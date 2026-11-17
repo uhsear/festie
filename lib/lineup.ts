@@ -20,7 +20,8 @@ export function lineupNameKey(name: string): string {
   const folded = String(name ?? '')
     .normalize('NFKD')
     // Marks go only after Latin, Greek or Cyrillic letters, so Japanese and Indic marks keep names apart.
-    .replace(/(?<=[\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}])\p{M}+/gu, '')
+    // Explicit ranges, no lookbehind or Script= escapes: this runs in the mobile bundle too.
+    .replace(/([A-Za-z\u00c0-\u024f\u1e00-\u1eff\u0370-\u03ff\u1f00-\u1fff\u0400-\u04ff])\p{M}+/gu, '$1')
     .toLowerCase()
     .replace(/&/g, ' and ')
     .replace(/['’ʼ.]/g, '')
@@ -70,10 +71,13 @@ export function lineupIssues(lineup: any): LineupIssue[] {
     if (id) byId.set(id, [...(byId.get(id) ?? []), index + 1]);
   });
   const lines = (list: number[]) => list.join(', ');
-  for (const [key, list] of byKey) {
+  for (const list of byKey.values()) {
     if (list.length < 2) continue;
-    const name = key.split(KEY_SEPARATOR).join(' + ');
-    issues.push({ code: 'lineup_duplicate', message: `The announced lineup lists "${name}" more than once (lines ${lines(list)}). Remove the extra line.` });
+    const name = (lineup[list[0]! - 1]?.artists ?? []).map((artist: any) => artist?.name).join(' b2b ');
+    issues.push({
+      code: 'lineup_duplicate',
+      message: `The announced lineup lists "${name}" more than once (lines ${lines(list)}). Remove the extra line. Two acts with the same name need artist notes, which arrive with the artist repository.`,
+    });
   }
   for (const [id, list] of byId) {
     if (list.length < 2) continue;

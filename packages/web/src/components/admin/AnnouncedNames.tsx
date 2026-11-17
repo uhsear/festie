@@ -58,21 +58,36 @@ function EditableText({
   label: string;
   value: string;
   placeholder?: string;
-  onCommit: (next: string) => void;
+  /** Returns an error message to refuse the edit; the draft then resets to the saved text. */
+  onCommit: (next: string) => string | null | void;
 }) {
   const [draft, setDraft] = useState(value);
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => setDraft(value), [value]);
+  const commit = () => {
+    if (draft === value) return;
+    const refused = onCommit(draft);
+    setError(refused || null);
+    if (refused) setDraft(value);
+  };
   return (
-    <input
-      type="text"
-      aria-label={label}
-      placeholder={placeholder}
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => draft !== value && onCommit(draft)}
-      onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
-      className={`${FIELD} w-full`}
-    />
+    <div>
+      <input
+        type="text"
+        aria-label={label}
+        aria-invalid={error ? true : undefined}
+        placeholder={placeholder}
+        value={draft}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          setError(null);
+        }}
+        onBlur={commit}
+        onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+        className={`${FIELD} w-full`}
+      />
+      {error && <p role="alert" className="mt-1 text-xs text-accent-coral">{error}</p>}
+    </div>
   );
 }
 
@@ -104,8 +119,14 @@ export default function AnnouncedNames({ lineup, days, savedDays, separator, sav
     [text, jsonMode, sep],
   );
   const merge = useMemo(
-    () => (parsed ? mergeLineupPaste(lineup, parsed.entries, { mode, dayDate: dayDate || null, sameAs }) : null),
-    [parsed, lineup, mode, dayDate, sameAs],
+    () => (parsed ? mergeLineupPaste(lineup, parsed.entries, {
+          mode,
+          dayDate: dayDate || null,
+          sameAs,
+          exactTiers: parsed.hasHeadings || dialog === 'edit',
+          exactNames: dialog === 'edit',
+        }) : null),
+    [parsed, lineup, mode, dayDate, sameAs, dialog],
   );
   const nearMatches = useMemo(() => (parsed ? findNearMatches(lineup, parsed.entries) : []), [parsed, lineup]);
   const blocking = parsed?.flags.filter((f) => f.blocking) ?? [];
@@ -136,13 +157,15 @@ export default function AnnouncedNames({ lineup, days, savedDays, separator, sav
   const patch = (index: number, change: Partial<LineupDraft>) =>
     onChange(lineup.map((e, i) => (i === index ? { ...e, ...change } : e)));
 
-  const rename = (index: number, value: string) => {
+  const rename = (index: number, value: string): string | null => {
     const entry = lineup[index]!;
     const names = value.split(new RegExp(`\\s+(?:${sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|b2b)\\s+`, 'i')).map((n) => n.trim()).filter(Boolean);
-    if (names.length === 0 || names.length > 4) return;
+    if (names.length === 0) return 'Enter at least one artist name.';
+    if (names.length > 4) return 'A line holds at most 4 artists. Put the full text in the poster name instead.';
     // A name that survives the rename keeps its links.
     const links = new Map(entry.artists.map((a) => [a.name.toLowerCase(), a.links ?? {}]));
     patch(index, { artists: names.map((name) => ({ name, links: links.get(name.toLowerCase()) ?? {} })) });
+    return null;
   };
 
   const rows = lineup

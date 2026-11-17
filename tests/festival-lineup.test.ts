@@ -108,6 +108,18 @@ describe('festival lineup saves', () => {
     assert.equal('lineup' in (update.mock.calls[0]!.arguments as any)[1], false);
   });
 
+  test('a stored lineup is not re-checked: a PUT without lineup saves even if the stored list has a duplicate', async () => {
+    const update = updateStore();
+    const dup = { ...existing, lineup: [storedEntry, { ...storedEntry, id: 'lu-twin' }] };
+    const app = appFor({ festivals: { update } });
+    (existing as any).lineup = dup.lineup;
+    try {
+      await request(app).put('/f1').send({ location: 'Elsewhere' }).expect(200);
+    } finally {
+      (existing as any).lineup = [storedEntry];
+    }
+  });
+
   test('a PUT with lineup and no expectedUpdatedAt is refused', async () => {
     const update = updateStore();
     const app = appFor({ festivals: { update } });

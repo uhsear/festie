@@ -226,6 +226,15 @@ export default function AdminFestivals() {
     toast(notice ? describeScheduleNotice(notice) : `Saved ${plural(n, 'change')}.`, 'success');
   };
 
+  // The whole lineup can be large (JSON_LIMIT is 256 kb), so a save resends it only when it changed.
+  // A PUT without `lineup` keeps the stored list.
+  const festivalBody = () => {
+    const { lineup, ...rest } = formData;
+    const changed =
+      countFestivalChanges({ lineup: original?.lineup } as EditableFestival, { lineup } as EditableFestival).total > 0;
+    return changed ? { ...rest, lineup } : rest;
+  };
+
   const handleSave = async () => {
     if (!formData.name || !formData.location) {
       toast('Name and location are required', 'error');
@@ -241,7 +250,7 @@ export default function AdminFestivals() {
       if (festivalId) {
         const res = await api.put<{ scheduleNotice?: ScheduleNotice; venueGuessed?: boolean } | undefined>(
           `/admin/festivals/${festivalId}`,
-          { ...formData, expectedUpdatedAt: formData.updatedAt, notify: notifyPickers },
+          { ...festivalBody(), expectedUpdatedAt: formData.updatedAt, notify: notifyPickers },
         );
         setVenueGuessedFor(res?.venueGuessed ? festivalId : null);
         await afterEditSave(res?.scheduleNotice);
@@ -273,7 +282,7 @@ export default function AdminFestivals() {
     try {
       const done = await withReauth(async () => {
         const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${festivalId}`, {
-          ...formData,
+          ...festivalBody(),
           expectedUpdatedAt: formData.updatedAt,
           confirmRemovals: true,
           notify: notifyPickers,

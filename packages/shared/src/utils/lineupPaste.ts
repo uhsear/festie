@@ -52,6 +52,8 @@ export interface ParseResult {
   flags: LineFlag[];
   /** Empty lines that were skipped. */
   skipped: number;
+  /** Text mode: the paste has at least one # heading. */
+  hasHeadings: boolean;
   /** JSON mode: keys that were dropped, with how many times each appeared. */
   dropped: Record<string, number>;
   linksKept: number;
@@ -60,7 +62,15 @@ export interface ParseResult {
   error?: string;
 }
 
-const emptyResult = (): ParseResult => ({ entries: [], flags: [], skipped: 0, dropped: {}, linksKept: 0, b2b: 0 });
+const emptyResult = (): ParseResult => ({
+  entries: [],
+  flags: [],
+  skipped: 0,
+  hasHeadings: false,
+  dropped: {},
+  linksKept: 0,
+  b2b: 0,
+});
 
 function escapeRe(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -120,6 +130,7 @@ export function parseLineupText(text: string, separator = 'b2b'): ParseResult {
     }
     const heading = /^#+\s*(.*)$/.exec(trimmed);
     if (heading) {
+      result.hasHeadings = true;
       tier = headingTier(heading[1]!, tier);
       return;
     }
@@ -230,6 +241,10 @@ export interface MergeOptions {
   dayDate?: string | null;
   /** Pasted line number -> stored entry id, from "Same act as X". */
   sameAs?: Record<number, string>;
+  /** The paste has tier headings, so a line with no tier clears the old one. */
+  exactTiers?: boolean;
+  /** Edit names: a line with no poster name clears the old one. */
+  exactNames?: boolean;
 }
 
 export interface MergeResult {
@@ -299,6 +314,12 @@ export function findNearMatches(prev: LineupDraft[], parsed: ParsedLine[]): Near
   return out;
 }
 
+/** Keeps the stored artists and order, and lays pasted links on top by name key, not by position. */
+function linksByName(prev: Artist[], pasted: Artist[]): Artist[] {
+  const pastedByKey = new Map(pasted.map((a) => [lineupNameKey(a.name), a.links ?? {}]));
+  return prev.map((a) => ({ ...a, links: { ...(a.links ?? {}), ...(pastedByKey.get(lineupNameKey(a.name)) ?? {}) } }));
+}
+
 function mergeLinks(prev: Artist[], next: Artist[]): Artist[] {
   const prevByKey = new Map(prev.map((a) => [lineupNameKey(a.name), a.links ?? {}]));
   return next.map((a) => ({ ...a, links: { ...(prevByKey.get(lineupNameKey(a.name)) ?? {}), ...(a.links ?? {}) } }));
@@ -306,7 +327,8 @@ function mergeLinks(prev: Artist[], next: Artist[]): Artist[] {
 
 /**
  * Merges a parse into the stored list. A matched line keeps the entry's id, links, day, status,
- * announcedAt and linked sets. A heading sets the tier; without one the old tier stays.
+ * announcedAt and linked sets. A heading sets the tier; without one the old tier stays, unless the
+ * paste has headings (exactTiers) or is an edit of the whole list (exactNames), where null clears.
  */
 export function mergeLineupPaste(prev: LineupDraft[], parsed: ParsedLine[], options: MergeOptions): MergeResult {
   const used = new Set<number>();
@@ -323,9 +345,9 @@ export function mergeLineupPaste(prev: LineupDraft[], parsed: ParsedLine[], opti
       const renamed = options.sameAs?.[p.line] === old.id;
       draft = {
         ...old,
-        artists: mergeLinks(old.artists, renamed ? p.artists : old.artists.map((a, k) => ({ ...a, links: p.artists[k]?.links ?? {} }))),
-        displayName: p.displayName ?? old.displayName,
-        tier: p.tier ?? old.tier,
+        artists: renamed ? mergeLinks(old.artists, p.artists) : linksByName(old.artists, p.artists),
+        displayName: options.exactNames ? p.displayName : (p.displayName ?? old.displayName),
+        tier: options.exactTiers ? p.tier : (p.tier ?? old.tier),
         dayDate: p.dayDate !== undefined ? p.dayDate : (dayDate ?? old.dayDate),
         status: p.status ?? old.status,
       };
