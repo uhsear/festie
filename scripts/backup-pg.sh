@@ -26,9 +26,7 @@ DB_PORT="${DB_PORT:-5432}"
 DAILY_KEEP="${DAILY_KEEP:-30}"      # days to keep daily backups
 WEEKLY_KEEP="${WEEKLY_KEEP:-12}"    # weekly snapshots to retain
 VERIFY="${BACKUP_VERIFY:-1}"        # pg_restore --list is cheap; catches truncated dumps
-
-TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="${BACKUP_DIR}/fp_${TIMESTAMP}.dump"
+LOCK_WAIT="${BACKUP_LOCK_WAIT:-120}" # seconds to wait for another backup run; 0 = do not wait
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -50,7 +48,28 @@ export PGPASSWORD="${PGPASSWORD:?Could not resolve database password from DATABA
 # ── Pre-flight checks ───────────────────────────────────────────────────────
 
 command -v pg_dump >/dev/null 2>&1 || die "pg_dump not found in PATH"
+command -v flock >/dev/null 2>&1 || die "flock not found in PATH"
 mkdir -p "$BACKUP_DIR"
+
+# One lock for every backup run (shared with backup-offsite-git.sh). Exit 75 so a
+# hung run makes the next scheduled run miss its ping and alert.
+exec 9>"$BACKUP_DIR/.backup.lock"
+if [ "$LOCK_WAIT" = "0" ]; then FLOCK_ARGS=(-n); else FLOCK_ARGS=(-w "$LOCK_WAIT"); fi
+if ! flock "${FLOCK_ARGS[@]}" 9; then
+  log "lock held, skipped"
+  exit 75
+fi
+
+# Failed copies are kept as *.dump.bad for a week, never as the newest .dump.
+find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump.bad" -mtime +7 -delete
+
+# Name by second; never overwrite a file another run just wrote.
+TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+while [ -e "${BACKUP_DIR}/fp_${TIMESTAMP}.dump" ]; do
+  sleep 1
+  TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+done
+BACKUP_FILE="${BACKUP_DIR}/fp_${TIMESTAMP}.dump"
 
 log "Starting backup: db=${DB_NAME} host=${DB_HOST}:${DB_PORT} dest=${BACKUP_DIR}"
 
@@ -77,15 +96,30 @@ if [ "${VERIFY}" = "1" ]; then
   if pg_restore --list "$BACKUP_FILE" >/dev/null 2>&1; then
     log "Verification OK: pg_restore --list succeeded"
   else
-    log "WARNING: pg_restore --list failed -- dump may be corrupt"
+    mv -f "$BACKUP_FILE" "${BACKUP_FILE}.bad"
+    die "pg_restore --list failed -- dump is corrupt, kept as ${BACKUP_FILE}.bad"
   fi
 fi
 
+# ── Row-count sidecar ────────────────────────────────────────────────────────
+# Non-fatal: on failure no sidecar is written and the restore drill fails on it.
+
+COUNTS_TMP="${BACKUP_FILE}.counts.tmp"
+if psql -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$DB_NAME" -X -A -t -F '|' \
+     -v ON_ERROR_STOP=1 -f "$SCRIPT_DIR/scripts/sql/backup-counts.sql" > "$COUNTS_TMP"; then
+  mv "$COUNTS_TMP" "${BACKUP_FILE}.counts"
+  log "Row counts written: ${BACKUP_FILE}.counts"
+else
+  rm -f "$COUNTS_TMP"
+  log "WARNING: row-count query failed -- no .counts sidecar for $(basename "$BACKUP_FILE")"
+fi
+
 # ── Weekly snapshot ──────────────────────────────────────────────────────────
-# Tag Sunday dumps as weekly so they survive daily pruning.
+# Tag Sunday dumps as weekly so they survive daily pruning. One per day: a
+# 6-hourly run must not add a second copy.
 
 DOW=$(date +%u)  # 7 = Sunday
-if [ "$DOW" = "7" ]; then
+if [ "$DOW" = "7" ] && ! compgen -G "${BACKUP_DIR}/fp_${TIMESTAMP%%_*}_*_weekly.dump" >/dev/null; then
   WEEKLY_FILE="${BACKUP_DIR}/fp_${TIMESTAMP}_weekly.dump"
   cp "$BACKUP_FILE" "$WEEKLY_FILE"
   log "Weekly snapshot: $WEEKLY_FILE"
@@ -96,6 +130,7 @@ fi
 
 DAILY_PRUNED=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump" \
   -not -name "*_weekly.dump" -mtime +"${DAILY_KEEP}" -print -delete | wc -l)
+find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump.counts" -mtime +"${DAILY_KEEP}" -delete
 log "Daily rotation: pruned ${DAILY_PRUNED} backups older than ${DAILY_KEEP}d"
 
 # ── Rotation: weekly ────────────────────────────────────────────────────────
