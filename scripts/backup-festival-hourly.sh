@@ -4,7 +4,7 @@
 #
 # Runs only while the flag file ~/.festie-festival-mode exists; otherwise it
 # exits 0 at once. Install the line permanently and toggle with the flag:
-#   20 * * * * cd /home/asir/festival-planner && bash scripts/backup-festival-hourly.sh >> logs/backup-festival.log 2>&1
+#   20 * * * * cd $APP_DIR && bash scripts/backup-festival-hourly.sh >> logs/backup-festival.log 2>&1
 # (minute 20 stays clear of the 0 */6 dump and the 01:30 off-site push)
 #
 # Runs backup-pg.sh, then backup-offsite-git.sh, each with BACKUP_LOCK_WAIT=0.
