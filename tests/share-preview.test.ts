@@ -274,6 +274,11 @@ describe('pickOgArtists', () => {
     assert.deepEqual(pickOgArtists(festival, picks, 'b2b'), ['Late', 'Night', 'DayTwo', 'Tba', 'Want1']);
   });
 
+  test('uses the billed displayName over the joined artists', () => {
+    const festival = { days: [{ sets: [{ id: 's1', artist: 'A b2b B', displayName: 'A & B', artists: [{ name: 'A' }, { name: 'B' }], startTime: '20:00' }] }] };
+    assert.deepEqual(pickOgArtists(festival, { s1: 'must' }, 'b2b'), ['A & B']);
+  });
+
   test('joins B2B artists with the festival separator', () => {
     const festival = { days: [{ sets: [{ id: 's1', artist: 'ignored', artists: [{ name: 'A' }, { name: 'B' }], startTime: '20:00' }] }] };
     assert.deepEqual(pickOgArtists(festival, { s1: 'must' }, 'x'), ['A x B']);

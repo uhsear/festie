@@ -90,9 +90,9 @@ function handlerFor(deps: any, path: string) {
   return route.handlers[route.handlers.length - 1];
 }
 
-async function getPage(deps: any, slug: string) {
+async function getPage(deps: any, slug: string, query: Record<string, unknown> = {}) {
   const res = mockRes();
-  await handlerFor(deps, '/f/:slug')({ params: { slug }, protocol: 'https', get: () => 'festie.us' }, res);
+  await handlerFor(deps, '/f/:slug')({ params: { slug }, query, protocol: 'https', get: () => 'festie.us' }, res);
   return res;
 }
 
@@ -153,6 +153,33 @@ describe('festival page: GET /f/:slug', () => {
     assert.ok(html.includes('<h2>Day 2 <span class="fp-date">Sat, Nov 7</span></h2>'));
     assert.ok(html.includes('Set times to come.'));
     assert.ok(!html.includes('<script>') && !html.includes('<img'), 'no scripts or images');
+  });
+
+  it('passes an allow-listed ref through the CTA and falls back to festival-page for anything else', async () => {
+    const cta = async (query: Record<string, unknown>) => {
+      const html: string = (await getPage(buildDeps().deps, 'edc-orlando-2026', query))._sent;
+      return /href="[^"]*\?festival=[^"]*&amp;ref=([^"]*)"/.exec(html)?.[1];
+    };
+    for (const ref of ['share-festival', 'share-wrap', 'share-picks', 'crew-invite']) assert.equal(await cta({ ref }), ref);
+    for (const ref of ['evil', 'festival-page-follow', 'SHARE-FESTIVAL', '"><script>', ['share-wrap'], { a: 1 }, undefined]) {
+      assert.equal(await cta({ ref }), 'festival-page', JSON.stringify(ref));
+    }
+  });
+
+  it('shows the billed name on a set row, ahead of the joined artists', async () => {
+    const festival = {
+      ...FESTIVAL,
+      days: [
+        {
+          label: 'Day 1',
+          date: '2026-11-06',
+          sets: [{ id: 'b', artist: 'Alpha b2b Beta', displayName: 'Alpha & Beta <live>', artists: [{ name: 'Alpha' }, { name: 'Beta' }], startTime: '20:00', endTime: '21:00', stageId: 'main' }],
+        },
+      ],
+    };
+    const html: string = (await getPage(buildDeps({ festival }).deps, 'edc-orlando-2026'))._sent;
+    assert.ok(html.includes('Alpha &amp; Beta &lt;live&gt;'));
+    assert.ok(!html.includes('Alpha b2b Beta'));
   });
 
   it('sorts sets in festival time: 11:00 PM before 1:00 AM, TBA last', async () => {

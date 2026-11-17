@@ -104,7 +104,7 @@ export default function createPageRoutes(deps: any) {
         return res.status(404).send(renderFestivalNotFoundPage(origin));
       }
       res.setHeader('Cache-Control', 'public, max-age=300');
-      return res.status(200).send(renderFestivalPage({ festival, origin, slug }));
+      return res.status(200).send(renderFestivalPage({ festival, origin, slug, ref: req.query.ref }));
     } catch (error: any) {
       log.error('festival page failed', { error: error.message, slug });
       res.setHeader('Cache-Control', 'no-store');

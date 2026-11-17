@@ -86,7 +86,7 @@ export function pickOgArtists(festival: any, picks: Record<string, string>, sep:
       const timed = CLOCK_TIME_RE.test(String(set.startTime || ''));
       const names = Array.isArray(set.artists) ? set.artists.map((a: any) => a?.name).filter(Boolean) : [];
       rows.push({
-        name: names.length > 0 ? names.join(` ${sep} `) : String(set.artist || ''),
+        name: set.displayName || (names.length > 0 ? names.join(` ${sep} `) : String(set.artist || '')),
         rank,
         tba: timed ? 0 : 1,
         day: dayIndex,
