@@ -16,55 +16,84 @@
  *                         When unset, falls back to https://ntfy.sh/<topic> with the topic
  *                         read from ~/.config/festie-ntfy-topic; no file = log only.
  *   ALERT_THRESHOLD     - Error count threshold per window (default: 10)
- *   ALERT_COOLDOWN_MIN  - Minutes between repeat alerts (default: 30)
+ *   ALERT_COOLDOWN_MIN  - Minutes between repeat alerts of the same kind (default: 30).
+ *                         A "recovered" notice is sent when a kind clears.
  *   ALERT_MEMORY_MB     - Per-instance memory (MB) that triggers an alert (default: 600)
  *   HEALTH_URL          - Health endpoint URL (default: http://127.0.0.1:4000/api/health)
+ *   READY_URL           - Readiness endpoint URL (default: HEALTH_URL with /health -> /ready).
+ *                         Not-ready and Redis-degraded alert after 2 consecutive polls.
+ *   BACKUP_DIR          - Directory probed for writability (default: ~/backups/festie)
+ *
+ * Disk: alerts below 10% free on / or when a probe file cannot be written to BACKUP_DIR.
  */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const http = require('http');
 const https = require('https');
 
-// Load .env. cron runs this as `cd <app> && node scripts/error-rate-alert.cjs`
-// with a bare environment, so without this every setting below silently fell
-// back to its default — including ALERT_WEBHOOK_URL, which is configured in
-// .env but was invisible here. Measured 2026-08-19: 1128 of 104507 log lines
-// were "No ALERT_WEBHOOK_URL configured", i.e. 1128 real alerts were computed
-// and then thrown away. Loading it here (rather than fixing the crontab) keeps
-// the fix in version control. Never overrides a var already set in the
-// environment, so an explicit override still wins.
-try {
-  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-} catch {
-  // dotenv missing (or no .env present) — fall through to process.env only.
-}
-
 // ── Config ──
-const HEALTH_URL = process.env.HEALTH_URL || 'http://127.0.0.1:4000/api/health';
-const ALERT_MEMORY_MB = parseInt(process.env.ALERT_MEMORY_MB, 10) || 600;
+// Read inside main() so that requiring this file (tests) has no side effects.
+function loadConfig() {
+  // Load .env. cron runs this as `cd <app> && node scripts/error-rate-alert.cjs`
+  // with a bare environment, so without this every setting below silently fell
+  // back to its default — including ALERT_WEBHOOK_URL, which is configured in
+  // .env but was invisible here. Measured 2026-08-19: 1128 of 104507 log lines
+  // were "No ALERT_WEBHOOK_URL configured", i.e. 1128 real alerts were computed
+  // and then thrown away. Loading it here (rather than fixing the crontab) keeps
+  // the fix in version control. Never overrides a var already set in the
+  // environment, so an explicit override still wins.
+  try {
+    require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+  } catch {
+    // dotenv missing (or no .env present) — fall through to process.env only.
+  }
+  const healthUrl = process.env.HEALTH_URL || 'http://127.0.0.1:4000/api/health';
+  return {
+    healthUrl,
+    readyUrl: process.env.READY_URL || healthUrl.replace(/\/health\/?$/, '/ready'),
+    memoryMb: parseInt(process.env.ALERT_MEMORY_MB, 10) || 600,
+    webhookUrl: process.env.ALERT_WEBHOOK_URL || ntfyUrlFromTopicFile(),
+    threshold: parseInt(process.env.ALERT_THRESHOLD, 10) || 10,
+    cooldownMin: parseInt(process.env.ALERT_COOLDOWN_MIN, 10) || 30,
+    backupDir: process.env.BACKUP_DIR || path.join(os.homedir(), 'backups', 'festie'),
+  };
+}
 
 // Same server and JSON body the other host scripts post to ntfy with.
 function ntfyUrlFromTopicFile() {
   try {
-    const topic = fs.readFileSync(path.join(require('os').homedir(), '.config', 'festie-ntfy-topic'), 'utf8').trim();
+    const topic = fs.readFileSync(path.join(os.homedir(), '.config', 'festie-ntfy-topic'), 'utf8').trim();
     return topic ? `https://ntfy.sh/${encodeURIComponent(topic)}` : '';
   } catch {
     return '';
   }
 }
-const ALERT_WEBHOOK_URL = process.env.ALERT_WEBHOOK_URL || ntfyUrlFromTopicFile();
-const ALERT_THRESHOLD = parseInt(process.env.ALERT_THRESHOLD, 10) || 10;
-const ALERT_COOLDOWN_MIN = parseInt(process.env.ALERT_COOLDOWN_MIN, 10) || 30;
+
 const LOG_DIR = path.join(__dirname, '..', 'logs');
 const STATE_FILE = path.join(LOG_DIR, '.alert-state.json');
+const DISK_MIN_FREE = 0.1;
+// Alert kinds that must fail this many polls in a row before they page.
+const CONFIRM_POLLS = { ready: 2, redis: 2 };
 
 // ── State (persisted between runs) ──
+// lastAlertAt is per alert kind. Older state files stored one number; it is dropped.
+function normalizeState(raw) {
+  const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+  return {
+    lastAlertAt: obj(raw?.lastAlertAt),
+    active: obj(raw?.active),
+    strikes: obj(raw?.strikes),
+    lastErrorCount: Number(raw?.lastErrorCount) || 0,
+  };
+}
+
 function loadState() {
   try {
-    return JSON.parse(fs.readFileSync(STATE_FILE, 'utf8'));
+    return normalizeState(JSON.parse(fs.readFileSync(STATE_FILE, 'utf8')));
   } catch {
-    return { lastAlertAt: 0, lastErrorCount: 0 };
+    return normalizeState(null);
   }
 }
 
@@ -73,8 +102,8 @@ function saveState(state) {
   fs.writeFileSync(STATE_FILE, JSON.stringify(state, null, 2));
 }
 
-// ── Health Check ──
-function checkHealth(url) {
+// ── HTTP probe ──
+function fetchJson(url) {
   return new Promise((resolve) => {
     const mod = url.startsWith('https') ? https : http;
     const req = mod.get(url, { timeout: 5000 }, (res) => {
@@ -82,16 +111,69 @@ function checkHealth(url) {
       res.on('data', (chunk) => (body += chunk));
       res.on('end', () => {
         try {
-          const data = JSON.parse(body);
-          resolve({ ok: res.statusCode === 200 && data?.data?.status === 'ok', status: res.statusCode, body: data });
+          resolve({ status: res.statusCode, body: JSON.parse(body) });
         } catch {
-          resolve({ ok: false, status: res.statusCode, body });
+          resolve({ status: res.statusCode, body });
         }
       });
     });
-    req.on('error', (err) => resolve({ ok: false, status: 0, error: err.message }));
-    req.on('timeout', () => { req.destroy(); resolve({ ok: false, status: 0, error: 'timeout' }); });
+    req.on('error', (err) => resolve({ status: 0, error: err.message }));
+    req.on('timeout', () => { req.destroy(); resolve({ status: 0, error: 'timeout' }); });
   });
+}
+
+async function checkHealth(url) {
+  const res = await fetchJson(url);
+  return { ...res, ok: res.status === 200 && res.body?.data?.status === 'ok' };
+}
+
+// ── Pure checks (exported for tests) ──
+// Each returns { bad, msg } per alert kind.
+function readyObservations(res) {
+  const ready = res.status === 200 && res.body?.data?.status === 'ready';
+  const redis = res.body?.data?.checks?.redis;
+  const redisBad = typeof redis === 'string' && redis !== 'ok' && redis !== 'disabled';
+  return {
+    ready: { bad: !ready, msg: `/api/ready is not ready (status: ${res.status}, error: ${res.error || res.body?.data?.status || 'unready response'})` },
+    redis: { bad: redisBad, msg: `Redis is ${redis} (/api/ready checks.redis)` },
+  };
+}
+
+function diskObservations({ freeRatio, probeError }) {
+  return {
+    'disk-space': { bad: freeRatio < DISK_MIN_FREE, msg: `Disk / has ${(freeRatio * 100).toFixed(1)}% free (alert below ${DISK_MIN_FREE * 100}%)` },
+    'disk-write': { bad: Boolean(probeError), msg: `Cannot write to the backup directory: ${probeError}` },
+  };
+}
+
+/**
+ * Applies one poll to the persisted state.
+ * observations: { kind: { bad, msg } }. Kinds in CONFIRM_POLLS need that many bad polls in a row.
+ * Returns { state, alerts, recoveries, suppressed }.
+ * A kind alerts at most once per cooldownMs. A "recovered" notice follows only an alert that was sent.
+ */
+function advance(prevState, observations, now, cooldownMs) {
+  const state = normalizeState(prevState);
+  const alerts = [];
+  const recoveries = [];
+  let suppressed = 0;
+
+  for (const [kind, { bad, msg }] of Object.entries(observations)) {
+    state.strikes[kind] = bad ? (state.strikes[kind] || 0) + 1 : 0;
+    if (bad && state.strikes[kind] >= (CONFIRM_POLLS[kind] || 1)) {
+      if (now - (state.lastAlertAt[kind] || 0) > cooldownMs) {
+        alerts.push(msg);
+        state.lastAlertAt[kind] = now;
+        state.active[kind] = true;
+      } else {
+        suppressed++;
+      }
+    } else if (!bad && state.active[kind]) {
+      recoveries.push(`Recovered: ${kind}`);
+      delete state.active[kind];
+    }
+  }
+  return { state, alerts, recoveries, suppressed };
 }
 
 // ── Error Log Analysis ──
@@ -116,14 +198,14 @@ function countRecentErrors(windowMinutes = 5) {
 }
 
 // ── PM2 Process Check ──
-function checkPM2Processes() {
+function checkPM2Processes(memoryMb) {
   const { execSync } = require('child_process');
   try {
     const output = execSync('pm2 jlist 2>/dev/null', { timeout: 5000 }).toString();
     const procs = JSON.parse(output);
     const fpProcs = procs.filter((p) => p.name === 'festie');
     const stopped = fpProcs.filter((p) => p.pm2_env.status !== 'online');
-    const highMem = fpProcs.filter((p) => (p.monit?.memory || 0) > ALERT_MEMORY_MB * 1024 * 1024);
+    const highMem = fpProcs.filter((p) => (p.monit?.memory || 0) > memoryMb * 1024 * 1024);
     return {
       total: fpProcs.length,
       online: fpProcs.length - stopped.length,
@@ -136,18 +218,32 @@ function checkPM2Processes() {
   }
 }
 
+// ── Disk Check ──
+function checkDisk(backupDir) {
+  const stat = fs.statfsSync('/');
+  const probe = path.join(backupDir, `.alert-probe-${process.pid}`);
+  let probeError = '';
+  try {
+    fs.writeFileSync(probe, 'ok');
+    fs.unlinkSync(probe);
+  } catch (err) {
+    probeError = err.message;
+  }
+  return { freeRatio: stat.bavail / stat.blocks, probeError };
+}
+
 // ── Alert Sender ──
-function sendAlert(message) {
+function sendAlert(message, webhookUrl, title = '🚨 Festie Alert') {
   const timestamp = new Date().toISOString();
   console.log(`[ALERT ${timestamp}] ${message}`);
 
-  if (!ALERT_WEBHOOK_URL) {
+  if (!webhookUrl) {
     console.log('[ALERT] No ALERT_WEBHOOK_URL or ~/.config/festie-ntfy-topic configured — logging only');
     return Promise.resolve();
   }
 
-  const payload = JSON.stringify({ text: `🚨 Festie Alert\n${message}` });
-  const url = new URL(ALERT_WEBHOOK_URL);
+  const payload = JSON.stringify({ text: `${title}\n${message}` });
+  const url = new URL(webhookUrl);
   const mod = url.protocol === 'https:' ? https : http;
 
   return new Promise((resolve) => {
@@ -163,49 +259,56 @@ function sendAlert(message) {
 
 // ── Main ──
 async function main() {
+  const cfg = loadConfig();
   const state = loadState();
-  const alerts = [];
+  const observations = {};
 
   // 1. Health check
-  const health = await checkHealth(HEALTH_URL);
-  if (!health.ok) {
-    alerts.push(`Health check FAILED (status: ${health.status}, error: ${health.error || 'unhealthy response'})`);
-  }
+  const health = await checkHealth(cfg.healthUrl);
+  observations.health = {
+    bad: !health.ok,
+    msg: `Health check FAILED (status: ${health.status}, error: ${health.error || 'unhealthy response'})`,
+  };
 
-  // 2. Error log count
+  // 2. Readiness and Redis (page after 2 consecutive polls)
+  Object.assign(observations, readyObservations(await fetchJson(cfg.readyUrl)));
+
+  // 3. Error log count
   const errorCount = countRecentErrors(5);
-  if (errorCount >= ALERT_THRESHOLD) {
-    alerts.push(`${errorCount} errors in PM2 error log (last 5 minutes, threshold: ${ALERT_THRESHOLD})`);
-  }
+  observations.errors = {
+    bad: errorCount >= cfg.threshold,
+    msg: `${errorCount} errors in PM2 error log (last 5 minutes, threshold: ${cfg.threshold})`,
+  };
 
-  // 3. PM2 process health
-  const pm2 = checkPM2Processes();
-  if (pm2.stopped > 0) {
-    alerts.push(`${pm2.stopped}/${pm2.total} PM2 instances are NOT online`);
-  }
-  if (pm2.highMemory > 0) {
-    alerts.push(`${pm2.highMemory}/${pm2.total} instances over ${ALERT_MEMORY_MB}MB (avg: ${pm2.avgMemoryMB}MB)`);
-  }
+  // 4. PM2 process health
+  const pm2 = checkPM2Processes(cfg.memoryMb);
+  observations['pm2-stopped'] = { bad: pm2.stopped > 0, msg: `${pm2.stopped}/${pm2.total} PM2 instances are NOT online` };
+  observations['pm2-memory'] = {
+    bad: pm2.highMemory > 0,
+    msg: `${pm2.highMemory}/${pm2.total} instances over ${cfg.memoryMb}MB (avg: ${pm2.avgMemoryMB}MB)`,
+  };
 
-  // 4. Decide whether to alert
-  if (alerts.length > 0) {
-    const now = Date.now();
-    const cooldownMs = ALERT_COOLDOWN_MIN * 60_000;
-    if (now - state.lastAlertAt > cooldownMs) {
-      await sendAlert(alerts.join('\n'));
-      state.lastAlertAt = now;
-    } else {
-      console.log(`[SUPPRESSED] ${alerts.length} alert(s) within cooldown window`);
-    }
-  } else {
+  // 5. Disk space and backup directory writability
+  Object.assign(observations, diskObservations(checkDisk(cfg.backupDir)));
+
+  // 6. Decide what to send
+  const { state: next, alerts, recoveries, suppressed } = advance(state, observations, Date.now(), cfg.cooldownMin * 60_000);
+  if (alerts.length > 0) await sendAlert(alerts.join('\n'), cfg.webhookUrl);
+  if (recoveries.length > 0) await sendAlert(recoveries.join('\n'), cfg.webhookUrl, '✅ Festie Recovered');
+  if (suppressed > 0) console.log(`[SUPPRESSED] ${suppressed} alert(s) within cooldown window`);
+  if (Object.values(observations).every((o) => !o.bad)) {
     console.log(`[OK ${new Date().toISOString()}] Health: ok, Errors: ${errorCount}, PM2: ${pm2.online}/${pm2.total} online, Mem: ${pm2.avgMemoryMB}MB avg`);
   }
 
-  state.lastErrorCount = errorCount;
-  saveState(state);
+  next.lastErrorCount = errorCount;
+  saveState(next);
 }
 
-main().catch((err) => {
-  console.error('[FATAL]', err.message);
-  process.exit(1);
-});
+module.exports = { advance, readyObservations, diskObservations, normalizeState };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('[FATAL]', err.message);
+    process.exit(1);
+  });
+}
