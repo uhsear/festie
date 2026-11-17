@@ -7,7 +7,7 @@ import { sharePoster, wrapShareLink } from './sharePoster';
 describe('wrapShareLink', () => {
   it('builds the festival page link tagged share-wrap', () => {
     expect(wrapShareLink('edc-orlando-2026', 'EDC Orlando')).toEqual({
-      text: 'EDC Orlando on Festie',
+      text: 'EDC Orlando lineup and set times on Festie',
       url: `${window.location.origin}/f/edc-orlando-2026?ref=share-wrap`,
     });
   });

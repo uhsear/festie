@@ -1,3 +1,4 @@
+import { FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import { buildFestivalPageUrl } from '@festie/shared/utils';
 
 /**
@@ -40,5 +41,5 @@ export async function sharePoster(
 /** Link that rides along with a shared poster; absent for a festival without a public page. */
 export function wrapShareLink(slug: string | null | undefined, festivalName: string) {
   if (!slug) return undefined;
-  return { text: `${festivalName} on Festie`, url: buildFestivalPageUrl(slug, window.location.origin, 'share-wrap') };
+  return { text: FESTIVAL_SHARE_COPY.text(festivalName), url: buildFestivalPageUrl(slug, window.location.origin, 'share-wrap') };
 }
