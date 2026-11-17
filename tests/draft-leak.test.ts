@@ -156,7 +156,10 @@ describe('Integration — draft festivals are not reachable by non-admins', { co
       socket.emit('join:festival', draft.id, { userToken: alice.token }, resolve);
     });
     socket.close();
+    // Regression guard: refusal comes from the missing profile, which a non-admin can no longer
+    // create in a draft (see the crew and profile tests above), so there is no other way in.
     assert.equal(ack?.ok, false);
+    assert.equal(ack?.error, 'Not a member of this festival');
 
     await server.request.get(`/api/v1/export/${draft.id}/prof-none`).set('x-user-token', alice.token).expect(404);
   });
@@ -167,10 +170,15 @@ describe('Integration — draft festivals are not reachable by non-admins', { co
     const admin = await loginAdmin(server);
     const draft = await seedDraft(server, admin);
 
-    // The route has no admin middleware, so req.isAdmin is never set and a draft set cannot be
-    // located over HTTP. The private, no-store header on that branch is defence in depth.
     await server.request.get(`/api/v1/festivals/locate-set/${draft.setId}`).expect(404);
     await server.request.get(`/api/v1/festivals/locate-set/${draft.setId}`).set('x-user-token', admin).expect(404);
+
+    // The admin mount sets req.isAdmin, so a draft set resolves there and must not be cached.
+    const adminRes = await server.request
+      .get(`/api/v1/admin/festivals/locate-set/${draft.setId}`)
+      .set('x-user-token', admin)
+      .expect(200);
+    assert.equal(adminRes.headers['cache-control'], 'private, no-store');
 
     const published = await server.request.get('/api/v1/festivals/locate-set/set-a').expect(200);
     assert.equal(published.headers['cache-control'], 'public, max-age=300');

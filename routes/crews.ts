@@ -378,7 +378,7 @@ export default function createCrewRoutes(deps: any) {
 
         // Target festival must exist (and not be deleted).
         const { rows: festivalRows } = await pool.query(
-          'SELECT 1 FROM festivals WHERE id = $1 AND deleted_at IS NULL',
+          'SELECT 1 FROM festivals WHERE id = $1 AND deleted_at IS NULL AND published_at IS NOT NULL',
           [targetFestivalId],
         );
         if (festivalRows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);

@@ -192,6 +192,24 @@ describe('routes/crews.js', () => {
       assert.equal(res.status, 404);
     });
 
+    test('POST /crews/:id/reform maps festival-unavailable from ensureFestivalProfile to 404', async () => {
+      const base = makeCrewDeps().stores;
+      const { app } = await buildCrewApp({
+        stores: {
+          ...base,
+          crews: {
+            ...base.crews,
+            getById: mock.fn(async () => ({ id: 'crew-1', festivalId: 'f0', name: 'Crew' })),
+            getMember: mock.fn(async () => ({ userId: 'user-1', role: 'owner' })),
+          },
+          profiles: { ...base.profiles, userIdsByFestival: mock.fn(async () => []) },
+          pool: { query: mock.fn(async () => ({ rows: [] })) },
+        },
+      });
+      const res = await request(app).post('/crews/crew-1/reform').send({ targetFestivalId: 'f1' });
+      assert.equal(res.status, 404);
+    });
+
     test('creates the festival profile when the user has none', async () => {
       const crewData = {
         id: 'crew-mock-id', festivalId: 'f1', name: 'Crew',
