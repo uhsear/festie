@@ -84,6 +84,8 @@ export interface Festival {
   publishedAt?: string | null;
   /** Public page slug (festie.us/f/<slug>); null or absent for drafts and old servers. */
   slug?: string | null;
+  /** Links editions of one recurring festival; null or absent when the festival is in no series. */
+  seriesId?: string | null;
   /**
    * Optional IANA time-zone id (e.g. `America/New_York`). When present, set
    * reminders are anchored in the festival's zone so they fire at the right

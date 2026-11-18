@@ -2914,6 +2914,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            seriesId?: string | null;
             slug?: string | null;
             stages: {
                 color: string | null;
@@ -3043,6 +3044,7 @@ export type components = {
             name: string;
             /** @enum {string|null} */
             scheduleProgress?: "times" | "days" | "lineup" | null;
+            seriesId?: string | null;
             slug?: string | null;
             stageCount: number;
             startDate: string | null;

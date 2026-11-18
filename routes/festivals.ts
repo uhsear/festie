@@ -168,7 +168,7 @@ export default function createFestivalsRoutes(deps: any) {
   function festivalAuditChanges(before: any, after: any, daysSent: boolean) {
     const changes: Record<string, [unknown, unknown]> = {};
     const norm = (v: unknown) => (v === undefined || v === '' ? null : v);
-    for (const key of ['name', 'location', 'timeZone', 'b2bSeparator']) {
+    for (const key of ['name', 'location', 'timeZone', 'b2bSeparator', 'seriesId']) {
       if (norm(before[key]) !== norm(after[key])) changes[key] = [norm(before[key]), norm(after[key])];
     }
     const counts: Array<[string, (f: any) => number]> = [['stages', (f) => (f.stages || []).length]];
@@ -261,13 +261,14 @@ export default function createFestivalsRoutes(deps: any) {
             startDate: dates[0] || null,
             endDate: dates[dates.length - 1] || null,
             slug: festival.slug ?? null,
+            seriesId: festival.seriesId ?? null,
             published: !!festival.publishedAt,
             updatedAt: festival.updatedAt,
           };
         });
         const published = all
           .filter((item: any) => item.published)
-          .map(({ published: _published, updatedAt: _updatedAt, ...item }: any) => item);
+          .map(({ published: _published, updatedAt: _updatedAt, seriesId: _seriesId, ...item }: any) => item);
         _festivalListCache = {
           admin: { items: all, etag: listETag(all) },
           public: { items: published, etag: listETag(published) },
@@ -423,7 +424,8 @@ export default function createFestivalsRoutes(deps: any) {
             checklist: publishChecklist(config, festival),
           });
         }
-        return sendSuccess(res, festival);
+        const { seriesId: _seriesId, ...publicFestival } = festival;
+        return sendSuccess(res, publicFestival);
       } catch (error: any) {
         log.error('festival load failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to load festival', ErrorCodes.INTERNAL_ERROR);
@@ -583,6 +585,7 @@ export default function createFestivalsRoutes(deps: any) {
           // Only a body that sends the lineup rewrites it, so mobile and map saves keep the stored list.
           ...(body.lineup !== undefined ? { lineup: nextFestival.lineup } : {}),
           mapConfig: nextFestival.mapConfig,
+          seriesId: nextFestival.seriesId,
           updatedBy: req.user?.userId ?? null,
           ...(venueSent ? { latitude: nextFestival.latitude, longitude: nextFestival.longitude } : {}),
         });

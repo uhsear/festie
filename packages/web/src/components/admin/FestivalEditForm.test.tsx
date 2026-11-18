@@ -165,6 +165,58 @@ describe('FestivalEditForm engagement', () => {
   });
 });
 
+describe('FestivalEditForm series picker', () => {
+  const festivals = [
+    { id: 'fk-2026', name: 'Forbidden Kingdom 2026', seriesId: 'forbidden-kingdom' },
+    { id: 'f1', name: 'Forbidden Kingdom 2027', seriesId: 'forbidden-kingdom' },
+    { id: 'nc-2026', name: 'North Coast 2026', seriesId: null },
+  ];
+  const renderSeries = (formData: Record<string, unknown>) => {
+    const setFormData = vi.fn();
+    render(
+      <FestivalEditForm {...baseProps} formData={formData} setFormData={setFormData} festivals={festivals} />,
+    );
+    return setFormData;
+  };
+
+  it('picks an existing series id from the list', () => {
+    const setFormData = renderSeries({ name: 'Forbidden Kingdom 2027' });
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: 'forbidden-kingdom' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBe('forbidden-kingdom');
+  });
+
+  it('cleans a typed new series id to the server pattern', () => {
+    const setFormData = renderSeries({ name: 'Wasteland Weekend 2027' });
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: '__new__' } });
+    fireEvent.change(screen.getByLabelText('New series id'), { target: { value: 'Café_Fest.2027' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBe('cafe-fest-2027');
+  });
+
+  it('lists the other editions and clears the series', () => {
+    const setFormData = renderSeries({ name: 'Forbidden Kingdom 2027', seriesId: 'forbidden-kingdom' });
+    expect(screen.getByText('Also in this series: Forbidden Kingdom 2026')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: '' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBeNull();
+  });
+
+  it('New series pre-fills the id suggested from the name', () => {
+    const setFormData = renderSeries({ name: 'Wasteland Weekend 2027' });
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: '__new__' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBe('wasteland-weekend');
+    expect(screen.getByLabelText('New series id')).toBeTruthy();
+  });
+
+  it('warns when the name suggests a known series but no other festival uses the id', () => {
+    renderSeries({ name: 'Forbidden Kingdom 2028', seriesId: 'forbidden-kingdm' });
+    expect(screen.getByText('No other festival uses this id. Check the spelling.')).toBeTruthy();
+  });
+
+  it('does not warn for a first edition of a new series', () => {
+    renderSeries({ name: 'Wasteland Weekend 2027', seriesId: 'wasteland-weekend' });
+    expect(screen.queryByText('No other festival uses this id. Check the spelling.')).toBeNull();
+  });
+});
+
 describe('FestivalEditForm announced names', () => {
   it('shows the block only when the festival carries a lineup, and a paste calls setFormData with it', () => {
     const { expanded: _expanded, ...base } = lineup();

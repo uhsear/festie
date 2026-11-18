@@ -444,6 +444,7 @@ export default function AdminFestivals() {
         savedLineup={original?.lineup}
         engagement={engagement}
         engagementError={engagementError}
+        festivals={festivals}
         interestCounts={interestCounts}
         onSave={handleSave}
         onDiscard={() => {

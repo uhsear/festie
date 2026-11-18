@@ -43,6 +43,7 @@ export type EditableFestival = {
   location?: string;
   timeZone?: string | null;
   b2bSeparator?: string;
+  seriesId?: string | null;
   stages?: { id: string; name?: string; color?: string }[];
   days?: { label?: string; date?: string; sets?: EditableSet[] }[];
   lineup?: EditableLineupEntry[];
@@ -204,7 +205,7 @@ export function countFestivalChanges(
 ): { total: number; changedSetIds: Set<string>; newSetIds: Set<string> } {
   const a = before ?? {};
   let total = 0;
-  for (const k of ['name', 'location', 'timeZone', 'b2bSeparator'] as const) {
+  for (const k of ['name', 'location', 'timeZone', 'b2bSeparator', 'seriesId'] as const) {
     if (norm(a[k]) !== norm(after[k])) total++;
   }
 

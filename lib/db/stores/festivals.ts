@@ -440,8 +440,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
 
           await client.query(
             `
-            INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, series_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT(id) DO UPDATE SET
               name = EXCLUDED.name,
               location = EXCLUDED.location,
@@ -451,7 +451,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
               latitude = EXCLUDED.latitude,
               longitude = EXCLUDED.longitude,
               time_zone = EXCLUDED.time_zone,
-              map_config = EXCLUDED.map_config
+              map_config = EXCLUDED.map_config,
+              series_id = EXCLUDED.series_id
           `,
             [
               festival.id,
@@ -464,6 +465,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
               festival.longitude ?? null,
               festival.timeZone ?? null,
               festival.mapConfig == null ? null : JSON.stringify(festival.mapConfig),
+              festival.seriesId ?? null,
             ],
           );
 
@@ -631,6 +633,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           f.latitude,
           f.longitude,
           f.map_config AS "mapConfig",
+          f.series_id AS "seriesId",
           f.created_at AS "createdAt",
           f.updated_at AS "updatedAt",
           f.published_at AS "publishedAt",
@@ -701,7 +704,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         const updatedAt = festival.updatedAt || createdAt;
 
         await client.query(
-          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, lineup) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)',
+          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, series_id, lineup) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)',
           [
             festival.id,
             festival.name,
@@ -716,6 +719,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             // Only the admin create route passes null (a draft); every other caller publishes.
             festival.publishedAt === undefined ? new Date().toISOString() : festival.publishedAt,
             festival.updatedBy ?? null,
+            festival.seriesId ?? null,
             JSON.stringify(festival.lineup ?? []),
           ],
         );
@@ -741,6 +745,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             latitude,
             longitude,
             map_config AS "mapConfig",
+            series_id AS "seriesId",
             created_at AS "createdAt",
             updated_at AS "updatedAt",
             published_at AS "publishedAt",
@@ -811,6 +816,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           values.push(fields.mapConfig == null ? null : JSON.stringify(fields.mapConfig));
           idx++;
         }
+        if (fields.seriesId !== undefined) {
+          sets.push(`series_id = $${idx}`);
+          values.push(fields.seriesId ?? null);
+          idx++;
+        }
         if (fields.lineup !== undefined) {
           sets.push(`lineup = $${idx}::jsonb`);
           values.push(JSON.stringify(fields.lineup));
@@ -872,6 +882,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             latitude,
             longitude,
             map_config AS "mapConfig",
+            series_id AS "seriesId",
             created_at AS "createdAt",
             updated_at AS "updatedAt",
             published_at AS "publishedAt"

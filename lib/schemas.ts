@@ -563,6 +563,12 @@ export const festivalCreateSchema = z.object({
   // Optional festival site-map. Nullable so an update can clear it; omitted on
   // legacy clients ⇒ map_config stays NULL and the festival renders unmapped.
   mapConfig: festivalMapConfigSchema.optional().nullable(),
+  // Links editions of one recurring festival. Null clears it; omitted keeps the stored value.
+  seriesId: z
+    .string()
+    .regex(/^[a-z0-9-]{1,60}$/, 'Use lower-case letters, digits and hyphens, up to 60 characters.')
+    .nullable()
+    .optional(),
 });
 export type FestivalCreateInput = z.infer<typeof festivalCreateSchema>;
 
@@ -1059,6 +1065,8 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
   const venueLat = venueSent ? coord(input.latitude, 90) : (existingFestival?.latitude ?? null);
   const venueLng = venueSent ? coord(input.longitude, 180) : (existingFestival?.longitude ?? null);
   const venueValid = venueLat !== null && venueLng !== null;
+  // series_id: shape-validated by festivalCreateSchema. Undefined keeps the stored value; null clears it.
+  const seriesId = input.seriesId !== undefined ? (input.seriesId ?? null) : (existingFestival?.seriesId ?? null);
   const storedSets = new Map<string, any>();
   for (const day of existingFestival?.days || []) {
     for (const set of day?.sets || []) if (set?.id) storedSets.set(set.id, set);
@@ -1100,6 +1108,7 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
       }),
     })),
     mapConfig,
+    seriesId,
     // Sent: cleaned and keyed against the stored list. Omitted: the stored list stays.
     lineup:
       input.lineup !== undefined

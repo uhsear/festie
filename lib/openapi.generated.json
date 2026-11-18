@@ -1625,6 +1625,10 @@
           "slug": {
             "nullable": true,
             "type": "string"
+          },
+          "seriesId": {
+            "nullable": true,
+            "type": "string"
           }
         },
         "required": [
@@ -1979,6 +1983,10 @@
             "type": "string"
           },
           "slug": {
+            "nullable": true,
+            "type": "string"
+          },
+          "seriesId": {
             "nullable": true,
             "type": "string"
           }

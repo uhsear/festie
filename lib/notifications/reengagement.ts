@@ -378,10 +378,10 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       );
       followerIds = followers.rows.map((r: any) => r.userId).filter(Boolean);
 
-      // Prior-edition attendees: users with a profile in an EARLIER festival whose name matches once a
-      // trailing year is ignored, who do NOT already have a profile in THIS one. A separate statement,
+      // Prior-edition attendees: users with a profile in an EARLIER festival that shares this festival's
+      // series_id OR whose name matches once a trailing year is ignored (OR, so editions with a null
+      // series_id stay in), who do NOT already have a profile in THIS one. A separate statement,
       // so an organizer filter is one more AND here. Excludes deleted.
-      // shortcut: name-minus-year match, replace with a festivals.series_id when editions need explicit links
       const prior = await db.query(
         `
         SELECT DISTINCT p.user_id AS "userId", fp.name AS "festivalName"
@@ -390,8 +390,11 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
         WHERE p.deleted_at IS NULL
           AND p.user_id IS NOT NULL
           AND fp.id <> $1
-          AND regexp_replace(lower(fp.name), '\\s*(19|20)\\d{2}\\s*$', '')
-            = regexp_replace((SELECT lower(name) FROM festivals WHERE id = $1), '\\s*(19|20)\\d{2}\\s*$', '')
+          AND (
+            fp.series_id = (SELECT series_id FROM festivals WHERE id = $1)
+            OR regexp_replace(lower(fp.name), '\\s*(19|20)\\d{2}\\s*$', '')
+              = regexp_replace((SELECT lower(name) FROM festivals WHERE id = $1), '\\s*(19|20)\\d{2}\\s*$', '')
+          )
           AND NOT EXISTS (
             SELECT 1 FROM festival_profiles cur
             WHERE cur.user_id = p.user_id AND cur.festival_id = $1 AND cur.deleted_at IS NULL

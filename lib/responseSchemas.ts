@@ -202,6 +202,8 @@ export const festivalResponseSchema = z.object({
   days: z.array(festivalFullDaySchema),
   lineup: z.array(lineupEntryResponseSchema),
   slug: z.string().nullable().optional(),
+  // Admin only; the public detail response leaves it out.
+  seriesId: z.string().nullable().optional(),
 });
 export type FestivalResponse = z.infer<typeof festivalResponseSchema>;
 
@@ -333,6 +335,8 @@ export const festivalListItemResponseSchema = z.object({
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   slug: z.string().nullable().optional(),
+  // Admin list only; the public list leaves it out.
+  seriesId: z.string().nullable().optional(),
 });
 export type FestivalListItemResponse = z.infer<typeof festivalListItemResponseSchema>;
 
