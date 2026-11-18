@@ -15,8 +15,12 @@ export const MAX_LINKED_SETS = 10;
 
 const KEY_SEPARATOR = '\u0001';
 
-/** Folds a name for matching: "Zed's Dead" = "Zeds Dead", "roi*" = "roi", "The X" = "X". */
-export function lineupNameKey(name: string): string {
+/**
+ * The fold core: NFKD, marks off Latin, Greek and Cyrillic letters, lower case, "&" as "and",
+ * apostrophes and periods deleted, other symbols as spaces. It keeps a leading "the". An empty
+ * result falls back to the lower-cased input. artistNameKey (lib/artist-key.ts) uses it as is.
+ */
+export function foldNameCore(name: string): string {
   const folded = String(name ?? '')
     .normalize('NFKD')
     // Marks go only after Latin, Greek or Cyrillic letters, so Japanese and Indic marks keep names apart.
@@ -27,8 +31,12 @@ export function lineupNameKey(name: string): string {
     .replace(/['’ʼ.]/g, '')
     .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ')
     .trim();
-  if (!folded) return String(name ?? '').trim().toLowerCase();
-  return folded.replace(/^the (?=\S)/, '');
+  return folded || String(name ?? '').trim().toLowerCase();
+}
+
+/** Folds a name for matching: "Zed's Dead" = "Zeds Dead", "roi*" = "roi", "The X" = "X". */
+export function lineupNameKey(name: string): string {
+  return foldNameCore(name).replace(/^the (?=\S)/, '');
 }
 
 /** One billing line is one key: the sorted name keys of its artists, so B2B order does not matter. */
