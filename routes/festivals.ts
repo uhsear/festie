@@ -2,7 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import crypto from 'crypto';
-import { diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
+import { diffCancelledEntries, diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { coverLineup } from '../lib/lineup.js';
@@ -207,6 +207,22 @@ export default function createFestivalsRoutes(deps: any) {
     if (setIds.length === 0) return 0;
     const result = await stores.pool.query(`SELECT COUNT(*) AS count FROM ${table} WHERE set_id = ANY($1)`, [setIds]);
     return Number.parseInt(result.rows[0]?.count ?? '0', 10) || 0;
+  }
+
+  // The cancel line of the removal confirm: what cancelling these acts takes away and who hears about it.
+  // `picked` counts people who picked or set a reminder on a removed set that covered a cancelled act.
+  async function cancelSummary(
+    festival: any,
+    cancelled: { entryId: string; artist: string }[],
+    removedIds: string[],
+    interestedByEntry: Map<string, string[]>,
+  ) {
+    const cover = coverLineup(festival.lineup ?? [], festival.days ?? [], festival.b2bSeparator || 'b2b');
+    const removed = new Set(removedIds);
+    const setIds = [...new Set(cancelled.flatMap((c) => cover[c.entryId]?.setIds ?? []))].filter((id) => removed.has(id));
+    const pickers = new Set([...(await stores.profiles.pickersBySet(festival.id, setIds)).values()].flat());
+    const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId)));
+    return { acts: cancelled.map((c) => c.artist), sets: setIds.length, picked: pickers.size, marked: marked.size };
   }
 
   router.get('/', rateLimit(120, 'festival-list'), async (req: any, res: any) => {
@@ -471,6 +487,14 @@ export default function createFestivalsRoutes(deps: any) {
         // editors leave them out so a map save cannot rewrite the lineup.
         const daysSent = body.days !== undefined;
         const stats = { setsAdded: 0, setsRemoved: 0, setsChanged: 0, picksLost: 0 };
+        // A cancelled act alerts the people whose mark on it is still open. Converted marks are pickers already.
+        const cancelled = body.lineup !== undefined ? diffCancelledEntries(existingFestival, nextFestival) : [];
+        const interestedByEntry: Map<string, string[]> = cancelled.length
+          ? await stores.profiles.interestedProfilesByEntry(
+              existingFestival.id,
+              cancelled.map((change) => change.entryId),
+            )
+          : new Map();
         if (daysSent) {
           const storedSets = setsOf(existingFestival);
           const storedById = new Map(storedSets.map((set: any) => [set.id, set]));
@@ -482,11 +506,15 @@ export default function createFestivalsRoutes(deps: any) {
             countOnSets('set_ratings', removedIds),
           ]);
           if (picks + ratings > 0 && body.confirmRemovals !== true) {
+            const cancel = cancelled.length
+              ? await cancelSummary(existingFestival, cancelled, removedIds, interestedByEntry)
+              : undefined;
             const removal = {
               days: Math.max(0, (existingFestival.days || []).length - nextFestival.days.length),
               sets: removedIds.length,
               picks,
               ratings,
+              ...(cancel ? { cancel } : {}),
             };
             return sendError(
               res,
@@ -531,7 +559,6 @@ export default function createFestivalsRoutes(deps: any) {
         const pickersBySet: Map<string, string[]> = changes.length
           ? await stores.profiles.pickersBySet(existingFestival.id, changes.map((change) => change.setId))
           : new Map();
-
         const festival = await stores.festivals.update(req.validatedParams.id, {
           name: nextFestival.name,
           location: nextFestival.location,
@@ -548,22 +575,25 @@ export default function createFestivalsRoutes(deps: any) {
         invalidateFestivalCache();
 
         invalidateFestivalListCache();
-        const people = new Set([...pickersBySet.values()].flat()).size;
+        const pickers = new Set([...pickersBySet.values()].flat());
+        // A person who picked a changed set gets that alert only, so marks are counted once.
+        const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
+        const people = pickers.size + marked;
         const notified = req.validatedBody.notify !== false && people > 0;
-        const scheduleNotice = { changes: changes.length, people, notified };
+        const scheduleNotice = { changes: changes.length + cancelled.length, people, notified, ...(marked > 0 ? { marked } : {}) };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
         // The saved row lacks stages and days, so those come from the payload that was written.
         const fieldChanges = festivalAuditChanges(existingFestival, { ...nextFestival, ...festival }, daysSent);
         audit(AUDIT_ACTIONS.FESTIVAL_UPDATED, 'festival', festival.id, req, {
           name: festival.name,
           ...stats,
-          scheduleChanges: changes.length,
+          scheduleChanges: changes.length + cancelled.length,
           notifiedPeople: notified ? people : 0,
           ...(Object.keys(fieldChanges).length > 0 ? { changes: fieldChanges } : {}),
         });
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
-        if (notified) void emitter.scheduleChanged({ festival, changes, pickersBySet });
+        if (notified) void emitter.scheduleChanged({ festival, changes: [...changes, ...cancelled], pickersBySet, interestedByEntry });
         // The executor checks publish state, the marker and the times itself.
         if (daysSent) notifySetTimesOut(festival.id);
         // New sets or new names can cover a marked act. It runs after commit and logs its own failure.

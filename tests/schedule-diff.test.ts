@@ -1,7 +1,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { buildSchedulePushes, diffPickedSchedule, formatShiftDelta, isTbaToTime } from '../lib/schedule-diff';
+import {
+  buildSchedulePushes,
+  diffCancelledEntries,
+  diffPickedSchedule,
+  formatShiftDelta,
+  isTbaToTime,
+} from '../lib/schedule-diff';
 
 function festival(sets: any[], extraDay: any[] = []) {
   return {
@@ -316,5 +322,85 @@ describe('isTbaToTime', () => {
 
   it('is false for a removed set', () => {
     assert.equal(isTbaToTime({ kind: 'removed', setId: 'set-1', artist: 'Peggy Gou' }), false);
+  });
+});
+
+describe('diffCancelledEntries', () => {
+  const entry = (id: string, name: string, extra: any = {}) => ({
+    id,
+    artists: [{ name }],
+    displayName: null,
+    status: 'announced',
+    ...extra,
+  });
+  const lineup = (...entries: any[]) => ({ b2bSeparator: 'b2b', lineup: entries });
+
+  it('reports an announced act that turns cancelled, by poster name when it has one', () => {
+    const before = lineup(entry('a', 'Kai'), entry('b', 'Mira'));
+    const after = lineup(entry('a', 'Kai', { status: 'cancelled', displayName: 'KAI (live)' }), entry('b', 'Mira'));
+    assert.deepEqual(diffCancelledEntries(before, after), [{ kind: 'entry_cancelled', entryId: 'a', artist: 'KAI (live)' }]);
+  });
+
+  it('joins a B2B act with the festival separator', () => {
+    const b2b = (status: string) => ({ ...entry('a', 'Kai', { status }), artists: [{ name: 'Kai' }, { name: 'Mira' }] });
+    const after = { ...lineup(b2b('cancelled')), b2bSeparator: 'x' };
+    assert.equal(diffCancelledEntries(lineup(b2b('announced')), after)[0]!.artist, 'Kai x Mira');
+  });
+
+  it('ignores an act that was already cancelled, a new act and an un-cancel', () => {
+    assert.deepEqual(diffCancelledEntries(lineup(entry('a', 'Kai', { status: 'cancelled' })), lineup(entry('a', 'Kai', { status: 'cancelled' }))), []);
+    assert.deepEqual(diffCancelledEntries(lineup(), lineup(entry('n', 'New', { status: 'cancelled' }))), []);
+    assert.deepEqual(diffCancelledEntries(lineup(entry('a', 'Kai', { status: 'cancelled' })), lineup(entry('a', 'Kai'))), []);
+  });
+
+  it('is empty when a save carries no lineup', () => {
+    assert.deepEqual(diffCancelledEntries({ lineup: [entry('a', 'Kai')] }, {}), []);
+  });
+});
+
+describe('buildSchedulePushes: entry_cancelled', () => {
+  const cancelled = (entryId: string, artist: string) => ({ kind: 'entry_cancelled' as const, entryId, artist });
+  const removed = (setId: string, artist: string) => ({ kind: 'removed' as const, setId, artist });
+
+  it('writes the cancel copy for a person whose mark is open, with no set link', () => {
+    const pushes = buildSchedulePushes('Coachella', [cancelled('a', 'Kai')], new Map(), new Map([['a', ['u1']]]));
+    assert.deepEqual(pushes, [{ userId: 'u1', title: 'Kai is off the lineup', body: 'Coachella cancelled this act.' }]);
+  });
+
+  it('alerts a marker even when nobody picked a set', () => {
+    const pushes = buildSchedulePushes('F', [cancelled('a', 'Kai')], new Map(), new Map([['a', ['u1', 'u2']]]));
+    assert.deepEqual(pushes.map((p) => p.userId), ['u1', 'u2']);
+  });
+
+  it('tells a picker once: the removed-set alert only, not the cancel alert as well', () => {
+    const pushes = buildSchedulePushes(
+      'F',
+      [removed('s1', 'Kai'), cancelled('a', 'Kai')],
+      new Map([['s1', ['u1']]]),
+      new Map([['a', ['u1', 'u2']]]),
+    );
+    assert.deepEqual(pushes.map((p) => [p.userId, p.title]), [
+      ['u1', 'Kai is off the lineup'],
+      ['u2', 'Kai is off the lineup'],
+    ]);
+    assert.equal(pushes[0]!.body, 'F removed this set, so it is no longer in your picks.');
+    assert.equal(pushes[1]!.body, 'F cancelled this act.');
+  });
+
+  it('folds several cancelled acts into one alert per person', () => {
+    const pushes = buildSchedulePushes(
+      'F',
+      [cancelled('a', 'Kai'), cancelled('b', 'Mira'), cancelled('c', 'Zed')],
+      new Map(),
+      new Map([['a', ['u1']], ['b', ['u1']], ['c', ['u1']]]),
+    );
+    assert.equal(pushes.length, 1);
+    assert.equal(pushes[0]!.title, '3 acts you marked are off the lineup');
+    assert.equal(pushes[0]!.body, 'F: Kai, Mira and 1 more.');
+  });
+
+  it('sends nothing for a cancelled act that nobody marked', () => {
+    assert.deepEqual(buildSchedulePushes('F', [cancelled('a', 'Kai')], new Map(), new Map()), []);
+    assert.deepEqual(buildSchedulePushes('F', [cancelled('a', 'Kai')], new Map()), []);
   });
 });
