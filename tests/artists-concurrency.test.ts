@@ -1,6 +1,6 @@
 import 'dotenv/config';
 /**
- * Lock order and races (AR plan 9.1): festivals first, then artists. Two clients and an explicit
+ * Lock order and races: festivals first, then artists. Two clients and an explicit
  * barrier, so the interleaving is the one under test and not a lucky timing. Needs TEST_DATABASE_URL.
  */
 import assert from 'node:assert/strict';

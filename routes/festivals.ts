@@ -558,6 +558,8 @@ export default function createFestivalsRoutes(deps: any) {
           },
           {
             expectedUpdatedAt: body.expectedUpdatedAt,
+            // The removal count above came from the cache; under the lock the stored sets must still be those.
+            storedSetIds: daysSent ? setsOf(existingFestival).map((set: any) => set.id) : undefined,
             beforeChildren: refsNeeded
               ? async (client: any, fields: any) => {
                   refsSeen.value = await resolveArtistRefs(client, {

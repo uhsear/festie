@@ -1,6 +1,6 @@
 import 'dotenv/config';
 /**
- * One artist edit rewrites the copy in every festival that lists the artist (AR plan 9.1), and an
+ * One artist edit rewrites the copy in every festival that lists the artist, and an
  * artist edit never makes an open festival form stale. Needs TEST_DATABASE_URL.
  */
 import assert from 'node:assert/strict';

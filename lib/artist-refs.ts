@@ -5,7 +5,7 @@
  * resolveArtistRefs: ties every artist element of a festival save to an artists row.
  * It runs inside the save transaction, after the festival row lock and the token check, and it
  * reads the database, never a cache. It covers set elements and announced-lineup elements.
- * The rule for one element, in order (AR plan 4.3):
+ * The rule for one element, in order:
  *   1. A sent id that names a tombstone follows merged_into. An unknown id counts as no id.
  *   2. A sent id of a live artist is kept, and the canonical name, links, photo and genres are copied.
  *   3. No id: reuse the id of a stored element with the same key (the same set, or any stored lineup
@@ -16,7 +16,7 @@
  *   7. No id, and two or more live artists have the key: save the element without an id. The save
  *      does not fail. The publish checklist asks the editor to pick one.
  * The flat `artist` and `link_url` of every set are rebuilt from the resolved elements.
- * With `fillEmptyLinks` (the import's Link column, AR plan 7.4) a sent link for a platform the artist
+ * With `fillEmptyLinks` (the import's Link column) a sent link for a platform the artist
  * has no link for is returned in `linkFills`; the caller writes it after commit through the artist
  * route's own locks. A sent link that differs from a filled one counts in `ignoredLinkEdits`.
  */

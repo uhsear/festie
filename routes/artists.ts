@@ -7,7 +7,7 @@ import { ArtistError, isCurrentOrUpcoming, publicArtist, type SyncedFestival } f
 
 /**
  * Artist routes, admin only, mounted at /api/v1/admin/artists. An edit changes every festival that
- * lists the artist, past ones too (AR plan 6.5 and 9.1). The festival copies are rewritten in the
+ * lists the artist, past ones too. The festival copies are rewritten in the
  * same transaction as the artist row, so no reader ever sees them disagree.
  */
 export default function createArtistsRoutes(deps: any) {

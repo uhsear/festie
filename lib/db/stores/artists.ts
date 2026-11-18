@@ -5,7 +5,7 @@
  * The artists table: match, create, edit, usage lists, and syncArtistCopies, which rewrites the copy
  * of an artist that every set and announced-lineup entry holds. An edit changes past festivals too.
  *
- * Lock order for every writer (AR plan 9.1): festivals in id order, then artists in id order. An
+ * Lock order for every writer: festivals in id order, then artists in id order. An
  * artist edit does not know which festivals it needs until it reads them, so it reads the ids, locks
  * those festivals, locks the artist, then reads the ids again. A new id means a save added the artist
  * to a festival in between: the transaction rolls back with a retryable error and starts again.

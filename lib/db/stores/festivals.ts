@@ -15,6 +15,11 @@ export class FestivalChangedError extends Error {
 export interface FestivalUpdateOptions {
   /** The updatedAt the form loaded. The save fails when another save changed the festival after that. */
   expectedUpdatedAt?: string;
+  /**
+   * The set ids the route counted picks and ratings for. When the festival holds a different set of ids
+   * under the lock, the removal confirm was computed from stale data and the save fails with a 409.
+   */
+  storedSetIds?: string[];
   /** Runs after the token check and before the child rows are written; may return the days and lineup to write. */
   beforeChildren?: (client: any, fields: any) => Promise<{ days?: any[]; lineup?: any[] } | void>;
   /** False for a write that is not an admin edit of the form (the venue geocode), so an open form stays current. */
@@ -857,6 +862,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         if (locked.rowCount === 0) {
           if (options.expectedUpdatedAt !== undefined) throw new FestivalChangedError();
           return null;
+        }
+        if (options.storedSetIds) {
+          const { rows: current } = await client.query('SELECT id FROM festival_sets WHERE festival_id = $1', [festivalId]);
+          const known = new Set(options.storedSetIds);
+          if (current.length !== known.size || current.some((row: any) => !known.has(row.id))) throw new FestivalChangedError();
         }
         const prepared = await options.beforeChildren?.(client, fields);
         const days = prepared?.days ?? fields.days;

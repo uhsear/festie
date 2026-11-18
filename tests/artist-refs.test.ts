@@ -1,6 +1,6 @@
 import 'dotenv/config';
 /**
- * resolveArtistRefs (AR plan 4.3) directly in a transaction, and through the festival save, the
+ * resolveArtistRefs directly in a transaction, and through the festival save, the
  * import commit and the import undo. Needs TEST_DATABASE_URL.
  */
 import assert from 'node:assert/strict';
