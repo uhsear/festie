@@ -225,6 +225,8 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
         <span className="text-sm text-text-muted">Up to 500 rows and 200 KB.</span>
       </div>
       <ul className="bg-bg-card/60 border border-glass-border rounded-lg p-4 text-sm text-text-muted space-y-1 list-disc list-inside">
+        <li>Export, fill in stages and times in a sheet, then import. The preview shows every change before you save.</li>
+        <li>The export also lists announced acts that have no set yet, with no stage or times. Fill those in, or delete rows you are not ready to place. A new set keeps the act&apos;s poster name.</li>
         <li>A column you don&apos;t map is left alone. An empty cell in a mapped column clears that value, so an empty time becomes TBA.</li>
         <li>Imports never delete sets.</li>
         <li>Sets that start after midnight and before 6 AM belong to the night before. Put a 1 AM Saturday set on Friday.</li>
@@ -406,6 +408,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
                       {r.changes.map((c) => (
                         <p key={c}>{c}</p>
                       ))}
+                      {r.displayName && <p className="text-text-muted">Poster name kept: {r.displayName}</p>}
                       {r.warnings.map((w) => (
                         <p key={w} className="text-text-muted">{w}</p>
                       ))}
@@ -439,6 +442,21 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
           <button type="button" className={secondaryButton} disabled={loading} onClick={() => void runPreview(rows)}>
             Check again
           </button>
+        )}
+        {(p.unmatchedActs ?? []).length > 0 && (
+          <details open={(p.unmatchedActs ?? []).length <= 5} className="text-sm text-accent-amber rounded-lg border border-accent-amber/40 p-3">
+            <summary>
+              {(p.unmatchedActs ?? []).length} announced {(p.unmatchedActs ?? []).length === 1 ? 'act matches' : 'acts match'} no set on the
+              days this import fills. Fix the spelling in your file, or link the set by hand with Matches set… after the import.
+            </summary>
+            <ul className="mt-2 space-y-1">
+              {(p.unmatchedActs ?? []).map((a) => (
+                <li key={a.entryId}>
+                  {a.name} ({a.dayLabel})
+                </li>
+              ))}
+            </ul>
+          </details>
         )}
         {p.missingFromFile.length > 0 && (
           <details className="text-sm text-text-muted">

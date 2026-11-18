@@ -1,5 +1,6 @@
 import Papa from 'papaparse';
-import type { Artist } from '../types/domain';
+import type { Artist, LineupEntry } from '../types/domain';
+import { coverLineup } from './lineupCover';
 import { artistNamesOf, joinArtistNames } from './setArtists';
 
 export type LineupImportRowStatus = 'new' | 'changed' | 'unchanged' | 'error';
@@ -34,6 +35,8 @@ export interface LineupImportPlanRow {
   stageName?: string;
   startTime?: string | null;
   endTime?: string | null;
+  /** The poster name a new set takes from the announced act it covers. */
+  displayName?: string;
   changes: string[];
   errors: {
     field: 'artist' | 'day' | 'date' | 'stage' | 'startTime' | 'endTime' | 'link' | 'row';
@@ -59,6 +62,8 @@ export interface LineupImportPlan {
   newStages: { name: string; color: string }[];
   newDays: { label: string; date: string }[];
   missingFromFile: { setId: string; artist: string; dayLabel: string }[];
+  /** Announced acts dated to a day this import fills that no set covers afterwards. Absent from an older server. */
+  unmatchedActs?: { entryId: string; name: string; dayLabel: string }[];
   problems: string[];
   stages: string[];
   days: string[];
@@ -253,23 +258,37 @@ export interface LineupExportFestival {
     date?: string;
     sets?: { id: string; artist?: string; artists?: Artist[]; stageId?: string | null; startTime?: string | null; endTime?: string | null }[];
   }[];
+  /** The announced lineup. Each act that is not scheduled and not cancelled becomes a row with no set id, stage or times. */
+  lineup?: LineupEntry[];
 }
 
-/** The lineup as a CSV that imports again unchanged: set_id matches each row to its set. */
+/**
+ * The lineup as a CSV that imports again unchanged: set_id matches each row to its set. After the sets
+ * come the announced acts that no set covers, with their day when it resolves, so the organizer fills in
+ * stage and times in a sheet. The poster name is not a column: the import copies it from the act.
+ */
 export function buildLineupCsv(festival: LineupExportFestival): string {
   const stageName = new Map((festival.stages ?? []).map((s) => [s.id, s.name]));
   const time = (t: string | null | undefined) => (t && t !== 'TBA' ? t : '');
-  return Papa.unparse({
-    fields: ['set_id', 'day', 'stage', 'artist', 'start', 'end'],
-    data: (festival.days ?? []).flatMap((d) =>
-      (d.sets ?? []).map((s) => [
-        s.id,
-        d.label || d.date || '',
-        stageName.get(s.stageId ?? '') ?? '',
-        joinArtistNames(artistNamesOf(s), festival.b2bSeparator),
-        time(s.startTime),
-        time(s.endTime),
-      ]),
-    ),
-  });
+  const days = festival.days ?? [];
+  const separator = festival.b2bSeparator;
+  const lineup = festival.lineup ?? [];
+  const cover = coverLineup(lineup, days, separator || 'b2b');
+  const setRows = days.flatMap((d) =>
+    (d.sets ?? []).map((s) => [
+      s.id,
+      d.label || d.date || '',
+      stageName.get(s.stageId ?? '') ?? '',
+      joinArtistNames(artistNamesOf(s), separator),
+      time(s.startTime),
+      time(s.endTime),
+    ]),
+  );
+  const entryRows = lineup
+    .filter((entry) => cover[entry.id]?.state === 'announced')
+    .map((entry) => {
+      const day = days[cover[entry.id]!.dayIndex];
+      return ['', day ? day.label || day.date || '' : '', '', joinArtistNames(entry.artists.map((a) => a.name), separator), '', ''];
+    });
+  return Papa.unparse({ fields: ['set_id', 'day', 'stage', 'artist', 'start', 'end'], data: [...setRows, ...entryRows] });
 }

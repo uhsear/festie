@@ -9,9 +9,14 @@
  * the write transaction, so what it writes always matches the locked festival.
  * Imports never delete. A field the row leaves out is left alone; an empty
  * string in a mapped field clears that value.
+ *
+ * A new set that covers an announced act (same artist name keys) takes the act's poster name, so
+ * "Port Zero presents: ..." survives the move from the announced list to the timetable. The plan also
+ * names the announced acts on the days this import fills that no set covers once it is written.
  */
 
 import { MAX_ARTISTS_PER_SET } from './constants';
+import { lineupEntryKey } from './lineup';
 import { sanitizeLinkRecord, type LineupImportRowInput } from './schemas';
 import { sanitizeString } from './helpers/sanitize';
 import { validateColor, validateTime } from './helpers/validation';
@@ -28,6 +33,8 @@ export interface LineupImportPlanRow {
   stageName?: string;
   startTime?: string | null;
   endTime?: string | null;
+  /** The poster name a new set takes from the announced act it covers. */
+  displayName?: string;
   changes: string[];
   errors: { field: ErrorField; message: string }[];
   warnings: string[];
@@ -48,6 +55,8 @@ export interface LineupImportPlan {
   newStages: { name: string; color: string }[];
   newDays: { label: string; date: string }[];
   missingFromFile: { setId: string; artist: string; dayLabel: string }[];
+  /** Announced acts dated to a day this import fills that no set covers afterwards. */
+  unmatchedActs: { entryId: string; name: string; dayLabel: string }[];
   problems: string[];
   stages: string[];
   days: string[];
@@ -72,7 +81,7 @@ export interface SetValues {
 export interface LineupImportWrites {
   newStages: { id: string; name: string; color: string }[];
   newDays: { dayIndex: number; label: string; date: string }[];
-  inserts: (SetValues & { index: number; id: string; dayIndex: number })[];
+  inserts: (SetValues & { index: number; id: string; dayIndex: number; displayName: string | null })[];
   updates: { index: number; setId: string; before: SetValues; after: SetValues }[];
   spotifyMatched: number;
 }
@@ -196,6 +205,11 @@ function createContext(input: PlanInput) {
     date: d.date || '',
   }));
   const existingDayCount = days.length;
+  const lineup: any[] = Array.isArray(festival.lineup) ? festival.lineup : [];
+  const posterNames = new Map<string, string>();
+  for (const entry of lineup) {
+    if (entry.status !== 'cancelled' && entry.displayName) posterNames.set(lineupEntryKey(entry), entry.displayName);
+  }
   const lastExistingDate = days.reduce((max, d) => (d.date > max ? d.date : max), '');
   const existing: ExistingSet[] = (festival.days || []).flatMap((d: any, i: number) =>
     (d.sets || []).map((s: any) => {
@@ -232,11 +246,14 @@ function createContext(input: PlanInput) {
     existingDayCount,
     lastExistingDate,
     existing,
+    lineup,
+    posterNames,
+    filledDays: new Set<string>(),
     existingById: new Map(existing.map((s) => [s.id, s])),
     planRows: [] as LineupImportPlanRow[],
     matchedIds: new Set<string>(),
     firstRowOf: new Map<string, number>(),
-    inserts: [] as (SetValues & { index: number; id: string; dayKey: string })[],
+    inserts: [] as (SetValues & { index: number; id: string; dayKey: string; displayName: string | null })[],
     updates: [] as LineupImportWrites['updates'],
     schedule: [] as ScheduleEntry[],
     spotifyMatched: 0,
@@ -416,6 +433,7 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
 
   const status: LineupImportRowStatus =
     errors.length > 0 ? 'error' : !match ? 'new' : changes.length > 0 ? 'changed' : 'unchanged';
+  const poster = !match && names.length > 0 ? (ctx.posterNames.get(lineupEntryKey({ artists: values.artists })) ?? null) : null;
   ctx.planRows.push({
     row: row.row,
     status,
@@ -425,11 +443,12 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
     stageName: stageNameOf(ctx, values.stageId || undefined),
     startTime: values.startTime,
     endTime: values.endTime,
+    ...(poster && status !== 'error' ? { displayName: poster } : {}),
     changes,
     errors,
     warnings,
   });
-  recordWrite(ctx, index, status, match, dayInfo, values);
+  recordWrite(ctx, index, status, match, dayInfo, values, poster);
 }
 
 function newValues(ctx: Ctx, names: string[], stageId: string, start: string | null, end: string | null, link: string | null): SetValues {
@@ -491,11 +510,20 @@ function addNearMatchWarning(ctx: Ctx, key: string, day: DayInfo | undefined, wa
   if (near) warnings.push(`Did you mean ${near.names.join(` ${ctx.sep} `)}?`);
 }
 
-function recordWrite(ctx: Ctx, index: number, status: LineupImportRowStatus, match: ExistingSet | undefined, day: DayInfo | undefined, values: SetValues) {
+function recordWrite(
+  ctx: Ctx,
+  index: number,
+  status: LineupImportRowStatus,
+  match: ExistingSet | undefined,
+  day: DayInfo | undefined,
+  values: SetValues,
+  displayName: string | null,
+) {
   if (status === 'error' || !day) return;
+  ctx.filledDays.add(day.key);
   if (status === 'new') {
     const id = ctx.makeId('set-import');
-    ctx.inserts.push({ ...values, index, id, dayKey: day.key });
+    ctx.inserts.push({ ...values, index, id, dayKey: day.key, displayName });
     ctx.schedule.push({ rowIndex: index, dayKey: day.key, stageId: values.stageId, artist: values.artist, start: values.startTime, end: values.endTime });
     return;
   }
@@ -580,6 +608,7 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
   }
 
   const spotifyMatched = fillSpotify(ctx);
+  const unmatchedActs = findUnmatchedActs(ctx);
   const missingFromFile = ctx.existing
     .filter((s) => !ctx.matchedIds.has(s.id))
     .map((s) => ({ setId: s.id, artist: s.values.artist, dayLabel: s.dayLabel }));
@@ -600,6 +629,7 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
     newStages: newStages.map((s) => ({ name: s.name, color: s.color })),
     newDays: newDays.map((d) => ({ label: d.label, date: d.date })),
     missingFromFile,
+    unmatchedActs,
     problems,
     stages: [...ctx.stages.filter((s) => !s.isNew), ...newStages].map((s) => s.name),
     days: [...ctx.days.slice(0, ctx.existingDayCount), ...newDays].map((d) => d.label || d.date),
@@ -612,6 +642,28 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
     spotifyMatched,
   };
   return { plan, writes };
+}
+
+/**
+ * Announced acts dated to a day this import writes to that no set covers once it is written. The cover
+ * rule is the one in lib/lineup.ts: equal name-key sets, or a hand link to a set that exists.
+ */
+function findUnmatchedActs(ctx: Ctx): LineupImportPlan['unmatchedActs'] {
+  const setKey = (artists: { name: string }[]) => lineupEntryKey({ artists });
+  const updated = new Map(ctx.updates.map((u) => [u.setId, u.after]));
+  const covered = new Set<string>([
+    ...ctx.existing.map((s) => setKey(updated.get(s.id)?.artists ?? s.names.map((name) => ({ name })))),
+    ...ctx.inserts.map((s) => setKey(s.artists)),
+  ]);
+  return ctx.lineup
+    .filter((entry) => entry.status !== 'cancelled' && !covered.has(lineupEntryKey(entry)))
+    .filter((entry) => !(entry.linkedSetIds ?? []).some((id: string) => ctx.existingById.has(id)))
+    .flatMap((entry) => {
+      const day = entry.dayDate ? ctx.days.find((d) => d.date === entry.dayDate) : undefined;
+      if (!day || !ctx.filledDays.has(day.key)) return [];
+      const name = entry.displayName || (entry.artists ?? []).map((a: any) => a.name).join(` ${ctx.sep} `);
+      return [{ entryId: entry.id, name, dayLabel: day.label || day.date }];
+    });
 }
 
 /** Fills Spotify link, photo and genres of new sets' artists that have no link. */
