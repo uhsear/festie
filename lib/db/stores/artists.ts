@@ -16,6 +16,7 @@ import { withTransactionRetry } from '../connection';
 import { createOpaqueId } from '../../helpers';
 import { sanitizeString } from '../../helpers/sanitize';
 import { artistNameKey } from '../../artist-key';
+import { possibleDuplicateIds } from '../../artist-duplicates';
 import { detectPlatform, normalizeArtistLink } from '../../artist-links';
 import { todayInZone } from '../../lineup';
 import { AUDIT_ACTIONS } from '../../audit-actions';
@@ -69,7 +70,13 @@ export interface ArtistActor {
 }
 
 /** The audit row of a global artist change, written in the change's own transaction so the two never disagree. */
-async function insertArtistAudit(client: any, artistId: string, actor: ArtistActor, details: Record<string, unknown>) {
+async function insertArtistAudit(
+  client: any,
+  artistId: string,
+  actor: ArtistActor,
+  details: Record<string, unknown>,
+  action: string = AUDIT_ACTIONS.ARTIST_UPDATED,
+) {
   await client.query(
     `
   INSERT INTO
@@ -99,7 +106,7 @@ async function insertArtistAudit(client: any, artistId: string, actor: ArtistAct
       NOW()
     )
 `,
-    [createOpaqueId('aud'), actor.userId, AUDIT_ACTIONS.ARTIST_UPDATED, artistId, JSON.stringify(details), actor.ip ?? null],
+    [createOpaqueId('aud'), actor.userId, action, artistId, JSON.stringify(details), actor.ip ?? null],
   );
 }
 
@@ -244,13 +251,18 @@ export async function artistUses(db: { query: Pool['query'] }, artistIds: string
   return out;
 }
 
-/** Ids of the festivals that list one artist, archived ones included, in id order. Takes no locks. */
-async function festivalIdsUsing(client: any, artistId: string): Promise<string[]> {
+/** Ids of the festivals that list any of the artists, archived ones included, in id order. Takes no locks. */
+async function festivalIdsUsingAny(client: any, artistIds: string[]): Promise<string[]> {
   const { rows } = await client.query(
     `SELECT DISTINCT festival_id FROM (${ELEMENT_IDS_OF_SETS} UNION ${ELEMENT_IDS_OF_LINEUPS}) u ORDER BY festival_id`,
-    [[artistId]],
+    [artistIds],
   );
   return rows.map((row: any) => row.festival_id);
+}
+
+/** Ids of the festivals that list one artist, archived ones included, in id order. Takes no locks. */
+async function festivalIdsUsing(client: any, artistId: string): Promise<string[]> {
+  return festivalIdsUsingAny(client, [artistId]);
 }
 
 /** The element with the artist row's name, links, photo and genres. Other keys stay. */
@@ -385,12 +397,16 @@ function applyChanges(current: ArtistRecord, changes: ArtistChanges) {
 }
 
 /** Throws the 409 ARTIST_CHANGED, with the current version, when the editor's token is not the row's updated_at. */
-async function assertFreshToken(client: any, row: ArtistRecord, expectedUpdatedAt: string) {
+async function tokenIsFresh(client: any, row: ArtistRecord, expectedUpdatedAt: string): Promise<boolean> {
   const { rows } = await client.query(
     "SELECT date_trunc('milliseconds', $1::timestamptz) = date_trunc('milliseconds', $2::timestamptz) AS same",
     [expectedUpdatedAt, row.updated_at],
   );
-  if (!rows[0].same) {
+  return rows[0].same;
+}
+
+async function assertFreshToken(client: any, row: ArtistRecord, expectedUpdatedAt: string) {
+  if (!(await tokenIsFresh(client, row, expectedUpdatedAt))) {
     throw new ArtistError(409, 'ARTIST_CHANGED', `Someone changed ${row.name} while you were editing. Here is the new version. Apply your change again.`, {
       artist: publicArtist(row),
     });
@@ -398,10 +414,16 @@ async function assertFreshToken(client: any, row: ArtistRecord, expectedUpdatedA
 }
 
 /** Another live artist that would clash with the next key and note, or Spotify id. Throws the 409. */
-async function assertNoClash(client: any, id: string, next: { key: string; label: string; spotifyId: string | null }) {
+async function assertNoClash(
+  client: any,
+  id: string | string[],
+  next: { key: string; label: string; spotifyId: string | null },
+  opts: { merging?: boolean } = {},
+) {
+  const ignored = Array.isArray(id) ? id : [id];
   const { rows: sameKey } = await client.query(
-    `SELECT ${ARTIST_COLUMNS} FROM artists WHERE name_key = $1 AND lower(label) = lower($2) AND merged_into IS NULL AND id <> $3`,
-    [next.key, next.label, id],
+    `SELECT ${ARTIST_COLUMNS} FROM artists WHERE name_key = $1 AND lower(label) = lower($2) AND merged_into IS NULL AND id <> ALL($3::text[])`,
+    [next.key, next.label, ignored],
   );
   if (sameKey[0]) {
     throw new ArtistError(
@@ -413,14 +435,16 @@ async function assertNoClash(client: any, id: string, next: { key: string; label
   }
   if (!next.spotifyId) return;
   const { rows: sameSpotify } = await client.query(
-    `SELECT ${ARTIST_COLUMNS} FROM artists WHERE spotify_id = $1 AND merged_into IS NULL AND id <> $2`,
-    [next.spotifyId, id],
+    `SELECT ${ARTIST_COLUMNS} FROM artists WHERE spotify_id = $1 AND merged_into IS NULL AND id <> ALL($2::text[])`,
+    [next.spotifyId, ignored],
   );
   if (sameSpotify[0]) {
     throw new ArtistError(
       409,
       'ARTIST_EXISTS',
-      `This Spotify artist is already linked to '${shownName(sameSpotify[0])}'. Use that artist, or ask an admin to merge them.`,
+      opts.merging
+        ? `The merged artist would take a Spotify link that '${shownName(sameSpotify[0])}' already holds. Keep the other Spotify link, or merge into that artist.`
+        : `This Spotify artist is already linked to '${shownName(sameSpotify[0])}'. Use that artist, or ask an admin to merge them.`,
       { existingId: sameSpotify[0].id },
     );
   }
@@ -437,6 +461,108 @@ export function artistConflict(error: any): ArtistError | null {
       ? 'This Spotify artist is already linked to another artist. Use that artist, or ask an admin to merge them.'
       : 'An artist with that name and note already exists. Pick that artist, or use a different note.',
   );
+}
+
+export type MergeSide = 'survivor' | 'loser';
+
+/** Per field, which artist's value the merged artist keeps. A field that is not listed keeps the survivor's. */
+export interface MergePick {
+  name?: MergeSide;
+  label?: MergeSide;
+  photo?: MergeSide;
+  genres?: MergeSide;
+  /** By platform key. A platform the picked side lacks takes the other side's link. */
+  links?: Record<string, MergeSide>;
+}
+
+/**
+ * The merged artist's fields. The picked side wins; an empty photo, genre list or link takes the other
+ * side's value. The note is never filled: it tells same-name artists apart, so a copied note could clash.
+ */
+function mergedFields(survivor: ArtistRecord, loser: ArtistRecord, pick: MergePick) {
+  const side = (which: MergeSide | undefined) => (which === 'loser' ? { first: loser, second: survivor } : { first: survivor, second: loser });
+  const name = side(pick.name).first.name;
+  const label = side(pick.label).first.label;
+  const photoSides = side(pick.photo);
+  const photo = photoSides.first.photo ?? photoSides.second.photo ?? null;
+  const genreSides = side(pick.genres);
+  const genres = genreSides.first.genres?.length ? genreSides.first.genres : (genreSides.second.genres ?? []);
+  const links: Links = {};
+  for (const platform of new Set([...Object.keys(survivor.links ?? {}), ...Object.keys(loser.links ?? {})])) {
+    const linkSides = side(pick.links?.[platform]);
+    const link = linkSides.first.links?.[platform] ?? linkSides.second.links?.[platform];
+    if (link) links[platform] = link;
+  }
+  const spotify = links.spotify ? normalizeArtistLink('spotify', links.spotify) : null;
+  return { name, label, photo, genres, links, spotifyId: spotify?.ok ? (spotify.spotifyId ?? null) : null, key: artistNameKey(name) };
+}
+
+interface MergeRefs {
+  sets: Array<{ festivalId: string; setId: string; index: number }>;
+  lineup: Array<{ festivalId: string; entry: number; index: number }>;
+}
+
+const idsOf = (elements: any) => (Array.isArray(elements) ? elements.map((e: any) => e?.id) : []);
+
+/**
+ * Where the loser sits, and the refusal when one set or lineup entry lists both artists. The festivals
+ * are locked by the caller, so the answer stays true until the commit.
+ */
+async function findMergeRefs(client: any, festivalIds: string[], survivorId: string, loserId: string) {
+  const refs: MergeRefs = { sets: [], lineup: [] };
+  const sets: Array<{ id: string; festival_id: string; artist: string; artists: any[] }> = [];
+  const lineups: Array<{ festivalId: string; lineup: any[] }> = [];
+  if (festivalIds.length > 0) {
+    const { rows } = await client.query(
+      `SELECT id, festival_id, artist, artists FROM festival_sets
+        WHERE festival_id = ANY($1::text[]) AND jsonb_typeof(artists) = 'array'
+          AND (artists @> $2::jsonb OR artists @> $3::jsonb)
+        ORDER BY festival_id, id`,
+      [festivalIds, JSON.stringify([{ id: survivorId }]), JSON.stringify([{ id: loserId }])],
+    );
+    sets.push(...rows);
+    const { rows: festivals } = await client.query(
+      `SELECT id, lineup FROM festivals WHERE id = ANY($1::text[]) AND jsonb_typeof(lineup) = 'array' ORDER BY id`,
+      [festivalIds],
+    );
+    for (const festival of festivals) lineups.push({ festivalId: festival.id, lineup: festival.lineup });
+  }
+  const together = (title: string) =>
+    new ArtistError(409, 'INVALID_INPUT', `Both artists play together in '${title}'. They cannot be the same artist.`);
+  for (const set of sets) {
+    const ids = idsOf(set.artists);
+    if (ids.includes(survivorId) && ids.includes(loserId)) throw together(set.artist);
+    ids.forEach((id, index) => id === loserId && refs.sets.push({ festivalId: set.festival_id, setId: set.id, index }));
+  }
+  for (const { festivalId, lineup } of lineups) {
+    lineup.forEach((entry: any, entryIndex: number) => {
+      const ids = idsOf(entry?.artists);
+      if (ids.includes(survivorId) && ids.includes(loserId)) {
+        throw together((entry.artists as any[]).map((e) => e?.name).join(' b2b '));
+      }
+      ids.forEach((id, index) => id === loserId && refs.lineup.push({ festivalId, entry: entryIndex, index }));
+    });
+  }
+  return { refs, sets, lineups };
+}
+
+/** Points every loser element at the survivor. Names, links and the flat set fields follow in rewriteCopies. */
+async function moveRefs(
+  client: any,
+  found: Awaited<ReturnType<typeof findMergeRefs>>,
+  survivorId: string,
+  loserId: string,
+) {
+  const repoint = (elements: any[]) => elements.map((e: any) => (e?.id === loserId ? { ...e, id: survivorId } : e));
+  for (const set of found.sets) {
+    if (!idsOf(set.artists).includes(loserId)) continue;
+    await client.query('UPDATE festival_sets SET artists = $2::jsonb WHERE id = $1', [set.id, JSON.stringify(repoint(set.artists))]);
+  }
+  for (const { festivalId, lineup } of found.lineups) {
+    if (!lineup.some((entry: any) => idsOf(entry?.artists).includes(loserId))) continue;
+    const next = lineup.map((entry: any) => (Array.isArray(entry?.artists) ? { ...entry, artists: repoint(entry.artists) } : entry));
+    await client.query('UPDATE festivals SET lineup = $2::jsonb WHERE id = $1', [festivalId, JSON.stringify(next)]);
+  }
 }
 
 export interface MatchItem {
@@ -662,6 +788,142 @@ export function createArtistsStore(pool: Pool) {
     },
 
     /**
+     * Merges `loserId` into `survivorId` (admin only). The loser becomes a tombstone that records the
+     * refs it moved (merge_refs); every set and announced-lineup entry that listed it now lists the
+     * survivor, and every festival copy is rewritten, archived festivals included. Lock order: festivals
+     * in id order, then both artists in id order; a festival that began to list either artist between
+     * the first read and the locks restarts the transaction. `acceptedFestivals` is the number of
+     * festivals the editor saw in the preview: it is counted again under the locks, and a higher count
+     * refuses the merge. The audit row is written in the same transaction.
+     */
+    async merge(input: {
+      survivorId: string;
+      loserId: string;
+      survivorUpdatedAt: string;
+      loserUpdatedAt: string;
+      pick: MergePick;
+      acceptedFestivals: number;
+      userId: string | null;
+      ip?: string | null;
+    }) {
+      const { survivorId, loserId } = input;
+      if (survivorId === loserId) throw new ArtistError(400, 'INVALID_INPUT', 'Pick two different artists to merge.');
+      try {
+        return await withTransactionRetry(pool, async (client) => {
+          const loadPair = async (lock: boolean) => {
+            const { rows } = await client.query(
+              `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = ANY($1::text[]) ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
+              [[survivorId, loserId]],
+            );
+            const byId = new Map<string, ArtistRecord>((rows as ArtistRecord[]).map((row) => [row.id, row]));
+            const survivor = byId.get(survivorId);
+            const loser = byId.get(loserId);
+            if (!survivor || !loser) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
+            for (const row of [survivor, loser]) {
+              if (!row.merged_into) continue;
+              const into = (await client.query('SELECT name, label FROM artists WHERE id = $1', [row.merged_into])).rows[0];
+              throw new ArtistError(409, 'ARTIST_CHANGED', `This artist was already merged into ${into ? shownName(into) : 'another artist'}.`);
+            }
+            return { survivor, loser };
+          };
+          const pair = [survivorId, loserId];
+          await loadPair(false);
+          const festivalIds = await festivalIdsUsingAny(client, pair);
+          for (const festivalId of festivalIds) await lockFestivalAny(client, festivalId);
+          const { survivor, loser } = await loadPair(true);
+          const again = await festivalIdsUsingAny(client, pair);
+          if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list an artist');
+          if (!(await tokenIsFresh(client, survivor, input.survivorUpdatedAt)) || !(await tokenIsFresh(client, loser, input.loserUpdatedAt))) {
+            throw new ArtistError(409, 'ARTIST_CHANGED', 'Someone changed one of these artists. Reload the pair.', {
+              survivor: publicArtist(survivor),
+              loser: publicArtist(loser),
+            });
+          }
+          if (festivalIds.length > input.acceptedFestivals) {
+            throw new ArtistError(
+              409,
+              'ARTIST_CHANGED',
+              `These artists now play on ${festivalIds.length} ${festivalIds.length === 1 ? 'festival' : 'festivals'}, more than the ${input.acceptedFestivals} you reviewed. Reload the pair and review the merge again.`,
+              { festivals: festivalIds.length, accepted: input.acceptedFestivals },
+            );
+          }
+          const found = await findMergeRefs(client, festivalIds, survivorId, loserId);
+          const next = mergedFields(survivor, loser, input.pick);
+          await assertNoClash(client, pair, next, { merging: true });
+          const takesSpotify = next.spotifyId !== null && next.spotifyId === loser.spotify_id;
+          const mergeRefs = {
+            survivorId,
+            mergedAt: new Date().toISOString(),
+            mergedBy: input.userId,
+            before: {
+              name: loser.name,
+              label: loser.label,
+              spotifyId: loser.spotify_id,
+              links: loser.links ?? {},
+              photo: loser.photo,
+              genres: loser.genres ?? [],
+            },
+            sets: found.refs.sets,
+            lineup: found.refs.lineup,
+          };
+          // The tombstone goes first: it leaves the live name, note and Spotify indexes, so the survivor can take its values.
+          await client.query(
+            `
+  UPDATE artists
+  SET
+    merged_into = $2,
+    merge_refs = $3::jsonb,
+    spotify_id = CASE
+      WHEN $4::boolean THEN NULL
+      ELSE spotify_id
+    END,
+    updated_by = $5,
+    updated_at = now()
+  WHERE
+    id = $1
+`,
+            [loserId, survivorId, JSON.stringify(mergeRefs), takesSpotify, input.userId],
+          );
+          await client.query('UPDATE artists SET merged_into = $2 WHERE merged_into = $1', [loserId, survivorId]);
+          const { rows: updated } = await client.query(
+            `UPDATE artists SET name = $2, name_key = $3, label = $4, spotify_id = $5, links = $6::jsonb, photo = $7, genres = $8::jsonb,
+                    updated_by = $9, updated_at = now()
+              WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
+            [survivorId, next.name, next.key, next.label, next.spotifyId, JSON.stringify(next.links), next.photo, JSON.stringify(next.genres), input.userId],
+          );
+          const artist = updated[0] as ArtistRecord;
+          await moveRefs(client, found, survivorId, loserId);
+          const synced = await rewriteCopies(client, festivalIds, artist);
+          await insertArtistAudit(
+            client,
+            survivorId,
+            { userId: input.userId, ip: input.ip },
+            {
+              survivorId,
+              loserId,
+              survivorName: artistTitle(survivor),
+              loserName: artistTitle(loser),
+              festivals: festivalIds.length,
+              setsMoved: found.refs.sets.length,
+              lineupEntriesMoved: found.refs.lineup.length,
+              pick: input.pick,
+              festivalIds: festivalIds.slice(0, 200),
+            },
+            AUDIT_ACTIONS.ARTIST_MERGED,
+          );
+          return {
+            artist,
+            loser,
+            synced,
+            counts: { festivals: festivalIds.length, sets: found.refs.sets.length, lineupEntries: found.refs.lineup.length },
+          };
+        });
+      } catch (error: any) {
+        throw artistConflict(error) ?? error;
+      }
+    },
+
+    /**
      * Fills one raw link into an artist that has none for its platform, under the festival and artist
      * locks, and rewrites every copy. A link that is already there stays: a concurrent edit wins.
      */
@@ -714,9 +976,15 @@ export function createArtistsStore(pool: Pool) {
      * Artists on one festival (its sets and announced names), or every artist with `scope: 'all'`.
      * Rows with no links come first. `alsoOn` counts the other festivals, archived ones left out.
      */
-    async list(opts: { festivalId?: string; query?: string; limit: number }) {
+    async list(opts: { festivalId?: string; query?: string; limit: number; duplicates?: boolean }) {
       let rows: ArtistRecord[];
-      if (opts.festivalId) {
+      if (opts.duplicates) {
+        const { rows: keys } = await pool.query('SELECT id, name_key FROM artists WHERE merged_into IS NULL');
+        ({ rows } = await pool.query(
+          `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = ANY($1::text[]) ORDER BY name_key, lower(label), id LIMIT $2`,
+          [[...possibleDuplicateIds(keys)], opts.limit],
+        ));
+      } else if (opts.festivalId) {
         ({ rows } = await pool.query(
           `
   SELECT ${ARTIST_COLUMNS} FROM artists WHERE merged_into IS NULL AND id IN (

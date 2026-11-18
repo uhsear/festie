@@ -7,8 +7,12 @@ import {
   createArtist,
   findSpotifyCandidates,
   followersText,
+  listDuplicateArtists,
   listFestivalArtists,
   matchArtists,
+  mergeArtists,
+  mergeFestivalCount,
+  mergePreviewText,
   pickSpotifyCandidates,
   updateArtist,
 } from '../adminArtists';
@@ -122,5 +126,52 @@ describe('Spotify candidates', () => {
     expect(followersText(1_250_000)).toBe('1.3M followers');
     expect(followersText(999_949)).toBe('999.9K followers');
     expect(followersText(999_950)).toBe('1M followers');
+  });
+});
+
+describe('merge artists', () => {
+  const festival = (id: string) => ({ id, name: id, published: true, archived: false, firstDate: null });
+
+  it('posts the loser, both edit tokens, the accepted festival count and the picks to the survivor path', async () => {
+    const spy = vi.fn(async () =>
+      res(200, { data: { artist: { id: 'art-s' }, loserId: 'art-l', counts: { festivals: 2, sets: 3, lineupEntries: 1 } }, error: null }),
+    );
+    vi.stubGlobal('fetch', spy);
+    const out = await mergeArtists(
+      { id: 'art-s', updatedAt: '2026-01-01T00:00:00.000Z' },
+      { id: 'art-l', updatedAt: '2026-01-02T00:00:00.000Z' },
+      { pick: { name: 'loser', links: { spotify: 'loser' } }, acceptedFestivals: 2 },
+    );
+    expect(out.counts.sets).toBe(3);
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain('/admin/artists/art-s/merge');
+    expect(JSON.parse(init.body as string)).toEqual({
+      loserId: 'art-l',
+      survivorUpdatedAt: '2026-01-01T00:00:00.000Z',
+      loserUpdatedAt: '2026-01-02T00:00:00.000Z',
+      acceptedFestivals: 2,
+      pick: { name: 'loser', links: { spotify: 'loser' } },
+    });
+  });
+
+  it('lists possible duplicates through the duplicates query', async () => {
+    const spy = vi.fn(async () => res(200, { data: { artists: [{ id: 'art-1' }] }, error: null }));
+    vi.stubGlobal('fetch', spy);
+    await expect(listDuplicateArtists()).resolves.toEqual([{ id: 'art-1' }]);
+    expect((spy.mock.calls[0] as unknown as [string])[0]).toContain('/admin/artists?duplicates=true');
+  });
+
+  it('counts a festival that lists both artists once', () => {
+    const a = { festivals: [festival('f1'), festival('f2')], counts: { sets: 2, lineupEntries: 0 } };
+    const b = { festivals: [festival('f2'), festival('f3')], counts: { sets: 1, lineupEntries: 1 } };
+    expect(mergeFestivalCount(a, b)).toBe(3);
+  });
+
+  it('words the preview with the loser appearances and its festivals', () => {
+    const use = { festivals: [festival('f1'), festival('f2'), festival('f3')], counts: { sets: 3, lineupEntries: 1 } };
+    expect(mergePreviewText({ name: "Sumthin' Sumthin'" }, { name: 'Sumthin Sumthin', label: 'US' }, use)).toBe(
+      "Moves 4 appearances on 3 festivals from 'Sumthin' Sumthin'' to 'Sumthin Sumthin (US)'. This cannot be undone. To split them later, re-pick the artist on each set.",
+    );
+    expect(mergePreviewText({ name: 'A' }, { name: 'B' }, { festivals: [festival('f1')], counts: { sets: 1, lineupEntries: 0 } })).toContain('Moves 1 appearance on 1 festival');
   });
 });

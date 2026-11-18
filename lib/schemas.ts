@@ -721,8 +721,32 @@ export const artistListQuerySchema = z.object({
   festivalId: z.string().max(100).optional(),
   q: z.string().max(100).optional(),
   limit: z.coerce.number().int().min(1).max(1000).optional(),
+  // "Possible duplicates": artists with the same name key or a key one character apart, on any festival.
+  duplicates: z.enum(['true']).optional(),
 });
 export type ArtistListQuery = z.infer<typeof artistListQuerySchema>;
+
+// Merge the artist in the path (the survivor) with `loserId`. Admin only, web only, behind a recent re-auth.
+const mergeSide = z.enum(['survivor', 'loser']);
+export const artistMergeSchema = z.object({
+  loserId: identifier,
+  // Each artist's updatedAt the editor loaded (millisecond precision).
+  survivorUpdatedAt: z.string().datetime({ offset: true }),
+  loserUpdatedAt: z.string().datetime({ offset: true }),
+  // How many festivals, archived ones included, the editor saw in the preview. The server counts again under its locks and refuses a higher count.
+  acceptedFestivals: z.number().int().min(0).max(10_000),
+  // Per field, which artist's value the merged artist keeps. A field left out keeps the survivor's.
+  pick: z
+    .object({
+      name: mergeSide.optional(),
+      label: mergeSide.optional(),
+      photo: mergeSide.optional(),
+      genres: mergeSide.optional(),
+      links: z.record(z.string().max(40), mergeSide).refine((links) => Object.keys(links).length <= 12, 'Too many link choices').optional(),
+    })
+    .optional(),
+});
+export type ArtistMergeInput = z.infer<typeof artistMergeSchema>;
 
 // "Find Spotify links": the candidates for the artists on one festival, and the editor's picks.
 export const artistSpotifyCandidatesSchema = z.object({
@@ -1757,6 +1781,7 @@ export const schemas = {
   artistMatch: artistMatchSchema,
   artistCreate: artistCreateSchema,
   artistUpdate: artistUpdateSchema,
+  artistMerge: artistMergeSchema,
   artistListQuery: artistListQuerySchema,
   artistSpotifyCandidates: artistSpotifyCandidatesSchema,
   artistSpotifyPicks: artistSpotifyPicksSchema,

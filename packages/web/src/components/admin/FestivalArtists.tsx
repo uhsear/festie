@@ -3,6 +3,7 @@ import {
   artistTitle,
   changeEverywhereText,
   changedArtistFrom,
+  listDuplicateArtists,
   listFestivalArtists,
   searchArtists,
   updateArtist,
@@ -11,6 +12,7 @@ import type { AdminArtistRow } from '@festie/shared/services';
 import { isSafeExternalUrl, platformLabel } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import ArtistMerge from './ArtistMerge';
 import SpotifyCandidates from './SpotifyCandidates';
 
 interface FestivalArtistsProps {
@@ -19,7 +21,7 @@ interface FestivalArtistsProps {
   onClose: () => void;
 }
 
-type Scope = 'festival' | 'all';
+type Scope = 'festival' | 'all' | 'duplicates';
 type RowStatus = { kind: 'saving' | 'saved' | 'conflict' | 'error'; message?: string };
 interface Draft {
   name: string;
@@ -58,12 +60,18 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [findOpen, setFindOpen] = useState(false);
+  const [mergeId, setMergeId] = useState<string | null>(null);
 
   // Each load takes a number. A reply that arrives after a newer load started is dropped.
   const latestLoad = useRef(0);
   const load = useCallback(async () => {
     const mine = ++latestLoad.current;
-    const list = scope === 'festival' ? await listFestivalArtists(festivalId) : await searchArtists(query.trim());
+    const list =
+      scope === 'festival'
+        ? await listFestivalArtists(festivalId)
+        : scope === 'duplicates'
+          ? await listDuplicateArtists()
+          : await searchArtists(query.trim());
     if (mine === latestLoad.current) setArtists(list);
   }, [scope, festivalId, query]);
 
@@ -160,6 +168,9 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         </Button>
         <Button size="sm" variant={scope === 'all' ? 'primary' : 'secondary'} aria-pressed={scope === 'all'} onClick={() => setScope('all')}>
           All artists
+        </Button>
+        <Button size="sm" variant={scope === 'duplicates' ? 'primary' : 'secondary'} aria-pressed={scope === 'duplicates'} onClick={() => setScope('duplicates')}>
+          Possible duplicates
         </Button>
         <Button size="sm" variant={noLinksOnly ? 'primary' : 'secondary'} aria-pressed={noLinksOnly} onClick={() => setNoLinksOnly((v) => !v)}>
           No links
@@ -279,6 +290,16 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
                       onChange={(e) => patchDraft(artist, { label: e.target.value })}
                     />
                   )}
+                  {mergeId === artist.id && (
+                    <ArtistMerge
+                      artist={artist}
+                      onMerged={() => {
+                        setOpenId(null);
+                        void refresh();
+                      }}
+                      onClose={() => setMergeId(null)}
+                    />
+                  )}
                   <div className="flex items-center gap-3">
                     <Button
                       size="sm"
@@ -287,6 +308,15 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
                       onClick={() => requestSave(artist)}
                     >
                       Save
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      disabled={mergeId === artist.id}
+                      aria-label={`Merge ${artist.name} into another artist`}
+                      onClick={() => setMergeId(artist.id)}
+                    >
+                      Merge into…
                     </Button>
                     {rowStatus?.kind === 'saving' && <span className="text-xs text-text-muted">Saving…</span>}
                     {rowStatus?.kind === 'saved' && (

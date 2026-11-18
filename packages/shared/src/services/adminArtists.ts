@@ -112,6 +112,29 @@ export interface SpotifyPick {
   acceptedAlsoOn?: number;
 }
 
+export type MergeSide = 'survivor' | 'loser';
+
+/** Per field, which artist's value the merged artist keeps. A field that is not listed keeps the survivor's. */
+export interface ArtistMergePick {
+  name?: MergeSide;
+  label?: MergeSide;
+  photo?: MergeSide;
+  genres?: MergeSide;
+  /** By platform key. A platform the picked side lacks takes the other side's link. */
+  links?: Record<string, MergeSide>;
+}
+
+export interface ArtistMergeCounts {
+  festivals: number;
+  sets: number;
+  lineupEntries: number;
+}
+
+export interface ArtistUse {
+  festivals: ArtistImpactFestival[];
+  counts: { sets: number; lineupEntries: number };
+}
+
 export const ARTIST_CHANGED = 'ARTIST_CHANGED';
 export const ARTIST_EXISTS = 'ARTIST_EXISTS';
 
@@ -147,6 +170,51 @@ export async function updateArtist(
 export async function getArtistImpact(id: string): Promise<ArtistImpactFestival[]> {
   const data = await api.get<{ festivals: ArtistImpactFestival[] }>(`/admin/artists/${encodeURIComponent(id)}/impact`);
   return data.festivals;
+}
+
+/** Where the artist plays: the festivals (archived ones marked) and the number of sets and announced-lineup entries. */
+export async function getArtistUse(id: string): Promise<ArtistUse> {
+  return api.get<ArtistUse>(`/admin/artists/${encodeURIComponent(id)}/impact`);
+}
+
+/** Admin, web only: artists that share a name key (they differ by note) or have keys one character apart. */
+export async function listDuplicateArtists(): Promise<AdminArtistRow[]> {
+  const data = await api.get<{ artists: AdminArtistRow[] }>('/admin/artists?duplicates=true&limit=1000');
+  return data.artists;
+}
+
+/**
+ * Merges `loser` into `survivor`. Needs a recent re-auth: run it through `withReauth`. `acceptedFestivals`
+ * is the festival count the editor saw (see `mergeFestivalCount`); the server counts again and refuses a higher one.
+ */
+export async function mergeArtists(
+  survivor: Pick<AdminArtist, 'id' | 'updatedAt'>,
+  loser: Pick<AdminArtist, 'id' | 'updatedAt'>,
+  options: { pick: ArtistMergePick; acceptedFestivals: number },
+): Promise<{ artist: AdminArtist; loserId: string; counts: ArtistMergeCounts }> {
+  return api.post(`/admin/artists/${encodeURIComponent(survivor.id)}/merge`, {
+    loserId: loser.id,
+    survivorUpdatedAt: survivor.updatedAt,
+    loserUpdatedAt: loser.updatedAt,
+    acceptedFestivals: options.acceptedFestivals,
+    pick: options.pick,
+  });
+}
+
+/** Distinct festivals that list either artist: the count a merge asks the editor to accept. */
+export function mergeFestivalCount(a: ArtistUse, b: ArtistUse): number {
+  return new Set([...a.festivals, ...b.festivals].map((festival) => festival.id)).size;
+}
+
+/** "Moves 4 appearances on 3 festivals from 'A' to 'B'. This cannot be undone. ..." */
+export function mergePreviewText(loser: { name: string; label?: string }, survivor: { name: string; label?: string }, use: ArtistUse): string {
+  const appearances = use.counts.sets + use.counts.lineupEntries;
+  const festivals = use.festivals.length;
+  return (
+    `Moves ${appearances} ${appearances === 1 ? 'appearance' : 'appearances'} on ${festivals} ${festivals === 1 ? 'festival' : 'festivals'} ` +
+    `from '${artistTitle(loser)}' to '${artistTitle(survivor)}'. This cannot be undone. ` +
+    'To split them later, re-pick the artist on each set.'
+  );
 }
 
 /** The top 3 Spotify candidates for each artist on the festival that has no Spotify link, except the `exclude` ids. Writes nothing. */

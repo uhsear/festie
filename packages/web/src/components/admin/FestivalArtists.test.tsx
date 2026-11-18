@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event';
 const toastError = vi.fn();
 const listFestivalArtists = vi.fn();
 const searchArtists = vi.fn();
+const listDuplicateArtists = vi.fn();
 const updateArtist = vi.fn();
 const findSpotifyCandidates = vi.fn();
 
@@ -12,10 +13,12 @@ vi.mock('@festie/shared/services', async (orig) => ({
   ...(await orig<typeof import('@festie/shared/services')>()),
   listFestivalArtists: (...a: unknown[]) => listFestivalArtists(...a),
   searchArtists: (...a: unknown[]) => searchArtists(...a),
+  listDuplicateArtists: (...a: unknown[]) => listDuplicateArtists(...a),
   updateArtist: (...a: unknown[]) => updateArtist(...a),
   findSpotifyCandidates: (...a: unknown[]) => findSpotifyCandidates(...a),
 }));
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError }) }));
+vi.mock('../../lib/useReauthPrompt', () => ({ useReauthPrompt: () => ({ askPassword: vi.fn(), reauthDialog: null }) }));
 
 import { ApiClientError } from '@festie/shared/services/api';
 import FestivalArtists from './FestivalArtists';
@@ -50,6 +53,7 @@ describe('FestivalArtists', () => {
     vi.clearAllMocks();
     listFestivalArtists.mockResolvedValue(rows());
     searchArtists.mockResolvedValue([]);
+    listDuplicateArtists.mockResolvedValue([]);
   });
 
   it('lists this festival\'s artists with link platforms and where else they play', async () => {
@@ -168,5 +172,25 @@ describe('FestivalArtists', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(screen.queryByText('Stale Match')).toBeNull();
     expect(screen.getByText('Newest Match')).toBeTruthy();
+  });
+
+  it('Possible duplicates loads the duplicate pairs from any festival', async () => {
+    listDuplicateArtists.mockResolvedValue([artist({ id: 'art-5', name: 'Twin Act', label: 'UK', sameName: true }), artist({ id: 'art-6', name: 'Twin Act', label: 'US', sameName: true })]);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Possible duplicates' }));
+    expect(await screen.findByText('(UK)')).toBeTruthy();
+    expect(screen.getByText('(US)')).toBeTruthy();
+    expect(listDuplicateArtists).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Cyclops')).toBeNull();
+  });
+
+  it('Merge into opens the merge panel on that row and searches by the artist name', async () => {
+    searchArtists.mockResolvedValue([artist({ id: 'art-7', name: 'Avello', label: 'NL' })]);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Avello, edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Merge Avello into another artist' }));
+    expect(await screen.findByRole('group', { name: 'Merge Avello' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Merge with Avello (NL)' })).toBeTruthy();
+    expect(searchArtists).toHaveBeenCalledWith('Avello');
   });
 });

@@ -36,6 +36,7 @@ export default function createArtistsRoutes(deps: any) {
     sendError,
     ErrorCodes,
     getRequestIp,
+    requireRecentAuth,
     invalidateFestivalCache,
     config,
   } = deps;
@@ -102,8 +103,13 @@ export default function createArtistsRoutes(deps: any) {
 
   router.get('/', validateQuery(schemas.artistListQuery), async (req: any, res: any) => {
     try {
-      const { festivalId, q, limit } = req.validatedQuery;
-      const artists = await stores.artists.list({ festivalId, query: q, limit: limit ?? (festivalId ? 1000 : 200) });
+      const { festivalId, q, limit, duplicates } = req.validatedQuery;
+      const artists = await stores.artists.list({
+        festivalId,
+        query: q,
+        duplicates: duplicates === 'true',
+        limit: limit ?? (festivalId && !duplicates ? 1000 : 200),
+      });
       return sendSuccess(res, { artists });
     } catch (error: any) {
       return sendArtistError(res, error, 'load artists');
@@ -277,6 +283,41 @@ export default function createArtistsRoutes(deps: any) {
         return sendSuccess(res, { artist: publicArtist(result.artist), festivalsUpdated: result.synced.length });
       } catch (error: any) {
         return sendArtistError(res, error, 'update the artist');
+      }
+    },
+  );
+
+  /**
+   * Merges the artist in the path (the survivor) with `loserId`. Admin only and web only: the loser
+   * becomes a tombstone, every festival that lists it, archived ones too, lists the survivor, and the
+   * moved refs are recorded on the tombstone. A recent re-auth is required, as for a festival delete.
+   * The store writes the audit row in the merge's transaction.
+   */
+  router.post(
+    '/:id/merge',
+    rateLimit(10, 'artist-merge'),
+    requireRecentAuth,
+    validateParams(schemas.genericIdParams),
+    validate(schemas.artistMerge),
+    async (req: any, res: any) => {
+      try {
+        const { loserId, survivorUpdatedAt, loserUpdatedAt, acceptedFestivals, pick } = req.validatedBody;
+        const result = await stores.artists.merge({
+          survivorId: req.validatedParams.id,
+          loserId,
+          survivorUpdatedAt,
+          loserUpdatedAt,
+          acceptedFestivals,
+          pick: pick ?? {},
+          userId: req.user?.userId ?? null,
+          ip: getRequestIp(req),
+        });
+        await afterSync(result.synced);
+        if (req.res?.locals) req.res.locals.auditWritten = true;
+        log.info('artist:merged', { survivorId: req.validatedParams.id, loserId, ...result.counts });
+        return sendSuccess(res, { artist: publicArtist(result.artist), loserId, counts: result.counts });
+      } catch (error: any) {
+        return sendArtistError(res, error, 'merge the artists');
       }
     },
   );

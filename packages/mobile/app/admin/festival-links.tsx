@@ -38,6 +38,8 @@ interface Draft {
 const HEADER_TITLE = 'Artists';
 /** Mobile has no Spotify picker: the candidates and "None of these" are on the web Artists screen. */
 const PICK_ON_WEB = 'Pick the artist on the web. Open Artists there and choose Find Spotify links.';
+/** Mobile has no merge screen: two artists are merged on the web Artists screen. */
+const MERGE_ON_WEB = 'Merge on the web. Open Artists there and choose Merge into.';
 const emptyDraft = (artist: AdminArtistRow): Draft => ({ name: artist.name, addLink: '', label: artist.label, removed: [] });
 const hasChanges = (artist: AdminArtistRow, draft: Draft) =>
   draft.addLink.trim() !== '' ||
@@ -238,6 +240,7 @@ export default function FestivalArtistsScreen() {
         </View>
 
         <Text style={styles.emptyHint}>{PICK_ON_WEB}</Text>
+        <Text style={styles.emptyHint}>{MERGE_ON_WEB}</Text>
 
         {notice ? (
           <View style={styles.card} accessibilityLiveRegion="polite">
