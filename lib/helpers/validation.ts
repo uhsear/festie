@@ -6,7 +6,7 @@
  */
 
 import { sanitizeString, sanitizeIdentifier } from './sanitize';
-import { festivalStartMinutes, formatClock12 } from '../time-zone';
+import { festivalStartMinutes, formatClock12, setMinuteRange } from '../time-zone';
 import { coverLineup, lineupIssues } from '../lineup';
 
 export function validateTime(value: any) {
@@ -254,7 +254,9 @@ export function validateFestival(config: any, body: any) {
 }
 
 export interface ChecklistItem {
-  key: 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps';
+  key:
+    | 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps'
+    | 'duration_odd' | 'start_unusual_hour' | 'artist_double_booked';
   /** 'todo' blocks publish; 'warn' does not. */
   status: 'done' | 'todo' | 'warn';
   label: string;
@@ -298,6 +300,123 @@ export function stageOverlapWarnings(festival: any): string[] {
       }
     }
   });
+  return out;
+}
+
+const ODD_SET_MIN_MINUTES = 15;
+const ODD_SET_MAX_MINUTES = 240;
+const UNUSUAL_START_FROM = 6 * 60;
+const UNUSUAL_START_BEFORE = 11 * 60;
+const LATE_DAY_FROM = 14 * 60;
+
+/** True when most timed sets on the day start at 14:00 or later (after-midnight starts count as late). */
+export function dayRunsLate(daySets: any[]): boolean {
+  const starts = daySets.filter((s) => validateTime(s?.startTime)).map((s) => festivalStartMinutes(s.startTime));
+  return starts.length > 0 && starts.filter((m) => m >= LATE_DAY_FROM).length * 2 > starts.length;
+}
+
+/**
+ * The two time checks shared by the publish checklist and the lineup import rows.
+ * `lengthMinutes` is set only for an odd length: under 15 minutes or over 4 hours
+ * after the 6 AM day rule. `unusualStart` means a 06:00-10:59 start on a late day.
+ */
+export function setTimeFlags(set: any, dayLate: boolean): { lengthMinutes?: number; unusualStart: boolean } {
+  const startOk = validateTime(set?.startTime);
+  const range = startOk && validateTime(set?.endTime) ? setMinuteRange(set) : null;
+  const length = range ? range.end - range.start : null;
+  const startMinutes = startOk ? festivalStartMinutes(set.startTime) : -1;
+  return {
+    ...(length !== null && (length < ODD_SET_MIN_MINUTES || length > ODD_SET_MAX_MINUTES) ? { lengthMinutes: length } : {}),
+    unusualStart: dayLate && startMinutes >= UNUSUAL_START_FROM && startMinutes < UNUSUAL_START_BEFORE,
+  };
+}
+
+export function formatSetLength(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  return minutes % 60 ? `${Math.floor(minutes / 60)} h ${minutes % 60} min` : `${minutes / 60} h`;
+}
+
+const artistNamesOf = (set: any): string[] =>
+  (set?.artists?.length > 0 ? set.artists.map((a: any) => a?.name) : [set?.artist]).filter(
+    (n: any) => typeof n === 'string' && n.trim(),
+  );
+
+/** One line for the first problem, "(and N more)" for the rest. */
+const firstAndCount = (list: string[]) =>
+  list.length === 1 ? list[0]! : `${list[0]!.slice(0, -1)} (and ${list.length - 1} more).`;
+
+/** Odd set lengths and unusual start hours, one line each. Warnings only: they never block a save. */
+export function setTimeWarnings(festival: any): { odd: string[]; unusual: string[] } {
+  const out = { odd: [] as string[], unusual: [] as string[] };
+  (Array.isArray(festival?.days) ? festival.days : []).forEach((day: any, dayIndex: number) => {
+    const daySets: any[] = Array.isArray(day?.sets) ? day.sets : [];
+    const dayLate = dayRunsLate(daySets);
+    const dayName = day?.label || `Day ${dayIndex + 1}`;
+    for (const set of daySets) {
+      const flags = setTimeFlags(set, dayLate);
+      const name = artistNamesOf(set).join(' b2b ') || 'Unnamed';
+      if (flags.lengthMinutes !== undefined) {
+        out.odd.push(`${name} is ${formatSetLength(flags.lengthMinutes)} long on ${dayName}.`);
+      }
+      if (flags.unusualStart) {
+        out.unusual.push(`${name} starts at ${formatClock12(set.startTime)} on ${dayName}, but most sets that day start at 2:00 PM or later.`);
+      }
+    }
+  });
+  return out;
+}
+
+/**
+ * Whole-day offsets in minutes. Dated festivals use the calendar date, so consecutive
+ * days line up across the 6 AM boundary; any undated day falls back to the index.
+ */
+function dayOffsets(days: any[]): number[] {
+  const dates = days.map((d) => /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(d?.date ?? '')));
+  if (dates.length === 0 || dates.some((m) => !m)) return days.map((_, i) => i * 1440);
+  return dates.map((m) => (Date.UTC(+m![1]!, +m![2]! - 1, +m![3]!) / 86_400_000) * 1440);
+}
+
+/**
+ * "{name} is on {stage} and {stage} at the same time on {day}." One name on two
+ * different stages at overlapping absolute minutes. Each B2B member is checked alone.
+ * Name match only: two artists who share a name show here too.
+ */
+export function artistDoubleBookedWarnings(festival: any): string[] {
+  const days: any[] = Array.isArray(festival?.days) ? festival.days : [];
+  const stageNames = new Map<string, string>(
+    (Array.isArray(festival?.stages) ? festival.stages : []).map((s: any) => [s?.id, s?.name || s?.id]),
+  );
+  const offsets = dayOffsets(days);
+  const byName = new Map<string, { name: string; stageId: string; start: number; end: number; dayName: string }[]>();
+  days.forEach((day: any, dayIndex: number) => {
+    for (const set of Array.isArray(day?.sets) ? day.sets : []) {
+      if (!set?.stageId || !validateTime(set.startTime) || !validateTime(set.endTime)) continue;
+      const range = setMinuteRange(set)!;
+      for (const name of artistNamesOf(set)) {
+        const key = name.toLowerCase().replace(/\s+/g, ' ').trim();
+        const list = byName.get(key) ?? [];
+        list.push({
+          name,
+          stageId: set.stageId,
+          start: offsets[dayIndex]! + range.start,
+          end: offsets[dayIndex]! + range.end,
+          dayName: day?.label || `Day ${dayIndex + 1}`,
+        });
+        byName.set(key, list);
+      }
+    }
+  });
+  const out: string[] = [];
+  for (const list of byName.values()) {
+    list.sort((a, b) => a.start - b.start);
+    for (let i = 0; i < list.length; i += 1) {
+      for (let j = i + 1; j < list.length && list[j]!.start < list[i]!.end; j += 1) {
+        const [a, b] = [list[i]!, list[j]!];
+        if (a.stageId === b.stageId) continue; // same-stage overlaps belong to stage_overlap
+        out.push(`${b.name} is on ${stageNames.get(a.stageId) ?? a.stageId} and ${stageNames.get(b.stageId) ?? b.stageId} at the same time on ${b.dayName}.`);
+      }
+    }
+  }
   return out;
 }
 
@@ -376,10 +495,25 @@ export function publishChecklist(config: any, festival: any): ChecklistItem[] {
     : {
         key: 'overlaps',
         status: 'warn',
-        label: overlapList.length === 1
-          ? overlapList[0]!
-          : `${overlapList[0]!.slice(0, -1)} (and ${overlapList.length - 1} more).`,
+        label: firstAndCount(overlapList),
       };
 
-  return [timeZone, stagesItem, daysItem, setsItem, errors, pins, times, overlaps];
+  const timeWarnings = setTimeWarnings(festival);
+  const durationOdd: ChecklistItem = timeWarnings.odd.length === 0
+    ? { key: 'duration_odd', status: 'done', label: 'Every set is 15 minutes to 4 hours long' }
+    : { key: 'duration_odd', status: 'warn', label: firstAndCount(timeWarnings.odd) };
+  const startUnusual: ChecklistItem = timeWarnings.unusual.length === 0
+    ? { key: 'start_unusual_hour', status: 'done', label: 'No unusual morning start times' }
+    : { key: 'start_unusual_hour', status: 'warn', label: firstAndCount(timeWarnings.unusual) };
+
+  const doubleBooked = artistDoubleBookedWarnings(festival);
+  const artistDouble: ChecklistItem = doubleBooked.length === 0
+    ? { key: 'artist_double_booked', status: 'done', label: 'No artist is on two stages at once' }
+    : {
+        key: 'artist_double_booked',
+        status: 'warn',
+        label: `${firstAndCount(doubleBooked)} Name match. Two different artists with one name show here too.`,
+      };
+
+  return [timeZone, stagesItem, daysItem, setsItem, errors, pins, times, overlaps, durationOdd, startUnusual, artistDouble];
 }

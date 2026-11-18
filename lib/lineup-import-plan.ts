@@ -15,7 +15,7 @@ import { MAX_ARTISTS_PER_SET } from './constants';
 import { sanitizeLinkRecord, type LineupImportRowInput } from './schemas';
 import { sanitizeString } from './helpers/sanitize';
 import { lineupFoldKey } from './lineup';
-import { validateColor, validateTime } from './helpers/validation';
+import { dayRunsLate, formatSetLength, setTimeFlags, validateColor, validateTime } from './helpers/validation';
 
 type ErrorField = 'artist' | 'day' | 'date' | 'stage' | 'startTime' | 'endTime' | 'link' | 'row';
 export type LineupImportRowStatus = 'new' | 'changed' | 'unchanged' | 'error';
@@ -178,6 +178,7 @@ export function planLineupImport(input: PlanInput): { plan: LineupImportPlan; wr
   const ctx = createContext(input);
   input.rows.forEach((row, index) => planRow(ctx, row, index));
   addOverlapErrors(ctx);
+  addTimeWarnings(ctx);
   return finish(ctx);
 }
 
@@ -537,17 +538,43 @@ function recordWrite(ctx: Ctx, index: number, status: LineupImportRowStatus, mat
   }
 }
 
-/** Stage overlaps on the final schedule. A pair of two untouched existing sets never blocks an import. */
-function addOverlapErrors(ctx: Ctx) {
+/** The schedule after the import: existing sets with accepted updates applied, plus the new sets. */
+function finalSchedule(ctx: Ctx): ScheduleEntry[] {
   const updated = new Map(ctx.updates.map((u) => [u.setId, u]));
-  const entries: ScheduleEntry[] = [
+  return [
     ...ctx.existing.map((s) => {
       const u = updated.get(s.id);
       const v = u ? u.after : s.values;
       return { rowIndex: u ? u.index : null, dayKey: s.dayKey, stageId: v.stageId, artist: v.artist, start: v.startTime, end: v.endTime };
     }),
     ...ctx.schedule,
-  ].filter((e) => e.start && e.end);
+  ];
+}
+
+/** Odd lengths and unusual start hours on the rows an import writes. Warnings only: they never block a row. */
+function addTimeWarnings(ctx: Ctx) {
+  const entries = finalSchedule(ctx);
+  const lateDays = new Set(
+    [...new Set(entries.map((e) => e.dayKey))].filter((dayKey) =>
+      dayRunsLate(entries.filter((e) => e.dayKey === dayKey).map((e) => ({ startTime: e.start }))),
+    ),
+  );
+  for (const e of entries) {
+    if (e.rowIndex === null) continue;
+    const flags = setTimeFlags({ startTime: e.start, endTime: e.end }, lateDays.has(e.dayKey));
+    const warnings = ctx.planRows[e.rowIndex]!.warnings;
+    if (flags.lengthMinutes !== undefined) {
+      warnings.push(`This set is ${formatSetLength(flags.lengthMinutes)} long. Check the start and end times.`);
+    }
+    if (flags.unusualStart) {
+      warnings.push(`Starts at ${e.start}, but most sets that day start at 14:00 or later. Check AM and PM.`);
+    }
+  }
+}
+
+/** Stage overlaps on the final schedule. A pair of two untouched existing sets never blocks an import. */
+function addOverlapErrors(ctx: Ctx) {
+  const entries = finalSchedule(ctx).filter((e) => e.start && e.end);
 
   for (let i = 0; i < entries.length; i++) {
     for (let j = i + 1; j < entries.length; j++) {
