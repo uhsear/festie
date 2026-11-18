@@ -1052,6 +1052,17 @@ describe('createReengagementTriggers days_out', () => {
       }
     });
 
+    it('a press after the push went out still reaches the people the budget cut', async () => {
+      const { triggers } = build({ postal: '1 Main St, Town', emailsToday: 90 });
+      const first = await triggers.sendDaysOut('fest-1');
+      assert.equal(first.sent, 3);
+      assert.equal(first.emailSent, 0);
+      const dry = await triggers.countDaysOut('fest-1');
+      assert.equal(dry.recipients, 0, 'everyone has the push');
+      assert.equal(dry.emailCut, 3);
+      assert.equal(dry.reason, undefined, 'not "already heard": three people still have no email');
+    });
+
     it('stops at the daily budget and puts people with no push token first', async () => {
       const bodies: any[] = [];
       const fetchMock = mock.method(globalThis, 'fetch', async (_url: any, init: any) => {

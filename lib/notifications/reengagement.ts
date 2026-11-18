@@ -515,7 +515,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   async function countDaysOut(festivalId: string) {
     const { userIds, fresh, reason, ...rest } = await resolveDaysOut(festivalId);
     const email = reason ? { emailRecipients: 0, emailCut: 0, emailOff: null } : await planAlertEmail(userIds, 'days_out', `days:${festivalId}`);
-    const heard = !reason && fresh.length === 0 && email.emailRecipients === 0;
+    const heard = !reason && fresh.length === 0 && email.emailRecipients + email.emailCut === 0;
     return {
       ...rest,
       recipients: fresh.length,
