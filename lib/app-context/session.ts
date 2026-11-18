@@ -17,6 +17,7 @@
 import crypto from 'crypto';
 
 import { hashSessionToken } from '../crypto-auth';
+import { sanitizeIdentifier } from '../helpers/sanitize';
 
 export const REAUTH_WINDOW_MS = 15 * 60 * 1000;
 
@@ -26,7 +27,7 @@ export const REAUTH_WINDOW_MS = 15 * 60 * 1000;
 export const FESTIVAL_ACTIONS = {
   'festival.edit': { role: 'editor', write: true },
   'festival.impact': { role: 'owner', write: false },
-  'festival.delete': { role: 'owner', write: true },
+  'festival.delete': { role: 'admin', write: true },
   'festival.restore': { role: 'admin', write: true },
   'publish.decide': { role: 'admin', write: true },
   'links.edit': { role: 'editor', write: true },
@@ -130,7 +131,9 @@ export function createSessionHelpers({
     const guard = (req: any, res: any, next: any) =>
       adminAuth(req, res, () => {
         req.festivalRole = 'admin';
-        req.festivalId = req.params[param];
+        const raw = req.params[param];
+        // Handlers may trust req.festivalId, so it stays unset for an id that fails validation.
+        req.festivalId = sanitizeIdentifier(raw, 100) === raw ? raw : undefined;
         return next();
       });
     guard.action = action;

@@ -60,7 +60,7 @@ function listRows(): Row[] {
           prefix,
           method,
           path: layer.route.path,
-          guarded: handles.some((fn: any) => typeof fn.action === 'string' && fn.param && layer.route.path.includes(`:${fn.param}`)),
+          guarded: handles.some((fn: any) => typeof fn.action === 'string' && fn.param && new RegExp(`:${fn.param}(?!\w)`).test(layer.route.path)),
           mountGuarded: guards.length > 0,
         });
       }
@@ -118,14 +118,14 @@ describe('festival access: route inventory', () => {
   test('server.ts mounts the festival routers only through buildFestivalMounts', () => {
     const src = readFileSync(new URL('../server.ts', import.meta.url), 'utf8');
     assert.match(src, /buildFestivalMounts\(deps\)/);
-    assert.doesNotMatch(src, /createFestivalRoutes|createLineupImportRoutes|createLineupAnnounceRoutes|createAdminSiteplanRoutes/);
+    assert.doesNotMatch(src, /createFestivalRoutes|createLineupImportRoutes|createLineupAnnounceRoutes|createAdminSiteplanRoutes|createAdminAnnouncementRoutes|createPublicAnnouncementRoutes|createFestivalDiscoveryRoutes/);
   });
 });
 
 describe('festival access: the guard', () => {
   function build({ session = true, admin = false } = {}) {
     const helpers = createSessionHelpers({
-      config: { ORGANIZER_PLATFORM_ENABLED: true, USER_SESSION_COOKIE: 'c', SESSION_TTL: 1 },
+      config: { USER_SESSION_COOKIE: 'c', SESSION_TTL: 1 },
       stores: {
         sessions: { validateUserSession: async () => (session ? { userId: 'u1' } : null) },
         roles: { hasRole: async (userId: string, role: string) => admin && userId === 'u1' && role === 'admin' },
@@ -161,9 +161,9 @@ describe('festival access: the guard', () => {
     assert.equal(nexted, false);
   });
 
-  test('a non-admin is 403 even on a request that claims the organizer mount with the flag on', async () => {
+  test('a non-admin is 403 on every request until organizer access arrives', async () => {
     const guard = build().festivalAccess({ action: 'festival.edit' });
-    const req: any = { params: { id: 'f1' }, organizerMount: true };
+    const req: any = { params: { id: 'f1' } };
     const { res, nexted } = await run(guard, req);
     assert.equal(res.statusCode, 403);
     assert.equal(res.body.message, 'Admin access required');
@@ -186,6 +186,13 @@ describe('festival access: the guard', () => {
     assert.equal(byName.festivalId, 'f2');
     assert.equal((guard as any).action, 'links.edit');
     assert.equal((guard as any).param, 'festivalId');
+  });
+
+  test('an admin request with an invalid festival id passes but leaves festivalId unset', async () => {
+    const req: any = { params: { id: 'a b/../c' } };
+    const { nexted } = await run(build({ admin: true }).festivalAccess({ action: 'festival.edit' }), req);
+    assert.equal(nexted, true);
+    assert.equal(req.festivalId, undefined);
   });
 });
 
