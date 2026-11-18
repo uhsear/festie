@@ -95,7 +95,7 @@ describe('openPlannerDatabase logger adapter', () => {
       await waitFor(() => calls.warn.length > 0);
       // A closed pool fails the retry with a non-retryable error, which logs the error line.
       await pool.end();
-      await assert.rejects(migrationsReady);
+      await assert.rejects(migrationsReady as Promise<unknown>);
       assert.equal(calls.warn[0], 'database not accepting connections; retrying migrations');
       assert.equal(calls.error[0], 'migration runner aborted startup');
     } finally {
