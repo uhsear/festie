@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Festival, FestivalDay, FestivalSet, LineupEntry } from '@festie/shared/types';
 import { announcedLineupModel, lineupReplacesEmptyState } from '@festie/shared/utils';
-import { announcedActsLine, parseLineupView } from '../lib/lineupView';
+import { parseLineupView } from '../lib/lineupView';
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -69,16 +69,6 @@ describe('lineupView helpers', () => {
     expect(parseLineupView(null)).toBe('poster');
     expect(parseLineupView(undefined)).toBe('poster');
   });
-
-  it('announcedActsLine counts announced acts and skips cancelled ones', () => {
-    expect(announcedActsLine([{ status: 'announced' }, { status: 'announced' }, { status: 'cancelled' }])).toBe(
-      '2 announced acts. Edit them on the web.',
-    );
-    expect(announcedActsLine([{ status: 'announced' }])).toBe('1 announced act. Edit them on the web.');
-    expect(announcedActsLine([{ status: 'cancelled' }])).toBeNull();
-    expect(announcedActsLine([])).toBeNull();
-    expect(announcedActsLine(undefined)).toBeNull();
-  });
 });
 
 describe('announced lineup wiring (source guards)', () => {
@@ -101,6 +91,11 @@ describe('announced lineup wiring (source guards)', () => {
     expect(component).toContain("from '@festie/shared/utils'");
     expect(component).not.toMatch(/from '@festie\/shared\/(?!stores|types|utils)/);
     expect(component).not.toContain('socket.io-client');
+  });
+
+  it('a tap on the view switch is not undone by a late saved-view read', () => {
+    expect(component).toContain('if (!userChose.current) setView(parseLineupView(raw));');
+    expect(component).toContain('userChose.current = true;');
   });
 
   it('a scheduled row opens its set and a cancelled one is struck through', () => {

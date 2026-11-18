@@ -58,6 +58,7 @@ import {
 } from './festivalEditState';
 import {
   amenityCount,
+  announcedActsLine,
   artistNamesOf,
   countFestivalChanges,
   describeScheduleNotice,
@@ -79,7 +80,6 @@ import {
   type ScheduleNotice,
 } from '@festie/shared/utils';
 import type { Artist, FestivalMapConfig, LineupEntry } from '@festie/shared/types';
-import { announcedActsLine } from '../../lib/lineupView';
 
 /**
  * Admin — Festival editor (native UI parity for the web FestivalEditForm →

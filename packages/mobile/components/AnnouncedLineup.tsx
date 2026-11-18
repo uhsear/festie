@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
@@ -45,10 +45,14 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
   const nowMs = useNow(60_000);
   const [view, setView] = useState<LineupView>('poster');
   const [full, setFull] = useState(false);
+  // A tap on the switch beats a saved-view read that is still in flight.
+  const userChose = useRef(false);
 
   useEffect(() => {
     AsyncStorage.getItem(LINEUP_VIEW_KEY)
-      .then((raw) => setView(parseLineupView(raw)))
+      .then((raw) => {
+        if (!userChose.current) setView(parseLineupView(raw));
+      })
       .catch((err: unknown) => console.warn('lineup: could not read the saved view', err));
   }, []);
 
@@ -69,6 +73,7 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
 
   const separator = festival?.b2bSeparator;
   const changeView = (next: LineupView) => {
+    userChose.current = true;
     setView(next);
     AsyncStorage.setItem(LINEUP_VIEW_KEY, next).catch((err: unknown) =>
       console.warn('lineup: could not save the view', err),
