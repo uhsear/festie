@@ -630,6 +630,18 @@ describe('responseSchemas: serialized payloads parse', () => {
           ],
         },
       ],
+      lineup: [
+        {
+          id: 'lu-1',
+          artists: [{ name: 'DJ A', links: {} }],
+          displayName: null,
+          tier: null,
+          dayDate: null,
+          status: 'announced',
+          announcedAt: '2026-11-20',
+          linkedSetIds: [],
+        },
+      ],
       mapConfig: null,
       createdAt: now,
       updatedAt: now,
@@ -726,11 +738,13 @@ describe('responseSchemas: serialized payloads parse', () => {
       location: '',
       stageCount: 3,
       dayCount: 2,
+      lineupCount: 5,
       startDate: '2026-07-01',
       endDate: '2026-07-02',
     };
     const parsed = festivalListItemResponseSchema.parse(wire(row));
     assert.equal(parsed.stageCount, 3);
+    assert.equal(parsed.lineupCount, 5);
     // Dateless festival → null range still parses.
     const noDates = festivalListItemResponseSchema.parse(
       wire({ ...row, startDate: null, endDate: null }),

@@ -4,7 +4,7 @@ import { timeAgo } from './timeAgo';
 // FestivalIssueTarget, FestivalIssue and ChecklistItem mirror lib/helpers/validation.ts (server).
 export interface FestivalIssueTarget {
   kind: 'festival' | 'stage' | 'day' | 'set';
-  field?: 'name' | 'color' | 'id' | 'label' | 'date' | 'artist' | 'stageId' | 'startTime' | 'endTime' | 'sets';
+  field?: 'name' | 'color' | 'id' | 'label' | 'date' | 'artist' | 'stageId' | 'startTime' | 'endTime' | 'sets' | 'lineup';
   stageId?: string;
   stageIndex?: number;
   dayIndex?: number;
@@ -18,7 +18,9 @@ export interface FestivalIssue {
   target: FestivalIssueTarget;
 }
 export interface ChecklistItem {
-  key: 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps';
+  key:
+    | 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps'
+    | 'duration_odd' | 'start_unusual_hour' | 'artist_double_booked';
   status: 'done' | 'todo' | 'warn';
   label: string;
 }
@@ -44,7 +46,32 @@ export type EditableFestival = {
   seriesId?: string | null;
   stages?: { id: string; name?: string; color?: string }[];
   days?: { label?: string; date?: string; sets?: EditableSet[] }[];
+  lineup?: EditableLineupEntry[];
 };
+export type EditableLineupEntry = {
+  id?: string;
+  artists: { name: string; links?: Record<string, string> }[];
+  displayName?: string | null;
+  tier?: number | null;
+  dayDate?: string | null;
+  status?: string;
+  linkedSetIds?: string[];
+};
+
+/** Everything an editor can change on an entry, so any edit makes the signatures differ. */
+function lineupSignature(lineup: EditableLineupEntry[] | undefined): string {
+  return JSON.stringify(
+    (lineup ?? []).map((e) => [
+      e.id ?? '',
+      e.artists.map((a) => [a.name, a.links ?? {}]),
+      e.displayName ?? null,
+      e.tier ?? null,
+      e.dayDate ?? null,
+      e.status ?? 'announced',
+      e.linkedSetIds ?? [],
+    ]),
+  );
+}
 
 const HHMM = /^(\d{1,2}):(\d{2})$/;
 
@@ -212,6 +239,8 @@ export function countFestivalChanges(
     }),
   );
   for (const id of setsBefore.keys()) if (!seen.has(id)) total++;
+  // The announced lineup counts as one change however many lines moved.
+  if (lineupSignature(a.lineup) !== lineupSignature(after.lineup)) total++;
   total += newSetIds.size + changedSetIds.size;
   return { total, changedSetIds, newSetIds };
 }

@@ -107,6 +107,24 @@ export default function AdminFestivalPreview({ festivalId }: { festivalId: strin
         </ul>
       )}
 
+      {preview.lineup.length > 0 && (
+        <div>
+          <h2 className="type-label text-text-primary mb-2">Announced acts ({preview.lineup.length})</h2>
+          <ul className="divide-y divide-glass-border rounded-lg border border-glass-border bg-bg-card/60">
+            {preview.lineup.map((entry) => (
+              <li key={entry.id} className="flex items-center gap-3 px-4 py-2 text-sm">
+                <span className="flex-1 text-text-primary">{entry.name}</span>
+                {entry.tier !== null && <span className="text-text-muted">Tier {entry.tier}</span>}
+                <span className="text-text-muted">{entry.dayLabel || 'Day TBA'}</span>
+                <span className="text-text-muted">
+                  {entry.status === 'cancelled' ? 'Cancelled' : entry.scheduled ? 'Scheduled' : 'Announced'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div>
         <h2 className="type-label text-text-primary mb-2">Stages</h2>
         <ul className="space-y-1">

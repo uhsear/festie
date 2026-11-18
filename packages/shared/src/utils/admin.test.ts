@@ -125,6 +125,21 @@ describe('buildFestivalPreview', () => {
     expect(p.days[0].sets[1].time).toBe('8:00 PM – 9:00 PM');
     expect(p.days[0].sets[2].time).toBe('Time TBA');
   });
+  it('lists the announced lineup with its resolved day and scheduled state', () => {
+    const entry = (id: string, names: string[], extra = {}) => ({
+      id, artists: names.map((name) => ({ name })), displayName: null, tier: null, dayDate: null,
+      status: 'announced', announcedAt: '2026-11-01', linkedSetIds: [], ...extra,
+    });
+    const p = buildFestivalPreview({
+      ...detail,
+      lineup: [entry('1', ['Early'], { dayDate: '2026-05-01' }), entry('2', ['Zed', 'Kai'], { displayName: 'Poster', dayDate: '2026-06-01' })],
+    } as unknown as FestivalPreviewInput);
+    expect(p.lineup).toEqual([
+      { id: '1', name: 'Early', tier: null, dayLabel: 'Fri', status: 'announced', scheduled: true },
+      { id: '2', name: 'Poster', tier: null, dayLabel: '', status: 'announced', scheduled: false },
+    ]);
+    expect(buildFestivalPreview(detail).lineup).toEqual([]);
+  });
   it('keys days by dayIndex because the server sends no day id', () => {
     const keys = buildFestivalPreview(detail).days.map((d) => d.key);
     expect(keys).toEqual(['0', '1']);

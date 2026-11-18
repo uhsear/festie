@@ -38,8 +38,11 @@ import {
   ALLOWED_PICK_PRIORITIES,
   ALLOWED_REMINDER_MINUTES,
 } from './constants';
-import { sanitizeString, normalizeRecordKey, sanitizeIdentifier, validateTime, validateColor } from './helpers';
+import { sanitizeLinkRecord, sanitizeString, normalizeRecordKey, sanitizeIdentifier, validateTime, validateColor } from './helpers';
 import { sendError, ErrorCodes } from './response';
+import { normalizeLineup, todayInZone } from './lineup';
+
+export { sanitizeLinkRecord };
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Reusable Primitives
@@ -126,6 +129,7 @@ export const oauthCompleteSchema = z
     username,
     dateOfBirth,
     tosAccepted,
+    ref: signupRef,
   })
   .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
 export type OAuthCompleteInput = z.infer<typeof oauthCompleteSchema>;
@@ -162,6 +166,13 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 const pickValue = z.enum(PICK_PRIORITY_VALUES);
 const picksMap = z.record(z.string().max(100), pickValue).optional();
+// A delta changes only the sets it names: a priority sets the pick, null removes it.
+// Sets the delta leaves out keep whatever the server holds, so a replayed offline
+// write cannot erase picks that arrived after the device last synced.
+const pickDeltasMap = z
+  .record(z.string().max(100), pickValue.nullable())
+  .refine((d) => Object.keys(d).length > 0, { message: 'pickDeltas needs at least one set' })
+  .optional();
 const notesMap = z.record(z.string().max(100), shortText).optional();
 const allowedReminderMinutes = z.union(REMINDER_MINUTE_VALUES.map((m: any) => z.literal(m)) as any);
 const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optional();
@@ -169,11 +180,21 @@ const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optio
 export const profileUpdateSchema = z
   .object({
     picks: picksMap,
+    pickDeltas: pickDeltasMap,
     notes: notesMap,
     reminders: remindersMap,
+    // Set ids the user cleared in this full-map write. They end the server's 72-hour guard on converted picks.
+    pickRemove: z.array(z.string().max(100)).max(200).optional(),
+    // Interest marks travel as deltas, never as a whole map, so two devices cannot erase each other's marks.
+    interestAdd: z.array(identifier).max(50).optional(),
+    interestRemove: z.array(identifier).max(50).optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
+  })
+  .refine((d) => d.picks === undefined || d.pickDeltas === undefined, {
+    message: 'Send either picks or pickDeltas, not both',
+    path: ['pickDeltas'],
   });
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 
@@ -397,6 +418,27 @@ export const daySchema = z.object({
 });
 export type DayInput = z.infer<typeof daySchema>;
 
+// One billing line of the announced lineup (festivals.lineup). The server owns announcedAt and
+// makes the id when it is absent; status defaults to announced (see lib/lineup.ts normalizeLineup).
+export const lineupEntrySchema = z.object({
+  id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).optional(),
+  artists: z.array(artistLinkSchema).min(1).max(MAX_ARTISTS_PER_SET),
+  displayName: z.string().max(300).optional().nullable(),
+  tier: z.number().int().min(1).max(9).optional().nullable(),
+  dayDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .nullable(),
+  status: z.enum(['announced', 'cancelled']).optional(),
+  announcedAt: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  linkedSetIds: z.array(z.string().max(100)).max(10).optional(),
+});
+export type LineupEntryInput = z.infer<typeof lineupEntrySchema>;
+
 // Optional IANA time-zone id (e.g. `America/New_York`). Anchors set status +
 // reminder fire-times in the festival's zone. Validated by attempting to
 // construct an Intl.DateTimeFormat with it — a RangeError means an unknown zone.
@@ -513,6 +555,8 @@ export const festivalCreateSchema = z.object({
   timeZone: festivalTimeZone,
   stages: z.array(stageSchema).max(20).optional(),
   days: z.array(daySchema).max(10).optional(),
+  // The announced lineup, at most 500 lines. A save that omits it keeps the stored list.
+  lineup: z.array(lineupEntrySchema).max(500).optional(),
   // Venue point the map and weather use. Sent only when the admin changes it.
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
@@ -540,7 +584,12 @@ export const festivalUpdateSchema = festivalCreateSchema
   .partial()
   // false saves without pushing schedule alerts to people whose picks changed.
   .extend({ notify: z.boolean().optional() })
-  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required');
+  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required')
+  // The PUT also rewrites name, stages and map from the body, so a lineup save from a stale copy needs the token.
+  .refine((d) => d.lineup === undefined || d.expectedUpdatedAt !== undefined, {
+    message: 'Saving the lineup needs expectedUpdatedAt, the updatedAt you loaded.',
+    path: ['expectedUpdatedAt'],
+  });
 export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
 
 // ── Lineup import (admin) ───────────────────────────────────────────
@@ -580,6 +629,17 @@ export const festivalAnnouncementSchema = z
     body: z.string().trim().min(1).max(200),
     screen: z.enum(['home', 'map', 'timeline', 'picks', 'festival-mode', 'crew']).default('home'),
     sendAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+
+// ── Set-time releases (admin) ───────────────────────────────────────
+// One alert per festival date. note is the push body, so it stays inside payload.ts MAX_BODY_LENGTH (200).
+// confirmPartial lets a date go out while some of its sets still have no time.
+export const timeReleaseSendSchema = z
+  .object({
+    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(10),
+    note: z.string().trim().min(1).max(200).optional(),
+    confirmPartial: z.boolean().optional(),
   })
   .strict();
 
@@ -922,17 +982,6 @@ export function resolveSetArtists(set: any, storedSet: any, sep = 'b2b'): any[] 
   return result.map((a: any) => ({ ...a, ..._storedArtistExtras(_findArtist(stored, a.name)) }));
 }
 
-export function sanitizeLinkRecord(links: any): Record<string, string> {
-  if (!links || typeof links !== 'object') return {};
-  const clean: Record<string, string> = {};
-  for (const [platform, url] of Object.entries(links)) {
-    if (typeof url !== 'string' || !url.trim()) continue;
-    const trimmed = url.trim().slice(0, 500);
-    if (/^https?:\/\//.test(trimmed)) clean[platform] = trimmed;
-  }
-  return clean;
-}
-
 export function normalizePickPayload(input: any, config: any): { error?: string; value?: any } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { error: 'Invalid picks format' };
@@ -1060,6 +1109,14 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
     })),
     mapConfig,
     seriesId,
+    // Sent: cleaned and keyed against the stored list. Omitted: the stored list stays.
+    lineup:
+      input.lineup !== undefined
+        ? normalizeLineup(input.lineup, existingFestival?.lineup ?? [], {
+            createId: createOpaqueId,
+            today: todayInZone(timeZone),
+          })
+        : (existingFestival?.lineup ?? []),
     latitude: venueValid ? venueLat : null,
     longitude: venueValid ? venueLng : null,
     createdAt: existingFestival?.createdAt || now,
@@ -1652,6 +1709,7 @@ export const schemas = {
   setLink: setLinkSchema,
   spotifyBackfill: spotifyBackfillSchema,
   festivalAnnouncement: festivalAnnouncementSchema,
+  timeReleaseSend: timeReleaseSendSchema,
   crewHomeBase: crewHomeBaseSchema,
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,

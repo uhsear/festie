@@ -26,6 +26,7 @@ export function resetAllStores(): void {
     savesInFlight: 0,
     lastSavedAt: null,
     guestPicks: {},
+    guestInterests: {},
   });
   useFestivalUIStore.setState({
     selectedDay: 0,

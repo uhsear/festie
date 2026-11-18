@@ -122,6 +122,22 @@ export const festivalSetResponseSchema = z.object({
 });
 export type FestivalSetResponse = z.infer<typeof festivalSetResponseSchema>;
 
+/**
+ * One entry of the announced lineup (festivals.lineup). `scheduled` is not stored: readers derive it
+ * from the sets, so it cannot disagree with them (lib/lineup.ts coverLineup).
+ */
+export const lineupEntryResponseSchema = z.object({
+  id: z.string(),
+  artists: z.array(artistResponseSchema),
+  displayName: z.string().nullable(),
+  tier: z.number().int().nullable(),
+  dayDate: z.string().nullable(),
+  status: z.enum(['announced', 'cancelled']),
+  announcedAt: z.string(),
+  linkedSetIds: z.array(z.string()),
+});
+export type LineupEntryResponse = z.infer<typeof lineupEntryResponseSchema>;
+
 // The depth=1 set is the same minus `linkUrl` (the route's L1 mapper drops it).
 const festivalDepth1SetSchema = festivalSetResponseSchema.omit({ linkUrl: true });
 
@@ -158,6 +174,7 @@ export const festivalDepth1ResponseSchema = z.object({
   longitude: z.number().nullable().optional(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalDepth1DaySchema),
+  lineup: z.array(lineupEntryResponseSchema),
   slug: z.string().nullable().optional(),
   mapConfig: festivalMapConfigSchema.nullable(),
   createdAt: z.string(),
@@ -183,6 +200,7 @@ export const festivalResponseSchema = z.object({
   updatedAt: z.string(),
   stages: z.array(stageResponseSchema),
   days: z.array(festivalFullDaySchema),
+  lineup: z.array(lineupEntryResponseSchema),
   slug: z.string().nullable().optional(),
   // Admin only; the public detail response leaves it out.
   seriesId: z.string().nullable().optional(),
@@ -310,6 +328,10 @@ export const festivalListItemResponseSchema = z.object({
   location: z.string(),
   stageCount: z.number(),
   dayCount: z.number(),
+  /** Announced acts that no set covers yet; cancelled acts are not counted. */
+  lineupCount: z.number(),
+  /** 'times' when any set has a start time, 'days' when acts have days only, 'lineup' when only names are out, else null. */
+  scheduleProgress: z.enum(['times', 'days', 'lineup']).nullable().optional(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   slug: z.string().nullable().optional(),
@@ -346,6 +368,16 @@ export type PickPriorityResponse = z.infer<typeof pickPriorityResponseSchema>;
  * viewer payload (which omits them) and an own payload (which includes them)
  * both parse.
  */
+/**
+ * One interest mark on an announced act. `open` means no pick was made yet; `converted` lists the
+ * set ids the server picked for it, and `at` is when. Private to the owner, like notes.
+ */
+export const interestMarkResponseSchema = z.object({
+  state: z.enum(['open', 'converted']),
+  sets: z.array(z.string()).optional(),
+  at: z.string().optional(),
+});
+
 export const profileResponseSchema = z.object({
   id: z.string(),
   festivalId: z.string(),
@@ -355,6 +387,7 @@ export const profileResponseSchema = z.object({
   picks: z.record(z.string(), pickPriorityResponseSchema),
   notes: z.record(z.string(), z.string()).optional(),
   reminders: z.record(z.string(), z.number()).optional(),
+  interests: z.record(z.string(), interestMarkResponseSchema).optional(),
   createdAt: z.string(),
   updatedAt: z.string(),
 });

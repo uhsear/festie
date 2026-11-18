@@ -24,6 +24,7 @@ describe('resetAllStores', () => {
       days: [{ id: 'd1' } as any],
       error: 'some error',
       guestPicks: { f1: { s1: 'must' } },
+      guestInterests: { f1: { e1: { state: 'open' } } },
     });
     useFestivalUIStore.setState({
       selectedDay: 3,
@@ -88,6 +89,7 @@ describe('resetAllStores', () => {
     expect(state.days).toEqual([]);
     expect(state.error).toBeNull();
     expect(state.guestPicks).toEqual({});
+    expect(state.guestInterests).toEqual({});
   });
 
   it('resets festivalUIStore to defaults', () => {

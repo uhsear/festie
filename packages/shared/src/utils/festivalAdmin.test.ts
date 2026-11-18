@@ -75,6 +75,14 @@ describe('countFestivalChanges', () => {
     expect(countFestivalChanges({ seriesId: 'a' }, { seriesId: null }).total).toBe(1);
     expect(countFestivalChanges({ name: 'FK' }, { name: 'FK', seriesId: null }).total).toBe(0);
   });
+
+  it('counts a lineup change as one change, and an absent lineup equals an empty one', () => {
+    const entry = (name: string, extra = {}) => ({ id: 'lu-1', artists: [{ name }], ...extra });
+    expect(countFestivalChanges({ lineup: [] }, {}).total).toBe(0);
+    expect(countFestivalChanges({ lineup: [entry('A')] }, { lineup: [entry('A')] }).total).toBe(0);
+    expect(countFestivalChanges({ lineup: [entry('A')] }, { lineup: [entry('A', { tier: 2 })] }).total).toBe(1);
+    expect(countFestivalChanges({ lineup: [entry('A')] }, { lineup: [entry('B'), { id: 'x', artists: [{ name: 'C' }] }] }).total).toBe(1);
+  });
   it('treats empty and TBA as equal', () => {
     const f = (t: string) => ({ days: [{ sets: [set('x', { startTime: t, endTime: t })] }] });
     expect(countFestivalChanges(f(''), f('TBA')).total).toBe(0);

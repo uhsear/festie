@@ -76,4 +76,16 @@ describe('AdminFestivals', () => {
     await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
     expect(mockPut.mock.calls[1][1]).toMatchObject({ confirmRemovals: true, expectedUpdatedAt: FULL.updatedAt });
   });
+
+  it('puts the cancel line in the same removal confirm, and says no one is told when alerts are off', async () => {
+    mockPut.mockRejectedValueOnce(
+      new ApiClientError('This save removes sets', 409, 'CONFIRM_REMOVALS', undefined, undefined, {
+        removal: { days: 0, sets: 2, picks: 8, ratings: 0, cancel: { acts: ['Kai'], sets: 2, picks: 8, picked: 4, marked: 8 } },
+      }),
+    );
+    render(<AdminFestivals />);
+    await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
+    expect(await screen.findByText(/Cancelling Kai removes 2 sets and 8 picks\. 12 people will be told \(8 marked it, 4 picked or set a reminder on the changed sets\)\./)).toBeInTheDocument();
+    expect(screen.getAllByText('Remove sets with picks?')).toHaveLength(1);
+  });
 });

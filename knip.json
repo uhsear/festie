@@ -5,6 +5,7 @@
     "lib/avatar-worker.ts",
     "lib/instrument.ts",
     "scripts/*.{mjs,js}",
+    "scripts/artist-backfill.ts",
     "tests/**/*.test.ts"
   ],
   "project": ["lib/**/*.ts", "routes/**/*.ts", "server.ts", "scripts/**/*.{ts,mjs,js}"],

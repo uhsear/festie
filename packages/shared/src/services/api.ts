@@ -1,6 +1,7 @@
 import { API_BASE, TRUSTED_MUTATION_HEADER } from '../constants/config';
 import { ApiError } from '../types/api';
 import { useUIStore } from '../stores/uiStore';
+import { canQueueOnEdgeError } from './errors';
 
 type AuthMode = 'cookie' | 'bearer';
 
@@ -290,7 +291,7 @@ export class ApiClientError extends Error implements ApiError {
 
 // Error-classification helpers live in ./errors (type-only dependency on this
 // module) so store tests that mock '../services/api' don't clobber them.
-export { isApiClientError, parseRetryAfterMs, mapErrorToUserMessage, isResetLinkExpired, isPasswordIncorrect } from './errors';
+export { isApiClientError, parseRetryAfterMs, mapErrorToUserMessage, isResetLinkExpired, isPasswordIncorrect, isEdgeUnavailable } from './errors';
 
 async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = false): Promise<T> {
   const method = String(options.method || 'GET').toUpperCase();
@@ -373,6 +374,17 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
         const refreshed = await _refreshPromise;
         if (refreshed) {
           return apiRequest<T>(path, options, true);
+        }
+      }
+
+      // The edge answered for a dead origin (tunnel down, origin restarting): not a verdict on the
+      // write, so an eligible mutation queues for replay like a network failure instead of being lost.
+      if (!_isRetry && !options._bypassOfflineQueue && isOfflineEligible(path) && canQueueOnEdgeError(response.status, method)) {
+        markOffline();
+        try {
+          return await enqueueOfflineMutation<T>(path, method, options);
+        } catch {
+          /* fall through to surface the HTTP error */
         }
       }
 

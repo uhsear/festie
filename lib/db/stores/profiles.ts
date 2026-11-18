@@ -20,6 +20,27 @@ function batchInsert(client: any, table: string, columns: string[], rows: any[][
   return client.query(`INSERT INTO ${table} (${colStr}) VALUES ${placeholders.join(', ')}`, values);
 }
 
+// Upsert and remove only the pick rows a delta names, then return the profile's whole pick map.
+async function applyPickDeltas(client: any, profileId: string, deltas: { set?: Record<string, string>; remove?: string[] }) {
+  const upserts = Object.entries(deltas.set ?? {});
+  if (upserts.length > 0) {
+    await client.query(
+      `INSERT INTO festival_profile_picks (profile_id, set_id, priority)
+       SELECT $1, u.set_id, u.priority FROM unnest($2::text[], $3::text[]) AS u(set_id, priority)
+       ON CONFLICT (profile_id, set_id) DO UPDATE SET priority = EXCLUDED.priority`,
+      [profileId, upserts.map(([setId]) => setId), upserts.map(([, priority]) => priority)],
+    );
+  }
+  if (deltas.remove?.length) {
+    await client.query('DELETE FROM festival_profile_picks WHERE profile_id = $1 AND set_id = ANY($2::text[])', [
+      profileId,
+      deltas.remove,
+    ]);
+  }
+  const { rows } = await client.query('SELECT set_id, priority FROM festival_profile_picks WHERE profile_id = $1', [profileId]);
+  return Object.fromEntries(rows.map((row: any) => [row.set_id, row.priority]));
+}
+
 // #24: Normalized read fragment — reconstructs picks/notes/reminders from
 // dedicated tables instead of the legacy JSONB columns. JSONB columns remain
 // for dual-write rollback safety but are no longer the read source.
@@ -42,6 +63,8 @@ const PROFILE_SELECT = `
   -- the reminders_json JSONB column (write path + reminder-scheduler use it).
   -- Without this select the API always returned reminders: {} (read-back bug).
   COALESCE(fp.reminders_json, '{}'::jsonb) AS "remindersJson",
+  -- Interest marks go to their owner only: PROFILE_SELECT_PICKS, which serves other users' rows, leaves them out.
+  COALESCE(fp.interests_json, '{}'::jsonb) AS "interestsJson",
   fp.created_at AS "createdAt",
   fp.updated_at AS "updatedAt"
 `;
@@ -63,6 +86,49 @@ const PROFILE_SELECT_PICKS = `
   fp.created_at AS "createdAt",
   fp.updated_at AS "updatedAt"
 `;
+
+// A converted mark protects its picks from a stale full-map pick write for this long. Old builds send
+// the whole picks map and no `If-Match`, so a map that predates the conversion would erase its picks.
+const CONVERTED_PICK_GUARD_MS = 72 * 60 * 60 * 1000;
+
+/**
+ * The picks a full-map write must keep: converted in the last 72 hours, still stored, and missing
+ * from the incoming map. An explicit `interestRemove` deletes the mark, so it ends the protection.
+ * An id in `removed` (the request's `pickRemove`) is the user clearing that pick on purpose, so it is not kept.
+ */
+async function keepConvertedPicks(client: any, profileId: string, picks: Record<string, any>, removed: string[] = []) {
+  const { rows } = await client.query(
+    'SELECT interests_json AS interests FROM festival_profiles WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+    [profileId],
+  );
+  const cutoff = Date.now() - CONVERTED_PICK_GUARD_MS;
+  const guarded = new Set<string>();
+  for (const mark of Object.values<any>(rows[0]?.interests ?? {})) {
+    if (mark?.state !== 'converted' || !(Date.parse(mark.at) >= cutoff)) continue;
+    for (const setId of mark.added ?? []) if (!(setId in picks) && !removed.includes(setId)) guarded.add(setId);
+  }
+  if (guarded.size === 0) return picks;
+  const stored = await client.query(
+    'SELECT set_id, priority FROM festival_profile_picks WHERE profile_id = $1 AND set_id = ANY($2::text[])',
+    [profileId, [...guarded]],
+  );
+  return { ...picks, ...Object.fromEntries(stored.rows.map((row: any) => [row.set_id, row.priority])) };
+}
+
+// One expression, one statement: a mark is added only when absent, so a converted mark stays converted,
+// and a removed id leaves the map whatever its state. Two devices cannot erase each other's marks.
+const interestDeltaSql = (addParam: number, removeParam: number) => `(
+  SELECT COALESCE(jsonb_object_agg(m.k, m.v), '{}'::jsonb)
+  FROM (
+    SELECT e.key AS k, e.value AS v
+    FROM jsonb_each(COALESCE(interests_json, '{}'::jsonb)) e
+    WHERE e.key <> ALL($${removeParam}::text[])
+    UNION ALL
+    SELECT a AS k, '{"state":"open"}'::jsonb AS v
+    FROM unnest($${addParam}::text[]) AS a
+    WHERE a <> ALL($${removeParam}::text[]) AND NOT (COALESCE(interests_json, '{}'::jsonb) ? a)
+  ) m
+)`;
 
 export default function createProfilesStore(pool: Pool, utils: any) {
   const { mapProfileRow } = utils;
@@ -165,6 +231,49 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return bySet;
     },
 
+    /**
+     * User ids whose mark on each entry is still `open`, keyed by entry id. Conversion turns a mark
+     * into picks, so an open mark here means conversion has not run for it, or the picks were full.
+     */
+    async interestedProfilesByEntry(festivalId: string, entryIds: string[]): Promise<Map<string, string[]>> {
+      const byEntry = new Map<string, string[]>();
+      if (entryIds.length === 0) return byEntry;
+      const result = await pool.query(
+        `
+        SELECT e.key AS "entryId", fp.user_id AS "userId"
+        FROM festival_profiles fp, jsonb_each(fp.interests_json) e
+        WHERE fp.festival_id = $1
+          AND fp.deleted_at IS NULL
+          AND fp.user_id IS NOT NULL
+          AND e.key = ANY ($2::text[])
+          AND e.value ->> 'state' = 'open'
+      `,
+        [festivalId, entryIds],
+      );
+      for (const row of result.rows) byEntry.set(row.entryId, [...(byEntry.get(row.entryId) ?? []), row.userId]);
+      return byEntry;
+    },
+
+    /** Marks per entry for the admin demand view: { [entryId]: { open, converted } }. */
+    async interestCounts(festivalId: string): Promise<Record<string, { open: number; converted: number }>> {
+      const result = await pool.query(
+        `
+        SELECT e.key AS "entryId", e.value ->> 'state' AS state, count(*)::int AS n
+        FROM festival_profiles fp, jsonb_each(fp.interests_json) e
+        WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL
+        GROUP BY e.key, state
+      `,
+        [festivalId],
+      );
+      const counts: Record<string, { open: number; converted: number }> = {};
+      for (const row of result.rows) {
+        if (row.state !== 'open' && row.state !== 'converted') continue;
+        counts[row.entryId] ??= { open: 0, converted: 0 };
+        counts[row.entryId]![row.state as 'open' | 'converted'] = row.n;
+      }
+      return counts;
+    },
+
     async getByUserId(userId: string) {
       const result = await pool.query(
         `
@@ -173,6 +282,7 @@ export default function createProfilesStore(pool: Pool, utils: any) {
           fp.festival_id AS "festivalId",
           fp.user_id AS "userId",
           fp.name,
+          COALESCE(fp.interests_json, '{}'::jsonb) AS interests,
           fp.created_at AS "createdAt",
           fp.updated_at AS "updatedAt"
         FROM
@@ -270,7 +380,7 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       });
     },
 
-    async create({ id, festivalId, userId, name, picks, notes, reminders, createdAt }: any) {
+    async create({ id, festivalId, userId, name, picks, notes, reminders, interests, createdAt }: any) {
       // Use transaction to ensure main record and normalized tables stay in sync
       return withTransaction(pool, async (client) => {
         await client.query(
@@ -284,10 +394,11 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       picks_json,
       notes_json,
       reminders_json,
+      interests_json,
       created_at
     )
   VALUES
-    ($1, $2, $3, $4, $5, $6, $7, $8)
+    ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 `,
           [
             id,
@@ -297,6 +408,7 @@ export default function createProfilesStore(pool: Pool, utils: any) {
             serializeJson(picks || {}),
             serializeJson(notes || {}),
             serializeJson(reminders || {}),
+            serializeJson(interests || {}),
             createdAt || new Date().toISOString(),
           ],
         );
@@ -333,16 +445,45 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return mapProfileRow(rows[0]);
     },
 
-    async update(profileId: string, fields: any) {
-      // fields: picks, notes, reminders, userId, name, updatedAt
+    async update(profileId: string, fields: any, { expectedEtag, maxPicks }: { expectedEtag?: string; maxPicks?: number } = {}) {
+      // fields: picks, pickRemove, pickDeltas, notes, reminders, interestAdd, interestRemove, userId, name, updatedAt
+      // pickDeltas ({ set: {setId: priority}, remove: [setId] }) changes only the sets it names.
+      // expectedEtag (the If-Match value) is checked under the row lock, so two writes that both
+      // read the same version cannot both pass. A mismatch throws code VERSION_MISMATCH with the
+      // current profile; a delta that pushes the pick map past maxPicks throws TOO_MANY_PICKS.
+      // Either throw rolls the transaction back.
       // Use transaction to ensure main record and normalized tables stay in sync (#CRITICAL)
       return withTransaction(pool, async (client) => {
         const sets: string[] = [];
         const values: any[] = [];
         let idx = 1;
-        if (fields.picks !== undefined) {
+        let deltaPicks: Record<string, string> | undefined;
+        if (fields.pickDeltas !== undefined || expectedEtag) {
+          // Lock the row so writes to one profile apply one after the other.
+          const locked = await client.query(
+            `SELECT ${PROFILE_SELECT} FROM festival_profiles fp WHERE fp.id = $1 AND fp.deleted_at IS NULL FOR UPDATE OF fp`,
+            [profileId],
+          );
+          if (locked.rows.length === 0) return null;
+          const current = mapProfileRow(locked.rows[0]);
+          if (expectedEtag && current.updatedAt && expectedEtag !== `"${current.updatedAt}"`) {
+            throw Object.assign(new Error('Profile was modified since your last fetch'), { code: 'VERSION_MISMATCH', current });
+          }
+        }
+        if (fields.pickDeltas !== undefined) {
+          deltaPicks = await applyPickDeltas(client, profileId, fields.pickDeltas);
+          if (maxPicks !== undefined && Object.keys(deltaPicks).length > maxPicks) {
+            throw Object.assign(new Error('Too many picks'), { code: 'TOO_MANY_PICKS' });
+          }
+        }
+        const picks = fields.picks === undefined ? undefined : await keepConvertedPicks(client, profileId, fields.picks, fields.pickRemove);
+        if (picks !== undefined) {
           sets.push(`picks_json = $${idx}`);
-          values.push(serializeJson(fields.picks));
+          values.push(serializeJson(picks));
+          idx++;
+        } else if (deltaPicks !== undefined) {
+          sets.push(`picks_json = $${idx}`);
+          values.push(serializeJson(deltaPicks));
           idx++;
         }
         if (fields.notes !== undefined) {
@@ -354,6 +495,11 @@ export default function createProfilesStore(pool: Pool, utils: any) {
           sets.push(`reminders_json = $${idx}`);
           values.push(serializeJson(fields.reminders));
           idx++;
+        }
+        if (fields.interestAdd !== undefined || fields.interestRemove !== undefined) {
+          sets.push(`interests_json = ${interestDeltaSql(idx, idx + 1)}`);
+          values.push(fields.interestAdd ?? [], fields.interestRemove ?? []);
+          idx += 2;
         }
         if (fields.userId !== undefined) {
           sets.push(`user_id = $${idx}`);
@@ -374,9 +520,9 @@ export default function createProfilesStore(pool: Pool, utils: any) {
           values,
         );
         // Sync normalized tables (batch inserts)
-        if (fields.picks !== undefined) {
+        if (picks !== undefined) {
           await client.query('DELETE FROM festival_profile_picks WHERE profile_id = $1', [profileId]);
-          const pickRows = Object.entries(fields.picks).map(([setId, priority]) => [profileId, setId, priority]);
+          const pickRows = Object.entries(picks).map(([setId, priority]) => [profileId, setId, priority]);
           await batchInsert(client, 'festival_profile_picks', ['profile_id', 'set_id', 'priority'], pickRows);
         }
         if (fields.notes !== undefined) {
@@ -440,6 +586,7 @@ export default function createProfilesStore(pool: Pool, utils: any) {
           if (keepPicks) return;
           await client.query('DELETE FROM festival_profile_picks WHERE profile_id = ANY($1)', [profileIds]);
           await client.query('DELETE FROM festival_profile_notes WHERE profile_id = ANY($1)', [profileIds]);
+          await client.query("UPDATE festival_profiles SET interests_json = '{}'::jsonb WHERE id = ANY($1)", [profileIds]);
         });
       }
       return rows.map(mapProfileRow);
