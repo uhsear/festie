@@ -354,23 +354,36 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return mapProfileRow(rows[0]);
     },
 
-    async update(profileId: string, fields: any) {
+    async update(profileId: string, fields: any, { expectedEtag, maxPicks }: { expectedEtag?: string; maxPicks?: number } = {}) {
       // fields: picks, pickDeltas, notes, reminders, userId, name, updatedAt
       // pickDeltas ({ set: {setId: priority}, remove: [setId] }) changes only the sets it names.
+      // expectedEtag (the If-Match value) is checked under the row lock, so two writes that both
+      // read the same version cannot both pass. A mismatch throws code VERSION_MISMATCH with the
+      // current profile; a delta that pushes the pick map past maxPicks throws TOO_MANY_PICKS.
+      // Either throw rolls the transaction back.
       // Use transaction to ensure main record and normalized tables stay in sync (#CRITICAL)
       return withTransaction(pool, async (client) => {
         const sets: string[] = [];
         const values: any[] = [];
         let idx = 1;
         let deltaPicks: Record<string, string> | undefined;
-        if (fields.pickDeltas !== undefined) {
-          // Lock the row so two delta writes to one profile apply one after the other.
+        if (fields.pickDeltas !== undefined || expectedEtag) {
+          // Lock the row so writes to one profile apply one after the other.
           const locked = await client.query(
-            'SELECT id FROM festival_profiles WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+            `SELECT ${PROFILE_SELECT} FROM festival_profiles fp WHERE fp.id = $1 AND fp.deleted_at IS NULL FOR UPDATE OF fp`,
             [profileId],
           );
           if (locked.rows.length === 0) return null;
+          const current = mapProfileRow(locked.rows[0]);
+          if (expectedEtag && current.updatedAt && expectedEtag !== `"${current.updatedAt}"`) {
+            throw Object.assign(new Error('Profile was modified since your last fetch'), { code: 'VERSION_MISMATCH', current });
+          }
+        }
+        if (fields.pickDeltas !== undefined) {
           deltaPicks = await applyPickDeltas(client, profileId, fields.pickDeltas);
+          if (maxPicks !== undefined && Object.keys(deltaPicks).length > maxPicks) {
+            throw Object.assign(new Error('Too many picks'), { code: 'TOO_MANY_PICKS' });
+          }
         }
         if (fields.picks !== undefined) {
           sets.push(`picks_json = $${idx}`);

@@ -211,6 +211,28 @@ describe('offlineQueue', () => {
       expect(queued.map((q) => q.clientId).sort()).toEqual(['a', 'b']);
       expect(queued.every((q) => (q.retries ?? 0) === 0)).toBe(true);
       expect(useUIStore.getState().failedSync).toHaveLength(0);
+      // Replays bypass api.ts, so the drain must flip offline itself for the next good response to restart it.
+      expect(useUIStore.getState().offlineMode).toBe(true);
+    });
+
+    it('treats a 404 on a replayed DELETE as done: removed from the queue, never surfaced as failed', async () => {
+      seed([makeMutation({ clientId: 'd', method: 'DELETE', url: '/crews/c1/polls/x', body: undefined })]);
+      vi.mocked(api.delete).mockRejectedValue(new ApiClientError('Not found', 404));
+
+      await drainQueue();
+
+      expect(readPersisted()).toHaveLength(0);
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
+    });
+
+    it('still surfaces a 404 on a replayed PUT as failed', async () => {
+      seed([makeMutation({ clientId: 'p' })]);
+      vi.mocked(api.put).mockRejectedValue(new ApiClientError('Not found', 404));
+
+      await drainQueue();
+
+      expect(readPersisted()).toHaveLength(0);
+      expect(useUIStore.getState().failedSync).toHaveLength(1);
     });
 
     it('keeps a 429 queued, skips it until Retry-After passes, and never consumes a retry', async () => {

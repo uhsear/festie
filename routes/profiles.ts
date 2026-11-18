@@ -97,6 +97,13 @@ export default function createProfilesRoutes(deps: any) {
     }
   });
 
+  async function sendVersionConflict(res: any, current: any) {
+    const user = (await getUserById(current.userId)) || null;
+    return sendError(res, 409, 'Profile was modified since your last fetch', ErrorCodes.VERSION_MISMATCH, {
+      current: serializeOwnProfile(current, user),
+    });
+  }
+
   // PUT and PATCH both accept partial payloads. `picks` replaces the whole map (old app builds
   // still send it); `pickDeltas` changes only the sets it names, so a replayed offline write
   // cannot clobber picks it never saw. A client that wants conflict detection sends If-Match.
@@ -170,11 +177,9 @@ export default function createProfilesRoutes(deps: any) {
         return sendError(res, 403, 'Not your profile', ErrorCodes.FORBIDDEN);
       }
       // Conflict detection: reject if client's version doesn't match
+      // This early check only saves work; the store repeats it under the row lock.
       if (ifMatch && currentProfile.updatedAt && ifMatch !== `"${currentProfile.updatedAt}"`) {
-        const user = await getUserById(currentProfile.userId) || null;
-        return sendError(res, 409, 'Profile was modified since your last fetch', ErrorCodes.VERSION_MISMATCH, {
-          current: serializeOwnProfile(currentProfile, user),
-        });
+        return sendVersionConflict(res, currentProfile);
       }
 
       const festival = await getFestivalById(currentProfile.festivalId);
@@ -205,7 +210,10 @@ export default function createProfilesRoutes(deps: any) {
       if (nextReminders !== undefined) updateFields.reminders = nextReminders;
 
       // Update profile
-      const profile = await stores.profiles.update(profileId, updateFields);
+      const profile = await stores.profiles.update(profileId, updateFields, {
+        expectedEtag: ifMatch || undefined,
+        maxPicks: deps.config?.MAX_PICKS,
+      });
       if (!profile) return sendError(res, 500, 'Failed to update profile', ErrorCodes.INTERNAL_ERROR);
 
       log.info('profile:updated', { profileId, userId: req.user.userId, fields: Object.keys(updateFields) });
@@ -219,6 +227,8 @@ export default function createProfilesRoutes(deps: any) {
       if (profile.updatedAt) res.setHeader('ETag', `"${profile.updatedAt}"`);
       return sendSuccess(res, serializeOwnProfile(profile, await getUserById(profile.userId)));
     } catch (error: any) {
+      if (error.code === 'VERSION_MISMATCH') return sendVersionConflict(res, error.current);
+      if (error.code === 'TOO_MANY_PICKS') return sendError(res, 400, 'Too many picks', ErrorCodes.INVALID_INPUT);
       log.error('profile update failed', { error: error.message, profileId: req.validatedParams?.id });
       return sendError(res, 500, 'Failed to update profile', ErrorCodes.INTERNAL_ERROR);
     }

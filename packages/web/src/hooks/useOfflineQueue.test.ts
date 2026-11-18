@@ -316,6 +316,26 @@ describe('useOfflineQueue — localStorage fallback', () => {
     expect(ui.failedSync).toEqual([]);
   });
 
+  it('an edge 502 is treated like a dead network: stays queued with no retry used, and flips offline', async () => {
+    const { result } = renderHook(() => useOfflineQueue());
+    await act(async () => {
+      await result.current.queueMutation({ clientId: 'edge-1', type: 'api', url: '/crews/abc/expenses', method: 'POST', body: {} });
+    });
+    const apiFn = vi.fn().mockRejectedValue(Object.assign(new Error('Bad gateway'), { status: 502 }));
+    for (let i = 0; i < MAX_RETRIES + 1; i++) {
+      await act(async () => {
+        ui.setOfflineMode(false);
+        await result.current.processQueue(apiFn);
+      });
+    }
+    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')).toEqual([
+      expect.objectContaining({ clientId: 'edge-1' }),
+    ]);
+    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')[0].retries ?? 0).toBe(0);
+    expect(ui.offlineMode).toBe(true);
+    expect(ui.failedSync).toEqual([]);
+  });
+
   it('a 429 stays queued after Retry-After without consuming a retry or surfacing', async () => {
     const { result } = renderHook(() => useOfflineQueue());
     await act(async () => {
@@ -343,7 +363,7 @@ describe('useOfflineQueue — localStorage fallback', () => {
     await act(async () => {
       await result.current.queueMutation({ clientId: 'srv-1', type: 'api', url: '/crews/abc/polls', method: 'POST', body: {} });
     });
-    const apiFn = vi.fn().mockRejectedValue(Object.assign(new Error('Server error'), { status: 503 }));
+    const apiFn = vi.fn().mockRejectedValue(Object.assign(new Error('Server error'), { status: 500 }));
     vi.useFakeTimers({ toFake: ['setTimeout'] });
     try {
       for (let i = 1; i < MAX_RETRIES; i++) {

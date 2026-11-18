@@ -5,6 +5,7 @@ import {
   MAX_QUEUE_AGE_MS,
   extractRealId,
   parseRetryAfterMs,
+  isEdgeUnavailable,
   hydrateFailedSync,
   surfaceFailedSync,
 } from '@festie/shared/services';
@@ -579,8 +580,13 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
           } catch (err: unknown) {
             // Dead network: keep the entry untouched (same clientId, so the same
             // Idempotency-Key next time; same retries and createdAt, so MAX_RETRIES
-            // and the 24h prune still apply) and stop. The next good response drains.
-            if ((err as { isNetworkError?: boolean } | null)?.isNetworkError === true) {
+            // and the 24h prune still apply) and stop. The next good response drains. An edge 5xx
+            // means the origin is down, so it counts the same: otherwise a flapping origin
+            // would burn MAX_RETRIES.
+            if (
+              (err as { isNetworkError?: boolean } | null)?.isNetworkError === true ||
+              isEdgeUnavailable((err as { status?: number } | null)?.status)
+            ) {
               try {
                 useUIStore.getState().setOfflineMode(true);
               } catch {

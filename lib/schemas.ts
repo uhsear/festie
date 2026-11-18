@@ -165,7 +165,10 @@ const picksMap = z.record(z.string().max(100), pickValue).optional();
 // A delta changes only the sets it names: a priority sets the pick, null removes it.
 // Sets the delta leaves out keep whatever the server holds, so a replayed offline
 // write cannot erase picks that arrived after the device last synced.
-const pickDeltasMap = z.record(z.string().max(100), pickValue.nullable()).optional();
+const pickDeltasMap = z
+  .record(z.string().max(100), pickValue.nullable())
+  .refine((d) => Object.keys(d).length > 0, { message: 'pickDeltas needs at least one set' })
+  .optional();
 const notesMap = z.record(z.string().max(100), shortText).optional();
 const allowedReminderMinutes = z.union(REMINDER_MINUTE_VALUES.map((m: any) => z.literal(m)) as any);
 const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optional();

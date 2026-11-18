@@ -115,6 +115,64 @@ describe('Picks deltas (BL-1.1 server half)', { concurrency: 1 }, () => {
     assert.equal(fresh.status, 200);
   });
 
+  test('conflict: two writes that carry the same ETag at once, only one applies', async () => {
+    const { write, tablePicks } = await setup('delta-conflict-race');
+    const first = await write('put', { pickDeltas: { 'set-a': 'must' } }).expect(200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const etag = first.headers['etag'];
+
+    const results = await Promise.all([
+      write('put', { pickDeltas: { 'set-b': 'maybe' } }, { 'If-Match': etag }),
+      write('put', { pickDeltas: { 'set-c': 'must' } }, { 'If-Match': etag }),
+    ]);
+
+    assert.deepEqual(results.map((r) => r.status).sort(), [200, 409]);
+    const { table } = await tablePicks();
+    assert.equal(table['set-b'] !== undefined, results[0].status === 200);
+    assert.equal(table['set-c'] !== undefined, results[1].status === 200);
+  });
+
+  test('a stale If-Match on a full picks map returns 409 and applies nothing', async () => {
+    const { write, tablePicks } = await setup('delta-conflict-full');
+    const first = await write('put', { picks: { 'set-a': 'must' } }).expect(200);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    await write('put', { picks: { 'set-b': 'maybe' } }).expect(200);
+
+    const conflict = await write('put', { picks: { 'set-c': 'must' } }, { 'If-Match': first.headers['etag'] });
+    assert.equal(conflict.status, 409);
+    assert.deepEqual((await tablePicks()).table, { 'set-b': 'maybe' });
+  });
+
+  test('an empty pickDeltas is rejected and changes nothing', async () => {
+    const { write, tablePicks } = await setup('delta-empty');
+    await write('put', { picks: { 'set-a': 'must' } }).expect(200);
+    await write('put', { pickDeltas: {} }).expect(400);
+    assert.deepEqual((await tablePicks()).table, { 'set-a': 'must' });
+  });
+
+  test('repeated deltas cannot grow the pick map past MAX_PICKS', async () => {
+    server = await startServer({ MAX_PICKS: 2 });
+    const user = await registerUser(server, 'delta-cap');
+    const profile = await joinFestivalProfile(server, user.token);
+    const write = (body: any) =>
+      server.request
+        .put(`/api/v1/profiles/${profile.id}`)
+        .set('x-user-token', user.token)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .send(body);
+    await write({ pickDeltas: { 'set-a': 'must', 'set-b': 'maybe' } }).expect(200);
+    const over = await write({ pickDeltas: { 'set-c': 'must' } });
+    assert.equal(over.status, 400);
+    await write({ pickDeltas: { 'set-a': null, 'set-c': 'must' } }).expect(200);
+    const pool = new Pool({ connectionString: server.databaseUrl });
+    try {
+      const rows = (await pool.query('SELECT set_id FROM festival_profile_picks WHERE profile_id = $1 ORDER BY set_id', [profile.id])).rows;
+      assert.deepEqual(rows.map((r: any) => r.set_id), ['set-b', 'set-c']);
+    } finally {
+      await pool.end();
+    }
+  });
+
   test('old client: a full picks map still replaces the whole map, on PUT and PATCH', async () => {
     const { write, tablePicks } = await setup('delta-old-client');
     await write('put', { picks: { 'set-a': 'must', 'set-b': 'maybe' } }).expect(200);

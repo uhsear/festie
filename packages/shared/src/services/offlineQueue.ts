@@ -316,7 +316,12 @@ async function replay(m: QueuedMutation): Promise<unknown> {
       await api.patch(m.url, m.body, opts);
       return undefined;
     case 'DELETE':
-      await api.delete(m.url, opts);
+      try {
+        await api.delete(m.url, opts);
+      } catch (err) {
+        // A 404 means the target is gone, so a delete the origin ran before its answer was lost succeeded.
+        if ((err as { status?: number } | null)?.status !== 404) throw err;
+      }
       return undefined;
   }
 }
@@ -397,6 +402,13 @@ export async function drainQueue(): Promise<void> {
         } else if (isNetworkTimeout(err) || isEdgeUnavailable((err as { status?: number } | null)?.status)) {
           // Weak signal, not a server verdict (an edge 5xx means the origin is down): keep the
           // entry untouched, retry next drain. Without this, an outage would burn MAX_RETRIES.
+          // Replays bypass api.ts's offline marking, so flip it here or the next good
+          // response never restarts the drain.
+          try {
+            useUIStore.getState().setOfflineMode(true);
+          } catch {
+            /* store not ready */
+          }
           break;
         } else if (isPermanentFailure(err)) {
           await withQueueLock(async () => {
