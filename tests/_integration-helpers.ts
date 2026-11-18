@@ -91,7 +91,7 @@ async function truncateAllTables(databaseUrl: string) {
         festival_stages, festivals, user_sessions, users,
         install_events, set_ratings, calendar_tokens,
         crew_expenses, crew_polls, crew_poll_votes,
-        crew_meeting_points, crew_activity
+        crew_meeting_points, crew_activity, artist_backfill_runs
       CASCADE
     `);
   } finally {

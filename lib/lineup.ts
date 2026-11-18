@@ -29,15 +29,23 @@ export function lineupFoldKey(name: string): string {
     .trim();
 }
 
-/** Folds a name for matching: "Zed's Dead" = "Zeds Dead", "roi*" = "roi", "The X" = "X". */
-export function lineupNameKey(name: string): string {
+/**
+ * The fold core: lineupFoldKey, then "&" as "and", apostrophes and periods deleted, other symbols as
+ * spaces. It keeps a leading "the". An empty result falls back to the lower-cased input.
+ * artistNameKey (lib/artist-key.ts) uses it as is.
+ */
+export function foldNameCore(name: string): string {
   const folded = lineupFoldKey(name)
     .replace(/&/g, ' and ')
     .replace(/['.]/g, '')
     .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ')
     .trim();
-  if (!folded) return String(name ?? '').trim().toLowerCase();
-  return folded.replace(/^the (?=\S)/, '');
+  return folded || String(name ?? '').trim().toLowerCase();
+}
+
+/** Folds a name for matching: "Zed's Dead" = "Zeds Dead", "roi*" = "roi", "The X" = "X". */
+export function lineupNameKey(name: string): string {
+  return foldNameCore(name).replace(/^the (?=\S)/, '');
 }
 
 /** One billing line is one key: the sorted name keys of its artists, so B2B order does not matter. */
