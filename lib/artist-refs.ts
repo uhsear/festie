@@ -300,7 +300,12 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
     }
   }
   const current = await lockArtistRows(client, [...new Set([...linked.values()].map((row) => row.id))]);
-  for (const [slot, row] of linked) slot.list[slot.index] = canonicalElement(current.get(row.id) ?? row);
+  // A row missing here was merged away after the unlocked read above, and a merge of the artist never waited on this
+  // festival. Start over: the retry resolves the loser's id to the survivor. withTransactionRetry retries 40001.
+  for (const row of linked.values()) {
+    if (!current.has(row.id)) throw Object.assign(new Error(`artist ${row.id} was merged during the save`), { code: '40001' });
+  }
+  for (const [slot, row] of linked) slot.list[slot.index] = canonicalElement(current.get(row.id)!);
   rebuildFlatFields(days, input.separator, sentJoined);
   return { ...result, days, lineup };
 }

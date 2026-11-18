@@ -9,7 +9,7 @@
 
 import crypto from 'crypto';
 import type { Pool } from 'pg';
-import { withTransaction } from '../connection';
+import { withTransactionRetry } from '../connection';
 import { buildMultiInsert, insertSetsBatch } from './festivals';
 import type { LineupImportPlan, LineupImportWrites, SetValues } from '../../lineup-import-plan';
 import { nextMoveMark, type SlotAt } from '../../set-moves';
@@ -330,7 +330,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
      * Writes nothing when the fresh plan has errors or problems.
      */
     async commit(festivalId: string, buildPlan: BuildPlan, meta: { createdBy: string | null }) {
-      return withTransaction(pool, async (client) => {
+      return withTransactionRetry(pool, async (client) => {
         const locked = await lockFestival(client, festivalId);
         if (!locked) return { notFound: true as const };
         const ctx = markContext(locked);
@@ -443,7 +443,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
 
     /** Undoes the newest import that is not undone yet. */
     async undo(festivalId: string, importId: string) {
-      return withTransaction(pool, async (client) => {
+      return withTransactionRetry(pool, async (client) => {
         const locked = await lockFestival(client, festivalId);
         if (!locked) return { notFound: true as const };
         const { rows } = await client.query(
