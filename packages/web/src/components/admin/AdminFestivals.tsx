@@ -39,7 +39,7 @@ import FestivalMapEditor from './FestivalMapEditor';
 import FestivalStatusPanel, { FestivalMeta } from './FestivalStatusPanel';
 import AdminFestivalPreview from './AdminFestivalPreview';
 import SelectionBar from './SelectionBar';
-import FestivalLinks from './FestivalLinks';
+import FestivalArtists from './FestivalArtists';
 import FestivalAnnouncements from './FestivalAnnouncements';
 import { cn } from '../../lib/utils';
 import EmptyState from '../ui/EmptyState';
@@ -92,8 +92,8 @@ export default function AdminFestivals() {
   const [searchQuery, setSearchQuery] = useState(q ?? '');
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; title: string; description: string } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  // When set, the Spotify links panel takes over the panel for this festival.
-  const [linksTarget, setLinksTarget] = useState<{ id: string; name: string } | null>(null);
+  // When set, the Artists panel takes over the panel for this festival.
+  const [artistsTarget, setArtistsTarget] = useState<{ id: string; name: string } | null>(null);
   // Per-set picks and reminders for the festival being edited.
   const [engagement, setEngagement] = useState<SetEngagementMap | undefined>(undefined);
   const [engagementError, setEngagementError] = useState(false);
@@ -382,9 +382,9 @@ export default function AdminFestivals() {
 
   if (previewId) return <AdminFestivalPreview festivalId={previewId} />;
 
-  if (linksTarget) {
+  if (artistsTarget) {
     return (
-      <FestivalLinks festivalId={linksTarget.id} festivalName={linksTarget.name} onClose={() => setLinksTarget(null)} />
+      <FestivalArtists festivalId={artistsTarget.id} festivalName={artistsTarget.name} onClose={() => setArtistsTarget(null)} />
     );
   }
 
@@ -660,11 +660,11 @@ export default function AdminFestivals() {
                       Map
                     </button>
                     <button
-                      onClick={() => setLinksTarget({ id: festival.id, name: festival.name })}
-                      aria-label={`Spotify links for ${festival.name}`}
+                      onClick={() => setArtistsTarget({ id: festival.id, name: festival.name })}
+                      aria-label={`Artists for ${festival.name}`}
                       className={rowButton}
                     >
-                      Links
+                      Artists
                     </button>
                     <button
                       onClick={() => handleDelete(festival.id)}

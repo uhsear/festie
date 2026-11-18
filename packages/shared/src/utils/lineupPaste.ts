@@ -12,7 +12,7 @@ export const MAX_LINEUP_LINES = 500;
 export const MAX_LINEUP_ARTISTS = 4;
 
 // Mirrors ALLOWED_LINK_PLATFORMS in lib/constants.ts; any other key is dropped here so the server never sees it.
-const LINK_PLATFORMS = ['spotify', 'soundcloud', 'instagram', 'twitter', 'tiktok', 'facebook', 'website'];
+const LINK_PLATFORMS = ['spotify', 'soundcloud', 'instagram', 'twitter', 'tiktok', 'facebook', 'website', 'youtube', 'apple_music'];
 const ID_RE = /^[A-Za-z0-9_-]{1,100}$/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 

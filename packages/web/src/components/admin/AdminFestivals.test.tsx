@@ -94,9 +94,9 @@ vi.mock('./FestivalEditForm', () => ({
     </div>
   ),
 }));
-vi.mock('./FestivalLinks', () => ({
+vi.mock('./FestivalArtists', () => ({
   default: ({ festivalName, onClose }: { festivalName: string; onClose: () => void }) => (
-    <button onClick={onClose}>links panel for {festivalName}</button>
+    <button onClick={onClose}>artists panel for {festivalName}</button>
   ),
 }));
 
@@ -275,11 +275,11 @@ describe('AdminFestivals', () => {
   });
 });
 
-describe('AdminFestivals Links button', () => {
-  it('opens the links panel for the row and returns to the list', async () => {
+describe('AdminFestivals Artists button', () => {
+  it('opens the artists panel for the row and returns to the list', async () => {
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Spotify links for Fest' }));
-    await userEvent.click(await screen.findByText('links panel for Fest'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Artists for Fest' }));
+    await userEvent.click(await screen.findByText('artists panel for Fest'));
     expect(await screen.findByRole('button', { name: 'Edit Fest' })).toBeInTheDocument();
   });
 

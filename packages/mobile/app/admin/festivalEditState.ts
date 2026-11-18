@@ -37,7 +37,7 @@ export interface SetRow {
   /** '' or 'TBA' is the permitted fallback; the field renders it as blank. */
   startTime: string;
   endTime: string;
-  /** Optional spotify/soundcloud URL — sent as linkUrl (server normalizes it). */
+  /** The loaded link of a set that has no artists[] yet, sent back so a save keeps it. Not editable on mobile. */
   linkUrl: string;
   /** Per-artist entries (B2B sets hold up to 4). Empty for a set not yet given structured artists. */
   artists: Artist[];
@@ -217,6 +217,11 @@ export function withoutIndex<T>(list: T[], index: number): T[] {
  * when a middle name is blank. Also rewrites the flat `artist` display string with
  * the festival's B2B separator.
  */
+/** The artists to send for a set: id, name and links. A save keeps each artist's id; the server owns the links. */
+export function artistsPayload(s: SetRow): { id?: string; name: string; links: Record<string, string> }[] {
+  return s.artists.map((a) => ({ ...(a.id ? { id: a.id } : {}), name: a.name, links: { ...(a.links ?? {}) } }));
+}
+
 export function setSetArtistNames(
   f: FormState,
   dayId: string,

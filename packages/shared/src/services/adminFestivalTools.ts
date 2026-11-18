@@ -11,6 +11,8 @@ export interface SpotifyBackfillResult {
   skipped: number;
   total: number;
   unmatched: string[];
+  /** Artists that are on other festivals too: left alone, edited on the Artists tab. */
+  skippedShared?: string[];
   message?: string;
 }
 
@@ -20,19 +22,10 @@ export function getSetEngagement(festivalId: string): Promise<SetEngagementMap> 
   return api.get<SetEngagementMap>(`/admin/festivals/${enc(festivalId)}/set-engagement`);
 }
 
-export function saveSetLink(
-  festivalId: string,
-  setId: string,
-  linkUrl: string | null,
-  artistIndex: number,
-): Promise<{ setId: string; artistIndex: number; linkUrl: string | null }> {
-  return api.put(`/admin/festivals/${enc(festivalId)}/sets/${enc(setId)}/link`, { linkUrl, artistIndex });
-}
-
 /** A whole-festival Spotify search can outlast the 15 s default timeout. */
 export function runSpotifyBackfill(
   festivalId: string,
-  opts?: { setIds?: string[]; force?: boolean },
+  opts?: { setIds?: string[] },
 ): Promise<SpotifyBackfillResult> {
   return api.post<SpotifyBackfillResult>(`/admin/festivals/${enc(festivalId)}/backfill-spotify`, opts ?? {}, {
     timeoutMs: 120_000,

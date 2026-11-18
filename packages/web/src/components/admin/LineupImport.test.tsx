@@ -157,7 +157,7 @@ describe('LineupImport', () => {
     expect(await screen.findByText(/Approve import\?/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Import' }));
     expect(await screen.findByText(/Import done. Added 3 sets/)).toBeInTheDocument();
-    expect(screen.getByText(/Spotify linked 2 artists/)).toBeInTheDocument();
+    expect(screen.queryByText(/Spotify linked/)).toBeNull();
     expect(screen.getByText('Row 7: link dropped')).toBeInTheDocument();
   });
 

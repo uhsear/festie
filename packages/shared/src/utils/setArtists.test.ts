@@ -17,6 +17,22 @@ describe('setArtists', () => {
     expect(withArtistNames(origin, ['A', '', 'C'])).toEqual([origin[0], origin[2]]);
   });
 
+  it('withArtistNames drops the id, links and photo of a slot whose name changed', () => {
+    const origin = [{ id: 'art-1', name: 'Kai', links: { spotify: 's' }, photo: 'p', genres: ['house'] }];
+    expect(withArtistNames(origin, ['Kai Two'])).toEqual([{ name: 'Kai Two', links: {} }]);
+    expect(withArtistNames(origin, [' Kai '])).toEqual(origin);
+  });
+
+  it('withArtistNames keeps each artist id when a B2B slot is removed or the order is kept', () => {
+    const origin = [
+      { id: 'art-1', name: 'A', links: {} },
+      { id: 'art-2', name: 'B', links: {} },
+    ];
+    expect(withArtistNames(origin, ['A', 'B']).map((a) => a.id)).toEqual(['art-1', 'art-2']);
+    expect(withArtistNames(origin, ['A']).map((a) => a.id)).toEqual(['art-1']);
+    expect(withArtistNames(origin, ['B', 'A']).map((a) => a.id)).toEqual(['art-2', 'art-1']);
+  });
+
   it('withArtistNames gives new artists empty links and trims', () => {
     expect(withArtistNames(undefined, [' Kai '])).toEqual([{ name: 'Kai', links: {} }]);
   });

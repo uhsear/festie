@@ -22,11 +22,11 @@ describe('runSpotifyBackfill', () => {
     const spy = vi.fn(async () => res(200, { data: { updated: 1, skipped: 0, total: 1, unmatched: [] }, error: null }));
     vi.stubGlobal('fetch', spy);
     const timeoutSpy = vi.spyOn(globalThis, 'setTimeout');
-    const out = await runSpotifyBackfill('f 1', { setIds: ['s'], force: true });
+    const out = await runSpotifyBackfill('f 1', { setIds: ['s'] });
     expect(out.updated).toBe(1);
     const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain('/admin/festivals/f%201/backfill-spotify');
-    expect(init.body).toBe(JSON.stringify({ setIds: ['s'], force: true }));
+    expect(init.body).toBe(JSON.stringify({ setIds: ['s'] }));
     expect(timeoutSpy.mock.calls.some((c) => c[1] === 120_000)).toBe(true);
   });
 });

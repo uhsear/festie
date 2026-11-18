@@ -475,7 +475,6 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
     <div className="space-y-4">
       <p role="status" className="bg-accent-aqua/10 border border-accent-aqua/30 rounded-lg p-4 text-sm text-text-primary">
         Import done. Added {r.created} sets, updated {r.updated}, created {r.newStages} stages and {r.newDays} days.
-        Spotify linked {r.spotifyMatched} artists.
       </p>
       {r.warnings.length > 0 && (
         <ul className="text-sm text-text-muted space-y-1">

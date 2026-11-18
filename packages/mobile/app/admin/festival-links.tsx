@@ -2,59 +2,49 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Linking } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { api, runSpotifyBackfill, saveSetLink } from '@festie/shared/services';
+import {
+  artistTitle,
+  changeEverywhereText,
+  changedArtistFrom,
+  listFestivalArtists,
+  runSpotifyBackfill,
+  updateArtist,
+} from '@festie/shared/services';
+import type { AdminArtistRow, ArtistChanges } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
-import { backfillSummary, isHttpsUrl, linkCoverage, linkCoverageText, setLinkRows } from '@festie/shared/utils';
-import type { LooseFestivalDetail, SetLinkRow } from '@festie/shared/utils';
+import { backfillSummary, isSafeExternalUrl, platformLabel } from '@festie/shared/utils';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
-import SectionLabel from '../../components/SectionLabel';
 import { ConfirmDialog, LabeledTextInput } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
- * Admin: Spotify links for one festival. Lists every set and artist with its
- * Spotify link, lets an admin paste a link per artist, search Spotify again for
- * one set, or find every missing link. It is a separate screen from the festival
- * editor, so a backfill can never reload an editor that holds unsaved edits.
+ * Admin: the Artists screen for one festival. Lists the artists on its sets and announced names,
+ * rows with no links first. Tap a row to add or remove a link or change the note. An edit changes
+ * every festival that lists the artist, past ones too, so the first save of an artist on other
+ * festivals asks "Change it everywhere?". Each row saves on its own. It is a separate screen from
+ * the festival editor, so a backfill can never reload an editor that holds unsaved edits.
  *
  *   ?id=<festivalId>  (required)
  */
 
 type Notice = { text: string; names?: string[]; error?: boolean };
-
-const HEADER_TITLE = 'Spotify links';
-const draftKey = (setId: string, index: number) => `${setId}:${index}`;
-
-// Shows a saved link on the row without a reload (the server already stored it).
-function withSavedLink(detail: LooseFestivalDetail, setId: string, index: number, url: string | null) {
-  return {
-    ...detail,
-    days: (detail.days ?? []).map((day) => ({
-      ...day,
-      sets: (day.sets ?? []).map((set) => {
-        if (set.id !== setId) return set;
-        if (set.artists && set.artists.length > 0) {
-          return {
-            ...set,
-            artists: set.artists.map((a, i) => {
-              if (i !== index) return a;
-              const { spotify: _drop, ...rest } = a.links ?? {};
-              return { ...a, links: url ? { ...rest, spotify: url } : rest };
-            }),
-          };
-        }
-        return { ...set, linkUrl: url };
-      }),
-    })),
-  };
+interface Draft {
+  addLink: string;
+  label: string;
+  removed: string[];
 }
+
+const HEADER_TITLE = 'Artists';
+const emptyDraft = (artist: AdminArtistRow): Draft => ({ addLink: '', label: artist.label, removed: [] });
+const hasChanges = (artist: AdminArtistRow, draft: Draft) =>
+  draft.addLink.trim() !== '' || draft.removed.length > 0 || draft.label.trim() !== artist.label;
 
 function errorText(err: unknown, fallback: string) {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
-export default function FestivalLinksScreen() {
+export default function FestivalArtistsScreen() {
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
@@ -62,14 +52,17 @@ export default function FestivalLinksScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
   const festivalId = typeof id === 'string' && id.length > 0 ? id : null;
 
-  const [detail, setDetail] = useState<LooseFestivalDetail | null>(null);
+  const [artists, setArtists] = useState<AdminArtistRow[] | null>(null);
   const [loading, setLoading] = useState(!!festivalId);
   const [loadError, setLoadError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
-  const [missingOnly, setMissingOnly] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  // Key of the running request: 'all', 'search:<setId>' or 'save:<setId>:<index>'.
+  const [noLinksOnly, setNoLinksOnly] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, Draft>>({});
+  const [asked, setAsked] = useState<Set<string>>(new Set());
+  const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [findOpen, setFindOpen] = useState(false);
+  // Key of the running request: 'all' or 'save:<artistId>'.
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -77,9 +70,7 @@ export default function FestivalLinksScreen() {
     if (!festivalId) return;
     setLoadError(false);
     try {
-      const full = await api.get<LooseFestivalDetail>(`/admin/festivals/${encodeURIComponent(festivalId)}`);
-      setDetail(full);
-      setDrafts({});
+      setArtists(await listFestivalArtists(festivalId));
     } catch {
       setLoadError(true);
     }
@@ -107,57 +98,60 @@ export default function FestivalLinksScreen() {
     setRefreshing(false);
   };
 
-  const rows = useMemo(() => (detail ? setLinkRows(detail) : []), [detail]);
-  const coverage = useMemo(() => linkCoverage(rows), [rows]);
-  const visibleRows = useMemo(
-    () => (missingOnly ? rows.filter((r) => r.artists.some((a) => !a.spotifyUrl)) : rows),
-    [rows, missingOnly],
-  );
-  const days = useMemo(() => {
-    const groups: { label: string; rows: SetLinkRow[] }[] = [];
-    for (const row of visibleRows) {
-      const last = groups[groups.length - 1];
-      if (last && last.label === row.dayLabel) last.rows.push(row);
-      else groups.push({ label: row.dayLabel, rows: [row] });
-    }
-    return groups;
-  }, [visibleRows]);
+  const shown = useMemo(() => (artists ?? []).filter((a) => !noLinksOnly || a.linkCount === 0), [artists, noLinksOnly]);
+  const linked = (artists ?? []).filter((a) => a.linkCount > 0).length;
+  const confirming = (artists ?? []).find((a) => a.id === confirmId) ?? null;
 
-  const saveLink = async (row: SetLinkRow, index: number, current: string | null) => {
-    if (!festivalId) return;
-    const value = (drafts[draftKey(row.setId, index)] ?? current ?? '').trim();
-    if (value && !isHttpsUrl(value)) {
-      setNotice({ text: 'Paste a link that starts with https://', error: true });
-      return;
-    }
-    setBusy(`save:${row.setId}:${index}`);
+  const draftOf = (artist: AdminArtistRow) => drafts[artist.id] ?? emptyDraft(artist);
+  const patchDraft = (artist: AdminArtistRow, patch: Partial<Draft>) =>
+    setDrafts((d) => ({ ...d, [artist.id]: { ...draftOf(artist), ...patch } }));
+
+  const replaceArtist = (artistId: string, next: AdminArtistRow) => {
+    setArtists((list) => (list ?? []).map((a) => (a.id === artistId ? next : a)));
+    setDrafts((d) => ({ ...d, [artistId]: emptyDraft(next) }));
+  };
+
+  const save = async (artist: AdminArtistRow) => {
+    const draft = draftOf(artist);
+    const changes: ArtistChanges = {};
+    if (draft.addLink.trim()) changes.addLink = draft.addLink.trim();
+    if (draft.removed.length > 0) changes.removeLinks = draft.removed;
+    if (draft.label.trim() !== artist.label) changes.label = draft.label.trim();
+    setAsked((s) => new Set(s).add(artist.id));
+    setBusy(`save:${artist.id}`);
+    setNotice(null);
     try {
-      await saveSetLink(festivalId, row.setId, value || null, index);
-      setDetail((d) => (d ? withSavedLink(d, row.setId, index, value || null) : d));
-      setDrafts((d) => {
-        const { [draftKey(row.setId, index)]: _done, ...rest } = d;
-        return rest;
-      });
-      setNotice({ text: 'Link saved.' });
+      const saved = await updateArtist(artist.id, artist.updatedAt, changes);
+      replaceArtist(artist.id, { ...artist, ...saved.artist });
+      setNotice({ text: `Saved ${artist.name}.` });
     } catch (err) {
-      setNotice({ text: errorText(err, "Couldn't save the link. Try again."), error: true });
+      const current = changedArtistFrom(err);
+      if (current) {
+        replaceArtist(artist.id, { ...artist, ...current });
+        setNotice({
+          text: `Someone changed ${current.name} while you were editing. Here is the new version. Apply your change again.`,
+          error: true,
+        });
+      } else {
+        setNotice({ text: errorText(err, "Couldn't save. Try again."), error: true });
+      }
     } finally {
       setBusy(null);
     }
   };
 
-  const backfill = async (opts: { setIds: string[]; force: boolean } | undefined, key: string, row?: SetLinkRow) => {
+  const requestSave = (artist: AdminArtistRow) => {
+    if (artist.alsoOn > 0 && !asked.has(artist.id)) setConfirmId(artist.id);
+    else void save(artist);
+  };
+
+  const findMissing = async () => {
     if (!festivalId) return;
-    setBusy(key);
+    setBusy('all');
     setNotice(null);
     try {
-      const result = await runSpotifyBackfill(festivalId, opts);
-      if (row) {
-        const name = row.artists.map((a) => a.name).join(' & ');
-        setNotice({ text: result.updated > 0 ? `Linked ${name}.` : `No Spotify match for ${name}.` });
-      } else {
-        setNotice({ text: backfillSummary(result), names: result.unmatched });
-      }
+      const result = await runSpotifyBackfill(festivalId);
+      setNotice({ text: backfillSummary(result), names: result.unmatched });
       await load();
     } catch (err) {
       setNotice({ text: errorText(err, "Couldn't search Spotify. Try again."), error: true });
@@ -186,7 +180,7 @@ export default function FestivalLinksScreen() {
         <EmptyState
           icon="musical-notes-outline"
           title="No festival selected"
-          message="Open the admin festival list, then choose Links."
+          message="Open the admin festival list, then choose Artists."
         />
       </View>
     );
@@ -196,18 +190,18 @@ export default function FestivalLinksScreen() {
     return (
       <View style={styles.screen}>
         <Stack.Screen options={{ title: HEADER_TITLE, headerShown: true }} />
-        <LoadingState label="Loading Spotify links" />
+        <LoadingState label="Loading artists" />
       </View>
     );
   }
 
-  if (loadError || !detail) {
+  if (loadError || !artists) {
     return (
       <View style={styles.screen}>
         <Stack.Screen options={{ title: HEADER_TITLE, headerShown: true }} />
         <EmptyState
           icon="cloud-offline-outline"
-          title="Couldn't load festival"
+          title="Couldn't load artists"
           message="Something went wrong reaching the server."
           action={{ label: 'Try again', onPress: () => void load() }}
         />
@@ -234,27 +228,29 @@ export default function FestivalLinksScreen() {
           />
         }
       >
-        <Text style={styles.coverage}>{linkCoverageText(coverage)}</Text>
+        <Text style={styles.coverage}>
+          {`${linked} of ${artists.length} ${artists.length === 1 ? 'artist has' : 'artists have'} a link.`}
+        </Text>
 
         <View style={styles.toolbar}>
           {([false, true] as const).map((only) => (
             <TouchableOpacity
               key={String(only)}
-              onPress={() => setMissingOnly(only)}
-              style={[styles.chip, missingOnly === only ? styles.chipActive : null]}
+              onPress={() => setNoLinksOnly(only)}
+              style={[styles.chip, noLinksOnly === only ? styles.chipActive : null]}
               activeOpacity={0.7}
               accessibilityRole="button"
-              accessibilityState={{ selected: missingOnly === only }}
+              accessibilityState={{ selected: noLinksOnly === only }}
             >
-              <Text style={[styles.chipText, missingOnly === only ? styles.chipTextActive : null]}>
-                {only ? 'Missing only' : 'All'}
+              <Text style={[styles.chipText, noLinksOnly === only ? styles.chipTextActive : null]}>
+                {only ? 'No links' : 'On this festival'}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
         <TouchableOpacity
-          onPress={() => setConfirmOpen(true)}
+          onPress={() => setFindOpen(true)}
           disabled={busy !== null}
           style={[styles.primaryBtn, busy !== null ? styles.btnDisabled : null]}
           activeOpacity={0.7}
@@ -276,89 +272,120 @@ export default function FestivalLinksScreen() {
           </View>
         ) : null}
 
-        {days.length === 0 ? (
-          <Text style={styles.emptyHint}>{missingOnly ? 'Every artist has a link.' : 'No sets yet.'}</Text>
+        {shown.length === 0 ? (
+          <Text style={styles.emptyHint}>{noLinksOnly ? 'Every artist has a link.' : 'No artists yet.'}</Text>
         ) : (
-          days.map((day) => (
-            <View key={day.label} style={styles.dayGroup}>
-              <SectionLabel>{day.label}</SectionLabel>
-              {day.rows.map((row) => {
-                const setName = row.artists.map((a) => a.name).join(' & ');
-                const searching = busy === `search:${row.setId}`;
-                return (
-                  <View key={row.setId} style={styles.card}>
-                    <Text style={styles.setName}>{setName}</Text>
-                    {row.stageName ? <Text style={styles.stageName}>{row.stageName}</Text> : null}
-                    {row.artists.map((artist) => {
-                      const value = drafts[draftKey(row.setId, artist.index)] ?? artist.spotifyUrl ?? '';
-                      const removing = !value.trim() && !!artist.spotifyUrl;
-                      const saving = busy === `save:${row.setId}:${artist.index}`;
+          shown.map((artist) => {
+            const open = openId === artist.id;
+            const draft = draftOf(artist);
+            const links = Object.entries(artist.links);
+            const saving = busy === `save:${artist.id}`;
+            return (
+              <View key={artist.id} style={styles.card}>
+                <TouchableOpacity
+                  onPress={() => setOpenId(open ? null : artist.id)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: open }}
+                  accessibilityLabel={`${artistTitle(artist)}, ${open ? 'collapse' : 'edit'}`}
+                >
+                  <Text style={styles.setName}>{artistTitle(artist)}</Text>
+                  <Text style={styles.stageName}>
+                    {links.length === 0 ? 'No links' : links.map(([platform]) => platformLabel(platform)).join(', ')}
+                    {artist.alsoOn > 0 ? ` · Also on ${artist.alsoOn} ${artist.alsoOn === 1 ? 'festival' : 'festivals'}` : ''}
+                  </Text>
+                </TouchableOpacity>
+
+                {open ? (
+                  <View style={styles.artistBlock}>
+                    {links.map(([platform, url]) => {
+                      const removed = draft.removed.includes(platform);
                       return (
-                        <View key={artist.index} style={styles.artistBlock}>
-                          <View style={styles.statusRow}>
-                            <Text style={styles.statusText}>{artist.spotifyUrl ? 'Linked' : 'No link'}</Text>
-                            {artist.spotifyUrl ? (
-                              <TouchableOpacity
-                                onPress={() => void Linking.openURL(artist.spotifyUrl!)}
-                                accessibilityRole="link"
-                                accessibilityLabel={`Open ${artist.name} in Spotify`}
-                              >
-                                <Text style={styles.linkText}>Open in Spotify</Text>
-                              </TouchableOpacity>
-                            ) : null}
-                          </View>
-                          <LabeledTextInput
-                            label={`Spotify link for ${artist.name}`}
-                            value={value}
-                            onChangeText={(text) =>
-                              setDrafts((d) => ({ ...d, [draftKey(row.setId, artist.index)]: text }))
-                            }
-                            placeholder="https://open.spotify.com/artist/…"
-                            keyboardType="url"
-                            autoCapitalize="none"
-                            editable={busy === null}
-                          />
+                        <View key={platform} style={styles.statusRow}>
+                          {isSafeExternalUrl(url) ? (
+                            <TouchableOpacity
+                              onPress={() => void Linking.openURL(url)}
+                              accessibilityRole="link"
+                              accessibilityLabel={`Open ${artist.name} on ${platformLabel(platform)}`}
+                            >
+                              <Text style={[styles.linkText, removed ? styles.struck : null]}>{platformLabel(platform)}</Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <Text style={styles.statusText}>{platformLabel(platform)}</Text>
+                          )}
                           <TouchableOpacity
-                            onPress={() => void saveLink(row, artist.index, artist.spotifyUrl)}
-                            disabled={busy !== null}
-                            style={[styles.secondaryBtn, busy !== null ? styles.btnDisabled : null]}
-                            activeOpacity={0.7}
+                            onPress={() =>
+                              patchDraft(artist, {
+                                removed: removed ? draft.removed.filter((p) => p !== platform) : [...draft.removed, platform],
+                              })
+                            }
                             accessibilityRole="button"
-                            accessibilityState={{ busy: saving, disabled: busy !== null }}
+                            accessibilityLabel={`${removed ? 'Keep' : 'Remove'} ${platformLabel(platform)} link for ${artist.name}`}
                           >
-                            <Text style={styles.secondaryBtnText}>{removing ? 'Remove link' : 'Save link'}</Text>
+                            <Text style={styles.linkText}>{removed ? 'Keep' : 'Remove'}</Text>
                           </TouchableOpacity>
                         </View>
                       );
                     })}
+                    <LabeledTextInput
+                      label={`Add link for ${artist.name}`}
+                      value={draft.addLink}
+                      onChangeText={(text) => patchDraft(artist, { addLink: text })}
+                      placeholder="Paste a link. Festie detects the platform."
+                      keyboardType="url"
+                      autoCapitalize="none"
+                      editable={busy === null}
+                    />
+                    {artist.sameName || artist.label ? (
+                      <LabeledTextInput
+                        label={`Note to tell ${artist.name} apart`}
+                        value={draft.label}
+                        onChangeText={(text) => patchDraft(artist, { label: text })}
+                        placeholder="For example UK or Berlin"
+                        maxLength={40}
+                        editable={busy === null}
+                      />
+                    ) : null}
                     <TouchableOpacity
-                      onPress={() => void backfill({ setIds: [row.setId], force: true }, `search:${row.setId}`, row)}
-                      disabled={busy !== null}
-                      style={[styles.secondaryBtn, busy !== null ? styles.btnDisabled : null]}
+                      onPress={() => requestSave(artist)}
+                      disabled={busy !== null || !hasChanges(artist, draft)}
+                      style={[styles.secondaryBtn, busy !== null || !hasChanges(artist, draft) ? styles.btnDisabled : null]}
                       activeOpacity={0.7}
                       accessibilityRole="button"
-                      accessibilityLabel={`Search again for ${setName}`}
-                      accessibilityState={{ busy: searching, disabled: busy !== null }}
+                      accessibilityLabel={`Save ${artist.name}`}
+                      accessibilityState={{ busy: saving, disabled: busy !== null || !hasChanges(artist, draft) }}
                     >
-                      <Text style={styles.secondaryBtnText}>{searching ? 'Searching Spotify…' : 'Search again'}</Text>
+                      <Text style={styles.secondaryBtnText}>{saving ? 'Saving…' : 'Save'}</Text>
                     </TouchableOpacity>
                   </View>
-                );
-              })}
-            </View>
-          ))
+                ) : null}
+              </View>
+            );
+          })
         )}
       </ScrollView>
 
       <ConfirmDialog
-        visible={confirmOpen}
-        title="Find missing Spotify links?"
-        message={`Festie searches Spotify for the ${coverage.total - coverage.linked} artists without a link and adds the best match. Links you already have stay as they are.`}
-        confirmLabel="Search Spotify"
-        onCancel={() => setConfirmOpen(false)}
+        visible={confirming !== null}
+        title="Change everywhere?"
+        message={confirming ? changeEverywhereText(confirming.name, confirming.alsoOn) : ''}
+        confirmLabel="Change everywhere"
+        onCancel={() => setConfirmId(null)}
         onConfirm={() => {
-          setConfirmOpen(false);
-          void backfill(undefined, 'all');
+          const target = confirming;
+          setConfirmId(null);
+          if (target) void save(target);
+        }}
+      />
+      <ConfirmDialog
+        visible={findOpen}
+        title="Find missing Spotify links?"
+        message="Festie searches Spotify for artists on this festival only that have no Spotify link and adds the best match. Artists on other festivals are skipped. Links you already have stay as they are."
+        confirmLabel="Search Spotify"
+        onCancel={() => setFindOpen(false)}
+        onConfirm={() => {
+          setFindOpen(false);
+          void findMissing();
         }}
       />
     </View>
@@ -458,9 +485,6 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.muted,
   },
-  dayGroup: {
-    gap: t.spacing[2],
-  },
   setName: {
     ...typeStyle('body', 600),
     color: t.colors.text.primary,
@@ -484,5 +508,8 @@ const useStyles = makeStyles((t) => ({
   linkText: {
     ...typeStyle('caption', 600),
     color: t.colors.accent.aqua,
+  },
+  struck: {
+    textDecorationLine: 'line-through',
   },
 }));

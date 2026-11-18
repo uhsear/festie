@@ -9,6 +9,7 @@ export * from './lineupImport';
 export * from './festivalAdmin';
 export * from './caught';
 export * from './adminFestivalTools';
+export * from './adminArtists';
 export * from './checkin';
 export * from './ratings';
 export * from './announcements';
