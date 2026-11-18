@@ -567,7 +567,7 @@ export default function createFestivalsRoutes(deps: any) {
         // The executor checks publish state, the marker and the times itself.
         if (daysSent) notifySetTimesOut(festival.id);
         // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
-        if (daysSent || body.lineup !== undefined) void deps.interestConversion?.convert(festival.id);
+        if (daysSent || body.lineup !== undefined || body.b2bSeparator !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
         // An admin-set venue wins over the geocoder until the location text changes in a later save.
         const venueSetByAdmin =
@@ -761,6 +761,8 @@ export default function createFestivalsRoutes(deps: any) {
         );
         await stores.pool.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
         invalidateFestivalCache();
+        // A flat set becomes an artists array here, which can change the name key that covers an act.
+        void deps.interestConversion?.convert(festivalId);
 
         audit(AUDIT_ACTIONS.SET_LINK_UPDATED, 'set', setId, req, { festivalId, artistIndex, linkUrl: cleanUrl });
         log.info('set link updated', {
