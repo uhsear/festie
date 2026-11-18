@@ -105,6 +105,42 @@ describe('emitter: profileUpdated', () => {
     emitter.flushAll();
   });
 
+  it('flags an interest change to the author only, and a later pick write does not hide it', async () => {
+    const io = makeIo();
+    const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({ c1: ['user-1', 'bob'] }) }));
+    const profile = {
+      festivalId: 'fest-1',
+      id: 'prof-1',
+      userId: 'user-1',
+      name: 'Alice',
+      picks: { s1: 'must' },
+      interests: { 'lu-1': { state: 'open' } },
+      updatedAt: new Date().toISOString(),
+    };
+    emitter.profileUpdated({ profile, user: {}, changedFields: { interests: true } });
+    emitter.profileUpdated({ profile, user: {}, changedFields: { picks: true } });
+
+    await new Promise((r) => setTimeout(r, 300));
+    const payload = io._rooms['user:user-1'][0][1];
+    assert.equal(payload.interestsChanged, true);
+    assert.equal(JSON.stringify(payload).includes('lu-1'), false, 'the payload also reaches crew rooms');
+    assert.equal(io._rooms['crew:c1'][0][1].interestsChanged, false, 'a crew mate never gets the flag');
+    emitter.flushAll();
+  });
+
+  it('sends interestsChanged false for a plain pick write', async () => {
+    const io = makeIo();
+    const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({}) }));
+    emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'user-1', name: 'Alice', picks: {}, updatedAt: new Date().toISOString() },
+      user: {},
+      changedFields: { picks: true },
+    });
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(io._rooms['user:user-1'][0][1].interestsChanged, false);
+    emitter.flushAll();
+  });
+
   it('still emits to the author own devices when the author has no crew', async () => {
     const io = makeIo();
     const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({}) }));

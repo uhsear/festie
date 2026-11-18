@@ -15,6 +15,7 @@ import {
   lineupSummary,
   searchLineupEntries,
   selectLineupEntries,
+  setTimesBannerKind,
 } from './lineup';
 
 const entry = (id: string, names: string[], extra: Partial<LineupEntry> = {}): LineupEntry => ({
@@ -255,5 +256,34 @@ describe('announcedLineupModel and lineupReplacesEmptyState', () => {
     expect(over.visible).toBe(false);
     expect(lineupReplacesEmptyState(over, '')).toBe(false);
     expect(announcedLineupModel(null, DAYS, [], 0, BEFORE).visible).toBe(false);
+  });
+});
+
+describe('setTimesBannerKind', () => {
+  const festival = (extra: Partial<Festival> = {}) => ({ id: 'f', name: 'F', lineup: [], ...extra }) as unknown as Festival;
+  const days = [{ date: '2027-02-05' }] as FestivalDay[];
+  const timedSet = (startTime: string | null) => ({ id: 's', startTime }) as unknown as FestivalSet;
+
+  it('is null when a set has a time, or for a draft or no festival', () => {
+    expect(setTimesBannerKind(festival(), days, [timedSet(null), timedSet('20:00')])).toBeNull();
+    expect(setTimesBannerKind(festival({ publishedAt: null }), days, [])).toBeNull();
+    expect(setTimesBannerKind(null, days, [])).toBeNull();
+  });
+
+  it('is "times" when sets exist with no times', () => {
+    expect(setTimesBannerKind(festival(), days, [timedSet(null), timedSet('')])).toBe('times');
+  });
+
+  it('is "days" when nothing has a day: no sets and no act with a day', () => {
+    expect(setTimesBannerKind(festival(), days, [])).toBe('days');
+    expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'])] }), days, [])).toBe('days');
+    // A date that matches no festival day is not a day.
+    expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'], { dayDate: '2030-01-01' })] }), days, [])).toBe('days');
+    // A cancelled act does not count.
+    expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'], { dayDate: '2027-02-05', status: 'cancelled' })] }), days, [])).toBe('days');
+  });
+
+  it('is "times" when an act has a day but no set has a time', () => {
+    expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'], { dayDate: '2027-02-05' })] }), days, [])).toBe('times');
   });
 });

@@ -9,6 +9,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import AuthBrand from '../components/auth/AuthBrand';
+import { readSignupRef } from '../hooks/useFestivalLoader';
 import { cn } from '../lib/utils';
 
 type FieldName = 'username' | 'dateOfBirth' | 'tosAccepted';
@@ -88,7 +89,13 @@ function FinishForm({ payload, next }: { payload: ProviderSignupPayload; next?: 
 
     setIsLoading(true);
     try {
-      await completeProviderSignup({ signupToken: payload.signupToken, username: username.trim(), dateOfBirth, tosAccepted: true });
+      await completeProviderSignup({
+        signupToken: payload.signupToken,
+        username: username.trim(),
+        dateOfBirth,
+        tosAccepted: true,
+        ref: readSignupRef(),
+      });
       await (next ? navigate({ href: next }) : navigate({ to: '/cards' }));
     } catch (err) {
       if (isApiClientError(err) && err.code === 'SIGNUP_EXPIRED') {

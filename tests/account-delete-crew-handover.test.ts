@@ -7,6 +7,7 @@ import { Pool } from 'pg';
 import createAccountRoutes from '../routes/account.js';
 import { createStores } from '../lib/db/index.js';
 import { accountDeleteSchema } from '../lib/schemas.js';
+import { ensureTestSchema } from './_test-schema';
 
 // DELETE /account hands every crew the account owns to another member before it
 // soft-deletes the user, so a crew never sits without a visible owner for the
@@ -115,6 +116,7 @@ describe('crews.handOverOwnedCrews (database)', { skip }, () => {
   let n = 0;
 
   before(async () => {
+    await ensureTestSchema(TEST_DATABASE_URL!);
     pool = new Pool({ connectionString: TEST_DATABASE_URL });
     stores = createStores(pool);
     await pool.query("INSERT INTO festivals (id, name) VALUES ('hand-test-f1', 'Handover Fest') ON CONFLICT DO NOTHING");

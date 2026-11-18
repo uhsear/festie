@@ -23,6 +23,7 @@ export default function createUtils(pool: Pool) {
       picks: parseJsonObject(row.picksJson, {}),
       notes: parseJsonObject(row.notesJson, {}),
       reminders: parseJsonObject(row.remindersJson, {}),
+      interests: parseJsonObject(row.interestsJson, {}),
       createdAt: toISOString(row.createdAt),
       updatedAt: toISOString(row.updatedAt),
     };

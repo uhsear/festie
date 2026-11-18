@@ -86,6 +86,8 @@ export const PREF_MAP: Record<string, string> = {
   lineup_drop: 'lineupDrops',
   // "New lineups and set times" covers both announcements; no column of its own.
   set_times_out: 'lineupDrops',
+  // Days announced by an admin before any set has a time: same switch, no column of its own.
+  days_out: 'lineupDrops',
   crew_reformed: 'crewReformed',
   wrap_ready: 'wrapReady',
   // The Wrap toggle covers the morning rate prompt too (no own column).

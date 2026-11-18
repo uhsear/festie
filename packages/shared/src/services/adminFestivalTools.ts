@@ -20,6 +20,13 @@ export function getSetEngagement(festivalId: string): Promise<SetEngagementMap> 
   return api.get<SetEngagementMap>(`/admin/festivals/${enc(festivalId)}/set-engagement`);
 }
 
+/** Marks per announced act (admin only): { [entryId]: { open, converted } }. Counts only, never who marked. */
+export type LineupInterestCounts = Record<string, { open: number; converted: number }>;
+
+export function getLineupInterest(festivalId: string): Promise<{ counts: LineupInterestCounts }> {
+  return api.get<{ counts: LineupInterestCounts }>(`/admin/festivals/${enc(festivalId)}/lineup-interest`);
+}
+
 export function saveSetLink(
   festivalId: string,
   setId: string,

@@ -1,5 +1,6 @@
 import { FESTIVAL_READY_COPY } from '../constants/config';
 import type { FestivalReadiness } from '../stores/offlineReadinessStore';
+import type { InterestMark } from '../types';
 
 export type FestivalReadyKey = 'picks' | 'crew' | 'reminders' | 'offline';
 export interface FestivalReadyItem {
@@ -18,12 +19,16 @@ export function isFestivalDownloaded(readiness: FestivalReadiness | undefined): 
 /** Items in the order picks, crew, reminders, offline. Labels and hints from FESTIVAL_READY_COPY. */
 export function getFestivalReadyChecklist(input: {
   pickCount: number;
+  /** Open marks on acts that are in the festival's lineup. They count like picks. */
+  interestCount?: number;
+  /** The festival has an announced lineup, so the picks item says "Mark acts or pick sets". */
+  hasLineup?: boolean;
   hasCrew: boolean;
   remindersOn: boolean;
   offlineReady: boolean;
 }): { items: FestivalReadyItem[]; doneCount: number; total: number } {
   const doneByKey: Record<FestivalReadyKey, boolean> = {
-    picks: input.pickCount > 0,
+    picks: input.pickCount + (input.interestCount ?? 0) > 0,
     crew: input.hasCrew,
     reminders: input.remindersOn,
     offline: input.offlineReady,
@@ -31,10 +36,24 @@ export function getFestivalReadyChecklist(input: {
   const keys: FestivalReadyKey[] = ['picks', 'crew', 'reminders', 'offline'];
   const items = keys.map((key) => {
     const { label, hint } = FESTIVAL_READY_COPY.items[key];
+    if (key === 'picks' && input.hasLineup) {
+      const done = doneByKey[key];
+      return { key, label: FESTIVAL_READY_COPY.markOrPickLabel, hint: FESTIVAL_READY_COPY.markOrPickHint, done, a11y: `${FESTIVAL_READY_COPY.markOrPickLabel}, ${done ? 'done' : 'not done yet'}` };
+    }
     const done = doneByKey[key];
     return { key, label, hint, done, a11y: `${label}, ${done ? 'done' : 'not done yet'}` };
   });
   return { items, doneCount: items.filter((i) => i.done).length, total: items.length };
+}
+
+/** Open marks whose act is still in the lineup. A mark on a removed act does not count. */
+export function countOpenInterests(
+  interests: Record<string, InterestMark> | undefined,
+  lineup: readonly { id: string }[] | undefined,
+): number {
+  if (!interests || !lineup) return 0;
+  const ids = new Set(lineup.map((entry) => entry.id));
+  return Object.entries(interests).filter(([entryId, mark]) => mark.state === 'open' && ids.has(entryId)).length;
 }
 
 /** '2 of 4 done' */

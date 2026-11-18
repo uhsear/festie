@@ -194,6 +194,8 @@ export function serializeOwnProfile(profile: any, user: any = null) {
     picks: profile.picks || {},
     notes: profile.notes || {},
     reminders: profile.reminders || {},
+    // Interest marks are private to their owner, so only this serializer carries them.
+    interests: profile.interests || {},
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
   };
@@ -214,6 +216,7 @@ export function serializeProfileForViewer(profile: any, viewerUserId: any, user:
   if (profile.userId === viewerUserId) {
     result.notes = profile.notes || {};
     result.reminders = profile.reminders || {};
+    result.interests = profile.interests || {};
   }
 
   return result;

@@ -15,7 +15,7 @@ import {
   issuesFromError,
   restoreFestival,
 } from '@festie/shared/services/festivalAdmin';
-import { getSetEngagement, type SetEngagementMap } from '@festie/shared/services';
+import { getLineupInterest, getSetEngagement, type LineupInterestCounts, type SetEngagementMap } from '@festie/shared/services';
 import type { AdminFestivalDetail, ArchivedFestival } from '@festie/shared/services/festivalAdmin';
 import type { EditableFestival, FestivalIssue } from '@festie/shared/utils';
 import {
@@ -97,6 +97,7 @@ export default function AdminFestivals() {
   // Per-set picks and reminders for the festival being edited.
   const [engagement, setEngagement] = useState<SetEngagementMap | undefined>(undefined);
   const [engagementError, setEngagementError] = useState(false);
+  const [interestCounts, setInterestCounts] = useState<LineupInterestCounts | undefined>(undefined);
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
   const [removalBusy, setRemovalBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -163,6 +164,7 @@ export default function AdminFestivals() {
     setInitialExpandedDays(new Set());
     setEngagement(undefined);
     setEngagementError(false);
+    setInterestCounts(undefined);
   };
 
   // Leaving the Details view drops the seeded form; coming back loads the saved festival again.
@@ -195,6 +197,11 @@ export default function AdminFestivals() {
     setEngagementError(false);
     // Pick counts load beside the festival; a failure only hides the counts.
     getSetEngagement(festivalId).then(setEngagement, () => setEngagementError(true));
+    // Marks are a published-festival feature. A failure only hides the column, so it needs no message.
+    setInterestCounts(undefined);
+    if (publishedAt && Array.isArray(full.lineup) && full.lineup.length > 0) {
+      getLineupInterest(festivalId).then((res) => setInterestCounts(res.counts), () => setInterestCounts(undefined));
+    }
     setSeededId(festivalId);
   }, [festivalId, editing, seededId, detail.data, detail.isFetching]);
 
@@ -264,7 +271,7 @@ export default function AdminFestivals() {
     } catch (err: unknown) {
       const removal = removalFromError(err);
       if (removal) {
-        setPendingRemoval(describeRemovals(removal));
+        setPendingRemoval(describeRemovals(removal, notifyPickers));
         return;
       }
       const found = issuesFromError(err);
@@ -434,8 +441,10 @@ export default function AdminFestivals() {
         saving={saving}
         venueGuessed={!!festivalId && venueGuessedFor === festivalId}
         savedDays={original?.days}
+        savedLineup={original?.lineup}
         engagement={engagement}
         engagementError={engagementError}
+        interestCounts={interestCounts}
         onSave={handleSave}
         onDiscard={() => {
           setFormData(original ?? {});

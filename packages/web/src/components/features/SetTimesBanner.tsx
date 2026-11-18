@@ -1,15 +1,18 @@
 import { useFestivalStore, useFollowStore } from '@festie/shared/stores';
 import { DISCOVER_COPY } from '@festie/shared/constants';
+import { setTimesBannerKind } from '@festie/shared/utils';
 import FollowButton from './FollowButton';
 
-/** Shown on a lineup whose sets have no start times yet. */
+/** Shown for a published festival whose sets have no start times yet, with or without sets or days. */
 export default function SetTimesBanner() {
   const festival = useFestivalStore((s) => s.currentFestival);
   const sets = useFestivalStore((s) => s.sets);
+  const days = useFestivalStore((s) => s.days);
   const hasProfile = useFestivalStore((s) => !!s.currentProfile);
   const following = useFollowStore((s) => (festival ? s.festivalIds.includes(festival.id) : false));
 
-  if (!festival || sets.length === 0 || sets.some((s) => !!s.startTime)) return null;
+  const kind = setTimesBannerKind(festival, days, sets);
+  if (!festival || !kind) return null;
   const copy = DISCOVER_COPY.banner;
   const joined = following || hasProfile;
   return (
@@ -19,7 +22,7 @@ export default function SetTimesBanner() {
     >
       <div className="min-w-0">
         <h2 id="set-times-banner-heading" className="text-sm font-semibold text-text-primary">
-          {copy.title}
+          {kind === 'days' ? copy.daysTitle : copy.title}
         </h2>
         <p className="text-sm text-text-secondary">{joined ? copy.joined : copy.guest}</p>
       </div>

@@ -143,6 +143,8 @@ export const DEFAULTS = {
   // crew_activity row + pushes safety-critical alerts.
   LIVE_LOCATION_ENABLED: true,
   SOS_ENABLED: true,
+  // Cancel alerts for marked acts stay dark until the owner turns them on (LINEUP_CANCEL_ALERTS_ENABLED=true).
+  LINEUP_CANCEL_ALERTS_ENABLED: false,
   REMINDER_TICK_INTERVAL_MS: 60_000,
   REMINDER_FIRE_WINDOW_MS: 65_000,
   REMINDER_DEDUP_TTL_MS: 7_200_000,
@@ -370,6 +372,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   OAUTH_CONFIG_MISSING: { google: string[]; apple: string[] };
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
+  EMAIL_POSTAL_ADDRESS: string;
   REFRESH_TOKEN_TTL: number;
   MAX_LOGIN_FAILURES: number;
   LOGIN_LOCKOUT_MS: number;
@@ -405,6 +408,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   CLUSTER_SIZE: number;
   LIVE_LOCATION_ENABLED: boolean;
   SOS_ENABLED: boolean;
+  LINEUP_CANCEL_ALERTS_ENABLED: boolean;
   LOG_LEVEL: string;
   SENTRY_DSN: string;
   SENTRY_TRACES_RATE: number;
@@ -689,6 +693,10 @@ export function loadConfig(overrides: Record<string, any> = {}): {
       DEFAULTS.LIVE_LOCATION_ENABLED,
     ),
     SOS_ENABLED: readBool(overrides.SOS_ENABLED ?? process.env.SOS_ENABLED, DEFAULTS.SOS_ENABLED),
+    LINEUP_CANCEL_ALERTS_ENABLED: readBool(
+      overrides.LINEUP_CANCEL_ALERTS_ENABLED ?? process.env.LINEUP_CANCEL_ALERTS_ENABLED,
+      DEFAULTS.LINEUP_CANCEL_ALERTS_ENABLED,
+    ),
 
     // Deep linking — populate when you have your Apple/Android signing credentials
     // APPLE_TEAM_ID comes from `...oauth` below; the AASA file and Apple sign-in share it.
@@ -710,6 +718,8 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     // that passed '' to disable sending got the real key and hit the provider.
     RESEND_API_KEY: overrides.RESEND_API_KEY ?? process.env.RESEND_API_KEY ?? '',
     EMAIL_FROM: overrides.EMAIL_FROM || process.env.EMAIL_FROM || 'Festie <no-reply@festie.us>',
+    // CAN-SPAM postal address for the re-engagement footer. Kept out of the public repo; unset omits the line.
+    EMAIL_POSTAL_ADDRESS: (overrides.EMAIL_POSTAL_ADDRESS ?? process.env.EMAIL_POSTAL_ADDRESS ?? '').trim(),
 
     REFRESH_TOKEN_TTL: readInt(
       overrides.REFRESH_TOKEN_TTL || process.env.REFRESH_TOKEN_TTL,

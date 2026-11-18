@@ -41,4 +41,6 @@ export interface ProviderSignupCompleteRequest {
   username: string;
   dateOfBirth: string;
   tosAccepted: true;
+  /** Anonymous ?ref= sign-up source; the server drops anything that is not a valid ref. */
+  ref?: string;
 }

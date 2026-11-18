@@ -12,6 +12,7 @@ describe('T50 mobile festival share', () => {
     expect(src).toContain('FESTIVAL_SHARE_COPY.a11y(');
     expect(src).toContain('FESTIVAL_SHARE_COPY.text(');
     expect(src).toContain('festival.slug');
+    expect(src).toContain("buildFestivalPageUrl(shareSlug, undefined, 'share-festival')");
   });
 
   it('uses the system share sheet and a wrapping action row', () => {

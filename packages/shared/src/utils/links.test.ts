@@ -195,6 +195,14 @@ describe('links — buildFestivalPageUrl', () => {
   it('percent-encodes the slug', () => {
     expect(buildFestivalPageUrl('a b')).toMatch(/\/f\/a%20b$/);
   });
+
+  it('appends the share source as ?ref= only when given', () => {
+    expect(buildFestivalPageUrl('edc', undefined, 'share-festival')).toBe('https://festie.us/f/edc?ref=share-festival');
+    expect(buildFestivalPageUrl('edc', 'http://localhost:5173/', 'share-wrap')).toBe(
+      'http://localhost:5173/f/edc?ref=share-wrap',
+    );
+    expect(buildFestivalPageUrl('edc', undefined, '')).toBe('https://festie.us/f/edc');
+  });
 });
 
 describe('FESTIVAL_SHARE_COPY', () => {

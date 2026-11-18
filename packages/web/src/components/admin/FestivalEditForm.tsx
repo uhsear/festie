@@ -11,9 +11,10 @@ import {
 import type { FestivalIssue } from '@festie/shared/utils';
 import type { Artist } from '@festie/shared/types';
 import type { LineupDraft } from '@festie/shared/utils';
-import type { SetEngagementMap } from '@festie/shared/services';
+import type { LineupInterestCounts, SetEngagementMap } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
 import AnnouncedNames from './AnnouncedNames';
+import SetTimeReleasePanel from './SetTimeReleasePanel';
 import DayEditor, { Day } from './DayEditor';
 import { Stage } from './SetEditor';
 
@@ -48,9 +49,13 @@ export interface FestivalEditFormProps {
   venueGuessed?: boolean;
   /** Days as last saved, for the lineup's save-summary checks. */
   savedDays?: Day[];
+  /** The lineup as last saved, so the save summary can count marks on entries a save removes. */
+  savedLineup?: LineupDraft[];
   /** Picks and reminders per set id; undefined until loaded. */
   engagement?: SetEngagementMap;
   engagementError?: boolean;
+  /** Marks per announced act, for the "N marked" figure on each lineup row. Absent until loaded. */
+  interestCounts?: LineupInterestCounts;
   onSave: () => void;
   /** Edit mode: reset to the loaded festival. */
   onDiscard: () => void;
@@ -80,8 +85,10 @@ export default function FestivalEditForm({
   saving,
   venueGuessed,
   savedDays,
+  savedLineup,
   engagement,
   engagementError,
+  interestCounts,
   onSave,
   onDiscard,
   onCancel,
@@ -449,9 +456,12 @@ export default function FestivalEditForm({
           lineup={formData.lineup}
           days={formData.days || []}
           savedDays={savedDays}
+          savedLineup={savedLineup}
+          stages={formData.stages}
           separator={formData.b2bSeparator}
           savedAt={formData.updatedAt}
-          onChange={(lineup) => setFormData({ ...formData, lineup })}
+          interestCounts={interestCounts}
+          onChange={(lineup, days) => setFormData({ ...formData, lineup, ...(days ? { days } : {}) })}
         />
       )}
 
@@ -544,6 +554,12 @@ export default function FestivalEditForm({
         </button>
       </div>
 
+      {editingId && (
+        <div className="border-t border-glass-border pt-4">
+          <SetTimeReleasePanel festivalId={editingId} refreshKey={formData.updatedAt} />
+        </div>
+      )}
+
       {issues.length > 0 && (
         <div role="alert" className="rounded-lg border border-accent-coral p-3 space-y-1">
           <p className="text-sm font-medium text-accent-coral">Fix these before saving</p>
@@ -574,7 +590,7 @@ export default function FestivalEditForm({
               Tell people whose picks changed
             </label>
             <span className="text-xs text-text-muted">
-              Sends one alert to each person who picked a set you moved or removed.
+              Sends one alert to each person who picked a set you moved, removed or gave its first time on a day whose set-time alert already went out, and to each person who marked an act you cancelled.
             </span>
           </div>
         </div>

@@ -44,6 +44,19 @@ describe('AnnouncedNames', () => {
     expect(screen.getAllByText('Cancelled').length).toBeGreaterThan(0);
   });
 
+  it('shows how many people marked an act, open and converted together, and nothing for an act no one marked', () => {
+    render(
+      <AnnouncedNames
+        lineup={[entry('a', ['Kai']), entry('b', ['Mira']), entry('c', ['Zed'])]}
+        days={days}
+        interestCounts={{ a: { open: 2, converted: 3 }, b: { open: 0, converted: 0 } }}
+        onChange={() => {}}
+      />,
+    );
+    expect(screen.getByText('5 marked')).toBeTruthy();
+    expect(screen.getAllByText(/ marked$/)).toHaveLength(1);
+  });
+
   it('edits tier, day and status in place and keeps the id', () => {
     render(<Harness initial={[entry('a', ['Mira'])]} />);
     fireEvent.change(screen.getByLabelText('Tier for Mira'), { target: { value: '2' } });
@@ -191,5 +204,179 @@ describe('AnnouncedNames', () => {
   it('warns about acts with no matching set once sets exist', () => {
     render(<Harness initial={[entry('a', ['Kai']), entry('b', ['Mira'])]} />);
     expect(screen.getByLabelText('Lineup notices').textContent).toMatch(/1 announced act has no matching set: Mira/);
+  });
+
+  describe('scheduling tools', () => {
+    const stages = [{ id: 'st1', name: 'Main' }, { id: 'st2', name: 'Forest' }];
+    type TestDay = { date?: string; label?: string; sets?: { id: string; artist?: string; artists?: { name: string }[]; stageId?: string; startTime?: string; displayName?: string }[] };
+    const baseDays: TestDay[] = [
+      { date: '2027-02-05', label: 'Fri', sets: [{ id: 's1', artist: 'Kai', artists: [{ name: 'Kai' }], stageId: 'st1', startTime: '20:00' }] },
+      { date: '2027-02-06', label: 'Sat', sets: [] },
+    ];
+
+    /** Holds lineup and days like the edit form does, so a change that edits both flows back. */
+    function Form({
+      initial,
+      counts,
+      saved,
+      initialDays = baseDays,
+    }: {
+      initial: LineupDraft[];
+      counts?: Record<string, { open: number; converted: number }>;
+      saved?: LineupDraft[];
+      initialDays?: TestDay[];
+    }) {
+      const [lineup, setLineup] = useState(initial);
+      const [formDays, setFormDays] = useState(initialDays);
+      return (
+        <>
+          <AnnouncedNames
+            lineup={lineup}
+            days={formDays}
+            stages={stages}
+            interestCounts={counts}
+            savedLineup={saved}
+            onChange={(next, nextDays) => {
+              setLineup(next);
+              if (nextDays) setFormDays(nextDays);
+            }}
+          />
+          <div data-testid="json">{JSON.stringify(lineup)}</div>
+          <div data-testid="days">{JSON.stringify(formDays)}</div>
+        </>
+      );
+    }
+    const formDays = () => JSON.parse(screen.getByTestId('days').textContent!) as TestDay[];
+
+    it('Cancelled removes the act sets from the form and says so, and un-cancelling clears the note', () => {
+      render(<Form initial={[entry('a', ['Kai'])]} />);
+      fireEvent.click(screen.getByLabelText('Cancelled'));
+      expect(state()[0]!.status).toBe('cancelled');
+      expect(formDays()[0]!.sets).toEqual([]);
+      expect(screen.getByText('Its 1 set is removed too. To drop one set only, delete that set instead.')).toBeTruthy();
+      fireEvent.click(screen.getByLabelText('Cancelled'));
+      expect(state()[0]!.status).toBe('announced');
+      expect(screen.queryByText(/removed too/)).toBeNull();
+    });
+
+    it('Cancelled on an act with no set leaves the days alone and adds no note', () => {
+      render(<Form initial={[entry('a', ['Mira'])]} />);
+      fireEvent.click(screen.getByLabelText('Cancelled'));
+      expect(formDays()[0]!.sets).toHaveLength(1);
+      expect(screen.queryByText(/removed too/)).toBeNull();
+    });
+
+    it('Cancelled also removes a hand-linked set', () => {
+      render(<Form initial={[entry('a', ['Mira'], { linkedSetIds: ['s1'] })]} />);
+      fireEvent.click(screen.getByLabelText('Cancelled'));
+      expect(formDays()[0]!.sets).toEqual([]);
+    });
+
+    it('Remove asks first when people marked the act, and removes only after the confirm', () => {
+      render(<Form initial={[entry('a', ['Mira']), entry('b', ['Zed'])]} counts={{ a: { open: 2, converted: 1 } }} />);
+      fireEvent.click(screen.getByLabelText('Remove Zed'));
+      expect(state().map((e) => e.id)).toEqual(['a']);
+      fireEvent.click(screen.getByLabelText('Remove Mira'));
+      expect(state()).toHaveLength(1);
+      expect(dialogOf().getByText('3 people marked it. Remove it anyway? Use Cancelled to keep their marks.')).toBeTruthy();
+      fireEvent.click(dialogOf().getByRole('button', { name: 'Remove' }));
+      expect(state()).toEqual([]);
+    });
+
+    it('Remove all asks with a count when any act has marks', () => {
+      render(<Form initial={[entry('a', ['Mira']), entry('b', ['Zed'])]} counts={{ a: { open: 4, converted: 0 } }} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Remove all' }));
+      expect(state()).toHaveLength(2);
+      expect(dialogOf().getByText(/1 of these 2 acts has marks\. They carry 4 marks\./)).toBeTruthy();
+      fireEvent.click(dialogOf().getByRole('button', { name: 'Cancel' }));
+      expect(state()).toHaveLength(2);
+    });
+
+    it('Replace list names how many people marked the entries it would drop', () => {
+      render(<Form initial={[entry('a', ['Mira']), entry('b', ['Zed'])]} counts={{ b: { open: 5, converted: 7 } }} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Paste names' }));
+      fireEvent.change(dialogOf().getByLabelText('Names'), { target: { value: 'Mira' } });
+      fireEvent.click(dialogOf().getByLabelText('Replace list'));
+      fireEvent.click(dialogOf().getByRole('button', { name: 'Replace list' }));
+      expect(dialogOf().getByRole('alert').textContent).toMatch(/1 entry is not in this paste\. 12 people marked it\. Click again to remove it\./);
+    });
+
+    it('the save summary counts marks on entries this save removes', () => {
+      render(
+        <Form
+          initial={[entry('a', ['Mira'])]}
+          saved={[entry('a', ['Mira']), entry('b', ['Zed']), entry('c', ['Ana'])]}
+          counts={{ b: { open: 5, converted: 7 }, c: { open: 1, converted: 0 } }}
+        />,
+      );
+      expect(screen.getByLabelText('Lineup notices').textContent).toContain('2 entries with marks will be removed (13 marks).');
+    });
+
+    it('Copy to day adds a set with the artists and poster name, no times, to the chosen day', () => {
+      render(<Form initial={[entry('a', ['Mira', 'Zed'], { displayName: 'Mira and Zed (live)' })]} />);
+      fireEvent.click(screen.getByLabelText('Copy Mira b2b Zed to a day'));
+      expect(dialogOf().getByText('For small fixes: put one act on a day and stage, without times.')).toBeTruthy();
+      expect((dialogOf().getByRole('button', { name: 'Add set' }) as HTMLButtonElement).disabled).toBe(true);
+      fireEvent.change(dialogOf().getByLabelText('Copy to day'), { target: { value: '1' } });
+      fireEvent.change(dialogOf().getByLabelText('Copy to stage'), { target: { value: 'st2' } });
+      fireEvent.click(dialogOf().getByRole('button', { name: 'Add set' }));
+      const [added] = formDays()[1]!.sets!;
+      expect(added).toMatchObject({
+        artist: 'Mira b2b Zed',
+        stageId: 'st2',
+        startTime: '',
+        displayName: 'Mira and Zed (live)',
+        artists: [{ name: 'Mira' }, { name: 'Zed' }],
+      });
+      expect(screen.getByText('Scheduled (1 set)')).toBeTruthy();
+      expect(formDays()[0]!.sets).toHaveLength(1);
+    });
+
+    it('Copy to day is offered only for an act no set covers', () => {
+      render(<Form initial={[entry('a', ['Kai']), entry('b', ['Mira'], { status: 'cancelled' }), entry('c', ['Zed'])]} />);
+      expect(screen.queryByLabelText('Copy Kai to a day')).toBeNull();
+      expect(screen.queryByLabelText('Copy Mira to a day')).toBeNull();
+      expect(screen.getByLabelText('Copy Zed to a day')).toBeTruthy();
+    });
+
+    it('Matches set links a B2B act to the two solo sets and keeps the rest of the entry', () => {
+      const soloDays: TestDay[] = [
+        {
+          date: '2027-02-05',
+          label: 'Fri',
+          sets: [
+            { id: 's1', artist: 'Kai', artists: [{ name: 'Kai' }], stageId: 'st1', startTime: '20:00' },
+            { id: 's2', artist: 'Mira', artists: [{ name: 'Mira' }], stageId: 'st2' },
+            { id: 's3', artist: 'Other', artists: [{ name: 'Other' }] },
+          ],
+        },
+      ];
+      render(<Form initial={[entry('a', ['Kai', 'Mira'], { tier: 2, displayName: 'KAI x MIRA', dayDate: '2027-02-05' })]} initialDays={soloDays} />);
+      fireEvent.click(screen.getByLabelText('Matches set for Kai b2b Mira'));
+      expect(dialogOf().getByText('For small fixes: tell Festie that this act and that set are the same.')).toBeTruthy();
+      expect(dialogOf().queryByText(/Other/)).toBeNull();
+      fireEvent.click(dialogOf().getByLabelText(/^Kai · Fri · Main · 20:00/));
+      fireEvent.click(dialogOf().getByLabelText(/^Mira · Fri · Forest · Time TBA/));
+      fireEvent.click(dialogOf().getByRole('button', { name: 'Save links' }));
+      expect(state()[0]).toMatchObject({ id: 'a', tier: 2, displayName: 'KAI x MIRA', dayDate: '2027-02-05', linkedSetIds: ['s1', 's2'] });
+      expect(screen.getByText('Scheduled (2 sets)')).toBeTruthy();
+      expect(screen.getByText('Linked to 2 sets by hand')).toBeTruthy();
+    });
+
+    it('Matches set says so when no set shares a name, and keeps a link to a set it cannot list', () => {
+      render(<Form initial={[entry('a', ['Nobody'], { linkedSetIds: ['gone'] })]} />);
+      fireEvent.click(screen.getByLabelText('Matches set for Nobody'));
+      expect(dialogOf().getByText('No set shares an artist name with this act yet.')).toBeTruthy();
+      fireEvent.click(dialogOf().getByRole('button', { name: 'Save links' }));
+      expect(state()[0]!.linkedSetIds).toEqual(['gone']);
+    });
+
+    it('explains the three ways to add days and times', () => {
+      render(<Form initial={[entry('a', ['Mira'])]} />);
+      const help = within(screen.getByLabelText('Ways to add days and times'));
+      expect(help.getByText(/export, fill in stages and times in a sheet, then import/)).toBeTruthy();
+      expect(help.getByText(/Copy to day…: for small fixes/)).toBeTruthy();
+      expect(help.getByText(/Matches set…: for small fixes/)).toBeTruthy();
+    });
   });
 });

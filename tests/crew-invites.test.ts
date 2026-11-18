@@ -65,6 +65,8 @@ function makeInviteDeps(overrides: any = {}) {
       countByFestival: mock.fn(async () => 0),
       create: mock.fn(async (p: any) => p),
     },
+    // ensureFestivalProfile checks the festival is published.
+    pool: { query: mock.fn(async () => ({ rows: [{}] })) },
   };
 
   // Deep-merge stores
@@ -72,6 +74,7 @@ function makeInviteDeps(overrides: any = {}) {
   if (overrides.stores) {
     stores.crews = { ...storesBase.crews, ...overrides.stores.crews };
     stores.profiles = { ...storesBase.profiles, ...overrides.stores.profiles };
+    if (overrides.stores.pool) stores.pool = overrides.stores.pool;
   }
   stores.activity = overrides.activity || { log: mock.fn(async () => 'act-1') };
 
@@ -325,6 +328,25 @@ describe('routes/crew-invites.js — POST /join', () => {
     assert.equal(created.userId, 'user-1');
     assert.equal(deps.emitter.profileCreated.mock.calls.length, 1);
     assert.equal(addMember.mock.calls.length, 1);
+  });
+
+  test('returns 404 when the crew festival is unpublished, and adds no member', async () => {
+    const create = mock.fn(async (p: any) => p);
+    const addMember = mock.fn(async () => {});
+    const { app } = await buildInviteApp({
+      getUserFestivalProfile: mock.fn(async () => null),
+      stores: {
+        crews: { getByInviteCode: mock.fn(async () => ({ ...DEFAULT_CREW })), addMember },
+        profiles: { create },
+        pool: { query: mock.fn(async () => ({ rows: [] })) },
+      },
+    });
+
+    const res = await request(app).post('/join').send({ inviteCode: 'ABC123' });
+
+    assert.equal(res.status, 404);
+    assert.equal(create.mock.calls.length, 0);
+    assert.equal(addMember.mock.calls.length, 0);
   });
 
   test('returns 400 MAX_LIMIT_REACHED when the festival is at its profile cap', async () => {
