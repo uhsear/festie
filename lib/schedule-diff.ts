@@ -16,7 +16,8 @@ export type SetSlot = { dayLabel: string; startTime: string | null; endTime: str
 export type SetChange =
   | { kind: 'moved'; setId: string; artist: string; before: SetSlot; after: SetSlot }
   | { kind: 'removed'; setId: string; artist: string };
-export type EntryCancelled = { kind: 'entry_cancelled'; entryId: string; artist: string };
+/** `setIds` are the stored sets that covered the act. The festival route fills them in. */
+export type EntryCancelled = { kind: 'entry_cancelled'; entryId: string; artist: string; setIds?: string[] };
 export type ScheduleChange = SetChange | EntryCancelled;
 export type SchedulePush = { userId: string; title: string; body: string; setId?: string };
 
@@ -156,7 +157,8 @@ function shiftOf(changes: SetChange[]): { stageName: string; delta: number } | n
 
 /**
  * One message per user who picked at least one changed set or set a reminder on it, then one per
- * user whose mark on a cancelled act is still open. A user who already gets a set alert gets no second one.
+ * user whose mark on a cancelled act is still open. A user whose set alert already says the act left the
+ * lineup (a removed set that covered it) gets no second one; any other set alert does not cover the act.
  */
 export function buildSchedulePushes(
   festivalName: string,
@@ -198,20 +200,23 @@ export function buildSchedulePushes(
       body: `${festivalName}: ${names}. Tap to see the new times.`.slice(0, MAX_BODY_LENGTH),
     });
   }
-  return [...pushes, ...buildCancelPushes(festivalName, changes, interestedByEntry, new Set(changesByUser.keys()))];
+  return [...pushes, ...buildCancelPushes(festivalName, changes, interestedByEntry, changesByUser)];
 }
 
 function buildCancelPushes(
   festivalName: string,
   changes: ScheduleChange[],
   interestedByEntry: Map<string, string[]>,
-  alreadyTold: Set<string>,
+  setChangesByUser: Map<string, SetChange[]>,
 ): SchedulePush[] {
   const artistsByUser = new Map<string, string[]>();
   for (const change of changes) {
     if (change.kind !== 'entry_cancelled') continue;
     for (const userId of new Set(interestedByEntry.get(change.entryId) || [])) {
-      if (alreadyTold.has(userId)) continue;
+      const told = (setChangesByUser.get(userId) || []).some(
+        (setChange) => setChange.kind === 'removed' && (change.setIds || []).includes(setChange.setId),
+      );
+      if (told) continue;
       artistsByUser.set(userId, [...(artistsByUser.get(userId) || []), change.artist]);
     }
   }

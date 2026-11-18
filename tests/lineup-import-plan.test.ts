@@ -518,14 +518,18 @@ describe('lineup CSV round trip with announced acts', () => {
 
   it('shows 10 New with poster names kept after the stage and times are filled, then 10 Unchanged', () => {
     const f = base();
-    const filled = exportRows(f)
-      .filter((r) => r.artist.startsWith('Act '))
-      .map((r, i) => ({ ...r, stage: 'Forest', startTime: `${String(12 + i).padStart(2, '0')}:00`, endTime: `${String(12 + i).padStart(2, '0')}:45` }));
+    // Only the 10 'Act ' rows are filled in; the DJ Alpha row and the 'No Day' row stay as exported.
+    const filled = exportRows(f).map((r, i) =>
+      r.artist.startsWith('Act ')
+        ? { ...r, stage: 'Forest', startTime: `${String(12 + i).padStart(2, '0')}:00`, endTime: `${String(12 + i).padStart(2, '0')}:45` }
+        : r,
+    );
     const first = plan(filled, { updateExisting: true }, f);
     assert.deepEqual(
       { new: first.plan.counts.new, error: first.plan.counts.error, changed: first.plan.counts.changed },
       { new: 10, error: 0, changed: 0 },
     );
+    assert.equal(first.plan.counts.unchanged, 2);
     assert.deepEqual(first.writes.inserts.map((s) => s.displayName), names.map((n) => `${n} (poster)`));
     assert.deepEqual(first.plan.unmatchedActs, []);
 
@@ -536,7 +540,34 @@ describe('lineup CSV round trip with announced acts', () => {
     const second = plan(filled, { updateExisting: true }, f);
     assert.deepEqual(
       { new: second.plan.counts.new, changed: second.plan.counts.changed, unchanged: second.plan.counts.unchanged, error: second.plan.counts.error },
-      { new: 0, changed: 0, unchanged: 10, error: 0 },
+      { new: 0, changed: 0, unchanged: 12, error: 0 },
     );
+  });
+
+  const untouched = (f: any) => {
+    const { plan: p, writes } = plan(exportRows(f), { updateExisting: true, createMissing: false }, f);
+    assert.equal(p.counts.error, 0);
+    assert.equal(p.counts.new, 0);
+    assert.equal(p.counts.changed, 0);
+    assert.equal(p.counts.unchanged, 12);
+    assert.equal(writes.inserts.length + writes.updates.length, 0);
+    assert.match(p.rows[1]!.warnings[0]!, /Not placed yet/);
+  };
+
+  it('imports an untouched export on a two-stage festival with no errors and no writes', () => {
+    untouched(base());
+  });
+
+  it('imports an untouched export on a one-stage festival without making TBA sets', () => {
+    const f = base();
+    f.stages = [f.stages[0]!];
+    untouched(f);
+  });
+
+  it('still makes a TBA set on a one-stage festival when the row has a name and no stage but names an unannounced act', () => {
+    const f = base();
+    f.stages = [f.stages[0]!];
+    const { plan: p } = plan([row(2, { artist: 'Walk-in', day: 'Friday' })], {}, f);
+    assert.equal(p.counts.new, 1);
   });
 });

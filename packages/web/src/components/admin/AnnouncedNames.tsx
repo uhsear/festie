@@ -350,6 +350,7 @@ export default function AnnouncedNames<D extends FormDay>({
     return total > 0 ? `${total} marked` : null;
   };
 
+  const pendingMarked = pendingRemoval ? pendingRemoval.filter((i) => marksOf(lineup[i]!) > 0).length : 0;
   return (
     <div className="border-t border-glass-border pt-4" data-testid="announced-names">
       <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -591,7 +592,7 @@ export default function AnnouncedNames<D extends FormDay>({
           pendingRemoval
             ? pendingRemoval.length === 1
               ? `${marksPhrase([lineup[pendingRemoval[0]!]!]).trim()} Remove it anyway? Use Cancelled to keep their marks.`
-              : `${pendingRemoval.filter((i) => marksOf(lineup[i]!) > 0).length} of these ${pendingRemoval.length} acts have marks.${marksPhrase(pendingRemoval.map((i) => lineup[i]!))} Remove them anyway? Use Cancelled to keep their marks.`
+              : `${pendingMarked} of these ${pendingRemoval.length} acts ${plural(pendingMarked, 'has', 'have')} marks.${marksPhrase(pendingRemoval.map((i) => lineup[i]!))} Remove them anyway? Use Cancelled to keep their marks.`
             : ''
         }
         confirmLabel="Remove"

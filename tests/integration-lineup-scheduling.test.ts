@@ -31,7 +31,8 @@ async function until<T>(check: () => Promise<T | false | undefined | null>, labe
 }
 
 async function setup(lineup: Record<string, unknown>[]) {
-  const server = await startServer();
+  // Cancel alerts are dark by default; the cancel test below needs them on.
+  const server = await startServer({ LINEUP_CANCEL_ALERTS_ENABLED: 'true' });
   servers.push(server);
   const admin = await loginAdmin(server);
   const pool = new Pool({ connectionString: server.databaseUrl });
@@ -105,7 +106,7 @@ describe('Integration: lineup scheduling tools', { concurrency: 1 }, () => {
 
     const asked = await putFestival(body).expect(409);
     assert.equal(asked.body.error.code, 'CONFIRM_REMOVALS');
-    assert.deepEqual(asked.body.error.removal.cancel, { acts: ['Alpha', 'Zeta'], sets: 1, picked: 1, marked: 1 });
+    assert.deepEqual(asked.body.error.removal.cancel, { acts: ['Alpha', 'Zeta'], sets: 1, picks: 1, picked: 1, marked: 1 });
 
     // An old login must confirm the password before the removal goes through.
     const reauth = await putFestival({ ...body, confirmRemovals: true }).expect(403);

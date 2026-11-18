@@ -11,7 +11,7 @@ import { validateFestivalIssues } from '../lib/helpers/validation.js';
 
 const noop = () => {};
 const pass = (_req: any, _res: any, next: any) => next();
-const config = { MAX_STAGES: 20, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 };
+const config = { MAX_STAGES: 20, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200, LINEUP_CANCEL_ALERTS_ENABLED: true };
 const ErrorCodes = {
   INVALID_INPUT: 'INVALID_INPUT',
   VALIDATION_ERROR: 'VALIDATION_ERROR',
@@ -55,7 +55,7 @@ const festival = (): any => ({
 });
 
 let counter = 0;
-function setup(options: { marks?: Record<string, string[]>; pickers?: Record<string, string[]>; picks?: number } = {}) {
+function setup(options: { marks?: Record<string, string[]>; pickers?: Record<string, string[]>; picks?: number; alerts?: boolean } = {}) {
   const existing = festival();
   const emitter = { festivalUpdated: mock.fn(), festivalCreated: mock.fn(), scheduleChanged: mock.fn() };
   const interested = mock.fn(async (_id: string, entryIds: string[]) =>
@@ -67,7 +67,7 @@ function setup(options: { marks?: Record<string, string[]>; pickers?: Record<str
   const update = mock.fn(async (id: string, fields: any) => ({ ...existing, id, ...fields }));
   const deps: any = {
     express,
-    config,
+    config: { ...config, LINEUP_CANCEL_ALERTS_ENABLED: options.alerts !== false },
     log: { info: noop, warn: noop, error: noop, debug: noop },
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
     sendError: (res: any, status: number, message: string, code: string, details?: any) =>
@@ -118,12 +118,25 @@ const withoutSets = (existing: any) => ({ days: existing.days.map((d: any) => ({
 
 describe('cancelling an announced act', () => {
   test('alerts the people whose mark is open even when nobody picked a set', async () => {
-    const { app, existing, emitter, interested } = setup({ marks: { 'lu-mira': ['u1', 'u2'] } });
-    const res = await request(app).put('/f1').send(cancelBody(existing, ['lu-mira'])).expect(200);
+    const { app, existing, emitter, interested, update } = setup({ marks: { 'lu-mira': ['u1', 'u2'] } });
+    // The first save is a dry run: it names the people who would hear, and sends nothing.
+    const dry = await request(app).put('/f1').send(cancelBody(existing, ['lu-mira'])).expect(409);
+    assert.equal(dry.body.error.code, 'CONFIRM_REMOVALS');
+    assert.equal(dry.body.error.message, 'This save sends cancel alerts. Confirm to continue.');
+    assert.deepEqual(dry.body.error.removal, {
+      days: 0,
+      sets: 0,
+      picks: 0,
+      ratings: 0,
+      cancel: { acts: ['Mira'], sets: 0, picks: 0, picked: 0, marked: 2 },
+    });
+    assert.equal(update.mock.callCount(), 0);
+    assert.equal(emitter.scheduleChanged.mock.callCount(), 0);
+    const res = await request(app).put('/f1').send(cancelBody(existing, ['lu-mira'], { confirmRemovals: true })).expect(200);
     assert.deepEqual(res.body.data.scheduleNotice, { changes: 1, people: 2, notified: true, marked: 2 });
     assert.deepEqual((interested.mock.calls[0]!.arguments as any)[1], ['lu-mira']);
     const sent = emitter.scheduleChanged.mock.calls[0]!.arguments[0] as any;
-    assert.deepEqual(sent.changes, [{ kind: 'entry_cancelled', entryId: 'lu-mira', artist: 'Mira' }]);
+    assert.deepEqual(sent.changes, [{ kind: 'entry_cancelled', entryId: 'lu-mira', artist: 'Mira', setIds: [] }]);
     assert.deepEqual([...sent.interestedByEntry], [['lu-mira', ['u1', 'u2']]]);
   });
 
@@ -164,7 +177,7 @@ describe('cancelling an announced act', () => {
       sets: 1,
       picks: 3,
       ratings: 3,
-      cancel: { acts: ['Kai', 'Mira'], sets: 1, picked: 2, marked: 2 },
+      cancel: { acts: ['Kai', 'Mira'], sets: 1, picks: 3, picked: 2, marked: 2 },
     });
     assert.equal(update.mock.callCount(), 0);
   });
@@ -178,7 +191,8 @@ describe('cancelling an announced act', () => {
   test('a set removed on its own does not count as a cancelled act set', async () => {
     const { app, existing } = setup({ marks: { 'lu-mira': ['u8'] }, pickers: { 'set-kai': ['u1'] }, picks: 1 });
     const res = await request(app).put('/f1').send(cancelBody(existing, ['lu-mira'], withoutSets(existing))).expect(409);
-    assert.deepEqual(res.body.error.removal.cancel, { acts: ['Mira'], sets: 0, picked: 0, marked: 1 });
+    // u1 picked the removed set of another act: they hear about that set, so they are counted once, as a picker.
+    assert.deepEqual(res.body.error.removal.cancel, { acts: ['Mira'], sets: 0, picks: 0, picked: 1, marked: 1 });
   });
 
   test('un-cancelling and saving a lineup with no new cancel read nothing and alert no one', async () => {
@@ -186,6 +200,20 @@ describe('cancelling an announced act', () => {
     existing.lineup[1].status = 'cancelled';
     await request(app).put('/f1').send({ expectedUpdatedAt: UPDATED_AT, lineup: existing.lineup.map((e: any) => ({ ...e, status: 'announced' })) }).expect(200);
     await request(app).put('/f1').send({ expectedUpdatedAt: UPDATED_AT, lineup: existing.lineup }).expect(200);
+    assert.equal(interested.mock.callCount(), 0);
+    assert.equal(emitter.scheduleChanged.mock.callCount(), 0);
+  });
+
+  test('a marker who also picked an unrelated moved set is counted once, as a picker', async () => {
+    const { app, existing } = setup({ marks: { 'lu-mira': ['u1'] }, pickers: { 'set-kai': ['u1'] } });
+    const moved = existing.days.map((d: any) => ({ ...d, sets: d.sets.map((set: any) => ({ ...set, startTime: '22:00', endTime: '23:00' })) }));
+    const res = await request(app).put('/f1').send(cancelBody(existing, ['lu-mira'], { days: moved })).expect(409);
+    assert.deepEqual(res.body.error.removal.cancel, { acts: ['Mira'], sets: 0, picks: 0, picked: 1, marked: 0 });
+  });
+
+  test('stays dark while LINEUP_CANCEL_ALERTS_ENABLED is off: no mark lookup, no confirm, no alert', async () => {
+    const { app, existing, emitter, interested } = setup({ marks: { 'lu-mira': ['u1'] }, alerts: false });
+    await request(app).put('/f1').send(cancelBody(existing, ['lu-mira'])).expect(200);
     assert.equal(interested.mock.callCount(), 0);
     assert.equal(emitter.scheduleChanged.mock.callCount(), 0);
   });

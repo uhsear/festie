@@ -141,6 +141,18 @@ describe('buildLineupCsv', () => {
   });
 });
 
+describe('buildLineupCsv: formula names', () => {
+  it('prefixes a name that starts like a formula, and the parser takes the prefix off again', () => {
+    const names = ['=SUM(1)', '+Kai', '-Mira', '@Zed'];
+    const csv = buildLineupCsv({
+      days: [{ label: 'Friday', sets: names.map((artist, i) => ({ id: `s${i}`, artist, stageId: '', startTime: null, endTime: null })) }],
+    });
+    expect(csv).toContain("'=SUM(1)");
+    const parsed = parseLineupTable(csv);
+    expect(toImportRows(parsed.rows, defaultMapping(parsed.rows, true), true, parsed.lines).map((r) => r.artist)).toEqual(names);
+  });
+});
+
 describe('buildLineupCsv: announced acts', () => {
   const act = (id: string, names: string[], extra: Record<string, unknown> = {}) => ({
     id,

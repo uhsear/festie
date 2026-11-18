@@ -163,7 +163,8 @@ export function parseLineupTable(text: string): { rows: string[][]; lines: numbe
   const rows: string[][] = [];
   const lines: number[] = [];
   result.data.forEach((raw, i) => {
-    const cells = raw.map((c) => String(c ?? '').trim());
+    // buildLineupCsv prefixes a name that starts like a formula with an apostrophe; take it off again.
+    const cells = raw.map((c) => String(c ?? '').replace(/^'(?=[=+\-@\t\r])/, '').trim());
     if (cells.every((c) => !c)) return;
     rows.push(cells);
     lines.push(startLine[i]!);
@@ -290,5 +291,6 @@ export function buildLineupCsv(festival: LineupExportFestival): string {
       const day = days[cover[entry.id]!.dayIndex];
       return ['', day ? day.label || day.date || '' : '', '', joinArtistNames(entry.artists.map((a) => a.name), separator), '', ''];
     });
-  return Papa.unparse({ fields: ['set_id', 'day', 'stage', 'artist', 'start', 'end'], data: [...setRows, ...entryRows] });
+  // A spreadsheet runs a cell that starts with = + - or @ as a formula, so those cells get an apostrophe.
+  return Papa.unparse({ fields: ['set_id', 'day', 'stage', 'artist', 'start', 'end'], data: [...setRows, ...entryRows] }, { escapeFormulae: true });
 }

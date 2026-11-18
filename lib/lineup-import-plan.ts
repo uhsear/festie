@@ -236,6 +236,12 @@ function createContext(input: PlanInput) {
     }),
   );
 
+  // Announced acts no set covers. The CSV export lists each as a row with no stage and no times.
+  const coveredKeys = new Set(existing.map((s) => lineupEntryKey({ artists: s.names.map((name) => ({ name })) })));
+  const unplacedKeys = new Set<string>(
+    lineup.filter((entry) => entry.status !== 'cancelled' && !coveredKeys.has(lineupEntryKey(entry))).map(lineupEntryKey),
+  );
+
   return {
     input,
     makeId,
@@ -249,6 +255,7 @@ function createContext(input: PlanInput) {
     lineup,
     posterNames,
     filledDays: new Set<string>(),
+    unplacedKeys,
     existingById: new Map(existing.map((s) => [s.id, s])),
     planRows: [] as LineupImportPlanRow[],
     matchedIds: new Set<string>(),
@@ -408,7 +415,17 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
 
   const match = names.length > 0 && day !== null ? findMatch(ctx, row, key, day ?? undefined, stageId ?? undefined, errors) : undefined;
   if (match) ctx.matchedIds.add(match.id);
-  if (!match && errors.length === 0) {
+  // An untouched export row for an act with no set yet is not a request to schedule it.
+  const unplaced =
+    !match &&
+    errors.length === 0 &&
+    names.length > 0 &&
+    stageId === undefined &&
+    !row.startTime?.trim() &&
+    !row.endTime?.trim() &&
+    ctx.unplacedKeys.has(lineupEntryKey({ artists: names.map((name) => ({ name })) }));
+  if (unplaced) warnings.push('Not placed yet. Add a stage and times to schedule it.');
+  if (!match && !unplaced && errors.length === 0) {
     if (!day) errors.push({ field: 'day', message: 'Day is empty.' });
     if (stageId === undefined && ctx.input.festival.stages?.length === 1) stageId = ctx.input.festival.stages[0].id;
     else if (stageId === undefined) errors.push({ field: 'stage', message: 'Stage is empty.' });
@@ -429,11 +446,11 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
   if (values.startTime && values.startTime < AFTER_MIDNIGHT_CUTOFF && dayInfo) {
     warnings.push(`Starts after midnight, so it counts as ${dayInfo.label || dayInfo.date} night.`);
   }
-  if (!match && errors.length === 0) addNearMatchWarning(ctx, key, dayInfo, warnings);
+  if (!match && !unplaced && errors.length === 0) addNearMatchWarning(ctx, key, dayInfo, warnings);
 
   const status: LineupImportRowStatus =
-    errors.length > 0 ? 'error' : !match ? 'new' : changes.length > 0 ? 'changed' : 'unchanged';
-  const poster = !match && names.length > 0 ? (ctx.posterNames.get(lineupEntryKey({ artists: values.artists })) ?? null) : null;
+    errors.length > 0 ? 'error' : unplaced ? 'unchanged' : !match ? 'new' : changes.length > 0 ? 'changed' : 'unchanged';
+  const poster = !match && !unplaced && names.length > 0 ? (ctx.posterNames.get(lineupEntryKey({ artists: values.artists })) ?? null) : null;
   ctx.planRows.push({
     row: row.row,
     status,
@@ -448,7 +465,7 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
     errors,
     warnings,
   });
-  recordWrite(ctx, index, status, match, dayInfo, values, poster);
+  if (!unplaced) recordWrite(ctx, index, status, match, dayInfo, values, poster);
 }
 
 function newValues(ctx: Ctx, names: string[], stageId: string, start: string | null, end: string | null, link: string | null): SetValues {

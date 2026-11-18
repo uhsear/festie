@@ -287,7 +287,7 @@ describe('AnnouncedNames', () => {
       render(<Form initial={[entry('a', ['Mira']), entry('b', ['Zed'])]} counts={{ a: { open: 4, converted: 0 } }} />);
       fireEvent.click(screen.getByRole('button', { name: 'Remove all' }));
       expect(state()).toHaveLength(2);
-      expect(dialogOf().getByText(/1 of these 2 acts have marks\. They carry 4 marks\./)).toBeTruthy();
+      expect(dialogOf().getByText(/1 of these 2 acts has marks\. They carry 4 marks\./)).toBeTruthy();
       fireEvent.click(dialogOf().getByRole('button', { name: 'Cancel' }));
       expect(state()).toHaveLength(2);
     });

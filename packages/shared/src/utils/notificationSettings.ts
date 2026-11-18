@@ -74,11 +74,12 @@ export function describeScheduleNotice(notice: ScheduleNotice): string {
     const noun = notice.people === 1 ? 'person' : 'people';
     if (notice.marked) {
       const picked = notice.people - notice.marked;
-      return `Saved. ${notice.people} ${noun} will get an alert: ${notice.marked} marked a cancelled act and ${picked} picked or set a reminder on the changed sets, unless they turned schedule alerts off.`;
+      const alsoPicked = picked > 0 ? ` and ${picked} picked or set a reminder on the changed sets` : '';
+      return `Saved. ${notice.people} ${noun} will get an alert: ${notice.marked} marked a cancelled act${alsoPicked}, unless they turned schedule alerts off.`;
     }
     return `Saved. ${notice.people} ${noun} picked or set a reminder on the changed sets and will get an alert, unless they turned schedule alerts off.`;
   }
-  if (notice.changes > 0 && notice.people === 0) return 'Saved. No one had picked or set a reminder on the changed sets, so no alerts were sent.';
+  if (notice.changes > 0 && notice.people === 0) return 'Saved. No one had picked, set a reminder on or marked what changed, so no alerts were sent.';
   if (notice.changes > 0) return 'Saved without alerts.';
   return 'Festival updated';
 }

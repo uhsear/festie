@@ -359,7 +359,7 @@ describe('diffCancelledEntries', () => {
 });
 
 describe('buildSchedulePushes: entry_cancelled', () => {
-  const cancelled = (entryId: string, artist: string) => ({ kind: 'entry_cancelled' as const, entryId, artist });
+  const cancelled = (entryId: string, artist: string, setIds: string[] = []) => ({ kind: 'entry_cancelled' as const, entryId, artist, setIds });
   const removed = (setId: string, artist: string) => ({ kind: 'removed' as const, setId, artist });
 
   it('writes the cancel copy for a person whose mark is open, with no set link', () => {
@@ -375,7 +375,7 @@ describe('buildSchedulePushes: entry_cancelled', () => {
   it('tells a picker once: the removed-set alert only, not the cancel alert as well', () => {
     const pushes = buildSchedulePushes(
       'F',
-      [removed('s1', 'Kai'), cancelled('a', 'Kai')],
+      [removed('s1', 'Kai'), cancelled('a', 'Kai', ['s1'])],
       new Map([['s1', ['u1']]]),
       new Map([['a', ['u1', 'u2']]]),
     );
@@ -385,6 +385,19 @@ describe('buildSchedulePushes: entry_cancelled', () => {
     ]);
     assert.equal(pushes[0]!.body, 'F removed this set, so it is no longer in your picks.');
     assert.equal(pushes[1]!.body, 'F cancelled this act.');
+  });
+
+  it('still tells a picker of an unrelated removed set about the act they marked', () => {
+    const pushes = buildSchedulePushes(
+      'F',
+      [removed('s9', 'Zed'), cancelled('a', 'Kai', ['s1'])],
+      new Map([['s9', ['u1']]]),
+      new Map([['a', ['u1']]]),
+    );
+    assert.deepEqual(pushes.map((p) => [p.userId, p.title]), [
+      ['u1', 'Zed is off the lineup'],
+      ['u1', 'Kai is off the lineup'],
+    ]);
   });
 
   it('folds several cancelled acts into one alert per person', () => {
