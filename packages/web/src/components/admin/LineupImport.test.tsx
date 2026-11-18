@@ -22,6 +22,8 @@ const api = vi.hoisted(() => ({
   exportCsv: vi.fn(),
 }));
 vi.mock('@festie/shared/services/lineupImport', () => ({ lineupImportApi: api }));
+// The release panel loads its own data; null renders nothing here.
+vi.mock('@festie/shared/services/timeReleases', () => ({ timeReleaseApi: { panel: vi.fn().mockResolvedValue(null), send: vi.fn() } }));
 
 const counts = (over: Record<string, number> = {}) => ({
   new: 0,

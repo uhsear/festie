@@ -29,9 +29,9 @@ function makeExecutor() {
       calls.push(['rate', festivalId]);
       return { sent: 4, eventKey: `rate:${festivalId}:0` };
     },
-    sendSetTimesOut: async (festivalId: string) => {
-      calls.push(['times', festivalId]);
-      return { sent: 4, eventKey: `times:${festivalId}` };
+    sendTimeRelease: async (festivalId: string, eventKey: string) => {
+      calls.push(['times', festivalId, eventKey]);
+      return { sent: 4, eventKey };
     },
     sendDaysOut: async (festivalId: string) => {
       calls.push(['days', festivalId]);
@@ -233,27 +233,40 @@ describe('createReengagementQueue', () => {
     ]);
   });
 
-  it('enqueues set_times_out with job id times-<id> and the worker routes it', async () => {
+  it('enqueues set_times_out under a fresh id with no colon, so it queues instead of running inline, and the worker routes it', async () => {
     const fakes = makeFakes();
     const executor = makeExecutor();
     const q = createReengagementQueue({ executor: executor as any, log, ...fakes });
     assert.ok(q);
+    const eventKey = 'times:edc-2027:11111111-1111-4111-8111-111111111111';
 
-    const r = await q!.sendSetTimesOut('edc-2027');
-    assert.deepEqual(r, { queued: true, jobId: 'times-edc-2027' });
+    const r: any = await q!.sendTimeRelease('edc-2027', eventKey);
+    assert.equal(r.queued, true);
+    assert.match(r.jobId, /^times-edc-2027-[0-9a-f-]{36}$/);
+    assert.ok(!r.jobId.includes(':'));
     assert.deepEqual(fakes.added, [
-      { name: 'set_times_out', data: { festivalId: 'edc-2027' }, jobOpts: { jobId: 'times-edc-2027' } },
+      { name: 'set_times_out', data: { festivalId: 'edc-2027', eventKey }, jobOpts: { jobId: r.jobId } },
     ]);
-    assert.deepEqual(executor.calls, []);
+    assert.deepEqual(executor.calls, [], 'the fan-out did not run in the request');
 
     const done = await fakes.getProcessor()({
       name: 'set_times_out',
-      data: { festivalId: 'edc-2027' },
-      id: 'times-edc-2027',
+      data: { festivalId: 'edc-2027', eventKey },
+      id: r.jobId,
       attemptsMade: 0,
     });
     assert.equal(done.sent, 4);
-    assert.deepEqual(executor.calls, [['times', 'edc-2027']]);
+    assert.deepEqual(executor.calls, [['times', 'edc-2027', eventKey]]);
+  });
+
+  it('a retry for the same key gets a new job id, so a kept failed job cannot swallow it', async () => {
+    const fakes = makeFakes({ modelJobIdNoop: true });
+    const q = createReengagementQueue({ executor: makeExecutor() as any, log, ...fakes });
+    const eventKey = 'times:edc-2027:11111111-1111-4111-8111-111111111111';
+    const first: any = await q!.sendTimeRelease('edc-2027', eventKey);
+    const second: any = await q!.sendTimeRelease('edc-2027', eventKey);
+    assert.notEqual(first.jobId, second.jobId);
+    assert.equal(fakes.added.length, 2);
   });
 
   it('enqueues days_out with job id days-<id> and the worker routes it', async () => {

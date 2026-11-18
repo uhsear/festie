@@ -20,6 +20,7 @@ import {
 import { useToast } from '../../lib/toastContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import LineupImportHistory from './LineupImportHistory';
+import SetTimeReleasePanel from './SetTimeReleasePanel';
 
 interface LineupImportProps {
   festivalId: string;
@@ -511,6 +512,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
         {step === 'preview' && plan && renderPreview(plan)}
         {step === 'result' && result && renderResult(result)}
       </div>
+      <SetTimeReleasePanel festivalId={festivalId} refreshKey={historyKey} />
       <LineupImportHistory festivalId={festivalId} festivalName={festivalName} refreshKey={historyKey} />
       <ConfirmDialog
         open={confirmOpen}

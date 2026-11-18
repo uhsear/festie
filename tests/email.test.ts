@@ -516,6 +516,27 @@ describe('email: sendSetTimesOutEmail', () => {
     assert.ok(!msg.html.includes('<b>u</b>'));
     assert.ok(msg.text.includes('The set times for EDC <Las Vegas> are out.'));
   });
+
+  it('names the released days in the subject and body, and adds the admin note escaped', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    await sendSetTimesOutEmail({
+      to: 'u@example.com',
+      username: 'u',
+      festivalName: 'Wasteland',
+      festivalId: 'wl-27',
+      dayLabels: ['Friday', 'Saturday'],
+      note: 'Gates at <noon>.',
+      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }),
+      log: createMockLog(),
+      _client: createMockClient(send),
+    });
+    const msg = (send.mock.calls as any[])[0].arguments[0];
+    assert.equal(msg.subject, 'Wasteland: Friday and Saturday set times are out');
+    assert.ok(msg.html.includes('The Friday and Saturday set times for <strong style="color:#e4e4e7">Wasteland</strong> are out.'));
+    assert.ok(msg.html.includes('Gates at &lt;noon&gt;.'));
+    assert.ok(msg.text.includes('The Friday and Saturday set times for Wasteland are out.'));
+    assert.ok(msg.text.includes('Gates at <noon>.'));
+  });
 });
 
 describe('email: sendDaysOutEmail', () => {

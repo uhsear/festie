@@ -609,6 +609,17 @@ export const festivalAnnouncementSchema = z
   })
   .strict();
 
+// ── Set-time releases (admin) ───────────────────────────────────────
+// One alert per festival date. note is the push body, so it stays inside payload.ts MAX_BODY_LENGTH (200).
+// confirmPartial lets a date go out while some of its sets still have no time.
+export const timeReleaseSendSchema = z
+  .object({
+    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(10),
+    note: z.string().trim().min(1).max(200).optional(),
+    confirmPartial: z.boolean().optional(),
+  })
+  .strict();
+
 // ── Crew schemas ─────────────────────────────────────────────────────
 export const crewCreateSchema = z.object({
   name: z.string().trim().min(1, 'Crew name required').max(60).refine(noMarkup, noMarkupMsg),
@@ -1672,6 +1683,7 @@ export const schemas = {
   setLink: setLinkSchema,
   spotifyBackfill: spotifyBackfillSchema,
   festivalAnnouncement: festivalAnnouncementSchema,
+  timeReleaseSend: timeReleaseSendSchema,
   crewHomeBase: crewHomeBaseSchema,
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,

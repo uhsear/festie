@@ -12,6 +12,8 @@ const api = vi.hoisted(() => ({
   announceDays: vi.fn(),
 }));
 vi.mock('@festie/shared/services/lineupImport', () => ({ lineupImportApi: api }));
+const releaseApi = vi.hoisted(() => ({ panel: vi.fn() }));
+vi.mock('@festie/shared/services/timeReleases', () => ({ timeReleaseApi: releaseApi }));
 vi.mock('../../lib/toastContext', () => {
   const value = { toast: vi.fn(), toastError: vi.fn() };
   return { useToast: () => value };
@@ -32,6 +34,7 @@ describe('LineupImportHistory', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     api.history.mockResolvedValue({ imports: [] });
+    releaseApi.panel.mockResolvedValue(null);
     api.announcement.mockResolvedValue({
       recipients: 0,
       followers: 0,
@@ -115,5 +118,51 @@ describe('LineupImportHistory', () => {
     render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);
     expect(await screen.findByText('No one to notify right now.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Announce to 0 people' })).toBeDisabled();
+  });
+
+  describe('undo warning', () => {
+    const item = (touchedDates: string[]) => ({
+      id: 'imp-1',
+      createdAt: '2027-01-10T10:00:00.000Z',
+      createdBy: 'asir',
+      counts: { created: 1, updated: 0, newStages: 0, newDays: 0 },
+      undoneAt: null,
+      canUndo: true,
+      touchedDates,
+    });
+    const releases = (sentAt: string | null) => ({
+      festivalName: 'Fest',
+      canSend: true,
+      recipientsNow: 5,
+      emailOff: null,
+      defaultBody: 'x',
+      dates: [
+        { date: '2027-02-05', label: 'Friday', timed: 2, total: 2, claimedAt: sentAt, sentAt, recipients: 5, previewTitle: 'x' },
+      ],
+      orphanDates: [],
+    });
+
+    it('says a sent alert stays sent when the import touched a released date', async () => {
+      api.history.mockResolvedValue({ imports: [item(['2027-02-05'])] });
+      releaseApi.panel.mockResolvedValue(releases('2027-01-06T10:00:00.000Z'));
+      render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Undo import' }));
+      expect(await screen.findByText(/The Friday alert already went out\. Undo will not recall it\./)).toBeInTheDocument();
+    });
+
+    it('says nothing extra when the touched date was never released, or the release state did not load', async () => {
+      api.history.mockResolvedValue({ imports: [item(['2027-02-05'])] });
+      releaseApi.panel.mockResolvedValue(releases(null));
+      const first = render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Undo import' }));
+      expect(screen.queryByText(/already went out/)).not.toBeInTheDocument();
+      first.unmount();
+
+      releaseApi.panel.mockRejectedValue(new Error('down'));
+      render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Undo import' }));
+      expect(screen.getByText(/This removes the sets it added/)).toBeInTheDocument();
+      expect(screen.queryByText(/already went out/)).not.toBeInTheDocument();
+    });
   });
 });

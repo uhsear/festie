@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { lineupImportApi } from '@festie/shared/services/lineupImport';
+import { timeReleaseApi } from '@festie/shared/services/timeReleases';
+import { undoReleaseWarning, type TimeReleasePanelData } from '@festie/shared/utils/timeReleases';
 import {
   announcementEmailNote,
   daysAnnouncementSummary,
@@ -31,6 +33,7 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
   const [lineupCount, setLineupCount] = useState<LineupAnnouncementCount | null>(null);
   const [daysCount, setDaysCount] = useState<DaysAnnouncementCount | null>(null);
   const [daysOpen, setDaysOpen] = useState(false);
+  const [releases, setReleases] = useState<TimeReleasePanelData | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [undoTarget, setUndoTarget] = useState<LineupImportHistoryItem | null>(null);
   const [announceOpen, setAnnounceOpen] = useState(false);
@@ -41,14 +44,17 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
   const reload = useCallback(async () => {
     try {
       setLoadError(null);
-      const [history, announcement, days] = await Promise.all([
+      const [history, announcement, days, released] = await Promise.all([
         lineupImportApi.history(festivalId),
         lineupImportApi.announcement(festivalId),
         lineupImportApi.daysAnnouncement(festivalId),
+        // Only the undo warning reads this, so a failure here must not hide the history.
+        timeReleaseApi.panel(festivalId).catch(() => null),
       ]);
       setImports(history.imports);
       setLineupCount(announcement);
       setDaysCount(days);
+      setReleases(released);
     } catch (err: unknown) {
       setLoadError(err);
       toastError(err, "Couldn't load import history. Try again.");
@@ -214,7 +220,12 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
         open={!!undoTarget}
         onOpenChange={(o) => !o && setUndoTarget(null)}
         title="Undo this import?"
-        description="This removes the sets it added and puts back the sets it changed. Sets that people picked, or that someone edited after the import, stay."
+        description={[
+          'This removes the sets it added and puts back the sets it changed. Sets that people picked, or that someone edited after the import, stay.',
+          releases && undoReleaseWarning(undoTarget?.touchedDates, releases.dates, releases.orphanDates),
+        ]
+          .filter(Boolean)
+          .join(' ')}
         confirmLabel="Undo import"
         destructive
         busy={busy}

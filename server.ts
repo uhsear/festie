@@ -137,6 +137,7 @@ import createNotificationRoutes from './routes/notifications';
 import createCrewRoutes from './routes/crews';
 import createLineupImportRoutes from './routes/lineup-import';
 import createLineupAnnounceRoutes from './routes/lineup-announce';
+import createTimeReleasesRoutes from './routes/time-releases';
 import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from './routes/festival-announcements';
 import createShareRoutes from './routes/share';
 import { createRatingsRoutes } from './routes/ratings';
@@ -287,6 +288,7 @@ async function createFestieApp(overrides: any = {}) {
   const crewRoutes = createCrewRoutes(deps);
   const lineupImportRoutes = createLineupImportRoutes(deps);
   const lineupAnnounceRoutes = createLineupAnnounceRoutes(deps);
+  const timeReleasesRoutes = createTimeReleasesRoutes(deps);
   const adminAnnouncementRoutes = createAdminAnnouncementRoutes(deps);
   const publicAnnouncementRoutes = createPublicAnnouncementRoutes(deps);
   const shareRoutes = createShareRoutes(deps);
@@ -313,6 +315,7 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);
+  app.use('/api/v1/admin/festivals', deps.adminAuth, timeReleasesRoutes);
   app.use('/api/v1/festivals', festivalDiscoveryRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, adminAnnouncementRoutes);
   app.use('/api/v1/festivals', publicAnnouncementRoutes);

@@ -163,6 +163,8 @@ export interface LineupImportHistoryItem {
   counts: { created: number; updated: number; newStages: number; newDays: number };
   undoneAt: string | null;
   canUndo: boolean;
+  /** Festival dates this import wrote to. Absent from a server that predates set-time releases. */
+  touchedDates?: string[];
 }
 
 export interface LineupImportUndoResult {

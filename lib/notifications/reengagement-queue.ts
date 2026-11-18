@@ -5,7 +5,7 @@
 // M3 Re-engagement: durable fan-out queue (issue #20).
 //
 // The re-engagement triggers (sendWrapReady / sendLineupDrop / sendCrewReformed /
-// sendSetTimesOut) already reach EVERY eligible recipient via bounded-concurrency chunks, so the
+// sendTimeRelease) already reach EVERY eligible recipient via bounded-concurrency chunks, so the
 // old MAX_PUSH_BATCH tail-drop is gone. What this module adds is DURABILITY:
 // rather than fanning out on the web process's event loop inside the triggering
 // request (where a large lineup import or attendee sweep competes with request
@@ -29,6 +29,7 @@
 // separate worker process is required — BullMQ coordinates job ownership across
 // instances via Redis, and the dedup guard is the final backstop.
 
+import crypto from 'crypto';
 import { Queue, Worker } from 'bullmq';
 import Redis from 'ioredis';
 
@@ -62,7 +63,7 @@ export interface ReengagementExecutor {
   sendLineupDrop: (festivalId: string) => Promise<any>;
   sendCrewReformed: (args: any) => Promise<any>;
   sendRatePrompt: (festivalId: string) => Promise<any>;
-  sendSetTimesOut: (festivalId: string) => Promise<any>;
+  sendTimeRelease: (festivalId: string, eventKey: string) => Promise<any>;
   sendDaysOut: (festivalId: string) => Promise<any>;
 }
 
@@ -159,7 +160,7 @@ export function createReengagementQueue(deps: ReengagementQueueDeps) {
         if (name === 'lineup_drop') return executor.sendLineupDrop(data.festivalId);
         if (name === 'crew_reformed') return executor.sendCrewReformed(data);
         if (name === 'rate_prompt') return executor.sendRatePrompt(data.festivalId);
-        if (name === 'set_times_out') return executor.sendSetTimesOut(data.festivalId);
+        if (name === 'set_times_out') return executor.sendTimeRelease(data.festivalId, data.eventKey);
         if (name === 'days_out') return executor.sendDaysOut(data.festivalId);
         throw new Error(`reengagement-queue: unknown job name ${name}`);
       },
@@ -215,8 +216,13 @@ export function createReengagementQueue(deps: ReengagementQueueDeps) {
       enqueue('crew_reformed', `reform-${args?.newCrewId}`, args, () => executor.sendCrewReformed(args)),
     sendRatePrompt: (festivalId: string) =>
       enqueue('rate_prompt', 'rate-' + festivalId, { festivalId }, () => executor.sendRatePrompt(festivalId)),
-    sendSetTimesOut: (festivalId: string) =>
-      enqueue('set_times_out', `times-${festivalId}`, { festivalId }, () => executor.sendSetTimesOut(festivalId)),
+    // A fresh job id on every call: BullMQ keeps a failed job for 600 s, and queue.add with an existing id is a
+    // silent no-op, so a reused id could turn the admin's Retry into nothing. The claim in
+    // festival_time_releases and the per-user dedup on `eventKey` are what stop a double send.
+    sendTimeRelease: (festivalId: string, eventKey: string) =>
+      enqueue('set_times_out', `times-${festivalId}-${crypto.randomUUID()}`, { festivalId, eventKey }, () =>
+        executor.sendTimeRelease(festivalId, eventKey),
+      ),
     sendDaysOut: (festivalId: string) =>
       enqueue('days_out', `days-${festivalId}`, { festivalId }, () => executor.sendDaysOut(festivalId)),
     async close() {

@@ -8,9 +8,9 @@
 //   • lineup_drop    — a recurring (same-named) festival publishes its lineup →
 //                      notify users who attended a PRIOR edition of that festival
 //                      and users who follow it.
-//   • set_times_out  — a published festival gets its first set times → notify its
-//                      followers and everyone with a profile in it, once per
-//                      festival (festivals.set_times_out_at marks it sent).
+//   • set_times_out  — an admin releases a festival date's set times ("Send set-times alert") →
+//                      notify its followers and everyone with a profile in it, once per
+//                      date (festival_time_releases holds the claim for each date).
 //   • days_out       — an admin announces that acts have days ("Announce days") → notify followers
 //                      and profile holders, once per user per festival.
 //   • crew_reformed  — a prior crew is reformed for a new festival → notify the
@@ -46,7 +46,7 @@ import { actsDayCoverage } from '../lineup.js';
 import { PREF_MAP } from './send.js';
 import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
 import { appLink, appOrigin } from './links.js';
-import { MAX_TITLE_LENGTH } from './payload.js';
+import { MAX_BODY_LENGTH, MAX_TITLE_LENGTH } from './payload.js';
 
 /**
  * Backend mirror of `@festie/shared` `isFestivalOver`: true once the festival's
@@ -61,7 +61,7 @@ import { MAX_TITLE_LENGTH } from './payload.js';
  * null/absent — or invalid — it falls back to UTC (NOT server-local), so the
  * cutoff is deterministic across deployments.
  */
-function isFestivalOver(days: Array<{ date?: string | null }> | null | undefined, timeZone?: string | null): boolean {
+export function isFestivalOver(days: Array<{ date?: string | null }> | null | undefined, timeZone?: string | null): boolean {
   const arr = days || [];
   if (!arr.length) return false;
   const last = arr[arr.length - 1];
@@ -115,6 +115,35 @@ export function findRatePromptDay(
     if (at(y, mo, d + 1, RATE_PROMPT_START_HOUR) <= nowMs && nowMs < at(y, mo, d + 1, RATE_PROMPT_END_HOUR)) return i;
   }
   return -1;
+}
+
+/** "Friday", "Friday and Saturday", "Fri, Sat and Sun". */
+function joinDayLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
+
+const TIME_RELEASE_BODY = 'See who plays when and build your plan.';
+
+/**
+ * Push title and body of a per-date set-times alert. The title names the days; when that would pass
+ * MAX_TITLE_LENGTH it falls back to "<Festival> set times are out" and the body names them. The
+ * admin's note replaces the fixed body. The preview in the release panel calls this too.
+ */
+export function timeReleaseCopy(
+  festivalName: string,
+  dayLabels: string[],
+  note?: string | null,
+): { title: string; body: string } {
+  const name = festivalName || 'Your festival';
+  const days = joinDayLabels(dayLabels);
+  const dayTitle = `${name}: ${days} set times are out`;
+  const body = note?.trim() || TIME_RELEASE_BODY;
+  if (!days || dayTitle.length <= MAX_TITLE_LENGTH) return { title: dayTitle, body };
+  return {
+    title: `${name} set times are out`.slice(0, MAX_TITLE_LENGTH),
+    body: `${days}. ${body}`.slice(0, MAX_BODY_LENGTH),
+  };
 }
 
 /**
@@ -448,8 +477,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
   /**
    * Followers plus profile holders of a festival, one id each: the audience of every alert that
-   * goes to "everyone who is in or following". `sendSetTimesOut` runs the same query inline;
-   * the per-date release reuses this one.
+   * goes to "everyone who is in or following". "Announce days" and the per-date set-times release
+   * both use it.
    */
   async function resolveFollowersAndProfileHolders(festivalId: string): Promise<string[]> {
     if (!festivalId || !db) return [];
@@ -480,6 +509,14 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return rows.map((r: any) => r.userId).filter(Boolean);
   }
 
+  /** True once any date's set times were released (festivals.set_times_out_at, written on the first release). */
+  async function setTimesAlreadyOut(festivalId: string): Promise<boolean> {
+    const { rows } = await db.query('SELECT set_times_out_at IS NOT NULL AS "out" FROM festivals WHERE id = $1', [
+      festivalId,
+    ]);
+    return rows[0]?.out === true;
+  }
+
   async function resolveDaysOut(festivalId: string) {
     const refused = (reason: string, extra: object = {}) => ({
       festivalName: '',
@@ -503,7 +540,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const coverage = actsDayCoverage(festival);
     const named = { festivalName: festival.name || '', ...coverage };
     if (!festival.publishedAt) return refused('draft', named);
-    if (await stores?.festivals?.getSetTimesOutAt?.(festivalId)) return refused('set_times_out', named);
+    if (await setTimesAlreadyOut(festivalId)) return refused('set_times_out', named);
     if (coverage.actsWithDay === 0) return refused('no_days', named);
 
     const userIds = await resolveFollowersAndProfileHolders(festivalId);
@@ -548,90 +585,85 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
   // ── set_times_out ───────────────────────────────────────────────────────
   //
-  // Fires after an admin save, an import commit or a publish (routes/festivals.ts,
-  // routes/lineup-import.ts). It sends only for a published festival that has
-  // timed sets and has not sent before. It sends first and marks after: a crash
-  // between the two retries, and the per-user dedup on eventKey `times:<festivalId>`
-  // stops repeat sends. The marker makes it once per festival, so blanking the
-  // times and adding them again sends nothing, even to people who followed since.
-  async function sendSetTimesOut(festivalId: string) {
-    if (!festivalId || !db) return { sent: 0, reason: 'no_festival' };
+  // Fires only from the admin release panel (routes/time-releases.ts), once per festival date. No save,
+  // import or publish sends it. The route claims each date in festival_time_releases first, then
+  // enqueues one job per event key; this reads the claimed rows for that key, sends, and stamps them.
+  // It sends first and stamps after: a crash between the two is retried by the admin, the stuck row
+  // keeps its event key, and the per-user dedup on that key stops repeat sends.
+  async function sendTimeRelease(festivalId: string, eventKey: string) {
+    if (!festivalId || !eventKey || !db) return { sent: 0, reason: 'no_festival' };
 
-    const { rows } = await db.query(
-      `
-  SELECT
-    name,
-    published_at AS "publishedAt",
-    set_times_out_at AS "setTimesOutAt",
-    EXISTS (
-      SELECT
-        1
-      FROM
-        festival_sets
-      WHERE
-        festival_id = $1
-        AND start_time IS NOT NULL
-        AND start_time <> ''
-    ) AS "hasTimes"
-  FROM
-    festivals
-  WHERE
-    id = $1
-    AND deleted_at IS NULL
-`,
-      [festivalId],
+    const { rows: releases } = await db.query(
+      'SELECT day_date AS "date", note FROM festival_time_releases WHERE festival_id = $1 AND event_key = $2 ORDER BY day_date',
+      [festivalId, eventKey],
     );
-    const festival = rows[0];
+    if (releases.length === 0) return { sent: 0, reason: 'no_release' };
+
+    let festival: any = null;
+    try {
+      festival = await stores?.festivals?.getById?.(festivalId);
+    } catch (err: any) {
+      log?.warn?.('sendTimeRelease: festival load failed', { festivalId, error: err?.message });
+    }
     if (!festival) return { sent: 0, reason: 'festival_not_found' };
     if (!festival.publishedAt) return { sent: 0, reason: 'draft' };
-    if (festival.setTimesOutAt) return { sent: 0, reason: 'already_sent' };
-    if (!festival.hasTimes) return { sent: 0, reason: 'no_times' };
 
-    const { rows: recipientRows } = await db.query(
-      `
-  SELECT
-    f.user_id AS "userId"
-  FROM
-    festival_follows f
-    JOIN users u ON u.id = f.user_id
-    AND u.deleted_at IS NULL
-  WHERE
-    f.festival_id = $1
-  UNION
-  SELECT
-    p.user_id
-  FROM
-    festival_profiles p
-    JOIN users u ON u.id = p.user_id
-    AND u.deleted_at IS NULL
-  WHERE
-    p.festival_id = $1
-    AND p.deleted_at IS NULL
-    AND p.user_id IS NOT NULL
-`,
-      [festivalId],
-    );
-    const userIds: string[] = recipientRows.map((r: any) => r.userId).filter(Boolean);
+    // The days and the note come from the claimed rows of this key, never from the request that made them.
+    const labelOf = (date: string) => (festival.days || []).find((d: any) => d.date === date)?.label || date;
+    const dayLabels: string[] = releases.map((r: any) => labelOf(r.date));
+    const note: string | null = releases[0].note ?? null;
     const festivalName = festival.name || 'Your festival';
-    const eventKey = `times:${festivalId}`;
-    const fresh = await filterFresh(userIds, 'set_times_out', eventKey);
+    const { title, body } = timeReleaseCopy(festivalName, dayLabels, note);
 
+    const userIds = await resolveFollowersAndProfileHolders(festivalId);
+    const fresh = await filterFresh(userIds, 'set_times_out', eventKey);
     const deepLink = appLink(config, '/?festival=' + encodeURIComponent(festivalId));
     const pushSent = await pushFanout(fresh, () => ({
       type: 'set_times_out',
-      title: `${festivalName} set times are out`,
-      body: 'See who plays when and build your plan.',
+      title,
+      body,
       data: { festivalId, eventKey, deepLink },
     }));
-    const emailSent = await emailFanout(userIds, 'set_times_out', eventKey, async (user) =>
-      sendSetTimesOutEmail({ to: user.email, username: user.username, festivalName, festivalId, config, log }),
-    );
+    // No postal address, no email (CAN-SPAM). The push and the inbox row do not depend on it.
+    const emailSent = hasPostalAddress()
+      ? await emailFanout(userIds, 'set_times_out', eventKey, async (user) =>
+          sendSetTimesOutEmail({
+            to: user.email,
+            username: user.username,
+            festivalName,
+            festivalId,
+            dayLabels,
+            note,
+            config,
+            log,
+          }),
+        )
+      : 0;
 
-    await db.query('UPDATE festivals SET set_times_out_at = NOW() WHERE id = $1 AND set_times_out_at IS NULL', [
+    // People this release reached by inbox, push or email, retries included.
+    const { rows: reached } = await db.query(
+      `SELECT COUNT(DISTINCT user_id)::int AS "reached" FROM notification_log
+       WHERE type = 'set_times_out' AND status <> 'failed' AND data_json->>'eventKey' = ANY($1::text[])`,
+      [[eventKey, `${eventKey}#email`]],
+    );
+    const recipients: number = reached[0]?.reached ?? 0;
+    await db.query(
+      'UPDATE festival_time_releases SET sent_at = NOW(), recipients = $3 WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL',
+      [festivalId, eventKey, recipients],
+    );
+    // The first release also writes the marker that "Announce days" and older builds still read.
+    await db.query('UPDATE festivals SET set_times_out_at = NOW() WHERE id = $1 AND set_times_out_at IS NULL', [festivalId]);
+
+    log?.info?.('sendTimeRelease: done', {
       festivalId,
-    ]);
-    log?.info?.('sendSetTimesOut: done', { festivalId, recipients: userIds.length, pushSent, emailSent });
-    return { sent: pushSent, emailSent, eventKey, recipients: userIds.length };
+      eventKey,
+      days: releases.length,
+      audience: userIds.length,
+      recipients,
+      pushSent,
+      emailSent,
+    });
+    return { sent: pushSent, emailSent, eventKey, recipients };
   }
 
   // ── crew_reformed ─────────────────────────────────────────────────────────
@@ -799,7 +831,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   // the mail provider's plan caps a day. People the budget cuts stay un-emailed; the next press reaches them.
   // The fan-out re-reads the budget before every send, so concurrent jobs overshoot by a send or two, not a batch.
   // wrap_ready, crew_reformed and set_times_out are not capped: each goes to one festival's or crew's own
-  // audience, and a cut there could not be retried (no button), so they only count against the budget.
+  // audience, and a cut there could not be retried (a date's release cannot be sent twice), so they only
+  // count against the budget. A release still skips email while the postal address is unset.
   const hasPostalAddress = () => !!String(config?.EMAIL_POSTAL_ADDRESS ?? '').trim();
 
   async function emailBudgetLeft(): Promise<number> {
@@ -838,6 +871,6 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     resolveFollowersAndProfileHolders,
     sendCrewReformed,
     sendRatePrompt,
-    sendSetTimesOut,
+    sendTimeRelease,
   };
 }

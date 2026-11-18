@@ -5,8 +5,9 @@ import 'dotenv/config';
  * Covers: new stages and days in an empty festival, re-import idempotency, no
  *         fallback to the first stage, updateExisting, errors block the commit,
  *         no lineup-drop notification, undo (kept picked sets), auth and 404/400,
- *         and the "set times are out" marker after the first timed import.
- *         A unit describe with mocked deps checks the commit calls sendSetTimesOut.
+ *         and that a timed import writes no "set times are out" marker.
+ *         A unit describe with mocked deps checks the commit sends no festival-wide alert and
+ *         alerts the pickers of a set that got its first time on a released date.
  *
  * Spotify external calls are NOT exercised live — we pass skipSpotify: true to
  * prevent outbound HTTP. That branch is documented in the report.
@@ -241,14 +242,33 @@ const SAMPLE_ROWS = [
   { row: 4, artist: 'Night Owl', stage: 'Main Stage', day: 'Friday', date: '2026-08-21', startTime: '01:00', endTime: '02:30' },
 ];
 
-describe('lineup-import commit: set times are out (mocked deps)', () => {
-  function build(committed: boolean) {
-    const sendSetTimesOut = mock.fn(async (_id: string) => ({ queued: true }));
-    const festival = { id: 'f-1', name: 'Fest', stages: [], days: [], b2bSeparator: 'b2b' };
+describe('lineup-import commit: picker alerts, no festival-wide alert (mocked deps)', () => {
+  const stages = [{ id: 'main', name: 'Main' }];
+  const festivalWith = (sets: any[]) => ({
+    id: 'f-1',
+    name: 'Fest',
+    publishedAt: '2026-01-01T00:00:00.000Z',
+    stages,
+    days: [{ label: 'Fri', date: '2026-06-05', sets }],
+    b2bSeparator: 'b2b',
+  });
+  const tba: any[] = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: null, endTime: null }];
+  const timed = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: '20:00', endTime: '21:00' }];
+  const timeShifted = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: '21:00', endTime: '22:00' }];
+
+  function build(committed: boolean, { before = tba, after = timed, released = [] as string[], published = true, pickersThrow = false } = {}) {
+    const sendTimeRelease = mock.fn(async (_id: string, _key: string) => ({ queued: true }));
+    const scheduleChanged = mock.fn(async (_arg: any) => {});
+    const pickersBySet = mock.fn(async (_id: string, setIds: string[]) => {
+      if (pickersThrow) throw new Error('db blip');
+      return new Map(setIds.map((id) => [id, ['picker-1']]));
+    });
+    const reads: any[] = [{ ...festivalWith(before), publishedAt: published ? '2026-01-01T00:00:00.000Z' : null }, festivalWith(after)];
     const plan = { rows: [], counts: { error: 0 }, problems: [] };
+    const warnings: any[] = [];
     const deps: any = {
       express,
-      log: { info() {}, warn() {}, error() {}, debug() {} },
+      log: { info() {}, warn: (...args: any[]) => warnings.push(args), error() {}, debug() {} },
       config: {},
       adminAuth: (req: any, _res: any, next: any) => {
         req.user = { userId: 'admin-1' };
@@ -261,7 +281,9 @@ describe('lineup-import commit: set times are out (mocked deps)', () => {
       sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
       ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
       stores: {
-        festivals: { getById: async () => festival },
+        festivals: { getById: async () => reads.shift() ?? festivalWith(after) },
+        profiles: { pickersBySet },
+        timeReleases: { releasedDates: async () => new Set(released) },
         lineupImports: {
           commit: async () =>
             committed
@@ -277,28 +299,63 @@ describe('lineup-import commit: set times are out (mocked deps)', () => {
       },
       invalidateFestivalCache: () => {},
       getRequestIp: () => '127.0.0.1',
-      reengagement: { sendSetTimesOut },
+      emitter: { scheduleChanged },
+      reengagement: { sendTimeRelease, sendSetTimesOut: sendTimeRelease },
     };
     const app = express();
     app.use(express.json());
     app.use(createLineupImportRoute(deps));
-    return { app, sendSetTimesOut };
+    return { app, sendTimeRelease, scheduleChanged, warnings };
   }
   const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20)); // the alert runs after the response
 
-  test('a committed import fires sendSetTimesOut for the festival', async () => {
-    const { app, sendSetTimesOut } = build(true);
+  test('a committed import sends no festival-wide alert', async () => {
+    const { app, sendTimeRelease } = build(true);
     await request(app).post('/f-1/import-lineup').send(body).expect(200);
-    assert.deepEqual(
-      sendSetTimesOut.mock.calls.map((c: any) => c.arguments),
-      [['f-1']],
-    );
+    await settle();
+    assert.equal(sendTimeRelease.mock.calls.length, 0);
   });
 
-  test('an import that did not commit does not fire', async () => {
-    const { app, sendSetTimesOut } = build(false);
+  test('a set that got its first time on a released date alerts its pickers', async () => {
+    const { app, scheduleChanged } = build(true, { released: ['2026-06-05'] });
     await request(app).post('/f-1/import-lineup').send(body).expect(200);
-    assert.equal(sendSetTimesOut.mock.calls.length, 0);
+    await settle();
+    assert.equal(scheduleChanged.mock.calls.length, 1);
+    const arg = scheduleChanged.mock.calls[0]!.arguments[0];
+    assert.deepEqual(arg.changes.map((c: any) => c.setId), ['s1']);
+    assert.deepEqual([...arg.pickersBySet], [['s1', ['picker-1']]]);
+  });
+
+  test('a set timed on a date with no release row alerts nobody', async () => {
+    const { app, scheduleChanged } = build(true);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await settle();
+    assert.equal(scheduleChanged.mock.calls.length, 0);
+  });
+
+  test('other time changes stay silent to pickers, even on a released date', async () => {
+    const { app, scheduleChanged } = build(true, { before: timed, after: timeShifted, released: ['2026-06-05'] });
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await settle();
+    assert.equal(scheduleChanged.mock.calls.length, 0);
+  });
+
+  test('a draft festival and an import that did not commit alert nobody', async () => {
+    const draft = build(true, { released: ['2026-06-05'], published: false });
+    await request(draft.app).post('/f-1/import-lineup').send(body).expect(200);
+    const notCommitted = build(false, { released: ['2026-06-05'] });
+    await request(notCommitted.app).post('/f-1/import-lineup').send(body).expect(200);
+    await settle();
+    assert.equal(draft.scheduleChanged.mock.calls.length + notCommitted.scheduleChanged.mock.calls.length, 0);
+  });
+
+  test('a failure while alerting is logged and the import still answers 200', async () => {
+    const { app, warnings } = build(true, { released: ['2026-06-05'], pickersThrow: true });
+    const res = await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.equal(res.body.data.committed, true);
+    await settle();
+    assert.deepEqual(warnings.map(([msg]) => msg), ['import picker alerts failed']);
   });
 });
 
@@ -347,7 +404,6 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
       invalidateFestivalListCache,
       emitter: { festivalUpdated },
       getRequestIp: () => '127.0.0.1',
-      reengagement: { sendSetTimesOut: async () => ({}) },
     };
     const app = express();
     app.use(express.json());
@@ -538,6 +594,15 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
       .set('x-user-token', admin).set(TRUSTED_MUTATION_HEADER, '1').expect(200);
   });
 
+  test('the history names the festival dates an import touched', async () => {
+    if (!createFestivalPlanner) return;
+    const { server, admin } = await adminServer();
+    await postImport(server, admin, FEST_ID, { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true }).expect(200);
+    const history = await server.request
+      .get(`/api/v1/admin/festivals/${FEST_ID}/imports`).set('x-user-token', admin).expect(200);
+    assert.deepEqual(history.body.data.imports[0].touchedDates, ['2026-08-21']);
+  });
+
   test('a commit writes exactly one festival.lineup.imported audit row', async () => {
     if (!createFestivalPlanner) return;
     const { server, admin } = await adminServer();
@@ -549,19 +614,17 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     assert.equal(rows[0].actor_type, 'admin');
   });
 
-  test('an import that adds the first set times sets the "set times are out" marker', async () => {
+  test('an import that adds the first set times writes no marker and no release row', async () => {
     if (!createFestivalPlanner) return;
     const { server, admin } = await adminServer();
     await postImport(server, admin, EMPTY_FEST_ID, { rows: SAMPLE_ROWS, createMissing: true, skipSpotify: true }).expect(200);
-    // The trigger runs after the response, so poll (bounded). The push is not observable here.
-    let marker = null;
-    for (let i = 0; i < 50 && !marker; i++) {
-      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 20));
-      const { rows } = await withPool((pool) =>
-        pool.query(`SELECT set_times_out_at FROM festivals WHERE id = $1`, [EMPTY_FEST_ID]));
-      marker = rows[0]?.set_times_out_at ?? null;
-    }
-    assert.ok(marker);
+    await new Promise((resolve) => setTimeout(resolve, 100)); // a stray trigger would run after the response
+    const marker = await withPool((pool) =>
+      pool.query(`SELECT set_times_out_at FROM festivals WHERE id = $1`, [EMPTY_FEST_ID]));
+    assert.equal(marker.rows[0]?.set_times_out_at ?? null, null);
+    const releases = await withPool((pool) =>
+      pool.query(`SELECT 1 FROM festival_time_releases WHERE festival_id = $1`, [EMPTY_FEST_ID]));
+    assert.equal(releases.rows.length, 0);
   });
 
   test('the old { text } payload is a 400', async () => {
