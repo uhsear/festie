@@ -122,8 +122,9 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
         return [];
       })
       : [];
-    const rooms = ['user:' + payload.userId, ...(crews || []).map((c: any) => 'crew:' + c.id)];
-    io.to(rooms).emit('profile:updated', {
+    const userRoom = 'user:' + payload.userId;
+    const crewRooms = (crews || []).map((c: any) => 'crew:' + c.id);
+    const body = {
       _v: EVENT_VERSION,
       festivalId: payload.festivalId,
       profileId: payload.profileId,
@@ -131,7 +132,15 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       avatarUrl: payload.avatarUrl,
       picks: payload.picks,
       updatedAt: payload.updatedAt,
-    });
+    };
+    // Marks are private to their owner. Only the author's devices learn that they changed: a crew mate
+    // cannot read them, so the flag would only force a reload and tell the crew someone marked an act.
+    if (payload.interestsChanged !== true) {
+      io.to([userRoom, ...crewRooms]).emit('profile:updated', { ...body, interestsChanged: false });
+      return;
+    }
+    io.to(userRoom).emit('profile:updated', { ...body, interestsChanged: true });
+    if (crewRooms.length > 0) io.to(crewRooms).emit('profile:updated', { ...body, interestsChanged: false });
   }
 
   function profileCreated({ festivalId, profile, user }: any) {
@@ -169,6 +178,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       name: profile.name,
       avatarUrl: buildAvatarUrl(user),
       picks: profile.picks || {},
+      // Rapid writes merge into one broadcast, so a later pick write must not hide an earlier interest change.
+      interestsChanged: changedFields.interests === true || _profileBatchPayloads.get(key)?.interestsChanged === true,
       updatedAt: profile.updatedAt || new Date().toISOString(),
       _batchedAt: Date.now(),
     });

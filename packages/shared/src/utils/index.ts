@@ -50,6 +50,7 @@ export * from './polls';
 export * from './lineupImport';
 export * from './lineup';
 export * from './lineupCover';
+export * from './lineupInterest';
 export * from './lineupPaste';
 export * from './setArtists';
 export * from './festivalAdmin';

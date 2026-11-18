@@ -25,6 +25,7 @@ import PicksPlanRow from '../components/features/PicksPlanRow';
 import ListenList from '../components/features/ListenList';
 import MyDayList from '../components/features/MyDayList';
 import PlanNotesList from '../components/features/PlanNotesList';
+import MarkedNoSet from '../components/features/MarkedNoSet';
 // Lazy-loaded: SharePicksDialog pulls in qrcode.react, which has no business in the
 // picks bundle until the user actually opens the share modal.
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
@@ -254,6 +255,7 @@ function PicksViewInner() {
             festivalName={currentFestival.name}
             separator={currentFestival.b2bSeparator}
           />
+          <MarkedNoSet />
           <EmptyState
             illustration="noPicks"
             title="No picks yet"
@@ -392,6 +394,7 @@ function PicksViewInner() {
           </div>
         </div>
 
+        <MarkedNoSet />
         {!(trimmedSearch && rows.length === 0) && <PickConflicts groups={conflictGroups} />}
         <RateNightBanner />
         <PickBulkActions />

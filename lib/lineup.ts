@@ -9,6 +9,7 @@
  */
 
 import { sanitizeString, sanitizeIdentifier, sanitizeLinkRecord } from './helpers/sanitize';
+import { withTransaction } from './db/connection';
 
 export const MAX_LINEUP_ENTRIES = 500;
 export const MAX_LINKED_SETS = 10;
@@ -246,4 +247,189 @@ export function scheduleProgress(festival: any): ScheduleProgress | null {
   const { actsTotal, actsWithDay } = actsDayCoverage(festival);
   if (actsWithDay > 0) return 'days';
   return actsTotal > 0 ? 'lineup' : null;
+}
+
+export const MAX_INTEREST_SETS = 10;
+// A release-day import can convert thousands of profiles; announce reads them this many at a time.
+const ANNOUNCE_CHUNK = 50;
+
+export interface InterestMark {
+  state: 'open' | 'converted';
+  /** Set ids that covered the act when it converted, at most MAX_INTEREST_SETS. */
+  sets?: string[];
+  /** The subset of `sets` that conversion itself picked. Import undo and the converted-pick guard read it. */
+  added?: string[];
+  /** When the server converted it (ISO). The converted-pick guard reads it. */
+  at?: string;
+}
+
+export interface InterestPlan {
+  marks: Record<string, InterestMark>;
+  /** Picks to insert: set id to 'want-to-see'. Never a set the profile already picked. */
+  added: Record<string, 'want-to-see'>;
+  changed: boolean;
+}
+
+/**
+ * What conversion does for one profile. A converted mark whose sets are all gone reopens (an organizer
+ * who fixes a slot deletes and re-adds the set, which makes a new id). An open mark on a covered,
+ * non-cancelled entry becomes `converted` with want-to-see picks on every covering set. A pick the
+ * profile already has stays as it is. An entry that would take the profile past maxPicks stays open.
+ */
+export function planInterestConversion(input: {
+  marks: Record<string, InterestMark>;
+  picks: Record<string, string>;
+  cover: Record<string, LineupCover>;
+  existingSetIds: ReadonlySet<string>;
+  maxPicks: number;
+  now: string;
+}): InterestPlan {
+  const { marks, picks, cover, existingSetIds, maxPicks, now } = input;
+  const next: Record<string, InterestMark> = { ...marks };
+  const added: Record<string, 'want-to-see'> = {};
+  let pickCount = Object.keys(picks).length;
+  let changed = false;
+  for (const [entryId, mark] of Object.entries(marks)) {
+    const entryCover = cover[entryId];
+    if (!entryCover) continue;
+    if (mark.state === 'converted') {
+      if ((mark.sets ?? []).some((setId) => existingSetIds.has(setId))) continue;
+      next[entryId] = { state: 'open' };
+      changed = true;
+    }
+    if (entryCover.state !== 'scheduled') continue;
+    const setIds = entryCover.setIds.slice(0, MAX_INTEREST_SETS);
+    const fresh = setIds.filter((setId) => !(setId in picks) && !(setId in added));
+    if (pickCount + fresh.length > maxPicks) continue;
+    for (const setId of fresh) added[setId] = 'want-to-see';
+    pickCount += fresh.length;
+    next[entryId] = { state: 'converted', sets: setIds, added: fresh, at: now };
+    changed = true;
+  }
+  return { marks: next, added, changed };
+}
+
+/**
+ * Server-side conversion of interest marks into picks, run after commit by every writer that can add a
+ * set or change names. It locks the festival row, so a concurrent save waits and every set id it reads
+ * still exists. A failure is logged and leaves marks as they were: it never fails the writer.
+ */
+export function createInterestConversion({ pool, stores, emitter, log, config }: any) {
+  /** Tells a user's open devices their marks or picks changed. A failure is logged only. */
+  async function announce(profileIds: string[]) {
+    if (profileIds.length === 0) return;
+    try {
+      const profiles: any[] = [];
+      for (let i = 0; i < profileIds.length; i += ANNOUNCE_CHUNK) {
+        const chunk = await Promise.all(profileIds.slice(i, i + ANNOUNCE_CHUNK).map((id) => stores.profiles.getById(id)));
+        profiles.push(...chunk.filter(Boolean));
+      }
+      const users = await stores.users.getByIds([...new Set(profiles.map((p: any) => p.userId).filter(Boolean))]);
+      for (const profile of profiles) {
+        emitter.profileUpdated({ profile, user: users.get(profile.userId) ?? null, changedFields: { interests: true } });
+      }
+    } catch (error: any) {
+      log.warn('interest announce failed', { error: error?.message });
+    }
+  }
+
+  async function convertInTransaction(client: any, festivalId: string): Promise<string[]> {
+    const locked = await client.query(
+      'SELECT published_at FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+      [festivalId],
+    );
+    if (!locked.rows[0]?.published_at) return [];
+    const festival = await stores.festivals.getById(festivalId, client);
+    if (!festival?.lineup?.length) return [];
+    const days = festival.days ?? [];
+    const cover = coverLineup(festival.lineup, days, festival.b2bSeparator || 'b2b');
+    const existingSetIds = new Set<string>(days.flatMap((day: any) => (day.sets ?? []).map((set: any) => set.id)));
+    const { rows } = await client.query(
+      `
+      SELECT fp.id, fp.interests_json AS marks,
+        COALESCE((SELECT jsonb_object_agg(p.set_id, p.priority) FROM festival_profile_picks p WHERE p.profile_id = fp.id), '{}'::jsonb) AS picks
+      FROM festival_profiles fp
+      WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL AND fp.interests_json <> '{}'::jsonb
+      ORDER BY fp.id
+      FOR UPDATE OF fp
+    `,
+      [festivalId],
+    );
+    const now = new Date().toISOString();
+    const changedIds: string[] = [];
+    for (const row of rows) {
+      const plan = planInterestConversion({
+        marks: row.marks,
+        picks: row.picks,
+        cover,
+        existingSetIds,
+        maxPicks: config.MAX_PICKS,
+        now,
+      });
+      if (!plan.changed) continue;
+      const addedIds = Object.keys(plan.added);
+      if (addedIds.length > 0) {
+        await client.query(
+          `INSERT INTO festival_profile_picks (profile_id, set_id, priority)
+           SELECT $1, s, 'want-to-see' FROM unnest($2::text[]) AS s
+           ON CONFLICT (profile_id, set_id) DO NOTHING`,
+          [row.id, addedIds],
+        );
+      }
+      // The new picks go first, so a pick the mirror already holds keeps its priority.
+      await client.query(
+        `UPDATE festival_profiles
+         SET interests_json = $2::jsonb, picks_json = $3::jsonb || COALESCE(picks_json, '{}'::jsonb), updated_at = NOW()
+         WHERE id = $1`,
+        [row.id, JSON.stringify(plan.marks), JSON.stringify(plan.added)],
+      );
+      changedIds.push(row.id);
+    }
+    return changedIds;
+  }
+
+  async function convertOnce(festivalId: string): Promise<number> {
+    let changedIds: string[];
+    try {
+      changedIds = await withTransaction(pool, (client) => convertInTransaction(client, festivalId));
+    } catch (error: any) {
+      log.warn('interest conversion failed', { festivalId, error: error?.message });
+      return 0;
+    }
+    await announce(changedIds);
+    return changedIds.length;
+  }
+
+  // shortcut: in-flight state is per process (PM2 runs one instance), upgrade to an advisory lock if the app scales out.
+  const running = new Map<string, { dirty: boolean; done: Promise<number> }>();
+
+  /**
+   * Resolves to the number of profiles whose marks changed. Calls for one festival coalesce: while a run
+   * is in flight, further calls mark it dirty and share one trailing run, so a burst costs at most two
+   * transactions on the festival lock.
+   */
+  function convert(festivalId: string): Promise<number> {
+    const active = running.get(festivalId);
+    if (active) {
+      active.dirty = true;
+      return active.done;
+    }
+    const state = { dirty: false, done: Promise.resolve(0) };
+    state.done = (async () => {
+      let changed = 0;
+      try {
+        do {
+          state.dirty = false;
+          changed += await convertOnce(festivalId);
+        } while (state.dirty);
+      } finally {
+        running.delete(festivalId);
+      }
+      return changed;
+    })();
+    running.set(festivalId, state);
+    return state.done;
+  }
+
+  return { convert, announce };
 }

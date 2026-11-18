@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
+import { useInterest, useInterestedRows } from '@festie/shared/hooks/useInterest';
 import type { Festival, FestivalSet, LineupEntry, Stage } from '@festie/shared/types';
 import {
   groupLineupAlphabetically,
@@ -12,13 +13,16 @@ import {
   searchLineupEntries,
   selectLineupEntries,
 } from '@festie/shared/utils';
+import type { InterestRow } from '@festie/shared/utils';
 import type { AnnouncedLineupModel } from '../../hooks/useAnnouncedLineup';
 import { useNow } from '../../hooks/useSetStatus';
 import { cn } from '../../lib/utils';
 
-type LineupView = 'poster' | 'az';
+type LineupView = 'poster' | 'az' | 'interested';
 
 const VIEW_KEY = 'festie.lineupView';
+const COPY_SEEN_KEY = 'festie.interestCopySeen';
+const INTEREST_COPY = 'Marked acts become want-to-see picks when sets are out. Your crew sees your picks.';
 const VIEWS: { key: LineupView; label: string }[] = [
   { key: 'poster', label: 'Poster' },
   { key: 'az', label: 'A-Z' },
@@ -26,7 +30,8 @@ const VIEWS: { key: LineupView; label: string }[] = [
 
 function readView(): LineupView {
   try {
-    return window.localStorage.getItem(VIEW_KEY) === 'az' ? 'az' : 'poster';
+    const stored = window.localStorage.getItem(VIEW_KEY);
+    return stored === 'az' || stored === 'interested' ? stored : 'poster';
   } catch {
     // Storage can be blocked (private mode); the view then lasts for this visit only.
     return 'poster';
@@ -55,6 +60,46 @@ const buttonClass =
 const chipClass = (active: boolean) =>
   buttonClass + (active ? 'bg-accent-aqua text-[var(--text-on-light-accent)]' : 'bg-transparent text-text-secondary hover:text-text-primary');
 
+function readCopySeen(): boolean {
+  try {
+    return window.localStorage.getItem(COPY_SEEN_KEY) === '1';
+  } catch {
+    // Storage can be blocked (private mode); the line then shows again next visit.
+    return false;
+  }
+}
+
+function writeCopySeen() {
+  try {
+    window.localStorage.setItem(COPY_SEEN_KEY, '1');
+  } catch {
+    // Same as readCopySeen: a blocked store only loses the "seen" flag.
+  }
+}
+
+/** The filled or empty "Interested" toggle on one act. A guest's mark stays on the device. */
+function InterestToggle({ entryId, name, onMarked }: { entryId: string; name: string; onMarked?: () => void }) {
+  const { marked, toggle } = useInterest(entryId);
+  return (
+    <button
+      type="button"
+      aria-pressed={marked}
+      aria-label={`Interested in ${name}`}
+      onClick={() => {
+        if (!marked) onMarked?.();
+        // toggleInterest rolls the mark back and sets the store error when the write fails, so the toggle already shows the truth.
+        toggle().catch(() => {});
+      }}
+      className={cn(
+        'rounded-full border px-3 min-h-11 text-xs font-semibold cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
+        marked ? 'border-accent-aqua bg-accent-aqua text-[var(--text-on-light-accent)]' : 'border-border text-text-secondary hover:text-text-primary',
+      )}
+    >
+      Interested
+    </button>
+  );
+}
+
 /** What a row needs to describe an act, read once by the component instead of once per row. */
 interface RowContext {
   cover: AnnouncedLineupModel['cover'];
@@ -63,6 +108,8 @@ interface RowContext {
   stages: Stage[];
   festival: Festival | null;
   nowMs: number;
+  /** Called when the user marks an act, so the "marked acts become picks" line can retire. */
+  onMarked: () => void;
 }
 
 /** One act: the poster name, its badges and, for a scheduled act, where it plays. */
@@ -96,6 +143,42 @@ function LineupRow({ entry, textClass, ctx }: { entry: LineupEntry; textClass: s
           {badge.text}
         </span>
       ))}
+      {entryCover.state === 'announced' && <InterestToggle entryId={entry.id} name={name} onMarked={ctx.onMarked} />}
+    </li>
+  );
+}
+
+/** One mark in the Interested view. A converted mark reads the user's real picks, not the mark. */
+function InterestedRowView({ row, ctx }: { row: InterestRow; ctx: RowContext }) {
+  const bulkSavePicks = useFestivalStore((s) => s.bulkSavePicks);
+  const name = lineupEntryName(row.entry, ctx.festival?.b2bSeparator);
+  const badges = lineupEntryBadge(row.entry, row.cover, ctx.days, ctx.festival?.publishedAt, ctx.nowMs);
+  const status: Record<InterestRow['status'], string | null> = {
+    waiting: null,
+    'has-set': 'Has a set now',
+    'in-picks': `In your picks · ${row.pickedWhen}`,
+    'not-in-picks': 'Not in your picks',
+    cancelled: null,
+  };
+  const addToPicks = () => {
+    // bulkSavePicks rolls its optimistic picks back and sets the store error when the write fails.
+    void bulkSavePicks(row.addSetIds, 'want-to-see').catch(() => {});
+  };
+  return (
+    <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-1">
+      <span className={cn('text-base font-medium', row.status === 'cancelled' && 'line-through text-text-muted')}>{name}</span>
+      {badges.map((badge) => (
+        <span key={badge.kind} className={pillClass}>
+          {badge.text}
+        </span>
+      ))}
+      {status[row.status] && <span className="text-sm text-text-secondary">{status[row.status]}</span>}
+      {row.addSetIds.length > 0 && (
+        <button type="button" onClick={addToPicks} className={cn(buttonClass, 'border border-border text-text-primary')}>
+          Add to picks
+        </button>
+      )}
+      {row.status !== 'cancelled' && <InterestToggle entryId={row.entry.id} name={name} />}
     </li>
   );
 }
@@ -124,6 +207,12 @@ export default function AnnouncedLineup({ model, className }: { model: Announced
   const searchQuery = useFestivalStore((s) => s.searchQuery);
   const [view, setView] = useState<LineupView>(readView);
   const [full, setFull] = useState(false);
+  const [copySeen, setCopySeen] = useState(readCopySeen);
+  const interestedRows = useInterestedRows();
+  const onMarked = () => {
+    writeCopySeen();
+    setCopySeen(true);
+  };
 
   const query = (searchQuery ?? '').trim();
   const matches = useMemo(
@@ -141,7 +230,15 @@ export default function AnnouncedLineup({ model, className }: { model: Announced
   if (!model.visible) return null;
 
   // `model.days` carries each day's sets and is what lineupSetWhen reads day labels from.
-  const ctx: RowContext = { cover: model.cover, days: model.days, sets: sets ?? [], stages: stages ?? [], festival, nowMs };
+  const ctx: RowContext = {
+    cover: model.cover,
+    days: model.days,
+    sets: sets ?? [],
+    stages: stages ?? [],
+    festival,
+    nowMs,
+    onMarked,
+  };
 
   if (query) {
     if (matches.length === 0) return null;
@@ -171,12 +268,16 @@ export default function AnnouncedLineup({ model, className }: { model: Announced
       <h2 id="announced-lineup-heading" className="text-sm font-semibold text-text-primary">
         Announced lineup
       </h2>
-      <p className="text-sm text-text-secondary">{summary.header}</p>
-      {model.noSets && <p className="text-sm text-text-secondary">Set times aren&apos;t out yet.</p>}
+      <p className="text-sm text-text-secondary">
+        {summary.header}
+        {interestedRows.length > 0 && ` · ${interestedRows.length} marked`}
+      </p>
+      {model.noSets && <p className="text-sm text-text-secondary">Set times aren&apos;t out yet. Mark the acts you want to see.</p>}
+      {!copySeen && <p className="text-sm text-text-secondary">{INTEREST_COPY}</p>}
 
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <div className="flex gap-1 p-1 rounded-full bg-bg-secondary" role="group" aria-label="Lineup view">
-          {VIEWS.map(({ key, label }) => (
+          {[...VIEWS, { key: 'interested' as const, label: `Interested (${interestedRows.length})` }].map(({ key, label }) => (
             <button key={key} type="button" aria-pressed={view === key} onClick={() => changeView(key)} className={chipClass(view === key)}>
               {label}
             </button>
@@ -194,7 +295,20 @@ export default function AnnouncedLineup({ model, className }: { model: Announced
         )}
       </div>
 
-      {nothingToList ? (
+      {view === 'interested' ? (
+        <div className="mt-3">
+          <p className="text-sm text-text-secondary mb-1">{INTEREST_COPY}</p>
+          {interestedRows.length === 0 ? (
+            <p className="text-sm text-text-secondary">You have not marked any acts yet.</p>
+          ) : (
+            <ul className="flex flex-col">
+              {interestedRows.map((row) => (
+                <InterestedRowView key={row.entry.id} row={row} ctx={ctx} />
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : nothingToList ? (
         <p className="mt-3 text-sm text-text-secondary">
           {summary.scheduled > 0
             ? 'Every announced act for this day is on the timetable. Open the full lineup to see them.'
@@ -217,7 +331,7 @@ export default function AnnouncedLineup({ model, className }: { model: Announced
         </div>
       )}
 
-      {selection.cancelled.length > 0 && (
+      {view !== 'interested' && selection.cancelled.length > 0 && (
         <div className="mt-3">
           <h3 className="text-sm font-semibold text-text-secondary">Cancelled</h3>
           <Rows entries={selection.cancelled} textClass="text-base" ctx={ctx} />

@@ -17,6 +17,8 @@
  * one-time "set times are out" alert (reengagement.sendSetTimesOut).
  * A commit and an undo also drop the festival list cache, and on a published festival emit
  * festival:updated, so open clients reload and the announced lineup shows what the sets now cover.
+ * Both then run the interest conversion (lib/lineup.ts), which turns marks on covered acts into picks.
+ * Undo first takes back the picks that conversion made on the sets it deletes.
  *
  * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, commit searches
  * Spotify once for the artists of new sets that have no link.
@@ -214,6 +216,8 @@ export default function createLineupImportRoute(deps: any) {
 
       invalidateFestivalCache();
       announceSetsChanged(festival);
+      // After the response is built, so the save never waits. It logs its own failure.
+      void deps.interestConversion?.convert(festivalId);
       // The executor checks publish state, the marker and the times itself.
       reengagement
         ?.sendSetTimesOut?.(festivalId)
@@ -282,6 +286,11 @@ export default function createLineupImportRoute(deps: any) {
         }
         invalidateFestivalCache();
         announceSetsChanged(festival);
+        // Marks that lost their automatic picks reach open devices, then conversion runs again in case
+        // a set that stayed still covers a marked act.
+        void deps.interestConversion
+          ?.announce(outcome.changedProfileIds ?? [])
+          .then(() => deps.interestConversion.convert(festivalId));
         log.info('lineup import undone', { festivalId, importId, ...outcome.result, kept: outcome.result.kept.length });
         await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORT_UNDONE, festivalId, {
           importId,
@@ -289,6 +298,7 @@ export default function createLineupImportRoute(deps: any) {
           restored: outcome.result.restored,
           removedStages: outcome.result.removedStages,
           removedDays: outcome.result.removedDays,
+          autoPicksRemoved: outcome.result.autoPicksRemoved,
           kept: outcome.result.kept.length,
         });
         return sendSuccess(res, outcome.result);

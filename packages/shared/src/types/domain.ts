@@ -250,8 +250,22 @@ export interface Profile {
   notes: Record<string, string>;
   /** setId -> reminder lead time in minutes (5|10|15|30|60). */
   reminders?: Record<string, number>;
+  /** Lineup entry id -> interest mark. Private to the owner: the server sends it on the own profile only. */
+  interests?: Record<string, InterestMark>;
   updatedAt: string;
   etag?: string;
+}
+
+/**
+ * An "Interested" mark on an announced act. `open`: no pick was made for it yet. `converted`: the
+ * server (or the guest device) made want-to-see picks on `sets`, at `at`. It reopens when none of
+ * those sets exists any more.
+ */
+export interface InterestMark {
+  state: 'open' | 'converted';
+  sets?: string[];
+  added?: string[];
+  at?: string;
 }
 
 // SINGLE-SOURCING NOTE (Phase 3): NOT aliased to api.gen.ts

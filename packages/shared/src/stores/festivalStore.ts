@@ -12,7 +12,7 @@ import type { FestivalUIState, FestivalUIActions } from './festivalUIStore';
 
 export type { FestivalDataState, FestivalDataActions } from './festivalDataStore';
 export type { FestivalUIState, FestivalUIActions } from './festivalUIStore';
-export { useFestivalDataStore, selectMyPicks, followTodayOnResume } from './festivalDataStore';
+export { useFestivalDataStore, selectMyPicks, selectMyInterests, followTodayOnResume } from './festivalDataStore';
 export { useFestivalUIStore } from './festivalUIStore';
 
 // Legacy combined types -- kept so `FestivalState`, `FestivalActions`, and
@@ -114,7 +114,11 @@ useFestivalStore.setState = (partial: Partial<FestivalStore>) => {
     'savesInFlight',
     'lastSavedAt',
     'guestPicks',
+    'guestInterests',
     'mergeGuestPicks',
+    'mergeGuestInterests',
+    'toggleInterest',
+    'convertGuestInterests',
     'loadFestivals',
     'selectFestival',
     'loadProfiles',
