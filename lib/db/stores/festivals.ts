@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
 import { planMoveMarks } from '../../set-moves';
+import { cleanLineupLinks } from '../../lineup';
 
 /**
  * Build a multi-row VALUES clause with parameterized placeholders.
@@ -597,15 +598,6 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       return result.rows;
     },
 
-    /** When the "set times are out" alert went out (migration 089), or null if it has not. */
-    async getSetTimesOutAt(festivalId: string): Promise<string | null> {
-      const result = await pool.query('SELECT set_times_out_at AS "setTimesOutAt" FROM festivals WHERE id = $1', [
-        festivalId,
-      ]);
-      const value = result.rows[0]?.setTimesOutAt;
-      return value ? new Date(value).toISOString() : null;
-    },
-
     /** The id of the admin who last saved, published or restored the festival. */
     async getEditor(festivalId: string) {
       const result = await pool.query('SELECT updated_by AS "updatedBy" FROM festivals WHERE id = $1', [festivalId]);
@@ -643,6 +635,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           f.updated_at AS "updatedAt",
           f.published_at AS "publishedAt",
           f.slug,
+          f.lineup,
           COALESCE(
             (SELECT json_agg(
               json_build_object(
@@ -693,7 +686,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       `,
         [festivalId],
       );
-      return result.rows[0] || null;
+      const row = result.rows[0];
+      return row ? { ...row, lineup: cleanLineupLinks(row.lineup) } : null;
     },
 
     async hardDelete(festivalId: string) {
@@ -707,7 +701,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         const updatedAt = festival.updatedAt || createdAt;
 
         await client.query(
-          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)',
+          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, lineup) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)',
           [
             festival.id,
             festival.name,
@@ -722,6 +716,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             // Only the admin create route passes null (a draft); every other caller publishes.
             festival.publishedAt === undefined ? new Date().toISOString() : festival.publishedAt,
             festival.updatedBy ?? null,
+            JSON.stringify(festival.lineup ?? []),
           ],
         );
 
@@ -765,6 +760,18 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
     async update(festivalId: string, fields: any) {
       // fields: name, location, stages, days (wrapped in transaction for consistency)
       return withTransaction(pool, async (client) => {
+        // The route's stale check reads a cached copy outside this transaction. Locking the row and
+        // comparing here makes two saves with the same token serialize, so the second one fails.
+        if (fields.expectedUpdatedAt !== undefined) {
+          const current = await client.query(
+            'SELECT updated_at FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+            [festivalId],
+          );
+          const stored = current.rows[0]?.updated_at;
+          if (stored && new Date(fields.expectedUpdatedAt).getTime() !== new Date(stored).getTime()) {
+            throw Object.assign(new Error('Festival changed since it was loaded'), { code: 'FESTIVAL_CHANGED' });
+          }
+        }
         const sets: string[] = [];
         const values: any[] = [];
         let idx = 1;
@@ -802,6 +809,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         if (fields.mapConfig !== undefined) {
           sets.push(`map_config = $${idx}`);
           values.push(fields.mapConfig == null ? null : JSON.stringify(fields.mapConfig));
+          idx++;
+        }
+        if (fields.lineup !== undefined) {
+          sets.push(`lineup = $${idx}::jsonb`);
+          values.push(JSON.stringify(fields.lineup));
           idx++;
         }
         if (fields.updatedBy !== undefined) {

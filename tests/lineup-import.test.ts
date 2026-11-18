@@ -5,8 +5,9 @@ import 'dotenv/config';
  * Covers: new stages and days in an empty festival, re-import idempotency, no
  *         fallback to the first stage, updateExisting, errors block the commit,
  *         no lineup-drop notification, undo (kept picked sets), auth and 404/400,
- *         and the "set times are out" marker after the first timed import.
- *         A unit describe with mocked deps checks the commit calls sendSetTimesOut.
+ *         and that a timed import writes no "set times are out" marker.
+ *         A unit describe with mocked deps checks the commit sends no festival-wide alert and
+ *         alerts the pickers of a set that got its first time on a released date.
  *
  * Spotify external calls are NOT exercised live — we pass skipSpotify: true to
  * prevent outbound HTTP. That branch is documented in the report.
@@ -241,10 +242,128 @@ const SAMPLE_ROWS = [
   { row: 4, artist: 'Night Owl', stage: 'Main Stage', day: 'Friday', date: '2026-08-21', startTime: '01:00', endTime: '02:30' },
 ];
 
-describe('lineup-import commit: set times are out (mocked deps)', () => {
-  function build(committed: boolean) {
-    const sendSetTimesOut = mock.fn(async (_id: string) => ({ queued: true }));
-    const festival = { id: 'f-1', name: 'Fest', stages: [], days: [], b2bSeparator: 'b2b' };
+describe('lineup-import commit: picker alerts, no festival-wide alert (mocked deps)', () => {
+  const stages = [{ id: 'main', name: 'Main' }];
+  const festivalWith = (sets: any[]) => ({
+    id: 'f-1',
+    name: 'Fest',
+    publishedAt: '2026-01-01T00:00:00.000Z',
+    stages,
+    days: [{ label: 'Fri', date: '2026-06-05', sets }],
+    b2bSeparator: 'b2b',
+  });
+  const tba: any[] = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: null, endTime: null }];
+  const timed = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: '20:00', endTime: '21:00' }];
+  const timeShifted = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: '21:00', endTime: '22:00' }];
+
+  function build(committed: boolean, { before = tba, after = timed, released = [] as string[], published = true, pickersThrow = false } = {}) {
+    const sendTimeRelease = mock.fn(async (_id: string, _key: string) => ({ queued: true }));
+    const scheduleChanged = mock.fn(async (_arg: any) => {});
+    const pickersBySet = mock.fn(async (_id: string, setIds: string[]) => {
+      if (pickersThrow) throw new Error('db blip');
+      return new Map(setIds.map((id) => [id, ['picker-1']]));
+    });
+    const reads: any[] = [{ ...festivalWith(before), publishedAt: published ? '2026-01-01T00:00:00.000Z' : null }, festivalWith(after)];
+    const plan = { rows: [], counts: { error: 0 }, problems: [] };
+    const warnings: any[] = [];
+    const deps: any = {
+      express,
+      log: { info() {}, warn: (...args: any[]) => warnings.push(args), error() {}, debug() {} },
+      config: {},
+      adminAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'admin-1' };
+        next();
+      },
+      setNoStore: () => {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      sanitizeIdentifier: (v: string) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      stores: {
+        festivals: { getById: async () => reads.shift() ?? festivalWith(after) },
+        profiles: { pickersBySet },
+        timeReleases: { releasedDates: async () => new Set(released) },
+        lineupImports: {
+          commit: async () =>
+            committed
+              ? {
+                  committed: true,
+                  plan,
+                  importId: 'imp-1',
+                  writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+                }
+              : { committed: false, plan },
+        },
+        auditLog: null,
+      },
+      invalidateFestivalCache: () => {},
+      getRequestIp: () => '127.0.0.1',
+      emitter: { scheduleChanged },
+      reengagement: { sendTimeRelease, sendSetTimesOut: sendTimeRelease },
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(createLineupImportRoute(deps));
+    return { app, sendTimeRelease, scheduleChanged, warnings };
+  }
+  const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 20)); // the alert runs after the response
+
+  test('a committed import sends no festival-wide alert', async () => {
+    const { app, sendTimeRelease } = build(true);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await settle();
+    assert.equal(sendTimeRelease.mock.calls.length, 0);
+  });
+
+  test('a set that got its first time on a released date alerts its pickers', async () => {
+    const { app, scheduleChanged } = build(true, { released: ['2026-06-05'] });
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await settle();
+    assert.equal(scheduleChanged.mock.calls.length, 1);
+    const arg = scheduleChanged.mock.calls[0]!.arguments[0];
+    assert.deepEqual(arg.changes.map((c: any) => c.setId), ['s1']);
+    assert.deepEqual([...arg.pickersBySet], [['s1', ['picker-1']]]);
+  });
+
+  test('a set timed on a date with no release row alerts nobody', async () => {
+    const { app, scheduleChanged } = build(true);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await settle();
+    assert.equal(scheduleChanged.mock.calls.length, 0);
+  });
+
+  test('other time changes stay silent to pickers, even on a released date', async () => {
+    const { app, scheduleChanged } = build(true, { before: timed, after: timeShifted, released: ['2026-06-05'] });
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await settle();
+    assert.equal(scheduleChanged.mock.calls.length, 0);
+  });
+
+  test('a draft festival and an import that did not commit alert nobody', async () => {
+    const draft = build(true, { released: ['2026-06-05'], published: false });
+    await request(draft.app).post('/f-1/import-lineup').send(body).expect(200);
+    const notCommitted = build(false, { released: ['2026-06-05'] });
+    await request(notCommitted.app).post('/f-1/import-lineup').send(body).expect(200);
+    await settle();
+    assert.equal(draft.scheduleChanged.mock.calls.length + notCommitted.scheduleChanged.mock.calls.length, 0);
+  });
+
+  test('a failure while alerting is logged and the import still answers 200', async () => {
+    const { app, warnings } = build(true, { released: ['2026-06-05'], pickersThrow: true });
+    const res = await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.equal(res.body.data.committed, true);
+    await settle();
+    assert.deepEqual(warnings.map(([msg]) => msg), ['import picker alerts failed']);
+  });
+});
+
+describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
+  function build(publishedAt: string | null, calls: string[] = []) {
+    const festivalUpdated = mock.fn((_arg: any) => {});
+    const invalidateFestivalListCache = mock.fn(() => {});
+    const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
     const plan = { rows: [], counts: { error: 0 }, problems: [] };
     const deps: any = {
       express,
@@ -261,44 +380,321 @@ describe('lineup-import commit: set times are out (mocked deps)', () => {
       sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
       ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
       stores: {
-        festivals: { getById: async () => festival },
+        festivals: {
+          getById: async () => {
+            calls.push('getById');
+            return festival;
+          },
+        },
         lineupImports: {
-          commit: async () =>
-            committed
-              ? {
-                  committed: true,
-                  plan,
-                  importId: 'imp-1',
-                  writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
-                }
-              : { committed: false, plan },
+          commit: async () => ({
+            committed: true,
+            plan,
+            importId: 'imp-1',
+            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+          }),
+          undo: async () => {
+            calls.push('undo');
+            return { result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } };
+          },
         },
         auditLog: null,
       },
       invalidateFestivalCache: () => {},
+      invalidateFestivalListCache,
+      emitter: { festivalUpdated },
       getRequestIp: () => '127.0.0.1',
-      reengagement: { sendSetTimesOut },
     };
     const app = express();
     app.use(express.json());
     app.use(createLineupImportRoute(deps));
-    return { app, sendSetTimesOut };
+    return { app, festivalUpdated, invalidateFestivalListCache };
   }
   const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+  const PUBLISHED = '2026-01-01T00:00:00.000Z';
 
-  test('a committed import fires sendSetTimesOut for the festival', async () => {
-    const { app, sendSetTimesOut } = build(true);
+  test('a commit on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
     await request(app).post('/f-1/import-lineup').send(body).expect(200);
-    assert.deepEqual(
-      sendSetTimesOut.mock.calls.map((c: any) => c.arguments),
-      [['f-1']],
-    );
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
   });
 
-  test('an import that did not commit does not fire', async () => {
-    const { app, sendSetTimesOut } = build(false);
+  test('an undo on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
+    const calls: string[] = [];
+    const { app } = build(PUBLISHED, calls);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.deepEqual(calls, ['getById', 'undo']);
+  });
+
+  test('a draft festival has no attendees, so nothing is emitted, but the list cache still drops', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(null);
     await request(app).post('/f-1/import-lineup').send(body).expect(200);
-    assert.equal(sendSetTimesOut.mock.calls.length, 0);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(festivalUpdated.mock.calls.length, 0);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 2);
+  });
+});
+
+describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
+  function build(publishedAt: string | null, calls: string[] = []) {
+    const festivalUpdated = mock.fn((_arg: any) => {});
+    const invalidateFestivalListCache = mock.fn(() => {});
+    const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
+    const plan = { rows: [], counts: { error: 0 }, problems: [] };
+    const deps: any = {
+      express,
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      config: {},
+      adminAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'admin-1' };
+        next();
+      },
+      setNoStore: () => {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      sanitizeIdentifier: (v: string) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      stores: {
+        festivals: {
+          getById: async () => {
+            calls.push('getById');
+            return festival;
+          },
+        },
+        lineupImports: {
+          commit: async () => ({
+            committed: true,
+            plan,
+            importId: 'imp-1',
+            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+          }),
+          undo: async () => {
+            calls.push('undo');
+            return { result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } };
+          },
+        },
+        auditLog: null,
+      },
+      invalidateFestivalCache: () => {},
+      invalidateFestivalListCache,
+      emitter: { festivalUpdated },
+      getRequestIp: () => '127.0.0.1',
+      reengagement: { sendSetTimesOut: async () => ({}) },
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(createLineupImportRoute(deps));
+    return { app, festivalUpdated, invalidateFestivalListCache };
+  }
+  const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+  const PUBLISHED = '2026-01-01T00:00:00.000Z';
+
+  test('a commit on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
+    const calls: string[] = [];
+    const { app } = build(PUBLISHED, calls);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.deepEqual(calls, ['getById', 'undo']);
+  });
+
+  test('a draft festival has no attendees, so nothing is emitted, but the list cache still drops', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(null);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(festivalUpdated.mock.calls.length, 0);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 2);
+  });
+});
+
+describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
+  function build(publishedAt: string | null, calls: string[] = []) {
+    const festivalUpdated = mock.fn((_arg: any) => {});
+    const invalidateFestivalListCache = mock.fn(() => {});
+    const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
+    const plan = { rows: [], counts: { error: 0 }, problems: [] };
+    const deps: any = {
+      express,
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      config: {},
+      adminAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'admin-1' };
+        next();
+      },
+      setNoStore: () => {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      sanitizeIdentifier: (v: string) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      stores: {
+        festivals: {
+          getById: async () => {
+            calls.push('getById');
+            return festival;
+          },
+        },
+        lineupImports: {
+          commit: async () => ({
+            committed: true,
+            plan,
+            importId: 'imp-1',
+            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+          }),
+          undo: async () => {
+            calls.push('undo');
+            return { result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } };
+          },
+        },
+        auditLog: null,
+      },
+      invalidateFestivalCache: () => {},
+      invalidateFestivalListCache,
+      emitter: { festivalUpdated },
+      getRequestIp: () => '127.0.0.1',
+      reengagement: { sendSetTimesOut: async () => ({}) },
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(createLineupImportRoute(deps));
+    return { app, festivalUpdated, invalidateFestivalListCache };
+  }
+  const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+  const PUBLISHED = '2026-01-01T00:00:00.000Z';
+
+  test('a commit on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
+    const calls: string[] = [];
+    const { app } = build(PUBLISHED, calls);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.deepEqual(calls, ['getById', 'undo']);
+  });
+
+  test('a draft festival has no attendees, so nothing is emitted, but the list cache still drops', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(null);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(festivalUpdated.mock.calls.length, 0);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 2);
+  });
+});
+
+describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
+  function build(publishedAt: string | null, calls: string[] = []) {
+    const festivalUpdated = mock.fn((_arg: any) => {});
+    const invalidateFestivalListCache = mock.fn(() => {});
+    const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
+    const plan = { rows: [], counts: { error: 0 }, problems: [] };
+    const deps: any = {
+      express,
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      config: {},
+      adminAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'admin-1' };
+        next();
+      },
+      setNoStore: () => {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      sanitizeIdentifier: (v: string) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      stores: {
+        festivals: {
+          getById: async () => {
+            calls.push('getById');
+            return festival;
+          },
+        },
+        lineupImports: {
+          commit: async () => ({
+            committed: true,
+            plan,
+            importId: 'imp-1',
+            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+          }),
+          undo: async () => {
+            calls.push('undo');
+            return { result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } };
+          },
+        },
+        auditLog: null,
+      },
+      invalidateFestivalCache: () => {},
+      invalidateFestivalListCache,
+      emitter: { festivalUpdated },
+      getRequestIp: () => '127.0.0.1',
+      reengagement: { sendSetTimesOut: async () => ({}) },
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(createLineupImportRoute(deps));
+    return { app, festivalUpdated, invalidateFestivalListCache };
+  }
+  const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+  const PUBLISHED = '2026-01-01T00:00:00.000Z';
+
+  test('a commit on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
+    const calls: string[] = [];
+    const { app } = build(PUBLISHED, calls);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.deepEqual(calls, ['getById', 'undo']);
+  });
+
+  test('a draft festival has no attendees, so nothing is emitted, but the list cache still drops', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(null);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(festivalUpdated.mock.calls.length, 0);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 2);
   });
 });
 
@@ -371,6 +767,35 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     const sets = await withPool((pool) => pool.query(
       `SELECT start_time FROM festival_sets WHERE festival_id = $1`, [FEST_ID]));
     assert.deepEqual(sets.rows.map((r: any) => r.start_time), ['21:00']);
+  });
+
+  test('a set_id row on another day is skipped and listed first, and the other rows commit', async () => {
+    if (!createFestivalPlanner) return;
+    const { server, admin } = await adminServer();
+    const alpha = { row: 2, artist: 'DJ Alpha', stage: 'Main Stage', day: 'Friday', startTime: '20:00', endTime: '21:00' };
+    const beta = { row: 3, artist: 'DJ Beta', stage: 'Forest', day: 'Friday', startTime: '20:00', endTime: '21:00' };
+    const seeded = await postImport(server, admin, FEST_ID, { rows: [alpha, beta], skipSpotify: true }).expect(200);
+    const [alphaId, betaId] = seeded.body.data.result.rows.map((r: any) => r.setId);
+
+    const res = await postImport(server, admin, FEST_ID, {
+      rows: [
+        { row: 2, setId: betaId, artist: 'DJ Beta', day: 'Friday', startTime: '21:00', endTime: '22:00' },
+        { row: 3, setId: alphaId, artist: 'DJ Alpha', day: 'Saturday', startTime: '22:00', endTime: '23:00' },
+      ],
+      updateExisting: true,
+      skipSpotify: true,
+    }).expect(200);
+
+    const { result } = res.body.data;
+    assert.deepEqual(result.rows.map((r: any) => r.status), ['updated', 'skipped']);
+    assert.equal(result.skipped, 1);
+    assert.match(result.warnings[0], /^Row 3: Skipped: the file says Saturday, the stored day is Friday\./);
+    const sets = await withPool((pool) => pool.query(
+      `SELECT id, start_time FROM festival_sets WHERE festival_id = $1 ORDER BY id`, [FEST_ID]));
+    assert.deepEqual(
+      Object.fromEntries(sets.rows.map((r: any) => [r.id, r.start_time])),
+      { [alphaId]: '20:00', [betaId]: '21:00' },
+    );
   });
 
   test('undo removes created sets, restores updated ones, keeps picked ones and drops new stages and days', async () => {
@@ -453,6 +878,15 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
       .set('x-user-token', admin).set(TRUSTED_MUTATION_HEADER, '1').expect(200);
   });
 
+  test('the history names the festival dates an import touched', async () => {
+    if (!createFestivalPlanner) return;
+    const { server, admin } = await adminServer();
+    await postImport(server, admin, FEST_ID, { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true }).expect(200);
+    const history = await server.request
+      .get(`/api/v1/admin/festivals/${FEST_ID}/imports`).set('x-user-token', admin).expect(200);
+    assert.deepEqual(history.body.data.imports[0].touchedDates, ['2026-08-21']);
+  });
+
   test('a commit writes exactly one festival.lineup.imported audit row', async () => {
     if (!createFestivalPlanner) return;
     const { server, admin } = await adminServer();
@@ -464,19 +898,17 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     assert.equal(rows[0].actor_type, 'admin');
   });
 
-  test('an import that adds the first set times sets the "set times are out" marker', async () => {
+  test('an import that adds the first set times writes no marker and no release row', async () => {
     if (!createFestivalPlanner) return;
     const { server, admin } = await adminServer();
     await postImport(server, admin, EMPTY_FEST_ID, { rows: SAMPLE_ROWS, createMissing: true, skipSpotify: true }).expect(200);
-    // The trigger runs after the response, so poll (bounded). The push is not observable here.
-    let marker = null;
-    for (let i = 0; i < 50 && !marker; i++) {
-      if (i > 0) await new Promise((resolve) => setTimeout(resolve, 20));
-      const { rows } = await withPool((pool) =>
-        pool.query(`SELECT set_times_out_at FROM festivals WHERE id = $1`, [EMPTY_FEST_ID]));
-      marker = rows[0]?.set_times_out_at ?? null;
-    }
-    assert.ok(marker);
+    await new Promise((resolve) => setTimeout(resolve, 100)); // a stray trigger would run after the response
+    const marker = await withPool((pool) =>
+      pool.query(`SELECT set_times_out_at FROM festivals WHERE id = $1`, [EMPTY_FEST_ID]));
+    assert.equal(marker.rows[0]?.set_times_out_at ?? null, null);
+    const releases = await withPool((pool) =>
+      pool.query(`SELECT 1 FROM festival_time_releases WHERE festival_id = $1`, [EMPTY_FEST_ID]));
+    assert.equal(releases.rows.length, 0);
   });
 
   test('the old { text } payload is a 400', async () => {

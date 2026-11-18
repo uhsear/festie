@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Share2 } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { buildFestivalPageUrl, formatFestivalDateRange, groupFestivalsByStatus } from '@festie/shared/utils';
-import { FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
+import { DISCOVER_COPY, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
 import Dialog from '../ui/Dialog';
 import FollowButton from '../features/FollowButton';
@@ -60,7 +60,7 @@ export default function FestivalPicker() {
 
   // Same pattern as DetailPanel's set share: native sheet first, clipboard as the fallback.
   const handleShare = async (f: Festival & { slug: string }) => {
-    const url = buildFestivalPageUrl(f.slug, window.location.origin);
+    const url = buildFestivalPageUrl(f.slug, window.location.origin, 'share-festival');
     const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
     if (typeof nav.share === 'function') {
       try {
@@ -95,6 +95,14 @@ export default function FestivalPicker() {
         <span className="min-w-0 flex-1">
           <span className="block truncate text-sm font-semibold text-text-primary">{f.name}</span>
           {detail && <span className="block truncate text-xs text-text-muted">{detail}</span>}
+          {f.scheduleProgress && (
+            <span
+              data-testid={`festival-progress-${f.id}`}
+              className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-text-secondary"
+            >
+              {DISCOVER_COPY.scheduleProgress[f.scheduleProgress]}
+            </span>
+          )}
         </span>
         {isCurrent && <Check className="w-4 h-4 shrink-0 text-accent-aqua" aria-hidden="true" />}
       </button>

@@ -36,10 +36,16 @@ describe('notificationSettings', () => {
     );
     expect(describeScheduleNotice({ changes: 2, people: 3, notified: true })).toContain('3 people picked');
     expect(describeScheduleNotice({ changes: 1, people: 0, notified: false })).toBe(
-      'Saved. No one had picked or set a reminder on the changed sets, so no alerts were sent.',
+      'Saved. No one had picked, set a reminder on or marked what changed, so no alerts were sent.',
     );
     expect(describeScheduleNotice({ changes: 1, people: 2, notified: false })).toBe('Saved without alerts.');
     expect(describeScheduleNotice({ changes: 0, people: 0, notified: false })).toBe('Festival updated');
+    expect(describeScheduleNotice({ changes: 2, people: 12, notified: true, marked: 8 })).toBe(
+      'Saved. 12 people will get an alert: 8 marked a cancelled act and 4 picked or set a reminder on the changed sets, unless they turned schedule alerts off.',
+    );
+    expect(describeScheduleNotice({ changes: 1, people: 2, notified: true, marked: 2 })).toBe(
+      'Saved. 2 people will get an alert: 2 marked a cancelled act, unless they turned schedule alerts off.',
+    );
   });
 
   it('labels must-see options', () => {

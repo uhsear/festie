@@ -1,6 +1,7 @@
 import type { Festival, FestivalDay, FestivalSet, Stage } from '../types/domain';
 import { artistDisplayName, formatFestivalDateRange, formatTime } from './format';
 import { byStartTime } from './scheduleFormat';
+import { coverLineup } from './lineupCover';
 
 /** "asir@example.com" -> "a@…e.com": first letter of the local part plus the last 5 characters of the domain. */
 export function maskEmail(email: string | null | undefined): string {
@@ -136,6 +137,8 @@ export interface FestivalPreview {
     date: string;
     sets: Array<{ id: string; time: string; artist: string; stageName: string; stageColor: string | undefined }>;
   }>;
+  /** The announced lineup in billing order, with the day each entry resolves to ('' for Day TBA). */
+  lineup: Array<{ id: string; name: string; tier: number | null; dayLabel: string; status: string; scheduled: boolean }>;
   stages: Array<{ id: string; name: string; color: string | undefined; pinned: boolean }>;
   warnings: string[];
 }
@@ -164,6 +167,18 @@ export function buildFestivalPreview(detail: FestivalPreviewInput): FestivalPrev
       };
     }),
   }));
+  const cover = coverLineup(detail.lineup ?? [], detail.days, detail.b2bSeparator ?? 'b2b');
+  const lineup = (detail.lineup ?? []).map((entry) => {
+    const c = cover[entry.id]!;
+    return {
+      id: entry.id,
+      name: entry.displayName || entry.artists.map((a) => a.name).join(` ${detail.b2bSeparator || 'b2b'} `),
+      tier: entry.tier,
+      dayLabel: c.dayIndex >= 0 ? days[c.dayIndex]!.label : '',
+      status: entry.status,
+      scheduled: c.state === 'scheduled',
+    };
+  });
   const stages = detail.stages.map((s) => ({
     id: s.id,
     name: s.name,
@@ -186,6 +201,7 @@ export function buildFestivalPreview(detail: FestivalPreviewInput): FestivalPrev
     dateRange: formatFestivalDateRange(detail.startDate, detail.endDate),
     location: detail.location,
     days,
+    lineup,
     stages,
     warnings,
   };

@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { parseJsonObject } from './connection';
+import { cleanLineupLinks } from '../lineup';
 
 /**
  * Create utility functions that will be shared across all stores
@@ -22,6 +23,7 @@ export default function createUtils(pool: Pool) {
       picks: parseJsonObject(row.picksJson, {}),
       notes: parseJsonObject(row.notesJson, {}),
       reminders: parseJsonObject(row.remindersJson, {}),
+      interests: parseJsonObject(row.interestsJson, {}),
       createdAt: toISOString(row.createdAt),
       updatedAt: toISOString(row.updatedAt),
     };
@@ -47,6 +49,7 @@ export default function createUtils(pool: Pool) {
         f.updated_at AS "updatedAt",
         f.published_at AS "publishedAt",
         f.slug,
+        f.lineup,
         COALESCE(
           (SELECT json_agg(
             json_build_object(
@@ -97,7 +100,7 @@ export default function createUtils(pool: Pool) {
       ORDER BY f.created_at ASC, f.id ASC
     `);
 
-    return result.rows;
+    return result.rows.map((row: any) => ({ ...row, lineup: cleanLineupLinks(row.lineup) }));
   }
 
   function parseMessageRow(row: any) {

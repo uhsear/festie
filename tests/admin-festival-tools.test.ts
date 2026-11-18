@@ -266,6 +266,18 @@ describe('PUT /:festivalId/sets/:setId/link', () => {
     assert.deepEqual(params.slice(1), ['https://open.spotify.com/artist/a', 's1', 'f1']);
   });
 
+  test('runs interest conversion after the link write', async () => {
+    const convert = mock.fn(async () => 0);
+    const festival = { id: 'f1', days: [{ label: 'Day 1', sets: [{ id: 's1', artist: 'Solo', artists: [] }] }] };
+    const deps = baseDeps({
+      getFestivalById: mock.fn(async () => festival),
+      stores: { pool: { query: mock.fn(async () => ({ rows: [] })) } },
+      interestConversion: { convert },
+    });
+    await request(appFor(createFestivalsRoutes(deps))).put('/f1/sets/s1/link').send({ linkUrl: '' }).expect(200);
+    assert.deepEqual(convert.mock.calls.map((c: any) => c.arguments), [['f1']]);
+  });
+
   test('refuses an artist that is not on the set', async () => {
     const { app, query } = linkApp(twoArtists());
     const res = await request(app)

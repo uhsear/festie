@@ -12,9 +12,13 @@
  *
  * The client parses the CSV or TSV file and posts JSON rows (lineupImportRequestSchema).
  * planLineupImport decides each row; commit plans again inside the write transaction.
- * Imports never delete sets. The lineup announcement is a separate, manual admin
- * action. A commit that adds a published festival's first set times sends the
- * one-time "set times are out" alert (reengagement.sendSetTimesOut).
+ * Imports never delete sets. The lineup announcement and the per-date set-times alert are separate,
+ * manual admin actions: a commit sends neither. A set that gets its first time on a date whose alert
+ * already went out alerts the people who picked it (lib/picker-alerts.ts). Other time changes stay silent.
+ * A commit and an undo also drop the festival list cache, and on a published festival emit
+ * festival:updated, so open clients reload and the announced lineup shows what the sets now cover.
+ * Both then run the interest conversion (lib/lineup.ts), which turns marks on covered acts into picks.
+ * Undo first takes back the picks that conversion made on the sets it deletes.
  *
  * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, commit searches
  * Spotify once for the artists of new sets that have no link.
@@ -23,6 +27,7 @@
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
+import { planPickerAlerts } from '../lib/picker-alerts.js';
 import {
   artistsNeedingLinks,
   planLineupImport,
@@ -32,6 +37,8 @@ import {
 } from '../lib/lineup-import-plan.js';
 
 const SKIPPED_MESSAGE = 'Matches an existing set. Not updated because Update sets that match was off.';
+
+const DAY_SKIPPED_MESSAGE = 'Not changed. The file names another day than the stored set, and an import cannot move a set to another day.';
 
 const makeId = (prefix: string) => `${prefix}-${crypto.randomBytes(6).toString('hex')}`;
 
@@ -46,6 +53,7 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
     if (updated.has(i)) {
       return { row: r.row, status: 'updated' as const, setId: r.setId, artist, message: `Updated: ${r.changes.join('; ')}.` };
     }
+    if (r.skipped) return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: DAY_SKIPPED_MESSAGE };
     if (r.status === 'changed') return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: SKIPPED_MESSAGE };
     return { row: r.row, status: 'unchanged' as const, setId: r.setId, artist, message: 'No change.' };
   });
@@ -60,7 +68,11 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
     newDays: writes.newDays.length,
     spotifyMatched: writes.spotifyMatched,
     rows,
-    warnings: [...plan.rows.flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)), ...warnings],
+    // Rows that kept their stored day come first, so the admin sees what the import did not apply.
+    warnings: [
+      ...[...plan.rows].sort((a, b) => Number(!!b.skipped) - Number(!!a.skipped)).flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)),
+      ...warnings,
+    ],
   };
 }
 
@@ -79,7 +91,7 @@ export default function createLineupImportRoute(deps: any) {
     stores,
     invalidateFestivalCache,
     getRequestIp,
-    reengagement,
+    emitter,
   } = deps;
 
   const router = express.Router();
@@ -97,6 +109,26 @@ export default function createLineupImportRoute(deps: any) {
       .catch(() => {
         log.warn('spotify module not available');
       });
+  }
+
+  // Sets changed, so the list's lineupCount is stale and open clients must reload.
+  // A draft has no attendees, and the event goes to every socket.
+  function announceSetsChanged(festival: any) {
+    deps.invalidateFestivalListCache?.();
+    if (festival?.publishedAt) emitter?.festivalUpdated?.({ festival });
+  }
+
+  // After a commit: a set that got its first time on a released date tells the people who picked it. The
+  // festival is read before and after the commit, outside its transaction, so a concurrent edit can cause
+  // one missed or extra alert. Fire and forget: the import has committed, so a failure here only logs.
+  function alertPickersOfFirstTimes(before: any) {
+    if (!before.publishedAt) return;
+    void (async () => {
+      const after = await stores.festivals.getById(before.id);
+      if (!after) return;
+      const { changes, pickersBySet } = await planPickerAlerts({ stores, before, after, tbaOnly: true });
+      if (changes.length > 0) await emitter?.scheduleChanged?.({ festival: after, changes, pickersBySet });
+    })().catch((err: any) => log.warn('import picker alerts failed', { festivalId: before.id, error: err?.message }));
   }
 
   async function writeAuditRow(req: any, res: any, action: string, festivalId: string, details: any) {
@@ -196,10 +228,10 @@ export default function createLineupImportRoute(deps: any) {
       if (!outcome.committed) return sendSuccess(res, { committed: false, plan: outcome.plan });
 
       invalidateFestivalCache();
-      // The executor checks publish state, the marker and the times itself.
-      reengagement
-        ?.sendSetTimesOut?.(festivalId)
-        ?.catch((err: any) => log.warn('set_times_out notify failed', { festivalId, error: err?.message }));
+      announceSetsChanged(festival);
+      // After the response is built, so the save never waits. It logs its own failure.
+      void deps.interestConversion?.convert(festivalId);
+      alertPickersOfFirstTimes(festival);
       const result = buildResult(outcome.plan, outcome.writes, outcome.importId, warnings, festival.b2bSeparator || 'b2b');
       log.info('lineup imported', {
         festivalId,
@@ -250,6 +282,8 @@ export default function createLineupImportRoute(deps: any) {
         const festivalId = sanitizeIdentifier(req.params.id, 100);
         const importId = sanitizeIdentifier(req.params.importId, 100);
         if (!festivalId || !importId) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
+        // Read before the undo commits: a failed read then fails the request while nothing has changed.
+        const festival = await stores.festivals.getById(festivalId);
         const outcome = await stores.lineupImports.undo(festivalId, importId);
         if ('notFound' in outcome) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
         if ('refused' in outcome) {
@@ -261,6 +295,12 @@ export default function createLineupImportRoute(deps: any) {
           );
         }
         invalidateFestivalCache();
+        announceSetsChanged(festival);
+        // Marks that lost their automatic picks reach open devices, then conversion runs again in case
+        // a set that stayed still covers a marked act.
+        void deps.interestConversion
+          ?.announce(outcome.changedProfileIds ?? [])
+          .then(() => deps.interestConversion.convert(festivalId));
         log.info('lineup import undone', { festivalId, importId, ...outcome.result, kept: outcome.result.kept.length });
         await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORT_UNDONE, festivalId, {
           importId,
@@ -268,6 +308,7 @@ export default function createLineupImportRoute(deps: any) {
           restored: outcome.result.restored,
           removedStages: outcome.result.removedStages,
           removedDays: outcome.result.removedDays,
+          autoPicksRemoved: outcome.result.autoPicksRemoved,
           kept: outcome.result.kept.length,
         });
         return sendSuccess(res, outcome.result);

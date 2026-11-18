@@ -169,7 +169,10 @@ describe('validateFestivalIssues targets', () => {
 });
 
 describe('publishChecklist', () => {
-  const keys = ['timeZone', 'stages', 'days', 'sets', 'errors', 'pins', 'times', 'overlaps'];
+  const keys = [
+    'timeZone', 'stages', 'days', 'sets', 'errors', 'pins', 'times', 'overlaps',
+    'duration_odd', 'start_unusual_hour', 'artist_double_booked',
+  ];
   const byKey = (items: any[]) => Object.fromEntries(items.map((item) => [item.key, item]));
 
   test('an empty festival is todo for time zone, stages, days and sets', () => {
@@ -227,6 +230,81 @@ describe('publishChecklist', () => {
     assert.deepEqual(map.times, { key: 'times', status: 'warn', label: '1 set(s) have no start time yet. They show as TBA.' });
   });
 
+  describe('a festival with announced names', () => {
+    const entry = (id: string, name: string, extra: any = {}) => ({
+      id,
+      artists: [{ name, links: {} }],
+      displayName: null,
+      tier: null,
+      dayDate: null,
+      status: 'announced',
+      announcedAt: '2026-11-20',
+      linkedSetIds: [],
+      ...extra,
+    });
+    const namesOnly = (extra: any = {}) => ({
+      name: 'Names',
+      timeZone: 'UTC',
+      stages: [],
+      days: [
+        { label: 'Fri', date: '2026-06-05', sets: [] },
+        { label: 'Sat', date: '2026-06-06', sets: [] },
+      ],
+      lineup: [entry('lu-1', 'INFEKT')],
+      ...extra,
+    });
+
+    test('can publish with dated days, no stages and no sets: sets and stages only warn', () => {
+      const items = publishChecklist(config, namesOnly());
+      const map = byKey(items);
+      assert.deepEqual(map.stages, { key: 'stages', status: 'warn', label: 'No stages yet. Add them before you add sets.' });
+      assert.deepEqual(map.sets, {
+        key: 'sets',
+        status: 'warn',
+        label: 'No sets yet on Fri, Sat. Attendees see the announced acts until you add sets.',
+      });
+      assert.deepEqual(items.filter((item) => item.status === 'todo'), []);
+    });
+
+    test('still blocks without dated days', () => {
+      assert.equal(byKey(publishChecklist(config, namesOnly({ days: [] }))).days.status, 'todo');
+      const undated = namesOnly({ days: [{ label: 'Fri', date: '', sets: [] }] });
+      assert.equal(byKey(publishChecklist(config, undated)).days.status, 'todo');
+      assert.equal(byKey(publishChecklist(config, namesOnly({ days: [] }))).sets.status, 'todo');
+    });
+
+    test('keeps today\'s todo rules with no entries, with only cancelled entries, or when every entry has a set', () => {
+      const none = byKey(publishChecklist(config, namesOnly({ lineup: [] })));
+      assert.equal(none.stages.status, 'todo');
+      assert.equal(none.sets.status, 'todo');
+      const cancelledOnly = [entry('lu-1', 'INFEKT', { status: 'cancelled' })];
+      assert.equal(byKey(publishChecklist(config, namesOnly({ lineup: cancelledOnly }))).sets.status, 'todo');
+      const covered = namesOnly({
+        stages: [stage('a', 'Main')],
+        days: [
+          { label: 'Fri', date: '2026-06-05', sets: [set('s1', 'INFEKT', 'a', '20:00', '21:00')] },
+          { label: 'Sat', date: '2026-06-06', sets: [] },
+        ],
+      });
+      assert.equal(byKey(publishChecklist(config, covered)).sets.status, 'todo');
+    });
+
+    test('warns about an empty day while an act is still unscheduled, even when other days have sets', () => {
+      const partial = namesOnly({
+        stages: [stage('a', 'Main')],
+        lineup: [entry('lu-1', 'INFEKT'), entry('lu-2', 'Other')],
+        days: [
+          { label: 'Fri', date: '2026-06-05', sets: [set('s1', 'INFEKT', 'a', '20:00', '21:00')] },
+          { label: 'Sat', date: '2026-06-06', sets: [] },
+        ],
+      });
+      const map = byKey(publishChecklist(config, partial));
+      assert.equal(map.sets.status, 'warn');
+      assert.equal(map.sets.label, 'No sets yet on Sat. Attendees see the announced acts until you add sets.');
+      assert.equal(map.stages.status, 'done');
+    });
+  });
+
   test('warns, without blocking, about a same-stage overlap past midnight', () => {
     const festival = {
       name: 'Late',
@@ -259,6 +337,146 @@ describe('publishChecklist', () => {
       key: 'overlaps',
       status: 'warn',
       label: 'One and Two overlap on Main, Friday 11:00 PM (and 1 more).',
+    });
+  });
+});
+
+describe('publishChecklist data-quality warnings', () => {
+  const byKey = (items: any[]) => Object.fromEntries(items.map((item) => [item.key, item]));
+  const festivalOf = (days: any[]) => ({
+    name: 'Q',
+    timeZone: 'UTC',
+    stages: [stage('a', 'Main', { latitude: 1, longitude: 2 }), stage('b', 'Tent', { latitude: 1, longitude: 2 })],
+    days: days.map((sets, i) => ({ label: `Day ${i + 1}`, date: `2026-06-0${5 + i}`, sets })),
+  });
+  const checklistOf = (days: any[]) => byKey(publishChecklist(config, festivalOf(days)));
+  const quality = ['duration_odd', 'start_unusual_hour', 'artist_double_booked'];
+
+  test('a clean festival is done on all three and none of them can block publish', () => {
+    const map = checklistOf([[set('s1', 'X', 'a', '20:00', '21:00'), set('s2', 'Y', 'b', '22:00', '23:30')]]);
+    for (const key of quality) assert.equal(map[key].status, 'done', key);
+    const dirty = checklistOf([[
+      set('s1', 'X', 'a', '20:00', '20:05'), set('s2', 'X', 'b', '20:00', '21:00'), set('s3', 'Y', 'b', '09:00', '10:00'),
+    ]]);
+    for (const key of quality) assert.equal(dirty[key].status, 'warn', key);
+    assert.ok(!Object.values(dirty).some((item: any) => item.status === 'todo'));
+  });
+
+  describe('duration_odd', () => {
+    test('flags under 15 minutes, over 4 hours and a 22:00 to 21:00 wrap', () => {
+      const map = checklistOf([[
+        set('s1', 'Short', 'a', '20:00', '20:10'),
+        set('s2', 'Long', 'b', '14:00', '18:30'),
+        set('s3', 'Wrap', 'a', '22:00', '21:00'),
+      ]]);
+      assert.equal(map.duration_odd.status, 'warn');
+      assert.equal(map.duration_odd.label, 'Short is 10 min long on Day 1 (and 2 more).');
+    });
+
+    test('names a single set and uses h and min', () => {
+      assert.equal(checklistOf([[set('s1', 'Long', 'a', '14:00', '18:30')]]).duration_odd.label, 'Long is 4 h 30 min long on Day 1.');
+      assert.equal(checklistOf([[set('s1', 'Wrap', 'a', '22:00', '21:00')]]).duration_odd.label, 'Wrap is 23 h long on Day 1.');
+    });
+
+    test('accepts 15 minutes, 4 hours, a past-midnight set and untimed sets', () => {
+      const map = checklistOf([[
+        set('s1', 'Min', 'a', '20:00', '20:15'),
+        set('s2', 'Max', 'b', '14:00', '18:00'),
+        set('s3', 'Night', 'a', '23:00', '02:00'),
+        set('s4', 'Tba', 'b'),
+      ]]);
+      assert.equal(map.duration_odd.status, 'done');
+    });
+  });
+
+  describe('start_unusual_hour', () => {
+    const evening = [set('s1', 'A', 'a', '20:00', '21:00'), set('s2', 'B', 'b', '22:00', '23:00'), set('s3', 'C', 'a', '00:30', '01:30')];
+
+    test('flags a 06:00 to 10:59 start on a day of evening sets', () => {
+      for (const start of ['06:00', '09:00', '10:59']) {
+        const map = checklistOf([[...evening, set('s9', 'Nine', 'b', start, '12:00')]]);
+        assert.equal(map.start_unusual_hour.status, 'warn', start);
+      }
+      assert.match(
+        checklistOf([[...evening, set('s9', 'Nine', 'b', '09:00', '10:00')]]).start_unusual_hour.label,
+        /^Nine starts at 9:00 AM on Day 1, but most sets that day start at 2:00 PM or later\.$/,
+      );
+    });
+
+    test('leaves 11:00, 14:00 and after-midnight starts alone', () => {
+      for (const start of ['11:00', '13:00', '05:59', '00:30']) {
+        const map = checklistOf([[...evening, set('s9', 'Nine', 'b', start, '12:00')]]);
+        assert.equal(map.start_unusual_hour.status, 'done', start);
+      }
+    });
+
+    test('is quiet when every set on the day starts before 14:00', () => {
+      const map = checklistOf([[set('s1', 'A', 'a', '09:00', '10:00'), set('s2', 'B', 'b', '10:00', '11:00'), set('s3', 'C', 'a', '12:00', '13:00')]]);
+      assert.equal(map.start_unusual_hour.status, 'done');
+    });
+
+    test('judges each day on its own sets', () => {
+      const map = checklistOf([evening, [set('s4', 'D', 'a', '09:00', '10:00'), set('s5', 'E', 'b', '10:00', '11:00')]]);
+      assert.equal(map.start_unusual_hour.status, 'done');
+    });
+  });
+
+  describe('artist_double_booked', () => {
+    const tail = ' Name match. Two different artists with one name show here too.';
+
+    test('flags one name on two stages at overlapping times, ignoring case', () => {
+      const map = checklistOf([[set('s1', 'Kai', 'a', '20:00', '21:00'), set('s2', 'kai', 'b', '20:30', '21:30')]]);
+      assert.deepEqual(map.artist_double_booked, {
+        key: 'artist_double_booked',
+        status: 'warn',
+        label: `kai is on Main and Tent at the same time on Day 1.${tail}`,
+      });
+    });
+
+    test('does not flag back-to-back sets or the same stage', () => {
+      const map = checklistOf([[
+        set('s1', 'Kai', 'a', '20:00', '21:00'), set('s2', 'Kai', 'b', '21:00', '22:00'),
+        set('s3', 'Mira', 'a', '20:00', '22:00'), set('s4', 'Mira', 'a', '21:00', '23:00'),
+      ]]);
+      assert.equal(map.artist_double_booked.status, 'done');
+    });
+
+    test('checks each B2B member alone', () => {
+      const b2b = { id: 's1', artists: [{ name: 'Ana' }, { name: 'Bo' }], stageId: 'a', startTime: '20:00', endTime: '21:00' };
+      const apart = checklistOf([[b2b, set('s2', 'Bo', 'b', '23:00', '23:30')]]);
+      assert.equal(apart.artist_double_booked.status, 'done');
+      const clash = checklistOf([[b2b, set('s2', 'Bo', 'b', '20:30', '21:30')]]);
+      assert.equal(clash.artist_double_booked.status, 'warn');
+      assert.match(clash.artist_double_booked.label, /^Bo is on Main and Tent/);
+    });
+
+    test('compares across midnight: 23:00-02:00 against 01:00-02:00', () => {
+      const map = checklistOf([[set('s1', 'Kai', 'a', '23:00', '02:00'), set('s2', 'Kai', 'b', '01:00', '02:00')]]);
+      assert.equal(map.artist_double_booked.status, 'warn');
+    });
+
+    test('does not compare a late tail with the next night', () => {
+      const map = checklistOf([
+        [set('s1', 'Kai', 'a', '23:00', '02:00')],
+        [set('s2', 'Kai', 'b', '01:00', '02:00')],
+      ]);
+      assert.equal(map.artist_double_booked.status, 'done');
+    });
+
+    test('compares consecutive dated days across the 06:00 boundary', () => {
+      const clash = checklistOf([
+        [set('s1', 'Kai', 'a', '05:00', '07:00')],
+        [set('s2', 'Kai', 'b', '06:30', '07:30')],
+      ]);
+      assert.equal(clash.artist_double_booked.status, 'warn');
+      const festival = festivalOf([[set('s1', 'Kai', 'a', '05:00', '07:00')], [], [set('s2', 'Kai', 'b', '06:30', '07:30')]]);
+      assert.equal(byKey(publishChecklist(config, festival)).artist_double_booked.status, 'done');
+    });
+
+    test('falls back to day order when a day has no date', () => {
+      const festival = festivalOf([[set('s1', 'Kai', 'a', '05:00', '07:00')], [set('s2', 'Kai', 'b', '06:30', '07:30')]]);
+      festival.days.forEach((d: any) => delete d.date);
+      assert.equal(byKey(publishChecklist(config, festival)).artist_double_booked.status, 'warn');
     });
   });
 });

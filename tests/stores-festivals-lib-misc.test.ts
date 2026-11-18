@@ -141,7 +141,7 @@ describe('lib/db/stores/festivals.js', () => {
       const utils = { buildFestivalRecords: mock.fn() };
       const store = createFestivalsStore(pool, utils);
       const result = await store.getById('f2');
-      assert.deepEqual(result, festivalData);
+      assert.deepEqual(result, { ...festivalData, lineup: [] });
       // Should use pool.query directly, not buildFestivalRecords
       assert.equal(pool.query.mock.calls.length, 1);
       assert.ok((pool.query.mock.calls[0]! as any).arguments[0].includes('festivals'));

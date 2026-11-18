@@ -162,3 +162,15 @@ export function getLogSafeRequestInfo(req: any) {
     headers: safeHeaders,
   };
 }
+
+/** Keeps only http(s) link values, so a stored javascript: or data: URL never reaches a link sink. */
+export function sanitizeLinkRecord(links: any): Record<string, string> {
+  if (!links || typeof links !== 'object') return {};
+  const clean: Record<string, string> = {};
+  for (const [platform, url] of Object.entries(links)) {
+    if (typeof url !== 'string' || !url.trim()) continue;
+    const trimmed = url.trim().slice(0, 500);
+    if (/^https?:\/\//.test(trimmed)) clean[platform] = trimmed;
+  }
+  return clean;
+}

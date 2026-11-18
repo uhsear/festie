@@ -75,6 +75,23 @@ export function festivalStartMinutes(hhmm: string): number {
   return h! * 60 + m! + (h! < FESTIVAL_DAY_START_HOUR ? 1440 : 0);
 }
 
+/**
+ * Mirror of shared `setMinuteRange` (setStatus.ts): a set's minute range from its
+ * logical day's midnight. The start follows `festivalStartMinutes`; the end rolls
+ * forward a day until it is after the start. Null when either time is missing.
+ */
+export function setMinuteRange(set: {
+  startTime?: string | null;
+  endTime?: string | null;
+}): { start: number; end: number } | null {
+  if (!set.startTime || !set.endTime) return null;
+  const start = festivalStartMinutes(set.startTime);
+  const [h, m] = set.endTime.split(':').map(Number);
+  let end = h! * 60 + m!;
+  while (end <= start) end += 1440;
+  return { start, end };
+}
+
 /** `21:30` to `9:30 PM`, `00:15` to `12:15 AM`. */
 export function formatClock12(hhmm: string): string {
   const [h, m] = String(hhmm).split(':').map(Number);

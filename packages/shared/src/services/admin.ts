@@ -4,6 +4,7 @@ import { auditEntriesToCsv } from '../utils/auditActions';
 import { normalizeAnalytics, type AnalyticsData } from '../utils/analyticsNormalize';
 import type { PickInsight } from '../utils/pickInsight';
 import type { AdminHealth, DashboardStats } from '../utils/adminDashboard';
+import type { AdminGrowthReport } from '../utils/adminGrowth';
 
 export interface AuditEntry {
   id: string;
@@ -194,13 +195,25 @@ export interface RemovalSummary {
   sets: number;
   picks: number;
   ratings: number;
+  /**
+   * Present when the save cancels announced acts: the acts, their sets that go with the picks on them, and who
+   * hears about it. `picked` people get an alert about a changed set, `marked` people only about the act.
+   */
+  cancel?: { acts: string[]; sets: number; picks?: number; picked: number; marked: number };
 }
 
 export function removalFromError(err: unknown): RemovalSummary | null {
   if (!(err instanceof ApiClientError) || err.code !== 'CONFIRM_REMOVALS') return null;
   const r = err.details?.removal as Partial<RemovalSummary> | undefined;
   if (!r || typeof r !== 'object') return null;
-  return { days: r.days ?? 0, sets: r.sets ?? 0, picks: r.picks ?? 0, ratings: r.ratings ?? 0 };
+  const cancel = r.cancel && Array.isArray(r.cancel.acts) ? r.cancel : undefined;
+  return {
+    days: r.days ?? 0,
+    sets: r.sets ?? 0,
+    picks: r.picks ?? 0,
+    ratings: r.ratings ?? 0,
+    ...(cancel ? { cancel: { acts: cancel.acts, sets: cancel.sets ?? 0, picks: cancel.picks ?? 0, picked: cancel.picked ?? 0, marked: cancel.marked ?? 0 } } : {}),
+  };
 }
 
 function joinList(parts: string[]): string {
@@ -210,14 +223,34 @@ function joinList(parts: string[]): string {
 
 const plural = (n: number, one: string): string => `${n} ${n === 1 ? one : `${one}s`}`;
 
-export function describeRemovals(r: RemovalSummary): string {
+/** `notify` is the form's "Tell people" choice: with it off, the cancel line says no one will be told. */
+export function describeRemovals(r: RemovalSummary, notify = true): string {
   const parts = [
     r.days > 0 && plural(r.days, 'day'),
     r.sets > 0 && plural(r.sets, 'set'),
     r.picks > 0 && plural(r.picks, 'pick'),
     r.ratings > 0 && plural(r.ratings, 'rating'),
   ].filter((p): p is string => typeof p === 'string');
-  return `This save removes ${joinList(parts)}. People who picked these sets lose those picks. This cannot be undone.`;
+  // A save that only cancels acts removes nothing, so the cancel line is the whole message.
+  if (parts.length === 0 && r.cancel) return describeCancel(r.cancel, notify);
+  const cancel = r.cancel ? ` ${describeCancel(r.cancel, notify)}` : '';
+  return `This save removes ${joinList(parts)}. People who picked these sets lose those picks. This cannot be undone.${cancel}`;
+}
+
+/** "Cancelling X removes 2 sets and 8 picks. 12 people will be told (8 marked it, 4 picked or set a reminder on the changed sets)." */
+export function describeCancel(cancel: NonNullable<RemovalSummary['cancel']>, notify = true): string {
+  const one = cancel.acts.length === 1;
+  const people = cancel.picked + cancel.marked;
+  const who = [
+    cancel.marked > 0 && `${cancel.marked} marked ${one ? 'it' : 'them'}`,
+    cancel.picked > 0 && `${cancel.picked} picked or set a reminder on the changed sets`,
+  ].filter((p): p is string => typeof p === 'string');
+  const told =
+    people === 0 || !notify
+      ? `No one will be told${notify ? '' : ' because alerts are off'}.`
+      : `${people} ${people === 1 ? 'person' : 'people'} will be told (${who.join(', ')}).`;
+  const removes = cancel.sets > 0 ? `${plural(cancel.sets, 'set')}${cancel.picks ? ` and ${plural(cancel.picks, 'pick')}` : ''}` : 'no sets';
+  return `Cancelling ${one ? cancel.acts[0] : `${cancel.acts.length} acts`} removes ${removes}. ${told}`;
 }
 
 export function formatImportCounts(counts: LineupImportCounts): string {
@@ -373,6 +406,10 @@ export function addCrewMember(crewId: string, userId: string): Promise<unknown> 
 export async function fetchFestivalPreview(festivalId: string) {
   const detail = await api.get<FestivalPreviewInput>(`/admin/festivals/${enc(festivalId)}`);
   return buildFestivalPreview(detail);
+}
+
+export function fetchAdminGrowth(days = 30): Promise<AdminGrowthReport> {
+  return api.get<AdminGrowthReport>(`/admin/growth?days=${days}`);
 }
 
 export function fetchAdminPickInsight(festivalId: string): Promise<PickInsight> {

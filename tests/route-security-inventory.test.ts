@@ -86,6 +86,7 @@ const HAND_VALIDATED_QUERY: Record<string, string> = {
   'email-auth.ts GET /verify-email': 'Reads one token string; the store lookup bounds it.',
   'notifications.ts GET /history': 'Clamps limit and offset by hand.',
   'pages.ts GET /reset-password': 'Reads one token string and only forwards it.',
+  'pages.ts GET /f/:slug': 'Reads one ref string and only matches it against a fixed allow-list.',
 };
 const REQUIRE_RECENT_AUTH = [
   'admin-users.ts POST /users/:id/roles', 'admin-users.ts DELETE /users/:id/roles/:role', 'admin-users.ts POST /users/:id/reset-link',

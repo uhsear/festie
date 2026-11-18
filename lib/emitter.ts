@@ -122,8 +122,9 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
         return [];
       })
       : [];
-    const rooms = ['user:' + payload.userId, ...(crews || []).map((c: any) => 'crew:' + c.id)];
-    io.to(rooms).emit('profile:updated', {
+    const userRoom = 'user:' + payload.userId;
+    const crewRooms = (crews || []).map((c: any) => 'crew:' + c.id);
+    const body = {
       _v: EVENT_VERSION,
       festivalId: payload.festivalId,
       profileId: payload.profileId,
@@ -131,7 +132,15 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       avatarUrl: payload.avatarUrl,
       picks: payload.picks,
       updatedAt: payload.updatedAt,
-    });
+    };
+    // Marks are private to their owner. Only the author's devices learn that they changed: a crew mate
+    // cannot read them, so the flag would only force a reload and tell the crew someone marked an act.
+    if (payload.interestsChanged !== true) {
+      io.to([userRoom, ...crewRooms]).emit('profile:updated', { ...body, interestsChanged: false });
+      return;
+    }
+    io.to(userRoom).emit('profile:updated', { ...body, interestsChanged: true });
+    if (crewRooms.length > 0) io.to(crewRooms).emit('profile:updated', { ...body, interestsChanged: false });
   }
 
   function profileCreated({ festivalId, profile, user }: any) {
@@ -169,6 +178,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       name: profile.name,
       avatarUrl: buildAvatarUrl(user),
       picks: profile.picks || {},
+      // Rapid writes merge into one broadcast, so a later pick write must not hide an earlier interest change.
+      interestsChanged: changedFields.interests === true || _profileBatchPayloads.get(key)?.interestsChanged === true,
       updatedAt: profile.updatedAt || new Date().toISOString(),
       _batchedAt: Date.now(),
     });
@@ -218,13 +229,16 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     }
   }
 
-  /** One alert per person who picked a set that moved or left the lineup. Never throws. */
-  async function scheduleChanged({ festival, changes, pickersBySet }: any) {
+  /**
+   * One alert per person who picked a set that moved or left the lineup, and one per person whose open
+   * mark is on an act that was cancelled (`interestedByEntry`). Never throws.
+   */
+  async function scheduleChanged({ festival, changes, pickersBySet, interestedByEntry }: any) {
     if (!notificationService?.isConfigured || typeof notificationService.send !== 'function') return;
     try {
       const muted: Set<string> =
         (await stores?.topicSubscriptions?.getUnsubscribedUsers?.(festival.id, 'schedule')) || new Set();
-      const messages = buildSchedulePushes(festival.name, changes, pickersBySet).filter((m) => !muted.has(m.userId));
+      const messages = buildSchedulePushes(festival.name, changes, pickersBySet, interestedByEntry).filter((m) => !muted.has(m.userId));
       for (let i = 0; i < messages.length; i += SCHEDULE_PUSH_CHUNK) {
         const results = await Promise.allSettled(
           messages.slice(i, i + SCHEDULE_PUSH_CHUNK).map(({ userId, title, body, setId }) =>

@@ -63,6 +63,7 @@ function createBackgroundTasks(ctx: any, { io }: any) {
   for (const [provider, missing] of Object.entries(config.OAUTH_CONFIG_MISSING ?? {})) {
     if ((missing as string[]).length > 0) log.warn('oauth:config-incomplete', { provider, missing });
   }
+  if (config.RESEND_API_KEY && !config.EMAIL_POSTAL_ADDRESS) log.warn('email:postal-address-unset', { setting: 'EMAIL_POSTAL_ADDRESS' });
 
   // Session cleanup — evict expired sessions and disconnect their sockets
   const _sessionCleanupTimer = setInterval(async () => {
