@@ -15,7 +15,8 @@ import { buildMultiInsert, insertSetsBatch } from './festivals';
 import type { ArtistLookup, ArtistRef, LineupImportPlan, LineupImportWrites, SetValues } from '../../lineup-import-plan';
 import { nextMoveMark, type SlotAt } from '../../set-moves';
 
-export type BuildPlan = (festival: any) => { plan: LineupImportPlan; writes: LineupImportWrites };
+/** The second argument carries the locked artist rows, so the plan copies them instead of the earlier lookup. */
+export type BuildPlan = (festival: any, lockedArtists?: Map<string, ArtistRef>) => { plan: LineupImportPlan; writes: LineupImportWrites };
 
 export interface UndoResult {
   removed: number;
@@ -191,14 +192,50 @@ async function writeAnnounced(client: any, festivalId: string, announced: Lineup
   await client.query('UPDATE festivals SET lineup = $2::jsonb WHERE id = $1', [festivalId, JSON.stringify(next)]);
 }
 
-/** False when an artist that the plan attaches was merged or is gone. The share lock keeps it live until commit. */
-async function artistsStillLive(client: any, ids: string[]): Promise<boolean> {
-  if (ids.length === 0) return true;
+/**
+ * The locked live rows of the artists the plan attaches, or null when one was merged or is gone.
+ * Rows lock in id order, as every other writer does, so two writers on the same artists cannot deadlock.
+ * The share lock keeps them live and unchanged until commit.
+ */
+async function lockLiveArtists(client: any, ids: string[]): Promise<Map<string, ArtistRef> | null> {
+  const locked = new Map<string, ArtistRef>();
+  if (ids.length === 0) return locked;
   const { rows } = await client.query(
-    'SELECT id FROM artists WHERE id = ANY($1::text[]) AND merged_into IS NULL FOR SHARE',
+    `
+  SELECT
+    id,
+    name,
+    label,
+    links,
+    photo,
+    genres,
+    merged_into
+  FROM
+    artists
+  WHERE
+    id = ANY ($1::text[])
+    AND merged_into IS NULL
+  ORDER BY
+    id
+  FOR SHARE
+`,
     [ids],
   );
-  return rows.length === ids.length;
+  if (rows.length !== ids.length) return null;
+  for (const r of rows) locked.set(r.id, artistRefOf(r));
+  return locked;
+}
+
+function artistRefOf(r: any): ArtistRef {
+  return {
+    id: r.id,
+    name: r.name,
+    label: r.label,
+    links: r.links ?? {},
+    photo: r.photo ?? null,
+    genres: Array.isArray(r.genres) ? r.genres : [],
+    mergedInto: r.merged_into ?? null,
+  };
 }
 
 async function newestOpenImportId(client: any, festivalId: string): Promise<string | null> {
@@ -399,13 +436,17 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         if (!locked) return { notFound: true as const };
         const ctx = markContext(locked);
         const festival = await festivals.getById(festivalId, client);
-        const { plan, writes } = buildPlan(festival);
-        if (plan.counts.error > 0 || plan.problems.length > 0) return { committed: false as const, plan };
+        const first = buildPlan(festival);
+        if (first.plan.counts.error > 0 || first.plan.problems.length > 0) return { committed: false as const, plan: first.plan };
         // Festival lock first, then artists: the one lock order of every writer.
-        if (!(await artistsStillLive(client, writes.artistIds))) {
-          plan.problems.push('An artist changed while you were importing. Check the rows again.');
-          return { committed: false as const, plan };
+        const lockedArtists = await lockLiveArtists(client, first.writes.artistIds);
+        if (!lockedArtists) {
+          first.plan.problems.push('An artist changed while you were importing. Check the rows again.');
+          return { committed: false as const, plan: first.plan };
         }
+        // Re-plan from the locked rows, so an artist edited since the lookup gives its current name and links.
+        const { plan, writes } = first.writes.artistIds.length > 0 ? buildPlan(festival, lockedArtists) : first;
+        if (plan.counts.error > 0 || plan.problems.length > 0) return { committed: false as const, plan };
 
         await insertNewStages(client, festivalId, writes.newStages);
         await insertNewDays(client, festivalId, writes.newDays);
@@ -497,15 +538,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         [keys, ids],
       );
       for (const r of rows) {
-        const ref: ArtistRef = {
-          id: r.id,
-          name: r.name,
-          label: r.label,
-          links: r.links ?? {},
-          photo: r.photo ?? null,
-          genres: Array.isArray(r.genres) ? r.genres : [],
-          mergedInto: r.merged_into ?? null,
-        };
+        const ref = artistRefOf(r);
         lookup.byId.set(ref.id, ref);
         if (!ref.mergedInto) lookup.byKey.set(r.name_key, [...(lookup.byKey.get(r.name_key) ?? []), ref]);
       }

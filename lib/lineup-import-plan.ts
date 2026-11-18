@@ -45,6 +45,15 @@ export interface ArtistLookup {
   byId: Map<string, ArtistRef>;
 }
 
+/** The lookup with each locked row swapped in for its earlier copy. */
+export function withLockedArtists(lookup: ArtistLookup, locked: Map<string, ArtistRef>): ArtistLookup {
+  const fresh = (ref: ArtistRef) => locked.get(ref.id) ?? ref;
+  return {
+    byId: new Map([...lookup.byId].map(([id, ref]) => [id, fresh(ref)])),
+    byKey: new Map([...lookup.byKey].map(([key, refs]) => [key, refs.map(fresh)])),
+  };
+}
+
 export interface ArtistCandidate {
   id: string;
   label: string;

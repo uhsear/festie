@@ -31,6 +31,8 @@ import {
   artistLookupKeys,
   artistsNeedingLinks,
   planLineupImport,
+  withLockedArtists,
+  type ArtistRef,
   type LineupImportPlan,
   type LineupImportWrites,
   type SpotifyHit,
@@ -216,7 +218,8 @@ export default function createLineupImportRoute(deps: any) {
 
       const outcome = await stores.lineupImports.commit(
         festivalId,
-        (current: any) => planLineupImport({ festival: current, ...base, spotify: spotifyMap, makeId }),
+        (current: any, locked?: Map<string, ArtistRef>) =>
+          planLineupImport({ festival: current, ...base, artists: locked ? withLockedArtists(base.artists, locked) : base.artists, spotify: spotifyMap, makeId }),
         { createdBy: req.user?.userId ?? null },
       );
       if ('notFound' in outcome) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);

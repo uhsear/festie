@@ -24,6 +24,7 @@ import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
 import createLineupImportRoute from '../routes/lineup-import';
 import { createLineupImportsStore } from '../lib/db/stores/lineup-imports';
+import { planLineupImport, withLockedArtists } from '../lib/lineup-import-plan';
 import { artistNameKey } from '../lib/artist-key';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -798,5 +799,41 @@ describe('lineup-import P6: artist matching', { skip }, () => {
     } finally {
       await withPool(cleanArtists);
     }
+  });
+
+  test('commit plans from the locked artist rows, so an edit after the lookup reaches the new entry, and the lock query orders by id', async () => {
+    await withPool(async (pool) => {
+      await seedArtist(pool, 'late', 'Late Edit', '', { instagram: 'https://www.instagram.com/old' });
+      const store = createLineupImportsStore(pool, { festivals: { getById: async () => ({}) } });
+      try {
+        const rows = [{ row: 1, artist: 'Late Edit', artistId: AR('late') }];
+        const stale = await store.lookupArtists([], [AR('late')]);
+        await pool.query(`UPDATE artists SET links = $2::jsonb WHERE id = $1`, [AR('late'), JSON.stringify({ instagram: 'https://www.instagram.com/new' })]);
+
+        const sql: string[] = [];
+        const spy = {
+          connect: async () => {
+            const client = await pool.connect();
+            const run = client.query.bind(client);
+            client.query = (text: any, ...rest: any[]) => (sql.push(String(text?.text ?? text)), run(text, ...rest));
+            return client;
+          },
+        };
+        const spied = createLineupImportsStore(spy as any, { festivals: { getById: async () => ({ id: EMPTY_FEST_ID, name: 'Empty', b2bSeparator: 'b2b', stages: [], days: [], lineup: [] }) } });
+        const outcome: any = await spied.commit(
+          EMPTY_FEST_ID,
+          (f: any, locked?: Map<string, any>) =>
+            planLineupImport({ festival: f, rows, options: { updateExisting: false, createMissing: true }, config: { MAX_IMPORT_SETS: 500, MAX_STAGES: 20, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 } as any, artists: locked ? withLockedArtists(stale, locked) : stale }),
+          { createdBy: null },
+        );
+        assert.equal(outcome.committed, true);
+        const lineup = await lineupOf(EMPTY_FEST_ID);
+        assert.deepEqual(lineup.at(-1).artists[0].links, { instagram: 'https://www.instagram.com/new' });
+        assert.match(sql.find((q) => q.includes('FOR SHARE')) ?? '', /ORDER BY\s+id\s+FOR SHARE/);
+      } finally {
+        await pool.query(`UPDATE festivals SET lineup = '[]'::jsonb WHERE id = $1`, [EMPTY_FEST_ID]);
+        await cleanArtists(pool);
+      }
+    });
   });
 });
