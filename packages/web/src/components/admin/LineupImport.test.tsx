@@ -225,7 +225,7 @@ describe('LineupImport P6', () => {
   it('shows a banner when changed rows would not be applied, and its button turns Update on', async () => {
     api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
     await pasteSampleAndCheck();
-    expect(await screen.findByText('2 rows change existing sets. Turn on Update to apply them.')).toBeInTheDocument();
+    expect(await screen.findByText('2 rows change existing sets or announced acts. Turn on Update to apply them.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Turn on Update' }));
     expect(api.preview.mock.calls[1][1].updateExisting).toBe(true);
     expect(screen.queryByText(/Turn on Update to apply them/)).toBeNull();
@@ -234,7 +234,7 @@ describe('LineupImport P6', () => {
   it('sends moveDays when Move sets is ticked', async () => {
     api.preview.mockResolvedValue(plan([planRow()], { new: 1 }));
     await pasteSampleAndCheck();
-    expect(api.preview.mock.calls[0][1].moveDays).toBe(false);
+    expect(api.preview.mock.calls[0][1].moveDays).toBeUndefined();
     await userEvent.click(await screen.findByRole('checkbox', { name: 'Move sets to the day in the file' }));
     expect(api.preview.mock.calls[1][1].moveDays).toBe(true);
   });

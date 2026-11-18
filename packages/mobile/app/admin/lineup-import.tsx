@@ -167,7 +167,7 @@ export default function LineupImportScreen() {
       updateExisting: update,
       createMissing: create,
       skipSpotify: false,
-      moveDays: move,
+      ...(move ? { moveDays: true } : {}),
     }),
     [],
   );

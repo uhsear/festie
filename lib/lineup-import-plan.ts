@@ -755,7 +755,13 @@ function planAnnouncedRow(ctx: Ctx, parts: RowParts) {
         linkedSetIds: [],
       };
   const changes: string[] = [];
+  if (match?.status === 'cancelled') {
+    warnings.push('This act is cancelled in the announced lineup. Restore it in the editor.');
+  }
   if (match) {
+    artists.forEach((a, i) => {
+      if (a.id && a.id !== storedFor(names[i]!)?.id) changes.push(`Artist ${a.name} linked to artist ${a.id}`);
+    });
     changes.push(...describeLinkChanges(storedFor(names[0]!)?.links ?? {}, artists[0]?.links ?? {}, links));
     if ((match.displayName ?? null) !== after.displayName) {
       changes.push(`Display name ${match.displayName ?? 'none'} → ${after.displayName ?? 'none'}`);

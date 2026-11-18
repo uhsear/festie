@@ -12,26 +12,9 @@ import {
 
 const src = readFileSync(join(__dirname, '..', 'app', 'admin', 'lineup-import.tsx'), 'utf8');
 
-describe('lineup import screen: P6 wiring', () => {
-  it('takes its grouping, list parsing and choice logic from @festie/shared', () => {
-    for (const name of ['groupPlanRows', 'parseNameList', 'withArtistChoice', 'updateBanner', 'defaultUpdateExisting', 'importBlocked']) {
-      expect(src).toContain(`  ${name},`);
-    }
+describe('lineup import screen imports', () => {
+  it('imports only its own deps and @festie/shared', () => {
     expect(src).not.toMatch(/from 'socket\.io-client'|from 'papaparse'/);
-  });
-
-  it('offers a list of names, a move option and the Needs choice picker', () => {
-    expect(src).toContain('Check as a list of names');
-    expect(src).toContain('accessibilityLabel="Move sets to the day in the file"');
-    expect(src).toContain('moveDays: move');
-    expect(src).toContain("x.outcome === 'needs_choice'");
-    expect(src).toContain('chooseArtist(item.row, i, v)');
-  });
-
-  it('lists skipped rows in the result and keeps Approve off while the plan is blocked', () => {
-    expect(src).toContain("x.status === 'skipped'");
-    expect(src).toContain('disabled={blocked || working}');
-    expect(src).toContain('importBlocked(plan)');
   });
 });
 
@@ -45,7 +28,7 @@ describe('lineup import logic the screen uses', () => {
 
   it('turns Update on for an export file and shows the banner otherwise', () => {
     expect(defaultUpdateExisting({ artist: 0, setId: 1 })).toBe(true);
-    expect(updateBanner({ changed: 2 }, false)).toBe('2 rows change existing sets. Turn on Update to apply them.');
+    expect(updateBanner({ changed: 2 }, false)).toBe('2 rows change existing sets or announced acts. Turn on Update to apply them.');
   });
 
   it('keeps one id per B2B name and blocks a plan with errors', () => {

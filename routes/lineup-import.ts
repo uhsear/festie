@@ -37,6 +37,7 @@ import {
 } from '../lib/lineup-import-plan.js';
 
 const SKIPPED_MESSAGE = 'Matches an existing set. Not updated because Update sets that match was off.';
+const ANNOUNCED_SKIPPED_MESSAGE = 'Matches an announced lineup entry. Not updated because Update sets that match was off.';
 
 const makeId = (prefix: string) => `${prefix}-${crypto.randomBytes(6).toString('hex')}`;
 
@@ -55,7 +56,10 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
       return { row: r.row, status: 'updated' as const, setId: r.setId, artist, message: `Updated: ${r.changes.join('; ')}.` };
     }
     if (r.skipped) return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: r.skipped };
-    if (r.status === 'changed') return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: SKIPPED_MESSAGE };
+    if (r.status === 'changed') {
+      const message = r.target === 'announced' ? ANNOUNCED_SKIPPED_MESSAGE : SKIPPED_MESSAGE;
+      return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message };
+    }
     return { row: r.row, status: 'unchanged' as const, setId: r.setId, artist, message: 'No change.' };
   });
   const count = (status: string) => rows.filter((r) => r.status === status).length;
@@ -238,6 +242,8 @@ export default function createLineupImportRoute(deps: any) {
         importId: result.importId,
         created: result.created,
         updated: result.updated,
+        announced: result.announced,
+        announcedUpdated: result.announcedUpdated,
         unchanged: result.unchanged,
         skipped: result.skipped,
         newStages: result.newStages,
@@ -293,6 +299,8 @@ export default function createLineupImportRoute(deps: any) {
           importId,
           removed: outcome.result.removed,
           restored: outcome.result.restored,
+          removedEntries: outcome.result.removedEntries,
+          restoredEntries: outcome.result.restoredEntries,
           removedStages: outcome.result.removedStages,
           removedDays: outcome.result.removedDays,
           kept: outcome.result.kept.length,

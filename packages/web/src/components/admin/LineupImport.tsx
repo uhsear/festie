@@ -137,7 +137,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
           updateExisting: update,
           createMissing: create,
           skipSpotify: false,
-          moveDays: move,
+          ...(move ? { moveDays: true } : {}),
         }),
       );
       setStep('preview');
@@ -198,7 +198,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
   const handleCommit = async () => {
     setLoading(true);
     try {
-      const res = await lineupImportApi.commit(festivalId, { rows, updateExisting, createMissing, skipSpotify: false, moveDays });
+      const res = await lineupImportApi.commit(festivalId, { rows, updateExisting, createMissing, skipSpotify: false, ...(moveDays ? { moveDays: true } : {}) });
       setConfirmOpen(false);
       if (res.committed) {
         setResult(res.result);

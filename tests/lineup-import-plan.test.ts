@@ -584,6 +584,13 @@ describe('planLineupImport: announced rows', () => {
     assert.equal(p.rows[0]!.errors[0]!.message, 'Day is empty.');
   });
 
+  it('warns that a matched entry is cancelled and leaves it as it is', () => {
+    const f = festival({ lineup: [entry('lu-1', ['Alok'], { status: 'cancelled' })] });
+    const { plan: p } = plan([row(1, { artist: 'Alok' })], { updateExisting: true }, f);
+    assert.equal(p.rows[0]!.status, 'unchanged');
+    assert.deepEqual(p.rows[0]!.warnings, ['This act is cancelled in the announced lineup. Restore it in the editor.']);
+  });
+
   it('stops past the lineup limit', () => {
     const f = festival({ lineup: Array.from({ length: 500 }, (_, i) => entry(`lu-${i}`, [`Stored ${i}`])) });
     const { plan: p } = plan([row(1, { artist: 'One More' })], {}, f);
@@ -621,6 +628,15 @@ describe('planLineupImport: artist matching', () => {
     assert.equal(p.counts.needsChoice, 1);
     assert.equal(p.counts.error, 1);
     assert.equal(writes.inserts.length, 0);
+  });
+
+  it('writes the artist id of a matched announced entry and reports it as a change', () => {
+    const artists = lookup([...NINA]);
+    const f = festival({ lineup: [{ id: 'lu-1', artists: [{ name: 'Nina Kraviz', links: {} }], displayName: null, tier: null, dayDate: null, status: 'announced', announcedAt: '2026-01-01', linkedSetIds: [] }] });
+    const { plan: p, writes } = plan([row(1, { artist: 'Nina Kraviz', artistId: 'ar-ru' })], { updateExisting: true }, f, { artists });
+    assert.equal(p.rows[0]!.status, 'changed');
+    assert.deepEqual(p.rows[0]!.changes, ['Artist Nina Kraviz linked to artist ar-ru']);
+    assert.equal(writes.announced.updates[0]!.after.artists[0]!.id, 'ar-ru');
   });
 
   it('stops an announced row at Needs choice too', () => {

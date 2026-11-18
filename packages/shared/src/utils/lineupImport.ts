@@ -277,7 +277,7 @@ export const defaultUpdateExisting = (mapping: LineupColumnMapping): boolean => 
 /** The banner for a preview whose changed rows would not be applied, or null. */
 export function updateBanner(counts: Pick<LineupImportPlanCounts, 'changed'>, updateExisting: boolean): string | null {
   if (updateExisting || counts.changed === 0) return null;
-  return `${plural(counts.changed, 'row')} change${counts.changed === 1 ? 's' : ''} existing sets. Turn on Update to apply them.`;
+  return `${plural(counts.changed, 'row')} change${counts.changed === 1 ? 's' : ''} existing sets or announced acts. Turn on Update to apply them.`;
 }
 
 /** A pasted list: one act per line, blank lines and # lines skipped. A line number is the row number. */

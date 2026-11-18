@@ -241,8 +241,8 @@ describe('update default and banner', () => {
   });
 
   it('shows a banner only when Update is off and rows would change', () => {
-    expect(updateBanner({ changed: 3 }, false)).toBe('3 rows change existing sets. Turn on Update to apply them.');
-    expect(updateBanner({ changed: 1 }, false)).toBe('1 row changes existing sets. Turn on Update to apply them.');
+    expect(updateBanner({ changed: 3 }, false)).toBe('3 rows change existing sets or announced acts. Turn on Update to apply them.');
+    expect(updateBanner({ changed: 1 }, false)).toBe('1 row changes existing sets or announced acts. Turn on Update to apply them.');
     expect(updateBanner({ changed: 3 }, true)).toBeNull();
     expect(updateBanner({ changed: 0 }, false)).toBeNull();
   });
