@@ -46,6 +46,9 @@ export default function createArtistsRoutes(deps: any) {
     if (error instanceof ArtistError) {
       return sendError(res, error.status, error.message, ErrorCodes[error.code], error.details);
     }
+    if (error?.code === 'SPOTIFY_RATE_LIMITED') {
+      return sendError(res, 503, 'Spotify is busy right now. Try again in a minute.', ErrorCodes.SPOTIFY_RATE_LIMITED);
+    }
     // The database gave up on a deadlock or a serialization failure after the retries.
     if (error?.code === '40P01' || error?.code === '40001') {
       return sendError(res, 503, 'Festie is busy. Try again.', ErrorCodes.SERVICE_UNAVAILABLE);
@@ -215,8 +218,9 @@ export default function createArtistsRoutes(deps: any) {
               festivalId,
               expectedUpdatedAt: pick.expectedUpdatedAt,
               spotify: { spotifyId: pick.spotifyId, photo: spotifyArtist.imageUrl, genres: spotifyArtist.genres },
-              acceptShared: pick.acceptShared === true,
+              acceptedAlsoOn: pick.acceptedAlsoOn ?? 0,
               userId: req.user?.userId ?? null,
+              ip: getRequestIp(req),
             });
             if (outcome.status === 'shared') {
               results.push({ ...result, status: 'shared', alsoOn: outcome.alsoOn });
@@ -226,22 +230,8 @@ export default function createArtistsRoutes(deps: any) {
               const have = synced.get(festival.id);
               synced.set(festival.id, have ? { ...have, setIds: [...have.setIds, ...festival.setIds] } : festival);
             }
-            const { before, artist: after } = outcome;
-            // A pick links Spotify and also fills an empty photo or genre list: audit what really changed.
-            const fields = [
-              ...(before.links?.spotify !== after.links?.spotify ? ['spotify'] : []),
-              ...(before.photo !== after.photo ? ['photo'] : []),
-              ...(JSON.stringify(before.genres ?? []) !== JSON.stringify(after.genres ?? []) ? ['genres'] : []),
-            ];
-            audit(AUDIT_ACTIONS.ARTIST_UPDATED, pick.artistId, req, {
-              name: after.name,
-              fields,
-              via: 'spotify-pick',
-              festivalsUpdated: outcome.synced.length,
-              before: { name: before.name, label: before.label, links: before.links ?? {}, photo: before.photo ?? null, genres: before.genres ?? [] },
-              after: { name: after.name, label: after.label, links: after.links ?? {}, photo: after.photo ?? null, genres: after.genres ?? [] },
-              festivalIds: outcome.synced.slice(0, 200).map((festival: SyncedFestival) => festival.id),
-            });
+            // The store wrote the audit row in the pick's transaction.
+            if (req.res?.locals) req.res.locals.auditWritten = true;
             results.push({ ...result, status: 'saved', artist: publicArtist(outcome.artist), festivalsUpdated: outcome.synced.length });
           } catch (error: any) {
             if (!(error instanceof ArtistError)) {

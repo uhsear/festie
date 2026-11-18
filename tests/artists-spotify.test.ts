@@ -61,9 +61,9 @@ afterEach(() => {
 });
 
 const elementOf = (artist: any) => ({ id: artist.id, name: artist.name, links: artist.links ?? {} });
-const pickBody = (festivalId: string, artist: any, spotifyId: string, acceptShared?: boolean) => ({
+const pickBody = (festivalId: string, artist: any, spotifyId: string, acceptedAlsoOn?: number) => ({
   festivalId,
-  picks: [{ artistId: artist.id, expectedUpdatedAt: artist.updatedAt, spotifyId, ...(acceptShared === undefined ? {} : { acceptShared }) }],
+  picks: [{ artistId: artist.id, expectedUpdatedAt: artist.updatedAt, spotifyId, ...(acceptedAlsoOn === undefined ? {} : { acceptedAlsoOn }) }],
 });
 const artistRow = async (artistId: string) =>
   withPool(async (pool) => (await pool.query('SELECT links, spotify_id, photo, genres, updated_at FROM artists WHERE id = $1', [artistId])).rows[0]);
@@ -176,14 +176,16 @@ describe('spotify candidates and picks', { skip, concurrency: 1 }, () => {
     assert.ok(festivalAfter.updated_at > festivalBefore.updated_at, 'the festival version moved');
     assert.deepEqual(festivalAfter.edited_at, festivalBefore.edited_at, 'a pick is not a festival form edit');
     // The audit entry names every field the pick changed: the link, and the photo and genres it filled.
-    let entry: any;
-    for (let attempt = 0; attempt < 50 && !entry; attempt++) {
+    let entry: any[] = [];
+    for (let attempt = 0; attempt < 50 && !entry.length; attempt++) {
       entry = await withPool(async (pool) =>
-        (await pool.query(`SELECT details_json FROM audit_log WHERE action = 'artist.updated' AND target_id = $1`, [artist.id])).rows[0],
+        (await pool.query(`SELECT details_json FROM audit_log WHERE action = 'artist.updated' AND target_id = $1`, [artist.id])).rows,
       );
-      if (!entry) await new Promise((resolve) => setTimeout(resolve, 100));
+      if (!entry.length) await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    const details = typeof entry.details_json === 'string' ? JSON.parse(entry.details_json) : entry.details_json;
+    assert.equal(entry.length, 1, 'one transactional audit row per pick');
+    const details = typeof entry[0].details_json === 'string' ? JSON.parse(entry[0].details_json) : entry[0].details_json;
+    assert.equal(details.via, 'spotify-pick');
     assert.deepEqual(details.fields, ['spotify', 'photo', 'genres']);
     assert.equal(details.before.photo, null);
     assert.equal(details.after.photo, 'https://i.scdn.co/image/30');
@@ -274,17 +276,32 @@ describe('spotify candidates and picks', { skip, concurrency: 1 }, () => {
       await seedFestival(pool, { id: 'fest-shared-b', date: '2020-01-01', sets: [{ id: 'shared-b', artist: 'Pick Shared', artists: [element] }] });
     });
     artistTable[id(37)] = spotifyArtist(37, 'Pick Shared');
-    const refused = await app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-shared-a', artist, id(37), false)).expect(200);
+    const refused = await app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-shared-a', artist, id(37), 0)).expect(200);
     assert.deepEqual([refused.body.data.results[0].status, refused.body.data.results[0].alsoOn], ['shared', 1]);
     assert.deepEqual((await artistRow(artist.id)).links, {}, 'nothing is written without the editor accepting');
     assert.deepEqual((await withPool((pool) => setRow(pool, 'shared-b'))).artists[0].links, {});
 
-    const accepted = await app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-shared-a', artist, id(37), true)).expect(200);
+    const accepted = await app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-shared-a', artist, id(37), 1)).expect(200);
     assert.equal(accepted.body.data.results[0].status, 'saved');
     assert.equal(accepted.body.data.results[0].festivalsUpdated, 2);
     for (const setId of ['shared-a', 'shared-b']) {
       assert.equal((await withPool((pool) => setRow(pool, setId))).artists[0].links.spotify, `https://open.spotify.com/artist/${id(37)}`, setId);
     }
+  });
+
+  test('picks: a pick confirmed for 1 festival is refused when the artist is now on 3, and writes nothing', async () => {
+    const artist = await createArtist(app, { name: 'Pick Grown' });
+    const element = elementOf(artist);
+    await withPool(async (pool) => {
+      for (const letter of ['a', 'b', 'c', 'd']) {
+        await seedFestival(pool, { id: `fest-grown-${letter}`, sets: [{ id: `grown-${letter}`, artist: 'Pick Grown', artists: [element] }] });
+      }
+    });
+    artistTable[id(39)] = spotifyArtist(39, 'Pick Grown');
+    const res = await app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-grown-a', artist, id(39), 1)).expect(200);
+    assert.deepEqual([res.body.data.results[0].status, res.body.data.results[0].alsoOn], ['shared', 3]);
+    assert.deepEqual((await artistRow(artist.id)).links, {});
+    assert.deepEqual((await withPool((pool) => setRow(pool, 'grown-d'))).artists[0].links, {});
   });
 
   test('picks: the shared check runs again under the locks, so a list that was out of date cannot spread a link', async () => {
@@ -301,7 +318,7 @@ describe('spotify candidates and picks', { skip, concurrency: 1 }, () => {
       // Another save holds the only festival the artist is on, so the pick waits for it.
       await holder.query('BEGIN');
       await lockFestivalAny(holder, 'fest-race-a');
-      const pending = app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-race-a', artist, id(38), false)).then((r: any) => r);
+      const pending = app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-race-a', artist, id(38), 0)).then((r: any) => r);
       const untouched = await artistRow(artist.id);
       // Wait until a backend really is blocked on a lock, then check that it wrote nothing while it waited.
       let blocked = false;

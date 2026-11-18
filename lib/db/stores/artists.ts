@@ -64,6 +64,8 @@ function retryTransaction(reason: string): Error {
 export interface ArtistActor {
   userId: string | null;
   ip?: string | null;
+  /** The caller writes its own audit row for the change (pickSpotify does, with the copies it rewrote). */
+  skipAudit?: boolean;
 }
 
 /** The audit row of a global artist change, written in the change's own transaction so the two never disagree. */
@@ -595,9 +597,9 @@ export function createArtistsStore(pool: Pool) {
     /**
      * Stores a Spotify artist the editor picked: the link and spotify_id, and the photo and genres
      * only where the artist has none. The copies in every festival follow, past ones too, so an
-     * artist on other festivals needs `acceptShared`. Whether it is shared is read again under the
-     * festival and artist locks: the list the editor saw may be old. Without `acceptShared` the
-     * answer is `shared` and nothing is written. `spotify` comes from Spotify, never from the client.
+     * artist on other festivals needs `acceptedAlsoOn`, the number of other festivals the editor
+     * confirmed. How many there are is read again under the festival and artist locks: the list the
+     * editor saw may be old. When there are more, the answer is `shared` and nothing is written. `spotify` comes from Spotify, never from the client.
      */
     async pickSpotify(
       id: string,
@@ -605,8 +607,9 @@ export function createArtistsStore(pool: Pool) {
         festivalId: string;
         expectedUpdatedAt: string;
         spotify: { spotifyId: string; photo: string | null; genres: string[] };
-        acceptShared: boolean;
+        acceptedAlsoOn: number;
         userId: string | null;
+        ip?: string | null;
       },
     ): Promise<
       | { status: 'saved'; artist: ArtistRecord; before: ArtistRecord; synced: SyncedFestival[] }
@@ -627,17 +630,30 @@ export function createArtistsStore(pool: Pool) {
           }
           const uses = (await artistUses(client, [id])).get(id) ?? [];
           const elsewhere = uses.filter((use) => use.festivalId !== input.festivalId).length;
-          if (elsewhere > 0 && !input.acceptShared) return { status: 'shared' as const, alsoOn: elsewhere };
+          if (elsewhere > input.acceptedAlsoOn) return { status: 'shared' as const, alsoOn: elsewhere };
           const spotifyUrl = `https://open.spotify.com/artist/${input.spotify.spotifyId}`;
           await assertNoClash(client, id, { key: before.name_key, label: before.label, spotifyId: input.spotify.spotifyId });
-          const filled = await this.fillEmpty(client, id, { spotifyUrl, photo: input.spotify.photo ?? undefined, genres: input.spotify.genres }, { userId: input.userId });
+          const filled = await this.fillEmpty(client, id, { spotifyUrl, photo: input.spotify.photo ?? undefined, genres: input.spotify.genres }, { userId: input.userId, ip: input.ip, skipAudit: true });
           if (!filled || filled.skippedSpotify) throw retryTransaction('the Spotify link could not be stored');
-          await client.query('UPDATE artists SET updated_by = $2 WHERE id = $1', [id, input.userId]);
           const artist = filled.artist;
           // A save may have put the artist on a festival after the first read, before it could lock the artist.
           const again = await festivalIdsUsing(client, id);
           if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list the artist');
           const synced = await rewriteCopies(client, festivalIds, artist);
+          // A pick links Spotify and also fills an empty photo or genre list: audit what really changed.
+          await insertArtistAudit(client, id, { userId: input.userId, ip: input.ip }, {
+            name: artist.name,
+            fields: [
+              ...(before.links?.spotify !== artist.links?.spotify ? ['spotify'] : []),
+              ...(before.photo !== artist.photo ? ['photo'] : []),
+              ...(JSON.stringify(before.genres ?? []) !== JSON.stringify(artist.genres ?? []) ? ['genres'] : []),
+            ],
+            via: 'spotify-pick',
+            festivalsUpdated: synced.length,
+            before: { name: before.name, label: before.label, links: before.links ?? {}, photo: before.photo ?? null, genres: before.genres ?? [] },
+            after: { name: artist.name, label: artist.label, links: artist.links ?? {}, photo: artist.photo ?? null, genres: artist.genres ?? [] },
+            festivalIds: synced.slice(0, 200).map((festival) => festival.id),
+          });
           return { status: 'saved' as const, artist, before, synced };
         });
       } catch (error: any) {
@@ -818,12 +834,14 @@ export function createArtistsStore(pool: Pool) {
           WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
         [id, JSON.stringify(links), spotifyId, photo, JSON.stringify(genres), actor.userId],
       );
-      await insertArtistAudit(client, id, actor, {
-        source: 'fill',
-        name: row.name,
-        before: { links: row.links ?? {}, photo: row.photo, genres: row.genres ?? [] },
-        after: { links, photo, genres },
-      });
+      if (!actor.skipAudit) {
+        await insertArtistAudit(client, id, actor, {
+          source: 'fill',
+          name: row.name,
+          before: { links: row.links ?? {}, photo: row.photo, genres: row.genres ?? [] },
+          after: { links, photo, genres },
+        });
+      }
       return { artist: updated[0] as ArtistRecord, skippedSpotify, changed: true };
     },
   };
