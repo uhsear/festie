@@ -109,7 +109,7 @@ export function renderInviteJoinPage({
   const title = escapeHtml(`Join ${crewName} on Festie`);
   const code = encodeURIComponent(inviteCode);
   const pageUrl = escapeHtml(`${origin}/join/${code}`);
-  const joinUrl = escapeHtml(`${origin}/?joinCrew=${code}`);
+  const joinUrl = escapeHtml(`${origin}/?joinCrew=${code}&ref=crew-invite`);
   const saveLink = dates
     ? `      <a href="${escapeHtml(`${origin}/join/${code}/save.ics`)}" class="invite-link invite-save" download>Save for later</a>
       <p class="invite-footer">Adds the festival dates and this invite to your calendar.</p>
