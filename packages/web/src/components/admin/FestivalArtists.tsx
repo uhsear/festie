@@ -4,15 +4,14 @@ import {
   changeEverywhereText,
   changedArtistFrom,
   listFestivalArtists,
-  runSpotifyBackfill,
   searchArtists,
   updateArtist,
 } from '@festie/shared/services';
-import type { AdminArtistRow, SpotifyBackfillResult } from '@festie/shared/services';
-import { backfillSummary, isSafeExternalUrl, platformLabel } from '@festie/shared/utils';
-import { useToast } from '../../lib/toastContext';
+import type { AdminArtistRow } from '@festie/shared/services';
+import { isSafeExternalUrl, platformLabel } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import SpotifyCandidates from './SpotifyCandidates';
 
 interface FestivalArtistsProps {
   festivalId: string;
@@ -43,10 +42,9 @@ const SEARCH_DELAY_MS = 300;
 /**
  * Admin: one screen for every artist task. An edit changes every festival that lists the artist,
  * past ones too, so the first save of an artist on other festivals asks "Change it everywhere?".
- * Each row saves on its own.
+ * Each row saves on its own. "Find Spotify links" opens the candidate picker: nothing is linked without a pick.
  */
 export default function FestivalArtists({ festivalId, festivalName, onClose }: FestivalArtistsProps) {
-  const { toastError } = useToast();
   const [artists, setArtists] = useState<AdminArtistRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [reloading, setReloading] = useState(false);
@@ -60,8 +58,6 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [findOpen, setFindOpen] = useState(false);
-  const [finding, setFinding] = useState(false);
-  const [result, setResult] = useState<SpotifyBackfillResult | null>(null);
 
   // Each load takes a number. A reply that arrives after a newer load started is dropped.
   const latestLoad = useRef(0);
@@ -140,20 +136,6 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
     else void save(artist);
   };
 
-  const findMissing = async () => {
-    setFindOpen(false);
-    setFinding(true);
-    setResult(null);
-    try {
-      setResult(await runSpotifyBackfill(festivalId));
-      await load();
-    } catch (err) {
-      toastError(err, "Couldn't search Spotify. Try again.");
-    } finally {
-      setFinding(false);
-    }
-  };
-
   const shown = useMemo(() => artists.filter((a) => !noLinksOnly || a.linkCount === 0), [artists, noLinksOnly]);
   const linked = artists.filter((a) => a.linkCount > 0).length;
   const confirming = artists.find((a) => a.id === confirmId) ?? null;
@@ -182,8 +164,8 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         <Button size="sm" variant={noLinksOnly ? 'primary' : 'secondary'} aria-pressed={noLinksOnly} onClick={() => setNoLinksOnly((v) => !v)}>
           No links
         </Button>
-        <Button size="sm" disabled={finding} onClick={() => setFindOpen(true)}>
-          {finding ? 'Searching Spotify…' : 'Find missing links'}
+        <Button size="sm" disabled={findOpen} onClick={() => setFindOpen(true)}>
+          Find Spotify links
         </Button>
       </div>
 
@@ -198,18 +180,7 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         />
       )}
 
-      {result && (
-        <div role="status" className="rounded-lg border border-glass-border bg-bg-card/60 p-3 text-sm text-text-primary">
-          <p>{backfillSummary(result)}</p>
-          {result.unmatched?.length > 0 && (
-            <ul className="mt-1 list-disc pl-5 text-text-secondary">
-              {result.unmatched.map((n) => (
-                <li key={n}>{n}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      {findOpen && <SpotifyCandidates festivalId={festivalId} onApplied={() => void refresh()} onClose={() => setFindOpen(false)} />}
 
       {loadError && (
         <div role="alert" className="flex items-center gap-3 text-sm text-text-secondary">
@@ -349,15 +320,6 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
           setConfirmId(null);
           if (target) void save(target);
         }}
-      />
-      <ConfirmDialog
-        open={findOpen}
-        onOpenChange={setFindOpen}
-        title="Find missing Spotify links?"
-        description="Festie searches Spotify for artists on this festival only that have no Spotify link and adds the best match. Artists on other festivals are skipped. Links you already have stay as they are."
-        confirmLabel="Search Spotify"
-        busy={finding}
-        onConfirm={findMissing}
       />
     </div>
   );

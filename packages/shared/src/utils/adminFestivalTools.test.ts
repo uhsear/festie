@@ -1,24 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
-  backfillSummary,
   setEngagementLabel,
   parseLatLng,
 } from './adminFestivalTools';
-
-describe('backfillSummary', () => {
-  const base = { updated: 41, skipped: 0, total: 52 };
-  it('handles each case', () => {
-    expect(backfillSummary({ ...base, total: 0, unmatched: [] })).toBe('Every set already has a link.');
-    expect(backfillSummary({ ...base, unmatched: [] })).toBe('Linked 41 of 52 sets.');
-    expect(backfillSummary({ ...base, unmatched: ['X'] })).toBe('Linked 41 of 52 sets. No match for 1 artist:');
-    expect(backfillSummary({ ...base, unmatched: Array(11).fill('X') })).toBe(
-      'Linked 41 of 52 sets. No match for 11 artists:',
-    );
-    expect(backfillSummary({ ...base, unmatched: [], skippedShared: ['A', 'B'] })).toBe(
-      'Linked 41 of 52 sets. 2 artists are on other festivals. Add their links on the Artists tab.',
-    );
-  });
-});
 
 describe('setEngagementLabel', () => {
   it('formats counts', () => {

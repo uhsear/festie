@@ -6,30 +6,10 @@ import { api, ApiClientError, getApiBase, getAuthToken } from './api';
 
 export type SetEngagementMap = Record<string, { picks: number; reminders: number }>;
 
-export interface SpotifyBackfillResult {
-  updated: number;
-  skipped: number;
-  total: number;
-  unmatched: string[];
-  /** Artists that are on other festivals too: left alone, edited on the Artists tab. */
-  skippedShared?: string[];
-  message?: string;
-}
-
 const enc = encodeURIComponent;
 
 export function getSetEngagement(festivalId: string): Promise<SetEngagementMap> {
   return api.get<SetEngagementMap>(`/admin/festivals/${enc(festivalId)}/set-engagement`);
-}
-
-/** A whole-festival Spotify search can outlast the 15 s default timeout. */
-export function runSpotifyBackfill(
-  festivalId: string,
-  opts?: { setIds?: string[] },
-): Promise<SpotifyBackfillResult> {
-  return api.post<SpotifyBackfillResult>(`/admin/festivals/${enc(festivalId)}/backfill-spotify`, opts ?? {}, {
-    timeoutMs: 120_000,
-  });
 }
 
 /** Raw fetch (multipart), headers built as the avatar upload does. */

@@ -63,6 +63,55 @@ export interface ArtistImpactFestival {
   firstDate: string | null;
 }
 
+export interface SpotifyCandidate {
+  spotifyId: string;
+  spotifyUrl: string;
+  name: string;
+  imageUrl: string | null;
+  followers: number | null;
+  genres: string[];
+  /** The name equals the artist's name. */
+  exact: boolean;
+  /** Another artist already holds this Spotify id, for example "Avello (NL)". The candidate cannot be picked. */
+  linkedTo: string | null;
+}
+
+export interface SpotifyCandidateRow {
+  artist: AdminArtistRow;
+  candidates: SpotifyCandidate[];
+  /** Exactly one candidate has the exact name, no other artist holds it, and no other artist has the name. */
+  singleExact: boolean;
+}
+
+export interface SpotifyCandidatesResult {
+  artists: SpotifyCandidateRow[];
+  /** Artists without a Spotify link that this run left out. Run it again after these have links. */
+  notSearched: number;
+  /** Artists whose search Spotify refused. They show no candidates: try again. */
+  searchFailed: number;
+}
+
+export type SpotifyPickStatus = 'saved' | 'shared' | 'changed' | 'taken' | 'unavailable' | 'error';
+
+export interface SpotifyPickResult {
+  artistId: string;
+  status: SpotifyPickStatus;
+  message?: string;
+  /** `shared`: the other festivals that list the artist, past and archived ones too. */
+  alsoOn?: number;
+  /** `saved`: the stored artist. `changed`: the current artist. */
+  artist?: AdminArtist;
+  festivalsUpdated?: number;
+}
+
+export interface SpotifyPick {
+  artistId: string;
+  expectedUpdatedAt: string;
+  spotifyId: string;
+  /** The editor confirmed "Change everywhere". The server checks again under its locks. */
+  acceptShared?: boolean;
+}
+
 export const ARTIST_CHANGED = 'ARTIST_CHANGED';
 export const ARTIST_EXISTS = 'ARTIST_EXISTS';
 
@@ -98,6 +147,25 @@ export async function updateArtist(
 export async function getArtistImpact(id: string): Promise<ArtistImpactFestival[]> {
   const data = await api.get<{ festivals: ArtistImpactFestival[] }>(`/admin/artists/${encodeURIComponent(id)}/impact`);
   return data.festivals;
+}
+
+/** The top 3 Spotify candidates for each artist on the festival that has no Spotify link. Writes nothing. */
+export function findSpotifyCandidates(festivalId: string): Promise<SpotifyCandidatesResult> {
+  return api.post<SpotifyCandidatesResult>('/admin/artists/spotify-candidates', { festivalId }, { timeoutMs: 120_000 });
+}
+
+/** Stores the picks the editor made. Each pick answers on its own row. */
+export async function pickSpotifyCandidates(festivalId: string, picks: SpotifyPick[]): Promise<SpotifyPickResult[]> {
+  const data = await api.post<{ results: SpotifyPickResult[] }>('/admin/artists/spotify-picks', { festivalId, picks }, { timeoutMs: 120_000 });
+  return data.results;
+}
+
+/** "1.2M followers". Null when Spotify gave no count. */
+export function followersText(followers: number | null): string | null {
+  if (followers === null) return null;
+  const short =
+    followers >= 1_000_000 ? `${+(followers / 1_000_000).toFixed(1)}M` : followers >= 1_000 ? `${+(followers / 1_000).toFixed(1)}K` : String(followers);
+  return `${short} ${followers === 1 ? 'follower' : 'followers'}`;
 }
 
 /** The current artist that the server sent with a 409 ARTIST_CHANGED, or null for any other error. */

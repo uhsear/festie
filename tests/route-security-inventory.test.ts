@@ -231,7 +231,15 @@ test('artist routes stay admin only, validated and rate limited', () => {
   const artistRoutes = routes.filter((r) => r.file === 'artists.ts');
   assert.deepEqual(
     artistRoutes.map((r) => r.key).sort(),
-    ['artists.ts GET /', 'artists.ts GET /:id/impact', 'artists.ts PATCH /:id', 'artists.ts POST /', 'artists.ts POST /match'],
+    [
+      'artists.ts GET /',
+      'artists.ts GET /:id/impact',
+      'artists.ts PATCH /:id',
+      'artists.ts POST /',
+      'artists.ts POST /match',
+      'artists.ts POST /spotify-candidates',
+      'artists.ts POST /spotify-picks',
+    ],
   );
   for (const r of artistRoutes) {
     assert.ok(isAdmin(r), `${r.key} must be mounted behind adminAuth in server.ts`);
@@ -239,4 +247,6 @@ test('artist routes stay admin only, validated and rate limited', () => {
   }
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts PATCH /:id')!, /rateLimit\(60, 'artist-update'\)/));
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /match')!, /rateLimit\(60, 'artist-match'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-candidates')!, /rateLimit\(6, 'artist-spotify-search'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-picks')!, /rateLimit\(20, 'artist-spotify-pick'\)/));
 });

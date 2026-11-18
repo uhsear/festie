@@ -724,6 +724,29 @@ export const artistListQuerySchema = z.object({
 });
 export type ArtistListQuery = z.infer<typeof artistListQuerySchema>;
 
+// "Find Spotify links": the candidates for the artists on one festival, and the editor's picks.
+export const artistSpotifyCandidatesSchema = z.object({ festivalId: identifier });
+export type ArtistSpotifyCandidatesInput = z.infer<typeof artistSpotifyCandidatesSchema>;
+
+export const artistSpotifyPicksSchema = z.object({
+  festivalId: identifier,
+  picks: z
+    .array(
+      z.object({
+        artistId: identifier,
+        // The artist's updatedAt the editor loaded (millisecond precision).
+        expectedUpdatedAt: z.string().datetime({ offset: true }),
+        // Spotify's 22-character artist id. The server builds the link and reads the photo and genres from Spotify.
+        spotifyId: z.string().regex(/^[A-Za-z0-9]{22}$/, 'Not a Spotify artist id'),
+        // The editor confirmed that the artist is on other festivals too. The server checks again under the locks.
+        acceptShared: z.boolean().optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type ArtistSpotifyPicksInput = z.infer<typeof artistSpotifyPicksSchema>;
+
 // Spotify backfill body. All optional: old mobile bundles post no body.
 export const spotifyBackfillSchema = z
   .object({
@@ -1731,6 +1754,8 @@ export const schemas = {
   artistCreate: artistCreateSchema,
   artistUpdate: artistUpdateSchema,
   artistListQuery: artistListQuerySchema,
+  artistSpotifyCandidates: artistSpotifyCandidatesSchema,
+  artistSpotifyPicks: artistSpotifyPicksSchema,
   spotifyBackfill: spotifyBackfillSchema,
   festivalAnnouncement: festivalAnnouncementSchema,
   crewHomeBase: crewHomeBaseSchema,

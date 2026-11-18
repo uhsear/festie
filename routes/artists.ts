@@ -3,7 +3,18 @@
 
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
-import { ArtistError, isCurrentOrUpcoming, publicArtist, type SyncedFestival } from '../lib/db/stores/artists.js';
+import {
+  ArtistError,
+  artistTitle,
+  isCurrentOrUpcoming,
+  liveArtistsBySpotifyId,
+  publicArtist,
+  type SyncedFestival,
+} from '../lib/db/stores/artists.js';
+import * as spotify from '../lib/spotify.js';
+
+/** Artists searched per "Find Spotify links" run. The rest wait for the next run, after these have a link. */
+const MAX_CANDIDATE_ARTISTS = 150;
 
 /**
  * Artist routes, admin only, mounted at /api/v1/admin/artists. An edit changes every festival that
@@ -26,6 +37,7 @@ export default function createArtistsRoutes(deps: any) {
     ErrorCodes,
     getRequestIp,
     invalidateFestivalCache,
+    config,
   } = deps;
 
   const router = express.Router();
@@ -114,7 +126,133 @@ export default function createArtistsRoutes(deps: any) {
     }
   });
 
-  router.get('/:id/impact', validateParams(schemas.genericIdParams), async (req: any, res: any) => {
+  /** The two Spotify routes need the client-credentials keys. Sends the 400 and returns it when they are not set. */
+  function spotifyKeysMissing(res: any) {
+    if (config.SPOTIFY_CLIENT_ID && config.SPOTIFY_CLIENT_SECRET) return null;
+    return sendError(res, 400, 'Spotify API credentials not configured', ErrorCodes.INVALID_INPUT);
+  }
+
+  /**
+   * "Find Spotify links": the top 3 Spotify candidates for each artist on the festival that has no
+   * Spotify link. Writes nothing. A row is `singleExact` when exactly one candidate has the artist's
+   * name and no other artist holds its Spotify id, and the name is not shared with another artist:
+   * same-name artists are always picked by hand.
+   */
+  router.post(
+    '/spotify-candidates',
+    rateLimit(6, 'artist-spotify-search'),
+    validate(schemas.artistSpotifyCandidates),
+    async (req: any, res: any) => {
+      try {
+        const missing = spotifyKeysMissing(res);
+        if (missing) return missing;
+        const { festivalId } = req.validatedBody;
+        const rows = (await stores.artists.list({ festivalId, limit: 1000 })).filter((row: any) => !row.links?.spotify);
+        const searched = rows.slice(0, MAX_CANDIDATE_ARTISTS);
+        const found: Map<string, any[]> = await spotify.bulkSearchCandidates(
+          [...new Set(searched.map((row: any) => row.name))],
+          config.SPOTIFY_CLIENT_ID,
+          config.SPOTIFY_CLIENT_SECRET,
+          { log },
+        );
+        const heldBy = await liveArtistsBySpotifyId(
+          stores.pool,
+          [...new Set([...found.values()].flat().map((candidate: any) => candidate.spotifyId))],
+        );
+        let searchFailed = 0;
+        const artists = searched.map((artist: any) => {
+          const hits = found.get(artist.name);
+          if (!hits) searchFailed++;
+          const candidates = (hits ?? []).map((candidate: any) => {
+            const holder = heldBy.get(candidate.spotifyId);
+            return { ...candidate, linkedTo: holder ? artistTitle(holder) : null };
+          });
+          const exact = candidates.filter((candidate: any) => candidate.exact);
+          const singleExact = !artist.sameName && exact.length === 1 && exact[0].linkedTo === null;
+          return { artist, candidates, singleExact };
+        });
+        return sendSuccess(res, { artists, notSearched: rows.length - searched.length, searchFailed });
+      } catch (error: any) {
+        return sendArtistError(res, error, 'search Spotify');
+      }
+    },
+  );
+
+  /**
+   * The editor's Spotify picks, one artist at a time, each in its own transaction. The client sends
+   * only the Spotify id: the link, photo and genres come from Spotify. A pick that cannot be applied
+   * (stale token, taken id, artist now on other festivals) is reported on its own row, and the rest still apply.
+   */
+  router.post(
+    '/spotify-picks',
+    rateLimit(20, 'artist-spotify-pick'),
+    validate(schemas.artistSpotifyPicks),
+    async (req: any, res: any) => {
+      try {
+        const missing = spotifyKeysMissing(res);
+        if (missing) return missing;
+        const { festivalId, picks } = req.validatedBody;
+        const details: Map<string, any> = await spotify.getArtistsByIds(
+          [...new Set<string>(picks.map((pick: any) => pick.spotifyId))],
+          config.SPOTIFY_CLIENT_ID,
+          config.SPOTIFY_CLIENT_SECRET,
+          { log },
+        );
+        const results: any[] = [];
+        const synced = new Map<string, SyncedFestival>();
+        for (const pick of picks) {
+          const result: any = { artistId: pick.artistId };
+          const spotifyArtist = details.get(pick.spotifyId);
+          if (!spotifyArtist) {
+            results.push({ ...result, status: 'unavailable', message: 'Spotify did not return that artist. Try again.' });
+            continue;
+          }
+          try {
+            const outcome = await stores.artists.pickSpotify(pick.artistId, {
+              festivalId,
+              expectedUpdatedAt: pick.expectedUpdatedAt,
+              spotify: { spotifyId: pick.spotifyId, photo: spotifyArtist.imageUrl, genres: spotifyArtist.genres },
+              acceptShared: pick.acceptShared === true,
+              userId: req.user?.userId ?? null,
+            });
+            if (outcome.status === 'shared') {
+              results.push({ ...result, status: 'shared', alsoOn: outcome.alsoOn });
+              continue;
+            }
+            for (const festival of outcome.synced) {
+              const have = synced.get(festival.id);
+              synced.set(festival.id, have ? { ...have, setIds: [...have.setIds, ...festival.setIds] } : festival);
+            }
+            audit(AUDIT_ACTIONS.ARTIST_UPDATED, pick.artistId, req, {
+              name: outcome.artist.name,
+              fields: ['spotify'],
+              via: 'spotify-pick',
+              festivalsUpdated: outcome.synced.length,
+              before: { name: outcome.before.name, label: outcome.before.label, links: outcome.before.links ?? {} },
+              after: { name: outcome.artist.name, label: outcome.artist.label, links: outcome.artist.links ?? {} },
+              festivalIds: outcome.synced.slice(0, 200).map((festival: SyncedFestival) => festival.id),
+            });
+            results.push({ ...result, status: 'saved', artist: publicArtist(outcome.artist), festivalsUpdated: outcome.synced.length });
+          } catch (error: any) {
+            if (!(error instanceof ArtistError)) {
+              log.error('spotify pick failed', { artistId: pick.artistId, error: error?.message });
+              results.push({ ...result, status: 'error', message: "Couldn't save this pick. Try again." });
+            } else if (error.code === 'ARTIST_CHANGED') {
+              results.push({ ...result, status: 'changed', message: error.message, artist: error.details?.artist });
+            } else {
+              results.push({ ...result, status: error.code === 'ARTIST_EXISTS' ? 'taken' : 'error', message: error.message });
+            }
+          }
+        }
+        await afterSync([...synced.values()]);
+        return sendSuccess(res, { results });
+      } catch (error: any) {
+        return sendArtistError(res, error, 'save the Spotify picks');
+      }
+    },
+  );
+
+  router.get('/:id/impact',validateParams(schemas.genericIdParams), async (req: any, res: any) => {
     try {
       return sendSuccess(res, await stores.artists.impact(req.validatedParams.id));
     } catch (error: any) {

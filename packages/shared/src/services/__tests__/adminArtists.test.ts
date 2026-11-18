@@ -5,8 +5,11 @@ import {
   changeEverywhereText,
   changedArtistFrom,
   createArtist,
+  findSpotifyCandidates,
+  followersText,
   listFestivalArtists,
   matchArtists,
+  pickSpotifyCandidates,
   updateArtist,
 } from '../adminArtists';
 
@@ -78,5 +81,36 @@ describe('artist copy', () => {
     expect(changeEverywhereText('Avello', 1)).toBe('Avello is also on 1 festival, including past ones. Change it everywhere?');
     expect(artistTitle({ name: 'HOL', label: 'UK' })).toBe('HOL (UK)');
     expect(artistTitle({ name: 'HOL', label: '' })).toBe('HOL');
+  });
+});
+
+describe('Spotify candidates', () => {
+  it('asks for the candidates of one festival and sends nothing else', async () => {
+    const spy = vi.fn(async () => res(200, { data: { artists: [], notSearched: 0, searchFailed: 0 }, error: null }));
+    vi.stubGlobal('fetch', spy);
+    await expect(findSpotifyCandidates('f1')).resolves.toEqual({ artists: [], notSearched: 0, searchFailed: 0 });
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain('/admin/artists/spotify-candidates');
+    expect(init.body).toBe(JSON.stringify({ festivalId: 'f1' }));
+  });
+
+  it('sends the picks with the artist token and only the Spotify id, and returns each row', async () => {
+    const spy = vi.fn(async () =>
+      res(200, { data: { results: [{ artistId: 'art-1', status: 'shared', alsoOn: 2 }] }, error: null }),
+    );
+    vi.stubGlobal('fetch', spy);
+    const picks = [{ artistId: 'art-1', expectedUpdatedAt: '2026-01-01T00:00:00.000Z', spotifyId: 'x'.repeat(22), acceptShared: false }];
+    await expect(pickSpotifyCandidates('f1', picks)).resolves.toEqual([{ artistId: 'art-1', status: 'shared', alsoOn: 2 }]);
+    const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(url).toContain('/admin/artists/spotify-picks');
+    expect(init.body).toBe(JSON.stringify({ festivalId: 'f1', picks }));
+  });
+
+  it('writes followers in short form', () => {
+    expect(followersText(null)).toBeNull();
+    expect(followersText(1)).toBe('1 follower');
+    expect(followersText(950)).toBe('950 followers');
+    expect(followersText(12_340)).toBe('12.3K followers');
+    expect(followersText(1_250_000)).toBe('1.3M followers');
   });
 });

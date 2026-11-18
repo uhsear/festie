@@ -6,14 +6,14 @@ const toastError = vi.fn();
 const listFestivalArtists = vi.fn();
 const searchArtists = vi.fn();
 const updateArtist = vi.fn();
-const runSpotifyBackfill = vi.fn();
+const findSpotifyCandidates = vi.fn();
 
 vi.mock('@festie/shared/services', async (orig) => ({
   ...(await orig<typeof import('@festie/shared/services')>()),
   listFestivalArtists: (...a: unknown[]) => listFestivalArtists(...a),
   searchArtists: (...a: unknown[]) => searchArtists(...a),
   updateArtist: (...a: unknown[]) => updateArtist(...a),
-  runSpotifyBackfill: (...a: unknown[]) => runSpotifyBackfill(...a),
+  findSpotifyCandidates: (...a: unknown[]) => findSpotifyCandidates(...a),
 }));
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError }) }));
 
@@ -119,15 +119,20 @@ describe('FestivalArtists', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Spotify track link');
   });
 
-  it('the No links filter and the Find missing links summary list skipped shared artists', async () => {
-    runSpotifyBackfill.mockResolvedValue({ updated: 1, skipped: 0, total: 2, unmatched: [], skippedShared: ['Cyclops'] });
+  it('the No links filter hides artists that have a link', async () => {
     await open();
     fireEvent.click(screen.getByRole('button', { name: 'No links' }));
     expect(screen.queryByText('Cyclops')).toBeNull();
-    fireEvent.click(screen.getByText('Find missing links'));
-    fireEvent.click(await screen.findByText('Search Spotify'));
-    await waitFor(() => expect(runSpotifyBackfill).toHaveBeenCalledWith('f1'));
-    expect(await screen.findByText('Linked 1 of 2 sets. 1 artist is on other festivals. Add their links on the Artists tab.')).toBeTruthy();
+  });
+
+  it('Find missing links is gone, and Find Spotify links opens the picker without linking anything', async () => {
+    findSpotifyCandidates.mockResolvedValue({ artists: [], notSearched: 0, searchFailed: 0 });
+    await open();
+    expect(screen.queryByText('Find missing links')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Find Spotify links' }));
+    await waitFor(() => expect(findSpotifyCandidates).toHaveBeenCalledWith('f1'));
+    expect(await screen.findByRole('region', { name: 'Find Spotify links' })).toBeTruthy();
+    expect(updateArtist).not.toHaveBeenCalled();
   });
 
   it('renames an artist through the Name field and shows a refused name on the row', async () => {

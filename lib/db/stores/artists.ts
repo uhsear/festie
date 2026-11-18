@@ -341,6 +341,19 @@ function applyChanges(current: ArtistRecord, changes: ArtistChanges) {
   return { name, label, links, spotifyId, key: artistNameKey(name) };
 }
 
+/** Throws the 409 ARTIST_CHANGED, with the current version, when the editor's token is not the row's updated_at. */
+async function assertFreshToken(client: any, row: ArtistRecord, expectedUpdatedAt: string) {
+  const { rows } = await client.query(
+    "SELECT date_trunc('milliseconds', $1::timestamptz) = date_trunc('milliseconds', $2::timestamptz) AS same",
+    [expectedUpdatedAt, row.updated_at],
+  );
+  if (!rows[0].same) {
+    throw new ArtistError(409, 'ARTIST_CHANGED', `Someone changed ${row.name} while you were editing. Here is the new version. Apply your change again.`, {
+      artist: publicArtist(row),
+    });
+  }
+}
+
 /** Another live artist that would clash with the next key and note, or Spotify id. Throws the 409. */
 async function assertNoClash(client: any, id: string, next: { key: string; label: string; spotifyId: string | null }) {
   const { rows: sameKey } = await client.query(
@@ -506,15 +519,7 @@ export function createArtistsStore(pool: Pool) {
             const survivor = (await client.query('SELECT name, label FROM artists WHERE id = $1', [before.merged_into])).rows[0];
             throw new ArtistError(409, 'ARTIST_CHANGED', `This artist was already merged into ${survivor ? shownName(survivor) : 'another artist'}.`);
           }
-          const { rows: tokenRows } = await client.query(
-            "SELECT date_trunc('milliseconds', $1::timestamptz) = date_trunc('milliseconds', $2::timestamptz) AS same",
-            [input.expectedUpdatedAt, before.updated_at],
-          );
-          if (!tokenRows[0].same) {
-            throw new ArtistError(409, 'ARTIST_CHANGED', `Someone changed ${before.name} while you were editing. Here is the new version. Apply your change again.`, {
-              artist: publicArtist(before),
-            });
-          }
+          await assertFreshToken(client, before, input.expectedUpdatedAt);
           const next = applyChanges(before, input.changes);
           await assertNoClash(client, id, next);
           const { rows: updated } = await client.query(
@@ -530,6 +535,59 @@ export function createArtistsStore(pool: Pool) {
           const copyChanged = before.name !== artist.name || JSON.stringify(before.links ?? {}) !== JSON.stringify(artist.links ?? {});
           const synced = copyChanged ? await rewriteCopies(client, festivalIds, artist) : [];
           return { artist, synced, before };
+        });
+      } catch (error: any) {
+        throw artistConflict(error) ?? error;
+      }
+    },
+
+    /**
+     * Stores a Spotify artist the editor picked: the link and spotify_id, and the photo and genres
+     * only where the artist has none. The copies in every festival follow, past ones too, so an
+     * artist on other festivals needs `acceptShared`. Whether it is shared is read again under the
+     * festival and artist locks: the list the editor saw may be old. Without `acceptShared` the
+     * answer is `shared` and nothing is written. `spotify` comes from Spotify, never from the client.
+     */
+    async pickSpotify(
+      id: string,
+      input: {
+        festivalId: string;
+        expectedUpdatedAt: string;
+        spotify: { spotifyId: string; photo: string | null; genres: string[] };
+        acceptShared: boolean;
+        userId: string | null;
+      },
+    ): Promise<
+      | { status: 'saved'; artist: ArtistRecord; before: ArtistRecord; synced: SyncedFestival[] }
+      | { status: 'shared'; alsoOn: number }
+    > {
+      try {
+        return await withTransactionRetry(pool, async (client) => {
+          const festivalIds = await festivalIdsUsing(client, id);
+          for (const festivalId of festivalIds) await lockFestivalAny(client, festivalId);
+          const { rows } = await client.query(`SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 FOR UPDATE`, [id]);
+          const before = rows[0] as ArtistRecord | undefined;
+          if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
+          if (before.merged_into) throw new ArtistError(409, 'ARTIST_CHANGED', 'This artist was already merged into another artist.');
+          await assertFreshToken(client, before, input.expectedUpdatedAt);
+          // A pick never replaces a link: an artist that has one is changed on its row, not here.
+          if (before.links?.spotify) {
+            throw new ArtistError(409, 'ARTIST_CHANGED', `${before.name} already has a Spotify link.`, { artist: publicArtist(before) });
+          }
+          const uses = (await artistUses(client, [id])).get(id) ?? [];
+          const elsewhere = uses.filter((use) => use.festivalId !== input.festivalId).length;
+          if (elsewhere > 0 && !input.acceptShared) return { status: 'shared' as const, alsoOn: elsewhere };
+          const spotifyUrl = `https://open.spotify.com/artist/${input.spotify.spotifyId}`;
+          await assertNoClash(client, id, { key: before.name_key, label: before.label, spotifyId: input.spotify.spotifyId });
+          const filled = await this.fillEmpty(client, id, { spotifyUrl, photo: input.spotify.photo ?? undefined, genres: input.spotify.genres });
+          if (!filled || filled.skippedSpotify) throw retryTransaction('the Spotify link could not be stored');
+          await client.query('UPDATE artists SET updated_by = $2 WHERE id = $1', [id, input.userId]);
+          const artist = filled.artist;
+          // A save may have put the artist on a festival after the first read, before it could lock the artist.
+          const again = await festivalIdsUsing(client, id);
+          if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list the artist');
+          const synced = await rewriteCopies(client, festivalIds, artist);
+          return { status: 'saved' as const, artist, before, synced };
         });
       } catch (error: any) {
         throw artistConflict(error) ?? error;
@@ -636,8 +694,8 @@ export function createArtistsStore(pool: Pool) {
     },
 
     /**
-     * Fills empty fields of artists, inside the caller's transaction. Used by "Find missing links" for
-     * artists that sit on one festival only, so the caller rewrites that festival's other copies (see rewriteCopies). A Spotify id that another
+     * Fills empty fields of artists, inside the caller's transaction. Used by pickSpotify and by the old
+     * "Find missing links" route (artists that sit on one festival only), so the caller rewrites the other copies (see rewriteCopies). A Spotify id that another
      * artist holds is left out and reported. Never overwrites a link.
      */
     async fillEmpty(

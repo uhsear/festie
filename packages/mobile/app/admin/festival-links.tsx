@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, ActivityIndicator, Linking } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Linking } from 'react-native';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -7,12 +7,11 @@ import {
   changeEverywhereText,
   changedArtistFrom,
   listFestivalArtists,
-  runSpotifyBackfill,
   updateArtist,
 } from '@festie/shared/services';
 import type { AdminArtistRow, ArtistChanges } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
-import { backfillSummary, isSafeExternalUrl, platformLabel } from '@festie/shared/utils';
+import { isSafeExternalUrl, platformLabel } from '@festie/shared/utils';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import { ConfirmDialog, LabeledTextInput } from '../../components/admin';
@@ -23,12 +22,12 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  * rows with no links first. Tap a row to add or remove a link or change the note. An edit changes
  * every festival that lists the artist, past ones too, so the first save of an artist on other
  * festivals asks "Change it everywhere?". Each row saves on its own. It is a separate screen from
- * the festival editor, so a backfill can never reload an editor that holds unsaved edits.
+ * the festival editor. Spotify candidates are picked on the web: mobile has no picker.
  *
  *   ?id=<festivalId>  (required)
  */
 
-type Notice = { text: string; names?: string[]; error?: boolean };
+type Notice = { text: string; error?: boolean };
 interface Draft {
   name: string;
   addLink: string;
@@ -37,6 +36,8 @@ interface Draft {
 }
 
 const HEADER_TITLE = 'Artists';
+/** Mobile has no Spotify picker: the candidates and "None of these" are on the web Artists screen. */
+const PICK_ON_WEB = 'Pick the artist on the web. Open Artists there and choose Find Spotify links.';
 const emptyDraft = (artist: AdminArtistRow): Draft => ({ name: artist.name, addLink: '', label: artist.label, removed: [] });
 const hasChanges = (artist: AdminArtistRow, draft: Draft) =>
   draft.addLink.trim() !== '' ||
@@ -65,8 +66,7 @@ export default function FestivalArtistsScreen() {
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [confirmId, setConfirmId] = useState<string | null>(null);
-  const [findOpen, setFindOpen] = useState(false);
-  // Key of the running request: 'all' or 'save:<artistId>'.
+  // Key of the running request: 'save:<artistId>'.
   const [busy, setBusy] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -150,21 +150,6 @@ export default function FestivalArtistsScreen() {
     else void save(artist);
   };
 
-  const findMissing = async () => {
-    if (!festivalId) return;
-    setBusy('all');
-    setNotice(null);
-    try {
-      const result = await runSpotifyBackfill(festivalId);
-      setNotice({ text: backfillSummary(result), names: result.unmatched });
-      await load();
-    } catch (err) {
-      setNotice({ text: errorText(err, "Couldn't search Spotify. Try again."), error: true });
-    } finally {
-      setBusy(null);
-    }
-  };
-
   if (!isAdmin) {
     return (
       <View style={styles.screen}>
@@ -214,8 +199,6 @@ export default function FestivalArtistsScreen() {
     );
   }
 
-  const searchingAll = busy === 'all';
-
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: HEADER_TITLE, headerShown: true }} />
@@ -254,26 +237,11 @@ export default function FestivalArtistsScreen() {
           ))}
         </View>
 
-        <TouchableOpacity
-          onPress={() => setFindOpen(true)}
-          disabled={busy !== null}
-          style={[styles.primaryBtn, busy !== null ? styles.btnDisabled : null]}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityState={{ busy: searchingAll, disabled: busy !== null }}
-        >
-          {searchingAll ? <ActivityIndicator size="small" color={t.colors.text.onLightAccent} /> : null}
-          <Text style={styles.primaryBtnText}>{searchingAll ? 'Searching Spotify…' : 'Find missing links'}</Text>
-        </TouchableOpacity>
+        <Text style={styles.emptyHint}>{PICK_ON_WEB}</Text>
 
         {notice ? (
           <View style={styles.card} accessibilityLiveRegion="polite">
             <Text style={[styles.noticeText, notice.error ? styles.noticeError : null]}>{notice.text}</Text>
-            {notice.names?.map((name) => (
-              <Text key={name} style={styles.noticeName}>
-                {`• ${name}`}
-              </Text>
-            ))}
           </View>
         ) : null}
 
@@ -390,17 +358,6 @@ export default function FestivalArtistsScreen() {
           if (target) void save(target);
         }}
       />
-      <ConfirmDialog
-        visible={findOpen}
-        title="Find missing Spotify links?"
-        message="Festie searches Spotify for artists on this festival only that have no Spotify link and adds the best match. Artists on other festivals are skipped. Links you already have stay as they are."
-        confirmLabel="Search Spotify"
-        onCancel={() => setFindOpen(false)}
-        onConfirm={() => {
-          setFindOpen(false);
-          void findMissing();
-        }}
-      />
     </View>
   );
 }
@@ -446,19 +403,6 @@ const useStyles = makeStyles((t) => ({
   chipTextActive: {
     color: t.colors.text.onLightAccent,
   },
-  primaryBtn: {
-    minHeight: 48,
-    flexDirection: 'row',
-    gap: t.spacing[2],
-    borderRadius: t.radii.default,
-    backgroundColor: t.colors.accent.aqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  primaryBtnText: {
-    ...typeStyle('body', 600),
-    color: t.colors.text.onLightAccent,
-  },
   secondaryBtn: {
     minHeight: 44,
     paddingHorizontal: t.spacing[3],
@@ -489,10 +433,6 @@ const useStyles = makeStyles((t) => ({
   },
   noticeError: {
     color: t.colors.accent.coral,
-  },
-  noticeName: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
   },
   emptyHint: {
     ...typeStyle('caption'),
