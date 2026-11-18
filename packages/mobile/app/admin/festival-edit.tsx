@@ -78,7 +78,8 @@ import {
   type FestivalIssue,
   type ScheduleNotice,
 } from '@festie/shared/utils';
-import type { Artist, FestivalMapConfig } from '@festie/shared/types';
+import type { Artist, FestivalMapConfig, LineupEntry } from '@festie/shared/types';
+import { announcedActsLine } from '../../lib/lineupView';
 
 /**
  * Admin — Festival editor (native UI parity for the web FestivalEditForm →
@@ -127,6 +128,8 @@ interface FestivalDetail {
   b2bSeparator?: string;
   updatedAt?: string;
   mapConfig?: FestivalMapConfig | null;
+  /** The announced lineup. Web edits it; this editor only reads it and never sends it back. */
+  lineup?: LineupEntry[];
   stages?: { id?: string; name?: string; color?: string; latitude?: number | null; longitude?: number | null }[];
   days?: {
     id?: string;
@@ -243,6 +246,7 @@ export default function FestivalEditScreen() {
     null,
   );
   const [checklist, setChecklist] = useState<ChecklistItem[]>([]);
+  const [announcedLine, setAnnouncedLine] = useState<string | null>(null);
   const [issues, setIssues] = useState<FestivalIssue[]>(NO_ISSUES);
   const [banner, setBanner] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
@@ -319,6 +323,7 @@ export default function FestivalEditScreen() {
         updatedByUsername: full.updatedByUsername ?? null,
       });
       setChecklist(full.checklist ?? []);
+      setAnnouncedLine(announcedActsLine(full.lineup));
       setIssues(NO_ISSUES);
       setUpdatedAt(full.updatedAt ?? null);
       setArtistDrafts({});
@@ -979,6 +984,8 @@ export default function FestivalEditScreen() {
               </TouchableOpacity>
             ) : null}
           </View>
+
+          {announcedLine ? <Text style={styles.emptyHint}>{announcedLine}</Text> : null}
 
           {/* Days & Artists */}
           <SectionLabel>Days &amp; artists</SectionLabel>
