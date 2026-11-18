@@ -28,6 +28,7 @@ const counts = (over: Record<string, number> = {}) => ({
   changed: 0,
   unchanged: 0,
   error: 0,
+  skipped: 0,
   newStages: 0,
   newDays: 0,
   missingFromFile: 0,
@@ -130,6 +131,55 @@ describe('LineupImport', () => {
     expect(await screen.findByRole('button', { name: 'Approve' })).toBeEnabled();
   });
 
+  it('leaves Update off for a file with no set_id column and offers a banner button for changed rows', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
+    await pasteSampleAndCheck();
+    expect(api.preview.mock.calls[0][1].updateExisting).toBe(false);
+    expect(await screen.findByText('2 rows change existing sets. Turn on Update to apply them.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on Update' }));
+    expect(api.preview).toHaveBeenCalledTimes(2);
+    expect(api.preview.mock.calls[1][1].updateExisting).toBe(true);
+    expect(screen.getByLabelText('Update sets that match')).toBeChecked();
+    expect(screen.queryByText(/Turn on Update to apply/)).toBeNull();
+  });
+
+  it('turns Update on by default when a set_id column is mapped', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
+    render(<LineupImport festivalId="f1" festivalName="Fest" />);
+    fireEvent.change(screen.getByLabelText(/paste cells from google sheets/i), {
+      target: { value: 'set_id,day,stage,artist,start,end\nset-1,Friday,Main Stage,Aurora Lights,21:00,22:00' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Next: match columns' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
+    await screen.findByRole('button', { name: 'Approve' });
+    expect(api.preview.mock.calls[0][1].updateExisting).toBe(true);
+    expect(screen.getByLabelText('Update sets that match')).toBeChecked();
+    expect(screen.queryByText(/Turn on Update to apply/)).toBeNull();
+  });
+
+  it('keeps Update off after Back and Check rows when the admin turned it off', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
+    render(<LineupImport festivalId="f1" festivalName="Fest" />);
+    fireEvent.change(screen.getByLabelText(/paste cells from google sheets/i), {
+      target: { value: 'set_id,day,stage,artist,start,end\nset-1,Friday,Main Stage,Aurora Lights,21:00,22:00' },
+    });
+    await userEvent.click(screen.getByRole('button', { name: 'Next: match columns' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
+    await userEvent.click(await screen.findByLabelText('Update sets that match'));
+    expect(screen.getByLabelText('Update sets that match')).not.toBeChecked();
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
+    await screen.findByRole('button', { name: 'Approve' });
+    expect(api.preview.mock.calls.at(-1)![1].updateExisting).toBe(false);
+    expect(screen.getByLabelText('Update sets that match')).not.toBeChecked();
+  });
+
+  it('shows a Skipped chip when the plan skips rows', async () => {
+    api.preview.mockResolvedValue(plan([planRow()], { unchanged: 1, skipped: 1 }));
+    await pasteSampleAndCheck();
+    expect(await screen.findByText('Skipped 1')).toBeInTheDocument();
+  });
+
   it('disables Approve when the plan has an error row', async () => {
     api.preview.mockResolvedValue(
       plan([planRow({ status: 'error', errors: [{ field: 'day', message: 'Unknown day "Fryday".' }] })], { error: 1 }),
@@ -166,7 +216,7 @@ describe('LineupImport', () => {
         created: 3,
         updated: 0,
         unchanged: 0,
-        skipped: 0,
+        skipped: 2,
         newStages: 1,
         newDays: 1,
         spotifyMatched: 2,
@@ -179,6 +229,7 @@ describe('LineupImport', () => {
     expect(await screen.findByText(/Approve import\?/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Import' }));
     expect(await screen.findByText(/Import done. Added 3 sets/)).toBeInTheDocument();
+    expect(screen.getByText(/Skipped 2 rows that name another day/)).toBeInTheDocument();
     expect(screen.getByText(/Spotify linked 2 artists/)).toBeInTheDocument();
     expect(screen.getByText('Row 7: link dropped')).toBeInTheDocument();
   });

@@ -6,11 +6,13 @@ import {
   LINEUP_SAMPLE_CSV,
   buildResultCsv,
   defaultMapping,
+  defaultUpdateExisting,
   looksLikeHeader,
   mappingProblems,
   parseLineupTable,
   planSummary,
   toImportRows,
+  updateOffBanner,
   type LineupColumnMapping,
   type LineupImportCommitResult,
   type LineupImportField,
@@ -82,6 +84,8 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
   const [loading, setLoading] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
   const fileInput = useRef<HTMLInputElement>(null);
+  // Whether the last checked mapping had a set_id column. Update turns on by default only when that changes.
+  const checkedWithSetId = useRef<boolean | null>(null);
   const { toast, toastError } = useToast();
 
   const checkSize = (value: string) => {
@@ -108,6 +112,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
     if (!checkSize(text)) return;
     const parsed = parseLineupTable(text);
     if (parsed.rows.length === 0) return toast('No rows found in that data.', 'error');
+    checkedWithSetId.current = null;
     setTable(parsed.rows);
     setLines(parsed.lines);
     applyHeader(looksLikeHeader(parsed.rows[0] ?? []), parsed.rows);
@@ -133,8 +138,17 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
 
   const handleCheckRows = () => {
     const nextRows = toImportRows(table, mapping, hasHeader, lines);
+    const hasSetId = mapping.setId !== undefined;
+    const update = checkedWithSetId.current === hasSetId ? updateExisting : defaultUpdateExisting(mapping);
+    checkedWithSetId.current = hasSetId;
     setRows(nextRows);
-    void runPreview(nextRows);
+    setUpdateExisting(update);
+    void runPreview(nextRows, update);
+  };
+
+  const turnOnUpdate = () => {
+    setUpdateExisting(true);
+    void runPreview(rows, true, createMissing);
   };
 
   const editCell = (row: number, field: LineupImportField, value: string) =>
@@ -296,12 +310,14 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
 
   const renderPreview = (p: LineupImportPlan) => {
     const blocked = p.counts.error > 0 || p.problems.length > 0;
+    const updateBanner = updateOffBanner(p.counts, updateExisting);
     const shown = p.rows.filter((r) => filter === 'all' || r.status === filter);
     const chips: [string, number][] = [
       ['New', p.counts.new],
       ['Will change', p.counts.changed],
       ['Unchanged', p.counts.unchanged],
       ['Errors', p.counts.error],
+      ...(p.counts.skipped ? ([['Skipped', p.counts.skipped]] as [string, number][]) : []),
     ];
     return (
       <div className="space-y-4">
@@ -319,6 +335,14 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
           <p className="text-sm text-text-muted">
             New days: {p.newDays.map((d) => `${d.label} (${d.date})`).join(', ')}
           </p>
+        )}
+        {updateBanner && (
+          <div role="status" className="flex flex-wrap items-center gap-3 bg-accent-aqua/10 border border-accent-aqua/30 rounded-lg p-3 text-sm text-text-primary">
+            <span>{updateBanner}</span>
+            <button type="button" className={secondaryButton} disabled={loading} onClick={turnOnUpdate}>
+              Turn on Update
+            </button>
+          </div>
         )}
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-sm text-text-primary">
@@ -475,7 +499,8 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
     <div className="space-y-4">
       <p role="status" className="bg-accent-aqua/10 border border-accent-aqua/30 rounded-lg p-4 text-sm text-text-primary">
         Import done. Added {r.created} sets, updated {r.updated}, created {r.newStages} stages and {r.newDays} days.
-        Spotify linked {r.spotifyMatched} artists.
+        {r.skipped > 0 && ` Skipped ${r.skipped} ${r.skipped === 1 ? 'row' : 'rows'} that name another day.`} Spotify linked{' '}
+        {r.spotifyMatched} artists.
       </p>
       {r.warnings.length > 0 && (
         <ul className="text-sm text-text-muted space-y-1">

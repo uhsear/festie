@@ -141,7 +141,7 @@ describe('share page previews', () => {
     assert.ok(res.text.includes('href="http://localhost:3000/friend-picks?from=tok123">Compare with my picks'));
     assert.ok(res.text.includes('href="http://localhost:3000/friend-picks?from=tok123#add">Add their picks to my plan'));
     assert.ok(res.text.includes('href="festie://friend-picks?from=tok123">Open in the app'));
-    assert.ok(res.text.includes('New to Festie? Plan your own schedule'));
+    assert.ok(res.text.includes('href="http://localhost:3000/?ref=share-picks">New to Festie? Plan your own schedule'));
     assert.ok(!res.text.includes('Compare picks with your crew on Festie'));
   });
 

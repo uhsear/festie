@@ -96,9 +96,9 @@ async function getPage(deps: any, slug: string, query: Record<string, unknown> =
   return res;
 }
 
-async function getOg(deps: any, slug: string) {
+async function getOg(deps: any, slug: string, handler = handlerFor(deps, '/f/:slug/og.png')) {
   const res = mockRes();
-  await handlerFor(deps, '/f/:slug/og.png')({ params: { slug } }, res);
+  await handler({ params: { slug } }, res);
   return res;
 }
 
@@ -313,6 +313,30 @@ describe('festival page: GET /f/:slug/og.png', () => {
     assert.equal(meta.format, 'png');
     assert.equal(meta.width, 1200);
     assert.equal(meta.height, 630);
+  });
+
+  it('serves a second request inside 10 minutes from the cache and renders again after', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+    const { deps } = buildDeps();
+    const og = handlerFor(deps, '/f/:slug/og.png');
+    const first = await getOg(deps, 'edc-orlando-2026', og);
+    t.mock.timers.tick(9 * 60 * 1000);
+    const second = await getOg(deps, 'edc-orlando-2026', og);
+    assert.equal(second._sent, first._sent, 'same buffer: sharp skipped');
+    t.mock.timers.tick(61 * 1000);
+    const third = await getOg(deps, 'edc-orlando-2026', og);
+    assert.notEqual(third._sent, first._sent, 'rendered again after the TTL');
+    assert.equal(third._headers['Content-Type'], 'image/png');
+  });
+
+  it('does not serve a cached image once the festival stops being public', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+    const { deps, findPublicIdBySlug } = buildDeps();
+    const og = handlerFor(deps, '/f/:slug/og.png');
+    await getOg(deps, 'edc-orlando-2026', og);
+    findPublicIdBySlug.mock.mockImplementation(async () => null);
+    const res = await getOg(deps, 'edc-orlando-2026', og);
+    assert.equal(res._status, 404);
   });
 
   it('answers an empty 404 for an unknown or malformed slug', async () => {

@@ -196,7 +196,7 @@ describe('FestivalPicker share', () => {
       expect(share).toHaveBeenCalledWith({
         title: 'Alpha',
         text: 'Alpha lineup and set times on Festie',
-        url: `${window.location.origin}/f/alpha`,
+        url: `${window.location.origin}/f/alpha?ref=share-festival`,
       }),
     );
     expect(toastMock).not.toHaveBeenCalled();
@@ -208,7 +208,7 @@ describe('FestivalPicker share', () => {
     state.festivals = [withSlug(fest('a', 'Alpha', 5, 6), 'alpha')];
     open();
     fireEvent.click(screen.getByLabelText('Share Alpha'));
-    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/f/alpha`));
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/f/alpha?ref=share-festival`));
     expect(toastMock).toHaveBeenCalledWith('Link copied', 'success');
   });
 

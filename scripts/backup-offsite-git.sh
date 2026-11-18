@@ -6,22 +6,31 @@ set -euo pipefail
 # Off-site, encrypted, version-controlled DB backups for Festie prod.
 #
 # WHAT IT DOES
-#   1. Finds the NEWEST *.dump in $BACKUP_DIR (default ~/backups/festie).
+#   1. Finds the NEWEST fp_*.dump in $BACKUP_DIR (default ~/backups/festie),
+#      ignoring *_weekly.dump copies. Fails (exit 1) when it is older than 26 h
+#      (2 h while ~/.festie-festival-mode exists) or fails pg_restore --list;
+#      a corrupt dump is renamed *.dump.bad.
 #   2. Encrypts it with GPG symmetric AES256 using $BACKUP_GPG_PASSPHRASE
 #      (read from ../.env). The passphrase NEVER leaves the server.
 #   3. Pushes the encrypted blob to a PRIVATE GitHub repo (uhsear/festie-backups)
 #      over SSH using a dedicated, write-only deploy key. The repo is the
 #      off-site store -- no third-party cloud account required.
-#   4. Prunes the repo to the most recent 14 encrypted dumps (older ones are
-#      git-removed and committed) to bound repo growth.
+#      The dump's .counts row-count sidecar is pushed next to it (counts and
+#      timestamps only, no PII).
+#   4. Prunes the repo by scripts/lib/backup-retention.cjs: every dump from the
+#      last 48 h, the newest per day for 30 days, the newest per ISO week for
+#      12 weeks. Older ones are git-removed and committed.
+#   5. Takes the shared $BACKUP_DIR/.backup.lock (same as backup-pg.sh). Waits
+#      BACKUP_LOCK_WAIT seconds (default 120; 0 = do not wait), then exits 75.
 #
-# This is a SUPPLEMENT to the on-host 6-hourly pg backups (backup-pg.sh) and the
-# rsync-based scripts/backup-offsite.sh (which needs OFFSITE_TARGET). This
-# git path is the working off-site copy.
+# This is a SUPPLEMENT to the on-host 6-hourly pg backups (backup-pg.sh). The
+# rsync-based scripts/backup-offsite.sh is unused (exits 3 without OFFSITE_TARGET).
+# This git path is the working off-site copy.
 #
 # CONFIG (in ../.env):
 #   BACKUP_GPG_PASSPHRASE   strong random passphrase (generated, stored once)
-#   BACKUP_DIR              optional, default $HOME/backups/festie
+#   (BACKUP_DIR comes from the environment only, default $HOME/backups/festie,
+#   the same as backup-pg.sh; a value in .env is ignored.)
 #
 # FAILURE ALERT: on any non-zero exit, if ~/.config/festie-ntfy-topic exists and
 # is non-empty, a short message is POSTed to https://ntfy.sh/<topic>. The topic
@@ -61,19 +70,24 @@ set -euo pipefail
 # =============================================================================
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+# BACKUP_DIR resolves exactly as in backup-pg.sh (caller env, else the default), so
+# both scripts share one directory and one lock; a BACKUP_DIR in .env is ignored.
+CALLER_BACKUP_DIR="${BACKUP_DIR:-}"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../.env" 2>/dev/null || true
 
-BACKUP_DIR="${BACKUP_DIR:-$HOME/backups/festie}"
+BACKUP_DIR="${CALLER_BACKUP_DIR:-$HOME/backups/festie}"
 LOG_FILE="$BACKUP_DIR/offsite-git.log"
 DEPLOY_KEY="${BACKUP_DEPLOY_KEY:-$HOME/.ssh/festie_backups_deploy}"
 REPO_SSH="git@github.com:uhsear/festie-backups.git"
 CLONE_DIR="${BACKUP_GIT_CLONE:-$HOME/festie-backups-git}"
 DUMPS_SUBDIR="dumps"
-KEEP=14
+LOCK_WAIT="${BACKUP_LOCK_WAIT:-120}"
+FESTIVAL_MODE_FLAG="${FESTIVAL_MODE_FLAG:-$HOME/.festie-festival-mode}"
 
 NTFY_TOPIC_FILE="$HOME/.config/festie-ntfy-topic"
 
+mkdir -p "$BACKUP_DIR"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
 
 # Alert on ANY non-zero exit (set -e abort or explicit exit 1). A failed alert
@@ -90,6 +104,10 @@ alert_on_failure() {
 }
 trap alert_on_failure EXIT
 
+# The lock fd (9) must not leak into children that outlive this run (git's
+# detached gc, a gpg-agent), or they would hold the lock after we exit.
+git() { command git "$@" 9>&-; }
+
 export GIT_SSH_COMMAND="ssh -i $DEPLOY_KEY -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
 
 if [ -z "${BACKUP_GPG_PASSPHRASE:-}" ]; then
@@ -97,13 +115,47 @@ if [ -z "${BACKUP_GPG_PASSPHRASE:-}" ]; then
   exit 1
 fi
 
-# 1. Newest dump (exclude already-encrypted, just in case)
-NEWEST="$(ls -t "$BACKUP_DIR"/*.dump 2>/dev/null | head -1 || true)"
+# 0. One lock for all backup runs (shared with backup-pg.sh)
+exec 9>"$BACKUP_DIR/.backup.lock"
+if [ "$LOCK_WAIT" = "0" ]; then FLOCK_ARGS=(-n); else FLOCK_ARGS=(-w "$LOCK_WAIT"); fi
+if ! flock "${FLOCK_ARGS[@]}" 9; then
+  log "lock held, skipped"
+  exit 75
+fi
+
+# 1. Newest dump by the timestamp in its name. *_weekly.dump is a copy of a daily
+# dump with no sidecar, so it is never selected.
+NEWEST=""
+for f in "$BACKUP_DIR"/fp_*.dump; do
+  [ -f "$f" ] && [[ "$f" != *_weekly.dump ]] && NEWEST="$f"   # glob order is sorted, so the last is the newest
+done
 if [ -z "$NEWEST" ]; then
-  log "ERROR: no *.dump found in $BACKUP_DIR -- nothing to push."
+  log "ERROR: no fp_*.dump found in $BACKUP_DIR -- nothing to push."
   exit 1
 fi
 BASENAME="$(basename "$NEWEST")"
+STAMP="${BASENAME#fp_}"; STAMP="${STAMP%.dump}"
+DUMP_EPOCH="$(date -d "${STAMP:0:8} ${STAMP:9:2}:${STAMP:11:2}:${STAMP:13:2}" +%s 2>/dev/null || echo 0)"
+MAX_AGE=$((26 * 3600))
+[ -e "$FESTIVAL_MODE_FLAG" ] && MAX_AGE=$((2 * 3600))
+if [ $(( $(date +%s) - DUMP_EPOCH )) -gt "$MAX_AGE" ]; then
+  log "ERROR: newest dump $BASENAME is older than $((MAX_AGE / 3600)) h -- backups are stale."
+  exit 1
+fi
+if ! command -v pg_restore >/dev/null 2>&1; then
+  log "ERROR: pg_restore not found in PATH -- cannot verify $BASENAME."
+  exit 1
+fi
+LIST_RC=0
+LIST_ERR="$(pg_restore --list "$NEWEST" 2>&1 >/dev/null)" || LIST_RC=$?
+if [ "$LIST_RC" -eq 126 ] || [ "$LIST_RC" -eq 127 ]; then
+  log "ERROR: pg_restore could not run (exit $LIST_RC): $(head -n1 <<<"$LIST_ERR") -- $BASENAME left in place."
+  exit 1
+elif [ "$LIST_RC" -ne 0 ]; then
+  mv -f "$NEWEST" "${NEWEST}.bad"
+  log "ERROR: pg_restore --list failed for $BASENAME ($(head -n1 <<<"$LIST_ERR")) -- renamed to ${BASENAME}.bad."
+  exit 1
+fi
 ENC_NAME="${BASENAME}.gpg"
 log "Selected newest dump: $BASENAME"
 
@@ -135,28 +187,42 @@ mkdir -p "$DUMPS_SUBDIR"
 if [ -f "$DUMPS_SUBDIR/$ENC_NAME" ]; then
   log "Already pushed $ENC_NAME -- skipping re-encrypt; running prune only."
 else
-  if gpg --batch --yes --quiet \
+  if gpg --batch --yes --quiet --pinentry-mode loopback \
         --symmetric --cipher-algo AES256 \
-        --passphrase "$BACKUP_GPG_PASSPHRASE" \
+        --passphrase-fd 3 \
         --output "$DUMPS_SUBDIR/$ENC_NAME" \
-        "$NEWEST"; then
+        "$NEWEST" 3<<<"$BACKUP_GPG_PASSPHRASE" 9>&-; then
     log "Encrypted -> $DUMPS_SUBDIR/$ENC_NAME"
     git add "$DUMPS_SUBDIR/$ENC_NAME"
+    if [ -f "$NEWEST.counts" ]; then
+      cp "$NEWEST.counts" "$DUMPS_SUBDIR/$BASENAME.counts"
+      git add "$DUMPS_SUBDIR/$BASENAME.counts"
+    else
+      log "WARNING: no $BASENAME.counts sidecar -- the restore drill will fail on it."
+    fi
   else
     log "ERROR: gpg encryption failed for $BASENAME -- aborting."
     exit 1
   fi
 fi
 
-# 4. Prune to last $KEEP encrypted dumps
-mapfile -t ALL < <(ls -1 "$DUMPS_SUBDIR"/*.gpg 2>/dev/null | sort)
-COUNT=${#ALL[@]}
-if [ "$COUNT" -gt "$KEEP" ]; then
-  REMOVE=$((COUNT - KEEP))
-  for ((i=0; i<REMOVE; i++)); do
-    git rm -q --ignore-unmatch "${ALL[$i]}" || rm -f "${ALL[$i]}"
-    log "Pruned old dump: $(basename "${ALL[$i]}")"
-  done
+# 4. Tiered prune (a dump's .counts sidecar goes with it)
+# A failed prune must not hide: still push the new dump, then exit 1 at the end.
+PRUNE_FAILED=0
+NODE_BIN="$(command -v node || true)"
+[ -n "$NODE_BIN" ] || { [ -x /usr/bin/node ] && NODE_BIN=/usr/bin/node; } || true
+if [ -z "$NODE_BIN" ]; then
+  log "ERROR: node not found in PATH or /usr/bin -- retention prune not run."
+  PRUNE_FAILED=1
+elif ! REMOVE_LIST="$(ls -1 "$DUMPS_SUBDIR" | "$NODE_BIN" "$SCRIPT_DIR/lib/backup-retention.cjs")"; then
+  log "ERROR: retention prune failed -- nothing pruned."
+  PRUNE_FAILED=1
+else
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    git rm -q --ignore-unmatch "$DUMPS_SUBDIR/$name" || rm -f "$DUMPS_SUBDIR/$name"
+    log "Pruned old dump file: $name"
+  done <<<"$REMOVE_LIST"
 fi
 
 # Commit + push if anything changed
@@ -173,4 +239,8 @@ else
   log "No changes to push."
 fi
 
+if [ "$PRUNE_FAILED" = "1" ]; then
+  log "Off-site git backup pushed, but retention prune failed."
+  exit 1
+fi
 log "Off-site git backup completed."
