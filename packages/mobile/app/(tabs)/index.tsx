@@ -752,6 +752,15 @@ export default function TimelineScreen() {
     );
   };
 
+  // A festival with no days at all has no "other day" to pick, so "No sets for this day" would mislead.
+  const noDaysState = (
+    <EmptyState
+      icon="time-outline"
+      title={DISCOVER_COPY.banner.title}
+      message="The schedule has not been posted yet. Check back soon."
+    />
+  );
+
   // A filtered-out day still HAS sets, so the filter is blamed instead of the
   // false "No sets for this day". The timeless-sets hint still wins when the day
   // has TBA sets (timelessSets non-empty).
@@ -764,6 +773,8 @@ export default function TimelineScreen() {
       emptyReason === 'genres') &&
     timelessSets.length === 0 ? (
       filterEmptyState(emptyReason)
+    ) : days.length === 0 ? (
+      noDaysState
     ) : (
       <EmptyState
         icon="musical-notes"
@@ -795,6 +806,8 @@ export default function TimelineScreen() {
     emptyReason === 'stages' ||
     emptyReason === 'genres' ? (
     filterEmptyState(emptyReason)
+  ) : days.length === 0 ? (
+    noDaysState
   ) : (
     <EmptyState
       icon="musical-notes"
