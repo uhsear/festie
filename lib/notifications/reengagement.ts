@@ -4,13 +4,15 @@
 //
 // M3 "Re-engagement triggers" — after-festival growth loops.
 //
-// Four event-gated push/email notifications:
+// Event-gated push/email notifications:
 //   • lineup_drop    — a recurring (same-named) festival publishes its lineup →
 //                      notify users who attended a PRIOR edition of that festival
 //                      and users who follow it.
 //   • set_times_out  — a published festival gets its first set times → notify its
 //                      followers and everyone with a profile in it, once per
 //                      festival (festivals.set_times_out_at marks it sent).
+//   • days_out       — an admin announces that acts have days ("Announce days") → notify followers
+//                      and profile holders, once per user per festival.
 //   • crew_reformed  — a prior crew is reformed for a new festival → notify the
 //                      INVITED prior members (handed in by the reform route).
 //   • wrap_ready     — a festival is over → notify its attendees that the recap
@@ -33,7 +35,14 @@
 // push provider. Email is best-effort and degrades when RESEND_API_KEY is unset.
 
 import crypto from 'crypto';
-import { sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendSetTimesOutEmail } from '../email.js';
+import {
+  sendWrapReadyEmail,
+  sendLineupDropEmail,
+  sendDaysOutEmail,
+  sendCrewReformEmail,
+  sendSetTimesOutEmail,
+} from '../email.js';
+import { actsDayCoverage } from '../lineup.js';
 import { PREF_MAP } from './send.js';
 import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
 import { appLink, appOrigin } from './links.js';
@@ -75,6 +84,9 @@ function isFestivalOver(days: Array<{ date?: string | null }> | null | undefined
   }
   return cutoffMs < Date.now();
 }
+
+/** Re-engagement emails a day across all types: the mail provider's free plan allows 100, and the rest is kept for account mail. */
+export const EMAIL_DAILY_BUDGET = 90;
 
 /** Morning window (festival-local hours) in which the rate prompt for the previous day may fire. */
 const RATE_PROMPT_START_HOUR = 10;
@@ -269,35 +281,83 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
   // ── lineup_drop ─────────────────────────────────────────────────────────
   //
-  // Fires from the admin "Announce lineup" action (routes/lineup-announce.ts). Targets PRIOR-year attendees of the
-  // SAME-NAMED recurring festival (the inverse of getAttendedFestivals: users
-  // who attended an earlier edition but NOT the new one), plus followers of the
-  // festival who have not joined it. Deduped per user on eventKey `lineup:<festivalId>`.
-  async function resolveLineupDropRecipients(
-    festivalId: string,
-  ): Promise<{ festivalName: string; priorIds: string[]; fresh: string[] } | { reason: string }> {
+  // Fires from the admin "Announce lineup" action (routes/lineup-announce.ts). Two audiences:
+  // followers of the festival who have not joined it, and PRIOR-year attendees of the SAME-NAMED
+  // recurring festival (the inverse of getAttendedFestivals: users who attended an earlier edition
+  // but NOT the new one). Both get the push and the inbox row. Only followers get the email,
+  // because a name match can hit the wrong series. Deduped per user on eventKey `lineup:<festivalId>`.
+  async function resolveLineupDropRecipients(festivalId: string): Promise<
+    | {
+        festivalName: string;
+        hasTimes: boolean;
+        followerIds: string[];
+        priorEditionIds: string[];
+        matchedFestivalNames: string[];
+        fresh: string[];
+      }
+    | { reason: string }
+  > {
     if (!festivalId || !db) return { reason: 'no_festival' };
 
-    // Resolve the new festival's name.
+    // Resolve the new festival's name, and whether any set has a time (the copy depends on it).
     let festivalName = '';
+    let hasTimes = false;
     try {
-      const { rows } = await db.query('SELECT name FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
+      const { rows } = await db.query(
+        `
+  SELECT
+    name,
+    EXISTS (
+      SELECT
+        1
+      FROM
+        festival_sets
+      WHERE
+        festival_id = $1
+        AND start_time IS NOT NULL
+        AND start_time <> ''
+    ) AS "hasTimes"
+  FROM
+    festivals
+  WHERE
+    id = $1
+    AND deleted_at IS NULL
+`,
+        [festivalId],
+      );
       festivalName = rows[0]?.name || '';
+      hasTimes = !!rows[0]?.hasTimes;
     } catch (err: any) {
       log?.warn?.('sendLineupDrop: name lookup failed', { festivalId, error: err?.message });
     }
     if (!festivalName) return { reason: 'festival_not_found' };
 
-    // Prior-edition attendees: users with a profile in an EARLIER festival whose
-    // name matches once a trailing year is ignored, who do NOT already have a
-    // profile in THIS one. Followers of THIS festival who have not joined it are
-    // added. Excludes deleted.
-    let priorIds: string[];
+    let followerIds: string[];
+    let priorRows: Array<{ userId: string; festivalName: string }>;
     try {
-      // shortcut: name-minus-year match, replace with a festivals.series_id when editions need explicit links
-      const { rows } = await db.query(
+      // Followers of THIS festival who have not joined it. Excludes deleted users.
+      const followers = await db.query(
         `
-        SELECT DISTINCT p.user_id AS "userId"
+        SELECT ff.user_id AS "userId"
+        FROM festival_follows ff
+        JOIN users u ON u.id = ff.user_id AND u.deleted_at IS NULL
+        WHERE ff.festival_id = $1
+          AND NOT EXISTS (
+            SELECT 1 FROM festival_profiles cur
+            WHERE cur.user_id = ff.user_id AND cur.festival_id = $1 AND cur.deleted_at IS NULL
+          )
+        `,
+        [festivalId],
+      );
+      followerIds = followers.rows.map((r: any) => r.userId).filter(Boolean);
+
+      // Prior-edition attendees: users with a profile in an EARLIER festival whose name matches once a
+      // trailing year is ignored, who do NOT already have a profile in THIS one. A separate statement,
+      // so an organizer filter is one more AND here. Excludes deleted.
+      // shortcut: name-minus-year match, replace with a festivals.series_id when editions need explicit links
+      const prior = await db.query(
+        `
+        SELECT DISTINCT p.user_id AS "userId", fp.name AS "festivalName"
         FROM festival_profiles p
         JOIN festivals fp ON fp.id = p.festival_id AND fp.deleted_at IS NULL
         WHERE p.deleted_at IS NULL
@@ -309,59 +369,181 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
             SELECT 1 FROM festival_profiles cur
             WHERE cur.user_id = p.user_id AND cur.festival_id = $1 AND cur.deleted_at IS NULL
           )
-        UNION
-        SELECT ff.user_id
-        FROM festival_follows ff
-        JOIN users u ON u.id = ff.user_id AND u.deleted_at IS NULL
-        WHERE ff.festival_id = $1
-          AND NOT EXISTS (
-            SELECT 1 FROM festival_profiles cur
-            WHERE cur.user_id = ff.user_id AND cur.festival_id = $1 AND cur.deleted_at IS NULL
-          )
         `,
         [festivalId],
       );
-      priorIds = rows.map((r: any) => r.userId).filter(Boolean);
+      priorRows = prior.rows.filter((r: any) => r.userId);
     } catch (err: any) {
-      log?.warn?.('sendLineupDrop: prior-attendee query failed', { festivalId, error: err?.message });
+      log?.warn?.('sendLineupDrop: recipient query failed', { festivalId, error: err?.message });
       return { reason: 'query_failed' };
     }
-    const fresh = priorIds.length ? await filterFresh(priorIds, 'lineup_drop', `lineup:${festivalId}`) : [];
-    return { festivalName, priorIds, fresh };
+    // A follower who also attended before is a follower: they get the email, so they leave the prior list.
+    const followerSet = new Set(followerIds);
+    const priorOnly = priorRows.filter((r) => !followerSet.has(r.userId));
+    const priorEditionIds = [...new Set(priorOnly.map((r) => r.userId))];
+    const matchedFestivalNames = [...new Set(priorOnly.map((r) => r.festivalName))].sort();
+    const everyone = [...followerIds, ...priorEditionIds];
+    const fresh = everyone.length ? await filterFresh(everyone, 'lineup_drop', `lineup:${festivalId}`) : [];
+    return { festivalName, hasTimes, followerIds, priorEditionIds, matchedFestivalNames, fresh };
   }
 
-  /** Dry run for the admin "Announce lineup" button: how many people would be notified. */
+  /** Dry run for the admin "Announce lineup" button: who would be notified, and how many get no email. */
   async function countLineupDrop(festivalId: string) {
     const r = await resolveLineupDropRecipients(festivalId);
-    if ('reason' in r) return { festivalName: '', recipients: 0, priorAttendees: 0, reason: r.reason };
-    // priorAttendees counts everyone sendLineupDrop emails; recipients counts only push-fresh users.
-    return { festivalName: r.festivalName, recipients: r.fresh.length, priorAttendees: r.priorIds.length };
+    if ('reason' in r) {
+      return {
+        festivalName: '',
+        recipients: 0,
+        followers: 0,
+        priorAttendees: 0,
+        matchedFestivalNames: [] as string[],
+        emailRecipients: 0,
+        emailCut: 0,
+        emailOff: null as string | null,
+        reason: r.reason,
+      };
+    }
+    // recipients counts push-fresh users; the email goes to followers only.
+    return {
+      festivalName: r.festivalName,
+      recipients: r.fresh.length,
+      followers: r.followerIds.length,
+      priorAttendees: r.priorEditionIds.length,
+      matchedFestivalNames: r.matchedFestivalNames,
+      ...(await planAlertEmail(r.followerIds, 'lineup_drop', `lineup:${festivalId}`)),
+    };
   }
 
   async function sendLineupDrop(festivalId: string) {
     const r = await resolveLineupDropRecipients(festivalId);
     if ('reason' in r) return { sent: 0, reason: r.reason };
-    const { festivalName, priorIds, fresh } = r;
-    if (priorIds.length === 0) return { sent: 0, reason: 'no_prior_attendees' };
+    const { festivalName, hasTimes, followerIds, priorEditionIds, fresh } = r;
+    if (followerIds.length + priorEditionIds.length === 0) return { sent: 0, reason: 'no_recipients' };
     const eventKey = `lineup:${festivalId}`;
 
-    // Prior-year attendees are NOT in the new festival, so we push per-user
-    // (each respects pref + DND) — now over ALL of them in bounded chunks
-    // instead of dropping the tail past MAX_PUSH_BATCH.
+    // Neither list has joined the new festival, so we push per-user (each respects pref + DND) over
+    // ALL of them in bounded chunks instead of dropping the tail past MAX_PUSH_BATCH.
     const deepLink = appLink(config, '/?festival=' + encodeURIComponent(festivalId));
     const pushSent = await pushFanout(fresh, () => ({
       type: 'lineup_drop',
-      title: `${festivalName} lineup just dropped`,
-      body: 'Start picking your sets.',
+      title: hasTimes ? `${festivalName} lineup just dropped` : `${festivalName} lineup is out`,
+      body: hasTimes ? 'Start picking your sets.' : "See who is playing. We'll tell you when set times are out.",
       data: { festivalId, eventKey, deepLink },
     }));
 
-    const emailSent = await emailFanout(priorIds, 'lineup_drop', eventKey, async (user) =>
-      sendLineupDropEmail({ to: user.email, username: user.username, festivalName, festivalId, config, log }),
+    const emailSent = await alertEmailFanout(followerIds, 'lineup_drop', eventKey, async (user) =>
+      sendLineupDropEmail({ to: user.email, username: user.username, festivalName, festivalId, hasTimes, config, log }),
     );
 
-    log?.info?.('sendLineupDrop: done', { festivalId, priorAttendees: priorIds.length, pushSent, emailSent });
-    return { sent: pushSent, emailSent, eventKey, priorAttendees: priorIds.length };
+    log?.info?.('sendLineupDrop: done', { festivalId, followers: followerIds.length, priorEdition: priorEditionIds.length, pushSent, emailSent });
+    return { sent: pushSent, emailSent, eventKey, recipients: followerIds.length + priorEditionIds.length };
+  }
+
+  // ── days_out ────────────────────────────────────────────────────────────
+  //
+  // Fires only from the admin "Announce days" action (routes/lineup-announce.ts). No save, import or
+  // publish sends it, so act 1 of 118 getting a day alerts nobody. Followers and profile holders hear
+  // once per festival, deduped per user on eventKey `days:<festivalId>`. A second press reaches only
+  // people who joined since, or whose email the daily budget cut.
+
+  /**
+   * Followers plus profile holders of a festival, one id each: the audience of every alert that
+   * goes to "everyone who is in or following". `sendSetTimesOut` runs the same query inline;
+   * the per-date release reuses this one.
+   */
+  async function resolveFollowersAndProfileHolders(festivalId: string): Promise<string[]> {
+    if (!festivalId || !db) return [];
+    const { rows } = await db.query(
+      `
+  SELECT
+    f.user_id AS "userId"
+  FROM
+    festival_follows f
+    JOIN users u ON u.id = f.user_id
+    AND u.deleted_at IS NULL
+  WHERE
+    f.festival_id = $1
+  UNION
+  SELECT
+    p.user_id
+  FROM
+    festival_profiles p
+    JOIN users u ON u.id = p.user_id
+    AND u.deleted_at IS NULL
+  WHERE
+    p.festival_id = $1
+    AND p.deleted_at IS NULL
+    AND p.user_id IS NOT NULL
+`,
+      [festivalId],
+    );
+    return rows.map((r: any) => r.userId).filter(Boolean);
+  }
+
+  async function resolveDaysOut(festivalId: string) {
+    const refused = (reason: string, extra: object = {}) => ({
+      festivalName: '',
+      actsWithDay: 0,
+      actsTotal: 0,
+      userIds: [] as string[],
+      fresh: [] as string[],
+      reason,
+      ...extra,
+    });
+    if (!festivalId || !db) return refused('no_festival');
+
+    let festival: any = null;
+    try {
+      festival = await stores?.festivals?.getById?.(festivalId);
+    } catch (err: any) {
+      log?.warn?.('sendDaysOut: festival load failed', { festivalId, error: err?.message });
+    }
+    if (!festival) return refused('festival_not_found');
+
+    const coverage = actsDayCoverage(festival);
+    const named = { festivalName: festival.name || '', ...coverage };
+    if (!festival.publishedAt) return refused('draft', named);
+    if (await stores?.festivals?.getSetTimesOutAt?.(festivalId)) return refused('set_times_out', named);
+    if (coverage.actsWithDay === 0) return refused('no_days', named);
+
+    const userIds = await resolveFollowersAndProfileHolders(festivalId);
+    if (userIds.length === 0) return refused('no_audience', named);
+    const fresh = await filterFresh(userIds, 'days_out', `days:${festivalId}`);
+    return { ...named, userIds, fresh, reason: undefined as string | undefined };
+  }
+
+  /** Dry run for the admin "Announce days" button. `reason` names why a send would be refused. */
+  async function countDaysOut(festivalId: string) {
+    const { userIds, fresh, reason, ...rest } = await resolveDaysOut(festivalId);
+    const email = reason ? { emailRecipients: 0, emailCut: 0, emailOff: null } : await planAlertEmail(userIds, 'days_out', `days:${festivalId}`);
+    const heard = !reason && fresh.length === 0 && email.emailRecipients + email.emailCut === 0;
+    return {
+      ...rest,
+      recipients: fresh.length,
+      audience: userIds.length,
+      ...email,
+      ...(reason || heard ? { reason: reason ?? 'already_heard' } : {}),
+    };
+  }
+
+  async function sendDaysOut(festivalId: string) {
+    const { userIds, fresh, reason, festivalName } = await resolveDaysOut(festivalId);
+    if (reason) return { sent: 0, reason };
+    const eventKey = `days:${festivalId}`;
+
+    const deepLink = appLink(config, '/?festival=' + encodeURIComponent(festivalId));
+    const pushSent = await pushFanout(fresh, () => ({
+      type: 'days_out',
+      title: `${festivalName || 'Your festival'} days are out`,
+      body: 'See who plays which day. Set times come later.',
+      data: { festivalId, eventKey, deepLink },
+    }));
+    const emailSent = await alertEmailFanout(userIds, 'days_out', eventKey, async (user) =>
+      sendDaysOutEmail({ to: user.email, username: user.username, festivalName, festivalId, config, log }),
+    );
+
+    log?.info?.('sendDaysOut: done', { festivalId, recipients: userIds.length, pushSent, emailSent });
+    return { sent: pushSent, emailSent, eventKey, recipients: userIds.length };
   }
 
   // ── set_times_out ───────────────────────────────────────────────────────
@@ -520,33 +702,61 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   }
 
   /**
+   * Who an email would go to, in send order: the users that have not had this event's email, still
+   * have an address and have the type's switch on. Quiet hours do not apply to email.
+   * `noPushFirst` puts people with no push token first, because the email is their only way to hear.
+   */
+  async function emailPlan(userIds: string[], type: string, eventKey: string, { noPushFirst = false } = {}) {
+    if (!userIds.length) return { ids: [] as string[], users: new Map<string, any>() };
+    const users = await loadUsers(userIds);
+    // Email dedup shares the eventKey but uses a distinct type suffix so a push
+    // log row does not suppress the email (and vice-versa). ONE batch dedup
+    // query for the whole fan-out (no N+1); a read failure propagates rather
+    // than fail-open re-blasting every address.
+    const fresh = await filterFresh(userIds, type, `${eventKey}#email`);
+    const prefKey = PREF_MAP[type];
+    let ids: string[] = [];
+    // Verified addresses only: /register stores a typed email unverified, so mailing it would mail a stranger.
+    const withEmail = fresh.filter((uid) => users.get(uid)?.email && users.get(uid)?.emailVerifiedAt);
+    // One batched read (the admin dry runs call this per panel load); a store without getMany reads per user.
+    let prefsByUser = new Map<string, any>();
+    if (stores?.notificationPrefs?.getMany) prefsByUser = await stores.notificationPrefs.getMany(withEmail);
+    else for (const uid of withEmail) prefsByUser.set(uid, await stores?.notificationPrefs?.get?.(uid));
+    for (const uid of withEmail) {
+      // Per-type opt-out gates email as well as push.
+      const prefs = prefsByUser.get(uid);
+      if (prefs && prefKey && !prefs[prefKey]) continue; // store returns 0/1, same falsy check as send.ts
+      ids.push(uid);
+    }
+    if (noPushFirst && ids.length && stores?.deviceTokens?.listByUsers) {
+      const withPush = new Set<string>((await stores.deviceTokens.listByUsers(ids)).map((d: any) => d.userId));
+      ids = [...ids.filter((uid) => !withPush.has(uid)), ...ids.filter((uid) => withPush.has(uid))];
+    }
+    return { ids, users };
+  }
+
+  /**
    * Send the per-type email to each user that has an address, deduping per user
    * on the same eventKey as the push (so a user opted out of push but kept email,
    * or vice-versa, still gets exactly one of each per event). Best-effort: a
    * failed send (incl. RESEND_API_KEY unset) is logged and counted as not-sent.
+   * `limit` stops after that many sent; the rest stay un-emailed and a later run picks them up.
+   * `budgetLeft` is re-read before each send, so two jobs running at once share the budget.
    */
   async function emailFanout(
     userIds: string[],
     type: string,
     eventKey: string,
     sendFn: (user: any) => Promise<boolean>,
+    { limit = Infinity, noPushFirst = false, budgetLeft }: { limit?: number; noPushFirst?: boolean; budgetLeft?: () => Promise<number> } = {},
   ): Promise<number> {
-    if (!userIds.length) return 0;
-    const users = await loadUsers(userIds);
-    // Email dedup shares the eventKey but uses a distinct type suffix so a push
-    // log row does not suppress the email (and vice-versa). ONE batch dedup
-    // query for the whole fan-out (no N+1); a read failure propagates rather
-    // than fail-open re-blasting every address.
+    const { ids, users } = await emailPlan(userIds, type, eventKey, { noPushFirst });
     const emailEventKey = `${eventKey}#email`;
-    const fresh = await filterFresh(userIds, type, emailEventKey);
-    const prefKey = PREF_MAP[type];
     let sent = 0;
-    for (const uid of fresh) {
+    for (const uid of ids) {
+      if (sent >= limit) break;
+      if (budgetLeft && (await budgetLeft()) <= 0) break;
       const user = users.get(uid);
-      if (!user?.email) continue;
-      // Per-type opt-out gates email as well as push. Quiet hours do not apply to email.
-      const prefs = await stores?.notificationPrefs?.get?.(uid);
-      if (prefs && prefKey && !prefs[prefKey]) continue; // store returns 0/1, same falsy check as send.ts
       let ok: boolean;
       try {
         ok = await sendFn(user);
@@ -583,5 +793,52 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return sent;
   }
 
-  return { sendWrapReady, sendLineupDrop, countLineupDrop, sendCrewReformed, sendRatePrompt, sendSetTimesOut };
+  // ── announcement email rules (lineup, days) ───────────────────────────────
+  //
+  // These two alerts email without a postal address never (CAN-SPAM; the push and inbox row do not
+  // depend on it) and at most EMAIL_DAILY_BUDGET emails a day across all re-engagement mail, because
+  // the mail provider's plan caps a day. People the budget cuts stay un-emailed; the next press reaches them.
+  // The fan-out re-reads the budget before every send, so concurrent jobs overshoot by a send or two, not a batch.
+  // wrap_ready, crew_reformed and set_times_out are not capped: each goes to one festival's or crew's own
+  // audience, and a cut there could not be retried (no button), so they only count against the budget.
+  const hasPostalAddress = () => !!String(config?.EMAIL_POSTAL_ADDRESS ?? '').trim();
+
+  async function emailBudgetLeft(): Promise<number> {
+    const used = (await stores?.notificationLog?.countEmailsSince?.(24)) ?? 0;
+    return Math.max(0, EMAIL_DAILY_BUDGET - used);
+  }
+
+  /** Dry run for the email part: how many would get it now, how many the budget cuts, and why it is off. */
+  async function planAlertEmail(userIds: string[], type: string, eventKey: string) {
+    if (!hasPostalAddress()) return { emailRecipients: 0, emailCut: 0, emailOff: 'no_postal_address' as string | null };
+    const { ids } = await emailPlan(userIds, type, eventKey);
+    const emailRecipients = Math.min(ids.length, await emailBudgetLeft());
+    return { emailRecipients, emailCut: ids.length - emailRecipients, emailOff: null as string | null };
+  }
+
+  async function alertEmailFanout(
+    userIds: string[],
+    type: string,
+    eventKey: string,
+    sendFn: (user: any) => Promise<boolean>,
+  ): Promise<number> {
+    if (!hasPostalAddress()) return 0;
+    return emailFanout(userIds, type, eventKey, sendFn, {
+      limit: await emailBudgetLeft(),
+      noPushFirst: true,
+      budgetLeft: emailBudgetLeft,
+    });
+  }
+
+  return {
+    sendWrapReady,
+    sendLineupDrop,
+    countLineupDrop,
+    sendDaysOut,
+    countDaysOut,
+    resolveFollowersAndProfileHolders,
+    sendCrewReformed,
+    sendRatePrompt,
+    sendSetTimesOut,
+  };
 }

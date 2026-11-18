@@ -37,7 +37,7 @@ import { recentRequestTotals } from '../lib/recent-requests.js';
 import type { Router } from 'express';
 
 // Re-engagement news types the growth report counts. Add a type here when it joins the news set.
-const GROWTH_NEWS_TYPES = ['lineup_drop', 'set_times_out'];
+const GROWTH_NEWS_TYPES = ['lineup_drop', 'set_times_out', 'days_out'];
 
 export default function createAdminRoutes(deps: any): Router {
   const {

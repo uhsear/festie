@@ -12,6 +12,7 @@ import { festivalDateRange, renderFestivalNotFoundPage, renderFestivalPage } fro
 import { buildFestivalOgSvg } from '../lib/helpers/share-og-image.js';
 import { renderInviteJoinPage, renderInviteErrorPage, renderInviteIcs, INVITE_ERROR_MESSAGES } from '../lib/invite-pages.js';
 import { loadInvitePreview } from '../lib/invite-preview.js';
+import { actsDayCoverage } from '../lib/lineup.js';
 
 // Public festival page slug (migration 094). Checked before any query; upper case fails too.
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
@@ -134,6 +135,7 @@ export default function createPageRoutes(deps: any) {
           location: festival.location || '',
           setCount: days.reduce((sum: number, day: any) => sum + (day?.sets?.length || 0), 0),
           stageCount: (festival.stages || []).length,
+          announcedCount: actsDayCoverage(festival).actsTotal,
         });
         png = await sharp(Buffer.from(svg)).png().toBuffer();
         ogCache.delete(slug);

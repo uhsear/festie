@@ -1,6 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseLineupTable,
+  daysAnnouncementSummary,
+  announcementEmailNote,
+  lineupAudienceSummary,
   looksLikeHeader,
   autoMapColumns,
   mappingProblems,
@@ -188,5 +191,59 @@ describe('buildResultCsv', () => {
       rows: [{ row: 2, status: 'created', setId: 's1', artist: 'Smith, J', message: 'ok' }],
     });
     expect(csv.split(/\r?\n/)).toEqual(['row,status,set_id,artist,message', '2,created,s1,"Smith, J",ok']);
+  });
+});
+
+describe('daysAnnouncementSummary', () => {
+  const count = {
+    festivalName: 'WL',
+    actsWithDay: 118,
+    actsTotal: 118,
+    recipients: 12,
+    audience: 12,
+    emailRecipients: 12,
+    emailCut: 0,
+    emailOff: null,
+  };
+
+  it('states the split and the audience', () => {
+    const summary = daysAnnouncementSummary({ ...count, actsWithDay: 1 });
+    expect(summary.counts).toBe('1 of 118 acts have a day. 12 people get one alert.');
+    expect(summary.warning).toMatch(/Not every act has a day/);
+    expect(summary.blocked).toBeNull();
+    expect(summary.emailNote).toBeNull();
+  });
+
+  it('does not warn when every act has a day', () => {
+    expect(daysAnnouncementSummary(count).warning).toBeNull();
+  });
+
+  it('says why a send is refused', () => {
+    expect(daysAnnouncementSummary({ ...count, reason: 'already_heard' }).blocked).toBe('Everyone who follows has already heard.');
+    expect(daysAnnouncementSummary({ ...count, reason: 'no_audience' }).blocked).toBe('No one follows this festival or has joined it yet.');
+    expect(daysAnnouncementSummary({ ...count, actsWithDay: 0, reason: 'no_days' }).blocked).toBe('Give acts a day before you announce days.');
+    expect(daysAnnouncementSummary({ ...count, reason: 'set_times_out' }).blocked).toMatch(/Set times are already out/);
+    expect(daysAnnouncementSummary({ ...count, reason: 'draft' }).blocked).toMatch(/Publish the festival/);
+  });
+
+  it('reports email off, or how many the daily limit cuts', () => {
+    expect(daysAnnouncementSummary({ ...count, emailOff: 'no_postal_address' }).emailNote).toBe('Email off: no postal address.');
+    expect(announcementEmailNote({ emailOff: null, emailCut: 1 })).toMatch(/^1 person get no email today/);
+    expect(announcementEmailNote({ emailOff: null, emailCut: 7 })).toMatch(/^7 people get no email today/);
+    expect(announcementEmailNote({ emailOff: null, emailCut: 0 })).toBeNull();
+  });
+});
+
+describe('lineupAudienceSummary', () => {
+  it('uses singular forms for a count of one', () => {
+    expect(lineupAudienceSummary({ followers: 1, priorAttendees: 1, matchedFestivalNames: [] })).toBe(
+      '1 follower gets push and email. 1 person from earlier editions gets push only.',
+    );
+  });
+
+  it('uses plural forms and names the matched editions', () => {
+    expect(lineupAudienceSummary({ followers: 3, priorAttendees: 0, matchedFestivalNames: ['Fest 2025', 'Fest 2024'] })).toBe(
+      '3 followers get push and email. 0 people from earlier editions get push only. Matched editions: Fest 2025, Fest 2024.',
+    );
   });
 });

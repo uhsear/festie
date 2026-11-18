@@ -201,3 +201,49 @@ export function coverLineup(lineup: any[], days: any[], separator: string): Reco
   }
   return cover;
 }
+
+export interface ActsDayCoverage {
+  /** Acts that are not cancelled, plus the sets that no listed act covers. */
+  actsTotal: number;
+  /** Acts on the timetable or with a day of their own. Every set sits on a day. */
+  actsWithDay: number;
+}
+
+/** How many acts have a day. A set that covers an act counts once, as that act. */
+export function actsDayCoverage(festival: any): ActsDayCoverage {
+  const days: any[] = festival?.days ?? [];
+  const lineup: any[] = Array.isArray(festival?.lineup) ? festival.lineup : [];
+  const cover = coverLineup(lineup, days, festival?.b2bSeparator || 'b2b');
+  const coveredSetIds = new Set<string>();
+  let actsTotal = 0;
+  let actsWithDay = 0;
+  for (const entry of lineup) {
+    const placed = cover[entry.id];
+    if (!placed) continue;
+    placed.setIds.forEach((id) => coveredSetIds.add(id));
+    if (placed.state === 'cancelled') continue;
+    actsTotal += 1;
+    if (placed.state === 'scheduled' || placed.dayIndex >= 0) actsWithDay += 1;
+  }
+  for (const day of days) {
+    for (const set of day?.sets ?? []) {
+      if (coveredSetIds.has(set.id)) continue;
+      actsTotal += 1;
+      actsWithDay += 1;
+    }
+  }
+  return { actsTotal, actsWithDay };
+}
+
+export type ScheduleProgress = 'times' | 'days' | 'lineup';
+
+/** How far a festival's schedule has come, for the picker badge. Null when it has no acts at all. */
+export function scheduleProgress(festival: any): ScheduleProgress | null {
+  const timed = (festival?.days ?? []).some((day: any) =>
+    (day?.sets ?? []).some((set: any) => typeof set?.startTime === 'string' && set.startTime !== ''),
+  );
+  if (timed) return 'times';
+  const { actsTotal, actsWithDay } = actsDayCoverage(festival);
+  if (actsWithDay > 0) return 'days';
+  return actsTotal > 0 ? 'lineup' : null;
+}

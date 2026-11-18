@@ -3,7 +3,7 @@ import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl, Sha
 import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
-import { COPY, FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
+import { COPY, DISCOVER_COPY, FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
 import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -178,7 +178,8 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
 
   // Compose the card's pieces into one accessible name so a screen reader reads
   // "<name>, <status>, <dates>, <location>" as a single button instead of fragments.
-  const a11yLabel = [festival.name, badgeSpec?.label, dateRange, festival.location].filter(Boolean).join(', ');
+  const progressLabel = festival.scheduleProgress ? DISCOVER_COPY.scheduleProgress[festival.scheduleProgress] : null;
+  const a11yLabel = [festival.name, badgeSpec?.label, progressLabel, dateRange, festival.location].filter(Boolean).join(', ');
 
   const followable = status === 'upcoming' || status === null;
   const shareSlug = festival.slug;
@@ -230,6 +231,18 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
               importantForAccessibility="no-hide-descendants"
             />
             <Text style={styles.metaText}>{dateRange}</Text>
+          </View>
+        ) : null}
+        {progressLabel ? (
+          <View style={styles.metaRow}>
+            <Ionicons
+              name="list-outline"
+              size={14}
+              color={t.colors.text.secondary}
+              accessibilityElementsHidden
+              importantForAccessibility="no-hide-descendants"
+            />
+            <Text style={styles.metaText}>{progressLabel}</Text>
           </View>
         ) : null}
         {festival.location ? (

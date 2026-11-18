@@ -31,7 +31,7 @@ export const NOTIFICATION_TYPE_ROWS: readonly NotificationTypeRow[] = [
   { key: 'crewPolls', label: 'Polls', hint: 'When your crew starts or closes a poll.', onDevice: false, live: false },
   { key: 'crewMoney', label: 'Money', hint: 'Expenses and settle-up in your crew.', onDevice: false, live: false },
   { key: 'crewRides', label: 'Rides', hint: 'Ride offers and changes in your crew.', onDevice: false, live: false },
-  { key: 'lineupDrops', label: 'New lineups and set times', hint: 'A festival you follow or went to before posts its lineup or set times. By push and email.', onDevice: false, live: true },
+  { key: 'lineupDrops', label: 'New lineups, days and set times', hint: 'A festival you follow or went to before posts its lineup, days or set times. By push and email.', onDevice: false, live: true },
   { key: 'crewReformed', label: 'Crew re-forms', hint: 'A past crew reunites for a new festival. By push and email.', onDevice: false, live: true },
   { key: 'wrapReady', label: 'Wrap and rating nudges', hint: "A morning nudge to rate yesterday's sets, and your Festival Wrap when it is ready", onDevice: false, live: true },
 ];

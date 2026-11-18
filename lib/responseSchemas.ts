@@ -328,6 +328,8 @@ export const festivalListItemResponseSchema = z.object({
   dayCount: z.number(),
   /** Announced acts that no set covers yet; cancelled acts are not counted. */
   lineupCount: z.number(),
+  /** 'times' when any set has a start time, 'days' when acts have days only, 'lineup' when only names are out, else null. */
+  scheduleProgress: z.enum(['times', 'days', 'lineup']).nullable().optional(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   slug: z.string().nullable().optional(),

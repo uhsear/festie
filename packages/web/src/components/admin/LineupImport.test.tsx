@@ -17,6 +17,8 @@ const api = vi.hoisted(() => ({
   undo: vi.fn(),
   announcement: vi.fn(),
   announce: vi.fn(),
+  daysAnnouncement: vi.fn(),
+  announceDays: vi.fn(),
   exportCsv: vi.fn(),
 }));
 vi.mock('@festie/shared/services/lineupImport', () => ({ lineupImportApi: api }));
@@ -62,7 +64,27 @@ const plan = (rows: unknown[], c: Record<string, number>, problems: string[] = [
 beforeEach(() => {
   vi.clearAllMocks();
   api.history.mockResolvedValue({ festivalName: 'Fest', imports: [] });
-  api.announcement.mockResolvedValue({ festivalName: 'Fest', recipients: 0 });
+  api.announcement.mockResolvedValue({
+    festivalName: 'Fest',
+    recipients: 0,
+    followers: 0,
+    priorAttendees: 0,
+    matchedFestivalNames: [],
+    emailRecipients: 0,
+    emailCut: 0,
+    emailOff: null,
+  });
+  api.daysAnnouncement.mockResolvedValue({
+    festivalName: 'Fest',
+    actsWithDay: 0,
+    actsTotal: 0,
+    recipients: 0,
+    audience: 0,
+    emailRecipients: 0,
+    emailCut: 0,
+    emailOff: null,
+    reason: 'no_days',
+  });
 });
 
 async function pasteSampleAndCheck() {

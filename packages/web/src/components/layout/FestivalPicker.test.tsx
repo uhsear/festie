@@ -9,6 +9,7 @@ interface TestFestival {
   endDate: string;
   location?: string;
   slug?: string | null;
+  scheduleProgress?: 'times' | 'days' | 'lineup' | null;
 }
 
 const day = (offset: number) => {
@@ -98,6 +99,23 @@ describe('FestivalPicker dialog', () => {
     expect(screen.getByTestId('festival-option-up')).toHaveTextContent(' · ');
     expect(screen.getByTestId('festival-option-live')).toHaveAttribute('aria-current', 'true');
     expect(screen.getByTestId('festival-option-past')).not.toHaveAttribute('aria-current');
+  });
+
+  it('badges how far each festival\'s schedule has come, and none when no acts are out', () => {
+    state.festivals = [
+      { ...fest('t', 'Times Fest', 10, 12), scheduleProgress: 'times' },
+      { ...fest('d', 'Days Fest', 11, 13), scheduleProgress: 'days' },
+      { ...fest('l', 'Lineup Fest', 12, 14), scheduleProgress: 'lineup' },
+      { ...fest('n', 'Empty Fest', 13, 15), scheduleProgress: null },
+      fest('o', 'Old Server Fest', 14, 16),
+    ];
+    render(<FestivalPicker />);
+    fireEvent.click(screen.getByTestId('festival-select'));
+    expect(screen.getByTestId('festival-progress-t')).toHaveTextContent('Set times');
+    expect(screen.getByTestId('festival-progress-d')).toHaveTextContent('Days only');
+    expect(screen.getByTestId('festival-progress-l')).toHaveTextContent('Lineup only');
+    expect(screen.queryByTestId('festival-progress-n')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('festival-progress-o')).not.toBeInTheDocument();
   });
 
   it('shows search only above 8 festivals and filters by name or location', () => {

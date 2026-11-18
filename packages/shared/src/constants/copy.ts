@@ -175,15 +175,23 @@ export const DISCOVER_COPY = {
     followA11y: (festivalName: string): string => `Follow ${festivalName}`,
     unfollowA11y: (festivalName: string): string => `Stop following ${festivalName}`,
     followedToast: (festivalName: string): string =>
-      `We'll tell you when ${festivalName} posts its lineup or set times.`,
+      `We'll tell you when ${festivalName} posts its lineup, days or set times.`,
     unfollowedToast: (festivalName: string): string => `Stopped following ${festivalName}.`,
     error: "Couldn't update. Try again.",
     notNow: 'Not now',
   },
   banner: {
     title: 'Set times are not out yet',
+    // No act has a day yet, so days come before set times.
+    daysTitle: 'Days and set times are not out yet',
     joined: "We'll tell you when they are.",
     guest: 'Follow to hear when they are.',
+  },
+  /** The festival picker badge: how far the schedule has come. A festival with no acts has none. */
+  scheduleProgress: {
+    times: 'Set times',
+    days: 'Days only',
+    lineup: 'Lineup only',
   },
 } as const;
 

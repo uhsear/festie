@@ -18,6 +18,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'festival.lineup.imported': 'Lineup imported',
   'festival.lineup.import_undone': 'Lineup import undone',
   'festival.lineup.announced': 'Lineup announcement sent',
+  'festival.days.announced': 'Days announcement sent',
   'festival.spotify.backfilled': 'Spotify links filled in',
   'set.link.updated': 'Set link changed',
   'user.role.granted': 'Role granted',

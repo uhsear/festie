@@ -106,6 +106,8 @@ export interface Festival {
   mapConfig?: FestivalMapConfig | null;
   /** The announced lineup, in billing order. Absent on servers from before migration 104. */
   lineup?: LineupEntry[];
+  /** From the festival list only: set times out, days only, or lineup only. Null or absent when no acts are out. */
+  scheduleProgress?: 'times' | 'days' | 'lineup' | null;
   createdAt: string;
   updatedAt: string;
 }
