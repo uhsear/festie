@@ -266,12 +266,12 @@ export default function createFestivalsRoutes(deps: any) {
       const setId = String(req.params.setId || '');
       if (!setId) return sendError(res, 400, 'Set ID required', ErrorCodes.INVALID_INPUT);
       const result = await stores.pool.query(
-        `SELECT fs.festival_id FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
+        `SELECT fs.festival_id, (f.published_at IS NOT NULL) AS published FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
          WHERE fs.id = $1 AND f.deleted_at IS NULL AND (f.published_at IS NOT NULL OR $2::boolean) LIMIT 1`,
         [setId, isAdminReq(req)],
       );
       if (!result.rows.length) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
-      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Cache-Control', result.rows[0].published ? 'public, max-age=300' : 'private, no-store');
       return sendSuccess(res, { festivalId: result.rows[0].festival_id });
     } catch (error: any) {
       log.error('locate-set failed', { error: error.message });
@@ -516,6 +516,7 @@ export default function createFestivalsRoutes(deps: any) {
           : { changes: [], pickersBySet: new Map<string, string[]>() };
 
         const festival = await stores.festivals.update(req.validatedParams.id, {
+          expectedUpdatedAt: body.expectedUpdatedAt,
           name: nextFestival.name,
           location: nextFestival.location,
           b2bSeparator: nextFestival.b2bSeparator,
@@ -547,6 +548,8 @@ export default function createFestivalsRoutes(deps: any) {
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
         if (notified) void emitter.scheduleChanged({ festival, changes, pickersBySet });
+        // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
+        if (daysSent || body.lineup !== undefined || body.b2bSeparator !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
         // An admin-set venue wins over the geocoder until the location text changes in a later save.
         const venueSetByAdmin =
@@ -559,6 +562,14 @@ export default function createFestivalsRoutes(deps: any) {
           (await fillVenueCoords(festival.id, nextFestival.location));
         return sendSuccess(res, { ...festival, scheduleNotice, ...(venueGuessed ? { venueGuessed } : {}) });
       } catch (error: any) {
+        if (error.code === 'FESTIVAL_CHANGED') {
+          return sendError(
+            res,
+            409,
+            'This festival changed since you opened it. Reload it, then make your change again.',
+            ErrorCodes.FESTIVAL_CHANGED,
+          );
+        }
         if (sendIdClash(res, error)) return;
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
@@ -739,6 +750,8 @@ export default function createFestivalsRoutes(deps: any) {
         );
         await stores.pool.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
         invalidateFestivalCache();
+        // A flat set becomes an artists array here, which can change the name key that covers an act.
+        void deps.interestConversion?.convert(festivalId);
 
         audit(AUDIT_ACTIONS.SET_LINK_UPDATED, 'set', setId, req, { festivalId, artistIndex, linkUrl: cleanUrl });
         log.info('set link updated', {

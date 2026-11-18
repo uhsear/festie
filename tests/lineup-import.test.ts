@@ -443,6 +443,91 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
   });
 });
 
+describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
+  function build(publishedAt: string | null, calls: string[] = []) {
+    const festivalUpdated = mock.fn((_arg: any) => {});
+    const invalidateFestivalListCache = mock.fn(() => {});
+    const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
+    const plan = { rows: [], counts: { error: 0 }, problems: [] };
+    const deps: any = {
+      express,
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      config: {},
+      adminAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'admin-1' };
+        next();
+      },
+      setNoStore: () => {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      sanitizeIdentifier: (v: string) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      stores: {
+        festivals: {
+          getById: async () => {
+            calls.push('getById');
+            return festival;
+          },
+        },
+        lineupImports: {
+          commit: async () => ({
+            committed: true,
+            plan,
+            importId: 'imp-1',
+            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+          }),
+          undo: async () => {
+            calls.push('undo');
+            return { result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } };
+          },
+        },
+        auditLog: null,
+      },
+      invalidateFestivalCache: () => {},
+      invalidateFestivalListCache,
+      emitter: { festivalUpdated },
+      getRequestIp: () => '127.0.0.1',
+      reengagement: { sendSetTimesOut: async () => ({}) },
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(createLineupImportRoute(deps));
+    return { app, festivalUpdated, invalidateFestivalListCache };
+  }
+  const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+  const PUBLISHED = '2026-01-01T00:00:00.000Z';
+
+  test('a commit on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
+    const calls: string[] = [];
+    const { app } = build(PUBLISHED, calls);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.deepEqual(calls, ['getById', 'undo']);
+  });
+
+  test('a draft festival has no attendees, so nothing is emitted, but the list cache still drops', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(null);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(festivalUpdated.mock.calls.length, 0);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 2);
+  });
+});
+
 describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
   test('an empty festival gets new stages, days and sets', async () => {
     if (!createFestivalPlanner) return;
@@ -512,6 +597,35 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     const sets = await withPool((pool) => pool.query(
       `SELECT start_time FROM festival_sets WHERE festival_id = $1`, [FEST_ID]));
     assert.deepEqual(sets.rows.map((r: any) => r.start_time), ['21:00']);
+  });
+
+  test('a set_id row on another day is skipped and listed first, and the other rows commit', async () => {
+    if (!createFestivalPlanner) return;
+    const { server, admin } = await adminServer();
+    const alpha = { row: 2, artist: 'DJ Alpha', stage: 'Main Stage', day: 'Friday', startTime: '20:00', endTime: '21:00' };
+    const beta = { row: 3, artist: 'DJ Beta', stage: 'Forest', day: 'Friday', startTime: '20:00', endTime: '21:00' };
+    const seeded = await postImport(server, admin, FEST_ID, { rows: [alpha, beta], skipSpotify: true }).expect(200);
+    const [alphaId, betaId] = seeded.body.data.result.rows.map((r: any) => r.setId);
+
+    const res = await postImport(server, admin, FEST_ID, {
+      rows: [
+        { row: 2, setId: betaId, artist: 'DJ Beta', day: 'Friday', startTime: '21:00', endTime: '22:00' },
+        { row: 3, setId: alphaId, artist: 'DJ Alpha', day: 'Saturday', startTime: '22:00', endTime: '23:00' },
+      ],
+      updateExisting: true,
+      skipSpotify: true,
+    }).expect(200);
+
+    const { result } = res.body.data;
+    assert.deepEqual(result.rows.map((r: any) => r.status), ['updated', 'skipped']);
+    assert.equal(result.skipped, 1);
+    assert.match(result.warnings[0], /^Row 3: Skipped: the file says Saturday, the stored day is Friday\./);
+    const sets = await withPool((pool) => pool.query(
+      `SELECT id, start_time FROM festival_sets WHERE festival_id = $1 ORDER BY id`, [FEST_ID]));
+    assert.deepEqual(
+      Object.fromEntries(sets.rows.map((r: any) => [r.id, r.start_time])),
+      { [alphaId]: '20:00', [betaId]: '21:00' },
+    );
   });
 
   test('undo removes created sets, restores updated ones, keeps picked ones and drops new stages and days', async () => {

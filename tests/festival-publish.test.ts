@@ -271,7 +271,10 @@ describe('festival drafts and publish', { skip, concurrency: 1 }, () => {
     const detail = await admin(token, server.request.get('/api/v1/admin/festivals/fest-d')).expect(200);
     h.assert.deepEqual(
       detail.body.data.checklist.map((item: any) => item.key),
-      ['timeZone', 'stages', 'days', 'sets', 'errors', 'pins', 'times', 'overlaps'],
+      [
+        'timeZone', 'stages', 'days', 'sets', 'errors', 'pins', 'times', 'overlaps',
+        'duration_odd', 'start_unusual_hour', 'artist_double_booked',
+      ],
     );
     h.assert.equal(detail.body.data.publishedAt, null);
   });

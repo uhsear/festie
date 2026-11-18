@@ -269,11 +269,11 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
   describe('email', () => {
     // RESEND_API_KEY is unset, so sendEmail logs 'email:skip' (and sends nothing).
     // That log line shows which addresses the fan-out reached.
-    async function run(prefs: any, { postal = '1 Main St, Town', followers = ['p1'], prior = [] as string[] } = {}) {
+    async function run(prefs: any, { postal = '1 Main St, Town', followers = ['p1'], prior = [] as string[], unverified = [] as string[] } = {}) {
       const skips: any[] = [];
       const emailLog = { ...log, warn: (msg: string, meta: any) => { if (msg === 'email:skip') skips.push(meta); } };
       const users = new Map(
-        [...followers, ...prior].map((id) => [id, { email: `${id}@example.com`, username: id }] as const),
+        [...followers, ...prior].map((id) => [id, { email: `${id}@example.com`, emailVerifiedAt: unverified.includes(id) ? null : '2026-01-01T00:00:00.000Z', username: id }] as const),
       );
       const stores = {
         users: { getByIds: async () => users },
@@ -297,6 +297,11 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
 
     it('goes to followers only, never to a past-edition user who does not follow', async () => {
       const { skips } = await run({ lineupDrops: true }, { followers: ['f1'], prior: ['p1'] });
+      assert.deepEqual(skips.map((s) => s.to), ['f1@example.com']);
+    });
+
+    it('never emails an unverified address, but still emails a verified follower', async () => {
+      const { skips } = await run({ lineupDrops: true }, { followers: ['f1', 'f2'], unverified: ['f2'] });
       assert.deepEqual(skips.map((s) => s.to), ['f1@example.com']);
     });
 
@@ -812,7 +817,7 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
     };
     const stores = {
       festivals: { getById: async () => festival },
-      users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', username: 'f1' }]]) },
+      users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
       notificationPrefs: { get: async () => prefs },
       notificationLog: {
         // Stands in for notification_log: a user pushed for this event is not fresh.
@@ -896,7 +901,7 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
       const emailLog = { ...log, warn: (msg: string) => { if (msg === 'email:skip') skips.push(msg); } };
       const stores = {
         festivals: { getById: async () => FEST },
-        users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', username: 'f1' }]]) },
+        users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
         notificationPrefs: { get: async () => prefs },
         notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {}, countEmailsSince: async () => emailsToday },
       };
@@ -1017,7 +1022,7 @@ describe('createReengagementTriggers days_out', () => {
       festivals: { getById: async () => festival },
       users: {
         getByIds: async (ids: string[]) =>
-          new Map(ids.map((id) => [id, { email: `${id}@example.com`, username: id }] as const)),
+          new Map(ids.map((id) => [id, { email: `${id}@example.com`, emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: id }] as const)),
       },
       notificationPrefs: {
         get: async () => {

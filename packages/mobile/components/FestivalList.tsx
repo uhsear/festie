@@ -186,7 +186,7 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
 
   const handleShare = () => {
     if (!shareSlug) return;
-    const url = buildFestivalPageUrl(shareSlug);
+    const url = buildFestivalPageUrl(shareSlug, undefined, 'share-festival');
     // Android ignores `url`, so the message carries the link.
     Share.share({ message: `${FESTIVAL_SHARE_COPY.text(festival.name)}: ${url}`, url, title: festival.name }).catch(
       () => undefined,

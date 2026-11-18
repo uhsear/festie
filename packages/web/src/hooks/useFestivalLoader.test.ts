@@ -186,6 +186,12 @@ describe('useFestivalLoader ?ref capture', () => {
     expect(readSignupRef()).toBe('crew_share');
   });
 
+  it('keeps the crew-invite ref when a ?joinCrew= code is in the same link', () => {
+    window.history.pushState({}, '', '/?joinCrew=ABC123&ref=crew-invite');
+    renderHook(() => useFestivalLoader());
+    expect(readSignupRef()).toBe('crew-invite');
+  });
+
   it('ignores an invalid ref', () => {
     window.history.pushState({}, '', '/?ref=bad%20ref!');
     renderHook(() => useFestivalLoader());

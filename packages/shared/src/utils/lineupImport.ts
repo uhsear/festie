@@ -40,6 +40,8 @@ export interface LineupImportPlanRow {
     message: string;
   }[];
   warnings: string[];
+  /** The row names another day than the stored set. Nothing is written for it. */
+  skipped?: true;
 }
 
 export interface LineupImportPlanCounts {
@@ -47,6 +49,7 @@ export interface LineupImportPlanCounts {
   changed: number;
   unchanged: number;
   error: number;
+  skipped: number;
   newStages: number;
   newDays: number;
   missingFromFile: number;
@@ -172,6 +175,8 @@ export interface LineupImportUndoResult {
   restored: number;
   removedStages: number;
   removedDays: number;
+  /** Picks that interest conversion made on the removed sets and nobody changed. Absent from an older server. */
+  autoPicksRemoved?: number;
   kept: { setId: string; artist: string; reason: 'picked' | 'edited' }[];
 }
 
@@ -294,7 +299,7 @@ export function toImportRows(
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export function planSummary(
-  counts: Pick<LineupImportPlanCounts, 'new' | 'changed' | 'unchanged' | 'error' | 'newStages' | 'newDays'>,
+  counts: Pick<LineupImportPlanCounts, 'new' | 'changed' | 'unchanged' | 'error' | 'skipped' | 'newStages' | 'newDays'>,
   updateExisting: boolean,
 ): string {
   const parts: string[] = [];
@@ -307,8 +312,19 @@ export function planSummary(
   }
   if (counts.newStages) parts.push(`Create ${plural(counts.newStages, 'stage')}.`);
   if (counts.newDays) parts.push(`Create ${plural(counts.newDays, 'day')}.`);
+  if (counts.skipped) parts.push(`Skip ${plural(counts.skipped, 'row')} that name${counts.skipped === 1 ? 's' : ''} another day.`);
   if (counts.error) parts.push(`${plural(counts.error, 'row')} ${counts.error === 1 ? 'has' : 'have'} errors.`);
   return parts.length ? parts.join(' ') : 'Nothing to change.';
+}
+
+/** A file with a set_id column is an export of this lineup, so its changed rows are meant to apply. */
+export const defaultUpdateExisting = (mapping: LineupColumnMapping): boolean => mapping.setId !== undefined;
+
+/** The banner for a preview whose changed rows an off Update switch would leave unapplied, or null. */
+export function updateOffBanner(counts: Pick<LineupImportPlanCounts, 'changed'>, updateExisting: boolean): string | null {
+  if (updateExisting || counts.changed === 0) return null;
+  const n = counts.changed;
+  return `${n} ${n === 1 ? 'row changes an existing set' : 'rows change existing sets'}. Turn on Update to apply ${n === 1 ? 'it' : 'them'}.`;
 }
 
 export function buildResultCsv(result: LineupImportCommitResult): string {

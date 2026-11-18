@@ -11,7 +11,7 @@ import {
 import type { FestivalIssue } from '@festie/shared/utils';
 import type { Artist } from '@festie/shared/types';
 import type { LineupDraft } from '@festie/shared/utils';
-import type { SetEngagementMap } from '@festie/shared/services';
+import type { LineupInterestCounts, SetEngagementMap } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
 import AnnouncedNames from './AnnouncedNames';
 import SetTimeReleasePanel from './SetTimeReleasePanel';
@@ -52,6 +52,8 @@ export interface FestivalEditFormProps {
   /** Picks and reminders per set id; undefined until loaded. */
   engagement?: SetEngagementMap;
   engagementError?: boolean;
+  /** Marks per announced act, for the "N marked" figure on each lineup row. Absent until loaded. */
+  interestCounts?: LineupInterestCounts;
   onSave: () => void;
   /** Edit mode: reset to the loaded festival. */
   onDiscard: () => void;
@@ -83,6 +85,7 @@ export default function FestivalEditForm({
   savedDays,
   engagement,
   engagementError,
+  interestCounts,
   onSave,
   onDiscard,
   onCancel,
@@ -452,6 +455,7 @@ export default function FestivalEditForm({
           savedDays={savedDays}
           separator={formData.b2bSeparator}
           savedAt={formData.updatedAt}
+          interestCounts={interestCounts}
           onChange={(lineup) => setFormData({ ...formData, lineup })}
         />
       )}

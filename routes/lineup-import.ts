@@ -17,6 +17,8 @@
  * already went out alerts the people who picked it (lib/picker-alerts.ts). Other time changes stay silent.
  * A commit and an undo also drop the festival list cache, and on a published festival emit
  * festival:updated, so open clients reload and the announced lineup shows what the sets now cover.
+ * Both then run the interest conversion (lib/lineup.ts), which turns marks on covered acts into picks.
+ * Undo first takes back the picks that conversion made on the sets it deletes.
  *
  * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, commit searches
  * Spotify once for the artists of new sets that have no link.
@@ -36,6 +38,8 @@ import {
 
 const SKIPPED_MESSAGE = 'Matches an existing set. Not updated because Update sets that match was off.';
 
+const DAY_SKIPPED_MESSAGE = 'Not changed. The file names another day than the stored set, and an import cannot move a set to another day.';
+
 const makeId = (prefix: string) => `${prefix}-${crypto.randomBytes(6).toString('hex')}`;
 
 /** One result entry per request row, plus the counts the admin sees after a commit. */
@@ -49,6 +53,7 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
     if (updated.has(i)) {
       return { row: r.row, status: 'updated' as const, setId: r.setId, artist, message: `Updated: ${r.changes.join('; ')}.` };
     }
+    if (r.skipped) return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: DAY_SKIPPED_MESSAGE };
     if (r.status === 'changed') return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: SKIPPED_MESSAGE };
     return { row: r.row, status: 'unchanged' as const, setId: r.setId, artist, message: 'No change.' };
   });
@@ -63,7 +68,11 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
     newDays: writes.newDays.length,
     spotifyMatched: writes.spotifyMatched,
     rows,
-    warnings: [...plan.rows.flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)), ...warnings],
+    // Rows that kept their stored day come first, so the admin sees what the import did not apply.
+    warnings: [
+      ...[...plan.rows].sort((a, b) => Number(!!b.skipped) - Number(!!a.skipped)).flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)),
+      ...warnings,
+    ],
   };
 }
 
@@ -220,6 +229,8 @@ export default function createLineupImportRoute(deps: any) {
 
       invalidateFestivalCache();
       announceSetsChanged(festival);
+      // After the response is built, so the save never waits. It logs its own failure.
+      void deps.interestConversion?.convert(festivalId);
       alertPickersOfFirstTimes(festival);
       const result = buildResult(outcome.plan, outcome.writes, outcome.importId, warnings, festival.b2bSeparator || 'b2b');
       log.info('lineup imported', {
@@ -285,6 +296,11 @@ export default function createLineupImportRoute(deps: any) {
         }
         invalidateFestivalCache();
         announceSetsChanged(festival);
+        // Marks that lost their automatic picks reach open devices, then conversion runs again in case
+        // a set that stayed still covers a marked act.
+        void deps.interestConversion
+          ?.announce(outcome.changedProfileIds ?? [])
+          .then(() => deps.interestConversion.convert(festivalId));
         log.info('lineup import undone', { festivalId, importId, ...outcome.result, kept: outcome.result.kept.length });
         await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORT_UNDONE, festivalId, {
           importId,
@@ -292,6 +308,7 @@ export default function createLineupImportRoute(deps: any) {
           restored: outcome.result.restored,
           removedStages: outcome.result.removedStages,
           removedDays: outcome.result.removedDays,
+          autoPicksRemoved: outcome.result.autoPicksRemoved,
           kept: outcome.result.kept.length,
         });
         return sendSuccess(res, outcome.result);

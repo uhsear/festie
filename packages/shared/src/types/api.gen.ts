@@ -3119,6 +3119,14 @@ export type components = {
             createdAt: string;
             festivalId: string;
             id: string;
+            interests?: {
+                [key: string]: {
+                    at?: string;
+                    sets?: string[];
+                    /** @enum {string} */
+                    state: "open" | "converted";
+                };
+            };
             name: string;
             notes?: {
                 [key: string]: string;

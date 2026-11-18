@@ -1,5 +1,6 @@
 export * from './useSocket';
 export * from './usePicks';
+export * from './useInterest';
 export * from './useFestival';
 export * from './useAuth';
 export * from './useCrew';

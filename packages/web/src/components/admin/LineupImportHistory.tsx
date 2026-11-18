@@ -68,7 +68,8 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
     try {
       const result = await lineupImportApi.undo(festivalId, undoTarget.id);
       const stayed = result.kept.length ? ` ${result.kept.length} sets stayed.` : '';
-      toast(`Import undone. Removed ${result.removed} sets and restored ${result.restored}.${stayed}`, 'success');
+      const back = result.autoPicksRemoved ? ` ${result.autoPicksRemoved} automatic picks went back to marks.` : '';
+      toast(`Import undone. Removed ${result.removed} sets and restored ${result.restored}.${stayed}${back}`, 'success');
       setLastUndo(result);
       setUndoTarget(null);
       await reload();
