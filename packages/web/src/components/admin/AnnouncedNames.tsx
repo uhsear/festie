@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createArtist, matchArtists } from '@festie/shared/services';
+import type { ArtistCandidate } from '@festie/shared/services';
 import {
   MAX_LINEUP_LINES,
   coverLineup,
@@ -16,6 +18,8 @@ import type { LineupDraft } from '@festie/shared/utils';
 import type { LineupEntry } from '@festie/shared/types';
 import Button from '../ui/Button';
 import Dialog from '../ui/Dialog';
+import ArtistSlotMatch from './ArtistSlotMatch';
+import type { SlotMatch } from './ArtistSlotMatch';
 
 type FormDay = { date?: string; label?: string; sets?: { id: string; artist?: string; artists?: { name: string }[] }[] };
 
@@ -42,6 +46,12 @@ const FIELD =
   'px-2 py-1.5 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua';
 const SMALL_BUTTON =
   'px-3 py-1.5 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium';
+
+const nameKey = (name: string) => name.trim().toLowerCase();
+/** The match route takes at most this many names per call. */
+const MATCH_BATCH = 500;
+type NameMatch = { name: string; match: SlotMatch };
+type DraftArtist = LineupDraft['artists'][number];
 
 const joinNames = (e: LineupDraft, sep: string) => e.artists.map((a) => a.name).join(` ${sep} `);
 
@@ -105,6 +115,80 @@ export default function AnnouncedNames({ lineup, days, savedDays, separator, sav
 
   useEffect(() => setUnsaved(false), [savedAt]);
 
+  // Names with no artist id that fit an artist Festie already has, by lower-cased name.
+  const [matches, setMatches] = useState<Record<string, NameMatch>>({});
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const latestLineup = useRef(lineup);
+  latestLineup.current = lineup;
+  const matchRun = useRef(0);
+
+  /** Asks the server which unlinked names match an artist (one call per 500 names), then links the clear ones. */
+  const matchNames = async (list: LineupDraft[]) => {
+    const run = ++matchRun.current;
+    const names = [
+      ...new Map(list.flatMap((e) => e.artists).filter((a) => !a.id && a.name.trim()).map((a) => [nameKey(a.name), a.name.trim()])).values(),
+    ];
+    if (names.length === 0) return setMatches({});
+    try {
+      const found = [];
+      for (let i = 0; i < names.length; i += MATCH_BATCH) {
+        found.push(...(await matchArtists(names.slice(i, i + MATCH_BATCH).map((name) => ({ name })))));
+      }
+      if (run !== matchRun.current) return;
+      const next: Record<string, NameMatch> = {};
+      const linkTo = new Map<string, ArtistCandidate>();
+      found.forEach((f, i) => {
+        const name = names[i]!;
+        if (f.outcome === 'linked' && f.candidates[0]) {
+          linkTo.set(nameKey(name), f.candidates[0]);
+          next[nameKey(name)] = { name, match: { kind: 'linked', candidate: f.candidates[0] } };
+        } else if (f.outcome === 'pick') next[nameKey(name)] = { name, match: { kind: 'pick', name, candidates: f.candidates } };
+      });
+      if (linkTo.size > 0) {
+        onChange(
+          latestLineup.current.map((e) => ({
+            ...e,
+            artists: e.artists.map((a) => {
+              const c = a.id ? undefined : linkTo.get(nameKey(a.name));
+              return c ? { ...a, id: c.id, name: c.name } : a;
+            }),
+          })),
+        );
+      }
+      setMatches(next);
+      setReviewOpen(false);
+    } catch (err) {
+      // Offline or refused: the names stay free text and the server resolves them on save.
+      console.warn('Could not match the announced names', err);
+    }
+  };
+
+  const changeNamed = (key: string, only: (a: DraftArtist) => boolean, change: (a: DraftArtist) => DraftArtist) =>
+    onChange(latestLineup.current.map((e) => ({ ...e, artists: e.artists.map((a) => (nameKey(a.name) === key && only(a) ? change(a) : a)) })));
+
+  const pickFor = (key: string, name: string, c: ArtistCandidate) => {
+    changeNamed(key, (a) => a.id !== c.id, (a) => ({ ...a, id: c.id, name: c.name }));
+    setMatches((m) => ({ ...m, [key]: { name, match: { kind: 'linked', candidate: c } } }));
+  };
+
+  const notThisOne = (key: string, name: string, c: ArtistCandidate) => {
+    changeNamed(key, (a) => a.id === c.id, ({ id: _id, ...rest }) => rest);
+    setMatches((m) => ({ ...m, [key]: { name, match: { kind: 'pick', name, candidates: [c] } } }));
+  };
+
+  const createFor = async (key: string, name: string, label: string): Promise<string | null> => {
+    try {
+      const created = await createArtist({ name, label });
+      pickFor(key, name, { id: created.id, name: created.name, label: created.label, photo: created.photo, platforms: [], lastFestival: null });
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "Couldn't create the artist. Try again.";
+    }
+  };
+
+  const matched = Object.entries(matches);
+  const needChoice = matched.filter(([, m]) => m.match.kind === 'pick').length;
+
   const datedDays = days.filter((d) => d.date);
   // New lines have no id until the server saves them, so the cover rule gets a stand-in key.
   const keyed = useMemo<LineupEntry[]>(
@@ -152,6 +236,7 @@ export default function AnnouncedNames({ lineup, days, savedDays, separator, sav
     onChange(merge.lineup);
     setUnsaved(true);
     setDialog(null);
+    void matchNames(merge.lineup);
   };
 
   const patch = (index: number, change: Partial<LineupDraft>) =>
@@ -227,6 +312,36 @@ export default function AnnouncedNames({ lineup, days, savedDays, separator, sav
         <ul className="mb-3 rounded-lg border border-accent-amber/40 p-3 text-xs text-accent-amber list-disc list-inside" aria-label="Lineup notices">
           {notices.map((n) => <li key={n}>{n}</li>)}
         </ul>
+      )}
+
+      {matched.length > 0 && (
+        <div className="mb-3 rounded-lg border border-glass-border p-3 text-xs text-text-primary space-y-2" data-testid="artist-matches">
+          <p className="flex flex-wrap items-center gap-2">
+            <span>
+              {matched.length} {matched.length === 1 ? 'name matches an artist' : 'names match artists'} already in Festie.
+              {needChoice > 0 && ` ${needChoice} ${needChoice === 1 ? 'needs' : 'need'} a choice.`}
+            </span>
+            <button type="button" aria-expanded={reviewOpen} onClick={() => setReviewOpen((v) => !v)} className="text-accent-aqua hover:underline">
+              {reviewOpen ? 'Hide' : 'Review'}
+            </button>
+          </p>
+          {reviewOpen && (
+            <ul className="space-y-2">
+              {matched.map(([key, { name, match }]) => (
+                <li key={key} className="space-y-1">
+                  <span className="text-text-muted">{name}</span>
+                  <ArtistSlotMatch
+                    name={name}
+                    match={match}
+                    onPick={(c) => pickFor(key, name, c)}
+                    onNotThisOne={() => match.kind === 'linked' && notThisOne(key, name, match.candidate)}
+                    onCreate={(note) => createFor(key, name, note)}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
 
       {lineup.length > 0 && (

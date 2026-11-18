@@ -30,15 +30,19 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 type Notice = { text: string; names?: string[]; error?: boolean };
 interface Draft {
+  name: string;
   addLink: string;
   label: string;
   removed: string[];
 }
 
 const HEADER_TITLE = 'Artists';
-const emptyDraft = (artist: AdminArtistRow): Draft => ({ addLink: '', label: artist.label, removed: [] });
+const emptyDraft = (artist: AdminArtistRow): Draft => ({ name: artist.name, addLink: '', label: artist.label, removed: [] });
 const hasChanges = (artist: AdminArtistRow, draft: Draft) =>
-  draft.addLink.trim() !== '' || draft.removed.length > 0 || draft.label.trim() !== artist.label;
+  draft.addLink.trim() !== '' ||
+  draft.removed.length > 0 ||
+  draft.label.trim() !== artist.label ||
+  (draft.name.trim() !== '' && draft.name.trim() !== artist.name);
 
 function errorText(err: unknown, fallback: string) {
   return err instanceof Error && err.message ? err.message : fallback;
@@ -114,6 +118,7 @@ export default function FestivalArtistsScreen() {
   const save = async (artist: AdminArtistRow) => {
     const draft = draftOf(artist);
     const changes: ArtistChanges = {};
+    if (draft.name.trim() && draft.name.trim() !== artist.name) changes.name = draft.name.trim();
     if (draft.addLink.trim()) changes.addLink = draft.addLink.trim();
     if (draft.removed.length > 0) changes.removeLinks = draft.removed;
     if (draft.label.trim() !== artist.label) changes.label = draft.label.trim();
@@ -327,6 +332,14 @@ export default function FestivalArtistsScreen() {
                         </View>
                       );
                     })}
+                    <LabeledTextInput
+                      label={`Name for ${artist.name}`}
+                      value={draft.name}
+                      onChangeText={(text) => patchDraft(artist, { name: text })}
+                      placeholder="Artist name"
+                      maxLength={300}
+                      editable={busy === null}
+                    />
                     <LabeledTextInput
                       label={`Add link for ${artist.name}`}
                       value={draft.addLink}

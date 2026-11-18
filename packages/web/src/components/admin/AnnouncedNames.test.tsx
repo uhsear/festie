@@ -1,8 +1,17 @@
 import React, { useState } from 'react';
-import { describe, it, expect } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { beforeEach, describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import type { LineupDraft } from '@festie/shared/utils';
 import AnnouncedNames from './AnnouncedNames';
+
+const services = vi.hoisted(() => ({ matchArtists: vi.fn(), createArtist: vi.fn() }));
+vi.mock('@festie/shared/services', async (orig) => ({ ...(await orig<typeof import('@festie/shared/services')>()), ...services }));
+beforeEach(() => {
+  vi.clearAllMocks();
+  services.matchArtists.mockResolvedValue([]);
+});
+
+const candidate = (id: string, label = '') => ({ id, name: 'Mira', label, photo: null, platforms: ['spotify'], lastFestival: { id: 'f0', name: 'Old Fest' } });
 
 const entry = (id: string, names: string[], extra: Partial<LineupDraft> = {}): LineupDraft => ({
   id,
@@ -191,5 +200,30 @@ describe('AnnouncedNames', () => {
   it('warns about acts with no matching set once sets exist', () => {
     render(<Harness initial={[entry('a', ['Kai']), entry('b', ['Mira'])]} />);
     expect(screen.getByLabelText('Lineup notices').textContent).toMatch(/1 announced act has no matching set: Mira/);
+  });
+
+  it('after a paste, one match call links the clear names and lists the ones that need a pick', async () => {
+    services.matchArtists.mockResolvedValue([
+      { name: 'Kai', outcome: 'linked', candidates: [{ ...candidate('art-kai'), name: 'Kai' }] },
+      { name: 'Mira', outcome: 'pick', candidates: [candidate('art-m1'), candidate('art-m2', 'UK')] },
+      { name: 'Solo', outcome: 'new', candidates: [] },
+    ]);
+    render(<Harness initial={[]} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Paste names' }));
+    fireEvent.change(dialogOf().getByLabelText('Names'), { target: { value: 'Kai\nMira\nSolo' } });
+    fireEvent.click(dialogOf().getByRole('button', { name: 'Add' }));
+
+    expect(await screen.findByText(/2 names match artists already in Festie\. 1 needs a choice\./)).toBeTruthy();
+    expect(services.matchArtists).toHaveBeenCalledTimes(1);
+    expect(services.matchArtists).toHaveBeenCalledWith([{ name: 'Kai' }, { name: 'Mira' }, { name: 'Solo' }]);
+    await waitFor(() => expect(state().map((e) => e.artists[0]!.id)).toEqual(['art-kai', undefined, undefined]));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review' }));
+    fireEvent.click(screen.getByRole('button', { name: /Mira \(UK\)/ }));
+    await waitFor(() => expect(state().map((e) => e.artists[0]!.id)).toEqual(['art-kai', 'art-m2', undefined]));
+    expect(screen.getByText(/Linked: Mira \(UK\)/)).toBeTruthy();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Not this one' })[1]!);
+    await waitFor(() => expect(state().map((e) => e.artists[0]!.id)).toEqual(['art-kai', undefined, undefined]));
   });
 });

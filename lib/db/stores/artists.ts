@@ -172,6 +172,8 @@ export interface ArtistUse {
   published: boolean;
   deleted: boolean;
   firstDate: string | null;
+  lastDate: string | null;
+  timeZone: string | null;
 }
 
 /** Every festival that lists each artist on a set or in its announced lineup, archived ones included. */
@@ -186,7 +188,9 @@ export async function artistUses(db: { query: Pool['query'] }, artistIds: string
     f.name,
     f.published_at IS NOT NULL AS published,
     f.deleted_at IS NOT NULL AS deleted,
-    (SELECT MIN(d.date) FROM festival_days d WHERE d.festival_id = f.id AND d.date <> '') AS "firstDate"
+    (SELECT MIN(d.date) FROM festival_days d WHERE d.festival_id = f.id AND d.date <> '') AS "firstDate",
+    (SELECT MAX(d.date) FROM festival_days d WHERE d.festival_id = f.id AND d.date <> '') AS "lastDate",
+    f.time_zone AS "timeZone"
   FROM (${ELEMENT_IDS_OF_SETS} UNION ${ELEMENT_IDS_OF_LINEUPS}) u
   JOIN festivals f ON f.id = u.festival_id
   ORDER BY "firstDate" DESC NULLS LAST, f.id
@@ -387,8 +391,7 @@ export interface MatchItem {
 export type MatchOutcome = 'linked' | 'pick' | 'new';
 
 export function createArtistsStore(pool: Pool) {
-  const candidatesOf = async (rows: ArtistRecord[]) => {
-    const uses = await artistUses(pool, rows.map((r) => r.id));
+  const candidatesOf = (rows: ArtistRecord[], uses: Map<string, ArtistUse[]>) => {
     return rows.slice(0, MAX_CANDIDATES).map((row) => {
       const live = (uses.get(row.id) ?? []).filter((u) => !u.deleted);
       return {
@@ -417,15 +420,18 @@ export function createArtistsStore(pool: Pool) {
         liveArtistsByKey(pool, [...new Set(prepared.map((p) => p.key).filter(Boolean))]),
         liveArtistsBySpotifyId(pool, [...new Set(prepared.map((p) => p.spotifyId).filter((id): id is string => !!id))]),
       ]);
-      return Promise.all(
-        prepared.map(async (p) => {
-          const spotifyHit = p.spotifyId ? bySpotify.get(p.spotifyId) : undefined;
-          const keyed = byKey.get(p.key) ?? [];
-          const rows = spotifyHit ? [spotifyHit] : keyed;
-          const outcome: MatchOutcome = rows.length === 1 ? 'linked' : rows.length > 1 ? 'pick' : 'new';
-          return { name: p.name, outcome, candidates: await candidatesOf(rows) };
-        }),
-      );
+      const rowsOf = (p: (typeof prepared)[number]) => {
+        const spotifyHit = p.spotifyId ? bySpotify.get(p.spotifyId) : undefined;
+        return spotifyHit ? [spotifyHit] : (byKey.get(p.key) ?? []);
+      };
+      // One scan of the sets and lineups for the whole paste, not one per name.
+      const candidateIds = new Set(prepared.flatMap((p) => rowsOf(p).slice(0, MAX_CANDIDATES).map((row) => row.id)));
+      const uses = await artistUses(pool, [...candidateIds]);
+      return prepared.map((p) => {
+        const rows = rowsOf(p);
+        const outcome: MatchOutcome = rows.length === 1 ? 'linked' : rows.length > 1 ? 'pick' : 'new';
+        return { name: p.name, outcome, candidates: candidatesOf(rows, uses) };
+      });
     },
 
     async getById(id: string, db: { query: Pool['query'] } = pool): Promise<ArtistRecord | null> {
@@ -530,10 +536,33 @@ export function createArtistsStore(pool: Pool) {
       }
     },
 
-    /** The festivals that list an artist, archived ones marked, newest first. */
-    async impact(id: string) {
+    /**
+     * The festivals that list an artist, archived ones marked, newest first, with the counts an editor
+     * weighs before a change: festivals by time (archived ones apart) and the copies a change rewrites.
+     */
+    async impact(id: string, now: Date = new Date()) {
       const uses = (await artistUses(pool, [id])).get(id) ?? [];
-      return uses.map((u) => ({ id: u.festivalId, name: u.name, published: u.published, archived: u.deleted, firstDate: u.firstDate }));
+      const counts = { past: 0, current: 0, upcoming: 0, archived: 0, sets: 0, lineupEntries: 0 };
+      for (const u of uses) {
+        if (u.deleted) counts.archived++;
+        else if (!isCurrentOrUpcoming(u, now)) counts.past++;
+        else if (!u.firstDate || u.firstDate > todayInZone(u.timeZone, now)) counts.upcoming++;
+        else counts.current++;
+      }
+      const { rows } = await pool.query(
+        `SELECT
+           (SELECT count(*) FROM festival_sets WHERE jsonb_typeof(artists) = 'array' AND artists @> $1::jsonb)::int AS sets,
+           (SELECT count(*) FROM festivals f,
+              jsonb_array_elements(CASE WHEN jsonb_typeof(f.lineup) = 'array' THEN f.lineup ELSE '[]'::jsonb END) e
+              WHERE jsonb_typeof(e->'artists') = 'array' AND e->'artists' @> $1::jsonb)::int AS "lineupEntries"`,
+        [JSON.stringify([{ id }])],
+      );
+      counts.sets = rows[0].sets;
+      counts.lineupEntries = rows[0].lineupEntries;
+      return {
+        festivals: uses.map((u) => ({ id: u.festivalId, name: u.name, published: u.published, archived: u.deleted, firstDate: u.firstDate })),
+        counts,
+      };
     },
 
     /**
@@ -600,22 +629,22 @@ export function createArtistsStore(pool: Pool) {
       return keys.filter((key) => (byKey.get(key)?.length ?? 0) > 1).length;
     },
 
-    /** Ids of the artists in `ids` that sit on a festival other than `festivalId` (archived ones left out). */
+    /** Ids of the artists in `ids` that sit on a festival other than `festivalId`, archived ones included. */
     async sharedElsewhere(festivalId: string, ids: string[], db: { query: Pool['query'] } = pool): Promise<Set<string>> {
       const uses = await artistUses(db, ids);
-      return new Set(ids.filter((id) => (uses.get(id) ?? []).some((u) => u.festivalId !== festivalId && !u.deleted)));
+      return new Set(ids.filter((id) => (uses.get(id) ?? []).some((u) => u.festivalId !== festivalId)));
     },
 
     /**
      * Fills empty fields of artists, inside the caller's transaction. Used by "Find missing links" for
-     * artists that sit on one festival only, so no other copy needs a rewrite. A Spotify id that another
+     * artists that sit on one festival only, so the caller rewrites that festival's other copies (see rewriteCopies). A Spotify id that another
      * artist holds is left out and reported. Never overwrites a link.
      */
     async fillEmpty(
       client: any,
       id: string,
       fill: { spotifyUrl?: string; photo?: string; genres?: string[] },
-    ): Promise<{ artist: ArtistRecord; skippedSpotify: boolean } | null> {
+    ): Promise<{ artist: ArtistRecord; skippedSpotify: boolean; changed: boolean } | null> {
       const { rows } = await client.query(`SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 AND merged_into IS NULL FOR UPDATE`, [id]);
       const row = rows[0] as ArtistRecord | undefined;
       if (!row) return null;
@@ -638,12 +667,21 @@ export function createArtistsStore(pool: Pool) {
       }
       const photo = row.photo ?? (fill.photo?.startsWith('https://') ? fill.photo.slice(0, 500) : null);
       const genres = row.genres?.length ? row.genres : (fill.genres ?? []).slice(0, 10);
+      // A call that fills nothing leaves updated_at alone: it is the edit token of the Artists screen.
+      if (
+        spotifyId === row.spotify_id &&
+        photo === row.photo &&
+        JSON.stringify(links) === JSON.stringify(row.links ?? {}) &&
+        JSON.stringify(genres) === JSON.stringify(row.genres ?? [])
+      ) {
+        return { artist: row, skippedSpotify, changed: false };
+      }
       const { rows: updated } = await client.query(
         `UPDATE artists SET links = $2::jsonb, spotify_id = $3, photo = $4, genres = $5::jsonb, updated_at = now()
           WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
         [id, JSON.stringify(links), spotifyId, photo, JSON.stringify(genres)],
       );
-      return { artist: updated[0] as ArtistRecord, skippedSpotify };
+      return { artist: updated[0] as ArtistRecord, skippedSpotify, changed: true };
     },
   };
 }

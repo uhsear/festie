@@ -20,6 +20,8 @@ const api = vi.hoisted(() => ({
   exportCsv: vi.fn(),
 }));
 vi.mock('@festie/shared/services/lineupImport', () => ({ lineupImportApi: api }));
+const matchArtists = vi.hoisted(() => vi.fn());
+vi.mock('@festie/shared/services', async (orig) => ({ ...(await orig<typeof import('@festie/shared/services')>()), matchArtists }));
 
 const counts = (over: Record<string, number> = {}) => ({
   new: 0,
@@ -62,6 +64,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.history.mockResolvedValue({ festivalName: 'Fest', imports: [] });
   api.announcement.mockResolvedValue({ festivalName: 'Fest', recipients: 0 });
+  matchArtists.mockResolvedValue([]);
 });
 
 async function pasteSampleAndCheck() {
@@ -181,5 +184,18 @@ describe('LineupImport', () => {
     const buttons = await screen.findAllByRole('button', { name: 'Undo import' });
     await userEvent.click(buttons[buttons.length - 1]);
     expect(api.undo).toHaveBeenCalledWith('f1', 'imp-9');
+  });
+
+  it('the preview says how many names match known artists and lists the ones that fit two', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ artists: ['Aurora Lights'] }), planRow({ row: 3, artists: ['Kai', 'Mira'] })], { new: 2 }));
+    matchArtists.mockResolvedValue([
+      { name: 'Aurora Lights', outcome: 'linked', candidates: [] },
+      { name: 'Kai', outcome: 'new', candidates: [] },
+      { name: 'Mira', outcome: 'pick', candidates: [] },
+    ]);
+    await pasteSampleAndCheck();
+    expect(await screen.findByText('2 names match artists already in Festie.')).toBeInTheDocument();
+    expect(matchArtists).toHaveBeenCalledWith([{ name: 'Aurora Lights' }, { name: 'Kai' }, { name: 'Mira' }]);
+    expect(screen.getByText(/Mira: more than one artist has this name\./)).toBeInTheDocument();
   });
 });

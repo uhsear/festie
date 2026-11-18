@@ -113,6 +113,17 @@ describe('resolveArtistRefs', { skip, concurrency: 1 }, () => {
     });
   });
 
+  test('an unknown id with two artists on the key is stripped and counted as ambiguous', async () => {
+    await createArtist(app, { name: 'Dangle Name' });
+    await createArtist(app, { name: 'Dangle Name', label: 'UK' });
+    await inRolledBackTx(async (client) => {
+      const out = await run(client, daysOf([{ id: 'art-does-not-exist', name: 'Dangle Name', links: {} }]));
+      const element = out.days![0].sets[0].artists[0];
+      assert.equal('id' in element, false);
+      assert.deepEqual(out.ambiguous, ['Dangle Name']);
+    });
+  });
+
   test('a client that strips ids re-links from the stored set, even when two artists share the name', async () => {
     const plain = await createArtist(app, { name: 'Stored Twin' });
     await createArtist(app, { name: 'Stored Twin', label: 'US' });

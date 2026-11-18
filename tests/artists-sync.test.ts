@@ -5,11 +5,13 @@ import 'dotenv/config';
  */
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
-import { isCurrentOrUpcoming } from '../lib/db/stores/artists';
+import { createArtistsStore, isCurrentOrUpcoming, rewriteCopies } from '../lib/db/stores/artists';
 import { createArtist, dropFestivalCache, festivalRow, formBody, seedFestival, setRow, skip, startArtistServer, withPool, type ArtistServer } from './_artist-helpers';
 
 const SPOTIFY = 'https://open.spotify.com/artist/4Z8W4fKeB5YxbusRsdQVPb';
 const SPOTIFY_FORM = 'https://open.spotify.com/artist/0du5cEVh5yTK9QJze8zA0C';
+// One id per test below: the artists table allows a Spotify id once, and the tests share a database.
+const spotifyArtist = (id: string) => `https://open.spotify.com/artist/${id}`;
 
 let app: ArtistServer;
 before(async () => {
@@ -111,6 +113,63 @@ describe('syncArtistCopies', { skip, concurrency: 1 }, () => {
   });
 });
 
+describe('the Spotify fill and the artist row', { skip, concurrency: 1 }, () => {
+  test('an artist on an archived festival counts as shared, so a fill leaves it alone', async () => {
+    const artist = await createArtist(app, { name: 'Fill Shared' });
+    const element = { id: artist.id, name: 'Fill Shared', links: {} };
+    await withPool(async (pool) => {
+      await seedFestival(pool, { id: 'fest-fill-live', sets: [{ id: 'fill-s1', artist: 'Fill Shared', artists: [element] }] });
+      await seedFestival(pool, { id: 'fest-fill-old', deleted: true, sets: [{ id: 'fill-s2', artist: 'Fill Shared', artists: [element] }] });
+      const store = createArtistsStore(pool);
+      assert.deepEqual([...(await store.sharedElsewhere('fest-fill-live', [artist.id]))], [artist.id]);
+      assert.deepEqual([...(await store.sharedElsewhere('fest-fill-old', [artist.id]))], [artist.id]);
+    });
+  });
+
+  test('a fill that adds nothing leaves updated_at alone, so an open Artists screen gets no false 409', async () => {
+    const artist = await createArtist(app, { name: 'Fill Nothing', link: spotifyArtist('2ZxCvBnMqWeRtYuIoPaSdF') });
+    await withPool(async (pool) => {
+      const store = createArtistsStore(pool);
+      const client = await pool.connect();
+      try {
+        const out = await store.fillEmpty(client, artist.id, { spotifyUrl: spotifyArtist('9KjHgFdSaQwErTyUiOpLmN') });
+        assert.equal(out!.changed, false);
+      } finally {
+        client.release();
+      }
+      const { rows } = await pool.query('SELECT updated_at FROM artists WHERE id = $1', [artist.id]);
+      assert.equal(new Date(rows[0].updated_at).toISOString(), artist.updatedAt);
+    });
+  });
+
+  test('a fill, then rewriteCopies, brings the lineup copy and a set the run left out to the row', async () => {
+    const artist = await createArtist(app, { name: 'Fill Copies' });
+    const element = { id: artist.id, name: 'Fill Copies', links: {} };
+    await withPool(async (pool) => {
+      await seedFestival(pool, {
+        id: 'fest-fill-copies',
+        lineup: [{ artists: [element], displayName: null }],
+        sets: [{ id: 'fill-copy-s1', artist: 'Fill Copies', artists: [element] }],
+      });
+      const store = createArtistsStore(pool);
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        const filled = await store.fillEmpty(client, artist.id, { spotifyUrl: spotifyArtist('5LkJhGfDsAzXcVbNmQwErT') });
+        assert.equal(filled!.changed, true);
+        await rewriteCopies(client, ['fest-fill-copies'], filled!.artist);
+        await client.query('COMMIT');
+      } finally {
+        client.release();
+      }
+      assert.deepEqual((await festivalRow(pool, 'fest-fill-copies')).lineup[0].artists[0].links, { spotify: spotifyArtist('5LkJhGfDsAzXcVbNmQwErT') });
+      const row = await setRow(pool, 'fill-copy-s1');
+      assert.deepEqual(row.artists[0].links, { spotify: spotifyArtist('5LkJhGfDsAzXcVbNmQwErT') });
+      assert.equal(row.link_url, spotifyArtist('5LkJhGfDsAzXcVbNmQwErT'));
+    });
+  });
+});
+
 describe('an artist edit never makes an open festival form stale', { skip, concurrency: 1 }, () => {
   async function openForm(festivalId: string) {
     await dropFestivalCache(app);
@@ -136,6 +195,40 @@ describe('an artist edit never makes an open festival form stale', { skip, concu
       assert.equal(row.artist, 'Form New');
       assert.equal(row.link_url, SPOTIFY_FORM);
       assert.equal(row.artists[0].id, artist.id);
+    });
+  });
+
+  test('a mobile-shaped save after a rename and a new link: no 409, ids kept, canonical links win', async () => {
+    const MOBILE_SPOTIFY = spotifyArtist('8PoIuYtReWqAsDfGhJkLzX');
+    const SOUNDCLOUD = 'https://soundcloud.com/mobile-old';
+    const artist = await createArtist(app, { name: 'Mobile Old', link: SOUNDCLOUD });
+    // The mobile form keeps the artist as loaded and sends it back with the id, the name and the links it holds.
+    const loaded = { id: artist.id, name: 'Mobile Old', links: { soundcloud: SOUNDCLOUD } };
+    await withPool((pool) =>
+      seedFestival(pool, { id: 'fest-form-mobile', sets: [{ id: 'form-mobile-s1', artist: 'Mobile Old', artists: [loaded], linkUrl: null }] }),
+    );
+    const form = await openForm('fest-form-mobile');
+    await rename(artist, { name: 'Mobile New', removeLinks: ['soundcloud'], addLink: MOBILE_SPOTIFY }).expect(200);
+
+    const save = await app.put('/api/v1/admin/festivals/fest-form-mobile', formBody({ id: 'fest-form-mobile' }, [
+      {
+        id: 'form-mobile-s1',
+        artist: 'Mobile Old',
+        artists: [{ id: artist.id, name: 'Mobile Old', links: { soundcloud: SOUNDCLOUD } }],
+        stageId: 'fest-form-mobile-main',
+        startTime: '20:00',
+        endTime: '23:00',
+        linkUrl: null,
+      },
+    ], { expectedUpdatedAt: form.updatedAt })).expect(200);
+    assert.equal(save.body.data.artistRefs.ignoredLinkEdits, 1);
+    await withPool(async (pool) => {
+      const row = await setRow(pool, 'form-mobile-s1');
+      assert.equal(row.artists[0].id, artist.id);
+      assert.equal(row.artists[0].name, 'Mobile New');
+      assert.deepEqual(row.artists[0].links, { spotify: MOBILE_SPOTIFY });
+      assert.equal(row.artist, 'Mobile New');
+      assert.equal(row.link_url, MOBILE_SPOTIFY);
     });
   });
 

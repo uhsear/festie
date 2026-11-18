@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   artistTitle,
   changeEverywhereText,
@@ -23,6 +23,7 @@ interface FestivalArtistsProps {
 type Scope = 'festival' | 'all';
 type RowStatus = { kind: 'saving' | 'saved' | 'conflict' | 'error'; message?: string };
 interface Draft {
+  name: string;
   addLink: string;
   label: string;
   removed: string[];
@@ -30,9 +31,14 @@ interface Draft {
 
 const INPUT_CLASS =
   'w-full min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder:text-text-muted text-sm';
-const emptyDraft = (artist: AdminArtistRow): Draft => ({ addLink: '', label: artist.label, removed: [] });
+const emptyDraft = (artist: AdminArtistRow): Draft => ({ name: artist.name, addLink: '', label: artist.label, removed: [] });
 const hasChanges = (artist: AdminArtistRow, draft: Draft) =>
-  draft.addLink.trim() !== '' || draft.removed.length > 0 || draft.label.trim() !== artist.label;
+  draft.addLink.trim() !== '' ||
+  draft.removed.length > 0 ||
+  draft.label.trim() !== artist.label ||
+  (draft.name.trim() !== '' && draft.name.trim() !== artist.name);
+/** Typing in the search box waits this long, so a name is one request, not one per key. */
+const SEARCH_DELAY_MS = 300;
 
 /**
  * Admin: one screen for every artist task. An edit changes every festival that lists the artist,
@@ -43,6 +49,7 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
   const { toastError } = useToast();
   const [artists, setArtists] = useState<AdminArtistRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [reloading, setReloading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [scope, setScope] = useState<Scope>('festival');
   const [query, setQuery] = useState('');
@@ -56,25 +63,36 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
   const [finding, setFinding] = useState(false);
   const [result, setResult] = useState<SpotifyBackfillResult | null>(null);
 
+  // Each load takes a number. A reply that arrives after a newer load started is dropped.
+  const latestLoad = useRef(0);
   const load = useCallback(async () => {
-    setArtists(scope === 'festival' ? await listFestivalArtists(festivalId) : await searchArtists(query.trim()));
+    const mine = ++latestLoad.current;
+    const list = scope === 'festival' ? await listFestivalArtists(festivalId) : await searchArtists(query.trim());
+    if (mine === latestLoad.current) setArtists(list);
   }, [scope, festivalId, query]);
 
-  const initialLoad = useCallback(async () => {
-    setLoading(true);
+  // Only the first load replaces the screen: later loads leave the toolbar and the search box mounted.
+  const refresh = useCallback(async () => {
+    const mine = latestLoad.current + 1;
     setLoadError(false);
+    setReloading(true);
     try {
       await load();
     } catch {
-      setLoadError(true);
+      if (mine === latestLoad.current) setLoadError(true);
     } finally {
-      setLoading(false);
+      if (mine === latestLoad.current) {
+        setLoading(false);
+        setReloading(false);
+      }
     }
   }, [load]);
 
   useEffect(() => {
-    void initialLoad();
-  }, [initialLoad]);
+    const wait = scope === 'all' && query.trim() ? SEARCH_DELAY_MS : 0;
+    const timer = setTimeout(() => void refresh(), wait);
+    return () => clearTimeout(timer);
+  }, [refresh, scope, query]);
 
   const draftOf = (artist: AdminArtistRow) => drafts[artist.id] ?? emptyDraft(artist);
   const patchDraft = (artist: AdminArtistRow, patch: Partial<Draft>) =>
@@ -93,6 +111,7 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
   const save = async (artist: AdminArtistRow) => {
     const draft = draftOf(artist);
     const changes: Parameters<typeof updateArtist>[2] = {};
+    if (draft.name.trim() && draft.name.trim() !== artist.name) changes.name = draft.name.trim();
     if (draft.addLink.trim()) changes.addLink = draft.addLink.trim();
     if (draft.removed.length > 0) changes.removeLinks = draft.removed;
     if (draft.label.trim() !== artist.label) changes.label = draft.label.trim();
@@ -139,15 +158,7 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
   const linked = artists.filter((a) => a.linkCount > 0).length;
   const confirming = artists.find((a) => a.id === confirmId) ?? null;
 
-  if (loading) return <div className="text-center py-12 text-text-muted">Loading artists…</div>;
-  if (loadError) {
-    return (
-      <div className="flex flex-col items-center gap-3 py-12">
-        <p className="text-sm text-text-secondary">Couldn’t load the artists.</p>
-        <Button onClick={() => void initialLoad()}>Try again</Button>
-      </div>
-    );
-  }
+  if (loading && !loadError) return <div className="text-center py-12 text-text-muted">Loading artists…</div>;
 
   return (
     <div className="space-y-4">
@@ -200,7 +211,16 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         </div>
       )}
 
-      {shown.length === 0 && <p className="text-sm text-text-muted">No artists to show.</p>}
+      {loadError && (
+        <div role="alert" className="flex items-center gap-3 text-sm text-text-secondary">
+          <span>Couldn’t load the artists.</span>
+          <Button size="sm" onClick={() => void refresh()}>
+            Try again
+          </Button>
+        </div>
+      )}
+      {reloading && !loadError && <p className="text-sm text-text-muted">Loading artists…</p>}
+      {!loadError && !reloading && shown.length === 0 && <p className="text-sm text-text-muted">No artists to show.</p>}
       <ul className="space-y-2">
         {shown.map((artist) => {
           const open = openId === artist.id;
@@ -260,6 +280,15 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
                       })}
                     </ul>
                   )}
+                  <input
+                    type="text"
+                    aria-label={`Name for ${artist.name}`}
+                    placeholder="Artist name"
+                    maxLength={300}
+                    className={INPUT_CLASS}
+                    value={draft.name}
+                    onChange={(e) => patchDraft(artist, { name: e.target.value })}
+                  />
                   <input
                     type="url"
                     aria-label={`Add link for ${artist.name}`}

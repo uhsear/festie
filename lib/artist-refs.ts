@@ -246,8 +246,11 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
       const row = spotifyHit ?? sameKey[0]!;
       linked.set(slot, row);
       noteIgnoredLinks(slot, row);
-    } else if (sameKey.length > 1) result.ambiguous.push(String(slot.element.name).trim());
-    else {
+    } else if (sameKey.length > 1) {
+      // An unknown sent id must not dangle on the saved copy: the slot stays unlinked.
+      delete slot.element.id;
+      result.ambiguous.push(String(slot.element.name).trim());
+    } else {
       const cleaned = cleanNewLinks(slot.element.links);
       result.droppedLinks += cleaned.dropped;
       const group =
@@ -277,7 +280,12 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
   const placed = await insertNewArtists(client, [...fresh.values()], input.userId);
   for (const [group, row] of placed) {
     if (row) for (const slot of group.slots) linked.set(slot, row);
-    else for (const slot of group.slots) result.ambiguous.push(String(slot.element.name).trim());
+    else {
+      for (const slot of group.slots) {
+        delete slot.element.id;
+        result.ambiguous.push(String(slot.element.name).trim());
+      }
+    }
   }
 
   // Share-lock the rows this save copies, then copy their newest version: an artist edit that commits

@@ -142,17 +142,19 @@ describe('artist routes', { skip, concurrency: 1 }, () => {
       await seedFestival(pool, { id: 'fest-impact-a', published: true, sets: [{ id: 'imp-a', artist: 'Impact Act', artists: [element] }] });
       await seedFestival(pool, { id: 'fest-impact-b', deleted: true, sets: [{ id: 'imp-b', artist: 'Impact Act', artists: [element] }] });
       await seedFestival(pool, { id: 'fest-impact-c', lineup: [{ artists: [element], displayName: null }], sets: [] });
+      await seedFestival(pool, { id: 'fest-impact-d', date: '2020-01-01', lineup: [{ artists: [element], displayName: null }], sets: [] });
     });
     const impact = await app.get(`/api/v1/admin/artists/${artist.id}/impact`).expect(200);
     const byId = new Map(impact.body.data.festivals.map((f: any) => [f.id, f]));
-    assert.equal(byId.size, 3);
+    assert.equal(byId.size, 4);
+    assert.deepEqual(impact.body.data.counts, { past: 1, current: 0, upcoming: 2, archived: 1, sets: 2, lineupEntries: 2 });
     assert.equal((byId.get('fest-impact-a') as any).published, true);
     assert.equal((byId.get('fest-impact-b') as any).archived, true);
     assert.equal((byId.get('fest-impact-c') as any).archived, false);
 
     const list = await app.get('/api/v1/admin/artists?festivalId=fest-impact-a').expect(200);
     assert.deepEqual(list.body.data.artists.map((a: any) => a.id), [artist.id]);
-    assert.equal(list.body.data.artists[0].alsoOn, 1);
+    assert.equal(list.body.data.artists[0].alsoOn, 2);
     const all = await app.get('/api/v1/admin/artists?q=impact').expect(200);
     assert.ok(all.body.data.artists.some((a: any) => a.id === artist.id));
   });

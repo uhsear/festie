@@ -116,8 +116,7 @@ export default function createArtistsRoutes(deps: any) {
 
   router.get('/:id/impact', validateParams(schemas.genericIdParams), async (req: any, res: any) => {
     try {
-      const festivals = await stores.artists.impact(req.validatedParams.id);
-      return sendSuccess(res, { festivals });
+      return sendSuccess(res, await stores.artists.impact(req.validatedParams.id));
     } catch (error: any) {
       return sendArtistError(res, error, 'count where the artist plays');
     }
@@ -139,6 +138,10 @@ export default function createArtistsRoutes(deps: any) {
           ...(result.before.name !== result.artist.name ? { renamedFrom: result.before.name } : {}),
           fields: Object.keys(changes).filter((key) => changes[key] !== undefined),
           festivalsUpdated: result.synced.length,
+          // Enough to see what changed and where: the festival ids are capped so one row stays small.
+          before: { name: result.before.name, label: result.before.label, links: result.before.links ?? {} },
+          after: { name: result.artist.name, label: result.artist.label, links: result.artist.links ?? {} },
+          festivalIds: result.synced.slice(0, 200).map((festival: SyncedFestival) => festival.id),
         });
         log.info('artist:updated', { artistId: id, festivals: result.synced.length });
         return sendSuccess(res, { artist: publicArtist(result.artist), festivalsUpdated: result.synced.length });

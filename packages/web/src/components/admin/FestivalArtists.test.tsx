@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 const toastError = vi.fn();
 const listFestivalArtists = vi.fn();
@@ -127,5 +128,40 @@ describe('FestivalArtists', () => {
     fireEvent.click(await screen.findByText('Search Spotify'));
     await waitFor(() => expect(runSpotifyBackfill).toHaveBeenCalledWith('f1'));
     expect(await screen.findByText('Linked 1 of 2 sets. 1 artist is on other festivals. Add their links on the Artists tab.')).toBeTruthy();
+  });
+
+  it('renames an artist through the Name field and shows a refused name on the row', async () => {
+    updateArtist.mockRejectedValueOnce(new ApiClientError('Avello Two already exists. Pick that artist, or use a different note.', 409, 'ARTIST_EXISTS'));
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Avello, edit' }));
+    fireEvent.change(screen.getByLabelText('Name for Avello'), { target: { value: 'Avello Two' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Avello' }));
+    await waitFor(() => expect(updateArtist).toHaveBeenCalledWith('art-1', '2026-06-01T00:00:00.000Z', { name: 'Avello Two' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('already exists');
+
+    updateArtist.mockResolvedValueOnce({ artist: artist({ name: 'Avello Two', updatedAt: '2026-06-02T00:00:00.000Z' }), festivalsUpdated: 1 });
+    fireEvent.click(screen.getByRole('button', { name: 'Save Avello' }));
+    expect(await screen.findByText('Avello Two')).toBeTruthy();
+  });
+
+  it('the All artists search keeps its input mounted and focused, waits for the typing to stop, and drops a late reply', async () => {
+    let releaseFirst: (rows: unknown[]) => void = () => {};
+    searchArtists.mockImplementationOnce(() => new Promise((resolve) => (releaseFirst = resolve)));
+    searchArtists.mockResolvedValue([artist({ id: 'art-9', name: 'Newest Match' })]);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'All artists' }));
+    const input = await screen.findByLabelText('Search artists');
+    await userEvent.type(input, 'ne');
+    expect(screen.getByLabelText('Search artists')).toBe(input);
+    expect(document.activeElement).toBe(input);
+    expect((input as HTMLInputElement).value).toBe('ne');
+    expect(await screen.findByText('Newest Match')).toBeTruthy();
+    expect(searchArtists).toHaveBeenCalledWith('ne');
+    expect(searchArtists).not.toHaveBeenCalledWith('n');
+
+    releaseFirst([artist({ id: 'art-8', name: 'Stale Match' })]);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(screen.queryByText('Stale Match')).toBeNull();
+    expect(screen.getByText('Newest Match')).toBeTruthy();
   });
 });

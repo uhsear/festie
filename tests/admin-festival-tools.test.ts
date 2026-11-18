@@ -106,7 +106,10 @@ describe('POST /festivals/:id/backfill-spotify', () => {
     globalThis.fetch = originalFetch;
   });
 
-  function backfillApp(sets: any[], extra: { shared?: string[]; fill?: any; currentArtists?: (set: any) => any } = {}) {
+  function backfillApp(
+    sets: any[],
+    extra: { shared?: string[]; sharedUnderLock?: string[]; fill?: any; currentArtists?: (set: any) => any } = {},
+  ) {
     const { pool, query } = txPool((sql) => {
       if (sql.startsWith('SELECT id FROM festivals')) return { rows: [{ id: 'f1' }] };
       if (sql.startsWith('SELECT id, artist, artists')) return { rows: sets };
@@ -118,7 +121,10 @@ describe('POST /festivals/:id/backfill-spotify', () => {
     });
     const auditInsert = mock.fn(async () => {});
     const artists = {
-      sharedElsewhere: mock.fn(async () => new Set(extra.shared ?? [])),
+      // The first call is the read before the transaction; the second, made with the locked client, is the check that counts.
+      sharedElsewhere: mock.fn(async (_festivalId: string, _ids: string[], db?: unknown) =>
+        new Set(db ? (extra.sharedUnderLock ?? extra.shared ?? []) : (extra.shared ?? [])),
+      ),
       fillEmpty: mock.fn(extra.fill ?? (async () => null)),
     };
     const deps = baseDeps({ stores: { pool, auditLog: { insert: auditInsert }, artists } });
@@ -260,7 +266,36 @@ describe('POST /festivals/:id/backfill-spotify', () => {
     assert.deepEqual((artists.fillEmpty.mock.calls[0]!.arguments as any)[2].spotifyUrl, 'https://open.spotify.com/artist/a');
     assert.deepEqual(res.body.data.unmatched, ['Alpha']);
   });
+
+  test('an artist that another festival gained after the first read is left alone under the locks', async () => {
+    const { app, query, artists } = backfillApp(
+      [{ id: 's1', artist: 'Alpha', artists: [{ id: 'art-1', name: 'Alpha' }] }],
+      { sharedUnderLock: ['art-1'], fill: async () => ({ artist: { links: {}, photo: null, genres: [] }, skippedSpotify: false, changed: true }) },
+    );
+    const res = await request(app).post('/festivals/f1/backfill-spotify').send({}).expect(200);
+    assert.equal(res.body.data.updated, 0);
+    assert.deepEqual(res.body.data.skippedShared, ['Alpha']);
+    assert.equal(artists.fillEmpty.mock.callCount(), 0);
+    assert.ok(!statements(query).some((sql: string) => sql.startsWith('UPDATE festival_sets')));
+    const sql = statements(query);
+    assert.ok(sql.findIndex((s: string) => s.startsWith('SELECT id FROM artists')) < sql.length, 'the artist rows were locked');
+    assert.equal(artists.sharedElsewhere.mock.calls.at(-1)!.arguments.length, 3, 'the check ran with the transaction client');
+  });
+
+  test('a filled artist has every copy in the festival rewritten from its row, in the same transaction', async () => {
+    const filledArtist = { id: 'art-1', name: 'Alpha', links: { spotify: 'https://open.spotify.com/artist/a' }, photo: null, genres: [] };
+    const { app, query } = backfillApp([{ id: 's1', artist: 'Alpha', artists: [{ id: 'art-1', name: 'Alpha' }] }], {
+      fill: async () => ({ artist: filledArtist, skippedSpotify: false, changed: true }),
+    });
+    await request(app).post('/festivals/f1/backfill-spotify').send({}).expect(200);
+    const sql = statements(query);
+    const rewrite = sql.findIndex((s: string) => s.includes('FROM festivals WHERE id = ANY'));
+    assert.ok(rewrite > sql.findIndex((s: string) => s.startsWith('UPDATE festival_sets SET artists = $1')), 'rewrites after the set write');
+    assert.ok(rewrite < sql.indexOf('COMMIT'));
+    assert.deepEqual(query.mock.calls[rewrite]!.arguments[1], [['f1']]);
+  });
 });
+
 
 // ── Set engagement ──────────────────────────────────────────────────
 
