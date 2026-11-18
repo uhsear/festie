@@ -86,6 +86,7 @@ export default function createProfilesRoutes(deps: any) {
       if (!festival?.publishedAt) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
       const result = await ensureFestivalProfile(deps, req.user, festivalId);
+      if (result.error === 'festival-unavailable') return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       if (result.error === 'limit') {
         return sendError(res, 400, 'Maximum profiles reached', ErrorCodes.MAX_LIMIT_REACHED);
       }
