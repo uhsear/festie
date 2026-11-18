@@ -18,6 +18,8 @@ set -euo pipefail
 #   DB_PORT             PostgreSQL port (default: 5432)
 #   DB_NAME             Source database name for table-count comparison (default: festival_planner)
 #   EXPECTED_TABLES     Override expected table count (default: auto-detect from source DB)
+#   RESTORE_DB          Name of the database to restore into (default: festie_restore_test_<epoch>)
+#   KEEP_DB             Set to 1 to skip dropping the restored database at exit
 #   ALERT_WEBHOOK_URL   POST webhook for failure notifications (Slack, Discord, ntfy, etc.)
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -27,7 +29,8 @@ DB_USER="${DB_USER:-festival}"
 DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-5432}"
 DB_NAME="${DB_NAME:-festival_planner}"
-TEMP_DB="festie_restore_test_$(date +%s)"
+TEMP_DB="${RESTORE_DB:-festie_restore_test_$(date +%s)}"
+CREATED_DB=0
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +49,12 @@ send_alert() {
 }
 
 cleanup() {
+  # Never drop a database this run did not create (RESTORE_DB may name an existing one).
+  [ "$CREATED_DB" = "1" ] || return 0
+  if [ "${KEEP_DB:-0}" = "1" ]; then
+    log "KEEP_DB=1: leaving database ${TEMP_DB} in place"
+    return 0
+  fi
   log "Dropping temporary database ${TEMP_DB}..."
   dropdb -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" --if-exists "$TEMP_DB" 2>/dev/null || true
 }
@@ -111,6 +120,7 @@ fi
 
 log "Creating temporary database: ${TEMP_DB}"
 createdb -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" "$TEMP_DB" || die "Failed to create temp database ${TEMP_DB}"
+CREATED_DB=1
 
 # ── Restore ─────────────────────────────────────────────────────────────────
 
