@@ -26,12 +26,24 @@ function makeDeps(opts: { crew?: any; expired?: any; members?: any[]; festival?:
 }
 
 describe('loadInvitePreview', () => {
+  it('shows no festival for a draft', async () => {
+    const { deps } = makeDeps({ crew: CREW, festival: { id: 'fest-1', name: 'Secret', publishedAt: null, days: [{ date: '2026-11-06' }] } });
+    const result = await loadInvitePreview(deps, 'ABC123');
+    assert.equal(result.status, 'ok');
+    if (result.status === 'ok') {
+      assert.equal(result.preview.festivalId, null);
+      assert.equal(result.preview.festivalName, null);
+      assert.equal(result.preview.startDate, null);
+    }
+  });
+
   it('builds the contract shape from crew, members and festival', async () => {
     const { deps } = makeDeps({
       crew: CREW,
       festival: {
         id: 'fest-1',
         name: 'EDC Orlando',
+        publishedAt: '2026-01-01T00:00:00.000Z',
         days: [{ date: '2026-11-08' }, { date: '2026-11-06' }, { date: '2026-11-07' }],
       },
     });
@@ -85,7 +97,7 @@ describe('loadInvitePreview', () => {
   });
 
   it('gives null dates and festival name when the festival has no days or is missing', async () => {
-    const noDays = await loadInvitePreview(makeDeps({ crew: CREW, festival: { id: 'fest-1', name: 'F', days: [] } }).deps, 'ABC123');
+    const noDays = await loadInvitePreview(makeDeps({ crew: CREW, festival: { id: 'fest-1', name: 'F', publishedAt: '2026-01-01T00:00:00.000Z', days: [] } }).deps, 'ABC123');
     assert.equal(noDays.status, 'ok');
     if (noDays.status === 'ok') {
       assert.equal(noDays.preview.startDate, null);

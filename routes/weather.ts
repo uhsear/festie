@@ -12,19 +12,19 @@ export function createWeatherRoutes({ config, stores, userAuth, sendSuccess, sen
     try {
       const { festivalId } = req.validatedParams;
 
-      // Check cache first
-      const cached = weatherCache.get(festivalId);
-      if (cached && cached.expiresAt > Date.now()) {
-        return sendSuccess(res, cached.data);
-      }
-
-      // Get festival coordinates
+      // Check the festival before the cache, so a draft is never served from a
+      // cached entry and never cached itself.
       const result = await stores.pool.query(
-        'SELECT latitude, longitude, name FROM festivals WHERE id = $1 AND deleted_at IS NULL',
+        'SELECT latitude, longitude, name FROM festivals WHERE id = $1 AND deleted_at IS NULL AND published_at IS NOT NULL',
         [festivalId]
       );
       if (result.rows.length === 0) {
         return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      }
+
+      const cached = weatherCache.get(festivalId);
+      if (cached && cached.expiresAt > Date.now()) {
+        return sendSuccess(res, cached.data);
       }
 
       const { latitude, longitude } = result.rows[0];

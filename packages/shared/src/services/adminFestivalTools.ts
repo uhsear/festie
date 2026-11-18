@@ -12,6 +12,13 @@ export function getSetEngagement(festivalId: string): Promise<SetEngagementMap> 
   return api.get<SetEngagementMap>(`/admin/festivals/${enc(festivalId)}/set-engagement`);
 }
 
+/** Marks per announced act (admin only): { [entryId]: { open, converted } }. Counts only, never who marked. */
+export type LineupInterestCounts = Record<string, { open: number; converted: number }>;
+
+export function getLineupInterest(festivalId: string): Promise<{ counts: LineupInterestCounts }> {
+  return api.get<{ counts: LineupInterestCounts }>(`/admin/festivals/${enc(festivalId)}/lineup-interest`);
+}
+
 /** Raw fetch (multipart), headers built as the avatar upload does. */
 export async function uploadSiteplanImage(
   festivalId: string,

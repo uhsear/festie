@@ -560,7 +560,7 @@ function renderSharePage({ username, avatarUrl, festivalName, tint, festivalLoca
       <a href="${compareUrl}">Compare with my picks</a>
       <a class="share-cta-outline" href="${addUrl}">Add their picks to my plan</a>
       <p>Have the Festie app? <a href="${appUrl}">Open in the app</a></p>
-      <p><a href="${origin}">New to Festie? Plan your own schedule</a></p>
+      <p><a href="${origin}/?ref=share-picks">New to Festie? Plan your own schedule</a></p>
     </div>
   </div>
 </body>

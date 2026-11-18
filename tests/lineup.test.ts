@@ -4,12 +4,14 @@ import path from 'node:path';
 import { describe, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import {
+  actsDayCoverage,
   coverLineup,
   lineupEntryKey,
   lineupIssues,
   lineupNameKey,
   cleanLineupLinks,
   normalizeLineup,
+  scheduleProgress,
   todayInZone,
 } from '../lib/lineup.js';
 import { validateFestivalIssues } from '../lib/helpers/validation.js';
@@ -180,5 +182,59 @@ describe('todayInZone', () => {
       lineupEntryKey({ artists: [{ name: 'B' }, { name: 'A' }] }),
       lineupEntryKey({ artists: [{ name: 'A' }, { name: 'B' }] }),
     );
+  });
+});
+
+describe('actsDayCoverage and scheduleProgress', () => {
+  const act = (id: string, name: string, dayDate: string | null = null, status = 'announced') => ({
+    id,
+    artists: [{ name }],
+    dayDate,
+    status,
+    linkedSetIds: [],
+  });
+  const days = (sets: any[] = []) => [
+    { date: '2027-02-05', sets },
+    { date: '2027-02-06', sets: [] },
+  ];
+  const festival = (lineup: any[], sets: any[] = []) => ({ b2bSeparator: 'b2b', lineup, days: days(sets) });
+  const set = (id: string, artist: string, startTime: string | null = null) => ({
+    id,
+    artist,
+    artists: [{ name: artist }],
+    startTime,
+  });
+
+  test('counts acts, and acts with a day', () => {
+    const f = festival([act('a', 'A', '2027-02-05'), act('b', 'B'), act('c', 'C', '2030-01-01')]);
+    // C's date matches no festival day, so it has none.
+    assert.deepEqual(actsDayCoverage(f), { actsTotal: 3, actsWithDay: 1 });
+  });
+
+  test('a cancelled act is not counted', () => {
+    assert.deepEqual(actsDayCoverage(festival([act('a', 'A', '2027-02-05'), act('b', 'B', '2027-02-05', 'cancelled')])), {
+      actsTotal: 1,
+      actsWithDay: 1,
+    });
+  });
+
+  test('a set that covers an act counts once, and a set with no act counts as one with a day', () => {
+    const f = festival([act('a', 'A'), act('b', 'B')], [set('s1', 'A'), set('s2', 'Solo')]);
+    assert.deepEqual(actsDayCoverage(f), { actsTotal: 3, actsWithDay: 2 });
+  });
+
+  test('an empty festival has no acts', () => {
+    assert.deepEqual(actsDayCoverage({ days: [], lineup: [] }), { actsTotal: 0, actsWithDay: 0 });
+    assert.deepEqual(actsDayCoverage({}), { actsTotal: 0, actsWithDay: 0 });
+  });
+
+  test('scheduleProgress: lineup only, days only, set times, or nothing', () => {
+    assert.equal(scheduleProgress(festival([act('a', 'A')])), 'lineup');
+    assert.equal(scheduleProgress(festival([act('a', 'A', '2027-02-05')])), 'days');
+    assert.equal(scheduleProgress(festival([], [set('s1', 'A')])), 'days');
+    assert.equal(scheduleProgress(festival([], [set('s1', 'A', '20:00')])), 'times');
+    assert.equal(scheduleProgress(festival([act('a', 'A', '2027-02-05')], [set('s1', 'A', '')])), 'days');
+    assert.equal(scheduleProgress(festival([])), null);
+    assert.equal(scheduleProgress(festival([act('a', 'A', null, 'cancelled')])), null);
   });
 });

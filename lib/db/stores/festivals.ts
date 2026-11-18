@@ -463,8 +463,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
 
           await client.query(
             `
-            INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config)
-            VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10)
+            INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config, series_id)
+            VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT(id) DO UPDATE SET
               name = EXCLUDED.name,
               location = EXCLUDED.location,
@@ -475,7 +475,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
               latitude = EXCLUDED.latitude,
               longitude = EXCLUDED.longitude,
               time_zone = EXCLUDED.time_zone,
-              map_config = EXCLUDED.map_config
+              map_config = EXCLUDED.map_config,
+              series_id = EXCLUDED.series_id
           `,
             [
               festival.id,
@@ -488,6 +489,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
               festival.longitude ?? null,
               festival.timeZone ?? null,
               festival.mapConfig == null ? null : JSON.stringify(festival.mapConfig),
+              festival.seriesId ?? null,
             ],
           );
 
@@ -622,15 +624,6 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       return result.rows;
     },
 
-    /** When the "set times are out" alert went out (migration 089), or null if it has not. */
-    async getSetTimesOutAt(festivalId: string): Promise<string | null> {
-      const result = await pool.query('SELECT set_times_out_at AS "setTimesOutAt" FROM festivals WHERE id = $1', [
-        festivalId,
-      ]);
-      const value = result.rows[0]?.setTimesOutAt;
-      return value ? new Date(value).toISOString() : null;
-    },
-
     /** The id of the admin who last saved, published or restored the festival. */
     async getEditor(festivalId: string) {
       const result = await pool.query('SELECT updated_by AS "updatedBy" FROM festivals WHERE id = $1', [festivalId]);
@@ -664,6 +657,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           f.latitude,
           f.longitude,
           f.map_config AS "mapConfig",
+          f.series_id AS "seriesId",
           f.created_at AS "createdAt",
           f.updated_at AS "updatedAt",
           f.published_at AS "publishedAt",
@@ -734,7 +728,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         const updatedAt = festival.updatedAt || createdAt;
 
         await client.query(
-          'INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, lineup) VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)',
+          'INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, series_id, lineup) VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)',
           [
             festival.id,
             festival.name,
@@ -749,6 +743,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             // Only the admin create route passes null (a draft); every other caller publishes.
             festival.publishedAt === undefined ? new Date().toISOString() : festival.publishedAt,
             festival.updatedBy ?? null,
+            festival.seriesId ?? null,
             JSON.stringify(festival.lineup ?? []),
           ],
         );
@@ -774,6 +769,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             latitude,
             longitude,
             map_config AS "mapConfig",
+            series_id AS "seriesId",
             created_at AS "createdAt",
             updated_at AS "updatedAt",
             published_at AS "publishedAt",
@@ -830,6 +826,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         if (fields.mapConfig !== undefined) {
           sets.push(`map_config = $${idx}`);
           values.push(fields.mapConfig == null ? null : JSON.stringify(fields.mapConfig));
+          idx++;
+        }
+        if (fields.seriesId !== undefined) {
+          sets.push(`series_id = $${idx}`);
+          values.push(fields.seriesId ?? null);
           idx++;
         }
         if (fields.lineup !== undefined) {
@@ -921,6 +922,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             latitude,
             longitude,
             map_config AS "mapConfig",
+            series_id AS "seriesId",
             created_at AS "createdAt",
             updated_at AS "updatedAt",
             published_at AS "publishedAt"

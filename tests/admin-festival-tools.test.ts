@@ -381,6 +381,24 @@ describe('PUT /:festivalId/sets/:setId/link', () => {
     assert.deepEqual(params.slice(1), ['https://open.spotify.com/artist/a', 's1', 'f1']);
   });
 
+  test('runs interest conversion after the link write', async () => {
+    const convert = mock.fn(async () => 0);
+    const festival = { id: 'f1', days: [{ label: 'Day 1', sets: [{ id: 's1', artist: 'Solo', artists: [] }] }] };
+    const deps = baseDeps({
+      getFestivalById: mock.fn(async () => festival),
+      stores: {
+        pool: txPool((sql) => {
+          if (sql.startsWith('SELECT id, published_at, deleted_at FROM festivals')) return { rows: [{ id: 'f1', deleted_at: null }] };
+          if (sql.startsWith('SELECT artist, artists FROM festival_sets')) return { rows: [{ artist: 'Solo', artists: [] }] };
+          return null;
+        }).pool,
+      },
+      interestConversion: { convert },
+    });
+    await request(appFor(createFestivalsRoutes(deps))).put('/f1/sets/s1/link').send({ linkUrl: '' }).expect(200);
+    assert.deepEqual(convert.mock.calls.map((c: any) => c.arguments), [['f1']]);
+  });
+
   test('runs in one transaction: lock the festival, read the set row, write, bump edited_at, commit', async () => {
     const { app, query } = linkApp(twoArtists());
     await request(app).put('/f1/sets/s1/link').send({ linkUrl: 'https://open.spotify.com/artist/x', artistIndex: 1 }).expect(200);

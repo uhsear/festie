@@ -92,7 +92,7 @@ jobs:
           node scripts/ci/check-public-text.mjs --base "$BASE_SHA" --head "$HEAD_SHA"
 
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -114,6 +114,8 @@ jobs:
         run: npm run depcruise
       - name: Unused files and dependencies (knip, blocking)
         run: npx knip --include files,dependencies,devDependencies,unlisted
+      - name: Deploy script tests (stdlib unittest, no network)
+        run: python3 -m unittest discover -s tests/deploy -p "test_*.py" -v
       - name: Dead-code report (knip exports, non-blocking)
         run: npm run knip
         continue-on-error: true

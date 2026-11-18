@@ -39,6 +39,9 @@ import { rewriteCopies, type ArtistRecord } from '../lib/db/stores/artists.js';
 import { recentRequestTotals } from '../lib/recent-requests.js';
 import type { Router } from 'express';
 
+// Re-engagement news types the growth report counts. Add a type here when it joins the news set.
+const GROWTH_NEWS_TYPES = ['lineup_drop', 'set_times_out', 'days_out'];
+
 export default function createAdminRoutes(deps: any): Router {
   const {
     express,
@@ -208,12 +211,7 @@ export default function createAdminRoutes(deps: any): Router {
   mountAdminAuditRoutes({ router, deps, ctx }); // /audit
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*
 
-  // ── GET /ref-counts — anonymous sign-ups per ?ref= source (migration 070) ──
-  router.get('/ref-counts', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
-    try {
-      setNoStore(res);
-      const { rows } = await stores.pool.query(
-        `
+  const REF_COUNTS_SQL = `
   SELECT
     to_char(day, 'YYYY-MM-DD') AS day,
     ref,
@@ -226,13 +224,95 @@ export default function createAdminRoutes(deps: any): Router {
     day DESC,
     signups DESC,
     ref ASC
-`,
-        [req.validatedQuery.days],
-      );
+`;
+
+  // ── GET /ref-counts — anonymous sign-ups per ?ref= source (migration 070) ──
+  router.get('/ref-counts', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
+    try {
+      setNoStore(res);
+      const { rows } = await stores.pool.query(REF_COUNTS_SQL, [req.validatedQuery.days]);
       return sendSuccess(res, rows);
     } catch (error: any) {
       log.error('admin ref counts failed', { error: error.message });
       return sendError(res, 500, 'Failed to load sign-up ref counts', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
+  // ── GET /growth — read-only growth report: sign-ups by ref, follows, and people reached by news pushes, emails and held pushes ──
+  // Every ref count is a floor: mobile sign-ups and visitors who cleared storage carry no ref.
+  router.get('/growth', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
+    try {
+      setNoStore(res);
+      const days = [req.validatedQuery.days];
+      const dayOf = (column: string) => `to_char(${column}::date, 'YYYY-MM-DD')`;
+      const [signups, followsPerDay, followers, news] = await Promise.all([
+        stores.pool.query(REF_COUNTS_SQL, days),
+        stores.pool.query(
+          `SELECT ${dayOf('ff.created_at')} AS day, ff.festival_id AS "festivalId", f.name AS "festivalName", COUNT(*)::int AS follows
+           FROM festival_follows ff JOIN festivals f ON f.id = ff.festival_id
+           WHERE ff.created_at >= CURRENT_DATE - ($1::int - 1)
+           GROUP BY 1, 2, 3 ORDER BY 1 DESC, 4 DESC, 3 ASC`,
+          days,
+        ),
+        stores.pool.query(
+          `
+  SELECT
+    ff.festival_id AS "festivalId",
+    f.name AS "festivalName",
+    COUNT(*)::int AS followers
+  FROM
+    festival_follows ff
+    JOIN festivals f ON f.id = ff.festival_id
+  GROUP BY
+    1,
+    2
+  ORDER BY
+    3 DESC,
+    2 ASC
+`,
+        ),
+        // People, not rows: send.ts logs one row per device and reengagement.ts one per email.
+        stores.pool.query(
+          `
+  SELECT
+    type,
+    CASE
+      WHEN status = 'held' THEN 'held'
+      WHEN platform = 'email' THEN 'email'
+      ELSE 'push'
+    END AS channel,
+    COUNT(DISTINCT user_id)::int AS count
+  FROM
+    notification_log
+  WHERE
+    type = ANY ($2::text[])
+    AND status IN ('sent', 'held')
+    AND created_at >= CURRENT_DATE - ($1::int - 1)
+  GROUP BY
+    1,
+    2
+  ORDER BY
+    1 ASC,
+    2 ASC
+`,
+          [...days, GROWTH_NEWS_TYPES],
+        ),
+      ]);
+      const newsBy = (channel: string) =>
+        news.rows.filter((row: any) => row.channel === channel).map(({ type, count }: any) => ({ type, count }));
+      return sendSuccess(res, {
+        days: req.validatedQuery.days,
+        signupsByRef: signups.rows,
+        followsPerDay: followsPerDay.rows,
+        followers: followers.rows,
+        newsPushes: newsBy('push'),
+        newsEmails: newsBy('email'),
+        newsHeld: newsBy('held'),
+        generatedAt: new Date().toISOString(),
+      });
+    } catch (error: any) {
+      log.error('admin growth report failed', { error: error.message });
+      return sendError(res, 500, 'Failed to load the growth report', ErrorCodes.INTERNAL_ERROR);
     }
   });
 

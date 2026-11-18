@@ -30,6 +30,11 @@ vi.mock('@festie/shared/hooks', () => ({
   }),
 }));
 vi.mock('../hooks/useSetStatus', () => ({ useNow: () => nowMs }));
+// The announced lineup reads the viewer's marks from the real store, which this file's store mocks replace.
+vi.mock('@festie/shared/hooks/useInterest', () => ({
+  useInterest: () => ({ mark: undefined, marked: false, toggle: () => Promise.resolve() }),
+  useInterestedRows: () => [],
+}));
 vi.mock('../components/features/SetCard', () => ({
   default: ({ set }: { set: { id: string } }) => <div data-testid="set-card" data-id={set.id} />,
 }));

@@ -30,7 +30,7 @@ const spotifyUrl = (id: string) => `https://open.spotify.com/artist/${id}`;
 describe('backfill database guard', () => {
   test('accepts a _test or _staging name and refuses anything else', () => {
     assertSafeBackfillDatabase('postgresql://u:p@localhost:5653/festie_ar2_test');
-    assertSafeBackfillDatabase('postgresql://u:p@localhost:5432/festival_planner_staging');
+    assertSafeBackfillDatabase('postgresql://u:p@localhost:5432/app_db_staging');
     const disagree = ['socket://x/foo_test?db=festival_planner', 'mysql://u:p@localhost/foo_test'];
     for (const url of ['postgresql://u:p@localhost:5432/festival_planner', 'postgresql://u:p@localhost/testing', 'postgresql://u:p@localhost/', 'not a url', ...disagree]) {
       assert.throws(() => assertSafeBackfillDatabase(url), /must end in _test or _staging/);

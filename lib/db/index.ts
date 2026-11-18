@@ -20,6 +20,7 @@ import { createShareLinksStore } from './stores/share-links.js';
 import { createEmailTokensStore } from './stores/email-tokens.js';
 import { createLineupImportsStore } from './stores/lineup-imports.js';
 import { createFollowsStore } from './stores/follows.js';
+import { createTimeReleasesStore } from './stores/time-releases.js';
 import { createAnnouncementsStore } from './stores/announcements.js';
 import { createIdentitiesStore } from './stores/identities.js';
 import { createArtistsStore } from './stores/artists.js';
@@ -88,6 +89,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
   const emailTokens = createEmailTokensStore(pool);
   const lineupImports = createLineupImportsStore(pool, { festivals });
   const follows = createFollowsStore(pool);
+  const timeReleases = createTimeReleasesStore(pool);
   const announcements = createAnnouncementsStore(pool);
   const identities = createIdentitiesStore(pool);
   const artists = createArtistsStore(pool);
@@ -123,6 +125,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
     emailTokens,
     lineupImports,
     follows,
+    timeReleases,
     announcements,
     identities,
     artists,

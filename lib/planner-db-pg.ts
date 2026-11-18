@@ -395,6 +395,51 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
   }
 }
 
+// Boot-time connect retry. Measured on the production bundle against an
+// unreachable database: the process stays alive but never marks ready, because
+// the migration runner fails once and is never called again. Retrying only
+// connection-refused errors lets a database that comes up a minute after the
+// app (host reboot, postgres restart) finish the boot unaided.
+const MIGRATION_CONNECT_RETRY_MAX_MS = 120_000;
+const MIGRATION_CONNECT_RETRY_BASE_MS = 1_000;
+const MIGRATION_CONNECT_RETRY_CAP_MS = 15_000;
+
+function isDatabaseNotAcceptingConnections(err: any) {
+  // 57P03 = cannot_connect_now (postgres is starting up or in recovery).
+  return !!err && (err.code === 'ECONNREFUSED' || err.code === '57P03');
+}
+
+/**
+ * `runPostgresMigrations`, retried with backoff while the database refuses
+ * connections, for up to `maxWaitMs` (default 2 minutes). Any other error, and
+ * a refusal past the deadline, is thrown unchanged. Migrations are ledgered and
+ * idempotent, so re-running after a refused connect is safe.
+ */
+async function runPostgresMigrationsWithConnectRetry(pool: any, opts: any = {}) {
+  const log = opts.log || (() => {});
+  const maxWaitMs = opts.maxWaitMs ?? MIGRATION_CONNECT_RETRY_MAX_MS;
+  const sleep = opts.sleep || ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
+  let waitedMs = 0;
+  let delayMs = MIGRATION_CONNECT_RETRY_BASE_MS;
+  for (;;) {
+    try {
+      return await runPostgresMigrations(pool, opts);
+    } catch (err: any) {
+      if (!isDatabaseNotAcceptingConnections(err) || waitedMs >= maxWaitMs) throw err;
+      const pauseMs = Math.min(delayMs, maxWaitMs - waitedMs);
+      log('warn', 'database not accepting connections; retrying migrations', {
+        error: err.message,
+        code: err.code,
+        retry_in_ms: pauseMs,
+        waited_ms: waitedMs,
+      });
+      await sleep(pauseMs);
+      waitedMs += pauseMs;
+      delayMs = Math.min(delayMs * 2, MIGRATION_CONNECT_RETRY_CAP_MS);
+    }
+  }
+}
+
 /**
  * Wrap `openPlannerDatabase` from `./db/index` so that the first call
  * per-process-per-URL triggers the migration runner, while subsequent
@@ -418,7 +463,14 @@ function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Pro
   const result = openPlannerDatabaseRaw(opts);
   const pool = result && result.pool;
   const databaseUrl = opts.databaseUrl || process.env.DATABASE_URL || '';
-  const log = typeof opts.log === 'function' ? opts.log : () => {};
+  // app-context passes the structured logger (an object with level methods), not a
+  // function. Adapt it, or every runner line and the connect-retry warning is dropped.
+  const log =
+    typeof opts.log === 'function'
+      ? opts.log
+      : opts.log && typeof opts.log.warn === 'function'
+        ? (level: string, message: string, meta?: any) => opts.log[level]?.(message, meta)
+        : () => {};
 
   if (!pool) {
     // Upstream did something unexpected; preserve its return value and
@@ -443,7 +495,7 @@ function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Pro
 
   let migrationsReady = MIGRATED_URLS.get(databaseUrl);
   if (!migrationsReady) {
-    migrationsReady = runPostgresMigrations(pool, { log }).catch((err: any) => {
+    migrationsReady = runPostgresMigrationsWithConnectRetry(pool, { log }).catch((err: any) => {
       MIGRATED_URLS.delete(databaseUrl);
       log('error', 'migration runner aborted startup', {
         error: err && err.message,
@@ -490,6 +542,7 @@ export {
   withTransaction,
   // Newly exposed for tests / ops tooling (non-breaking additions):
   runPostgresMigrations,
+  runPostgresMigrationsWithConnectRetry,
   discoverMigrationsOnDisk,
   stripOuterTxBoundaries,
   __resetMigrationCacheForTests,

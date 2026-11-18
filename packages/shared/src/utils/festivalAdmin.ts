@@ -18,7 +18,9 @@ export interface FestivalIssue {
   target: FestivalIssueTarget;
 }
 export interface ChecklistItem {
-  key: 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps' | 'artists';
+  key:
+    | 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps'
+    | 'duration_odd' | 'start_unusual_hour' | 'artist_double_booked' | 'artists';
   status: 'done' | 'todo' | 'warn';
   label: string;
 }
@@ -41,6 +43,7 @@ export type EditableFestival = {
   location?: string;
   timeZone?: string | null;
   b2bSeparator?: string;
+  seriesId?: string | null;
   stages?: { id: string; name?: string; color?: string }[];
   days?: { label?: string; date?: string; sets?: EditableSet[] }[];
   lineup?: EditableLineupEntry[];
@@ -202,7 +205,7 @@ export function countFestivalChanges(
 ): { total: number; changedSetIds: Set<string>; newSetIds: Set<string> } {
   const a = before ?? {};
   let total = 0;
-  for (const k of ['name', 'location', 'timeZone', 'b2bSeparator'] as const) {
+  for (const k of ['name', 'location', 'timeZone', 'b2bSeparator', 'seriesId'] as const) {
     if (norm(a[k]) !== norm(after[k])) total++;
   }
 

@@ -23,6 +23,8 @@ export const AUDIT_ACTIONS = {
   LINEUP_IMPORTED: 'festival.lineup.imported',
   LINEUP_IMPORT_UNDONE: 'festival.lineup.import_undone',
   LINEUP_ANNOUNCED: 'festival.lineup.announced',
+  DAYS_ANNOUNCED: 'festival.days.announced',
+  TIMES_RELEASED: 'festival.times.released',
   SPOTIFY_BACKFILLED: 'festival.spotify.backfilled',
   SET_LINK_UPDATED: 'set.link.updated',
   ARTIST_CREATED: 'artist.created',

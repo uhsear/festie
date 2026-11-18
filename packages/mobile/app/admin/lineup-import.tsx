@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, Alert } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -11,11 +11,13 @@ import {
   LINEUP_SAMPLE_CSV,
   buildResultCsv,
   defaultMapping,
+  defaultUpdateExisting,
   looksLikeHeader,
   mappingProblems,
   parseLineupTable,
   planSummary,
   toImportRows,
+  updateOffBanner,
   type LineupColumnMapping,
   type LineupImportCommitResult,
   type LineupImportField,
@@ -104,6 +106,8 @@ export default function LineupImportScreen() {
   const [importRows, setImportRows] = useState<LineupImportRow[]>([]);
   const [plan, setPlan] = useState<LineupImportPlan | null>(null);
   const [updateExisting, setUpdateExisting] = useState(false);
+  // Whether the last checked mapping had a set_id column. Update turns on by default only when that changes.
+  const checkedWithSetId = useRef<boolean | null>(null);
   const [createMissing, setCreateMissing] = useState(true);
   const [filter, setFilter] = useState<Filter>('all');
   const [result, setResult] = useState<LineupImportCommitResult | null>(null);
@@ -190,6 +194,7 @@ export default function LineupImportScreen() {
     }
     const header = looksLikeHeader(parsed.rows[0] ?? []);
     setTable(parsed.rows);
+    checkedWithSetId.current = null;
     setLines(parsed.lines);
     setHasHeader(header);
     setMapping(defaultMapping(parsed.rows, header));
@@ -216,9 +221,13 @@ export default function LineupImportScreen() {
       );
       return;
     }
+    const hasSetId = mapping.setId !== undefined;
+    const update = checkedWithSetId.current === hasSetId ? updateExisting : defaultUpdateExisting(mapping);
+    checkedWithSetId.current = hasSetId;
     setImportRows(rows);
-    void runPreview(rows, updateExisting, createMissing);
-  }, [table, lines, mapping, hasHeader, updateExisting, createMissing, runPreview, say]);
+    setUpdateExisting(update);
+    void runPreview(rows, update, createMissing);
+  }, [table, lines, mapping, hasHeader, createMissing, updateExisting, runPreview, say]);
 
   const handleToggle = useCallback(
     (which: 'update' | 'create', value: boolean) => {
@@ -506,6 +515,11 @@ export default function LineupImportScreen() {
                 <Text style={styles.stagePillText}>{`${STATUS_LABEL[k]} ${plan.counts[k]}`}</Text>
               </View>
             ))}
+            {plan.counts.skipped > 0 ? (
+              <View style={styles.stagePill}>
+                <Text style={styles.stagePillText}>{`Skipped ${plan.counts.skipped}`}</Text>
+              </View>
+            ) : null}
           </View>
           {plan.newStages.length > 0 ? (
             <Text style={styles.helpNote}>New stages: {plan.newStages.map((s) => s.name).join(', ')}</Text>
@@ -514,6 +528,17 @@ export default function LineupImportScreen() {
             <Text style={styles.helpNote}>
               New days: {plan.newDays.map((d) => `${d.label} (${d.date})`).join(', ')}
             </Text>
+          ) : null}
+          {updateOffBanner(plan.counts, updateExisting) ? (
+            <View style={styles.card}>
+              <Text style={styles.helpNote}>{updateOffBanner(plan.counts, updateExisting)}</Text>
+              <Button
+                label="Turn on Update"
+                variant="secondary"
+                onPress={() => handleToggle('update', true)}
+                disabled={working}
+              />
+            </View>
           ) : null}
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>
@@ -576,7 +601,7 @@ export default function LineupImportScreen() {
           <View style={[styles.banner, styles.bannerOk]}>
             <Text style={styles.bannerText}>
               Import done. Added {result.created} sets, updated {result.updated}, created {result.newStages} stages and{' '}
-              {result.newDays} days.
+              {result.newDays} days.{result.skipped > 0 ? ` Skipped ${result.skipped} ${result.skipped === 1 ? 'row' : 'rows'} that name another day.` : ''}
             </Text>
           </View>
           {result.warnings.length > 0 ? (

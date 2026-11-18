@@ -728,6 +728,7 @@ describe('festivalDataStore', () => {
       await useFestivalDataStore.getState().removePick('fest-1', 'set-1');
       const profile = useFestivalDataStore.getState().currentProfile!;
       expect(profile.picks['set-1']).toBeUndefined();
+      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ picks: {}, pickRemove: ['set-1'] });
     });
 
     it('throws when signed in with no current profile', async () => {
@@ -942,7 +943,7 @@ describe('festivalDataStore', () => {
       await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-1', priority: null });
 
       expect(api.put).toHaveBeenCalledTimes(2);
-      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ picks: {} });
+      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ picks: {}, pickRemove: ['set-1'] });
       expect(vi.mocked(api.put).mock.calls[0]![2]).toMatchObject({ clientId: 'pick-prof-1-set-1' });
       expect(vi.mocked(api.put).mock.calls[1]![1]).toEqual({ reminders: { 'set-9': 30 } });
       expect(vi.mocked(api.put).mock.calls[1]![2]).toMatchObject({ clientId: 'reminder-prof-1-set-1' });

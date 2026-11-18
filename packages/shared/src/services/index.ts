@@ -6,6 +6,7 @@ export * from './sos';
 export * from './meetingPoints';
 export * from './sharing';
 export * from './lineupImport';
+export * from './timeReleases';
 export * from './festivalAdmin';
 export * from './caught';
 export * from './adminFestivalTools';

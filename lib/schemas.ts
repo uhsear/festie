@@ -129,6 +129,7 @@ export const oauthCompleteSchema = z
     username,
     dateOfBirth,
     tosAccepted,
+    ref: signupRef,
   })
   .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
 export type OAuthCompleteInput = z.infer<typeof oauthCompleteSchema>;
@@ -165,6 +166,13 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 const pickValue = z.enum(PICK_PRIORITY_VALUES);
 const picksMap = z.record(z.string().max(100), pickValue).optional();
+// A delta changes only the sets it names: a priority sets the pick, null removes it.
+// Sets the delta leaves out keep whatever the server holds, so a replayed offline
+// write cannot erase picks that arrived after the device last synced.
+const pickDeltasMap = z
+  .record(z.string().max(100), pickValue.nullable())
+  .refine((d) => Object.keys(d).length > 0, { message: 'pickDeltas needs at least one set' })
+  .optional();
 const notesMap = z.record(z.string().max(100), shortText).optional();
 const allowedReminderMinutes = z.union(REMINDER_MINUTE_VALUES.map((m: any) => z.literal(m)) as any);
 const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optional();
@@ -172,11 +180,21 @@ const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optio
 export const profileUpdateSchema = z
   .object({
     picks: picksMap,
+    pickDeltas: pickDeltasMap,
     notes: notesMap,
     reminders: remindersMap,
+    // Set ids the user cleared in this full-map write. They end the server's 72-hour guard on converted picks.
+    pickRemove: z.array(z.string().max(100)).max(200).optional(),
+    // Interest marks travel as deltas, never as a whole map, so two devices cannot erase each other's marks.
+    interestAdd: z.array(identifier).max(50).optional(),
+    interestRemove: z.array(identifier).max(50).optional(),
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
+  })
+  .refine((d) => d.picks === undefined || d.pickDeltas === undefined, {
+    message: 'Send either picks or pickDeltas, not both',
+    path: ['pickDeltas'],
   });
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 
@@ -552,6 +570,12 @@ export const festivalCreateSchema = z.object({
   // Optional festival site-map. Nullable so an update can clear it; omitted on
   // legacy clients ⇒ map_config stays NULL and the festival renders unmapped.
   mapConfig: festivalMapConfigSchema.optional().nullable(),
+  // Links editions of one recurring festival. Null clears it; omitted keeps the stored value.
+  seriesId: z
+    .string()
+    .regex(/^[a-z0-9-]{1,60}$/, 'Use lower-case letters, digits and hyphens, up to 60 characters.')
+    .nullable()
+    .optional(),
 });
 export type FestivalCreateInput = z.infer<typeof festivalCreateSchema>;
 
@@ -612,6 +636,17 @@ export const festivalAnnouncementSchema = z
     body: z.string().trim().min(1).max(200),
     screen: z.enum(['home', 'map', 'timeline', 'picks', 'festival-mode', 'crew']).default('home'),
     sendAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+
+// ── Set-time releases (admin) ───────────────────────────────────────
+// One alert per festival date. note is the push body, so it stays inside payload.ts MAX_BODY_LENGTH (200).
+// confirmPartial lets a date go out while some of its sets still have no time.
+export const timeReleaseSendSchema = z
+  .object({
+    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(10),
+    note: z.string().trim().min(1).max(200).optional(),
+    confirmPartial: z.boolean().optional(),
   })
   .strict();
 
@@ -1139,6 +1174,8 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
   const venueLat = venueSent ? coord(input.latitude, 90) : (existingFestival?.latitude ?? null);
   const venueLng = venueSent ? coord(input.longitude, 180) : (existingFestival?.longitude ?? null);
   const venueValid = venueLat !== null && venueLng !== null;
+  // series_id: shape-validated by festivalCreateSchema. Undefined keeps the stored value; null clears it.
+  const seriesId = input.seriesId !== undefined ? (input.seriesId ?? null) : (existingFestival?.seriesId ?? null);
   const storedSets = new Map<string, any>();
   for (const day of existingFestival?.days || []) {
     for (const set of day?.sets || []) if (set?.id) storedSets.set(set.id, set);
@@ -1180,6 +1217,7 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
       }),
     })),
     mapConfig,
+    seriesId,
     // Sent: cleaned and keyed against the stored list. Omitted: the stored list stays.
     lineup:
       input.lineup !== undefined
@@ -1787,6 +1825,7 @@ export const schemas = {
   artistSpotifyPicks: artistSpotifyPicksSchema,
   spotifyBackfill: spotifyBackfillSchema,
   festivalAnnouncement: festivalAnnouncementSchema,
+  timeReleaseSend: timeReleaseSendSchema,
   crewHomeBase: crewHomeBaseSchema,
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,
