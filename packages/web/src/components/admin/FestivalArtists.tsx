@@ -293,10 +293,12 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
                   {mergeId === artist.id && (
                     <ArtistMerge
                       artist={artist}
+                      suggested={artists.filter((other) => artist.duplicateOf?.includes(other.id))}
                       onMerged={() => {
                         setOpenId(null);
                         void refresh();
                       }}
+                      onStale={() => void refresh()}
                       onClose={() => setMergeId(null)}
                     />
                   )}

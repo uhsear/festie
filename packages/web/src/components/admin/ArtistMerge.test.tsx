@@ -99,6 +99,27 @@ describe('ArtistMerge', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('on ARTIST_CHANGED it asks the list to reload and starts the pair again', async () => {
+    mergeArtists.mockRejectedValue(new ApiClientError('Someone changed one of these artists. Reload the pair.', 409, 'ARTIST_CHANGED'));
+    const onStale = vi.fn();
+    const onMerged = vi.fn();
+    render(<ArtistMerge artist={mine as never} onMerged={onMerged} onStale={onStale} onClose={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: "Merge with Sumthin' Sumthin'" }));
+    await screen.findByText(/This cannot be undone/);
+    fireEvent.click(screen.getByRole('button', { name: 'Merge' }));
+    await waitFor(() => expect(onStale).toHaveBeenCalledTimes(1));
+    expect(onMerged).not.toHaveBeenCalled();
+    expect(await screen.findByRole('button', { name: "Merge with Sumthin' Sumthin'" })).toBeTruthy();
+    expect((screen.getByRole('alert')).textContent).toContain('Reload the pair');
+  });
+
+  it('lists the suggested partners first, even when the name search misses them', async () => {
+    searchArtists.mockResolvedValue([]);
+    const partner = artist({ id: 'art-9', name: 'Sumthin Sumthim' });
+    render(<ArtistMerge artist={mine as never} suggested={[partner as never]} onMerged={vi.fn()} onClose={vi.fn()} />);
+    expect(await screen.findByRole('button', { name: 'Merge with Sumthin Sumthim' })).toBeTruthy();
+  });
+
   it('asks for the password when the server wants a recent check, and a cancel merges nothing', async () => {
     mergeArtists.mockRejectedValue(new ApiClientError('Confirm your password to continue.', 403, 'REAUTH_REQUIRED'));
     askPassword.mockResolvedValue(null);

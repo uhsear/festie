@@ -27,6 +27,8 @@ export interface AdminArtistRow extends AdminArtist {
   /** Another live artist has the same name. */
   sameName: boolean;
   linkCount: number;
+  /** Only in the "Possible duplicates" list: the ids of the artists this one may duplicate. */
+  duplicateOf?: string[];
 }
 
 export interface ArtistCandidate {

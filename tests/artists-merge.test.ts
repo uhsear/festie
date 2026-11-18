@@ -181,6 +181,9 @@ describe('artist merge route', { skip, concurrency: 1 }, () => {
     assert.equal(details.loserId, loser.id);
     assert.equal(details.festivals, 1);
     assert.equal(details.setsMoved, 1);
+    assert.equal(details.survivorBefore.name, 'Audit Survivor');
+    assert.equal(details.survivorAfter.name, 'Audit Survivor');
+    assert.deepEqual(details.survivorBefore.links, {});
     const action = (await pool.query("SELECT action FROM audit_log WHERE target_id = $1 AND action <> 'artist.created'", [survivor.id])).rows[0].action;
     assert.equal(action, 'artist.merged');
   });
@@ -277,15 +280,20 @@ describe('artist merge route', { skip, concurrency: 1 }, () => {
     assert.equal((await artistRow(uk.id)).label, 'US');
   });
 
-  test('"Possible duplicates" lists same-key pairs and keys one character apart', async () => {
-    const a = await createArtist(app, { name: 'Dupe Quartz Harbor' });
+  test('"Possible duplicates" lists same-key pairs and keys one character apart, each pair together with its partner ids', async () => {
+    // The first pair: the unlinked artist sorts apart from the linked one if links decide the order.
+    const a = await createArtist(app, { name: 'Dupe Quartz Harbor', links: { instagram: 'https://www.instagram.com/dupeq' } });
     const b = await createArtist(app, { name: 'Dupe Quartz Harbour' });
     const c = await createArtist(app, { name: 'Dupe Quartz Harbor', label: 'UK' });
     const solo = await createArtist(app, { name: 'Dupe Lonely Planet Unmatched' });
     const res = await app.get('/api/v1/admin/artists?duplicates=true&limit=1000').expect(200);
-    const ids = new Set(res.body.data.artists.map((row: any) => row.id));
-    for (const artist of [a, b, c]) assert.ok(ids.has(artist.id), artist.name);
-    assert.equal(ids.has(solo.id), false);
+    const list: any[] = res.body.data.artists;
+    const ids = list.map((row) => row.id);
+    for (const artist of [a, b, c]) assert.ok(ids.includes(artist.id), artist.name);
+    assert.equal(ids.includes(solo.id), false);
+    assert.deepEqual(list.find((row) => row.id === b.id).duplicateOf.sort(), [a.id, c.id].sort());
+    const at = [a, b, c].map((artist) => ids.indexOf(artist.id)).sort((x, y) => x - y);
+    assert.equal(at[2]! - at[0]!, 2, 'the three rows sit next to each other');
   });
 });
 

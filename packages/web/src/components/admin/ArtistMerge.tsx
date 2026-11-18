@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  ARTIST_CHANGED,
   artistTitle,
   getArtistUse,
   mergeArtists,
@@ -7,6 +8,7 @@ import {
   mergePreviewText,
   searchArtists,
 } from '@festie/shared/services';
+import { ApiClientError } from '@festie/shared/services/api';
 import { withReauth } from '@festie/shared/services/admin';
 import type { AdminArtistRow, ArtistMergePick, ArtistUse } from '@festie/shared/services';
 import { platformLabel } from '@festie/shared/utils';
@@ -17,8 +19,12 @@ import Button from '../ui/Button';
 interface ArtistMergeProps {
   /** The artist whose row is open. The editor picks the other artist and which of the two survives. */
   artist: AdminArtistRow;
+  /** The artists the list says this one may duplicate. They come first, whatever the search finds. */
+  suggested?: AdminArtistRow[];
   /** Called after a merge: the list behind this panel reloads. */
   onMerged: () => void;
+  /** Called when the server says an artist changed: the list reloads and the panel stays open. */
+  onStale?: () => void;
   onClose: () => void;
 }
 
@@ -63,7 +69,7 @@ function differingFields(a: AdminArtistRow, b: AdminArtistRow): Option[] {
  * the one with more appearances) and, for each field where both differ, which value stays. The preview
  * says how many appearances move. A merge cannot be undone, so it asks for a recent password check.
  */
-export default function ArtistMerge({ artist, onMerged, onClose }: ArtistMergeProps) {
+export default function ArtistMerge({ artist, suggested = [], onMerged, onStale, onClose }: ArtistMergeProps) {
   const { toast } = useToast();
   const { askPassword, reauthDialog } = useReauthPrompt();
   const [query, setQuery] = useState(artist.name);
@@ -112,6 +118,8 @@ export default function ArtistMerge({ artist, onMerged, onClose }: ArtistMergePr
     }
   };
 
+  // The list's suggested partners lead: a name search cannot find a partner whose name differs by one letter.
+  const candidates = [...suggested, ...found.filter((row) => !suggested.some((s) => s.id === row.id))];
   const options = useMemo(() => (other ? differingFields(artist, other) : []), [artist, other]);
 
   const merge = async () => {
@@ -137,6 +145,12 @@ export default function ArtistMerge({ artist, onMerged, onClose }: ArtistMergePr
       onClose();
     } catch (err) {
       setError(err instanceof Error && err.message ? err.message : "Couldn't merge these artists. Try again.");
+      if (err instanceof ApiClientError && err.code === ARTIST_CHANGED) {
+        // The tokens and counts are stale: reload the list and start the pair again.
+        setOther(null);
+        setUses(null);
+        onStale?.();
+      }
     } finally {
       setBusy(false);
     }
@@ -166,9 +180,9 @@ export default function ArtistMerge({ artist, onMerged, onClose }: ArtistMergePr
             onChange={(e) => setQuery(e.target.value)}
           />
           {searching && <p className="text-xs text-text-muted">Searching…</p>}
-          {!searching && found.length === 0 && <p className="text-xs text-text-muted">No other artist matches.</p>}
+          {!searching && candidates.length === 0 && <p className="text-xs text-text-muted">No other artist matches.</p>}
           <ul className="space-y-1">
-            {found.slice(0, 20).map((row) => (
+            {candidates.slice(0, 20).map((row) => (
               <li key={row.id}>
                 <Button
                   size="sm"

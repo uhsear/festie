@@ -184,6 +184,19 @@ describe('FestivalArtists', () => {
     expect(screen.queryByText('Cyclops')).toBeNull();
   });
 
+  it('Merge into on a possible duplicate offers the listed partner without a search match', async () => {
+    listDuplicateArtists.mockResolvedValue([
+      artist({ id: 'art-5', name: 'Quartz Harbour', duplicateOf: ['art-6'] }),
+      artist({ id: 'art-6', name: 'Quartz Harbor', duplicateOf: ['art-5'] }),
+    ]);
+    searchArtists.mockResolvedValue([]);
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Possible duplicates' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Quartz Harbour, edit' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Merge Quartz Harbour into another artist' }));
+    expect(await screen.findByRole('button', { name: 'Merge with Quartz Harbor' })).toBeTruthy();
+  });
+
   it('Merge into opens the merge panel on that row and searches by the artist name', async () => {
     searchArtists.mockResolvedValue([artist({ id: 'art-7', name: 'Avello', label: 'NL' })]);
     await open();

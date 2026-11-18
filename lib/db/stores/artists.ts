@@ -16,7 +16,7 @@ import { withTransactionRetry } from '../connection';
 import { createOpaqueId } from '../../helpers';
 import { sanitizeString } from '../../helpers/sanitize';
 import { artistNameKey } from '../../artist-key';
-import { possibleDuplicateIds } from '../../artist-duplicates';
+import { duplicatePartners } from '../../artist-duplicates';
 import { detectPlatform, normalizeArtistLink } from '../../artist-links';
 import { todayInZone } from '../../lineup';
 import { AUDIT_ACTIONS } from '../../audit-actions';
@@ -137,6 +137,16 @@ const shownName = (artist: { name: string; label: string }) => (artist.label ? `
 
 /** The name with its note, for a message. */
 export const artistTitle = shownName;
+
+/** The fields a merge can overwrite, for the audit row. */
+const auditFields = (row: ArtistRecord) => ({
+  name: row.name,
+  label: row.label,
+  spotifyId: row.spotify_id,
+  links: row.links ?? {},
+  photo: row.photo ?? null,
+  genres: row.genres ?? [],
+});
 
 /** Live artists whose key is in `keys`, newest id order, grouped by key. */
 export async function liveArtistsByKey(db: { query: Pool['query'] }, keys: string[]): Promise<Map<string, ArtistRecord[]>> {
@@ -903,6 +913,9 @@ export function createArtistsStore(pool: Pool) {
               loserId,
               survivorName: artistTitle(survivor),
               loserName: artistTitle(loser),
+              // A merge cannot be undone: keep what the pick overwrote on the survivor.
+              survivorBefore: auditFields(survivor),
+              survivorAfter: auditFields(artist),
               festivals: festivalIds.length,
               setsMoved: found.refs.sets.length,
               lineupEntriesMoved: found.refs.lineup.length,
@@ -975,15 +988,22 @@ export function createArtistsStore(pool: Pool) {
     /**
      * Artists on one festival (its sets and announced names), or every artist with `scope: 'all'`.
      * Rows with no links come first. `alsoOn` counts the other festivals, archived ones left out.
+     * With `duplicates`, only artists that have a possible duplicate: pairs stay together and `duplicateOf` lists each partner's id.
      */
     async list(opts: { festivalId?: string; query?: string; limit: number; duplicates?: boolean }) {
       let rows: ArtistRecord[];
+      let partners = new Map<string, string[]>();
       if (opts.duplicates) {
         const { rows: keys } = await pool.query('SELECT id, name_key FROM artists WHERE merged_into IS NULL');
+        partners = duplicatePartners(keys);
         ({ rows } = await pool.query(
           `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = ANY($1::text[]) ORDER BY name_key, lower(label), id LIMIT $2`,
-          [[...possibleDuplicateIds(keys)], opts.limit],
+          [[...partners.keys()], opts.limit],
         ));
+        // A pair stays together: sort by the first name key in the pair. The sort is stable, so the SQL order holds inside a pair.
+        const keyOf = new Map<string, string>(keys.map((k: { id: string; name_key: string }) => [k.id, k.name_key]));
+        const first = (id: string) => [id, ...(partners.get(id) ?? [])].map((other) => keyOf.get(other) ?? '').reduce((a, b) => (b < a ? b : a));
+        rows.sort((a, b) => (first(a.id) < first(b.id) ? -1 : first(a.id) > first(b.id) ? 1 : 0));
       } else if (opts.festivalId) {
         ({ rows } = await pool.query(
           `
@@ -1020,10 +1040,11 @@ export function createArtistsStore(pool: Pool) {
           alsoOn: others.length,
           sameName: (keysAcross.get(row.name_key)?.length ?? 1) > 1,
           linkCount: Object.keys(row.links ?? {}).length,
+          ...(opts.duplicates ? { duplicateOf: partners.get(row.id) ?? [] } : {}),
         };
       });
-      // Rows with no links first: the editor's work list.
-      return items.sort((a, b) => Number(a.linkCount > 0) - Number(b.linkCount > 0));
+      // Possible duplicates keep their pairs together. Every other list puts rows with no links first: the editor's work list.
+      return opts.duplicates ? items : items.sort((a, b) => Number(a.linkCount > 0) - Number(b.linkCount > 0));
     },
 
     /**
