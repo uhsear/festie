@@ -107,7 +107,7 @@ describe('Spotify candidates', () => {
       res(200, { data: { results: [{ artistId: 'art-1', status: 'shared', alsoOn: 2 }] }, error: null }),
     );
     vi.stubGlobal('fetch', spy);
-    const picks = [{ artistId: 'art-1', expectedUpdatedAt: '2026-01-01T00:00:00.000Z', spotifyId: 'x'.repeat(22), acceptShared: false }];
+    const picks = [{ artistId: 'art-1', expectedUpdatedAt: '2026-01-01T00:00:00.000Z', spotifyId: 'x'.repeat(22), acceptedAlsoOn: 0 }];
     await expect(pickSpotifyCandidates('f1', picks)).resolves.toEqual([{ artistId: 'art-1', status: 'shared', alsoOn: 2 }]);
     const [url, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toContain('/admin/artists/spotify-picks');

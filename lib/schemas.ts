@@ -742,8 +742,8 @@ export const artistSpotifyPicksSchema = z.object({
         expectedUpdatedAt: z.string().datetime({ offset: true }),
         // Spotify's 22-character artist id. The server builds the link and reads the photo and genres from Spotify.
         spotifyId: z.string().regex(/^[A-Za-z0-9]{22}$/, 'Not a Spotify artist id'),
-        // The editor confirmed that the artist is on other festivals too. The server checks again under the locks.
-        acceptShared: z.boolean().optional(),
+        // How many other festivals the editor confirmed the artist is on. The server counts again under the locks and refuses a higher count.
+        acceptedAlsoOn: z.number().int().min(0).max(10_000).optional(),
       }),
     )
     .min(1)

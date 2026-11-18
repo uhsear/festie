@@ -108,8 +108,8 @@ export interface SpotifyPick {
   artistId: string;
   expectedUpdatedAt: string;
   spotifyId: string;
-  /** The editor confirmed "Change everywhere". The server checks again under its locks. */
-  acceptShared?: boolean;
+  /** The number of other festivals the editor confirmed with "Change everywhere". The server counts again under its locks. */
+  acceptedAlsoOn?: number;
 }
 
 export const ARTIST_CHANGED = 'ARTIST_CHANGED';

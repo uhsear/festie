@@ -112,7 +112,7 @@ describe('SpotifyCandidates', () => {
     expect((screen.getByRole('button', { name: 'Pick Avello for Avello' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it('a pick on an artist that is on other festivals asks first and sends acceptShared only after Change everywhere', async () => {
+  it('a pick on an artist that is on other festivals asks first and sends acceptedAlsoOn only after Change everywhere', async () => {
     pickSpotifyCandidates.mockResolvedValue([saved('art-3')]);
     await open([cyclops()]);
     fireEvent.click(screen.getByRole('button', { name: 'Pick Cyclops for Cyclops' }));
@@ -121,12 +121,12 @@ describe('SpotifyCandidates', () => {
     fireEvent.click(screen.getByText('Change everywhere'));
     await waitFor(() =>
       expect(pickSpotifyCandidates).toHaveBeenCalledWith('f1', [
-        { artistId: 'art-3', expectedUpdatedAt: '2026-06-01T00:00:00.000Z', spotifyId: 'id5'.padEnd(22, 'x'), acceptShared: true },
+        { artistId: 'art-3', expectedUpdatedAt: '2026-06-01T00:00:00.000Z', spotifyId: 'id5'.padEnd(22, 'x'), acceptedAlsoOn: 2 },
       ]),
     );
   });
 
-  it('when the server finds the artist on other festivals, it asks and sends the pick again with acceptShared', async () => {
+  it('when the server finds the artist on other festivals, it asks and sends the pick again with the count the server found', async () => {
     pickSpotifyCandidates
       .mockResolvedValueOnce([{ artistId: 'art-1', status: 'shared', alsoOn: 1 }])
       .mockResolvedValueOnce([saved('art-1')]);
@@ -136,7 +136,7 @@ describe('SpotifyCandidates', () => {
     expect(screen.getByText('Avello', { selector: 'span' })).toBeTruthy();
     fireEvent.click(screen.getByText('Change everywhere'));
     await waitFor(() => expect(pickSpotifyCandidates).toHaveBeenCalledTimes(2));
-    expect((pickSpotifyCandidates.mock.calls[1]![1] as Array<{ acceptShared?: boolean }>)[0]!.acceptShared).toBe(true);
+    expect((pickSpotifyCandidates.mock.calls[1]![1] as Array<{ acceptedAlsoOn?: number }>)[0]!.acceptedAlsoOn).toBe(1);
   });
 
   it('shows a refused pick on its own row and keeps the row', async () => {

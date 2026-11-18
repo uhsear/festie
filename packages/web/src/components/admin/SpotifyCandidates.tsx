@@ -22,7 +22,8 @@ interface SpotifyCandidatesProps {
 interface PickRequest {
   row: SpotifyCandidateRow;
   spotifyId: string;
-  acceptShared: boolean;
+  /** Other festivals the editor confirmed; 0 when none was shown. */
+  acceptedAlsoOn: number;
 }
 
 interface Confirm {
@@ -83,16 +84,16 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
       return text ? { ...rest, [artistId]: text } : rest;
     });
 
-  /** Sends picks and reads each answer. A `shared` answer asks the editor, then sends that pick again with `acceptShared`. */
+  /** Sends picks and reads each answer. A `shared` answer asks the editor, then sends that pick again with the count it showed. */
   const apply = async (requests: PickRequest[]) => {
     setBusy(true);
     for (const request of requests) setMessage(request.row.artist.id, null);
     try {
-      const picks: SpotifyPick[] = requests.map(({ row, spotifyId, acceptShared }) => ({
+      const picks: SpotifyPick[] = requests.map(({ row, spotifyId, acceptedAlsoOn }) => ({
         artistId: row.artist.id,
         expectedUpdatedAt: row.artist.updatedAt,
         spotifyId,
-        ...(acceptShared ? { acceptShared: true } : {}),
+        ...(acceptedAlsoOn > 0 ? { acceptedAlsoOn } : {}),
       }));
       const results = await pickSpotifyCandidates(festivalId, picks);
       const byArtist = new Map<string, SpotifyPickResult>(results.map((r) => [r.artistId, r]));
@@ -103,7 +104,7 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
         const id = request.row.artist.id;
         if (!result) continue;
         if (result.status === 'saved') saved.add(id);
-        else if (result.status === 'shared') askAgain.push({ ...request, acceptShared: true });
+        else if (result.status === 'shared') askAgain.push({ ...request, acceptedAlsoOn: result.alsoOn ?? 0 });
         else {
           setMessage(id, result.message ?? "Couldn't save this pick. Try again.");
           const current = result.artist;
@@ -139,7 +140,7 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
   };
 
   const pick = (row: SpotifyCandidateRow, candidate: SpotifyCandidate) => {
-    const request: PickRequest = { row, spotifyId: candidate.spotifyId, acceptShared: row.artist.alsoOn > 0 };
+    const request: PickRequest = { row, spotifyId: candidate.spotifyId, acceptedAlsoOn: row.artist.alsoOn };
     if (row.artist.alsoOn > 0) {
       setConfirm({ text: changeEverywhereText(row.artist.name, row.artist.alsoOn), label: 'Change everywhere', run: () => void apply([request]) });
     } else {
@@ -150,9 +151,9 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
   const confirmAll = () => {
     const requests = confirmable.map((row): PickRequest => {
       const exact = row.candidates.find((c) => c.exact)!;
-      return { row, spotifyId: exact.spotifyId, acceptShared: row.artist.alsoOn > 0 };
+      return { row, spotifyId: exact.spotifyId, acceptedAlsoOn: row.artist.alsoOn };
     });
-    const shared = requests.filter((r) => r.acceptShared).length;
+    const shared = requests.filter((r) => r.acceptedAlsoOn > 0).length;
     if (shared === 0) {
       void apply(requests);
       return;
