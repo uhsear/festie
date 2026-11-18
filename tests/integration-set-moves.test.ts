@@ -315,6 +315,8 @@ describe('lineup import writes moved marks', { skip, concurrency: 1 }, () => {
         newDays: [],
         inserts: [],
         updates: [{ index: 0, setId: S1, before, after: afterValues }],
+        announced: { inserts: [], updates: [] },
+        artistIds: [],
         spotifyMatched: 0,
       };
       const plan = { counts: { error: 0 }, problems: [] };

@@ -86,6 +86,7 @@ const HAND_VALIDATED_QUERY: Record<string, string> = {
   'email-auth.ts GET /verify-email': 'Reads one token string; the store lookup bounds it.',
   'notifications.ts GET /history': 'Clamps limit and offset by hand.',
   'pages.ts GET /reset-password': 'Reads one token string and only forwards it.',
+  'pages.ts GET /f/:slug': 'Reads one ref string and only matches it against a fixed allow-list.',
 };
 const REQUIRE_RECENT_AUTH = [
   'admin-users.ts POST /users/:id/roles', 'admin-users.ts DELETE /users/:id/roles/:role', 'admin-users.ts POST /users/:id/reset-link',
@@ -226,4 +227,32 @@ test('socket event inventory', () => {
     if (!limiter.test(byEvent.get(event) ?? '')) issues.push(`socket ${event}: no rate limiter (consumeSocketRateLimit).`);
   }
   assert.equal(issues.length, 0, `\n${issues.join('\n')}`);
+});
+
+test('artist routes stay admin only, validated and rate limited', () => {
+  const artistRoutes = routes.filter((r) => r.file === 'artists.ts');
+  assert.deepEqual(
+    artistRoutes.map((r) => r.key).sort(),
+    [
+      'artists.ts GET /',
+      'artists.ts GET /:id/impact',
+      'artists.ts PATCH /:id',
+      'artists.ts POST /',
+      'artists.ts POST /:id/merge',
+      'artists.ts POST /match',
+      'artists.ts POST /spotify-candidates',
+      'artists.ts POST /spotify-picks',
+    ],
+  );
+  for (const r of artistRoutes) {
+    assert.ok(isAdmin(r), `${r.key} must be mounted behind adminAuth in server.ts`);
+    if (r.verb !== 'GET') assert.ok(has(r, /\bvalidate\(/), `${r.key} must validate its body`);
+  }
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts PATCH /:id')!, /rateLimit\(60, 'artist-update'\)/));
+  const mergeRoute = artistRoutes.find((r) => r.key === 'artists.ts POST /:id/merge')!;
+  assert.ok(has(mergeRoute, /rateLimit\(10, 'artist-merge'\)/));
+  assert.ok(has(mergeRoute, /\brequireRecentAuth\b/), 'a merge needs a recent re-auth, as a festival delete does');
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /match')!, /rateLimit\(60, 'artist-match'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-candidates')!, /rateLimit\(6, 'artist-spotify-search'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-picks')!, /rateLimit\(20, 'artist-spotify-pick'\)/));
 });

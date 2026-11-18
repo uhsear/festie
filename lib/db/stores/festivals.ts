@@ -1,7 +1,30 @@
 import type { Pool } from 'pg';
-import { withTransaction } from '../connection';
+import { withTransaction, withTransactionRetry } from '../connection';
 import { planMoveMarks } from '../../set-moves';
 import { cleanLineupLinks } from '../../lineup';
+
+/** The save found the festival changed, or gone, since the form loaded: the route answers 409 FESTIVAL_CHANGED. */
+export class FestivalChangedError extends Error {
+  constructor() {
+    super('The festival changed since it was loaded.');
+    this.name = 'FestivalChangedError';
+  }
+}
+
+/** What update() may do inside its transaction, after it holds the festival row lock. */
+export interface FestivalUpdateOptions {
+  /** The updatedAt the form loaded. The save fails when another save changed the festival after that. */
+  expectedUpdatedAt?: string;
+  /**
+   * The set ids the route counted picks and ratings for. When the festival holds a different set of ids
+   * under the lock, the removal confirm was computed from stale data and the save fails with a 409.
+   */
+  storedSetIds?: string[];
+  /** Runs after the token check and before the child rows are written; may return the days and lineup to write. */
+  beforeChildren?: (client: any, fields: any) => Promise<{ days?: any[]; lineup?: any[] } | void>;
+  /** False for a write that is not an admin edit of the form (the venue geocode), so an open form stays current. */
+  touchEdited?: boolean;
+}
 
 /**
  * Build a multi-row VALUES clause with parameterized placeholders.
@@ -440,18 +463,20 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
 
           await client.query(
             `
-            INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config, series_id)
+            VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11)
             ON CONFLICT(id) DO UPDATE SET
               name = EXCLUDED.name,
               location = EXCLUDED.location,
               created_at = EXCLUDED.created_at,
               updated_at = EXCLUDED.updated_at,
+              edited_at = EXCLUDED.edited_at,
               b2b_separator = EXCLUDED.b2b_separator,
               latitude = EXCLUDED.latitude,
               longitude = EXCLUDED.longitude,
               time_zone = EXCLUDED.time_zone,
-              map_config = EXCLUDED.map_config
+              map_config = EXCLUDED.map_config,
+              series_id = EXCLUDED.series_id
           `,
             [
               festival.id,
@@ -464,6 +489,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
               festival.longitude ?? null,
               festival.timeZone ?? null,
               festival.mapConfig == null ? null : JSON.stringify(festival.mapConfig),
+              festival.seriesId ?? null,
             ],
           );
 
@@ -598,15 +624,6 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       return result.rows;
     },
 
-    /** When the "set times are out" alert went out (migration 089), or null if it has not. */
-    async getSetTimesOutAt(festivalId: string): Promise<string | null> {
-      const result = await pool.query('SELECT set_times_out_at AS "setTimesOutAt" FROM festivals WHERE id = $1', [
-        festivalId,
-      ]);
-      const value = result.rows[0]?.setTimesOutAt;
-      return value ? new Date(value).toISOString() : null;
-    },
-
     /** The id of the admin who last saved, published or restored the festival. */
     async getEditor(festivalId: string) {
       const result = await pool.query('SELECT updated_by AS "updatedBy" FROM festivals WHERE id = $1', [festivalId]);
@@ -640,6 +657,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           f.latitude,
           f.longitude,
           f.map_config AS "mapConfig",
+          f.series_id AS "seriesId",
           f.created_at AS "createdAt",
           f.updated_at AS "updatedAt",
           f.published_at AS "publishedAt",
@@ -710,7 +728,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         const updatedAt = festival.updatedAt || createdAt;
 
         await client.query(
-          'INSERT INTO festivals (id, name, location, created_at, updated_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, lineup) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13::jsonb)',
+          'INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, series_id, lineup) VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)',
           [
             festival.id,
             festival.name,
@@ -725,6 +743,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             // Only the admin create route passes null (a draft); every other caller publishes.
             festival.publishedAt === undefined ? new Date().toISOString() : festival.publishedAt,
             festival.updatedBy ?? null,
+            festival.seriesId ?? null,
             JSON.stringify(festival.lineup ?? []),
           ],
         );
@@ -750,6 +769,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             latitude,
             longitude,
             map_config AS "mapConfig",
+            series_id AS "seriesId",
             created_at AS "createdAt",
             updated_at AS "updatedAt",
             published_at AS "publishedAt",
@@ -766,9 +786,9 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       });
     },
 
-    async update(festivalId: string, fields: any) {
+    async update(festivalId: string, fields: any, options: FestivalUpdateOptions = {}) {
       // fields: name, location, stages, days (wrapped in transaction for consistency)
-      return withTransaction(pool, async (client) => {
+      return withTransactionRetry(pool, async (client) => {
         const sets: string[] = [];
         const values: any[] = [];
         let idx = 1;
@@ -808,6 +828,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           values.push(fields.mapConfig == null ? null : JSON.stringify(fields.mapConfig));
           idx++;
         }
+        if (fields.seriesId !== undefined) {
+          sets.push(`series_id = $${idx}`);
+          values.push(fields.seriesId ?? null);
+          idx++;
+        }
         if (fields.lineup !== undefined) {
           sets.push(`lineup = $${idx}::jsonb`);
           values.push(JSON.stringify(fields.lineup));
@@ -819,11 +844,39 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
           idx++;
         }
         sets.push(`updated_at = $${idx}`);
+        if (options.touchEdited !== false) sets.push(`edited_at = $${idx}`);
         values.push(new Date().toISOString());
         idx++;
         values.push(festivalId);
+        let where = `id = $${idx} AND deleted_at IS NULL`;
+        idx++;
+        // The token is the festival's last form edit. An artist sync, a publish and a restore move
+        // updated_at but not edited_at, so they never make an open form stale. updated_at is always at
+        // least edited_at, so a token read after the last edit passes. Compared at millisecond precision.
+        if (options.expectedUpdatedAt !== undefined) {
+          where += ` AND date_trunc('milliseconds', COALESCE(edited_at, updated_at)) <= date_trunc('milliseconds', $${idx}::timestamptz)`;
+          values.push(options.expectedUpdatedAt);
+        }
 
-        await client.query(`UPDATE festivals SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL`, values);
+        // The first statement takes the festival row lock: every writer locks festivals before artists.
+        const locked = await client.query(`UPDATE festivals SET ${sets.join(', ')} WHERE ${where}`, values);
+        if (locked.rowCount === 0) {
+          if (options.expectedUpdatedAt !== undefined) throw new FestivalChangedError();
+          return null;
+        }
+        if (options.storedSetIds) {
+          const { rows: current } = await client.query('SELECT id FROM festival_sets WHERE festival_id = $1', [festivalId]);
+          const known = new Set(options.storedSetIds);
+          if (current.length !== known.size || current.some((row: any) => !known.has(row.id))) throw new FestivalChangedError();
+        }
+        const prepared = await options.beforeChildren?.(client, fields);
+        const days = prepared?.days ?? fields.days;
+        if (prepared?.lineup !== undefined) {
+          await client.query('UPDATE festivals SET lineup = $2::jsonb WHERE id = $1', [
+            festivalId,
+            JSON.stringify(prepared.lineup),
+          ]);
+        }
 
         // Upsert stages instead of delete-and-reinsert: festival_sets_stage_fkey is ON DELETE
         // CASCADE, so deleting a stage row would delete (or, with picks, fail on) its sets.
@@ -842,8 +895,8 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         }
 
         // Update days and sets if provided (batch insert with pick/rating preservation)
-        if (fields.days !== undefined) {
-          const children = collectFestivalChildren(festivalId, { days: fields.days });
+        if (days !== undefined) {
+          const children = collectFestivalChildren(festivalId, { days });
           await replaceChildRows(client, festivalId, children);
         }
 
@@ -869,6 +922,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
             latitude,
             longitude,
             map_config AS "mapConfig",
+            series_id AS "seriesId",
             created_at AS "createdAt",
             updated_at AS "updatedAt",
             published_at AS "publishedAt"

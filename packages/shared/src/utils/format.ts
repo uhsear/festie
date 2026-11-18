@@ -109,6 +109,8 @@ const PLATFORM_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
   facebook: 'Facebook',
   website: 'Website',
+  youtube: 'YouTube',
+  apple_music: 'Apple Music',
 };
 
 /** Human label for an artist link key; unknown keys pass through unchanged. */

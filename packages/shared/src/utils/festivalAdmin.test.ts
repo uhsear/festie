@@ -70,6 +70,12 @@ describe('shiftSetTimes', () => {
 });
 
 describe('countFestivalChanges', () => {
+  it('counts a series-only edit as one change', () => {
+    expect(countFestivalChanges({ name: 'FK' }, { name: 'FK', seriesId: 'forbidden-kingdom' }).total).toBe(1);
+    expect(countFestivalChanges({ seriesId: 'a' }, { seriesId: null }).total).toBe(1);
+    expect(countFestivalChanges({ name: 'FK' }, { name: 'FK', seriesId: null }).total).toBe(0);
+  });
+
   it('counts a lineup change as one change, and an absent lineup equals an empty one', () => {
     const entry = (name: string, extra = {}) => ({ id: 'lu-1', artists: [{ name }], ...extra });
     expect(countFestivalChanges({ lineup: [] }, {}).total).toBe(0);

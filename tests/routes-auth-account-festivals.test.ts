@@ -15,6 +15,7 @@ import express from 'express';
 import createAuthRoutes from '../routes/auth.js';
 import createAccountRoutes from '../routes/account.js';
 import createFestivalsRoutes from '../routes/festivals.js';
+import { FestivalChangedError } from '../lib/db/stores/festivals.js';
 import { schemas as realSchemas } from '../lib/schemas.js';
 
 // ── Shared mock helpers ────────────────────────────────────────────────
@@ -2030,6 +2031,16 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
 
   // ── PUT /:festivalId/sets/:setId/link ─────────────────────────────
   describe('PUT /:festivalId/sets/:setId/link', () => {
+    // The route runs in one transaction under the festival lock and reads the set row itself.
+    const txPool = (setRow: any, query = mock.fn(async (_sql: string, _params?: unknown[]): Promise<any> => ({ rows: [], rowCount: 0 }))) => {
+      const answer = async (sql: string, params?: unknown[]) => {
+        if (sql.startsWith('SELECT id, published_at, deleted_at FROM festivals')) return { rows: [{ id: 'f-1', deleted_at: null }] };
+        if (sql.startsWith('SELECT artist, artists FROM festival_sets')) return { rows: setRow ? [setRow] : [] };
+        return query(sql, params);
+      };
+      return { query: answer, connect: async () => ({ query: answer, release() {} }) };
+    };
+
     test('updates set link successfully', async () => {
       const festival = {
         id: 'f-1',
@@ -2041,7 +2052,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
           },
         ],
       };
-      const poolQuery = mock.fn(async () => ({ rows: [] }));
+      const poolQuery = mock.fn(async (_sql: string, _params?: unknown[]): Promise<any> => ({ rows: [], rowCount: 0 }));
       const deps = makeMockDeps({
         getFestivalById: mock.fn(async () => festival),
         stores: {
@@ -2052,7 +2063,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
           },
           users: { create: mock.fn(async (d) => d) },
           profiles: { update: mock.fn(async () => {}) },
-          pool: { query: poolQuery },
+          pool: txPool({ artist: 'DJ Test', artists: [{ name: 'DJ Test', links: {} }] }, poolQuery),
           roles: { getUserRoles: mock.fn(async () => []) },
           sessions: { deleteUserSession: mock.fn(async () => {}), listUserSessions: mock.fn(async () => []) },
         },
@@ -2067,7 +2078,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
       assert.equal(res.body.data.setId, 'set-1');
-      // Should have issued UPDATE queries
+      // The set row and the festival's updated_at and edited_at are written.
       assert.ok(poolQuery.mock.calls.length >= 2);
     });
 
@@ -2092,6 +2103,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       };
       const deps = makeMockDeps({
         getFestivalById: mock.fn(async () => festival),
+        stores: { pool: txPool(null), festivals: {}, roles: { getUserRoles: mock.fn(async () => []) } },
       });
       const router = createFestivalsRoutes(deps);
       const app = createApp(router);
@@ -2108,7 +2120,6 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
         name: 'Fest',
         days: [{ label: 'Day 1', sets: [{ id: 'set-1', artist: 'DJ', artists: [] }] }],
       };
-      const poolQuery = mock.fn(async () => ({ rows: [] }));
       const deps = makeMockDeps({
         getFestivalById: mock.fn(async () => festival),
         stores: {
@@ -2119,7 +2130,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
           },
           users: { create: mock.fn(async (d) => d) },
           profiles: { update: mock.fn(async () => {}) },
-          pool: { query: poolQuery },
+          pool: txPool({ artist: 'DJ', artists: [] }),
           roles: { getUserRoles: mock.fn(async () => []) },
           sessions: { deleteUserSession: mock.fn(async () => {}), listUserSessions: mock.fn(async () => []) },
         },
@@ -2369,14 +2380,18 @@ describe('routes/festivals.js — PUT /:id save guards', () => {
     });
   });
 
-  test('a stale expectedUpdatedAt returns FESTIVAL_CHANGED', async () => {
+  test('a token the save refuses returns FESTIVAL_CHANGED, and the token goes to the store check', async () => {
     const { deps, updateFn } = guardDeps();
+    // The check runs inside the store's transaction, under the row lock (tests/festival-edit-token.test.ts).
+    updateFn.mock.mockImplementationOnce(async () => {
+      throw new FestivalChangedError();
+    });
     const res = await request(createApp(createFestivalsRoutes(deps)))
       .put('/f-1')
       .send({ name: 'Fest', expectedUpdatedAt: '2026-09-01T00:00:00.000Z' });
     assert.equal(res.status, 409);
     assert.equal(res.body.error.code, 'FESTIVAL_CHANGED');
-    assert.equal(updateFn.mock.calls.length, 0);
+    assert.equal((updateFn.mock.calls[0] as any).arguments[2].expectedUpdatedAt, '2026-09-01T00:00:00.000Z');
   });
 
   test('a save without days leaves days and sets alone and counts nothing', async () => {

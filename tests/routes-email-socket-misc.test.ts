@@ -1805,6 +1805,7 @@ describe('routes/lineup-import', () => {
         pool: storePool,
         festivals: { getById: mock.fn(async () => FESTIVAL) },
         lineupImports: {
+          lookupArtists: mock.fn(async () => ({ byKey: new Map(), byId: new Map() })),
           // Runs the route's plan builder against the mocked festival, like the real store.
           commit: mock.fn(async (_id: string, buildPlan: any) => {
             const { plan, writes } = buildPlan(FESTIVAL);

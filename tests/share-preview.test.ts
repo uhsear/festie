@@ -141,7 +141,7 @@ describe('share page previews', () => {
     assert.ok(res.text.includes('href="http://localhost:3000/friend-picks?from=tok123">Compare with my picks'));
     assert.ok(res.text.includes('href="http://localhost:3000/friend-picks?from=tok123#add">Add their picks to my plan'));
     assert.ok(res.text.includes('href="festie://friend-picks?from=tok123">Open in the app'));
-    assert.ok(res.text.includes('New to Festie? Plan your own schedule'));
+    assert.ok(res.text.includes('href="http://localhost:3000/?ref=share-picks">New to Festie? Plan your own schedule'));
     assert.ok(!res.text.includes('Compare picks with your crew on Festie'));
   });
 
@@ -272,6 +272,11 @@ describe('pickOgArtists', () => {
     };
     const picks = { night: 'must', late: 'must', tba: 'must', day2: 'must', want1: 'want-to-see', maybe: 'maybe' };
     assert.deepEqual(pickOgArtists(festival, picks, 'b2b'), ['Late', 'Night', 'DayTwo', 'Tba', 'Want1']);
+  });
+
+  test('uses the billed displayName over the joined artists', () => {
+    const festival = { days: [{ sets: [{ id: 's1', artist: 'A b2b B', displayName: 'A & B', artists: [{ name: 'A' }, { name: 'B' }], startTime: '20:00' }] }] };
+    assert.deepEqual(pickOgArtists(festival, { s1: 'must' }, 'b2b'), ['A & B']);
   });
 
   test('joins B2B artists with the festival separator', () => {

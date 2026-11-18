@@ -76,9 +76,9 @@ function build() {
     stores: {
       festivals: {
         update: mock.fn(async (id: string, data: any) => ({ ...existing, id, ...data })),
-        getSetTimesOutAt: mock.fn(async () => '2026-01-01T00:00:00.000Z'),
       },
       profiles: { pickersBySet },
+      timeReleases: { releasedDates: async () => new Set<string>() },
       pool: { query: async () => ({ rows: [{ count: '0' }] }) },
     },
     emitter: { festivalCreated: mock.fn(), festivalUpdated: mock.fn(), scheduleChanged: mock.fn() },
@@ -87,7 +87,6 @@ function build() {
     validateQuery: pass,
     validateParams: pass,
     invalidateFestivalCache: () => {},
-    reengagement: { sendSetTimesOut: mock.fn(async () => ({ queued: false })) },
   };
   deps.festivalAccess = () => deps.adminAuth;
   const app = express();

@@ -130,10 +130,12 @@ import createOAuthRoutes from './routes/oauth';
 import createIdentityRoutes from './routes/identities';
 import createAccountRoutes from './routes/account';
 import createAdminRoutes from './routes/admin';
+import createArtistsRoutes from './routes/artists';
 import createProfileRoutes from './routes/profiles';
 import createExportRoutes from './routes/export';
 import createNotificationRoutes from './routes/notifications';
 import createCrewRoutes from './routes/crews';
+import { createInterestConversion } from './lib/lineup';
 import createShareRoutes from './routes/share';
 import { createRatingsRoutes } from './routes/ratings';
 import { createWeatherRoutes } from './routes/weather';
@@ -238,6 +240,8 @@ async function createFestieApp(overrides: any = {}) {
   });
   ctx.reminderScheduler = reminderScheduler;
   deps.emitter = emitter;
+  // Turns interest marks on announced acts into picks after any writer that adds sets or names.
+  deps.interestConversion = createInterestConversion({ pool, stores: ctx.stores, emitter, log, config });
   const crewNotify = createCrewNotifier({ stores: ctx.stores, notificationService, log });
   const pollCloser = createPollCloser({
     stores: ctx.stores,
@@ -274,6 +278,7 @@ async function createFestieApp(overrides: any = {}) {
   const identityRoutes = createIdentityRoutes(deps);
   const accountRoutes = createAccountRoutes(deps);
   const adminRoutes = createAdminRoutes(deps);
+  const artistRoutes = createArtistsRoutes(deps);
   const profileRoutes = createProfileRoutes(deps);
   const exportRoutes = createExportRoutes(deps);
   const notificationRoutes = createNotificationRoutes(deps);
@@ -298,6 +303,7 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/auth', identityRoutes);
   app.use('/api/v1/account', accountRoutes);
   app.use('/api/v1/admin', adminRoutes);
+  app.use('/api/v1/admin/artists', deps.adminAuth, artistRoutes);
   for (const { prefix, guards, router } of buildFestivalMounts(deps)) app.use(prefix, ...guards, router);
   app.use('/api/v1/profiles', profileRoutes);
   app.use('/api/v1', exportRoutes);

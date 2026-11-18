@@ -4,11 +4,12 @@ import 'dotenv/config';
  * Covers: migration default publishes existing rows, a new festival is a hidden draft,
  * the admin checklist, publish blocked and allowed, no festival:updated for a draft
  * save (unit-tested in routes-auth-account-festivals), structured 400 issues,
- * archive and restore, the delete-impact counts, and the "set times are out" marker.
+ * archive and restore, and the delete-impact counts.
  *
  * Skip-gate on TEST_DATABASE_URL. The helpers module exits the process without
  * it, so it is imported only when the database is there. The first describe is a
- * unit test of the "set times are out" wiring with mocked deps and always runs.
+ * unit test of the picker alerts and of "no save or publish sends the set-times alert",
+ * with mocked deps, and always runs.
  */
 
 import assert from 'node:assert/strict';
@@ -31,8 +32,8 @@ after(() => {
   if (skip) console.log('festival-publish: skipped (TEST_DATABASE_URL not set)');
 });
 
-// ── "set times are out" wiring (mocked deps, no database) ────────────────
-describe('set times are out: PUT and publish', () => {
+// ── picker alerts and the set-times alert (mocked deps, no database) ─────
+describe('set times: PUT and publish send no festival-wide alert', () => {
   const pass = () => (req: any, _res: any, next: any) => {
     req.validatedBody = req.body;
     req.validatedParams = req.params;
@@ -74,14 +75,11 @@ describe('set times are out: PUT and publish', () => {
 
   function build({
     existing = tbaFestival('2026-01-01T00:00:00.000Z'),
-    setTimesOutAt = null as string | null,
-    sendFails = false,
+    released = [] as string[],
   } = {}) {
     const warnings: any[] = [];
-    const sendSetTimesOut = mock.fn(async (_id: string) => {
-      if (sendFails) throw new Error('redis down');
-      return { queued: true };
-    });
+    // Any festival-wide send, under the old or the new name, counts here.
+    const sendTimeRelease = mock.fn(async (_id: string, _key: string) => ({ queued: true }));
     const pickersBySet = mock.fn(
       async (_festivalId: string, setIds: string[]) => new Map(setIds.map((id) => [id, [`picker-${id}`]])),
     );
@@ -108,10 +106,10 @@ describe('set times are out: PUT and publish', () => {
       stores: {
         festivals: {
           update: mock.fn(async (id: string, data: any) => ({ ...existing, id, ...data })),
-          getSetTimesOutAt: mock.fn(async () => setTimesOutAt),
           publish: mock.fn(async () => ({ publishedAt: '2026-11-01T00:00:00.000Z', slug: 'fest-2026' })),
         },
         profiles: { pickersBySet },
+        timeReleases: { releasedDates: mock.fn(async () => new Set(released)) },
         pool: { query: async () => ({ rows: [{ count: '0' }] }) },
       },
       emitter: { festivalCreated: mock.fn(), festivalUpdated: mock.fn(), scheduleChanged: mock.fn() },
@@ -120,67 +118,67 @@ describe('set times are out: PUT and publish', () => {
       validateQuery: pass,
       validateParams: pass,
       invalidateFestivalCache: () => {},
-      reengagement: { sendSetTimesOut },
+      reengagement: { sendTimeRelease, sendSetTimesOut: sendTimeRelease },
     };
     deps.festivalAccess = () => deps.adminAuth;
     const app = express();
     app.use(express.json());
     app.use(createFestivalsRoutes(deps));
-    return { app, deps, sendSetTimesOut, pickersBySet, warnings };
+    return { app, deps, sendTimeRelease, pickersBySet, warnings };
   }
 
   const alertedSets = (deps: any) =>
     deps.emitter.scheduleChanged.mock.calls[0]?.arguments[0].changes.map((c: any) => c.setId);
 
-  test('the first timed save drops TBA-to-time alerts, keeps real moves and fires once', async () => {
-    const { app, deps, sendSetTimesOut, pickersBySet } = build();
+  test('a save that times sets on an unreleased date drops TBA-to-time alerts, keeps real moves and sends no festival-wide alert', async () => {
+    const { app, deps, sendTimeRelease, pickersBySet } = build();
     const res = await request(app).put('/f-1').send({ stages, days: timedDays });
     assert.equal(res.status, 200);
     assert.deepEqual(pickersBySet.mock.calls[0]!.arguments[1], ['s2']);
     assert.deepEqual(alertedSets(deps), ['s2']);
     assert.deepEqual(res.body.data.scheduleNotice, { changes: 1, people: 1, notified: true });
-    assert.deepEqual(
-      sendSetTimesOut.mock.calls.map((c: any) => c.arguments),
-      [['f-1']],
-    );
+    assert.equal(sendTimeRelease.mock.calls.length, 0);
   });
 
-  test('after the marker is set, TBA-to-time changes alert their pickers again', async () => {
-    const { app, deps } = build({ setTimesOutAt: '2026-10-01T00:00:00.000Z' });
+  test('a set timed on a released date alerts its pickers', async () => {
+    const { app, deps } = build({ released: ['2026-06-05'] });
     await request(app).put('/f-1').send({ stages, days: timedDays }).expect(200);
     assert.deepEqual(alertedSets(deps), ['s1', 's2']);
   });
 
-  test('a festival that already had a time keeps every alert', async () => {
+  test('a release on another date does not count for this date', async () => {
+    const { app, deps } = build({ released: ['2026-06-06'] });
+    await request(app).put('/f-1').send({ stages, days: timedDays }).expect(200);
+    assert.deepEqual(alertedSets(deps), ['s2']);
+  });
+
+  test('a set that already had a time and moves keeps its alert on an unreleased date', async () => {
     const existing = tbaFestival('2026-01-01T00:00:00.000Z');
     existing.days[0].sets[1] = { ...existing.days[0].sets[1], startTime: '23:00', endTime: '23:30' };
     const { app, deps } = build({ existing });
     await request(app).put('/f-1').send({ stages, days: timedDays }).expect(200);
-    assert.equal(deps.stores.festivals.getSetTimesOutAt.mock.calls.length, 0);
-    assert.deepEqual(alertedSets(deps), ['s1', 's2']);
+    assert.deepEqual(alertedSets(deps), ['s2']);
   });
 
-  test('a save without days does not fire', async () => {
-    const { app, sendSetTimesOut } = build();
+  test('notify:false sends no picker alert even on a released date', async () => {
+    const { app, deps } = build({ released: ['2026-06-05'] });
+    await request(app).put('/f-1').send({ stages, days: timedDays, notify: false }).expect(200);
+    assert.equal(deps.emitter.scheduleChanged.mock.calls.length, 0);
+  });
+
+  test('a save without days alerts nobody and reads no release rows', async () => {
+    const { app, deps, sendTimeRelease } = build();
     await request(app).put('/f-1').send({ name: 'Fest 2' }).expect(200);
-    assert.equal(sendSetTimesOut.mock.calls.length, 0);
+    assert.equal(sendTimeRelease.mock.calls.length, 0);
+    assert.equal(deps.stores.timeReleases.releasedDates.mock.calls.length, 0);
+    assert.equal(deps.emitter.scheduleChanged.mock.calls.length, 0);
   });
 
-  test('a failed enqueue is logged and the save still answers 200', async () => {
-    const { app, warnings } = build({ sendFails: true });
-    await request(app).put('/f-1').send({ stages, days: timedDays }).expect(200);
-    await new Promise((resolve) => setImmediate(resolve));
-    assert.ok(warnings.some(([msg]) => msg === 'set_times_out notify failed'));
-  });
-
-  test('publish fires after the festival is announced', async () => {
-    const { app, deps, sendSetTimesOut } = build({ existing: tbaFestival(null) });
+  test('publish announces the festival and sends no set-times alert', async () => {
+    const { app, deps, sendTimeRelease } = build({ existing: tbaFestival(null) });
     await request(app).post('/f-1/publish').expect(200);
     assert.equal(deps.emitter.festivalCreated.mock.calls.length, 1);
-    assert.deepEqual(
-      sendSetTimesOut.mock.calls.map((c: any) => c.arguments),
-      [['f-1']],
-    );
+    assert.equal(sendTimeRelease.mock.calls.length, 0);
   });
 
   test('publish answers { publishedAt, checklist } and leaves the store slug out', async () => {
@@ -274,7 +272,10 @@ describe('festival drafts and publish', { skip, concurrency: 1 }, () => {
     const detail = await admin(token, server.request.get('/api/v1/admin/festivals/fest-d')).expect(200);
     h.assert.deepEqual(
       detail.body.data.checklist.map((item: any) => item.key),
-      ['timeZone', 'stages', 'days', 'sets', 'errors', 'pins', 'times', 'overlaps'],
+      [
+        'timeZone', 'stages', 'days', 'sets', 'errors', 'pins', 'times', 'overlaps',
+        'duration_odd', 'start_unusual_hour', 'artist_double_booked',
+      ],
     );
     h.assert.equal(detail.body.data.publishedAt, null);
   });
@@ -373,19 +374,14 @@ describe('festival drafts and publish', { skip, concurrency: 1 }, () => {
     h.assert.deepEqual(res.body.data, { profiles: 2, crews: 1, picks: 3 });
   });
 
-  // The push itself is not observable here (no push provider in tests); the marker is.
-  async function readMarker(server: any, id: string, wantSet: boolean) {
+  // No save or publish sends the set-times alert, so neither writes the marker or a release row.
+  async function readReleaseState(server: any, id: string) {
     const pool = new h.Pool({ connectionString: server.databaseUrl });
     try {
-      // The trigger runs after the response, so poll (bounded).
-      let value = null;
-      for (let i = 0; i < 50; i++) {
-        if (i > 0) await new Promise((resolve) => setTimeout(resolve, 20));
-        const { rows } = await pool.query('SELECT set_times_out_at FROM festivals WHERE id = $1', [id]);
-        value = rows[0]?.set_times_out_at ?? null;
-        if (Boolean(value) === wantSet) break;
-      }
-      return value;
+      await new Promise((resolve) => setTimeout(resolve, 100)); // a stray trigger would run after the response
+      const marker = await pool.query('SELECT set_times_out_at FROM festivals WHERE id = $1', [id]);
+      const rows = await pool.query('SELECT 1 FROM festival_time_releases WHERE festival_id = $1', [id]);
+      return { marker: marker.rows[0]?.set_times_out_at ?? null, releaseRows: rows.rows.length };
     } finally {
       await pool.end();
     }
@@ -399,41 +395,25 @@ describe('festival drafts and publish', { skip, concurrency: 1 }, () => {
     },
   ];
 
-  test('a draft save with times sets no marker, and publishing it does', async () => {
+  test('a draft save with times and its publish write no marker and no release row', async () => {
     const { server, token } = await setup();
     await admin(token, server.request.post('/api/v1/admin/festivals')).send(draftPayload('fest-tm')).expect(201);
     await admin(token, server.request.put('/api/v1/admin/festivals/fest-tm'))
       .send(draftPayload('fest-tm', { timeZone: 'America/New_York' }))
       .expect(200);
-    h.assert.equal(await readMarker(server, 'fest-tm', false), null);
-
     await admin(token, server.request.post('/api/v1/admin/festivals/fest-tm/publish')).expect(200);
-    h.assert.ok(await readMarker(server, 'fest-tm', true));
+    h.assert.deepEqual(await readReleaseState(server, 'fest-tm'), { marker: null, releaseRows: 0 });
   });
 
-  test('the first timed save of a published festival sets the marker once', async () => {
+  test('timing the sets of a published festival writes no marker and no release row', async () => {
     const { server, token } = await setup();
     await admin(token, server.request.post('/api/v1/admin/festivals'))
       .send(draftPayload('fest-tb', { timeZone: 'America/New_York', days: tbaDays('fest-tb') }))
       .expect(201);
     await admin(token, server.request.post('/api/v1/admin/festivals/fest-tb/publish')).expect(200);
-    h.assert.equal(await readMarker(server, 'fest-tb', false), null);
-
     await admin(token, server.request.put('/api/v1/admin/festivals/fest-tb'))
       .send(draftPayload('fest-tb', { timeZone: 'America/New_York' }))
       .expect(200);
-    const first = await readMarker(server, 'fest-tb', true);
-    h.assert.ok(first);
-
-    // Blank every time, then add them again: the marker does not move.
-    await admin(token, server.request.put('/api/v1/admin/festivals/fest-tb'))
-      .send(draftPayload('fest-tb', { timeZone: 'America/New_York', days: tbaDays('fest-tb') }))
-      .expect(200);
-    await admin(token, server.request.put('/api/v1/admin/festivals/fest-tb'))
-      .send(draftPayload('fest-tb', { timeZone: 'America/New_York' }))
-      .expect(200);
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    const after = await readMarker(server, 'fest-tb', true);
-    h.assert.equal(new Date(after).getTime(), new Date(first).getTime());
+    h.assert.deepEqual(await readReleaseState(server, 'fest-tb'), { marker: null, releaseRows: 0 });
   });
 });

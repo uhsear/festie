@@ -5,6 +5,8 @@ import createAdminSiteplanRoutes from '../routes/admin-siteplan';
 import createFestivalRoutes from '../routes/festivals';
 import createLineupImportRoutes from '../routes/lineup-import';
 import createLineupAnnounceRoutes from '../routes/lineup-announce';
+import createTimeReleasesRoutes from '../routes/time-releases';
+import createLineupInterestRoutes from '../routes/lineup-interest';
 import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from '../routes/festival-announcements';
 import { createFestivalDiscoveryRoutes } from '../routes/festival-discovery';
 
@@ -19,6 +21,8 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
   const festivalDiscoveryRoutes = createFestivalDiscoveryRoutes(deps);
   const lineupImportRoutes = createLineupImportRoutes(deps);
   const lineupAnnounceRoutes = createLineupAnnounceRoutes(deps);
+  const timeReleasesRoutes = createTimeReleasesRoutes(deps);
+  const lineupInterestRoutes = createLineupInterestRoutes(deps);
   const adminAnnouncementRoutes = createAdminAnnouncementRoutes(deps);
   const publicAnnouncementRoutes = createPublicAnnouncementRoutes(deps);
   const adminSiteplanRoutes = createAdminSiteplanRoutes(deps);
@@ -28,6 +32,8 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
     { prefix: '/api/v1/admin/festivals', guards: adminGuard, router: festivalRoutes },
     { prefix: '/api/v1/admin/festivals', guards: adminGuard, router: lineupImportRoutes },
     { prefix: '/api/v1/admin/festivals', guards: adminGuard, router: lineupAnnounceRoutes },
+    { prefix: '/api/v1/admin/festivals', guards: adminGuard, router: timeReleasesRoutes },
+    { prefix: '/api/v1/admin/festivals', guards: adminGuard, router: lineupInterestRoutes },
     { prefix: '/api/v1/festivals', guards: [], router: festivalDiscoveryRoutes },
     { prefix: '/api/v1/admin/festivals', guards: adminGuard, router: adminAnnouncementRoutes },
     { prefix: '/api/v1/festivals', guards: [], router: publicAnnouncementRoutes },

@@ -177,6 +177,40 @@ describe('describeRemovals', () => {
   });
 });
 
+describe('describeRemovals: cancelled acts', () => {
+  const removal = { days: 0, sets: 2, picks: 8, ratings: 0, cancel: { acts: ['Kai'], sets: 2, picks: 8, picked: 4, marked: 8 } };
+
+  it('adds the cancel line with the people who will be told', () => {
+    expect(describeRemovals(removal)).toContain(
+      'Cancelling Kai removes 2 sets and 8 picks. 12 people will be told (8 marked it, 4 picked or set a reminder on the changed sets).',
+    );
+  });
+  it('counts several acts, and says no one is told when alerts are off or nobody marked or picked', () => {
+    expect(describeRemovals({ ...removal, cancel: { acts: ['A', 'B'], sets: 1, picks: 0, picked: 1, marked: 0 } })).toContain(
+      'Cancelling 2 acts removes 1 set. 1 person will be told (1 picked or set a reminder on the changed sets).',
+    );
+    expect(describeRemovals(removal, false)).toContain('No one will be told because alerts are off.');
+    expect(describeRemovals({ ...removal, cancel: { acts: ['Kai'], sets: 0, picks: 0, picked: 0, marked: 0 } })).toContain(
+      'Cancelling Kai removes no sets. No one will be told.',
+    );
+  });
+  it('leads with the cancel line when the save removes nothing else', () => {
+    expect(describeRemovals({ days: 0, sets: 0, picks: 0, ratings: 0, cancel: { acts: ['Kai'], sets: 0, picks: 0, picked: 0, marked: 3 } })).toBe(
+      'Cancelling Kai removes no sets. 3 people will be told (3 marked it).',
+    );
+  });
+  it('reads the cancel field from a CONFIRM_REMOVALS error and leaves it out when absent', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () =>
+        jsonResponse(409, { data: null, error: { code: 'CONFIRM_REMOVALS', message: 'm', removal } }),
+      ),
+    );
+    const err = await api.put('/admin/festivals/f1', {}).catch((e: unknown) => e);
+    expect(removalFromError(err)).toEqual(removal);
+  });
+});
+
 describe('formatImportCounts', () => {
   it('leaves out zero parts', () => {
     expect(formatImportCounts({ new: 3, update: 0, unchanged: 2, error: 0 })).toBe('3 new · 2 unchanged');

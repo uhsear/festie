@@ -37,6 +37,27 @@ export async function withTransaction(pool: Pool, fn: (client: any) => Promise<a
   }
 }
 
+// 40P01 deadlock detected, 40001 serialization failure: the database aborted this transaction only.
+const RETRYABLE_TX_CODES = new Set(['40P01', '40001']);
+
+/**
+ * withTransaction, retried when Postgres aborts it for a deadlock (40P01) or a serialization
+ * failure (40001). fn must touch only the database, so a second run is safe. The last failure,
+ * and any other error, is rethrown unchanged: a route maps it to 503 "Festie is busy. Try again."
+ * Global lock order for every writer: festivals in id order, then artists in id order.
+ */
+export async function withTransactionRetry(pool: Pool, fn: (client: any) => Promise<any>, attempts = 3): Promise<any> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await withTransaction(pool, fn);
+    } catch (err: any) {
+      if (attempt >= attempts || !RETRYABLE_TX_CODES.has(err?.code)) throw err;
+      txLog.warn('withTransactionRetry:retry', { code: err.code, attempt });
+      await new Promise((resolve) => setTimeout(resolve, 20 * attempt + Math.floor(Math.random() * 30)));
+    }
+  }
+}
+
 export function parseJsonObject(value: any, fallback: any = {}): any {
   if (!value) return fallback;
 

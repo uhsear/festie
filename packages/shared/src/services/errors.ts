@@ -73,3 +73,30 @@ export function isResetLinkExpired(err: unknown): boolean {
 export function isPasswordIncorrect(err: unknown): boolean {
   return isApiClientError(err) && err.code === 'PASSWORD_INCORRECT';
 }
+
+/**
+ * Edge (Cloudflare tunnel) statuses that mean the origin never ran the request:
+ * connection refused, timed out, unreachable, TLS failure, or tunnel down.
+ */
+const EDGE_NOT_PROCESSED = new Set([521, 522, 523, 525, 526, 527, 528, 529, 530]);
+
+/** Edge statuses where the origin may already have committed the write before the answer was lost. */
+const EDGE_MAYBE_PROCESSED = new Set([502, 503, 504, 520, 524]);
+
+/** True when an edge status says the server is unreachable, so the failure is not a verdict on the write. */
+export function isEdgeUnavailable(status: number | undefined): boolean {
+  return status !== undefined && (EDGE_NOT_PROCESSED.has(status) || EDGE_MAYBE_PROCESSED.has(status));
+}
+
+/**
+ * Whether a mutation that got this edge status may go to the offline queue. A queued write replays,
+ * and the origin may have committed it already. PUT, PATCH and DELETE replay safely, because they
+ * set a final value. A POST would create twice once its Idempotency-Key cache expires (5 min), so
+ * it queues only when the origin certainly never ran it.
+ */
+export function canQueueOnEdgeError(status: number | undefined, method: string): boolean {
+  if (!isEdgeUnavailable(status)) return false;
+  const verb = method.toUpperCase();
+  if (verb === 'POST') return EDGE_NOT_PROCESSED.has(status as number);
+  return verb === 'PUT' || verb === 'PATCH' || verb === 'DELETE';
+}

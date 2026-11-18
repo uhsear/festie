@@ -37,7 +37,7 @@ describe('FollowButton', () => {
     render(<FollowButton festivalId="f1" festivalName="Alpha" />);
     await userEvent.click(screen.getByRole('button', { name: 'Follow Alpha' }));
     expect(follow.setFollowing).toHaveBeenCalledWith('f1', true);
-    expect(toast).toHaveBeenCalledWith("We'll tell you when Alpha posts its lineup or set times.", 'success');
+    expect(toast).toHaveBeenCalledWith("We'll tell you when Alpha posts its lineup, days or set times.", 'success');
   });
 
   it('following: unfollows with the stop name', async () => {

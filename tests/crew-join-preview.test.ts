@@ -59,7 +59,7 @@ async function buildApp(
 }
 
 const CREW = { id: 'c1', name: 'Bass Gang', festivalId: 'fest-1', maxMembers: 8, inviteExpiresAt: EXPIRY };
-const FESTIVAL = { id: 'fest-1', name: 'EDC Orlando', days: [{ date: '2026-11-08' }, { date: '2026-11-06' }] };
+const FESTIVAL = { id: 'fest-1', name: 'EDC Orlando', publishedAt: '2026-01-01T00:00:00.000Z', days: [{ date: '2026-11-08' }, { date: '2026-11-06' }] };
 
 describe('routes/crews.ts — GET /join-preview/:inviteCode', () => {
   test('returns the preview contract without auth', async () => {
@@ -99,7 +99,7 @@ describe('routes/crews.ts — GET /join-preview/:inviteCode', () => {
   test('null festival name and dates when the festival is missing', async () => {
     const { app } = await buildApp({ crew: CREW, members: [] });
     const res = await request(app).get('/join-preview/ABC123');
-    assert.equal(res.body.data.festivalId, 'fest-1');
+    assert.equal(res.body.data.festivalId, null);
     assert.equal(res.body.data.festivalName, null);
     assert.equal(res.body.data.startDate, null);
     assert.equal(res.body.data.endDate, null);

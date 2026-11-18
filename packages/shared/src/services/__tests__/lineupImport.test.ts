@@ -34,6 +34,13 @@ describe('lineupImportApi', () => {
     expect(post).toHaveBeenCalledWith('/admin/festivals/f1/lineup-announcement');
   });
 
+  it('days announcement dry run and send hit the contract paths', async () => {
+    await lineupImportApi.daysAnnouncement('f1');
+    expect(get).toHaveBeenCalledWith('/admin/festivals/f1/days-announcement');
+    await lineupImportApi.announceDays('f1');
+    expect(post).toHaveBeenCalledWith('/admin/festivals/f1/days-announcement');
+  });
+
   it('exportCsv reads the festival and writes the export columns', async () => {
     get.mockResolvedValue({ stages: [], days: [{ label: 'Fri', sets: [{ id: 's1', artist: 'Kai', startTime: '20:00' }] }] });
     const csv = await lineupImportApi.exportCsv('f 1');

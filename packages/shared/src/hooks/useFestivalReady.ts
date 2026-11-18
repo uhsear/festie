@@ -6,6 +6,7 @@ import { useFestivalDataStore } from '../stores/festivalDataStore';
 import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
 import { useOfflineReadinessStore } from '../stores/offlineReadinessStore';
 import {
+  countOpenInterests,
   formatReadyProgress,
   getFestivalReadyChecklist,
   isFestivalDownloaded,
@@ -78,6 +79,8 @@ export function useFestivalReady(
 
   const { items, doneCount, total } = getFestivalReadyChecklist({
     pickCount: Object.keys(currentProfile?.picks ?? {}).length,
+    interestCount: countOpenInterests(currentProfile?.interests, currentFestival?.lineup),
+    hasLineup: (currentFestival?.lineup?.length ?? 0) > 0,
     hasCrew: !!currentFestival && crews.some((c) => !c.festivalId || c.festivalId === currentFestival.id),
     remindersOn: notificationsAllowed && prefs.setReminders,
     offlineReady: isFestivalDownloaded(readiness),
