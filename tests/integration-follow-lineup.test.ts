@@ -110,6 +110,8 @@ describe('Integration: follow loop', { concurrency: 1 }, () => {
     const out = await createFestival({ id: 'out-fest', name: 'Out Fest', days, lineup: withDays });
     const open = await createFestival({ id: 'open-fest', name: 'Open Fest', days, lineup: [act('A')] });
     await sql('UPDATE festivals SET set_times_out_at = NOW() WHERE id = $1', [out]);
+    // Publishing a festival that already has days sends nothing.
+    assert.deepEqual(await sql("SELECT id FROM notification_log WHERE type IN ('days_out', 'lineup_drop')"), []);
 
     const draftRes = await admin(server.request.post(`/api/v1/admin/festivals/${draft}/days-announcement`)).expect(409);
     assert.equal(message(draftRes), 'Publish the festival before you announce its days.');

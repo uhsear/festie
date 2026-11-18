@@ -2146,7 +2146,7 @@ describe('routes/admin.js — GET /ref-counts', () => {
     assert.equal(queries.length, 4);
     for (const sql of queries) assert.doesNotMatch(sql, /(INSERT|UPDATE|DELETE)/i);
     const newsCall = (deps.stores.pool.query.mock.calls as any[]).find((c) => c.arguments[0].includes('notification_log'));
-    assert.deepEqual(newsCall.arguments[1][1], ['lineup_drop', 'set_times_out']);
+    assert.deepEqual(newsCall.arguments[1][1], ['lineup_drop', 'set_times_out', 'days_out']);
     assert.match(newsCall.arguments[0], /COUNT\(DISTINCT user_id\)/);
     assert.match(newsCall.arguments[0], /created_at >= CURRENT_DATE/);
   });
