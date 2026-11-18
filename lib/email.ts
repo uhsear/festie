@@ -327,22 +327,35 @@ export async function sendDaysOutEmail({ to, username, festivalName, festivalId,
   return sendEmail({ to, subject: `${name} days are out`, html, text, headers: reengagementHeaders(config), config, log, _client });
 }
 
+/** "Friday", "Friday and Saturday", "Fri, Sat and Sun". The set-times push and email share it. */
+export function joinDayLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
+
 /**
- * "{Festival} set times are out" — deep-links to the festival page.
+ * "{Festival} set times are out" — deep-links to the festival page. `dayLabels` names the released days
+ * ("Friday and Saturday"); without them the mail says "the set times". `note` is the admin's own line.
  */
-export async function sendSetTimesOutEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
+export async function sendSetTimesOutEmail({ to, username, festivalName, festivalId, dayLabels = [], note, config, log, _client }: any) {
   const origin = _origin(config);
   const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'Your festival';
+  const days = joinDayLabels(dayLabels);
+  const the = days ? `The ${days} set times` : 'The set times';
+  const noteHtml = note ? `<p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(note)}</p>` : '';
   const bodyHtml = `
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The set times for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. Pick your sets and spot clashes before the weekend.</p>
+    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(the)} for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. Pick your sets and spot clashes before the weekend.</p>
+    ${noteHtml}
     ${_buttonHtml(festivalUrl, 'See the schedule')}
     ${_urlFallback(festivalUrl)}`;
   const footer = _reengagementFooter('New lineups and set times', config);
   const html = _wrapTemplate('Set Times Are Out', bodyHtml, footer.html);
-  const text = `Hey ${username || 'there'},\n\nThe set times for ${name} are out. Pick your sets and spot clashes before the weekend.\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `${name} set times are out`, html, text, headers: reengagementHeaders(config), config, log, _client });
+  const noteText = note ? `\n\n${note}` : '';
+  const text = `Hey ${username || 'there'},\n\n${the} for ${name} are out. Pick your sets and spot clashes before the weekend.${noteText}\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
+  const subject = days ? `${name}: ${days} set times are out` : `${name} set times are out`;
+  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client });
 }
 
 /**

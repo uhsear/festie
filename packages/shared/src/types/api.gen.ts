@@ -877,6 +877,98 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/festivals/{id}/time-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Release panel: per date timed and total sets, claim state, recipient ceiling and preview title */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { festivalName, canSend, recipientsNow, emailRecipients, emailCut, emailOff, defaultBody, dates, orphanDates } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Send the set-times alert for one or more festival dates (claim, then send) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        confirmPartial?: boolean;
+                        dates: string[];
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description { queued, dates, skipped, recipients } */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description A date is not a day of the festival with a timed set */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description DRAFT, FESTIVAL_OVER, PARTIAL_RELEASE (error.partial) or ALREADY_RELEASED (error.releases) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/festivals/archived": {
         parameters: {
             query?: never;

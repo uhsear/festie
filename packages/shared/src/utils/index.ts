@@ -48,6 +48,7 @@ export * from './crewActivity';
 export * from './picksPlan';
 export * from './polls';
 export * from './lineupImport';
+export * from './timeReleases';
 export * from './lineup';
 export * from './lineupCover';
 export * from './lineupInterest';

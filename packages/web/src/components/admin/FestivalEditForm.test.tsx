@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import FestivalEditForm from './FestivalEditForm';
 
+// The release panel loads its own data; null renders nothing here.
+vi.mock('@festie/shared/services/timeReleases', () => ({ timeReleaseApi: { panel: vi.fn().mockResolvedValue(null), send: vi.fn() } }));
 const toast = vi.fn();
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast, toastError: vi.fn() }) }));
 

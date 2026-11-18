@@ -33,6 +33,7 @@ import {
   festivalDepthQuery,
   lineupImportRequestSchema,
   festivalAnnouncementSchema,
+  timeReleaseSendSchema,
   crewDaysSchema,
   meetingPointComingSchema,
 } from './schemas';
@@ -359,6 +360,10 @@ export function generateOpenAPISpec(config: any) {
       '/api/v1/admin/festivals/{id}/days-announcement': {
         get: { tags: ['Admin'], summary: 'Dry run for Announce days: acts with a day, who would hear, who gets no email', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, actsWithDay, actsTotal, recipients, audience, emailRecipients, emailCut, emailOff, reason? }' }, 404: { description: 'Festival not found' } } },
         post: { tags: ['Admin'], summary: 'Send the days announcement push, inbox row and email to followers and profile holders', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ queued: true, recipients, emailRecipients }' }, 400: { description: 'No act has a day, or everyone has already heard' }, 404: { description: 'Festival not found' }, 409: { description: 'The festival is a draft, or its set times are already out' } } },
+      },
+      '/api/v1/admin/festivals/{id}/time-releases': {
+        get: { tags: ['Admin'], summary: 'Release panel: per date timed and total sets, claim state, recipient ceiling and preview title', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, canSend, recipientsNow, emailRecipients, emailCut, emailOff, defaultBody, dates, orphanDates }' }, 404: { description: 'Festival not found' } } },
+        post: { tags: ['Admin'], summary: 'Send the set-times alert for one or more festival dates (claim, then send)', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], requestBody: jsonBody(timeReleaseSendSchema), responses: { 202: { description: '{ queued, dates, skipped, recipients }' }, 400: { description: 'A date is not a day of the festival with a timed set' }, 404: { description: 'Festival not found' }, 409: { description: 'DRAFT, FESTIVAL_OVER, PARTIAL_RELEASE (error.partial) or ALREADY_RELEASED (error.releases)' } } },
       },
       '/api/v1/admin/festivals/{id}/announcements': {
         get: { tags: ['Admin'], summary: 'List the announcements of a festival (newest 20) and its audience size', security: [{ bearerAuth: [] }], parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }], responses: { 200: { description: '{ festivalName, recipients, announcements }' }, 404: { description: 'Festival not found' } } },

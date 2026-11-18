@@ -423,7 +423,27 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
     li.created_at,
     li.counts,
     li.undone_at,
-    u.username
+    u.username,
+    (
+      SELECT
+        COALESCE(array_agg(DISTINCT d.date ORDER BY d.date), '{}')
+      FROM
+        festival_sets s
+        JOIN festival_days d ON d.festival_id = s.festival_id
+        AND d.day_index = s.day_index
+      WHERE
+        s.festival_id = li.festival_id
+        AND d.date <> ''
+        AND (
+          s.id = ANY (li.created_set_ids)
+          OR s.id IN (
+            SELECT
+              u2 ->> 'id'
+            FROM
+              jsonb_array_elements(li.updated_sets) u2
+          )
+        )
+    ) AS touched_dates
   FROM
     lineup_imports li
     LEFT JOIN users u ON u.id = li.created_by
@@ -452,6 +472,8 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           },
           undoneAt: r.undone_at ? new Date(r.undone_at).toISOString() : null,
           canUndo: r.id === newestOpen,
+          // The festival dates this import wrote to, so the undo dialog can warn that a sent alert stays sent.
+          touchedDates: (r.touched_dates ?? []) as string[],
         })),
       };
     },

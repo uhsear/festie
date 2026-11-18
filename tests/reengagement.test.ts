@@ -3,7 +3,12 @@ import { describe, it, mock } from 'node:test';
 
 import { ALLOWED_NOTIFICATION_TYPES } from '../lib/notifications/payload.js';
 import { createSendService } from '../lib/notifications/send.js';
-import { createReengagementTriggers, EMAIL_DAILY_BUDGET, findRatePromptDay } from '../lib/notifications/reengagement.js';
+import {
+  createReengagementTriggers,
+  EMAIL_DAILY_BUDGET,
+  findRatePromptDay,
+  timeReleaseCopy,
+} from '../lib/notifications/reengagement.js';
 
 // ---------------------------------------------------------------------------
 // Minimal logger / config helpers
@@ -716,34 +721,84 @@ describe('rate_prompt through createSendService: Wrap pref and DND', () => {
 });
 
 // =====================================================================
-// sendSetTimesOut — once per festival, followers + profile holders
+// timeReleaseCopy + sendTimeRelease — per date, followers + profile holders
 // =====================================================================
-describe('createReengagementTriggers.sendSetTimesOut', () => {
+describe('timeReleaseCopy', () => {
+  it('names the claimed days in the title and uses the fixed body without a note', () => {
+    assert.deepEqual(timeReleaseCopy('Wasteland', ['Friday']), {
+      title: 'Wasteland: Friday set times are out',
+      body: 'See who plays when and build your plan.',
+    });
+    assert.equal(timeReleaseCopy('Wasteland', ['Fri', 'Sat', 'Sun']).title, 'Wasteland: Fri, Sat and Sun set times are out');
+    assert.equal(timeReleaseCopy('Wasteland', ['Friday', 'Saturday']).title, 'Wasteland: Friday and Saturday set times are out');
+  });
+
+  it('with no day it drops the colon and the double space', () => {
+    assert.equal(timeReleaseCopy('Wasteland', []).title, 'Wasteland set times are out');
+    assert.equal(timeReleaseCopy('', []).title, 'Your festival set times are out');
+  });
+
+  it('the admin note replaces the body', () => {
+    assert.equal(timeReleaseCopy('Wasteland', ['Friday'], '  Gates open at noon.  ').body, 'Gates open at noon.');
+  });
+
+  it('falls back to a short title and puts the days in the body when the title would pass 100 characters', () => {
+    const name = 'A Very Long Festival Name '.repeat(3).trim();
+    const labels = ['Friday the thirteenth', 'Saturday the fourteenth'];
+    const copy = timeReleaseCopy(name, labels);
+    assert.equal(copy.title, `${name} set times are out`);
+    assert.ok(copy.title.length <= 100);
+    assert.equal(copy.body, 'Friday the thirteenth and Saturday the fourteenth. See who plays when and build your plan.');
+  });
+});
+
+describe('createReengagementTriggers.sendTimeRelease', () => {
+  const KEY = 'times:fest-1:11111111-1111-4111-8111-111111111111';
+  const FEST = {
+    name: 'EDC',
+    publishedAt: '2026-01-01T00:00:00.000Z',
+    days: [
+      { date: '2027-02-05', label: 'Friday' },
+      { date: '2027-02-06', label: 'Saturday' },
+    ],
+  } as any;
+
   // Fake pg pool. The recipient query's UNION is emulated by a Set, so a user
   // who follows AND has a profile is one recipient.
   function build({
-    festival = { name: 'EDC', publishedAt: '2026-01-01T00:00:00.000Z' } as any,
-    hasTimes = true,
+    festival = FEST as any,
+    releases = [{ date: '2027-02-05', note: null }] as any[],
     followers = ['f1', 'f2'],
     profileHolders = ['p1', 'p2', 'f1'],
-    markThrows = false,
+    stampThrows = false,
     prefs = null as any,
+    postal = '',
   } = {}) {
-    const state = { setTimesOutAt: null as string | null, events: [] as string[], markThrows };
+    const state = { setTimesOutAt: null as string | null, stamped: null as any, events: [] as string[], stampThrows };
     const sends: any[] = [];
     const seen = new Set<string>();
     const pool = {
       query: async (sql: string, params: any[]) => {
-        assert.equal(params[0], 'fest-1');
-        if (sql.includes('set_times_out_at AS')) {
-          return { rows: festival ? [{ ...festival, setTimesOutAt: state.setTimesOutAt, hasTimes }] : [] };
+        if (sql.includes('FROM festival_time_releases')) {
+          assert.deepEqual(params, ['fest-1', KEY]);
+          return { rows: releases };
         }
         if (/festival_follows f\s/.test(sql)) {
           assert.match(sql, /UNION/);
           return { rows: [...new Set([...followers, ...profileHolders])].map((userId) => ({ userId })) };
         }
+        if (sql.includes('FROM notification_log')) {
+          assert.deepEqual(params[0], [KEY, `${KEY}#email`]);
+          assert.deepEqual([...params[1]].sort(), [...new Set([...followers, ...profileHolders])].sort(), 'the count is limited to this release audience');
+          return { rows: [{ reached: new Set([...seen].map((k) => k.split('|')[0])).size }] };
+        }
+        if (sql.startsWith('UPDATE festival_time_releases SET sent_at')) {
+          if (state.stampThrows) throw new Error('db blip');
+          state.events.push('stamp');
+          state.stamped = params;
+          return { rows: [] };
+        }
         if (sql.startsWith('UPDATE festivals SET set_times_out_at')) {
-          if (state.markThrows) throw new Error('db blip');
           state.events.push('mark');
           state.setTimesOutAt ??= '2026-11-01T00:00:00.000Z';
           return { rows: [] };
@@ -761,7 +816,8 @@ describe('createReengagementTriggers.sendSetTimesOut', () => {
       },
     };
     const stores = {
-      users: { getByIds: async () => new Map() },
+      festivals: { getById: async () => festival },
+      users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
       notificationPrefs: { get: async () => prefs },
       notificationLog: {
         // Stands in for notification_log: a user pushed for this event is not fresh.
@@ -770,91 +826,101 @@ describe('createReengagementTriggers.sendSetTimesOut', () => {
         insert: async () => {},
       },
     };
-    const triggers = createReengagementTriggers({ stores, config, log, notificationService, pool });
+    const cfg = { ...config, EMAIL_POSTAL_ADDRESS: postal };
+    const triggers = createReengagementTriggers({ stores, config: cfg, log, notificationService, pool });
     return { triggers, sends, state };
   }
 
-  it('pushes once to each follower and profile holder, then sets the marker', async () => {
+  it('pushes once to each follower and profile holder, names only the claimed day, then stamps the row', async () => {
     const { triggers, sends, state } = build();
-    const r = await triggers.sendSetTimesOut('fest-1');
+    const r = await triggers.sendTimeRelease('fest-1', KEY);
     assert.equal(r.sent, 4);
     assert.deepEqual(sends.map((s) => s.userId).sort(), ['f1', 'f2', 'p1', 'p2']);
     assert.deepEqual(sends[0], {
       userId: sends[0].userId,
       type: 'set_times_out',
-      title: 'EDC set times are out',
+      title: 'EDC: Friday set times are out',
       body: 'See who plays when and build your plan.',
-      data: { festivalId: 'fest-1', eventKey: 'times:fest-1', deepLink: 'https://festie.test/?festival=fest-1' },
+      data: { festivalId: 'fest-1', eventKey: KEY, deepLink: 'https://festie.test/?festival=fest-1' },
     });
-    assert.equal(state.events.at(-1), 'mark');
-    assert.ok(state.setTimesOutAt);
+    assert.deepEqual(state.stamped, ['fest-1', KEY, 4], 'recipients is the people reached');
+    assert.deepEqual(state.events.slice(-2), ['stamp', 'mark']);
+    assert.ok(state.setTimesOutAt, 'the first release writes the legacy marker');
   });
 
-  it('sends nothing once the marker is set, even after times are blanked and re-added', async () => {
-    const { triggers, sends } = build();
-    await triggers.sendSetTimesOut('fest-1');
-    sends.length = 0;
-    const r = await triggers.sendSetTimesOut('fest-1');
-    assert.equal(r.reason, 'already_sent');
-    assert.equal(sends.length, 0);
+  it('uses the note of the claimed rows as the body, and two claimed days in one title', async () => {
+    const { triggers, sends } = build({
+      releases: [
+        { date: '2027-02-05', note: 'Gates open at noon.' },
+        { date: '2027-02-06', note: 'Gates open at noon.' },
+      ],
+    });
+    await triggers.sendTimeRelease('fest-1', KEY);
+    assert.equal(sends[0].title, 'EDC: Friday and Saturday set times are out');
+    assert.equal(sends[0].body, 'Gates open at noon.');
   });
 
-  it('a draft, a festival with no times and a missing festival send nothing and set no marker', async () => {
+  it('a draft, a festival that is gone and a key with no claimed rows send nothing and stamp nothing', async () => {
     for (const [opts, reason] of [
-      [{ festival: { name: 'EDC', publishedAt: null } }, 'draft'],
-      [{ hasTimes: false }, 'no_times'],
+      [{ festival: { ...FEST, publishedAt: null } }, 'draft'],
       [{ festival: null }, 'festival_not_found'],
+      [{ releases: [] }, 'no_release'],
     ] as const) {
       const { triggers, sends, state } = build(opts as any);
-      const r = await triggers.sendSetTimesOut('fest-1');
+      const r = await triggers.sendTimeRelease('fest-1', KEY);
       assert.equal(r.reason, reason);
       assert.equal(sends.length, 0);
-      assert.equal(state.setTimesOutAt, null);
+      assert.equal(state.stamped, null);
     }
   });
 
-  it('a published festival with no recipients still sets the marker', async () => {
+  it('a published festival with no recipients still stamps the row', async () => {
     const { triggers, sends, state } = build({ followers: [], profileHolders: [] });
-    await triggers.sendSetTimesOut('fest-1');
+    await triggers.sendTimeRelease('fest-1', KEY);
     assert.equal(sends.length, 0);
-    assert.ok(state.setTimesOutAt);
+    assert.deepEqual(state.stamped, ['fest-1', KEY, 0]);
   });
 
-  it('a retry after the marker write failed sends no second push', async () => {
-    const { triggers, sends, state } = build({ markThrows: true });
-    await assert.rejects(() => triggers.sendSetTimesOut('fest-1'), /db blip/);
+  it('a retry with the same key after the stamp failed sends no second push', async () => {
+    const { triggers, sends, state } = build({ stampThrows: true });
+    await assert.rejects(() => triggers.sendTimeRelease('fest-1', KEY), /db blip/);
     assert.equal(sends.length, 4);
-    assert.equal(state.setTimesOutAt, null);
+    assert.equal(state.stamped, null);
 
-    state.markThrows = false;
-    const r = await triggers.sendSetTimesOut('fest-1');
+    state.stampThrows = false;
+    const r = await triggers.sendTimeRelease('fest-1', KEY);
     assert.equal(r.sent, 0);
     assert.equal(sends.length, 4);
-    assert.ok(state.setTimesOutAt);
+    assert.ok(state.stamped);
   });
 
-  it('a follower with New lineups and set times off gets no email', async () => {
+  it('a follower with New lineups and set times off gets no email, and nobody gets one without a postal address', async () => {
     // RESEND_API_KEY is unset, so sendEmail logs 'email:skip' when the fan-out reaches it.
-    async function emailAttempts(prefs: any) {
+    async function emailAttempts(prefs: any, postal: string, emailsToday = 0) {
       const skips: string[] = [];
       const emailLog = { ...log, warn: (msg: string) => { if (msg === 'email:skip') skips.push(msg); } };
       const stores = {
+        festivals: { getById: async () => FEST },
         users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
         notificationPrefs: { get: async () => prefs },
-        notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {} },
+        notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {}, countEmailsSince: async () => emailsToday },
       };
       const pool = {
         query: async (sql: string) => {
-          if (sql.includes('set_times_out_at AS')) return { rows: [{ name: 'EDC', publishedAt: 'x', setTimesOutAt: null, hasTimes: true }] };
+          if (sql.includes('FROM festival_time_releases')) return { rows: [{ date: '2027-02-05', note: null }] };
           if (/festival_follows f\s/.test(sql)) return { rows: [{ userId: 'f1' }] };
+          if (sql.includes('FROM notification_log')) return { rows: [{ reached: 0 }] };
           return { rows: [] };
         },
       };
-      await createReengagementTriggers({ stores, config, log: emailLog, pool }).sendSetTimesOut('fest-1');
+      const cfg = { ...config, EMAIL_POSTAL_ADDRESS: postal };
+      await createReengagementTriggers({ stores, config: cfg, log: emailLog, pool }).sendTimeRelease('fest-1', KEY);
       return skips.length;
     }
-    assert.equal(await emailAttempts({ lineupDrops: false }), 0);
-    assert.equal(await emailAttempts({ lineupDrops: true }), 1);
+    assert.equal(await emailAttempts({ lineupDrops: false }, '1 Main St'), 0);
+    assert.equal(await emailAttempts({ lineupDrops: true }, '1 Main St'), 1);
+    assert.equal(await emailAttempts({ lineupDrops: true }, ''), 0);
+    assert.equal(await emailAttempts({ lineupDrops: true }, '1 Main St', EMAIL_DAILY_BUDGET), 0, 'the daily email budget caps the release email');
   });
 });
 
@@ -940,6 +1006,7 @@ describe('createReengagementTriggers days_out', () => {
         if (/festival_follows f\s/.test(sql)) {
           return { rows: [...new Set([...followers, ...profileHolders])].map((userId) => ({ userId })) };
         }
+        if (sql.includes('set_times_out_at IS NOT NULL')) return { rows: [{ out: setTimesOutAt !== null }] };
         throw new Error(`unexpected query: ${sql}`);
       },
     };
@@ -952,7 +1019,7 @@ describe('createReengagementTriggers days_out', () => {
       },
     };
     const stores = {
-      festivals: { getById: async () => festival, getSetTimesOutAt: async () => setTimesOutAt },
+      festivals: { getById: async () => festival },
       users: {
         getByIds: async (ids: string[]) =>
           new Map(ids.map((id) => [id, { email: `${id}@example.com`, emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: id }] as const)),

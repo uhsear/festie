@@ -116,4 +116,49 @@ describe('LineupImportHistory', () => {
     expect(await screen.findByText('No one to notify right now.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Announce to 0 people' })).toBeDisabled();
   });
+
+  describe('undo warning', () => {
+    const item = (touchedDates: string[]) => ({
+      id: 'imp-1',
+      createdAt: '2027-01-10T10:00:00.000Z',
+      createdBy: 'asir',
+      counts: { created: 1, updated: 0, newStages: 0, newDays: 0 },
+      undoneAt: null,
+      canUndo: true,
+      touchedDates,
+    });
+    const releases = (sentAt: string | null) => ({
+      festivalName: 'Fest',
+      canSend: true,
+      recipientsNow: 5,
+      emailRecipients: 5,
+      emailCut: 0,
+      emailOff: null,
+      defaultBody: 'x',
+      dates: [
+        { date: '2027-02-05', label: 'Friday', timed: 2, total: 2, claimedAt: sentAt, sentAt, recipients: 5, previewTitle: 'x' },
+      ],
+      orphanDates: [],
+    });
+
+    it('says a sent alert stays sent when the import touched a released date', async () => {
+      api.history.mockResolvedValue({ imports: [item(['2027-02-05'])] });
+      render(<LineupImportHistory festivalId="f1" festivalName="Fest" releases={releases('2027-01-06T10:00:00.000Z')} />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Undo import' }));
+      expect(await screen.findByText(/The Friday alert already went out\. Undo will not recall it\./)).toBeInTheDocument();
+    });
+
+    it('says nothing extra when the touched date was never released, or the release state did not load', async () => {
+      api.history.mockResolvedValue({ imports: [item(['2027-02-05'])] });
+      const first = render(<LineupImportHistory festivalId="f1" festivalName="Fest" releases={releases(null)} />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Undo import' }));
+      expect(screen.queryByText(/already went out/)).not.toBeInTheDocument();
+      first.unmount();
+
+      render(<LineupImportHistory festivalId="f1" festivalName="Fest" releases={null} />);
+      await userEvent.click(await screen.findByRole('button', { name: 'Undo import' }));
+      expect(screen.getByText(/This removes the sets it added/)).toBeInTheDocument();
+      expect(screen.queryByText(/already went out/)).not.toBeInTheDocument();
+    });
+  });
 });

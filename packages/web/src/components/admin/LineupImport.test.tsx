@@ -22,6 +22,9 @@ const api = vi.hoisted(() => ({
   exportCsv: vi.fn(),
 }));
 vi.mock('@festie/shared/services/lineupImport', () => ({ lineupImportApi: api }));
+// The release panel loads its own data; null renders nothing here.
+const releaseApi = vi.hoisted(() => ({ panel: vi.fn(), send: vi.fn() }));
+vi.mock('@festie/shared/services/timeReleases', () => ({ timeReleaseApi: releaseApi }));
 
 const counts = (over: Record<string, number> = {}) => ({
   new: 0,
@@ -63,6 +66,7 @@ const plan = (rows: unknown[], c: Record<string, number>, problems: string[] = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  releaseApi.panel.mockResolvedValue(null);
   api.history.mockResolvedValue({ festivalName: 'Fest', imports: [] });
   api.announcement.mockResolvedValue({
     festivalName: 'Fest',
@@ -95,6 +99,12 @@ async function pasteSampleAndCheck() {
 }
 
 describe('LineupImport', () => {
+  it('loads the release panel once for the panel and the history together', async () => {
+    render(<LineupImport festivalId="f1" festivalName="Big Fest" />);
+    await screen.findByText('No imports yet.');
+    expect(releaseApi.panel).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps the preview and asks for a re-check when the commit comes back uncommitted', async () => {
     const p = plan([planRow()], { new: 3 });
     api.preview.mockResolvedValue(p);

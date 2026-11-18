@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { lineupImportApi } from '@festie/shared/services/lineupImport';
+import { undoReleaseWarning, type TimeReleasePanelData } from '@festie/shared/utils/timeReleases';
 import {
   announcementEmailNote,
   daysAnnouncementSummary,
@@ -19,6 +20,8 @@ interface Props {
   festivalName: string;
   /** Change this value to reload history and the announcement count. */
   refreshKey?: number;
+  /** The release panel data the sibling panel already loaded; only the undo warning reads it. */
+  releases?: TimeReleasePanelData | null;
 }
 
 const KEPT_REASON = { picked: 'picked by someone', edited: 'edited since the import' } as const;
@@ -26,7 +29,7 @@ const KEPT_REASON = { picked: 'picked by someone', edited: 'edited since the imp
 const buttonClass =
   'px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 disabled:opacity-50 transition-colors text-sm font-medium';
 
-export default function LineupImportHistory({ festivalId, festivalName, refreshKey = 0 }: Props) {
+export default function LineupImportHistory({ festivalId, festivalName, refreshKey = 0, releases = null }: Props) {
   const [imports, setImports] = useState<LineupImportHistoryItem[]>([]);
   const [lineupCount, setLineupCount] = useState<LineupAnnouncementCount | null>(null);
   const [daysCount, setDaysCount] = useState<DaysAnnouncementCount | null>(null);
@@ -215,7 +218,12 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
         open={!!undoTarget}
         onOpenChange={(o) => !o && setUndoTarget(null)}
         title="Undo this import?"
-        description="This removes the sets it added and puts back the sets it changed. Sets that people picked, or that someone edited after the import, stay."
+        description={[
+          'This removes the sets it added and puts back the sets it changed. Sets that people picked, or that someone edited after the import, stay.',
+          releases && undoReleaseWarning(undoTarget?.touchedDates, releases.dates, releases.orphanDates),
+        ]
+          .filter(Boolean)
+          .join(' ')}
         confirmLabel="Undo import"
         destructive
         busy={busy}

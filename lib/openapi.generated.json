@@ -4701,6 +4701,104 @@
         }
       }
     },
+    "/api/v1/admin/festivals/{id}/time-releases": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Release panel: per date timed and total sets, claim state, recipient ceiling and preview title",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ festivalName, canSend, recipientsNow, emailRecipients, emailCut, emailOff, defaultBody, dates, orphanDates }"
+          },
+          "404": {
+            "description": "Festival not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Send the set-times alert for one or more festival dates (claim, then send)",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dates": {
+                    "minItems": 1,
+                    "maxItems": 10,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^\\d{4}-\\d{2}-\\d{2}$"
+                    }
+                  },
+                  "note": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "confirmPartial": {
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "dates"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "{ queued, dates, skipped, recipients }"
+          },
+          "400": {
+            "description": "A date is not a day of the festival with a timed set"
+          },
+          "404": {
+            "description": "Festival not found"
+          },
+          "409": {
+            "description": "DRAFT, FESTIVAL_OVER, PARTIAL_RELEASE (error.partial) or ALREADY_RELEASED (error.releases)"
+          }
+        }
+      }
+    },
     "/api/v1/admin/festivals/{id}/announcements": {
       "get": {
         "tags": [
