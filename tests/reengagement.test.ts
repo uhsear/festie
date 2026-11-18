@@ -728,6 +728,11 @@ describe('timeReleaseCopy', () => {
     assert.equal(timeReleaseCopy('Wasteland', ['Friday', 'Saturday']).title, 'Wasteland: Friday and Saturday set times are out');
   });
 
+  it('with no day it drops the colon and the double space', () => {
+    assert.equal(timeReleaseCopy('Wasteland', []).title, 'Wasteland set times are out');
+    assert.equal(timeReleaseCopy('', []).title, 'Your festival set times are out');
+  });
+
   it('the admin note replaces the body', () => {
     assert.equal(timeReleaseCopy('Wasteland', ['Friday'], '  Gates open at noon.  ').body, 'Gates open at noon.');
   });
@@ -778,7 +783,8 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
           return { rows: [...new Set([...followers, ...profileHolders])].map((userId) => ({ userId })) };
         }
         if (sql.includes('FROM notification_log')) {
-          assert.deepEqual(params, [[KEY, `${KEY}#email`]]);
+          assert.deepEqual(params[0], [KEY, `${KEY}#email`]);
+          assert.deepEqual([...params[1]].sort(), [...new Set([...followers, ...profileHolders])].sort(), 'the count is limited to this release audience');
           return { rows: [{ reached: new Set([...seen].map((k) => k.split('|')[0])).size }] };
         }
         if (sql.startsWith('UPDATE festival_time_releases SET sent_at')) {
@@ -885,14 +891,14 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
 
   it('a follower with New lineups and set times off gets no email, and nobody gets one without a postal address', async () => {
     // RESEND_API_KEY is unset, so sendEmail logs 'email:skip' when the fan-out reaches it.
-    async function emailAttempts(prefs: any, postal: string) {
+    async function emailAttempts(prefs: any, postal: string, emailsToday = 0) {
       const skips: string[] = [];
       const emailLog = { ...log, warn: (msg: string) => { if (msg === 'email:skip') skips.push(msg); } };
       const stores = {
         festivals: { getById: async () => FEST },
         users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', username: 'f1' }]]) },
         notificationPrefs: { get: async () => prefs },
-        notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {} },
+        notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {}, countEmailsSince: async () => emailsToday },
       };
       const pool = {
         query: async (sql: string) => {
@@ -909,6 +915,7 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
     assert.equal(await emailAttempts({ lineupDrops: false }, '1 Main St'), 0);
     assert.equal(await emailAttempts({ lineupDrops: true }, '1 Main St'), 1);
     assert.equal(await emailAttempts({ lineupDrops: true }, ''), 0);
+    assert.equal(await emailAttempts({ lineupDrops: true }, '1 Main St', EMAIL_DAILY_BUDGET), 0, 'the daily email budget caps the release email');
   });
 });
 

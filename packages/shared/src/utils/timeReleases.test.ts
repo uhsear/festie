@@ -2,9 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   shortDate,
   timeReleaseConfirmText,
+  timeReleaseEmailNote,
   timeReleaseOrphanText,
   timeReleasePartialText,
   timeReleasePrompts,
+  timeReleaseRetryText,
   timeReleaseRowText,
   timeReleaseState,
   undoReleaseWarning,
@@ -29,6 +31,8 @@ const panel = (dates: TimeReleaseDate[], canSend = true): TimeReleasePanelData =
   festivalName: 'Wasteland',
   canSend,
   recipientsNow: 812,
+  emailRecipients: 800,
+  emailCut: 0,
   emailOff: null,
   defaultBody: 'See who plays when and build your plan.',
   dates,
@@ -103,5 +107,19 @@ describe('orphan and undo text', () => {
     expect(undoReleaseWarning(['2027-02-04'], [], [{ date: '2027-02-04', claimedAt: 'x', sentAt: 'y' }])).toBe(
       'The 4 Feb alert already went out. Undo will not recall it.',
     );
+  });
+});
+
+describe('retry and email text', () => {
+  it('a retry names no title and promises no double send', () => {
+    expect(timeReleaseRetryText(812)).toBe(
+      'Resends the original alert to up to 812 people. Anyone it already reached does not get it twice.',
+    );
+  });
+
+  it('names the missing postal address first, then the people the daily limit cuts, else nothing', () => {
+    expect(timeReleaseEmailNote({ emailOff: 'no_postal_address', emailCut: 5 })).toBe('Email off: no postal address.');
+    expect(timeReleaseEmailNote({ emailOff: null, emailCut: 1 })).toMatch(/^1 person get no email because of the daily email limit/);
+    expect(timeReleaseEmailNote({ emailOff: null, emailCut: 0 })).toBeNull();
   });
 });

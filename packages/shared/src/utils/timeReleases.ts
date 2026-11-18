@@ -29,6 +29,10 @@ export interface TimeReleasePanelData {
   canSend: boolean;
   /** Followers plus profile holders, before preference and push-token filters. */
   recipientsNow: number;
+  /** Who would get the email now, before the daily email budget runs out. */
+  emailRecipients: number;
+  /** People the daily email budget would leave without the email. They still get the push. */
+  emailCut: number;
   /** 'no_postal_address' when the email part is off. */
   emailOff: string | null;
   /** The push body when the admin writes no custom line. */
@@ -98,6 +102,23 @@ export function timeReleaseRowText(row: TimeReleaseDate, nowMs: number): string 
 /** The confirm text: who it reaches at most, and the exact push title. */
 export function timeReleaseConfirmText(recipientsNow: number, title: string): string {
   return `Alert goes to up to ${recipientsNow} people: "${title}".`;
+}
+
+/**
+ * The confirm text of a retry. It resends the alert as first sent, so it names no title and takes no
+ * custom line, and people the first run reached do not get it twice.
+ */
+export function timeReleaseRetryText(recipientsNow: number): string {
+  return `Resends the original alert to up to ${recipientsNow} people. Anyone it already reached does not get it twice.`;
+}
+
+/** Why some people get no email, or null. A date sends once, so the cut people cannot be reached later. */
+export function timeReleaseEmailNote(panel: Pick<TimeReleasePanelData, 'emailOff' | 'emailCut'>): string | null {
+  if (panel.emailOff === 'no_postal_address') return 'Email off: no postal address.';
+  if (panel.emailCut > 0) {
+    return `${people(panel.emailCut)} get no email because of the daily email limit. A date sends only once, so wait a day to send if they should get it.`;
+  }
+  return null;
 }
 
 /** Why a partial date needs a second tick, or null when every set has a time. */

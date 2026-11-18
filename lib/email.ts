@@ -327,6 +327,12 @@ export async function sendDaysOutEmail({ to, username, festivalName, festivalId,
   return sendEmail({ to, subject: `${name} days are out`, html, text, headers: reengagementHeaders(config), config, log, _client });
 }
 
+/** "Friday", "Friday and Saturday", "Fri, Sat and Sun". The set-times push and email share it. */
+export function joinDayLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
+
 /**
  * "{Festival} set times are out" — deep-links to the festival page. `dayLabels` names the released days
  * ("Friday and Saturday"); without them the mail says "the set times". `note` is the admin's own line.
@@ -335,7 +341,7 @@ export async function sendSetTimesOutEmail({ to, username, festivalName, festiva
   const origin = _origin(config);
   const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'Your festival';
-  const days = dayLabels.length > 1 ? `${dayLabels.slice(0, -1).join(', ')} and ${dayLabels[dayLabels.length - 1]}` : dayLabels.join('');
+  const days = joinDayLabels(dayLabels);
   const the = days ? `The ${days} set times` : 'The set times';
   const noteHtml = note ? `<p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(note)}</p>` : '';
   const bodyHtml = `

@@ -4,9 +4,11 @@ import {
   TIME_RELEASE_HELP,
   TIME_RELEASE_NOTE_MAX,
   timeReleaseConfirmText,
+  timeReleaseEmailNote,
   timeReleaseOrphanText,
   timeReleasePartialText,
   timeReleasePrompts,
+  timeReleaseRetryText,
   timeReleaseRowText,
   timeReleaseState,
   type TimeReleaseDate,
@@ -22,6 +24,8 @@ interface Props {
   festivalId: string;
   /** Change this value to reload the panel, for example after a save or an import. */
   refreshKey?: number | string;
+  /** Called with each load result, null when it failed, so a sibling can read the same data. */
+  onLoaded?: (panel: TimeReleasePanelData | null) => void;
 }
 
 const rowButton =
@@ -31,10 +35,11 @@ const rowButton =
  * "Send set-times alert", one festival date at a time. A save, an import and a publish never send it:
  * the admin presses Send here, after the dialog shows who it reaches and the exact title.
  */
-export default function SetTimeReleasePanel({ festivalId, refreshKey = 0 }: Props) {
+export default function SetTimeReleasePanel({ festivalId, refreshKey = 0, onLoaded }: Props) {
   const [panel, setPanel] = useState<TimeReleasePanelData | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [target, setTarget] = useState<TimeReleaseDate | null>(null);
+  const [isRetry, setIsRetry] = useState(false);
   const [note, setNote] = useState('');
   const [partialOk, setPartialOk] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -43,18 +48,22 @@ export default function SetTimeReleasePanel({ festivalId, refreshKey = 0 }: Prop
   const reload = useCallback(async () => {
     try {
       setLoadError(null);
-      setPanel(await timeReleaseApi.panel(festivalId));
+      const loaded = await timeReleaseApi.panel(festivalId);
+      setPanel(loaded);
+      onLoaded?.(loaded);
     } catch (err: unknown) {
       setLoadError(err);
+      onLoaded?.(null);
     }
-  }, [festivalId]);
+  }, [festivalId, onLoaded]);
 
   useEffect(() => {
     void reload();
   }, [reload, refreshKey]);
 
-  const open = (row: TimeReleaseDate) => {
+  const open = (row: TimeReleaseDate, retry: boolean) => {
     setTarget(row);
+    setIsRetry(retry);
     setNote('');
     setPartialOk(false);
   };
@@ -66,7 +75,8 @@ export default function SetTimeReleasePanel({ festivalId, refreshKey = 0 }: Prop
     try {
       const result = await timeReleaseApi.send(festivalId, {
         dates: [target.date],
-        ...(note.trim() ? { note: note.trim() } : {}),
+        // A retry keeps the note of the first send; the server ignores a new one.
+        ...(!isRetry && note.trim() ? { note: note.trim() } : {}),
         ...(partial ? { confirmPartial: true } : {}),
       });
       toast(`Set-times alert queued for up to ${result.recipients} people.`, 'success');
@@ -95,6 +105,7 @@ export default function SetTimeReleasePanel({ festivalId, refreshKey = 0 }: Prop
   const nowMs = Date.now();
   const prompts = timeReleasePrompts(panel);
   const partialText = target ? timeReleasePartialText(target) : null;
+  const emailNote = timeReleaseEmailNote(panel);
   const sendDisabled = busy || (!!partialText && !partialOk);
 
   return (
@@ -104,7 +115,7 @@ export default function SetTimeReleasePanel({ festivalId, refreshKey = 0 }: Prop
         Tell followers and everyone with a profile in {panel.festivalName} that a day's set times are out. Each day
         sends once. A save, an import or a publish never sends it.
       </p>
-      {panel.emailOff === 'no_postal_address' && <p className="text-sm text-text-muted">Email off: no postal address.</p>}
+      {emailNote && <p className="text-sm text-text-muted">{emailNote}</p>}
       {prompts.map((text) => (
         <p key={text} role="status" className="text-sm text-accent-amber">
           {text}
@@ -124,7 +135,7 @@ export default function SetTimeReleasePanel({ festivalId, refreshKey = 0 }: Prop
               >
                 <span className="text-sm text-text-primary">{timeReleaseRowText(row, nowMs)}</span>
                 {canPress && (
-                  <button type="button" className={rowButton} disabled={busy} onClick={() => open(row)}>
+                  <button type="button" className={rowButton} disabled={busy} onClick={() => open(row, state === 'stuck')}>
                     {state === 'stuck' ? 'Retry' : 'Send alert'}
                   </button>
                 )}
@@ -150,20 +161,29 @@ export default function SetTimeReleasePanel({ festivalId, refreshKey = 0 }: Prop
           if (!o && !busy) setTarget(null);
         }}
         title="Send the set-times alert?"
-        description={target ? timeReleaseConfirmText(panel.recipientsNow, target.previewTitle) : undefined}
+        description={
+          target
+            ? isRetry
+              ? timeReleaseRetryText(panel.recipientsNow)
+              : timeReleaseConfirmText(panel.recipientsNow, target.previewTitle)
+            : undefined
+        }
       >
         <p className="text-sm text-text-muted">{TIME_RELEASE_HELP}</p>
-        <label className="block text-sm text-text-primary">
-          Custom line (optional)
-          <input
-            type="text"
-            maxLength={TIME_RELEASE_NOTE_MAX}
-            value={note}
-            placeholder={panel.defaultBody}
-            onChange={(e) => setNote(e.target.value)}
-            className="mt-1 w-full px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
-          />
-        </label>
+        {emailNote && <p className="text-sm text-text-muted">{emailNote}</p>}
+        {!isRetry && (
+          <label className="block text-sm text-text-primary">
+            Custom line (optional)
+            <input
+              type="text"
+              maxLength={TIME_RELEASE_NOTE_MAX}
+              value={note}
+              placeholder={panel.defaultBody}
+              onChange={(e) => setNote(e.target.value)}
+              className="mt-1 w-full px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            />
+          </label>
+        )}
         {partialText && (
           <label className="flex items-start gap-2 text-sm text-text-primary">
             <input

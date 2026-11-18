@@ -4696,7 +4696,7 @@
         ],
         "responses": {
           "200": {
-            "description": "{ festivalName, canSend, recipientsNow, emailOff, defaultBody, dates, orphanDates }"
+            "description": "{ festivalName, canSend, recipientsNow, emailRecipients, emailCut, emailOff, defaultBody, dates, orphanDates }"
           },
           "404": {
             "description": "Festival not found"

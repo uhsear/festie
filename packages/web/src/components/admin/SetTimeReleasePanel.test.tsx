@@ -23,6 +23,8 @@ const data = (over: Record<string, unknown> = {}) => ({
   festivalName: 'Wasteland',
   canSend: true,
   recipientsNow: 812,
+  emailRecipients: 800,
+  emailCut: 0,
   emailOff: null,
   defaultBody: 'See who plays when and build your plan.',
   dates: [day()],
@@ -86,6 +88,33 @@ describe('SetTimeReleasePanel', () => {
     render(<SetTimeReleasePanel festivalId="f1" />);
     expect(await screen.findByText('Fri 5 Feb · 44 of 44 timed · Not finished')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+
+  it('a retry offers no custom line, says it resends the original alert, and sends no note', async () => {
+    api.panel.mockResolvedValue(data({ dates: [day({ claimedAt: new Date(Date.now() - 20 * 60_000).toISOString() })] }));
+    render(<SetTimeReleasePanel festivalId="f1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    expect(screen.queryByLabelText(/Custom line/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Resends the original alert to up to 812 people/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(api.send).toHaveBeenCalledWith('f1', { dates: ['2027-02-05'] });
+  });
+
+  it('says how many people the daily email limit leaves without the email', async () => {
+    api.panel.mockResolvedValue(data({ emailRecipients: 90, emailCut: 722 }));
+    render(<SetTimeReleasePanel festivalId="f1" />);
+    expect(await screen.findByText(/722 people get no email because of the daily email limit/)).toBeInTheDocument();
+  });
+
+  it('hands each load to onLoaded, and null when the load fails', async () => {
+    const onLoaded = vi.fn();
+    api.panel.mockRejectedValueOnce(new Error('down'));
+    render(<SetTimeReleasePanel festivalId="f1" onLoaded={onLoaded} />);
+    await screen.findByText("Couldn't load set-time alerts");
+    expect(onLoaded).toHaveBeenLastCalledWith(null);
+    await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await screen.findByText('Fri 5 Feb · 44 of 44 timed · Not sent');
+    expect(onLoaded).toHaveBeenLastCalledWith(expect.objectContaining({ recipientsNow: 812 }));
   });
 
   it('when sending is closed it lists the rows read-only, with no button and no prompt', async () => {

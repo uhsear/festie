@@ -896,7 +896,7 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description { festivalName, canSend, recipientsNow, emailOff, defaultBody, dates, orphanDates } */
+                /** @description { festivalName, canSend, recipientsNow, emailRecipients, emailCut, emailOff, defaultBody, dates, orphanDates } */
                 200: {
                     headers: {
                         [name: string]: unknown;

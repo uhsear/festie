@@ -17,6 +17,7 @@ import {
   type LineupImportPlan,
   type LineupImportRow,
 } from '@festie/shared/utils/lineupImport';
+import type { TimeReleasePanelData } from '@festie/shared/utils/timeReleases';
 import { useToast } from '../../lib/toastContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import LineupImportHistory from './LineupImportHistory';
@@ -82,6 +83,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  const [releases, setReleases] = useState<TimeReleasePanelData | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const { toast, toastError } = useToast();
 
@@ -512,8 +514,8 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
         {step === 'preview' && plan && renderPreview(plan)}
         {step === 'result' && result && renderResult(result)}
       </div>
-      <SetTimeReleasePanel festivalId={festivalId} refreshKey={historyKey} />
-      <LineupImportHistory festivalId={festivalId} festivalName={festivalName} refreshKey={historyKey} />
+      <SetTimeReleasePanel festivalId={festivalId} refreshKey={historyKey} onLoaded={setReleases} />
+      <LineupImportHistory festivalId={festivalId} festivalName={festivalName} refreshKey={historyKey} releases={releases} />
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}

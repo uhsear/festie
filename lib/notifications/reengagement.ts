@@ -41,6 +41,7 @@ import {
   sendDaysOutEmail,
   sendCrewReformEmail,
   sendSetTimesOutEmail,
+  joinDayLabels,
 } from '../email.js';
 import { actsDayCoverage } from '../lineup.js';
 import { PREF_MAP } from './send.js';
@@ -117,12 +118,6 @@ export function findRatePromptDay(
   return -1;
 }
 
-/** "Friday", "Friday and Saturday", "Fri, Sat and Sun". */
-function joinDayLabels(labels: string[]): string {
-  if (labels.length <= 1) return labels.join('');
-  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
-}
-
 const TIME_RELEASE_BODY = 'See who plays when and build your plan.';
 
 /**
@@ -137,9 +132,10 @@ export function timeReleaseCopy(
 ): { title: string; body: string } {
   const name = festivalName || 'Your festival';
   const days = joinDayLabels(dayLabels);
-  const dayTitle = `${name}: ${days} set times are out`;
   const body = note?.trim() || TIME_RELEASE_BODY;
-  if (!days || dayTitle.length <= MAX_TITLE_LENGTH) return { title: dayTitle, body };
+  if (!days) return { title: `${name} set times are out`.slice(0, MAX_TITLE_LENGTH), body };
+  const dayTitle = `${name}: ${days} set times are out`;
+  if (dayTitle.length <= MAX_TITLE_LENGTH) return { title: dayTitle, body };
   return {
     title: `${name} set times are out`.slice(0, MAX_TITLE_LENGTH),
     body: `${days}. ${body}`.slice(0, MAX_BODY_LENGTH),
@@ -583,6 +579,12 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return { sent: pushSent, emailSent, eventKey, recipients: userIds.length };
   }
 
+  /** Dry run for the release panel: the audience ceiling and how many the daily email budget would cut. */
+  async function countTimeRelease(festivalId: string) {
+    const userIds = await resolveFollowersAndProfileHolders(festivalId);
+    return { recipients: userIds.length, ...(await planAlertEmail(userIds, 'set_times_out', `times:${festivalId}`)) };
+  }
+
   // ── set_times_out ───────────────────────────────────────────────────────
   //
   // Fires only from the admin release panel (routes/time-releases.ts), once per festival date. No save,
@@ -626,7 +628,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     }));
     // No postal address, no email (CAN-SPAM). The push and the inbox row do not depend on it.
     const emailSent = hasPostalAddress()
-      ? await emailFanout(userIds, 'set_times_out', eventKey, async (user) =>
+      ? await alertEmailFanout(userIds, 'set_times_out', eventKey, async (user) =>
           sendSetTimesOutEmail({
             to: user.email,
             username: user.username,
@@ -643,8 +645,9 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     // People this release reached by inbox, push or email, retries included.
     const { rows: reached } = await db.query(
       `SELECT COUNT(DISTINCT user_id)::int AS "reached" FROM notification_log
-       WHERE type = 'set_times_out' AND status <> 'failed' AND data_json->>'eventKey' = ANY($1::text[])`,
-      [[eventKey, `${eventKey}#email`]],
+       WHERE type = 'set_times_out' AND status <> 'failed' AND user_id = ANY($2::text[])
+         AND data_json->>'eventKey' = ANY($1::text[])`,
+      [[eventKey, `${eventKey}#email`], userIds],
     );
     const recipients: number = reached[0]?.reached ?? 0;
     await db.query(
@@ -830,9 +833,11 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   // depend on it) and at most EMAIL_DAILY_BUDGET emails a day across all re-engagement mail, because
   // the mail provider's plan caps a day. People the budget cuts stay un-emailed; the next press reaches them.
   // The fan-out re-reads the budget before every send, so concurrent jobs overshoot by a send or two, not a batch.
-  // wrap_ready, crew_reformed and set_times_out are not capped: each goes to one festival's or crew's own
-  // audience, and a cut there could not be retried (a date's release cannot be sent twice), so they only
-  // count against the budget. A release still skips email while the postal address is unset.
+  // wrap_ready and crew_reformed are not capped: each goes to one crew's or festival's own audience, so
+  // they only count against the budget. The set-times release is capped like the other two, because one
+  // release to a few hundred people could use the provider's daily quota and block account mail. A date
+  // sends only once, so people the budget cuts keep the push and the inbox row but get no email for it;
+  // the panel shows how many that is before the admin presses Send.
   const hasPostalAddress = () => !!String(config?.EMAIL_POSTAL_ADDRESS ?? '').trim();
 
   async function emailBudgetLeft(): Promise<number> {
@@ -872,5 +877,6 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     sendCrewReformed,
     sendRatePrompt,
     sendTimeRelease,
+    countTimeRelease,
   };
 }

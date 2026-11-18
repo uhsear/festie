@@ -86,7 +86,10 @@ describe('time-release routes', { skip, concurrency: 1 }, () => {
       setNoStore: () => {},
       getRequestIp: () => '127.0.0.1',
       reengagement: { sendTimeRelease },
-      reengagementExecutor: { resolveFollowersAndProfileHolders: async () => audience },
+      reengagementExecutor: {
+        resolveFollowersAndProfileHolders: async () => audience,
+        countTimeRelease: async () => ({ recipients: audience.length, emailRecipients: 1, emailCut: 2, emailOff: 'no_postal_address' }),
+      },
       schemas,
       validate,
       stores: { ...stores, auditLog: { insert: async (row: any) => audit.push(row) } },
@@ -237,6 +240,8 @@ describe('time-release routes', { skip, concurrency: 1 }, () => {
     assert.equal(data.canSend, true);
     assert.equal(data.recipientsNow, 3);
     assert.equal(data.emailOff, 'no_postal_address');
+    assert.equal(data.emailRecipients, 1);
+    assert.equal(data.emailCut, 2);
     assert.equal(data.defaultBody, 'See who plays when and build your plan.');
     assert.deepEqual(data.dates.map((d: any) => [d.date, d.timed, d.total, d.sentAt]), [
       [FRI, 2, 2, null],

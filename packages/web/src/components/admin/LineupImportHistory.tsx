@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { lineupImportApi } from '@festie/shared/services/lineupImport';
-import { timeReleaseApi } from '@festie/shared/services/timeReleases';
 import { undoReleaseWarning, type TimeReleasePanelData } from '@festie/shared/utils/timeReleases';
 import {
   announcementEmailNote,
@@ -21,6 +20,8 @@ interface Props {
   festivalName: string;
   /** Change this value to reload history and the announcement count. */
   refreshKey?: number;
+  /** The release panel data the sibling panel already loaded; only the undo warning reads it. */
+  releases?: TimeReleasePanelData | null;
 }
 
 const KEPT_REASON = { picked: 'picked by someone', edited: 'edited since the import' } as const;
@@ -28,12 +29,11 @@ const KEPT_REASON = { picked: 'picked by someone', edited: 'edited since the imp
 const buttonClass =
   'px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 disabled:opacity-50 transition-colors text-sm font-medium';
 
-export default function LineupImportHistory({ festivalId, festivalName, refreshKey = 0 }: Props) {
+export default function LineupImportHistory({ festivalId, festivalName, refreshKey = 0, releases = null }: Props) {
   const [imports, setImports] = useState<LineupImportHistoryItem[]>([]);
   const [lineupCount, setLineupCount] = useState<LineupAnnouncementCount | null>(null);
   const [daysCount, setDaysCount] = useState<DaysAnnouncementCount | null>(null);
   const [daysOpen, setDaysOpen] = useState(false);
-  const [releases, setReleases] = useState<TimeReleasePanelData | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [undoTarget, setUndoTarget] = useState<LineupImportHistoryItem | null>(null);
   const [announceOpen, setAnnounceOpen] = useState(false);
@@ -44,17 +44,14 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
   const reload = useCallback(async () => {
     try {
       setLoadError(null);
-      const [history, announcement, days, released] = await Promise.all([
+      const [history, announcement, days] = await Promise.all([
         lineupImportApi.history(festivalId),
         lineupImportApi.announcement(festivalId),
         lineupImportApi.daysAnnouncement(festivalId),
-        // Only the undo warning reads this, so a failure here must not hide the history.
-        timeReleaseApi.panel(festivalId).catch(() => null),
       ]);
       setImports(history.imports);
       setLineupCount(announcement);
       setDaysCount(days);
-      setReleases(released);
     } catch (err: unknown) {
       setLoadError(err);
       toastError(err, "Couldn't load import history. Try again.");

@@ -38,7 +38,6 @@ function countByDate(festival: any): DayCount[] {
 export default function createTimeReleasesRoute(deps: any) {
   const {
     express,
-    config,
     log,
     adminAuth,
     rateLimit,
@@ -87,7 +86,8 @@ export default function createTimeReleasesRoute(deps: any) {
       const counts = countByDate(festival);
       const rows = await stores.timeReleases.list(festivalId);
       const rowByDate = new Map<string, any>(rows.map((r: any) => [r.date, r]));
-      const recipientsNow = (await reengagementExecutor.resolveFollowersAndProfileHolders(festivalId)).length;
+      const { recipients: recipientsNow, emailRecipients, emailCut, emailOff } =
+        await reengagementExecutor.countTimeRelease(festivalId);
       const dates = counts.map((day) => {
         const row = rowByDate.get(day.date);
         return {
@@ -106,8 +106,10 @@ export default function createTimeReleasesRoute(deps: any) {
         festivalName: festival.name,
         canSend: !!festival.publishedAt && !isFestivalOver(festival.days, festival.timeZone),
         recipientsNow,
-        // The email goes out only when the mail footer can carry a postal address.
-        emailOff: String(config?.EMAIL_POSTAL_ADDRESS ?? '').trim() ? null : 'no_postal_address',
+        // Email goes out only with a postal address, and at most the daily budget; emailCut people get none.
+        emailRecipients,
+        emailCut,
+        emailOff,
         defaultBody: timeReleaseCopy(festival.name, []).body,
         dates,
         orphanDates,
