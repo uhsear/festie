@@ -20,6 +20,24 @@ import { hashSessionToken } from '../crypto-auth';
 
 export const REAUTH_WINDOW_MS = 15 * 60 * 1000;
 
+// Every festival-scoped route names one action here. `role` is the lowest role that may call it and
+// `write` marks a change. Only admins pass today: organizations do not exist yet, so the role and
+// write fields are not read until organizer access arrives with its per-action predicates.
+export const FESTIVAL_ACTIONS = {
+  'festival.edit': { role: 'editor', write: true },
+  'festival.impact': { role: 'owner', write: false },
+  'festival.delete': { role: 'owner', write: true },
+  'festival.restore': { role: 'admin', write: true },
+  'publish.decide': { role: 'admin', write: true },
+  'links.edit': { role: 'editor', write: true },
+  'lineup.import': { role: 'editor', write: true },
+  'lineup.history': { role: 'viewer', write: false },
+  'lineup.drop': { role: 'admin', write: true },
+  'map.edit': { role: 'editor', write: true },
+  'announcement.manage': { role: 'admin', write: true },
+} as const;
+export type FestivalAction = keyof typeof FESTIVAL_ACTIONS;
+
 /**
  * Build session + auth helpers bound to the supplied deps.
  */
@@ -105,6 +123,21 @@ export function createSessionHelpers({
     return next();
   }
 
+  // Gate for a route scoped to one festival. A non-admin gets adminAuth's 403 on every mount:
+  // organizer roles are not granted anywhere yet. The tags let the access-matrix test find it.
+  function festivalAccess({ action, param = 'id' }: { action: FestivalAction; param?: string }) {
+    if (!FESTIVAL_ACTIONS[action]) throw new Error(`Unknown festival action "${action}"`);
+    const guard = (req: any, res: any, next: any) =>
+      adminAuth(req, res, () => {
+        req.festivalRole = 'admin';
+        req.festivalId = req.params[param];
+        return next();
+      });
+    guard.action = action;
+    guard.param = param;
+    return guard;
+  }
+
   // True when the session's password was re-entered (POST /auth/reauth) within
   // REAUTH_WINDOW_MS. Reads the reauthAt that validateUserSession loaded.
   function hasRecentAuth(req: any) {
@@ -139,6 +172,7 @@ export function createSessionHelpers({
     invalidateUserSessions,
     resolveUserRequestSession,
     adminAuth,
+    festivalAccess,
     userAuth,
     hasRecentAuth,
     requireRecentAuth,

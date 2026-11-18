@@ -89,6 +89,7 @@ function build() {
     invalidateFestivalCache: () => {},
     reengagement: { sendSetTimesOut: mock.fn(async () => ({ queued: false })) },
   };
+  deps.festivalAccess = () => deps.adminAuth;
   const app = express();
   app.use(express.json());
   app.use(createFestivalsRoutes(deps));

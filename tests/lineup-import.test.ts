@@ -279,6 +279,7 @@ describe('lineup-import commit: set times are out (mocked deps)', () => {
       getRequestIp: () => '127.0.0.1',
       reengagement: { sendSetTimesOut },
     };
+    deps.festivalAccess = () => deps.adminAuth;
     const app = express();
     app.use(express.json());
     app.use(createLineupImportRoute(deps));
@@ -349,6 +350,7 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
       getRequestIp: () => '127.0.0.1',
       reengagement: { sendSetTimesOut: async () => ({}) },
     };
+    deps.festivalAccess = () => deps.adminAuth;
     const app = express();
     app.use(express.json());
     app.use(createLineupImportRoute(deps));

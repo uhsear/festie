@@ -176,7 +176,8 @@ const adminMounted = new Set(files.filter((f) => {
   });
 }));
 const has = (r: Route, re: RegExp) => re.test(r.mw);
-const isAdmin = (r: Route) => adminMounted.has(r.file) || has(r, /(^|[\s.|])adminAuth\b/);
+// festivalAccess refuses every non-admin until organizer roles exist, so it counts as an admin gate.
+const isAdmin = (r: Route) => adminMounted.has(r.file) || has(r, /(^|[\s.|])(adminAuth|festivalAccess)\b/);
 const isAuthed = (r: Route) => isAdmin(r) || has(r, /(^|[\s|])userAuth\b/);
 const fail = (r: Route, msg: string) => problems.push(`${r.where} ${r.verb} ${r.path}: ${msg}`);
 
@@ -190,7 +191,7 @@ const LIMITED_EVENTS = ['join:festival', 'leave:festival', 'join:crew', 'leave:c
 test('route security inventory', () => {
   for (const r of routes) {
     if (!isAuthed(r) && !PUBLIC_ROUTES[r.key]) fail(r, `no session middleware. Add userAuth, or add '${r.key}' to PUBLIC_ROUTES with a reason.`);
-    if (r.file.startsWith('admin') && !isAdmin(r) && !ADMIN_EXEMPT[r.key]) fail(r, 'admin route without adminAuth. Add adminAuth.');
+    if (r.file.startsWith('admin') && !isAdmin(r) && !ADMIN_EXEMPT[r.key]) fail(r, 'admin route without adminAuth or festivalAccess. Add one.');
     if (/\b_?req\.(body|validatedBody)\b/.test(r.body) && !has(r, /\bvalidate\(/) && !HAND_VALIDATED_BODY[r.key]) fail(r, `reads the body without validate(schemas.x). Add a Zod schema in lib/schemas.ts, or add '${r.key}' to HAND_VALIDATED_BODY with a reason.`);
     if (/\b_?req\.(query|validatedQuery)\b/.test(r.body) && !has(r, /\bvalidateQuery\(/) && !HAND_VALIDATED_QUERY[r.key]) fail(r, `reads the query without validateQuery(schemas.x). Add one, or add '${r.key}' to HAND_VALIDATED_QUERY with a reason.`);
     if (r.verb !== 'GET' && !has(r, /\b(rateLimit|rl)\(/)) fail(r, 'write route without a scoped rate limiter. Add rateLimit(max, scope).');

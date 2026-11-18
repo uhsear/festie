@@ -36,6 +36,7 @@ function build({
     },
     reengagementExecutor: { countLineupDrop: async () => ({ festivalName: name, recipients, priorAttendees: priorAttendees ?? recipients }) },
   };
+  deps.festivalAccess = () => deps.adminAuth;
   const app = express();
   app.use('/api/v1/admin/festivals', createLineupAnnounceRoute(deps));
   return { app, calls };

@@ -31,7 +31,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
   const {
     express,
     log,
-    adminAuth,
+    festivalAccess,
     rateLimit,
     sanitizeIdentifier,
     sendSuccess,
@@ -71,7 +71,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
     return (await stores.profiles.userIdsByFestival(festivalId)).length;
   }
 
-  router.get('/:id/announcements', adminAuth, async (req: any, res: any) => {
+  router.get('/:id/announcements', festivalAccess({ action: 'announcement.manage' }), async (req: any, res: any) => {
     setNoStore(res);
     try {
       const festivalId = sanitizeIdentifier(req.params.id, 100);
@@ -91,7 +91,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
 
   router.post(
     '/:id/announcements',
-    adminAuth,
+    festivalAccess({ action: 'announcement.manage' }),
     rateLimit(10, 'festival-announce'),
     validate(schemas.festivalAnnouncement),
     async (req: any, res: any) => {
@@ -152,7 +152,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
 
   router.delete(
     '/:id/announcements/:announcementId',
-    adminAuth,
+    festivalAccess({ action: 'announcement.manage' }),
     rateLimit(20, 'festival-announce-cancel'),
     async (req: any, res: any) => {
       try {

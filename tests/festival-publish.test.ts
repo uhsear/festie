@@ -122,6 +122,7 @@ describe('set times are out: PUT and publish', () => {
       invalidateFestivalCache: () => {},
       reengagement: { sendSetTimesOut },
     };
+    deps.festivalAccess = () => deps.adminAuth;
     const app = express();
     app.use(express.json());
     app.use(createFestivalsRoutes(deps));

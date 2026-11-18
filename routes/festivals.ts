@@ -13,6 +13,7 @@ export default function createFestivalsRoutes(deps: any) {
     config,
     log,
     adminAuth,
+    festivalAccess,
     hasRecentAuth,
     requireRecentAuth,
     getFestivals,
@@ -68,7 +69,7 @@ export default function createFestivalsRoutes(deps: any) {
     }
   }
 
-  // The router is mounted at /festivals and at /admin/festivals; adminAuth sets
+  // The router is mounted at /festivals and at /admin/festivals; adminAuth and festivalAccess set
   // req.isAdmin on the admin mount. Drafts (no publishedAt) are visible there only.
   const isAdminReq = (req: any) => req.isAdmin === true;
   const visible = (festival: any, req: any) => (festival && (festival.publishedAt || isAdminReq(req)) ? festival : null);
@@ -439,7 +440,7 @@ export default function createFestivalsRoutes(deps: any) {
 
   router.put(
     '/:id',
-    adminAuth,
+    festivalAccess({ action: 'festival.edit' }),
     rateLimit(10, 'festival-update'),
     validateParams(schemas.genericIdParams),
     validate(schemas.festivalUpdate),
@@ -586,7 +587,7 @@ export default function createFestivalsRoutes(deps: any) {
   );
 
   // How many people, crews and picks lose access if this festival is deleted.
-  router.get('/:id/impact', adminAuth, validateParams(schemas.genericIdParams), async (req: any, res: any) => {
+  router.get('/:id/impact', festivalAccess({ action: 'festival.impact' }), validateParams(schemas.genericIdParams), async (req: any, res: any) => {
     try {
       const festival = await getFestivalById(req.validatedParams.id);
       if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
@@ -601,7 +602,7 @@ export default function createFestivalsRoutes(deps: any) {
   // it would cut off attendees with picks. Delete and Restore cover mistakes.
   router.post(
     '/:id/publish',
-    adminAuth,
+    festivalAccess({ action: 'publish.decide' }),
     rateLimit(10, 'festival-publish'),
     validateParams(schemas.genericIdParams),
     async (req: any, res: any) => {
@@ -637,7 +638,7 @@ export default function createFestivalsRoutes(deps: any) {
   // Bring a soft-deleted festival back. It keeps its published state.
   router.post(
     '/:id/restore',
-    adminAuth,
+    festivalAccess({ action: 'festival.restore' }),
     rateLimit(10, 'festival-restore'),
     validateParams(schemas.genericIdParams),
     async (req: any, res: any) => {
@@ -664,7 +665,7 @@ export default function createFestivalsRoutes(deps: any) {
   // P3.18: Soft-delete (default). Pass ?hard=true for permanent removal.
   router.delete(
     '/:id',
-    adminAuth,
+    festivalAccess({ action: 'festival.delete' }),
     rateLimit(5, 'festival-delete'),
     requireRecentAuth,
     validateParams(schemas.genericIdParams),
@@ -717,7 +718,7 @@ export default function createFestivalsRoutes(deps: any) {
   // PUT /:festivalId/sets/:setId/link — Admin: set a Spotify/SoundCloud link on a set
   router.put(
     '/:festivalId/sets/:setId/link',
-    adminAuth,
+    festivalAccess({ action: 'links.edit', param: 'festivalId' }),
     rateLimit(10, 'set-link'),
     validate(schemas.setLink),
     async (req: any, res: any) => {
@@ -777,7 +778,7 @@ export default function createFestivalsRoutes(deps: any) {
   );
 
   // GET /:festivalId/sets/links — Admin: list all set links for a festival
-  router.get('/:festivalId/sets/links', adminAuth, async (req: any, res: any) => {
+  router.get('/:festivalId/sets/links', festivalAccess({ action: 'links.edit', param: 'festivalId' }), async (req: any, res: any) => {
     try {
       const festivalId = req.params.festivalId;
       const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
