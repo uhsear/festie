@@ -15,6 +15,7 @@ import {
   GRID_ZOOM_LEVELS,
   defaultZoomIndex,
   buildGridCrewAvatarsBySet,
+  lineupReplacesEmptyState,
   type GridCrewProfile,
 } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
@@ -26,6 +27,8 @@ import EmptyState from '../components/ui/EmptyState';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import OtherDayMatches from '../components/features/OtherDayMatches';
 import TBASection from '../components/timeline/TBASection';
+import AnnouncedLineup from '../components/features/AnnouncedLineup';
+import { useAnnouncedLineup } from '../hooks/useAnnouncedLineup';
 import TimelineLegend from '../components/timeline/TimelineLegend';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
@@ -115,6 +118,8 @@ function GridViewInner() {
     () => Object.fromEntries((days ?? []).map((d) => [d.dayIndex, d.label || d.date])) as Record<number, string>,
     [days],
   );
+
+  const announced = useAnnouncedLineup();
 
   const { vpW } = useTimelineViewport();
   const { nowIndicator, gridRef, scrollToNow } = useNowIndicator(timeBounds, selectedDay);
@@ -253,6 +258,23 @@ function GridViewInner() {
             onSavePick={handleSavePick}
             onOpenDetail={setDetailSet}
           />
+          <AnnouncedLineup model={announced} className="mt-5" />
+        </div>
+      </RefreshableView>
+    );
+  }
+
+  // The announced lineup stands in for "No sets scheduled for this day" only when the day has no sets at all.
+  if (lineupReplacesEmptyState(announced, searchQuery)) {
+    return (
+      <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
+        <div
+          className="relative overflow-auto h-full [-webkit-overflow-scrolling:touch] overscroll-contain pt-4"
+          role="region"
+          aria-label={COPY.grid.regionLabel}
+          data-scroll-sentinel
+        >
+          <AnnouncedLineup model={announced} className="mt-5" />
         </div>
       </RefreshableView>
     );
@@ -287,6 +309,8 @@ function GridViewInner() {
             }
           />
         )}
+        {/* A search lists the matching announced acts under the set results, even when no set matches. */}
+        {!allDaySets.length && searchQuery.trim() ? <AnnouncedLineup model={announced} className="mt-5" /> : null}
       </RefreshableView>
     );
   }
@@ -405,6 +429,7 @@ function GridViewInner() {
               onOpenDetail={setDetailSet}
             />
           )}
+          <AnnouncedLineup model={announced} className="mt-5" />
         </div>
       </div>
     </RefreshableView>

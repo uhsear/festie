@@ -230,6 +230,81 @@ describe('publishChecklist', () => {
     assert.deepEqual(map.times, { key: 'times', status: 'warn', label: '1 set(s) have no start time yet. They show as TBA.' });
   });
 
+  describe('a festival with announced names', () => {
+    const entry = (id: string, name: string, extra: any = {}) => ({
+      id,
+      artists: [{ name, links: {} }],
+      displayName: null,
+      tier: null,
+      dayDate: null,
+      status: 'announced',
+      announcedAt: '2026-11-20',
+      linkedSetIds: [],
+      ...extra,
+    });
+    const namesOnly = (extra: any = {}) => ({
+      name: 'Names',
+      timeZone: 'UTC',
+      stages: [],
+      days: [
+        { label: 'Fri', date: '2026-06-05', sets: [] },
+        { label: 'Sat', date: '2026-06-06', sets: [] },
+      ],
+      lineup: [entry('lu-1', 'INFEKT')],
+      ...extra,
+    });
+
+    test('can publish with dated days, no stages and no sets: sets and stages only warn', () => {
+      const items = publishChecklist(config, namesOnly());
+      const map = byKey(items);
+      assert.deepEqual(map.stages, { key: 'stages', status: 'warn', label: 'No stages yet. Add them before you add sets.' });
+      assert.deepEqual(map.sets, {
+        key: 'sets',
+        status: 'warn',
+        label: 'No sets yet on Fri, Sat. Attendees see the announced acts until you add sets.',
+      });
+      assert.deepEqual(items.filter((item) => item.status === 'todo'), []);
+    });
+
+    test('still blocks without dated days', () => {
+      assert.equal(byKey(publishChecklist(config, namesOnly({ days: [] }))).days.status, 'todo');
+      const undated = namesOnly({ days: [{ label: 'Fri', date: '', sets: [] }] });
+      assert.equal(byKey(publishChecklist(config, undated)).days.status, 'todo');
+      assert.equal(byKey(publishChecklist(config, namesOnly({ days: [] }))).sets.status, 'todo');
+    });
+
+    test('keeps today\'s todo rules with no entries, with only cancelled entries, or when every entry has a set', () => {
+      const none = byKey(publishChecklist(config, namesOnly({ lineup: [] })));
+      assert.equal(none.stages.status, 'todo');
+      assert.equal(none.sets.status, 'todo');
+      const cancelledOnly = [entry('lu-1', 'INFEKT', { status: 'cancelled' })];
+      assert.equal(byKey(publishChecklist(config, namesOnly({ lineup: cancelledOnly }))).sets.status, 'todo');
+      const covered = namesOnly({
+        stages: [stage('a', 'Main')],
+        days: [
+          { label: 'Fri', date: '2026-06-05', sets: [set('s1', 'INFEKT', 'a', '20:00', '21:00')] },
+          { label: 'Sat', date: '2026-06-06', sets: [] },
+        ],
+      });
+      assert.equal(byKey(publishChecklist(config, covered)).sets.status, 'todo');
+    });
+
+    test('warns about an empty day while an act is still unscheduled, even when other days have sets', () => {
+      const partial = namesOnly({
+        stages: [stage('a', 'Main')],
+        lineup: [entry('lu-1', 'INFEKT'), entry('lu-2', 'Other')],
+        days: [
+          { label: 'Fri', date: '2026-06-05', sets: [set('s1', 'INFEKT', 'a', '20:00', '21:00')] },
+          { label: 'Sat', date: '2026-06-06', sets: [] },
+        ],
+      });
+      const map = byKey(publishChecklist(config, partial));
+      assert.equal(map.sets.status, 'warn');
+      assert.equal(map.sets.label, 'No sets yet on Sat. Attendees see the announced acts until you add sets.');
+      assert.equal(map.stages.status, 'done');
+    });
+  });
+
   test('warns, without blocking, about a same-stage overlap past midnight', () => {
     const festival = {
       name: 'Late',

@@ -15,6 +15,8 @@
  * Imports never delete sets. The lineup announcement is a separate, manual admin
  * action. A commit that adds a published festival's first set times sends the
  * one-time "set times are out" alert (reengagement.sendSetTimesOut).
+ * A commit and an undo also drop the festival list cache, and on a published festival emit
+ * festival:updated, so open clients reload and the announced lineup shows what the sets now cover.
  *
  * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, commit searches
  * Spotify once for the artists of new sets that have no link.
@@ -33,6 +35,8 @@ import {
 
 const SKIPPED_MESSAGE = 'Matches an existing set. Not updated because Update sets that match was off.';
 
+const DAY_SKIPPED_MESSAGE = 'Not changed. The file names another day than the stored set, and an import cannot move a set to another day.';
+
 const makeId = (prefix: string) => `${prefix}-${crypto.randomBytes(6).toString('hex')}`;
 
 /** One result entry per request row, plus the counts the admin sees after a commit. */
@@ -46,6 +50,7 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
     if (updated.has(i)) {
       return { row: r.row, status: 'updated' as const, setId: r.setId, artist, message: `Updated: ${r.changes.join('; ')}.` };
     }
+    if (r.skipped) return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: DAY_SKIPPED_MESSAGE };
     if (r.status === 'changed') return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: SKIPPED_MESSAGE };
     return { row: r.row, status: 'unchanged' as const, setId: r.setId, artist, message: 'No change.' };
   });
@@ -60,7 +65,11 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
     newDays: writes.newDays.length,
     spotifyMatched: writes.spotifyMatched,
     rows,
-    warnings: [...plan.rows.flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)), ...warnings],
+    // Rows that kept their stored day come first, so the admin sees what the import did not apply.
+    warnings: [
+      ...[...plan.rows].sort((a, b) => Number(!!b.skipped) - Number(!!a.skipped)).flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)),
+      ...warnings,
+    ],
   };
 }
 
@@ -80,6 +89,7 @@ export default function createLineupImportRoute(deps: any) {
     invalidateFestivalCache,
     getRequestIp,
     reengagement,
+    emitter,
   } = deps;
 
   const router = express.Router();
@@ -97,6 +107,13 @@ export default function createLineupImportRoute(deps: any) {
       .catch(() => {
         log.warn('spotify module not available');
       });
+  }
+
+  // Sets changed, so the list's lineupCount is stale and open clients must reload.
+  // A draft has no attendees, and the event goes to every socket.
+  function announceSetsChanged(festival: any) {
+    deps.invalidateFestivalListCache?.();
+    if (festival?.publishedAt) emitter?.festivalUpdated?.({ festival });
   }
 
   async function writeAuditRow(req: any, res: any, action: string, festivalId: string, details: any) {
@@ -196,6 +213,7 @@ export default function createLineupImportRoute(deps: any) {
       if (!outcome.committed) return sendSuccess(res, { committed: false, plan: outcome.plan });
 
       invalidateFestivalCache();
+      announceSetsChanged(festival);
       // The executor checks publish state, the marker and the times itself.
       reengagement
         ?.sendSetTimesOut?.(festivalId)
@@ -250,6 +268,8 @@ export default function createLineupImportRoute(deps: any) {
         const festivalId = sanitizeIdentifier(req.params.id, 100);
         const importId = sanitizeIdentifier(req.params.importId, 100);
         if (!festivalId || !importId) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
+        // Read before the undo commits: a failed read then fails the request while nothing has changed.
+        const festival = await stores.festivals.getById(festivalId);
         const outcome = await stores.lineupImports.undo(festivalId, importId);
         if ('notFound' in outcome) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
         if ('refused' in outcome) {
@@ -261,6 +281,7 @@ export default function createLineupImportRoute(deps: any) {
           );
         }
         invalidateFestivalCache();
+        announceSetsChanged(festival);
         log.info('lineup import undone', { festivalId, importId, ...outcome.result, kept: outcome.result.kept.length });
         await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORT_UNDONE, festivalId, {
           importId,

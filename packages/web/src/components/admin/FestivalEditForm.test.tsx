@@ -162,3 +162,23 @@ describe('FestivalEditForm engagement', () => {
     expect(screen.getByText("Couldn't load pick counts.")).toBeTruthy();
   });
 });
+
+describe('FestivalEditForm announced names', () => {
+  it('shows the block only when the festival carries a lineup, and a paste calls setFormData with it', () => {
+    const { expanded: _expanded, ...base } = lineup();
+    void _expanded;
+    const setFormData = vi.fn();
+    const { unmount } = render(<FestivalEditForm {...baseProps} formData={base} setFormData={setFormData} />);
+    expect(screen.queryByText('Announced names')).toBeNull();
+    unmount();
+
+    render(<FestivalEditForm {...baseProps} formData={{ ...base, lineup: [] }} setFormData={setFormData} />);
+    expect(screen.getByText('Announced names')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Paste names' }));
+    fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Names'), { target: { value: 'Kai\nMira' } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add' }));
+    const next = setFormData.mock.calls.at(-1)![0];
+    expect(next.lineup.map((e: { artists: { name: string }[] }) => e.artists[0]!.name)).toEqual(['Kai', 'Mira']);
+    expect(next.name).toBe('Fest');
+  });
+});

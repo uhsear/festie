@@ -88,6 +88,37 @@ describe('notifications/payload: ALLOWED_NOTIFICATION_TYPES', () => {
   });
 });
 
+describe('notifications/send: days_out', () => {
+  function sendWith(prefs: any) {
+    const messaging = { send: mock.fn(async () => 'msg-id') };
+    const svc = createSendService({
+      stores: {
+        notificationPrefs: { get: mock.fn(async () => prefs) },
+        deviceTokens: {
+          listByUser: mock.fn(async () => [{ token: 't'.repeat(40), platform: 'android' }]),
+          unregister: mock.fn(async () => {}),
+        },
+        notificationCounts: { getByUser: mock.fn(async () => []), increment: mock.fn(async () => {}) },
+        notificationLog: { insert: mock.fn(async () => null) },
+      },
+      config: { PUBLIC_ORIGIN: 'https://festie.us' },
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      messaging,
+      retryQueue: { enqueue() {} },
+    });
+    return svc.send({ userId: 'u1', type: 'days_out', title: 'WL days are out', body: 'b', data: {} });
+  }
+
+  it('is an allowed type and delivers when New lineups, days and set times is on', async () => {
+    assert.ok(ALLOWED_NOTIFICATION_TYPES.has('days_out'));
+    assert.equal((await sendWith({ lineupDrops: 1 })).sent, 1);
+  });
+
+  it('is filtered when lineupDrops is off', async () => {
+    assert.equal((await sendWith({ lineupDrops: 0 })).reason, 'user_disabled');
+  });
+});
+
 describe('notifications/send: set_times_out', () => {
   function sendWith(prefs: any) {
     const messaging = { send: mock.fn(async () => 'msg-id') };

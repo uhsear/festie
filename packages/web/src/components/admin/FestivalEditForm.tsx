@@ -10,8 +10,10 @@ import {
 } from '@festie/shared/utils';
 import type { FestivalIssue } from '@festie/shared/utils';
 import type { Artist } from '@festie/shared/types';
+import type { LineupDraft } from '@festie/shared/utils';
 import type { SetEngagementMap } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
+import AnnouncedNames from './AnnouncedNames';
 import DayEditor, { Day } from './DayEditor';
 import { Stage } from './SetEditor';
 
@@ -27,6 +29,8 @@ export interface Festival {
   updatedAt?: string;
   stages?: Stage[];
   days?: Day[];
+  /** The announced lineup. Absent from a festival that a pre-lineup server sent. */
+  lineup?: LineupDraft[];
   [key: string]: unknown;
 }
 
@@ -42,6 +46,8 @@ export interface FestivalEditFormProps {
   saving: boolean;
   /** The last save stored a weak geocode match for the venue. */
   venueGuessed?: boolean;
+  /** Days as last saved, for the lineup's save-summary checks. */
+  savedDays?: Day[];
   /** Picks and reminders per set id; undefined until loaded. */
   engagement?: SetEngagementMap;
   engagementError?: boolean;
@@ -73,6 +79,7 @@ export default function FestivalEditForm({
   issues,
   saving,
   venueGuessed,
+  savedDays,
   engagement,
   engagementError,
   onSave,
@@ -436,6 +443,17 @@ export default function FestivalEditForm({
           + Add Stage
         </button>
       </div>
+
+      {formData.lineup !== undefined && (
+        <AnnouncedNames
+          lineup={formData.lineup}
+          days={formData.days || []}
+          savedDays={savedDays}
+          separator={formData.b2bSeparator}
+          savedAt={formData.updatedAt}
+          onChange={(lineup) => setFormData({ ...formData, lineup })}
+        />
+      )}
 
       {/* Days */}
       <div className="border-t border-glass-border pt-4">

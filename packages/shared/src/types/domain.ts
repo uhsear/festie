@@ -104,8 +104,34 @@ export interface Festival {
    * backward-compatible — legacy festivals omit it and keep working.
    */
   mapConfig?: FestivalMapConfig | null;
+  /** The announced lineup, in billing order. Absent on servers from before migration 104. */
+  lineup?: LineupEntry[];
+  /** From the festival list only: set times out, days only, or lineup only. Null or absent when no acts are out. */
+  scheduleProgress?: 'times' | 'days' | 'lineup' | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/**
+ * One billing line of the announced lineup (festivals.lineup). Whether it is scheduled is derived
+ * from the sets (utils/lineupCover.ts), never stored.
+ */
+export interface LineupEntry {
+  /** Server-made (`lu-<uuid>`) or a client-sent id. Stable across renames and re-pastes. */
+  id: string;
+  /** 1-4 artists; B2B order is kept. */
+  artists: Artist[];
+  /** The name on the poster, when it differs from the joined artist names. */
+  displayName: string | null;
+  /** 1 is the top line of the poster; null means no tier. */
+  tier: number | null;
+  /** YYYY-MM-DD; null means "Day TBA". */
+  dayDate: string | null;
+  status: 'announced' | 'cancelled';
+  /** YYYY-MM-DD in the festival time zone. The server stamps it; clients never set it. */
+  announcedAt: string;
+  /** Sets linked by hand, at most 10. */
+  linkedSetIds: string[];
 }
 
 // SINGLE-SOURCING NOTE (Phase 3): NOT aliased to api.gen.ts

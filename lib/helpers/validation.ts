@@ -7,6 +7,7 @@
 
 import { sanitizeString, sanitizeIdentifier } from './sanitize';
 import { festivalStartMinutes, formatClock12, setMinuteRange } from '../time-zone';
+import { coverLineup, lineupIssues } from '../lineup';
 
 export function validateTime(value: any) {
   if (typeof value !== 'string' || !/^\d{2}:\d{2}$/.test(value)) return false;
@@ -101,7 +102,7 @@ export function checkPasswordPolicy(
 
 export interface FestivalIssueTarget {
   kind: 'festival' | 'stage' | 'day' | 'set';
-  field?: 'name' | 'color' | 'id' | 'label' | 'date' | 'artist' | 'stageId' | 'startTime' | 'endTime' | 'sets';
+  field?: 'name' | 'color' | 'id' | 'label' | 'date' | 'artist' | 'stageId' | 'startTime' | 'endTime' | 'sets' | 'lineup';
   stageId?: string;
   stageIndex?: number;
   dayIndex?: number;
@@ -243,6 +244,7 @@ export function validateFestivalIssues(config: any, body: any): FestivalIssue[] 
     }
     dayIndex += 1;
   }
+  for (const issue of lineupIssues(body.lineup)) add(issue.code, issue.message, { kind: 'festival', field: 'lineup' });
   return issues;
 }
 
@@ -436,9 +438,13 @@ export function publishChecklist(config: any, festival: any): ChecklistItem[] {
     ? { key: 'timeZone', status: 'done', label: `Time zone: ${festival.timeZone}` }
     : { key: 'timeZone', status: 'todo', label: "Choose the festival's time zone." };
 
+  const lineup: any[] = Array.isArray(festival?.lineup) ? festival.lineup : [];
+  // A names-only festival can publish: announced acts need no stage, day split or set yet.
   const stagesItem: ChecklistItem = stages.length > 0
     ? { key: 'stages', status: 'done', label: `${stages.length} stage(s)` }
-    : { key: 'stages', status: 'todo', label: 'Add at least one stage.' };
+    : lineup.length > 0 && sets.length === 0
+      ? { key: 'stages', status: 'warn', label: 'No stages yet. Add them before you add sets.' }
+      : { key: 'stages', status: 'todo', label: 'Add at least one stage.' };
 
   const undated = dayLabels((day) => !/^\d{4}-\d{2}-\d{2}$/.test(String(day?.date ?? '')));
   let daysItem: ChecklistItem = { key: 'days', status: 'done', label: `${days.length} day(s), each with a date` };
@@ -447,13 +453,22 @@ export function publishChecklist(config: any, festival: any): ChecklistItem[] {
 
   const emptyDays = dayLabels((day) => !(Array.isArray(day?.sets) && day.sets.length > 0));
   // With no days at all there is no label to name, so the copy says "each day".
+  const hasUnscheduledActs = Object.values(coverLineup(lineup, days, festival?.b2bSeparator)).some(
+    (cover) => cover.state === 'announced',
+  );
   const setsItem: ChecklistItem = days.length > 0 && !emptyDays
     ? { key: 'sets', status: 'done', label: `${sets.length} set(s)` }
-    : {
-        key: 'sets',
-        status: 'todo',
-        label: `Add sets to ${emptyDays || 'each day'}. Import the lineup or add them by hand.`,
-      };
+    : days.length > 0 && hasUnscheduledActs
+      ? {
+          key: 'sets',
+          status: 'warn',
+          label: `No sets yet on ${emptyDays}. Attendees see the announced acts until you add sets.`,
+        }
+      : {
+          key: 'sets',
+          status: 'todo',
+          label: `Add sets to ${emptyDays || 'each day'}. Import the lineup or add them by hand.`,
+        };
 
   const issues = validateFestivalIssues(config, festival);
   const errors: ChecklistItem = issues.length === 0

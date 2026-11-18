@@ -475,6 +475,79 @@
               "additionalProperties": false
             }
           },
+          "lineup": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "artists": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "links": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "displayName": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "tier": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "dayDate": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "announced",
+                    "cancelled"
+                  ]
+                },
+                "announcedAt": {
+                  "type": "string"
+                },
+                "linkedSetIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "artists",
+                "displayName",
+                "tier",
+                "dayDate",
+                "status",
+                "announcedAt",
+                "linkedSetIds"
+              ],
+              "additionalProperties": false
+            }
+          },
           "slug": {
             "nullable": true,
             "type": "string"
@@ -888,6 +961,7 @@
           "location",
           "stages",
           "days",
+          "lineup",
           "mapConfig",
           "createdAt",
           "updatedAt"
@@ -1475,6 +1549,79 @@
               "additionalProperties": false
             }
           },
+          "lineup": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "artists": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "links": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "displayName": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "tier": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "dayDate": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "announced",
+                    "cancelled"
+                  ]
+                },
+                "announcedAt": {
+                  "type": "string"
+                },
+                "linkedSetIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "artists",
+                "displayName",
+                "tier",
+                "dayDate",
+                "status",
+                "announcedAt",
+                "linkedSetIds"
+              ],
+              "additionalProperties": false
+            }
+          },
           "slug": {
             "nullable": true,
             "type": "string"
@@ -1490,7 +1637,8 @@
           "createdAt",
           "updatedAt",
           "stages",
-          "days"
+          "days",
+          "lineup"
         ],
         "additionalProperties": false
       },
@@ -1810,6 +1958,18 @@
           "dayCount": {
             "type": "number"
           },
+          "lineupCount": {
+            "type": "number"
+          },
+          "scheduleProgress": {
+            "nullable": true,
+            "type": "string",
+            "enum": [
+              "times",
+              "days",
+              "lineup"
+            ]
+          },
           "startDate": {
             "nullable": true,
             "type": "string"
@@ -1829,6 +1989,7 @@
           "location",
           "stageCount",
           "dayCount",
+          "lineupCount",
           "startDate",
           "endDate"
         ],
@@ -4406,7 +4567,7 @@
         ],
         "responses": {
           "200": {
-            "description": "{ festivalName, recipients }"
+            "description": "{ festivalName, recipients, followers, priorAttendees, matchedFestivalNames, emailRecipients, emailCut, emailOff }"
           },
           "404": {
             "description": "Festival not found"
@@ -4442,6 +4603,72 @@
           },
           "404": {
             "description": "Festival not found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/festivals/{id}/days-announcement": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Dry run for Announce days: acts with a day, who would hear, who gets no email",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ festivalName, actsWithDay, actsTotal, recipients, audience, emailRecipients, emailCut, emailOff, reason? }"
+          },
+          "404": {
+            "description": "Festival not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Send the days announcement push, inbox row and email to followers and profile holders",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ queued: true, recipients, emailRecipients }"
+          },
+          "400": {
+            "description": "No act has a day, or everyone has already heard"
+          },
+          "404": {
+            "description": "Festival not found"
+          },
+          "409": {
+            "description": "The festival is a draft, or its set times are already out"
           }
         }
       }

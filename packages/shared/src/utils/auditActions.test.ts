@@ -14,8 +14,8 @@ describe('auditActionLabel', () => {
     expect(auditActionLabel(action)).toBe(label);
   });
 
-  it('has the 25 table labels', () => {
-    expect(Object.keys(AUDIT_ACTION_LABELS)).toHaveLength(25);
+  it('has the 26 table labels', () => {
+    expect(Object.keys(AUDIT_ACTION_LABELS)).toHaveLength(26);
     expect(AUDIT_ACTION_LABELS['user.role.revoked']).toBe('Role removed');
   });
 
