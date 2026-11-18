@@ -40,10 +40,12 @@ export async function loadInvitePreview(
   // T54: a locked crew shows only its status, so no member read happens.
   if (crew.inviteLocked) return { status: 'locked' };
 
-  const [members, festival] = await Promise.all([
+  const [members, festivalRow] = await Promise.all([
     stores.crews.getMembers(crew.id),
     crew.festivalId ? getFestivalById(crew.festivalId) : null,
   ]);
+  // A draft festival is not public: the invite then shows no festival.
+  const festival = festivalRow?.publishedAt ? festivalRow : null;
   const owner = members.find((m: any) => m.role === 'owner');
   // Same derivation as the festival list (routes/festivals.ts): the festivals
   // table has no start/end columns, so the range comes from the day dates.
@@ -61,7 +63,7 @@ export async function loadInvitePreview(
       memberCount: members.length,
       maxMembers,
       spotsLeft: Math.max(0, maxMembers - members.length),
-      festivalId: crew.festivalId || null,
+      festivalId: festival ? crew.festivalId : null,
       festivalName: festival?.name || null,
       startDate: dates[0] || null,
       endDate: dates[dates.length - 1] || null,
