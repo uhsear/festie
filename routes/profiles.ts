@@ -189,6 +189,7 @@ export default function createProfilesRoutes(deps: any) {
       // Build update fields
       const updateFields: any = {};
       if (nextPicks !== undefined) updateFields.picks = nextPicks;
+      if (nextPicks !== undefined && req.validatedBody?.pickRemove) updateFields.pickRemove = req.validatedBody.pickRemove;
       if (nextNotes !== undefined) updateFields.notes = nextNotes;
       if (nextReminders !== undefined) updateFields.reminders = nextReminders;
       if (interestAdd !== undefined) updateFields.interestAdd = interestAdd;
