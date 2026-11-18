@@ -87,6 +87,7 @@ export default function createProfilesRoutes(deps: any) {
       if (!festival?.publishedAt) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
       const result = await ensureFestivalProfile(deps, req.user, festivalId);
+      if (result.error === 'festival-unavailable') return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       if (result.error === 'limit') {
         return sendError(res, 400, 'Maximum profiles reached', ErrorCodes.MAX_LIMIT_REACHED);
       }
@@ -215,7 +216,9 @@ export default function createProfilesRoutes(deps: any) {
       // A mark on an act that sets already cover converts at once, after the response.
       if (interestAdd?.length && festival) {
         const cover = coverLineup(festival.lineup, festival.days || [], festival.b2bSeparator || 'b2b');
-        if (interestAdd.some((id) => cover[id]?.state === 'scheduled')) await deps.interestConversion?.convert(festival.id);
+        // Nothing to convert when every scheduled act the writer added is already converted.
+        const needsConversion = interestAdd.some((id) => cover[id]?.state === 'scheduled' && profile.interests?.[id]?.state !== 'converted');
+        if (needsConversion) await deps.interestConversion?.convert(festival.id);
       }
       return;
     } catch (error: any) {

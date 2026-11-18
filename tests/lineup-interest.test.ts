@@ -2,7 +2,7 @@
 // converted, which picks are added, when a converted mark reopens and when a profile is full.
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { planInterestConversion, type LineupCover } from '../lib/lineup';
+import { createInterestConversion, planInterestConversion, type LineupCover } from '../lib/lineup';
 
 const NOW = '2027-01-05T12:00:00.000Z';
 const cover = (state: LineupCover['state'], setIds: string[] = []): LineupCover => ({ setIds, state, dayIndex: 0 });
@@ -137,5 +137,28 @@ describe('planInterestConversion', () => {
     });
     assert.equal(Object.keys(result.added).length, 10);
     assert.equal(result.marks.a?.sets?.length, 10);
+  });
+});
+
+describe('createInterestConversion coalescing', () => {
+  test('concurrent converts for one festival run at most twice: one in flight plus one trailing', async () => {
+    let runs = 0;
+    const pool = {
+      connect: async () => ({
+        query: async (sql: string) => {
+          if (sql.includes('FOR UPDATE')) {
+            runs++;
+            await new Promise((resolve) => setTimeout(resolve, 20));
+          }
+          return { rows: [] };
+        },
+        release() {},
+      }),
+    };
+    const { convert } = createInterestConversion({ pool, stores: {}, emitter: {}, log: { warn() {} }, config: {} });
+    await Promise.all(Array.from({ length: 10 }, () => convert('fest-1')));
+    assert.equal(runs, 2);
+    await convert('fest-1');
+    assert.equal(runs, 3, 'a later call after the burst starts a fresh run');
   });
 });

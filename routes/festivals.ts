@@ -2,10 +2,11 @@
 // All Rights Reserved. See the LICENSE file.
 
 import crypto from 'crypto';
-import { diffCancelledEntries, diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
+import { planPickerAlerts } from '../lib/picker-alerts.js';
+import { diffCancelledEntries } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
-import { coverLineup } from '../lib/lineup.js';
+import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 
 export default function createFestivalsRoutes(deps: any) {
   const {
@@ -36,7 +37,6 @@ export default function createFestivalsRoutes(deps: any) {
     validateParams,
     invalidateFestivalCache,
     geocodeVenue,
-    reengagement,
   } = deps;
 
   const router = express.Router();
@@ -162,14 +162,6 @@ export default function createFestivalsRoutes(deps: any) {
     });
   }
 
-  // Fire and forget after the write. A rejection must not become an unhandled
-  // rejection, which shuts the server down (server.ts).
-  function notifySetTimesOut(festivalId: string) {
-    reengagement
-      ?.sendSetTimesOut?.(festivalId)
-      ?.catch((err: any) => log.warn('set_times_out notify failed', { festivalId, error: err?.message }));
-  }
-
   const setsOf = (festival: any): any[] => (festival?.days || []).flatMap((d: any) => d.sets || []);
 
   // Field-level before and after for the festival.updated audit row. Lists count only.
@@ -264,6 +256,8 @@ export default function createFestivalsRoutes(deps: any) {
             lineupCount: Object.values(coverLineup(festival.lineup ?? [], festival.days ?? [], festival.b2bSeparator)).filter(
               (cover) => cover.state === 'announced',
             ).length,
+            // How far the schedule has come: set times, days only, lineup only, or nothing yet.
+            scheduleProgress: scheduleProgress(festival),
             startDate: dates[0] || null,
             endDate: dates[dates.length - 1] || null,
             slug: festival.slug ?? null,
@@ -302,12 +296,12 @@ export default function createFestivalsRoutes(deps: any) {
       const setId = String(req.params.setId || '');
       if (!setId) return sendError(res, 400, 'Set ID required', ErrorCodes.INVALID_INPUT);
       const result = await stores.pool.query(
-        `SELECT fs.festival_id FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
+        `SELECT fs.festival_id, (f.published_at IS NOT NULL) AS published FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
          WHERE fs.id = $1 AND f.deleted_at IS NULL AND (f.published_at IS NOT NULL OR $2::boolean) LIMIT 1`,
         [setId, isAdminReq(req)],
       );
       if (!result.rows.length) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
-      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Cache-Control', result.rows[0].published ? 'public, max-age=300' : 'private, no-store');
       return sendSuccess(res, { festivalId: result.rows[0].festival_id });
     } catch (error: any) {
       log.error('locate-set failed', { error: error.message });
@@ -517,22 +511,12 @@ export default function createFestivalsRoutes(deps: any) {
             )
           : new Map();
 
-        // Only a moved or removed set alerts anyone, and only the people who picked it.
-        let changes = daysSent ? diffPickedSchedule(existingFestival, nextFestival) : [];
-        // The first timed save of a published festival sends "set times are out" to
-        // everyone, so its TBA-to-time changes do not also send a "moved" alert.
-        const hasTimes = (f: any) => setsOf(f).some((set: any) => set.startTime);
-        const timesOut =
-          daysSent &&
-          !!existingFestival.publishedAt &&
-          !hasTimes(existingFestival) &&
-          hasTimes(nextFestival) &&
-          (await stores.festivals.getSetTimesOutAt(existingFestival.id)) === null;
-        if (timesOut) changes = changes.filter((change) => !isTbaToTime(change));
-        // Read pickers before the update: it deletes picks on removed sets. The confirm and the send share this map.
-        const pickersBySet: Map<string, string[]> = changes.length
-          ? await stores.profiles.pickersBySet(existingFestival.id, changes.map((change) => change.setId))
-          : new Map();
+        // Only a moved or removed set, or a set timed on an already released date, alerts anyone, and only
+        // the people who picked it. No save sends the festival-wide set-times alert: the admin releases it per date.
+        // The pickers are read before the update, which deletes picks on removed sets. The confirm and the send share this map.
+        const { changes, pickersBySet } = daysSent
+          ? await planPickerAlerts({ stores, before: existingFestival, after: nextFestival })
+          : { changes: [], pickersBySet: new Map<string, string[]>() };
 
         let removedIds: string[] = [];
         let picks = 0;
@@ -589,6 +573,7 @@ export default function createFestivalsRoutes(deps: any) {
         }
 
         const festival = await stores.festivals.update(req.validatedParams.id, {
+          expectedUpdatedAt: body.expectedUpdatedAt,
           name: nextFestival.name,
           location: nextFestival.location,
           b2bSeparator: nextFestival.b2bSeparator,
@@ -623,8 +608,6 @@ export default function createFestivalsRoutes(deps: any) {
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
         if (notified) void emitter.scheduleChanged({ festival, changes: [...changes, ...cancelled], pickersBySet, interestedByEntry });
-        // The executor checks publish state, the marker and the times itself.
-        if (daysSent) notifySetTimesOut(festival.id);
         // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
         if (daysSent || body.lineup !== undefined || body.b2bSeparator !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
@@ -639,6 +622,14 @@ export default function createFestivalsRoutes(deps: any) {
           (await fillVenueCoords(festival.id, nextFestival.location));
         return sendSuccess(res, { ...festival, scheduleNotice, ...(venueGuessed ? { venueGuessed } : {}) });
       } catch (error: any) {
+        if (error.code === 'FESTIVAL_CHANGED') {
+          return sendError(
+            res,
+            409,
+            'This festival changed since you opened it. Reload it, then make your change again.',
+            ErrorCodes.FESTIVAL_CHANGED,
+          );
+        }
         if (sendIdClash(res, error)) return;
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
@@ -686,7 +677,6 @@ export default function createFestivalsRoutes(deps: any) {
         });
         log.info('festival:published', { festivalId: festival.id, name: festival.name });
         emitter.festivalCreated({ id: festival.id, name: festival.name });
-        notifySetTimesOut(festival.id);
         return sendSuccess(res, { publishedAt: row.publishedAt, checklist });
       } catch (error: any) {
         log.error('festival publish failed', { error: error.message, festivalId: req.validatedParams?.id });

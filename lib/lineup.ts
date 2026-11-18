@@ -16,16 +16,24 @@ export const MAX_LINKED_SETS = 10;
 
 const KEY_SEPARATOR = '\u0001';
 
-/** Folds a name for matching: "Zed's Dead" = "Zeds Dead", "roi*" = "roi", "The X" = "X". */
-export function lineupNameKey(name: string): string {
-  const folded = String(name ?? '')
+/** The fold core: accents, case, curly quotes and spacing only. "The X" and "X" stay apart, so imports never merge them. */
+export function lineupFoldKey(name: string): string {
+  return String(name ?? '')
     .normalize('NFKD')
     // Marks go only after Latin, Greek or Cyrillic letters, so Japanese and Indic marks keep names apart.
     // Explicit ranges, no lookbehind or Script= escapes: this runs in the mobile bundle too.
     .replace(/([A-Za-z\u00c0-\u024f\u1e00-\u1eff\u0370-\u03ff\u1f00-\u1fff\u0400-\u04ff])\p{M}+/gu, '$1')
     .toLowerCase()
+    .replace(/[’ʼ]/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Folds a name for matching: "Zed's Dead" = "Zeds Dead", "roi*" = "roi", "The X" = "X". */
+export function lineupNameKey(name: string): string {
+  const folded = lineupFoldKey(name)
     .replace(/&/g, ' and ')
-    .replace(/['’ʼ.]/g, '')
+    .replace(/['.]/g, '')
     .replace(/[^\p{L}\p{N}\p{M}]+/gu, ' ')
     .trim();
   if (!folded) return String(name ?? '').trim().toLowerCase();
@@ -195,6 +203,52 @@ export function coverLineup(lineup: any[], days: any[], separator: string): Reco
   return cover;
 }
 
+export interface ActsDayCoverage {
+  /** Acts that are not cancelled, plus the sets that no listed act covers. */
+  actsTotal: number;
+  /** Acts on the timetable or with a day of their own. Every set sits on a day. */
+  actsWithDay: number;
+}
+
+/** How many acts have a day. A set that covers an act counts once, as that act. */
+export function actsDayCoverage(festival: any): ActsDayCoverage {
+  const days: any[] = festival?.days ?? [];
+  const lineup: any[] = Array.isArray(festival?.lineup) ? festival.lineup : [];
+  const cover = coverLineup(lineup, days, festival?.b2bSeparator || 'b2b');
+  const coveredSetIds = new Set<string>();
+  let actsTotal = 0;
+  let actsWithDay = 0;
+  for (const entry of lineup) {
+    const placed = cover[entry.id];
+    if (!placed) continue;
+    placed.setIds.forEach((id) => coveredSetIds.add(id));
+    if (placed.state === 'cancelled') continue;
+    actsTotal += 1;
+    if (placed.state === 'scheduled' || placed.dayIndex >= 0) actsWithDay += 1;
+  }
+  for (const day of days) {
+    for (const set of day?.sets ?? []) {
+      if (coveredSetIds.has(set.id)) continue;
+      actsTotal += 1;
+      actsWithDay += 1;
+    }
+  }
+  return { actsTotal, actsWithDay };
+}
+
+export type ScheduleProgress = 'times' | 'days' | 'lineup';
+
+/** How far a festival's schedule has come, for the picker badge. Null when it has no acts at all. */
+export function scheduleProgress(festival: any): ScheduleProgress | null {
+  const timed = (festival?.days ?? []).some((day: any) =>
+    (day?.sets ?? []).some((set: any) => typeof set?.startTime === 'string' && set.startTime !== ''),
+  );
+  if (timed) return 'times';
+  const { actsTotal, actsWithDay } = actsDayCoverage(festival);
+  if (actsWithDay > 0) return 'days';
+  return actsTotal > 0 ? 'lineup' : null;
+}
+
 export const MAX_INTEREST_SETS = 10;
 // A release-day import can convert thousands of profiles; announce reads them this many at a time.
 const ANNOUNCE_CHUNK = 50;
@@ -334,8 +388,7 @@ export function createInterestConversion({ pool, stores, emitter, log, config }:
     return changedIds;
   }
 
-  /** Resolves to the number of profiles whose marks changed. */
-  async function convert(festivalId: string): Promise<number> {
+  async function convertOnce(festivalId: string): Promise<number> {
     let changedIds: string[];
     try {
       changedIds = await withTransaction(pool, (client) => convertInTransaction(client, festivalId));
@@ -345,6 +398,37 @@ export function createInterestConversion({ pool, stores, emitter, log, config }:
     }
     await announce(changedIds);
     return changedIds.length;
+  }
+
+  // shortcut: in-flight state is per process (PM2 runs one instance), upgrade to an advisory lock if the app scales out.
+  const running = new Map<string, { dirty: boolean; done: Promise<number> }>();
+
+  /**
+   * Resolves to the number of profiles whose marks changed. Calls for one festival coalesce: while a run
+   * is in flight, further calls mark it dirty and share one trailing run, so a burst costs at most two
+   * transactions on the festival lock.
+   */
+  function convert(festivalId: string): Promise<number> {
+    const active = running.get(festivalId);
+    if (active) {
+      active.dirty = true;
+      return active.done;
+    }
+    const state = { dirty: false, done: Promise.resolve(0) };
+    state.done = (async () => {
+      let changed = 0;
+      try {
+        do {
+          state.dirty = false;
+          changed += await convertOnce(festivalId);
+        } while (state.dirty);
+      } finally {
+        running.delete(festivalId);
+      }
+      return changed;
+    })();
+    running.set(festivalId, state);
+    return state.done;
   }
 
   return { convert, announce };

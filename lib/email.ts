@@ -257,11 +257,13 @@ function reengagementHeaders(config: any) {
 }
 
 // Footer + plain-text line naming the notification setting that gates this email.
+// CAN-SPAM needs a postal address; it comes from config because the repo is public.
 function _reengagementFooter(label: string, config: any) {
   const url = `${_origin(config)}/account`;
+  const address = typeof config?.EMAIL_POSTAL_ADDRESS === 'string' ? config.EMAIL_POSTAL_ADDRESS.trim() : '';
   return {
-    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${url}" style="color:rgba(255,255,255,0.5)">Turn it off</a>.`,
-    text: `You get this email because "${label}" is on in your Festie notification settings. Turn it off: ${url}`,
+    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${url}" style="color:rgba(255,255,255,0.5)">Turn it off</a>.${address ? `<br>${escapeHtml(address)}` : ''}`,
+    text: `You get this email because "${label}" is on in your Festie notification settings. Turn it off: ${url}${address ? `\n${address}` : ''}`,
   };
 }
 
@@ -286,37 +288,74 @@ export async function sendWrapReadyEmail({ to, username, festivalName, festivalI
 /**
  * "The lineup just dropped" — deep-links to the festival page.
  */
-export async function sendLineupDropEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
+export async function sendLineupDropEmail({ to, username, festivalName, festivalId, hasTimes = true, config, log, _client }: any) {
   const origin = _origin(config);
   const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'a festival you love';
+  // With no timed set there is nothing to pick yet, so the mail only promises a later alert.
+  const sentence = hasTimes
+    ? 'is out. Start picking your sets before tickets move.'
+    : "is out. See who is playing. We'll tell you when set times are out.";
   const bodyHtml = `
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The lineup for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> is out. Start picking your sets before tickets move.</p>
+    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The lineup for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> ${escapeHtml(sentence)}</p>
     ${_buttonHtml(festivalUrl, 'See the lineup')}
     ${_urlFallback(festivalUrl)}`;
   const footer = _reengagementFooter('New lineups', config);
   const html = _wrapTemplate('New Lineup', bodyHtml, footer.html);
-  const text = `Hey ${username || 'there'},\n\nThe lineup for ${name} just dropped.\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `${name} lineup just dropped`, html, text, headers: reengagementHeaders(config), config, log, _client });
+  const text = `Hey ${username || 'there'},\n\nThe lineup for ${name} ${hasTimes ? 'just dropped.' : sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
+  const subject = hasTimes ? `${name} lineup just dropped` : `${name} lineup is out`;
+  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client });
 }
 
 /**
- * "{Festival} set times are out" — deep-links to the festival page.
+ * "{Festival} days are out" — sent from the admin "Announce days" action, before any set has a time.
  */
-export async function sendSetTimesOutEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
+export async function sendDaysOutEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
   const origin = _origin(config);
   const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'Your festival';
+  const sentence = 'See who plays which day. Set times come later.';
   const bodyHtml = `
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
-    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The set times for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. Pick your sets and spot clashes before the weekend.</p>
+    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The days for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. ${sentence}</p>
+    ${_buttonHtml(festivalUrl, 'See the lineup')}
+    ${_urlFallback(festivalUrl)}`;
+  const footer = _reengagementFooter('New lineups, days and set times', config);
+  const html = _wrapTemplate('Days Are Out', bodyHtml, footer.html);
+  const text = `Hey ${username || 'there'},\n\nThe days for ${name} are out. ${sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
+  return sendEmail({ to, subject: `${name} days are out`, html, text, headers: reengagementHeaders(config), config, log, _client });
+}
+
+/** "Friday", "Friday and Saturday", "Fri, Sat and Sun". The set-times push and email share it. */
+export function joinDayLabels(labels: string[]): string {
+  if (labels.length <= 1) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
+
+/**
+ * "{Festival} set times are out" — deep-links to the festival page. `dayLabels` names the released days
+ * ("Friday and Saturday"); without them the mail says "the set times". `note` is the admin's own line.
+ */
+export async function sendSetTimesOutEmail({ to, username, festivalName, festivalId, dayLabels = [], note, config, log, _client }: any) {
+  const origin = _origin(config);
+  const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
+  const name = festivalName || 'Your festival';
+  const days = joinDayLabels(dayLabels);
+  const the = days ? `The ${days} set times` : 'The set times';
+  const noteHtml = note ? `<p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(note)}</p>` : '';
+  const bodyHtml = `
+    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username || 'there')}</strong>,</p>
+    <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(the)} for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. Pick your sets and spot clashes before the weekend.</p>
+    ${noteHtml}
     ${_buttonHtml(festivalUrl, 'See the schedule')}
     ${_urlFallback(festivalUrl)}`;
   const footer = _reengagementFooter('New lineups and set times', config);
   const html = _wrapTemplate('Set Times Are Out', bodyHtml, footer.html);
-  const text = `Hey ${username || 'there'},\n\nThe set times for ${name} are out. Pick your sets and spot clashes before the weekend.\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `${name} set times are out`, html, text, headers: reengagementHeaders(config), config, log, _client });
+  const noteText = note ? `\n\n${note}` : '';
+  const text = `Hey ${username || 'there'},\n\n${the} for ${name} are out. Pick your sets and spot clashes before the weekend.${noteText}\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
+  const subject = days ? `${name}: ${days} set times are out` : `${name} set times are out`;
+  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client });
 }
 
 /**

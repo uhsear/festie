@@ -372,6 +372,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   OAUTH_CONFIG_MISSING: { google: string[]; apple: string[] };
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
+  EMAIL_POSTAL_ADDRESS: string;
   REFRESH_TOKEN_TTL: number;
   MAX_LOGIN_FAILURES: number;
   LOGIN_LOCKOUT_MS: number;
@@ -717,6 +718,8 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     // that passed '' to disable sending got the real key and hit the provider.
     RESEND_API_KEY: overrides.RESEND_API_KEY ?? process.env.RESEND_API_KEY ?? '',
     EMAIL_FROM: overrides.EMAIL_FROM || process.env.EMAIL_FROM || 'Festie <no-reply@festie.us>',
+    // CAN-SPAM postal address for the re-engagement footer. Kept out of the public repo; unset omits the line.
+    EMAIL_POSTAL_ADDRESS: (overrides.EMAIL_POSTAL_ADDRESS ?? process.env.EMAIL_POSTAL_ADDRESS ?? '').trim(),
 
     REFRESH_TOKEN_TTL: readInt(
       overrides.REFRESH_TOKEN_TTL || process.env.REFRESH_TOKEN_TTL,

@@ -30,7 +30,10 @@ const fred = { id: 'set-2', artist: 'Fred again..', stageId: 'mojave', startTime
 
 describe('diffPickedSchedule', () => {
   it('reports a set moved by time', () => {
-    const changes = diffPickedSchedule(festival([peggy]), festival([{ ...peggy, startTime: '23:30', endTime: '00:30' }]));
+    const changes = diffPickedSchedule(
+      festival([peggy]),
+      festival([{ ...peggy, startTime: '23:30', endTime: '00:30' }]),
+    );
     assert.equal(changes.length, 1);
     assert.equal(changes[0]!.kind, 'moved');
     assert.equal(changes[0]!.setId, 'set-1');
@@ -78,6 +81,15 @@ describe('diffPickedSchedule', () => {
     assert.deepEqual(diffPickedSchedule(before, after), []);
   });
 
+  it('ignores a renamed day and a renamed stage when the date, stage and time stay', () => {
+    const dated = (label: string, stageName: string) => ({
+      ...festival([]),
+      stages: [{ id: 'sahara', name: stageName }],
+      days: [{ date: '2026-04-11', label, sets: [peggy] }],
+    });
+    assert.deepEqual(diffPickedSchedule(dated('Sat', 'Sahara'), dated('Saturday', 'Sahara Stage')), []);
+  });
+
   it('ignores a map change and a link change', () => {
     const after = { ...festival([{ ...peggy, linkUrl: 'https://open.spotify.com/x' }]), mapConfig: { imageUrl: 'x' } };
     assert.deepEqual(diffPickedSchedule(festival([peggy]), after), []);
@@ -86,9 +98,11 @@ describe('diffPickedSchedule', () => {
 
 describe('buildSchedulePushes', () => {
   const slot = (startTime: string | null, stageName: string | null = 'Sahara', dayLabel = 'Sat') => ({
+    dayKey: dayLabel,
     dayLabel,
     startTime,
     endTime: null,
+    stageId: stageName && stageName.toLowerCase(),
     stageName,
   });
   const moved = (setId: string, artist: string) => ({
@@ -185,19 +199,51 @@ describe('buildSchedulePushes', () => {
 
   it('keeps the body within 200 characters', () => {
     const long = 'X'.repeat(300);
-    const [push] = buildSchedulePushes('Coachella', [moved('a', long), moved('b', long)], new Map([
-      ['a', ['u1']],
-      ['b', ['u1']],
-    ]));
+    const [push] = buildSchedulePushes(
+      'Coachella',
+      [moved('a', long), moved('b', long)],
+      new Map([
+        ['a', ['u1']],
+        ['b', ['u1']],
+      ]),
+    );
     assert.ok(push!.body.length <= 200);
   });
 });
 
+describe('buildSchedulePushes set-time copy', () => {
+  const tba = { ...peggy, startTime: null, endTime: null };
+  const push = (before: any, after: any) =>
+    buildSchedulePushes(
+      'Coachella',
+      diffPickedSchedule(festival([before]), festival([after])),
+      new Map([['set-1', ['u1']]]),
+    );
+
+  it('titles a TBA-to-time change "has a set time" and gives the new slot only', () => {
+    assert.deepEqual(push(tba, peggy), [
+      { userId: 'u1', title: 'Peggy Gou has a set time', body: 'Sat 10:00 PM at Sahara.', setId: 'set-1' },
+    ]);
+  });
+
+  it('keeps the moved copy when the set also changes stage', () => {
+    const [one] = push(tba, { ...peggy, stageId: 'mojave' });
+    assert.equal(one!.title, 'Peggy Gou moved');
+  });
+});
+
 describe('buildSchedulePushes shift form', () => {
-  const at = (startTime: string | null, endTime: string | null = null, stageName: string | null = 'Sahara', dayLabel = 'Sat') => ({
+  const at = (
+    startTime: string | null,
+    endTime: string | null = null,
+    stageName: string | null = 'Sahara',
+    dayLabel = 'Sat',
+  ) => ({
+    dayKey: dayLabel,
     dayLabel,
     startTime,
     endTime,
+    stageId: stageName && stageName.toLowerCase(),
     stageName,
   });
   const change = (setId: string, before: any, after: any) => ({
@@ -224,8 +270,11 @@ describe('buildSchedulePushes shift form', () => {
 
   it('sends the shift only to the user who picked shifted sets', () => {
     // 20 sets, 30 minutes apart from 12:00, all shifted +30.
-    const hhmm = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-    const changes = Array.from({ length: 20 }, (_, i) => change(`s${i}`, at(hhmm(720 + i * 30)), at(hhmm(750 + i * 30))));
+    const hhmm = (minutes: number) =>
+      `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+    const changes = Array.from({ length: 20 }, (_, i) =>
+      change(`s${i}`, at(hhmm(720 + i * 30)), at(hhmm(750 + i * 30))),
+    );
     const pickers = new Map([
       ['s0', ['A']],
       ['s5', ['A']],
@@ -282,6 +331,16 @@ describe('buildSchedulePushes shift form', () => {
     assert.equal(titleOf(more), '2 of your picks changed');
   });
 
+  it('keeps the shift title when the stage and day are renamed in the same save', () => {
+    const renamed = (startTime: string) => ({
+      ...at(startTime),
+      stageName: 'Sahara Stage',
+      dayLabel: 'Saturday',
+    });
+    const changes = [change('a', at('20:00'), renamed('20:30')), change('b', at('21:00'), renamed('21:30'))];
+    assert.equal(titleOf(changes), 'Sahara Stage: 2 of your picks moved +30 min');
+  });
+
   it('reads a backward shift with a minus sign', () => {
     const changes = [change('a', at('22:00', '23:00'), at('21:45', '22:45')), change('b', at('23:00'), at('22:45'))];
     assert.equal(titleOf(changes), 'Sahara: 2 of your picks moved -15 min');
@@ -306,6 +365,32 @@ describe('isTbaToTime', () => {
 
   it('is true when a TBA set gets its first time on the same day and stage', () => {
     assert.equal(isTbaToTime(only([tba], [peggy])), true);
+  });
+
+  it('is true when the day label and stage name are renamed in the same save', () => {
+    const dated = (label: string, stageName: string, set: any) => ({
+      ...festival([]),
+      stages: [{ id: 'sahara', name: stageName }],
+      days: [{ date: '2026-04-11', label, sets: [set] }],
+    });
+    const change = diffPickedSchedule(dated('Sat', 'Sahara', tba), dated('Saturday', 'Sahara Stage', peggy))[0]!;
+    assert.equal(isTbaToTime(change), true);
+  });
+
+  it('is false when a day without a date is renamed, because its label is its identity', () => {
+    const undated = (label: string, set: any) => ({ ...festival([]), days: [{ label, sets: [set] }] });
+    const change = diffPickedSchedule(undated('Sat', tba), undated('Saturday', peggy))[0]!;
+    assert.equal(isTbaToTime(change), false);
+  });
+
+  it('is false when a set moves from a placeholder stage to a real stage and gains a time', () => {
+    const before = {
+      ...festival([]),
+      stages: [{ id: 'stage-tba', name: 'TBA' }],
+      days: [{ label: 'Sat', sets: [{ ...tba, stageId: 'stage-tba' }] }],
+    };
+    const after = { ...festival([]), days: [{ label: 'Sat', sets: [peggy] }] };
+    assert.equal(isTbaToTime(diffPickedSchedule(before, after)[0]!), false);
   });
 
   it('is false when a timed set changes time', () => {

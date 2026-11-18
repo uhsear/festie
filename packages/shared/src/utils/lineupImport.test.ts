@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseLineupTable,
+  daysAnnouncementSummary,
+  announcementEmailNote,
+  lineupAudienceSummary,
   looksLikeHeader,
   autoMapColumns,
   mappingProblems,
   toImportRows,
   planSummary,
+  defaultUpdateExisting,
+  updateOffBanner,
   buildResultCsv,
   buildLineupCsv,
   defaultMapping,
@@ -205,19 +210,32 @@ describe('buildLineupCsv: announced acts', () => {
 });
 
 describe('planSummary', () => {
-  const c = { new: 0, changed: 0, unchanged: 0, error: 0, newStages: 0, newDays: 0 };
+  const c = { new: 0, changed: 0, unchanged: 0, error: 0, skipped: 0, newStages: 0, newDays: 0 };
   it('says nothing to change when all zero', () => {
     expect(planSummary(c, false)).toBe('Nothing to change.');
   });
   it('covers every part with update off', () => {
-    expect(planSummary({ new: 1, changed: 1, unchanged: 1, error: 1, newStages: 1, newDays: 2 }, false)).toBe(
-      'Add 1 set. Leave 2 matching sets as they are. Create 1 stage. Create 2 days. 1 row has errors.',
+    expect(planSummary({ new: 1, changed: 1, unchanged: 1, error: 1, skipped: 2, newStages: 1, newDays: 2 }, false)).toBe(
+      'Add 1 set. Leave 2 matching sets as they are. Create 1 stage. Create 2 days. Skip 2 rows that name another day. 1 row has errors.',
     );
   });
   it('covers update on', () => {
     expect(planSummary({ ...c, new: 3, changed: 2, error: 2 }, true)).toBe(
       'Add 3 sets. Update 2. 2 rows have errors.',
     );
+  });
+});
+
+describe('update default and banner', () => {
+  it('defaults Update on only when a set_id column is mapped', () => {
+    expect(defaultUpdateExisting({ artist: 0, setId: 1 })).toBe(true);
+    expect(defaultUpdateExisting({ artist: 0, day: 1 })).toBe(false);
+  });
+  it('shows the banner only for changed rows with Update off', () => {
+    expect(updateOffBanner({ changed: 3 }, false)).toBe('3 rows change existing sets. Turn on Update to apply them.');
+    expect(updateOffBanner({ changed: 1 }, false)).toBe('1 row changes an existing set. Turn on Update to apply it.');
+    expect(updateOffBanner({ changed: 3 }, true)).toBeNull();
+    expect(updateOffBanner({ changed: 0 }, false)).toBeNull();
   });
 });
 
@@ -236,5 +254,59 @@ describe('buildResultCsv', () => {
       rows: [{ row: 2, status: 'created', setId: 's1', artist: 'Smith, J', message: 'ok' }],
     });
     expect(csv.split(/\r?\n/)).toEqual(['row,status,set_id,artist,message', '2,created,s1,"Smith, J",ok']);
+  });
+});
+
+describe('daysAnnouncementSummary', () => {
+  const count = {
+    festivalName: 'WL',
+    actsWithDay: 118,
+    actsTotal: 118,
+    recipients: 12,
+    audience: 12,
+    emailRecipients: 12,
+    emailCut: 0,
+    emailOff: null,
+  };
+
+  it('states the split and the audience', () => {
+    const summary = daysAnnouncementSummary({ ...count, actsWithDay: 1 });
+    expect(summary.counts).toBe('1 of 118 acts have a day. 12 people get one alert.');
+    expect(summary.warning).toMatch(/Not every act has a day/);
+    expect(summary.blocked).toBeNull();
+    expect(summary.emailNote).toBeNull();
+  });
+
+  it('does not warn when every act has a day', () => {
+    expect(daysAnnouncementSummary(count).warning).toBeNull();
+  });
+
+  it('says why a send is refused', () => {
+    expect(daysAnnouncementSummary({ ...count, reason: 'already_heard' }).blocked).toBe('Everyone who follows has already heard.');
+    expect(daysAnnouncementSummary({ ...count, reason: 'no_audience' }).blocked).toBe('No one follows this festival or has joined it yet.');
+    expect(daysAnnouncementSummary({ ...count, actsWithDay: 0, reason: 'no_days' }).blocked).toBe('Give acts a day before you announce days.');
+    expect(daysAnnouncementSummary({ ...count, reason: 'set_times_out' }).blocked).toMatch(/Set times are already out/);
+    expect(daysAnnouncementSummary({ ...count, reason: 'draft' }).blocked).toMatch(/Publish the festival/);
+  });
+
+  it('reports email off, or how many the daily limit cuts', () => {
+    expect(daysAnnouncementSummary({ ...count, emailOff: 'no_postal_address' }).emailNote).toBe('Email off: no postal address.');
+    expect(announcementEmailNote({ emailOff: null, emailCut: 1 })).toMatch(/^1 person get no email today/);
+    expect(announcementEmailNote({ emailOff: null, emailCut: 7 })).toMatch(/^7 people get no email today/);
+    expect(announcementEmailNote({ emailOff: null, emailCut: 0 })).toBeNull();
+  });
+});
+
+describe('lineupAudienceSummary', () => {
+  it('uses singular forms for a count of one', () => {
+    expect(lineupAudienceSummary({ followers: 1, priorAttendees: 1, matchedFestivalNames: [] })).toBe(
+      '1 follower gets push and email. 1 person from earlier editions gets push only.',
+    );
+  });
+
+  it('uses plural forms and names the matched editions', () => {
+    expect(lineupAudienceSummary({ followers: 3, priorAttendees: 0, matchedFestivalNames: ['Fest 2025', 'Fest 2024'] })).toBe(
+      '3 followers get push and email. 0 people from earlier editions get push only. Matched editions: Fest 2025, Fest 2024.',
+    );
   });
 });

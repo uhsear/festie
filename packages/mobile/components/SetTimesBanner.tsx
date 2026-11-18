@@ -1,25 +1,28 @@
 import { Text, View } from 'react-native';
 import { useAuthStore, useFestivalDataStore, useFollowStore } from '@festie/shared/stores';
 import { DISCOVER_COPY } from '@festie/shared/constants';
+import { setTimesBannerKind } from '@festie/shared/utils';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import FollowButton from './FollowButton';
 
-/** Shown on a lineup that has sets but no set times yet. */
+/** Shown for a published festival whose sets have no start times yet, with or without sets or days. */
 export default function SetTimesBanner({ hPad }: { hPad: number }) {
   const styles = useStyles();
   const festival = useFestivalDataStore((s) => s.currentFestival);
   const sets = useFestivalDataStore((s) => s.sets);
+  const days = useFestivalDataStore((s) => s.days);
   const hasProfile = useFestivalDataStore((s) => !!s.currentProfile);
   const user = useAuthStore((s) => s.user);
   const following = useFollowStore((s) => (festival ? s.festivalIds.includes(festival.id) : false));
 
-  if (!festival || sets.length === 0 || sets.some((s) => s.startTime)) return null;
+  const kind = setTimesBannerKind(festival, days, sets);
+  if (!festival || !kind) return null;
   const covered = following || (!!user && hasProfile);
   return (
     <View style={[styles.wrap, { marginHorizontal: hPad }]}>
       <View style={styles.text}>
         <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {DISCOVER_COPY.banner.title}
+          {kind === 'days' ? DISCOVER_COPY.banner.daysTitle : DISCOVER_COPY.banner.title}
         </Text>
         <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {covered ? DISCOVER_COPY.banner.joined : DISCOVER_COPY.banner.guest}

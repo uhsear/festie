@@ -129,6 +129,7 @@ export const oauthCompleteSchema = z
     username,
     dateOfBirth,
     tosAccepted,
+    ref: signupRef,
   })
   .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
 export type OAuthCompleteInput = z.infer<typeof oauthCompleteSchema>;
@@ -610,6 +611,17 @@ export const festivalAnnouncementSchema = z
     body: z.string().trim().min(1).max(200),
     screen: z.enum(['home', 'map', 'timeline', 'picks', 'festival-mode', 'crew']).default('home'),
     sendAt: z.string().datetime({ offset: true }).optional(),
+  })
+  .strict();
+
+// ── Set-time releases (admin) ───────────────────────────────────────
+// One alert per festival date. note is the push body, so it stays inside payload.ts MAX_BODY_LENGTH (200).
+// confirmPartial lets a date go out while some of its sets still have no time.
+export const timeReleaseSendSchema = z
+  .object({
+    dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(10),
+    note: z.string().trim().min(1).max(200).optional(),
+    confirmPartial: z.boolean().optional(),
   })
   .strict();
 
@@ -1676,6 +1688,7 @@ export const schemas = {
   setLink: setLinkSchema,
   spotifyBackfill: spotifyBackfillSchema,
   festivalAnnouncement: festivalAnnouncementSchema,
+  timeReleaseSend: timeReleaseSendSchema,
   crewHomeBase: crewHomeBaseSchema,
   crewPhotoAlbum: crewPhotoAlbumSchema,
   meetingPointCreate: meetingPointCreateSchema,

@@ -12,7 +12,15 @@
 import { festivalStartMinutes, formatClock12 } from './time-zone.js';
 import { MAX_BODY_LENGTH } from './notifications/payload.js';
 
-export type SetSlot = { dayLabel: string; startTime: string | null; endTime: string | null; stageName: string | null };
+// dayKey and stageId are the identity; dayLabel and stageName are display text that an admin can rename.
+export type SetSlot = {
+  dayKey: string;
+  dayLabel: string;
+  startTime: string | null;
+  endTime: string | null;
+  stageId: string | null;
+  stageName: string | null;
+};
 export type SetChange =
   | { kind: 'moved'; setId: string; artist: string; before: SetSlot; after: SetSlot }
   | { kind: 'removed'; setId: string; artist: string };
@@ -21,7 +29,7 @@ export type EntryCancelled = { kind: 'entry_cancelled'; entryId: string; artist:
 export type ScheduleChange = SetChange | EntryCancelled;
 export type SchedulePush = { userId: string; title: string; body: string; setId?: string };
 
-type IndexedSet = { dayKey: string; stageId: string | null; artist: string; slot: SetSlot };
+type IndexedSet = { artist: string; slot: SetSlot };
 
 function indexSets(festival: any): Map<string, IndexedSet> {
   const stageNames = new Map<string, string>();
@@ -31,14 +39,14 @@ function indexSets(festival: any): Map<string, IndexedSet> {
     for (const set of day?.sets || []) {
       const stageId = set.stageId || null;
       sets.set(set.id, {
-        // Key the day by its date, so inserting or reordering a day does not move every later set.
-        dayKey: day?.date || day?.label || `#${dayIndex}`,
-        stageId,
         artist: set.artist || '',
         slot: {
+          // Key the day by its date, so inserting or reordering a day does not move every later set.
+          dayKey: day?.date || day?.label || `#${dayIndex}`,
           dayLabel: day.label || `Day ${dayIndex + 1}`,
           startTime: set.startTime || null,
           endTime: set.endTime || null,
+          stageId,
           stageName: (stageId && stageNames.get(stageId)) || null,
         },
       });
@@ -59,8 +67,8 @@ export function diffPickedSchedule(before: any, after: any): SetChange[] {
       continue;
     }
     if (
-      (old.dayKey !== next.dayKey ||
-        old.stageId !== next.stageId ||
+      (old.slot.dayKey !== next.slot.dayKey ||
+        old.slot.stageId !== next.slot.stageId ||
         old.slot.startTime !== next.slot.startTime ||
         old.slot.endTime !== next.slot.endTime) &&
       // A change the alert cannot describe ("Now Fri 10 PM. Was Fri 10 PM.") alerts nobody.
@@ -94,8 +102,8 @@ export function isTbaToTime(change: ScheduleChange): boolean {
     change.kind === 'moved' &&
     change.before.startTime === null &&
     change.after.startTime !== null &&
-    change.before.dayLabel === change.after.dayLabel &&
-    change.before.stageName === change.after.stageName
+    change.before.dayKey === change.after.dayKey &&
+    change.before.stageId === change.after.stageId
   );
 }
 
@@ -111,6 +119,9 @@ function describeOne(festivalName: string, change: SetChange): { title: string; 
       title: `${change.artist} is off the lineup`,
       body: `${festivalName} removed this set, so it is no longer in your picks.`,
     };
+  }
+  if (isTbaToTime(change)) {
+    return { title: `${change.artist} has a set time`, body: `${formatSlot(change.after, false)}.` };
   }
   // When only the end time moved, the start-only slots would read the same, so show the end too.
   const withEnd = formatSlot(change.before, false) === formatSlot(change.after, false);
@@ -131,11 +142,13 @@ export function formatShiftDelta(minutes: number): string {
 
 /** The stage and minutes when every change is the same bulk shift on one stage and day, else null. */
 function shiftOf(changes: SetChange[]): { stageName: string; delta: number } | null {
-  let shift: { stageName: string; dayLabel: string; delta: number } | null = null;
+  let shift: { stageId: string; dayKey: string; stageName: string; delta: number } | null = null;
   for (const change of changes) {
     if (change.kind !== 'moved') return null;
     const { before, after } = change;
-    if (!before.stageName || before.stageName !== after.stageName || before.dayLabel !== after.dayLabel) return null;
+    if (!before.stageId || !after.stageName || before.stageId !== after.stageId || before.dayKey !== after.dayKey) {
+      return null;
+    }
     if (!before.startTime || !after.startTime) return null;
     const delta = festivalStartMinutes(after.startTime) - festivalStartMinutes(before.startTime);
     // The bound rejects a slot that crosses the 06:00 festival-day start (05:45 to 06:15 reads -1410).
@@ -147,10 +160,8 @@ function shiftOf(changes: SetChange[]): { stageName: string; delta: number } | n
     ) {
       return null;
     }
-    if (!shift) shift = { stageName: before.stageName, dayLabel: before.dayLabel, delta };
-    else if (shift.stageName !== before.stageName || shift.dayLabel !== before.dayLabel || shift.delta !== delta) {
-      return null;
-    }
+    if (!shift) shift = { stageId: before.stageId, dayKey: before.dayKey, stageName: after.stageName, delta };
+    else if (shift.stageId !== before.stageId || shift.dayKey !== before.dayKey || shift.delta !== delta) return null;
   }
   return shift && { stageName: shift.stageName, delta: shift.delta };
 }
@@ -190,7 +201,8 @@ export function buildSchedulePushes(
       continue;
     }
     const rest = userChanges.length - 2;
-    const names = rest > 0 ? `${first.artist}, ${second.artist} and ${rest} more` : `${first.artist} and ${second.artist}`;
+    const names =
+      rest > 0 ? `${first.artist}, ${second.artist} and ${rest} more` : `${first.artist} and ${second.artist}`;
     const shift = shiftOf(userChanges);
     pushes.push({
       userId,

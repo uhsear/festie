@@ -4,6 +4,7 @@ import { auditEntriesToCsv } from '../utils/auditActions';
 import { normalizeAnalytics, type AnalyticsData } from '../utils/analyticsNormalize';
 import type { PickInsight } from '../utils/pickInsight';
 import type { AdminHealth, DashboardStats } from '../utils/adminDashboard';
+import type { AdminGrowthReport } from '../utils/adminGrowth';
 
 export interface AuditEntry {
   id: string;
@@ -405,6 +406,10 @@ export function addCrewMember(crewId: string, userId: string): Promise<unknown> 
 export async function fetchFestivalPreview(festivalId: string) {
   const detail = await api.get<FestivalPreviewInput>(`/admin/festivals/${enc(festivalId)}`);
   return buildFestivalPreview(detail);
+}
+
+export function fetchAdminGrowth(days = 30): Promise<AdminGrowthReport> {
+  return api.get<AdminGrowthReport>(`/admin/growth?days=${days}`);
 }
 
 export function fetchAdminPickInsight(festivalId: string): Promise<PickInsight> {

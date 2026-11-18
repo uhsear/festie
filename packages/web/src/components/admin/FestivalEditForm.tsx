@@ -14,6 +14,7 @@ import type { LineupDraft } from '@festie/shared/utils';
 import type { LineupInterestCounts, SetEngagementMap } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
 import AnnouncedNames from './AnnouncedNames';
+import SetTimeReleasePanel from './SetTimeReleasePanel';
 import DayEditor, { Day } from './DayEditor';
 import { Stage } from './SetEditor';
 
@@ -553,6 +554,12 @@ export default function FestivalEditForm({
         </button>
       </div>
 
+      {editingId && (
+        <div className="border-t border-glass-border pt-4">
+          <SetTimeReleasePanel festivalId={editingId} refreshKey={formData.updatedAt} />
+        </div>
+      )}
+
       {issues.length > 0 && (
         <div role="alert" className="rounded-lg border border-accent-coral p-3 space-y-1">
           <p className="text-sm font-medium text-accent-coral">Fix these before saving</p>
@@ -583,7 +590,7 @@ export default function FestivalEditForm({
               Tell people whose picks changed
             </label>
             <span className="text-xs text-text-muted">
-              Sends one alert to each person who picked a set you moved or removed, and to each person who marked an act you cancelled.
+              Sends one alert to each person who picked a set you moved, removed or gave its first time on a day whose set-time alert already went out, and to each person who marked an act you cancelled.
             </span>
           </div>
         </div>
