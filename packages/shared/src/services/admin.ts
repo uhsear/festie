@@ -194,13 +194,22 @@ export interface RemovalSummary {
   sets: number;
   picks: number;
   ratings: number;
+  /** Present when the save cancels announced acts: the acts, their sets that go, and who hears about it. */
+  cancel?: { acts: string[]; sets: number; picked: number; marked: number };
 }
 
 export function removalFromError(err: unknown): RemovalSummary | null {
   if (!(err instanceof ApiClientError) || err.code !== 'CONFIRM_REMOVALS') return null;
   const r = err.details?.removal as Partial<RemovalSummary> | undefined;
   if (!r || typeof r !== 'object') return null;
-  return { days: r.days ?? 0, sets: r.sets ?? 0, picks: r.picks ?? 0, ratings: r.ratings ?? 0 };
+  const cancel = r.cancel && Array.isArray(r.cancel.acts) ? r.cancel : undefined;
+  return {
+    days: r.days ?? 0,
+    sets: r.sets ?? 0,
+    picks: r.picks ?? 0,
+    ratings: r.ratings ?? 0,
+    ...(cancel ? { cancel: { acts: cancel.acts, sets: cancel.sets ?? 0, picked: cancel.picked ?? 0, marked: cancel.marked ?? 0 } } : {}),
+  };
 }
 
 function joinList(parts: string[]): string {
@@ -210,14 +219,27 @@ function joinList(parts: string[]): string {
 
 const plural = (n: number, one: string): string => `${n} ${n === 1 ? one : `${one}s`}`;
 
-export function describeRemovals(r: RemovalSummary): string {
+/** `notify` is the form's "Tell people" choice: with it off, the cancel line says no one will be told. */
+export function describeRemovals(r: RemovalSummary, notify = true): string {
   const parts = [
     r.days > 0 && plural(r.days, 'day'),
     r.sets > 0 && plural(r.sets, 'set'),
     r.picks > 0 && plural(r.picks, 'pick'),
     r.ratings > 0 && plural(r.ratings, 'rating'),
   ].filter((p): p is string => typeof p === 'string');
-  return `This save removes ${joinList(parts)}. People who picked these sets lose those picks. This cannot be undone.`;
+  const cancel = r.cancel ? ` ${describeCancel(r.cancel, notify)}` : '';
+  return `This save removes ${joinList(parts)}. People who picked these sets lose those picks. This cannot be undone.${cancel}`;
+}
+
+/** "Cancelling X removes 2 sets. 12 people will be told (8 marked it, 4 picked its sets)." */
+export function describeCancel(cancel: NonNullable<RemovalSummary['cancel']>, notify = true): string {
+  const one = cancel.acts.length === 1;
+  const people = cancel.picked + cancel.marked;
+  const told =
+    people === 0 || !notify
+      ? `No one will be told${notify ? '' : ' because alerts are off'}.`
+      : `${people} ${people === 1 ? 'person' : 'people'} will be told (${cancel.marked} marked ${one ? 'it' : 'them'}, ${cancel.picked} picked ${one ? 'its' : 'their'} sets).`;
+  return `Cancelling ${one ? cancel.acts[0] : `${cancel.acts.length} acts`} removes ${plural(cancel.sets, 'set')}. ${told}`;
 }
 
 export function formatImportCounts(counts: LineupImportCounts): string {

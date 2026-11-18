@@ -40,6 +40,9 @@ describe('notificationSettings', () => {
     );
     expect(describeScheduleNotice({ changes: 1, people: 2, notified: false })).toBe('Saved without alerts.');
     expect(describeScheduleNotice({ changes: 0, people: 0, notified: false })).toBe('Festival updated');
+    expect(describeScheduleNotice({ changes: 2, people: 12, notified: true, marked: 8 })).toBe(
+      'Saved. 12 people will get an alert: 8 marked a cancelled act and 4 picked or set a reminder on the changed sets, unless they turned schedule alerts off.',
+    );
   });
 
   it('labels must-see options', () => {
