@@ -1961,6 +1961,15 @@
           "lineupCount": {
             "type": "number"
           },
+          "scheduleProgress": {
+            "nullable": true,
+            "type": "string",
+            "enum": [
+              "times",
+              "days",
+              "lineup"
+            ]
+          },
           "startDate": {
             "nullable": true,
             "type": "string"
@@ -4586,7 +4595,7 @@
         ],
         "responses": {
           "200": {
-            "description": "{ festivalName, recipients }"
+            "description": "{ festivalName, recipients, followers, priorAttendees, matchedFestivalNames, emailRecipients, emailCut, emailOff }"
           },
           "404": {
             "description": "Festival not found"
@@ -4622,6 +4631,72 @@
           },
           "404": {
             "description": "Festival not found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/festivals/{id}/days-announcement": {
+      "get": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Dry run for Announce days: acts with a day, who would hear, who gets no email",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ festivalName, actsWithDay, actsTotal, recipients, audience, emailRecipients, emailCut, emailOff, reason? }"
+          },
+          "404": {
+            "description": "Festival not found"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Admin"
+        ],
+        "summary": "Send the days announcement push, inbox row and email to followers and profile holders",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "{ queued: true, recipients, emailRecipients }"
+          },
+          "400": {
+            "description": "No act has a day, or everyone has already heard"
+          },
+          "404": {
+            "description": "Festival not found"
+          },
+          "409": {
+            "description": "The festival is a draft, or its set times are already out"
           }
         }
       }

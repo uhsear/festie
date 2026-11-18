@@ -69,6 +69,7 @@ export * from './adminFestivalTools';
 export * from './auditActions';
 export * from './adminSearch';
 export * from './adminDashboard';
+export * from './adminGrowth';
 export * from './avatarFile';
 export * from './registerValidation';
 export * from './offlineSummary';

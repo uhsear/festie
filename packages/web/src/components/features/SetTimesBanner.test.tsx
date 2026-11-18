@@ -17,6 +17,7 @@ describe('SetTimesBanner', () => {
     follow.festivalIds = [];
     Object.assign(festivalState, {
       currentFestival: { id: 'f1', name: 'Alpha' },
+      days: [{ date: '2027-02-05' }],
       sets: [
         { id: 's1', startTime: null },
         { id: 's2', startTime: '' },
@@ -55,8 +56,29 @@ describe('SetTimesBanner', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('hides when the festival has no sets', () => {
+  it('no sets and no act with a day: names days as well as set times', () => {
     festivalState.sets = [];
+    festivalState.currentFestival = { id: 'f1', name: 'Alpha', lineup: [{ id: 'a1', status: 'announced', dayDate: null }] };
+    render(<SetTimesBanner />);
+    expect(screen.getByRole('heading', { name: 'Days and set times are not out yet' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Follow' })).toBeInTheDocument();
+  });
+
+  it('no sets but an act has a day: keeps today\'s set-times copy', () => {
+    festivalState.sets = [];
+    festivalState.currentFestival = { id: 'f1', name: 'Alpha', lineup: [{ id: 'a1', status: 'announced', dayDate: '2027-02-05' }] };
+    render(<SetTimesBanner />);
+    expect(screen.getByRole('heading', { name: 'Set times are not out yet' })).toBeInTheDocument();
+  });
+
+  it('sets with no times keep today\'s copy', () => {
+    render(<SetTimesBanner />);
+    expect(screen.queryByText('Days and set times are not out yet')).toBeNull();
+  });
+
+  it('hides for a draft', () => {
+    festivalState.sets = [];
+    festivalState.currentFestival = { id: 'f1', name: 'Alpha', publishedAt: null };
     const { container } = render(<SetTimesBanner />);
     expect(container).toBeEmptyDOMElement();
   });

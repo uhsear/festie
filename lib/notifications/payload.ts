@@ -26,6 +26,8 @@ export const ALLOWED_NOTIFICATION_TYPES = new Set([
   'rate_prompt',
   // T42: a festival's first set times are out. Shares the lineupDrops opt-out.
   'set_times_out',
+  // Days announced from the admin "Announce days" action. Shares the lineupDrops opt-out.
+  'days_out',
   // Finer crew types. Each has its own opt-out (PREF_MAP) and routes to the Android 'crew' channel.
   'crew_meeting_point',
   'crew_poll',

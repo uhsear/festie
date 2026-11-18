@@ -129,6 +129,7 @@ export const oauthCompleteSchema = z
     username,
     dateOfBirth,
     tosAccepted,
+    ref: signupRef,
   })
   .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
 export type OAuthCompleteInput = z.infer<typeof oauthCompleteSchema>;

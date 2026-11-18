@@ -347,6 +347,90 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/festivals/{id}/days-announcement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dry run for Announce days: acts with a day, who would hear, who gets no email */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { festivalName, actsWithDay, actsTotal, recipients, audience, emailRecipients, emailCut, emailOff, reason? } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Send the days announcement push, inbox row and email to followers and profile holders */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { queued: true, recipients, emailRecipients } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No act has a day, or everyone has already heard */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The festival is a draft, or its set times are already out */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/festivals/{id}/impact": {
         parameters: {
             query?: never;
@@ -642,7 +726,7 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description { festivalName, recipients } */
+                /** @description { festivalName, recipients, followers, priorAttendees, matchedFestivalNames, emailRecipients, emailCut, emailOff } */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -2865,6 +2949,8 @@ export type components = {
             lineupCount: number;
             location: string;
             name: string;
+            /** @enum {string|null} */
+            scheduleProgress?: "times" | "days" | "lineup" | null;
             slug?: string | null;
             stageCount: number;
             startDate: string | null;

@@ -344,6 +344,23 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
       );
       return new Set(result.rows.map((r: any) => r.userId));
     },
+
+    /** Re-engagement emails recorded in the last `hours` hours, for the daily email budget. */
+    async countEmailsSince(hours: number): Promise<number> {
+      const result = await pool.query(
+        `
+  SELECT
+    COUNT(*)::int AS count
+  FROM
+    notification_log
+  WHERE
+    platform = 'email'
+    AND created_at > NOW() - make_interval(hours => $1)
+`,
+        [hours],
+      );
+      return result.rows[0]?.count ?? 0;
+    },
   };
 
   const notificationCounts = {

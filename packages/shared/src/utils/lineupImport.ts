@@ -40,6 +40,8 @@ export interface LineupImportPlanRow {
     message: string;
   }[];
   warnings: string[];
+  /** The row names another day than the stored set. Nothing is written for it. */
+  skipped?: true;
 }
 
 export interface LineupImportPlanCounts {
@@ -47,6 +49,7 @@ export interface LineupImportPlanCounts {
   changed: number;
   unchanged: number;
   error: number;
+  skipped: number;
   newStages: number;
   newDays: number;
   missingFromFile: number;
@@ -81,6 +84,79 @@ export interface LineupImportCommitResult {
     message: string;
   }[];
   warnings: string[];
+}
+
+/** Dry run of "Announce lineup": the push audience, the email audience and who the email skips. */
+export interface LineupAnnouncementCount {
+  festivalName: string;
+  /** People who get the push and inbox row now. */
+  recipients: number;
+  /** Followers who have not joined: they also get the email. */
+  followers: number;
+  /** People who went to an earlier edition and do not follow: push and inbox only. */
+  priorAttendees: number;
+  matchedFestivalNames: string[];
+  emailRecipients: number;
+  /** People the daily email limit leaves out today. */
+  emailCut: number;
+  /** 'no_postal_address' when email is off. */
+  emailOff: string | null;
+}
+
+/** Dry run of "Announce days". `reason` says why a send would be refused. */
+export interface DaysAnnouncementCount {
+  festivalName: string;
+  actsWithDay: number;
+  actsTotal: number;
+  recipients: number;
+  audience: number;
+  emailRecipients: number;
+  emailCut: number;
+  emailOff: string | null;
+  reason?: 'draft' | 'set_times_out' | 'no_days' | 'no_audience' | 'already_heard';
+}
+
+const DAYS_BLOCKED: Record<NonNullable<DaysAnnouncementCount['reason']>, string> = {
+  draft: 'Publish the festival before you announce its days.',
+  set_times_out: 'Set times are already out. The set-times alert covered this.',
+  no_days: 'Give acts a day before you announce days.',
+  no_audience: 'No one follows this festival or has joined it yet.',
+  already_heard: 'Everyone who follows has already heard.',
+};
+
+const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
+
+/** Who hears the lineup alert, with singular forms, and which earlier editions matched. */
+export function lineupAudienceSummary(
+  count: Pick<LineupAnnouncementCount, 'followers' | 'priorAttendees' | 'matchedFestivalNames'>,
+): string {
+  const followers = `${count.followers} ${count.followers === 1 ? 'follower gets' : 'followers get'} push and email.`;
+  const prior = `${people(count.priorAttendees)} from earlier editions ${count.priorAttendees === 1 ? 'gets' : 'get'} push only.`;
+  const matched = count.matchedFestivalNames.length ? ` Matched editions: ${count.matchedFestivalNames.join(', ')}.` : '';
+  return `${followers} ${prior}${matched}`;
+}
+
+/** What the email part of a dry run says, or null when everyone who should get one does. */
+export function announcementEmailNote(count: Pick<DaysAnnouncementCount, 'emailOff' | 'emailCut'>): string | null {
+  if (count.emailOff === 'no_postal_address') return 'Email off: no postal address.';
+  if (count.emailCut > 0) {
+    return `${people(count.emailCut)} get no email today because of the daily email limit. Press the button again tomorrow to reach them.`;
+  }
+  return null;
+}
+
+/** The text of the "Announce days" panel: the counts, a warning for a partial split, and why a send is blocked. */
+export function daysAnnouncementSummary(count: DaysAnnouncementCount) {
+  const partial = count.actsWithDay < count.actsTotal;
+  return {
+    blocked: count.reason ? DAYS_BLOCKED[count.reason] : null,
+    counts: `${count.actsWithDay} of ${count.actsTotal} acts have a day. ${people(count.recipients)} get one alert.`,
+    warning:
+      partial && count.actsWithDay > 0
+        ? 'Not every act has a day yet. Each person hears this once, so send it when the days are final.'
+        : null,
+    emailNote: announcementEmailNote(count),
+  };
 }
 
 export interface LineupImportHistoryItem {
@@ -221,7 +297,7 @@ export function toImportRows(
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export function planSummary(
-  counts: Pick<LineupImportPlanCounts, 'new' | 'changed' | 'unchanged' | 'error' | 'newStages' | 'newDays'>,
+  counts: Pick<LineupImportPlanCounts, 'new' | 'changed' | 'unchanged' | 'error' | 'skipped' | 'newStages' | 'newDays'>,
   updateExisting: boolean,
 ): string {
   const parts: string[] = [];
@@ -234,8 +310,19 @@ export function planSummary(
   }
   if (counts.newStages) parts.push(`Create ${plural(counts.newStages, 'stage')}.`);
   if (counts.newDays) parts.push(`Create ${plural(counts.newDays, 'day')}.`);
+  if (counts.skipped) parts.push(`Skip ${plural(counts.skipped, 'row')} that name${counts.skipped === 1 ? 's' : ''} another day.`);
   if (counts.error) parts.push(`${plural(counts.error, 'row')} ${counts.error === 1 ? 'has' : 'have'} errors.`);
   return parts.length ? parts.join(' ') : 'Nothing to change.';
+}
+
+/** A file with a set_id column is an export of this lineup, so its changed rows are meant to apply. */
+export const defaultUpdateExisting = (mapping: LineupColumnMapping): boolean => mapping.setId !== undefined;
+
+/** The banner for a preview whose changed rows an off Update switch would leave unapplied, or null. */
+export function updateOffBanner(counts: Pick<LineupImportPlanCounts, 'changed'>, updateExisting: boolean): string | null {
+  if (updateExisting || counts.changed === 0) return null;
+  const n = counts.changed;
+  return `${n} ${n === 1 ? 'row changes an existing set' : 'rows change existing sets'}. Turn on Update to apply ${n === 1 ? 'it' : 'them'}.`;
 }
 
 export function buildResultCsv(result: LineupImportCommitResult): string {

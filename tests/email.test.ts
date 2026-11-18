@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail } from '../lib/email.js';
+import { sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -337,6 +337,7 @@ describe('email: re-engagement senders', () => {
     ['lineup drop', sendLineupDropEmail, 'New lineups'],
     ['crew reform', sendCrewReformEmail, 'Crew re-forms'],
     ['set times out', sendSetTimesOutEmail, 'New lineups and set times'],
+    ['days out', sendDaysOutEmail, 'New lineups, days and set times'],
   ];
   for (const [name, fn, label] of cases) {
     it(`${name}: https List-Unsubscribe header and settings footer`, async () => {
@@ -349,6 +350,22 @@ describe('email: re-engagement senders', () => {
       assert.ok(msg.html.includes(sentence));
       assert.ok(msg.html.includes('href="https://festie.test/account"'));
       assert.ok(msg.text.endsWith(`${sentence} Turn it off: https://festie.test/account`));
+    });
+  }
+
+  for (const [name, fn] of cases) {
+    it(`${name}: postal address in html and text when set, omitted when unset`, async () => {
+      const run = async (to: string, extra: Record<string, string>) => {
+        const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+        await fn({ ...base, to, config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', ...extra }), log: createMockLog(), _client: createMockClient(send) });
+        return (send.mock.calls as any[])[0].arguments[0];
+      };
+      const withAddress = await run(`addr-${name.replace(' ', '')}@example.com`, { EMAIL_POSTAL_ADDRESS: 'PO Box 1 & Co, Orlando, FL 32801' });
+      assert.ok(withAddress.html.includes('PO Box 1 &amp; Co, Orlando, FL 32801'), 'html escaped');
+      assert.ok(withAddress.text.endsWith('\nPO Box 1 & Co, Orlando, FL 32801'), 'text plain');
+      const without = await run(`noaddr-${name.replace(' ', '')}@example.com`, {});
+      assert.ok(!without.html.includes('Orlando') && !without.html.includes('<br>'));
+      assert.ok(without.text.endsWith('Turn it off: https://festie.test/account'));
     });
   }
 });
@@ -503,5 +520,49 @@ describe('email: sendSetTimesOutEmail', () => {
     assert.ok(msg.html.includes('https://festie.test/?festival=edc%2027'));
     assert.ok(!msg.html.includes('<b>u</b>'));
     assert.ok(msg.text.includes('The set times for EDC <Las Vegas> are out.'));
+  });
+});
+
+describe('email: sendDaysOutEmail', () => {
+  it('uses the days copy, links the festival and escapes the name', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    const ok = await sendDaysOutEmail({
+      to: 'days@example.com',
+      username: '<b>u</b>',
+      festivalName: 'Wasteland <2027>',
+      festivalId: 'wl 27',
+      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }),
+      log: createMockLog(),
+      _client: createMockClient(send),
+    });
+    assert.equal(ok, true);
+    const msg = (send.mock.calls as any[])[0].arguments[0];
+    assert.equal(msg.subject, 'Wasteland <2027> days are out');
+    assert.ok(msg.html.includes('The days for <strong style="color:#e4e4e7">Wasteland &lt;2027&gt;</strong> are out. See who plays which day. Set times come later.'));
+    assert.ok(msg.html.includes('https://festie.test/?festival=wl%2027'));
+    assert.ok(!msg.html.includes('<b>u</b>'));
+    assert.ok(msg.text.includes('The days for Wasteland <2027> are out. See who plays which day. Set times come later.'));
+  });
+});
+
+describe('email: sendLineupDropEmail copy', () => {
+  const send = async (hasTimes?: boolean) => {
+    const fn = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    await sendLineupDropEmail({ to: 'lu@example.com', username: 'u', festivalName: 'Fest', festivalId: 'f1', ...(hasTimes === undefined ? {} : { hasTimes }), config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }), log: createMockLog(), _client: createMockClient(fn) });
+    return (fn.mock.calls as any[])[0].arguments[0];
+  };
+
+  it('with no timed set, neither body says picking and both promise a later alert', async () => {
+    const msg = await send(false);
+    assert.ok(!/picking/i.test(msg.html + msg.text + msg.subject));
+    assert.ok(msg.html.includes('is out. See who is playing. We&#39;ll tell you when set times are out.') || msg.html.includes("is out. See who is playing. We'll tell you when set times are out."));
+    assert.ok(msg.text.includes("The lineup for Fest is out. See who is playing. We'll tell you when set times are out."));
+    assert.ok(msg.html.includes('See the lineup'));
+  });
+
+  it('with timed sets, keeps today\'s copy', async () => {
+    const msg = await send();
+    assert.ok(msg.html.includes('Start picking your sets before tickets move.'));
+    assert.equal(msg.subject, 'Fest lineup just dropped');
   });
 });

@@ -20,6 +20,7 @@ import type { Request, Response, Router } from 'express';
 import { REAUTH_WINDOW_MS } from '../lib/app-context/session';
 import {
   checkRegistrationConflicts,
+  countSignupRef,
   createUserWithProfile,
   deviceOf,
   finishSignIn,
@@ -139,21 +140,6 @@ export default function createAuthRoutes(deps: any): Router {
     return { cleanUsername, cleanEmail: rawEmail ? String(rawEmail).trim().toLowerCase() : null };
   }
 
-  // Anonymous ?ref= sign-up count (migration 070): a day and a ref, nothing that
-  // identifies the person. A counting failure is logged and never fails sign-up.
-  async function countSignupRef(ref: string | undefined) {
-    if (!ref) return;
-    try {
-      await stores.pool.query(
-        `INSERT INTO signup_ref_counts (day, ref, signups) VALUES (CURRENT_DATE, $1, 1)
-         ON CONFLICT (day, ref) DO UPDATE SET signups = signup_ref_counts.signups + 1`,
-        [ref],
-      );
-    } catch (error: any) {
-      log.warn('signup ref count failed', { error: error.message });
-    }
-  }
-
   router.post(
     '/register',
     rateLimit(5, 'register', { keyFromBody: (req: any) => req.body?.username }),
@@ -174,7 +160,7 @@ export default function createAuthRoutes(deps: any): Router {
         const newUserId = createOpaqueId('user');
         const dateOfBirth = (req.validatedBody as any).dateOfBirth;
         const user = await createUserWithProfile({ cleanUsername, passwordHash, newUserId, cleanEmail, dateOfBirth }, deps);
-        await countSignupRef((req.validatedBody as any).ref);
+        await countSignupRef((req.validatedBody as any).ref, deps);
 
         const token = await createUserSession(user.id, user.username, deviceOf(req));
         setNoStore(res);

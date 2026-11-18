@@ -58,6 +58,8 @@ export interface FestivalOgInput {
   location: string;
   setCount: number;
   stageCount: number;
+  /** Announced acts with no sets yet. With zero sets the image counts these instead of "0 sets". */
+  announcedCount?: number;
 }
 
 /** Preview SVG for the public festival page (/f/<slug>/og.png). Same frame as the share image. */
@@ -69,7 +71,13 @@ export function buildFestivalOgSvg(input: FestivalOgInput): string {
     text(64, 170, 60, '#eaeaf2', truncate(input.festivalName, 32), 700),
   ];
   if (input.dateRange) lines.push(text(64, 226, 34, '#9999bb', input.dateRange));
-  lines.push(text(64, 580, 26, '#9999bb', `${plural(input.setCount, 'set')} · ${plural(input.stageCount, 'stage')}`));
+  const stages = plural(input.stageCount, 'stage');
+  const announced = input.setCount === 0 ? (input.announcedCount ?? 0) : 0;
+  const summary =
+    announced > 0
+      ? `${plural(announced, 'act')} announced${input.stageCount > 0 ? ` · ${stages}` : ''}`
+      : `${plural(input.setCount, 'set')} · ${stages}`;
+  lines.push(text(64, 580, 26, '#9999bb', summary));
   if (input.location) lines.push(text(OG_WIDTH - 64, 580, 26, '#9999bb', truncate(input.location, 40), 400, 'end'));
   return svgDocument(lines);
 }
@@ -86,7 +94,7 @@ export function pickOgArtists(festival: any, picks: Record<string, string>, sep:
       const timed = CLOCK_TIME_RE.test(String(set.startTime || ''));
       const names = Array.isArray(set.artists) ? set.artists.map((a: any) => a?.name).filter(Boolean) : [];
       rows.push({
-        name: names.length > 0 ? names.join(` ${sep} `) : String(set.artist || ''),
+        name: set.displayName || (names.length > 0 ? names.join(` ${sep} `) : String(set.artist || '')),
         rank,
         tba: timed ? 0 : 1,
         day: dayIndex,

@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { lineupImportApi } from '@festie/shared/services/lineupImport';
-import type { LineupImportHistoryItem, LineupImportUndoResult } from '@festie/shared/utils/lineupImport';
+import {
+  announcementEmailNote,
+  daysAnnouncementSummary,
+  type DaysAnnouncementCount,
+  type LineupAnnouncementCount,
+  type LineupImportHistoryItem,
+  type LineupImportUndoResult,
+  lineupAudienceSummary,
+} from '@festie/shared/utils/lineupImport';
 import { useToast } from '../../lib/toastContext';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -20,7 +28,9 @@ const buttonClass =
 
 export default function LineupImportHistory({ festivalId, festivalName, refreshKey = 0 }: Props) {
   const [imports, setImports] = useState<LineupImportHistoryItem[]>([]);
-  const [recipients, setRecipients] = useState<number | null>(null);
+  const [lineupCount, setLineupCount] = useState<LineupAnnouncementCount | null>(null);
+  const [daysCount, setDaysCount] = useState<DaysAnnouncementCount | null>(null);
+  const [daysOpen, setDaysOpen] = useState(false);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [undoTarget, setUndoTarget] = useState<LineupImportHistoryItem | null>(null);
   const [announceOpen, setAnnounceOpen] = useState(false);
@@ -31,12 +41,14 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
   const reload = useCallback(async () => {
     try {
       setLoadError(null);
-      const [history, announcement] = await Promise.all([
+      const [history, announcement, days] = await Promise.all([
         lineupImportApi.history(festivalId),
         lineupImportApi.announcement(festivalId),
+        lineupImportApi.daysAnnouncement(festivalId),
       ]);
       setImports(history.imports);
-      setRecipients(announcement.recipients);
+      setLineupCount(announcement);
+      setDaysCount(days);
     } catch (err: unknown) {
       setLoadError(err);
       toastError(err, "Couldn't load import history. Try again.");
@@ -61,6 +73,27 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
     } catch (err: unknown) {
       setUndoTarget(null);
       toastError(err, "Couldn't undo the import. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const recipients = lineupCount?.recipients ?? null;
+  const lineupEmailNote = lineupCount ? announcementEmailNote(lineupCount) : null;
+  // Push may be done while the daily email limit cut some followers: the server accepts another press for them.
+  const canAnnounceLineup = !!lineupCount && (lineupCount.recipients > 0 || lineupCount.emailCut > 0);
+  const days = daysCount ? daysAnnouncementSummary(daysCount) : null;
+
+  const doAnnounceDays = async () => {
+    setBusy(true);
+    try {
+      const result = await lineupImportApi.announceDays(festivalId);
+      toast(`Days announcement queued for ${result.recipients} people.`, 'success');
+      setDaysOpen(false);
+      await reload();
+    } catch (err: unknown) {
+      setDaysOpen(false);
+      toastError(err, "Couldn't send the days announcement. Try again.");
     } finally {
       setBusy(false);
     }
@@ -136,18 +169,46 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
       <section>
         <h3 className="type-heading text-text-primary mb-3">Announce lineup</h3>
         <p className="text-sm text-text-muted mb-3">
-          Send a push and an email to people who went to an earlier edition of {festivalName}. Editions match when the
-          name is the same apart from the year.
+          Send a push and an inbox alert to people who follow {festivalName} or went to an earlier edition. Followers
+          also get an email. Editions match when the name is the same apart from the year.
         </p>
+        {lineupCount && <p className="text-sm text-text-muted mb-3">{lineupAudienceSummary(lineupCount)}</p>}
+        {lineupEmailNote && <p className="text-sm text-text-muted mb-3">{lineupEmailNote}</p>}
         <button
           type="button"
           className={buttonClass}
-          disabled={!recipients || busy}
+          disabled={!canAnnounceLineup || busy}
           onClick={() => setAnnounceOpen(true)}
         >
           {`Announce to ${recipients ?? 0} people`}
         </button>
-        {recipients === 0 && <p className="text-sm text-text-muted mt-2">No one to notify right now.</p>}
+        {lineupCount && !canAnnounceLineup && (
+          <p className="text-sm text-text-muted mt-2">No one to notify right now.</p>
+        )}
+      </section>
+
+      <section>
+        <h3 className="type-heading text-text-primary mb-3">Announce days</h3>
+        <p className="text-sm text-text-muted mb-3">
+          Tell followers and everyone with a profile in {festivalName} that acts have days. Nothing sends until you
+          press the button. A save or an import never sends it.
+        </p>
+        {days && (
+          <>
+            <p className="text-sm text-text-primary mb-2">{days.counts}</p>
+            {days.warning && <p className="text-sm text-accent-amber mb-2">{days.warning}</p>}
+            {days.emailNote && <p className="text-sm text-text-muted mb-2">{days.emailNote}</p>}
+            {days.blocked && <p className="text-sm text-text-muted mb-2">{days.blocked}</p>}
+          </>
+        )}
+        <button
+          type="button"
+          className={buttonClass}
+          disabled={!days || !!days.blocked || busy}
+          onClick={() => setDaysOpen(true)}
+        >
+          Announce days
+        </button>
       </section>
 
       <ConfirmDialog
@@ -164,10 +225,19 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
         open={announceOpen}
         onOpenChange={setAnnounceOpen}
         title="Announce the lineup?"
-        description={`This sends one push and one email to ${recipients ?? 0} people. Each person gets it once for this festival.`}
+        description={`This sends one push to ${recipients ?? 0} people. Followers also get one email. Each person gets it once for this festival.`}
         confirmLabel="Send"
         busy={busy}
         onConfirm={doAnnounce}
+      />
+      <ConfirmDialog
+        open={daysOpen}
+        onOpenChange={setDaysOpen}
+        title="Announce the days?"
+        description={`${days?.counts ?? ''} Each person gets it once for this festival.`}
+        confirmLabel="Send"
+        busy={busy}
+        onConfirm={doAnnounceDays}
       />
     </div>
   );

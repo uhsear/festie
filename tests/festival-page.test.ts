@@ -90,15 +90,15 @@ function handlerFor(deps: any, path: string) {
   return route.handlers[route.handlers.length - 1];
 }
 
-async function getPage(deps: any, slug: string) {
+async function getPage(deps: any, slug: string, query: Record<string, unknown> = {}) {
   const res = mockRes();
-  await handlerFor(deps, '/f/:slug')({ params: { slug }, protocol: 'https', get: () => 'festie.us' }, res);
+  await handlerFor(deps, '/f/:slug')({ params: { slug }, query, protocol: 'https', get: () => 'festie.us' }, res);
   return res;
 }
 
-async function getOg(deps: any, slug: string) {
+async function getOg(deps: any, slug: string, handler = handlerFor(deps, '/f/:slug/og.png')) {
   const res = mockRes();
-  await handlerFor(deps, '/f/:slug/og.png')({ params: { slug } }, res);
+  await handler({ params: { slug } }, res);
   return res;
 }
 
@@ -153,6 +153,53 @@ describe('festival page: GET /f/:slug', () => {
     assert.ok(html.includes('<h2>Day 2 <span class="fp-date">Sat, Nov 7</span></h2>'));
     assert.ok(html.includes('Set times to come.'));
     assert.ok(!html.includes('<script>') && !html.includes('<img'), 'no scripts or images');
+  });
+
+  it('passes an allow-listed ref through the CTA and falls back to festival-page for anything else', async () => {
+    const cta = async (query: Record<string, unknown>) => {
+      const html: string = (await getPage(buildDeps().deps, 'edc-orlando-2026', query))._sent;
+      return /href="[^"]*\?festival=[^"]*&amp;ref=([^"]*)"/.exec(html)?.[1];
+    };
+    for (const ref of ['share-festival', 'share-wrap', 'share-picks', 'crew-invite']) assert.equal(await cta({ ref }), ref);
+    for (const ref of ['evil', 'festival-page-follow', 'SHARE-FESTIVAL', '"><script>', ['share-wrap'], { a: 1 }, undefined]) {
+      assert.equal(await cta({ ref }), 'festival-page', JSON.stringify(ref));
+    }
+  });
+
+  it('links "Get alerts (free account)" to the app, carrying a share tag or festival-page-follow', async () => {
+    const follow = async (query: Record<string, unknown>) => {
+      const html: string = (await getPage(buildDeps().deps, 'edc-orlando-2026', query))._sent;
+      const [, href, label] = /<a class="fp-link" href="([^"]*)">([^<]*)<\/a>/.exec(html) ?? [];
+      return { href, label };
+    };
+    const tagged = await follow({ ref: 'share-festival' });
+    assert.equal(tagged.label, 'Get alerts (free account)');
+    assert.equal(tagged.href, 'https://festie.us/?festival=fest%201%2Fx&amp;ref=share-festival');
+    for (const ref of ['evil', 'festival-page', '"><script>', undefined]) {
+      assert.equal((await follow({ ref })).href, 'https://festie.us/?festival=fest%201%2Fx&amp;ref=festival-page-follow');
+    }
+  });
+
+  it('keeps "You can start without an account." next to the planning button only', async () => {
+    const html: string = (await getPage(buildDeps().deps, 'edc-orlando-2026'))._sent;
+    assert.equal(html.split('You can start without an account.').length - 1, 1);
+    assert.ok(!/Get alerts[^<]*without an account/.test(html));
+  });
+
+  it('shows the billed name on a set row, ahead of the joined artists', async () => {
+    const festival = {
+      ...FESTIVAL,
+      days: [
+        {
+          label: 'Day 1',
+          date: '2026-11-06',
+          sets: [{ id: 'b', artist: 'Alpha b2b Beta', displayName: 'Alpha & Beta <live>', artists: [{ name: 'Alpha' }, { name: 'Beta' }], startTime: '20:00', endTime: '21:00', stageId: 'main' }],
+        },
+      ],
+    };
+    const html: string = (await getPage(buildDeps({ festival }).deps, 'edc-orlando-2026'))._sent;
+    assert.ok(html.includes('Alpha &amp; Beta &lt;live&gt;'));
+    assert.ok(!html.includes('Alpha b2b Beta'));
   });
 
   it('sorts sets in festival time: 11:00 PM before 1:00 AM, TBA last', async () => {
@@ -268,6 +315,30 @@ describe('festival page: GET /f/:slug/og.png', () => {
     assert.equal(meta.height, 630);
   });
 
+  it('serves a second request inside 10 minutes from the cache and renders again after', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+    const { deps } = buildDeps();
+    const og = handlerFor(deps, '/f/:slug/og.png');
+    const first = await getOg(deps, 'edc-orlando-2026', og);
+    t.mock.timers.tick(9 * 60 * 1000);
+    const second = await getOg(deps, 'edc-orlando-2026', og);
+    assert.equal(second._sent, first._sent, 'same buffer: sharp skipped');
+    t.mock.timers.tick(61 * 1000);
+    const third = await getOg(deps, 'edc-orlando-2026', og);
+    assert.notEqual(third._sent, first._sent, 'rendered again after the TTL');
+    assert.equal(third._headers['Content-Type'], 'image/png');
+  });
+
+  it('does not serve a cached image once the festival stops being public', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+    const { deps, findPublicIdBySlug } = buildDeps();
+    const og = handlerFor(deps, '/f/:slug/og.png');
+    await getOg(deps, 'edc-orlando-2026', og);
+    findPublicIdBySlug.mock.mockImplementation(async () => null);
+    const res = await getOg(deps, 'edc-orlando-2026', og);
+    assert.equal(res._status, 404);
+  });
+
   it('answers an empty 404 for an unknown or malformed slug', async () => {
     const unknown = await getOg(buildDeps({ publicId: null }).deps, 'nope');
     assert.equal(unknown._status, 404);
@@ -285,6 +356,16 @@ describe('festival page: GET /f/:slug/og.png', () => {
     assert.equal(res._headers['Cache-Control'], 'no-store');
     assert.equal(res._sent, null);
     assert.equal(log.error.mock.calls[0]!.arguments[0], 'festival og render failed');
+  });
+
+  it('buildFestivalOgSvg reads "42 acts announced" when there are no sets', () => {
+    const base = { festivalName: 'Wasteland', dateRange: null, location: '', setCount: 0, stageCount: 0 };
+    assert.ok(buildFestivalOgSvg({ ...base, announcedCount: 42 }).includes('>42 acts announced<'));
+    assert.ok(buildFestivalOgSvg({ ...base, announcedCount: 1 }).includes('>1 act announced<'));
+    assert.ok(buildFestivalOgSvg({ ...base, announcedCount: 42, stageCount: 2 }).includes('>42 acts announced · 2 stages<'));
+    // No announced acts keeps the old line; sets win over announced acts.
+    assert.ok(buildFestivalOgSvg(base).includes('>0 sets · 0 stages<'));
+    assert.ok(buildFestivalOgSvg({ ...base, setCount: 3, announcedCount: 42 }).includes('>3 sets · 0 stages<'));
   });
 
   it('buildFestivalOgSvg counts in the singular, drops an empty date line and escapes text', () => {

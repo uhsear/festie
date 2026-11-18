@@ -14,6 +14,8 @@ const h = vi.hoisted(() => ({
     cb: null as null | (() => void),
     currentFestival: null as unknown,
     currentProfile: null as unknown,
+    // What the festival store has persisted; getState() reads it.
+    cachedFestival: null as unknown,
   },
 }));
 
@@ -48,7 +50,7 @@ vi.mock('@festie/shared/stores', () => {
     loadProfiles: vi.fn(async () => {}),
   };
   const useFestivalStore = Object.assign((sel: (s: typeof slice) => unknown) => sel(slice), {
-    getState: () => ({ festivals: h.festivals as unknown[], currentFestival: null }),
+    getState: () => ({ festivals: h.festivals as unknown[], currentFestival: h.state.cachedFestival }),
   });
   return { useFestivalStore };
 });
@@ -184,6 +186,12 @@ describe('useFestivalLoader ?ref capture', () => {
     expect(readSignupRef()).toBe('crew_share');
   });
 
+  it('keeps the crew-invite ref when a ?joinCrew= code is in the same link', () => {
+    window.history.pushState({}, '', '/?joinCrew=ABC123&ref=crew-invite');
+    renderHook(() => useFestivalLoader());
+    expect(readSignupRef()).toBe('crew-invite');
+  });
+
   it('ignores an invalid ref', () => {
     window.history.pushState({}, '', '/?ref=bad%20ref!');
     renderHook(() => useFestivalLoader());
@@ -226,5 +234,39 @@ describe('useFestivalLoader ?festival deep link', () => {
     renderHook(() => useFestivalLoader());
     await act(async () => {});
     expect(window.location.search).toBe('?festival=f2');
+  });
+});
+
+describe('useFestivalLoader follow link from /f/', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    h.state.user = null;
+    h.state.cachedFestival = null;
+    h.festivals = [{ id: 'f1' }, { id: 'f2' }];
+    h.selectFestival.mockClear();
+  });
+
+  afterEach(() => {
+    h.state.user = null;
+    h.state.cachedFestival = null;
+    h.festivals = [];
+    window.history.pushState({}, '', '/');
+  });
+
+  it('keeps the linked festival selected, and the share tag, after the guest signs in', async () => {
+    window.history.pushState({}, '', '/?festival=f2&ref=share-festival');
+    const { rerender } = renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(h.selectFestival).toHaveBeenLastCalledWith('f2');
+    expect(window.location.search).toBe('?ref=share-festival');
+
+    // The guest signs up and the app returns to the stripped URL. The store keeps the selection (it persists).
+    h.state.cachedFestival = { id: 'f2' };
+    h.selectFestival.mockClear();
+    h.state.user = { id: 'u1' };
+    rerender();
+    await act(async () => {});
+    expect(h.selectFestival.mock.calls.map((call) => call[0])).not.toContain('f1');
+    expect(readSignupRef()).toBe('share-festival');
   });
 });
