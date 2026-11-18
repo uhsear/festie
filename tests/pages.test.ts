@@ -163,7 +163,7 @@ describe('pages: /join/:code', () => {
     assert.equal(res._status, 200);
     assert.ok(res._sent.includes('og:title" content="Join Bass Gang on Festie"'));
     assert.ok(res._sent.includes('EDC Orlando'));
-    assert.ok(res._sent.includes('href="https://festie.us/?joinCrew=ABC123"'));
+    assert.ok(res._sent.includes('href="https://festie.us/?joinCrew=ABC123&amp;ref=crew-invite"'));
     assert.ok(res._sent.includes('og:url" content="https://festie.us/join/ABC123"'));
     assert.equal(res._redirectUrl, null);
     assert.equal(res._headers['Content-Type'], 'text/html; charset=utf-8');
