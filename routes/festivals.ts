@@ -374,6 +374,7 @@ export default function createFestivalsRoutes(deps: any) {
                 ...(s.movedAt ? { movedAt: s.movedAt, movedFrom: s.movedFrom } : {}),
               })),
             })),
+            lineup: festival.lineup ?? [],
             slug: festival.slug ?? null,
             mapConfig: festival.mapConfig ?? null,
             createdAt: festival.createdAt,
@@ -441,7 +442,8 @@ export default function createFestivalsRoutes(deps: any) {
         const existingFestival = await getFestivalById(req.validatedParams.id);
         if (!existingFestival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
         // The body is partial, so check the festival that results from the save.
-        const issues = validateFestivalIssues(config, { ...existingFestival, ...body });
+        // A stored lineup is not re-checked: only a body that carries one can fail on duplicates.
+        const issues = validateFestivalIssues(config, { ...existingFestival, lineup: undefined, ...body });
         if (issues.length > 0) return sendIssues(res, issues);
 
         if (
@@ -524,12 +526,15 @@ export default function createFestivalsRoutes(deps: any) {
           : new Map();
 
         const festival = await stores.festivals.update(req.validatedParams.id, {
+          expectedUpdatedAt: body.expectedUpdatedAt,
           name: nextFestival.name,
           location: nextFestival.location,
           b2bSeparator: nextFestival.b2bSeparator,
           timeZone: nextFestival.timeZone,
           stages: nextFestival.stages,
           ...(daysSent ? { days: nextFestival.days } : {}),
+          // Only a body that sends the lineup rewrites it, so mobile and map saves keep the stored list.
+          ...(body.lineup !== undefined ? { lineup: nextFestival.lineup } : {}),
           mapConfig: nextFestival.mapConfig,
           updatedBy: req.user?.userId ?? null,
           ...(venueSent ? { latitude: nextFestival.latitude, longitude: nextFestival.longitude } : {}),
@@ -567,6 +572,14 @@ export default function createFestivalsRoutes(deps: any) {
           (await fillVenueCoords(festival.id, nextFestival.location));
         return sendSuccess(res, { ...festival, scheduleNotice, ...(venueGuessed ? { venueGuessed } : {}) });
       } catch (error: any) {
+        if (error.code === 'FESTIVAL_CHANGED') {
+          return sendError(
+            res,
+            409,
+            'This festival changed since you opened it. Reload it, then make your change again.',
+            ErrorCodes.FESTIVAL_CHANGED,
+          );
+        }
         if (sendIdClash(res, error)) return;
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);

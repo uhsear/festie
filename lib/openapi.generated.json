@@ -475,6 +475,79 @@
               "additionalProperties": false
             }
           },
+          "lineup": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "artists": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "links": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "displayName": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "tier": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "dayDate": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "announced",
+                    "cancelled"
+                  ]
+                },
+                "announcedAt": {
+                  "type": "string"
+                },
+                "linkedSetIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "artists",
+                "displayName",
+                "tier",
+                "dayDate",
+                "status",
+                "announcedAt",
+                "linkedSetIds"
+              ],
+              "additionalProperties": false
+            }
+          },
           "slug": {
             "nullable": true,
             "type": "string"
@@ -888,6 +961,7 @@
           "location",
           "stages",
           "days",
+          "lineup",
           "mapConfig",
           "createdAt",
           "updatedAt"
@@ -1475,6 +1549,79 @@
               "additionalProperties": false
             }
           },
+          "lineup": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "artists": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "name": {
+                        "type": "string"
+                      },
+                      "links": {
+                        "type": "object",
+                        "additionalProperties": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "displayName": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "tier": {
+                  "nullable": true,
+                  "type": "integer",
+                  "minimum": -9007199254740991,
+                  "maximum": 9007199254740991
+                },
+                "dayDate": {
+                  "nullable": true,
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "announced",
+                    "cancelled"
+                  ]
+                },
+                "announcedAt": {
+                  "type": "string"
+                },
+                "linkedSetIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              },
+              "required": [
+                "id",
+                "artists",
+                "displayName",
+                "tier",
+                "dayDate",
+                "status",
+                "announcedAt",
+                "linkedSetIds"
+              ],
+              "additionalProperties": false
+            }
+          },
           "slug": {
             "nullable": true,
             "type": "string"
@@ -1490,7 +1637,8 @@
           "createdAt",
           "updatedAt",
           "stages",
-          "days"
+          "days",
+          "lineup"
         ],
         "additionalProperties": false
       },

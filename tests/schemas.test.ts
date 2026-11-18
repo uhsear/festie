@@ -630,6 +630,18 @@ describe('responseSchemas: serialized payloads parse', () => {
           ],
         },
       ],
+      lineup: [
+        {
+          id: 'lu-1',
+          artists: [{ name: 'DJ A', links: {} }],
+          displayName: null,
+          tier: null,
+          dayDate: null,
+          status: 'announced',
+          announcedAt: '2026-11-20',
+          linkedSetIds: [],
+        },
+      ],
       mapConfig: null,
       createdAt: now,
       updatedAt: now,

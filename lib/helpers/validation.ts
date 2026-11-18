@@ -7,6 +7,7 @@
 
 import { sanitizeString, sanitizeIdentifier } from './sanitize';
 import { festivalStartMinutes, formatClock12 } from '../time-zone';
+import { lineupIssues } from '../lineup';
 
 export function validateTime(value: any) {
   if (typeof value !== 'string' || !/^\d{2}:\d{2}$/.test(value)) return false;
@@ -101,7 +102,7 @@ export function checkPasswordPolicy(
 
 export interface FestivalIssueTarget {
   kind: 'festival' | 'stage' | 'day' | 'set';
-  field?: 'name' | 'color' | 'id' | 'label' | 'date' | 'artist' | 'stageId' | 'startTime' | 'endTime' | 'sets';
+  field?: 'name' | 'color' | 'id' | 'label' | 'date' | 'artist' | 'stageId' | 'startTime' | 'endTime' | 'sets' | 'lineup';
   stageId?: string;
   stageIndex?: number;
   dayIndex?: number;
@@ -243,6 +244,7 @@ export function validateFestivalIssues(config: any, body: any): FestivalIssue[] 
     }
     dayIndex += 1;
   }
+  for (const issue of lineupIssues(body.lineup)) add(issue.code, issue.message, { kind: 'festival', field: 'lineup' });
   return issues;
 }
 

@@ -488,7 +488,8 @@ describe('createUtils — buildFestivalRecords', () => {
     const utils = createUtils(pool);
 
     const result = await utils.buildFestivalRecords();
-    assert.deepEqual(result, fakeRows);
+    // Rows come back with lineup normalised: a row with no lineup reads [].
+    assert.deepEqual(result, fakeRows.map((row) => ({ ...row, lineup: [] })));
     assert.equal(pool.queries.length, 1);
     assert.ok(pool.queries[0].sql.includes('FROM festivals f'));
   });

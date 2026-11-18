@@ -2667,6 +2667,22 @@ export type components = {
             }[];
             id: string;
             latitude?: number | null;
+            lineup: {
+                announcedAt: string;
+                artists: {
+                    links?: {
+                        [key: string]: string;
+                    };
+                    name: string;
+                }[];
+                dayDate: string | null;
+                displayName: string | null;
+                id: string;
+                linkedSetIds: string[];
+                /** @enum {string} */
+                status: "announced" | "cancelled";
+                tier: number | null;
+            }[];
             location: string;
             longitude?: number | null;
             mapConfig: {
@@ -2761,6 +2777,22 @@ export type components = {
             }[];
             id: string;
             latitude?: number | null;
+            lineup: {
+                announcedAt: string;
+                artists: {
+                    links?: {
+                        [key: string]: string;
+                    };
+                    name: string;
+                }[];
+                dayDate: string | null;
+                displayName: string | null;
+                id: string;
+                linkedSetIds: string[];
+                /** @enum {string} */
+                status: "announced" | "cancelled";
+                tier: number | null;
+            }[];
             location: string;
             longitude?: number | null;
             mapConfig: {
