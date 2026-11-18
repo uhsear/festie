@@ -2112,6 +2112,61 @@ describe('routes/admin.js — GET /ref-counts', () => {
     assert.equal(deps.stores.pool.query.mock.calls.length, 0);
   });
 
+  test('GET /growth returns sign-ups by ref, follows, followers, people reached by news pushes and emails, and held pushes, read-only', async () => {
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    const deps = makeDeps();
+    const queries: any[] = [];
+    deps.stores.pool.query = mock.fn(async (sql: string) => {
+      queries.push(sql);
+      if (sql.includes('signup_ref_counts')) return { rows: [{ day: '2026-11-01', ref: 'share-festival', signups: 2 }] };
+      if (sql.includes('notification_log')) {
+        return {
+          rows: [
+            { type: 'lineup_drop', channel: 'email', count: 3 },
+            { type: 'lineup_drop', channel: 'held', count: 2 },
+            { type: 'lineup_drop', channel: 'push', count: 5 },
+          ],
+        };
+      }
+      if (sql.includes('GROUP BY 1, 2, 3')) return { rows: [{ day: '2026-11-01', festivalId: 'f1', festivalName: 'Fest', follows: 4 }] };
+      if (sql.includes('festival_follows')) return { rows: [{ festivalId: 'f1', festivalName: 'Fest', followers: 9 }] };
+      return { rows: [] };
+    });
+    const app = buildApp(createAdminRoutes(deps));
+
+    const res = await request(app).get('/growth?days=14').expect(200);
+
+    assert.deepEqual(res.body.data.signupsByRef, [{ day: '2026-11-01', ref: 'share-festival', signups: 2 }]);
+    assert.equal(res.body.data.followsPerDay[0].follows, 4);
+    assert.equal(res.body.data.followers[0].followers, 9);
+    assert.deepEqual(res.body.data.newsPushes, [{ type: 'lineup_drop', count: 5 }]);
+    assert.deepEqual(res.body.data.newsEmails, [{ type: 'lineup_drop', count: 3 }]);
+    assert.deepEqual(res.body.data.newsHeld, [{ type: 'lineup_drop', count: 2 }]);
+    assert.equal(Number(res.body.data.days), 14);
+    assert.equal(queries.length, 4);
+    for (const sql of queries) assert.doesNotMatch(sql, /(INSERT|UPDATE|DELETE)/i);
+    const newsCall = (deps.stores.pool.query.mock.calls as any[]).find((c) => c.arguments[0].includes('notification_log'));
+    assert.deepEqual(newsCall.arguments[1][1], ['lineup_drop', 'set_times_out']);
+    assert.match(newsCall.arguments[0], /COUNT\(DISTINCT user_id\)/);
+    assert.match(newsCall.arguments[0], /created_at >= CURRENT_DATE/);
+  });
+
+  test('GET /growth is admin-only and reports a query failure as 500', async () => {
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    const denied = makeDeps({
+      adminAuth: (_req: any, res: any) => res.status(403).json({ data: null, error: { code: 'FORBIDDEN' } }),
+    });
+    denied.stores.pool.query = mock.fn(async () => ({ rows: [] }));
+    await request(buildApp(createAdminRoutes(denied))).get('/growth').expect(403);
+    assert.equal(denied.stores.pool.query.mock.calls.length, 0);
+
+    const failing = makeDeps();
+    failing.stores.pool.query = mock.fn(async () => {
+      throw new Error('db down');
+    });
+    await request(buildApp(createAdminRoutes(failing))).get('/growth').expect(500);
+  });
+
   test('defaults to 30 days and rejects an out-of-range window with the real schema', async () => {
     const { adminRefCountsQuery } = await import('../lib/schemas.js');
     assert.equal(adminRefCountsQuery.parse({}).days, 30);

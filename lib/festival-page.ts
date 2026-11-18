@@ -48,6 +48,8 @@ export function dayHeadingDate(date: unknown): string {
 }
 
 function setArtistName(set: any, separator: string | undefined): string {
+  // The billed name wins, as in the app's artistDisplayName.
+  if (set.displayName) return set.displayName;
   if (Array.isArray(set.artists) && set.artists.length > 0) return artistDisplayName(set.artists, separator);
   return set.artist || 'Artist TBA';
 }
@@ -190,13 +192,32 @@ function renderDay(day: ReturnType<typeof buildFestivalPageDays>[number], acts: 
     </section>`;
 }
 
-export function renderFestivalPage({ festival, origin, slug }: { festival: any; origin: string; slug: string }) {
+// Share sources a visitor may carry through the CTA into sign-up counts. Any other value
+// falls back to 'festival-page', so a forged link cannot mint new tags in signup_ref_counts.
+const FESTIVAL_PAGE_REFS = new Set(['share-festival', 'share-wrap', 'share-picks', 'crew-invite']);
+
+/** The incoming ?ref= when it is allow-listed, else 'festival-page'. */
+export function festivalPageRef(ref: unknown): string {
+  return typeof ref === 'string' && FESTIVAL_PAGE_REFS.has(ref) ? ref : 'festival-page';
+}
+
+export function renderFestivalPage({
+  festival,
+  origin,
+  slug,
+  ref,
+}: {
+  festival: any;
+  origin: string;
+  slug: string;
+  ref?: unknown;
+}) {
   const name = String(festival.name || '');
   const location = String(festival.location || '');
   const dateRange = festivalDateRange(festival);
   const pageUrl = `${origin}/f/${slug}`;
   const ogUrl = `${pageUrl}/og.png`;
-  const appUrl = `${origin}/?festival=${encodeURIComponent(festival.id)}&ref=festival-page`;
+  const appUrl = `${origin}/?festival=${encodeURIComponent(festival.id)}&ref=${festivalPageRef(ref)}`;
   const hasSets = (festival.days || []).some((day: any) => (day?.sets || []).length > 0);
   const description = `${hasSets ? 'Lineup and set times' : 'Lineup'} for ${name}${dateRange ? ` · ${dateRange}` : ''}${location ? ` · ${location}` : ''}. Plan your days with Festie.`;
   const placeLine = [dateRange, location].filter(Boolean).join(' · ');

@@ -273,6 +273,28 @@ describe('provider sign-in routes (database)', { skip, concurrency: 1 }, () => {
     assert.ok(again.body.data.refreshToken);
   });
 
+  test('complete counts a valid ref once and drops an invalid one without failing sign-up', async () => {
+    const s = await server();
+    const countFor = (ref: string) =>
+      withPool(
+        async (pool) =>
+          (await pool.query('SELECT COALESCE(SUM(signups), 0)::int AS n FROM signup_ref_counts WHERE ref = $1', [ref]))
+            .rows[0].n,
+      );
+    const ref = 'share-festival';
+    const before = await countFor(ref);
+    const tagged = await startGoogleSignup(s);
+    const taggedDone = await complete(s, { signupToken: tagged.data.signupToken, username: uniqueName('r'), ref });
+    assert.equal(taggedDone.status, 201, JSON.stringify(taggedDone.body));
+    assert.equal(await countFor(ref), before + 1);
+
+    const evil = await startGoogleSignup(s);
+    const evilDone = await complete(s, { signupToken: evil.data.signupToken, username: uniqueName('e'), ref: 'Evil Ref!' });
+    assert.equal(evilDone.status, 201, JSON.stringify(evilDone.body));
+    assert.equal(await countFor(ref), before + 1);
+    assert.equal(await countFor('evil ref!'), 0);
+  });
+
   test('a replayed ID token or a reused nonce is refused', async () => {
     const s = await server();
     const nonce = await getNonce(s);
