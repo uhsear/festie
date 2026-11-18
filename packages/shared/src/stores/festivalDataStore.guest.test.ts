@@ -88,7 +88,7 @@ describe('mergeGuestPicks', () => {
     useFestivalDataStore.setState({ guestPicks: { f1: { s1: 'must', gone: 'maybe' } } });
   });
 
-  it('posts the profile, PUTs the merged map, then clears guestPicks', async () => {
+  it('posts the profile, PUTs a delta of the added picks, then clears guestPicks', async () => {
     vi.mocked(api.post).mockResolvedValueOnce(profile({ s2: 'want-to-see' }));
     vi.mocked(api.put).mockResolvedValueOnce({});
     vi.mocked(api.get).mockResolvedValueOnce([]);
@@ -96,7 +96,7 @@ describe('mergeGuestPicks', () => {
     expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'f1' });
     expect(api.put).toHaveBeenCalledWith(
       '/profiles/prof-1',
-      { picks: { s1: 'must', s2: 'want-to-see' } },
+      { pickDeltas: { s1: 'must' }, legacyPicks: { s1: 'must', s2: 'want-to-see' } },
       { clientId: 'guest-merge-prof-1', offlineLabel: 'Update picks' },
     );
     expect(store().guestPicks).toEqual({});
