@@ -28,7 +28,7 @@ export default function createAdminSiteplanRoutes(deps: any) {
     pool,
     stores,
     avatarPool,
-    adminAuth,
+    festivalAccess,
     rateLimit,
     validateParams,
     schemas,
@@ -44,7 +44,7 @@ export default function createAdminSiteplanRoutes(deps: any) {
 
   router.post(
     '/festivals/:id/siteplan-image',
-    adminAuth,
+    festivalAccess({ action: 'map.edit' }),
     rateLimit(10, 'siteplan-upload'),
     validateParams(schemas.genericIdParams),
     handleSiteplanUpload,

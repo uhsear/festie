@@ -15,7 +15,7 @@ import {
   issuesFromError,
   restoreFestival,
 } from '@festie/shared/services/festivalAdmin';
-import { getSetEngagement, type SetEngagementMap } from '@festie/shared/services';
+import { getLineupInterest, getSetEngagement, type LineupInterestCounts, type SetEngagementMap } from '@festie/shared/services';
 import type { AdminFestivalDetail, ArchivedFestival } from '@festie/shared/services/festivalAdmin';
 import type { EditableFestival, FestivalIssue } from '@festie/shared/utils';
 import {
@@ -39,7 +39,7 @@ import FestivalMapEditor from './FestivalMapEditor';
 import FestivalStatusPanel, { FestivalMeta } from './FestivalStatusPanel';
 import AdminFestivalPreview from './AdminFestivalPreview';
 import SelectionBar from './SelectionBar';
-import FestivalLinks from './FestivalLinks';
+import FestivalArtists from './FestivalArtists';
 import FestivalAnnouncements from './FestivalAnnouncements';
 import { cn } from '../../lib/utils';
 import EmptyState from '../ui/EmptyState';
@@ -92,11 +92,12 @@ export default function AdminFestivals() {
   const [searchQuery, setSearchQuery] = useState(q ?? '');
   const [confirmDelete, setConfirmDelete] = useState<{ id: string; title: string; description: string } | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
-  // When set, the Spotify links panel takes over the panel for this festival.
-  const [linksTarget, setLinksTarget] = useState<{ id: string; name: string } | null>(null);
+  // When set, the Artists panel takes over the panel for this festival.
+  const [artistsTarget, setArtistsTarget] = useState<{ id: string; name: string } | null>(null);
   // Per-set picks and reminders for the festival being edited.
   const [engagement, setEngagement] = useState<SetEngagementMap | undefined>(undefined);
   const [engagementError, setEngagementError] = useState(false);
+  const [interestCounts, setInterestCounts] = useState<LineupInterestCounts | undefined>(undefined);
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
   const [removalBusy, setRemovalBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -163,6 +164,7 @@ export default function AdminFestivals() {
     setInitialExpandedDays(new Set());
     setEngagement(undefined);
     setEngagementError(false);
+    setInterestCounts(undefined);
   };
 
   // Leaving the Details view drops the seeded form; coming back loads the saved festival again.
@@ -195,6 +197,11 @@ export default function AdminFestivals() {
     setEngagementError(false);
     // Pick counts load beside the festival; a failure only hides the counts.
     getSetEngagement(festivalId).then(setEngagement, () => setEngagementError(true));
+    // Marks are a published-festival feature. A failure only hides the column, so it needs no message.
+    setInterestCounts(undefined);
+    if (publishedAt && Array.isArray(full.lineup) && full.lineup.length > 0) {
+      getLineupInterest(festivalId).then((res) => setInterestCounts(res.counts), () => setInterestCounts(undefined));
+    }
     setSeededId(festivalId);
   }, [festivalId, editing, seededId, detail.data, detail.isFetching]);
 
@@ -264,7 +271,7 @@ export default function AdminFestivals() {
     } catch (err: unknown) {
       const removal = removalFromError(err);
       if (removal) {
-        setPendingRemoval(describeRemovals(removal));
+        setPendingRemoval(describeRemovals(removal, notifyPickers));
         return;
       }
       const found = issuesFromError(err);
@@ -382,9 +389,9 @@ export default function AdminFestivals() {
 
   if (previewId) return <AdminFestivalPreview festivalId={previewId} />;
 
-  if (linksTarget) {
+  if (artistsTarget) {
     return (
-      <FestivalLinks festivalId={linksTarget.id} festivalName={linksTarget.name} onClose={() => setLinksTarget(null)} />
+      <FestivalArtists festivalId={artistsTarget.id} festivalName={artistsTarget.name} onClose={() => setArtistsTarget(null)} />
     );
   }
 
@@ -434,8 +441,11 @@ export default function AdminFestivals() {
         saving={saving}
         venueGuessed={!!festivalId && venueGuessedFor === festivalId}
         savedDays={original?.days}
+        savedLineup={original?.lineup}
         engagement={engagement}
         engagementError={engagementError}
+        festivals={festivals}
+        interestCounts={interestCounts}
         onSave={handleSave}
         onDiscard={() => {
           setFormData(original ?? {});
@@ -660,11 +670,11 @@ export default function AdminFestivals() {
                       Map
                     </button>
                     <button
-                      onClick={() => setLinksTarget({ id: festival.id, name: festival.name })}
-                      aria-label={`Spotify links for ${festival.name}`}
+                      onClick={() => setArtistsTarget({ id: festival.id, name: festival.name })}
+                      aria-label={`Artists for ${festival.name}`}
                       className={rowButton}
                     >
-                      Links
+                      Artists
                     </button>
                     <button
                       onClick={() => handleDelete(festival.id)}

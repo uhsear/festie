@@ -91,6 +91,31 @@ export function coverLineup(
   return cover;
 }
 
+export interface CandidateSet {
+  setId: string;
+  /** Index into `days`. */
+  dayIndex: number;
+  names: string[];
+}
+
+/**
+ * Sets that share at least one artist name key with the entry, whether or not they cover it: the list
+ * "Matches set..." offers. An act announced as "A b2b B" that plays two solo sets shows both solo sets.
+ */
+export function matchCandidateSets(
+  entry: Pick<LineupEntry, 'artists'>,
+  days: CoverDay[],
+  separator: string,
+): CandidateSet[] {
+  const wanted = new Set(entry.artists.map((artist) => lineupNameKey(artist.name)));
+  return days.flatMap((day, dayIndex) =>
+    (day.sets ?? []).flatMap((set) => {
+      const names = setNames(set, separator);
+      return names.some((name) => wanted.has(lineupNameKey(name))) ? [{ setId: set.id, dayIndex, names }] : [];
+    }),
+  );
+}
+
 const SAMPLE = 3;
 const nameList = (names: string[]) =>
   names.length > SAMPLE ? `${names.slice(0, SAMPLE).join(', ')} and ${names.length - SAMPLE} more` : names.join(', ');

@@ -347,6 +347,90 @@ export type paths = {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/admin/festivals/{id}/days-announcement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Dry run for Announce days: acts with a day, who would hear, who gets no email */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { festivalName, actsWithDay, actsTotal, recipients, audience, emailRecipients, emailCut, emailOff, reason? } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Send the days announcement push, inbox row and email to followers and profile holders */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { queued: true, recipients, emailRecipients } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No act has a day, or everyone has already heard */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description The festival is a draft, or its set times are already out */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/admin/festivals/{id}/impact": {
         parameters: {
             query?: never;
@@ -414,17 +498,28 @@ export type paths = {
                     "application/json": {
                         /** @default true */
                         createMissing?: boolean;
+                        /** @default false */
+                        moveDays?: boolean;
                         rows: {
                             artist: string;
+                            artistId?: string;
                             date?: string;
                             day?: string;
+                            displayName?: string;
                             endTime?: string;
+                            facebook?: string;
+                            instagram?: string;
                             link?: string;
                             row: number;
                             setId?: string;
+                            soundcloud?: string;
+                            spotify?: string;
                             stage?: string;
                             stageColor?: string;
                             startTime?: string;
+                            tiktok?: string;
+                            twitter?: string;
+                            website?: string;
                         }[];
                         /** @default false */
                         skipSpotify?: boolean;
@@ -487,17 +582,28 @@ export type paths = {
                     "application/json": {
                         /** @default true */
                         createMissing?: boolean;
+                        /** @default false */
+                        moveDays?: boolean;
                         rows: {
                             artist: string;
+                            artistId?: string;
                             date?: string;
                             day?: string;
+                            displayName?: string;
                             endTime?: string;
+                            facebook?: string;
+                            instagram?: string;
                             link?: string;
                             row: number;
                             setId?: string;
+                            soundcloud?: string;
+                            spotify?: string;
                             stage?: string;
                             stageColor?: string;
                             startTime?: string;
+                            tiktok?: string;
+                            twitter?: string;
+                            website?: string;
                         }[];
                         /** @default false */
                         skipSpotify?: boolean;
@@ -642,7 +748,7 @@ export type paths = {
             };
             requestBody?: never;
             responses: {
-                /** @description { festivalName, recipients } */
+                /** @description { festivalName, recipients, followers, priorAttendees, matchedFestivalNames, emailRecipients, emailCut, emailOff } */
                 200: {
                     headers: {
                         [name: string]: unknown;
@@ -780,6 +886,98 @@ export type paths = {
                 };
                 /** @description This festival is not in Archived. */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/festivals/{id}/time-releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Release panel: per date timed and total sets, claim state, recipient ceiling and preview title */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description { festivalName, canSend, recipientsNow, emailRecipients, emailCut, emailOff, defaultBody, dates, orphanDates } */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        /** Send the set-times alert for one or more festival dates (claim, then send) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": {
+                        confirmPartial?: boolean;
+                        dates: string[];
+                        note?: string;
+                    };
+                };
+            };
+            responses: {
+                /** @description { queued, dates, skipped, recipients } */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description A date is not a day of the festival with a timed set */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Festival not found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description DRAFT, FESTIVAL_OVER, PARTIAL_RELEASE (error.partial) or ALREADY_RELEASED (error.releases) */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -2441,10 +2639,13 @@ export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
         Artist: {
+            genres?: string[];
+            id?: string;
             links?: {
                 [key: string]: string;
             };
             name: string;
+            photo?: string;
         };
         AuthEnvelope: {
             pendingEmail?: string | null;
@@ -2646,10 +2847,13 @@ export type components = {
                 sets: {
                     artist: string | null;
                     artists: {
+                        genres?: string[];
+                        id?: string;
                         links?: {
                             [key: string]: string;
                         };
                         name: string;
+                        photo?: string;
                     }[];
                     endTime: string | null;
                     id: string;
@@ -2670,10 +2874,13 @@ export type components = {
             lineup: {
                 announcedAt: string;
                 artists: {
+                    genres?: string[];
+                    id?: string;
                     links?: {
                         [key: string]: string;
                     };
                     name: string;
+                    photo?: string;
                 }[];
                 dayDate: string | null;
                 displayName: string | null;
@@ -2738,6 +2945,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            seriesId?: string | null;
             slug?: string | null;
             stages: {
                 color: string | null;
@@ -2757,10 +2965,13 @@ export type components = {
                 sets: {
                     artist: string | null;
                     artists: {
+                        genres?: string[];
+                        id?: string;
                         links?: {
                             [key: string]: string;
                         };
                         name: string;
+                        photo?: string;
                     }[];
                     endTime: string | null;
                     id: string;
@@ -2780,10 +2991,13 @@ export type components = {
             lineup: {
                 announcedAt: string;
                 artists: {
+                    genres?: string[];
+                    id?: string;
                     links?: {
                         [key: string]: string;
                     };
                     name: string;
+                    photo?: string;
                 }[];
                 dayDate: string | null;
                 displayName: string | null;
@@ -2865,6 +3079,9 @@ export type components = {
             lineupCount: number;
             location: string;
             name: string;
+            /** @enum {string|null} */
+            scheduleProgress?: "times" | "days" | "lineup" | null;
+            seriesId?: string | null;
             slug?: string | null;
             stageCount: number;
             startDate: string | null;
@@ -2872,10 +3089,13 @@ export type components = {
         FestivalSet: {
             artist: string | null;
             artists: {
+                genres?: string[];
+                id?: string;
                 links?: {
                     [key: string]: string;
                 };
                 name: string;
+                photo?: string;
             }[];
             endTime: string | null;
             id: string;
@@ -2941,6 +3161,14 @@ export type components = {
             createdAt: string;
             festivalId: string;
             id: string;
+            interests?: {
+                [key: string]: {
+                    at?: string;
+                    sets?: string[];
+                    /** @enum {string} */
+                    state: "open" | "converted";
+                };
+            };
             name: string;
             notes?: {
                 [key: string]: string;

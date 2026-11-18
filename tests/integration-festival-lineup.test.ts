@@ -118,6 +118,20 @@ describe('Integration: announced lineup', { concurrency: 1 }, () => {
     assert.deepEqual((await get()).lineup.map((e: any) => e.artists[0].name), ['INFEKT']);
   });
 
+  test('two saves with the same token: one wins, the other gets 409 and the lineup survives', async () => {
+    const { get, put } = await setup();
+    const loaded = await get();
+    const results = await Promise.all([
+      put({ expectedUpdatedAt: loaded.updatedAt, lineup: [act('First')] }),
+      put({ expectedUpdatedAt: loaded.updatedAt, lineup: [act('Second')] }),
+    ]);
+    const statuses = results.map((r) => r.status).sort();
+    assert.deepEqual(statuses, [200, 409]);
+    const winner = results.find((r) => r.status === 200) === results[0] ? 'First' : 'Second';
+    assert.equal(results.find((r) => r.status === 409)!.body.error.code, 'FESTIVAL_CHANGED');
+    assert.deepEqual((await get()).lineup.map((e: any) => e.artists[0].name), [winner]);
+  });
+
   test('a new festival takes a lineup on create', async () => {
     const { server, token } = await setup();
     const res = await server.request

@@ -65,6 +65,7 @@ function appFor(stores: any) {
     sanitizeFestivalPayload: (input: any, ex: any) => sanitizeFestivalPayload(input, ex, config, () => 'x'),
     stores: { pool: { query: async () => ({ rows: [] }) }, ...stores },
   };
+  deps.festivalAccess = () => deps.adminAuth;
   const app = express();
   app.use(express.json());
   app.use(createFestivalsRoutes(deps));

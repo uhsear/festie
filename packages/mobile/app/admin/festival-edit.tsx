@@ -50,6 +50,7 @@ import {
   removeSet as removeSetReducer,
   setSetField as setSetFieldReducer,
   setSetArtistNames as setSetArtistNamesReducer,
+  artistsPayload,
   withoutIndex,
   type StageRow,
   type SetRow,
@@ -142,7 +143,7 @@ interface FestivalDetail {
       startTime?: string | null;
       endTime?: string | null;
       linkUrl?: string | null;
-      artists?: { name?: string; links?: Record<string, string> }[];
+      artists?: { id?: string; name?: string; links?: Record<string, string> }[];
     }[];
   }[];
 }
@@ -176,30 +177,10 @@ function stageIsPinned(s: StageRow): boolean {
   return typeof s.latitude === 'number' && typeof s.longitude === 'number';
 }
 
-/** First spotify/soundcloud link found on a set, for hydrating the link field. */
+/** First spotify/soundcloud link found on a set. Sent back on save so a set with no artists[] keeps it. */
 function setLink(s: DetailSet): string {
   const links = s.artists?.[0]?.links;
   return links?.spotify || links?.soundcloud || s.linkUrl || '';
-}
-
-/**
- * The artists to send for a set. Artist 1 carries the set's single Link field:
- * a changed link replaces its spotify/soundcloud link, because the server ignores
- * linkUrl whenever artists[] is sent. Empty means "send only the typed name".
- */
-function artistsPayload(s: SetRow): { name: string; links: Record<string, string> }[] {
-  return s.artists.map((a, i) => {
-    const links = { ...(a.links ?? {}) };
-    if (i === 0) {
-      const link = s.linkUrl.trim();
-      if (link !== (links.spotify || links.soundcloud || '')) {
-        delete links.spotify;
-        delete links.soundcloud;
-        if (link) links.spotify = link;
-      }
-    }
-    return { name: a.name, links };
-  });
 }
 
 export default function FestivalEditScreen() {
@@ -223,6 +204,10 @@ export default function FestivalEditScreen() {
   // saved artists[] drops; origins keep the artists loaded with the set so each
   // input index keeps its own links and photo.
   const [artistDrafts, setArtistDrafts] = useState<Record<string, string[]>>({});
+  // Names a loaded set holds with no artist id. After the backfill that means the name fits two artists:
+  // only the web editor has a picker, so mobile says so and the set still saves.
+  const unresolvedNames = useRef(new Set<string>());
+
   const artistOrigins = useRef<Record<string, Artist[]>>({});
   const [notifyPickers, setNotifyPickers] = useState(true);
   // Per-set picks and reminders (edit only). null until loaded.
@@ -306,6 +291,14 @@ export default function FestivalEditScreen() {
           artists: (s.artists ?? []).flatMap((a) => (a.name ? [{ ...a, name: a.name }] : [])),
         })),
       }));
+      const everyArtist = (full.days || []).flatMap((d) => (d.sets || []).flatMap((s) => s.artists ?? []));
+      unresolvedNames.current = new Set(
+        everyArtist.some((a) => a.id)
+          ? (full.days || []).flatMap((d) =>
+              (d.sets || []).flatMap((s) => (s.artists ?? []).filter((a) => a.name && !a.id).map((a) => `${s.id}:${a.name}`)),
+            )
+          : [],
+      );
       const loaded = sortFormSets({
         name: full.name || '',
         location: full.location || '',
@@ -456,6 +449,9 @@ export default function FestivalEditScreen() {
               autoCapitalize="words"
               error={i === 0 ? artistError : null}
             />
+            {unresolvedNames.current.has(`${s.id}:${name.trim()}`) && !s.artists.some((a) => a.id && a.name === name.trim()) ? (
+              <Text style={styles.pickOnWeb}>Pick the artist on the web.</Text>
+            ) : null}
             {i > 0 ? (
               <TouchableOpacity
                 onPress={() =>
@@ -1130,15 +1126,6 @@ export default function FestivalEditScreen() {
                                   {timeError}
                                 </Text>
                               ) : null}
-                              <LabeledTextInput
-                                label="Link (optional)"
-                                value={s.linkUrl}
-                                onChangeText={(v) => setSetField(day.id, s.id, 'linkUrl', v)}
-                                placeholder="https://open.spotify.com/…"
-                                autoCapitalize="none"
-                                keyboardType="url"
-                                hint="Spotify or SoundCloud URL."
-                              />
                             </View>
                             );
                           })
@@ -1459,6 +1446,10 @@ const useStyles = makeStyles((t) => ({
   fieldError: {
     ...typeStyle('caption'),
     color: t.colors.text.danger,
+  },
+  pickOnWeb: {
+    ...typeStyle('caption'),
+    color: t.colors.text.muted,
   },
   // Status card --------------------------------------------------------------
   banner: {

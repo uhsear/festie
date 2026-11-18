@@ -48,6 +48,8 @@ export function dayHeadingDate(date: unknown): string {
 }
 
 function setArtistName(set: any, separator: string | undefined): string {
+  // The billed name wins, as in the app's artistDisplayName.
+  if (set.displayName) return set.displayName;
   if (Array.isArray(set.artists) && set.artists.length > 0) return artistDisplayName(set.artists, separator);
   return set.artist || 'Artist TBA';
 }
@@ -190,13 +192,34 @@ function renderDay(day: ReturnType<typeof buildFestivalPageDays>[number], acts: 
     </section>`;
 }
 
-export function renderFestivalPage({ festival, origin, slug }: { festival: any; origin: string; slug: string }) {
+// Share sources a visitor may carry through the CTA into sign-up counts. Any other value
+// falls back to 'festival-page', so a forged link cannot mint new tags in signup_ref_counts.
+const FESTIVAL_PAGE_REFS = new Set(['share-festival', 'share-wrap', 'share-picks', 'crew-invite']);
+
+/** The incoming ?ref= when it is allow-listed, else `fallback`. */
+export function festivalPageRef(ref: unknown, fallback = 'festival-page'): string {
+  return typeof ref === 'string' && FESTIVAL_PAGE_REFS.has(ref) ? ref : fallback;
+}
+
+export function renderFestivalPage({
+  festival,
+  origin,
+  slug,
+  ref,
+}: {
+  festival: any;
+  origin: string;
+  slug: string;
+  ref?: unknown;
+}) {
   const name = String(festival.name || '');
   const location = String(festival.location || '');
   const dateRange = festivalDateRange(festival);
   const pageUrl = `${origin}/f/${slug}`;
   const ogUrl = `${pageUrl}/og.png`;
-  const appUrl = `${origin}/?festival=${encodeURIComponent(festival.id)}&ref=festival-page`;
+  const appUrl = `${origin}/?festival=${encodeURIComponent(festival.id)}&ref=${festivalPageRef(ref)}`;
+  // Keeps a share tag so the follow sign-up credits the share; untagged visitors count as festival-page-follow.
+  const followUrl = `${origin}/?festival=${encodeURIComponent(festival.id)}&ref=${festivalPageRef(ref, 'festival-page-follow')}`;
   const hasSets = (festival.days || []).some((day: any) => (day?.sets || []).length > 0);
   const description = `${hasSets ? 'Lineup and set times' : 'Lineup'} for ${name}${dateRange ? ` · ${dateRange}` : ''}${location ? ` · ${location}` : ''}. Plan your days with Festie.`;
   const placeLine = [dateRange, location].filter(Boolean).join(' · ');
@@ -267,6 +290,7 @@ export function renderFestivalPage({ festival, origin, slug }: { festival: any; 
       <h1>${escapeHtml(name)}</h1>
 ${placeLine ? `      <p class="fp-line">${escapeHtml(placeLine)}</p>\n` : ''}      <a class="fp-cta" href="${escapeHtml(appUrl)}">Plan your days in Festie</a>
       <p class="fp-hint">Pick sets, see clashes and plan with your crew. You can start without an account.</p>
+      <p class="fp-hint"><a class="fp-link" href="${escapeHtml(followUrl)}">Get alerts (free account)</a></p>
       <p class="fp-hint">${escapeHtml(festivalTimeZoneLine(festival))}</p>
     </header>
     ${stagesHtml}

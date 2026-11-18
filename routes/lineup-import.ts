@@ -12,28 +12,37 @@
  *
  * The client parses the CSV or TSV file and posts JSON rows (lineupImportRequestSchema).
  * planLineupImport decides each row; commit plans again inside the write transaction.
- * Imports never delete sets. The lineup announcement is a separate, manual admin
- * action. A commit that adds a published festival's first set times sends the
- * one-time "set times are out" alert (reengagement.sendSetTimesOut).
+ * A row with only names (and links) has no day, stage or time: it adds to the announced lineup.
+ * Rows name artists by key or by id; two live artists with one key stop the commit until a row names the id.
+ * Imports never delete sets. The lineup announcement and the per-date set-times alert are separate,
+ * manual admin actions: a commit sends neither. A set that gets its first time on a date whose alert
+ * already went out alerts the people who picked it (lib/picker-alerts.ts). Other time changes stay silent.
  * A commit and an undo also drop the festival list cache, and on a published festival emit
  * festival:updated, so open clients reload and the announced lineup shows what the sets now cover.
+ * Both then run the interest conversion (lib/lineup.ts), which turns marks on covered acts into picks.
+ * Undo first takes back the picks that conversion made on the sets it deletes.
  *
- * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, commit searches
- * Spotify once for the artists of new sets that have no link.
+ * The import does not search Spotify: one wrong guess would reach every festival that shares the
+ * artist. Links come from the Link column or the Artists tab. Inside the commit and the undo
+ * transaction every artist element is tied to its artists row (resolveArtistRefs), so a set gets
+ * the canonical name and links. A link that differs from the artist's links is not used.
  */
 
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
+import { planPickerAlerts } from '../lib/picker-alerts.js';
 import {
-  artistsNeedingLinks,
+  artistLookupKeys,
   planLineupImport,
+  withLockedArtists,
+  type ArtistRef,
   type LineupImportPlan,
   type LineupImportWrites,
-  type SpotifyHit,
 } from '../lib/lineup-import-plan.js';
 
 const SKIPPED_MESSAGE = 'Matches an existing set. Not updated because Update sets that match was off.';
+const ANNOUNCED_SKIPPED_MESSAGE = 'Matches an announced lineup entry. Not updated because Update sets that match was off.';
 
 const makeId = (prefix: string) => `${prefix}-${crypto.randomBytes(6).toString('hex')}`;
 
@@ -41,28 +50,41 @@ const makeId = (prefix: string) => `${prefix}-${crypto.randomBytes(6).toString('
 function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importId: string, warnings: string[], sep: string) {
   const insertByIndex = new Map(writes.inserts.map((s) => [s.index, s]));
   const updated = new Set(writes.updates.map((u) => u.index));
+  const announcedAdded = new Set(writes.announced.inserts.map((e) => e.index));
+  const announcedUpdated = new Set(writes.announced.updates.map((e) => e.index));
   const rows = plan.rows.map((r, i) => {
     const artist = r.artists.join(` ${sep} `);
     const insert = insertByIndex.get(i);
     if (insert) return { row: r.row, status: 'created' as const, setId: insert.id, artist, message: 'Added.' };
-    if (updated.has(i)) {
+    if (announcedAdded.has(i)) return { row: r.row, status: 'created' as const, artist, message: 'Added to the announced lineup.' };
+    if (updated.has(i) || announcedUpdated.has(i)) {
       return { row: r.row, status: 'updated' as const, setId: r.setId, artist, message: `Updated: ${r.changes.join('; ')}.` };
     }
-    if (r.status === 'changed') return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: SKIPPED_MESSAGE };
+    if (r.skipped) return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: r.skipped };
+    if (r.status === 'changed') {
+      const message = r.target === 'announced' ? ANNOUNCED_SKIPPED_MESSAGE : SKIPPED_MESSAGE;
+      return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message };
+    }
     return { row: r.row, status: 'unchanged' as const, setId: r.setId, artist, message: 'No change.' };
   });
   const count = (status: string) => rows.filter((r) => r.status === status).length;
   return {
     importId,
-    created: count('created'),
-    updated: count('updated'),
+    created: writes.inserts.length,
+    updated: writes.updates.length,
+    announced: writes.announced.inserts.length,
+    announcedUpdated: writes.announced.updates.length,
     unchanged: count('unchanged'),
     skipped: count('skipped'),
     newStages: writes.newStages.length,
     newDays: writes.newDays.length,
     spotifyMatched: writes.spotifyMatched,
     rows,
-    warnings: [...plan.rows.flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)), ...warnings],
+    // Rows that kept their stored day come first, so the admin sees what the import did not apply.
+    warnings: [
+      ...[...plan.rows].sort((a, b) => Number(!!b.skipped) - Number(!!a.skipped)).flatMap((r) => r.warnings.map((w) => `Row ${r.row}: ${w}`)),
+      ...warnings,
+    ],
   };
 }
 
@@ -71,7 +93,7 @@ export default function createLineupImportRoute(deps: any) {
     express,
     log,
     config,
-    adminAuth,
+    festivalAccess,
     setNoStore,
     rateLimit,
     sanitizeIdentifier,
@@ -81,32 +103,29 @@ export default function createLineupImportRoute(deps: any) {
     stores,
     invalidateFestivalCache,
     getRequestIp,
-    reengagement,
     emitter,
   } = deps;
 
   const router = express.Router();
-
-  // Spotify integration — optional, only if credentials configured
-  let spotify: any = null;
-  const spotifyClientId = config.SPOTIFY_CLIENT_ID;
-  const spotifyClientSecret = config.SPOTIFY_CLIENT_SECRET;
-  if (spotifyClientId && spotifyClientSecret) {
-    import('../lib/spotify.js')
-      .then((mod) => {
-        spotify = (mod as any).default || mod;
-        log.info('spotify integration enabled for lineup import');
-      })
-      .catch(() => {
-        log.warn('spotify module not available');
-      });
-  }
 
   // Sets changed, so the list's lineupCount is stale and open clients must reload.
   // A draft has no attendees, and the event goes to every socket.
   function announceSetsChanged(festival: any) {
     deps.invalidateFestivalListCache?.();
     if (festival?.publishedAt) emitter?.festivalUpdated?.({ festival });
+  }
+
+  // After a commit: a set that got its first time on a released date tells the people who picked it. The
+  // festival is read before and after the commit, outside its transaction, so a concurrent edit can cause
+  // one missed or extra alert. Fire and forget: the import has committed, so a failure here only logs.
+  function alertPickersOfFirstTimes(before: any) {
+    if (!before.publishedAt) return;
+    void (async () => {
+      const after = await stores.festivals.getById(before.id);
+      if (!after) return;
+      const { changes, pickersBySet } = await planPickerAlerts({ stores, before, after, tbaOnly: true });
+      if (changes.length > 0) await emitter?.scheduleChanged?.({ festival: after, changes, pickersBySet });
+    })().catch((err: any) => log.warn('import picker alerts failed', { festivalId: before.id, error: err?.message }));
   }
 
   async function writeAuditRow(req: any, res: any, action: string, festivalId: string, details: any) {
@@ -130,15 +149,17 @@ export default function createLineupImportRoute(deps: any) {
     res.locals.auditWritten = true;
   }
 
-  async function searchSpotify(names: string[], warnings: string[]) {
-    if (!spotify || names.length === 0) return undefined;
-    try {
-      const hits: Map<string, SpotifyHit> = await spotify.bulkSearchArtists(names, spotifyClientId, spotifyClientSecret, { log });
-      return new Map([...hits].map(([name, hit]) => [name.toLowerCase(), hit]));
-    } catch (err: any) {
-      log.warn('spotify auto-linking failed, continuing without', { error: err?.message });
-      warnings.push('Spotify search failed, so sets were imported without Spotify links.');
-      return undefined;
+  // A Link column value for an empty platform of an artist that exists: written after the import
+  // commits, through the artist's own locks (festivals first, then the artist), so every festival that
+  // lists the artist gets it. A failure is logged and never fails the import.
+  async function applyLinkFills(fills: Array<{ artistId: string; url: string }>, userId: string | null, ip: string | null) {
+    for (const fill of fills) {
+      try {
+        const result = await stores.artists.fillLink(fill.artistId, { link: fill.url, userId, ip });
+        await deps.afterArtistSync?.(result.synced);
+      } catch (error: any) {
+        log.warn('import link not added to the artist', { artistId: fill.artistId, error: error?.message });
+      }
     }
   }
 
@@ -160,17 +181,21 @@ export default function createLineupImportRoute(deps: any) {
       return null;
     }
     const body = validation.data;
+    // One lookup serves the preview and the commit's re-plan. Commit checks the ids again under lock.
+    const { keys, ids } = artistLookupKeys(festival, body.rows);
+    const artists = await stores.lineupImports.lookupArtists(keys, ids);
     const base = {
       rows: body.rows,
-      options: { updateExisting: body.updateExisting, createMissing: body.createMissing },
+      options: { updateExisting: body.updateExisting, createMissing: body.createMissing, moveDays: body.moveDays },
       config,
+      artists,
     };
     return { festivalId, festival, body, base };
   }
 
   router.post(
     '/:id/import-lineup/preview',
-    adminAuth,
+    festivalAccess({ action: 'lineup.import' }),
     rateLimit(30, 'lineup-import-preview'),
     async (req: any, res: any) => {
       try {
@@ -185,21 +210,18 @@ export default function createLineupImportRoute(deps: any) {
     },
   );
 
-  router.post('/:id/import-lineup', adminAuth, rateLimit(5, 'lineup-import'), async (req: any, res: any) => {
+  router.post('/:id/import-lineup', festivalAccess({ action: 'lineup.import' }), rateLimit(5, 'lineup-import'), async (req: any, res: any) => {
     try {
       setNoStore(res);
       const loaded = await loadRequest(req, res);
       if (!loaded) return;
-      const { festivalId, festival, body, base } = loaded;
+      const { festivalId, festival, base } = loaded;
 
       const warnings: string[] = [];
-      const first = planLineupImport({ festival, ...base });
-      const clean = first.plan.counts.error === 0 && first.plan.problems.length === 0;
-      const spotifyMap = clean && !body.skipSpotify ? await searchSpotify(artistsNeedingLinks(first.writes), warnings) : undefined;
-
       const outcome = await stores.lineupImports.commit(
         festivalId,
-        (current: any) => planLineupImport({ festival: current, ...base, spotify: spotifyMap, makeId }),
+        (current: any, locked?: Map<string, ArtistRef>) =>
+          planLineupImport({ festival: current, ...base, artists: locked ? withLockedArtists(base.artists, locked) : base.artists, makeId }),
         { createdBy: req.user?.userId ?? null },
       );
       if ('notFound' in outcome) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
@@ -207,10 +229,18 @@ export default function createLineupImportRoute(deps: any) {
 
       invalidateFestivalCache();
       announceSetsChanged(festival);
-      // The executor checks publish state, the marker and the times itself.
-      reengagement
-        ?.sendSetTimesOut?.(festivalId)
-        ?.catch((err: any) => log.warn('set_times_out notify failed', { festivalId, error: err?.message }));
+      await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null, getRequestIp(req));
+      if (outcome.refs?.ignoredLinkEdits) {
+        warnings.push(
+          `${outcome.refs.ignoredLinkEdits} ${outcome.refs.ignoredLinkEdits === 1 ? 'link differs' : 'links differ'} from the artist's links and ${outcome.refs.ignoredLinkEdits === 1 ? 'was' : 'were'} not used. Change them on the Artists tab.`,
+        );
+      }
+      if (outcome.writes.inserts.some((s: any) => s.artists.some((a: any) => !Object.keys(a.links ?? {}).length))) {
+        warnings.push('Add links on the Artists tab. The import does not search Spotify.');
+      }
+      // After the response is built, so the save never waits. It logs its own failure.
+      void deps.interestConversion?.convert(festivalId);
+      alertPickersOfFirstTimes(festival);
       const result = buildResult(outcome.plan, outcome.writes, outcome.importId, warnings, festival.b2bSeparator || 'b2b');
       log.info('lineup imported', {
         festivalId,
@@ -225,6 +255,8 @@ export default function createLineupImportRoute(deps: any) {
         importId: result.importId,
         created: result.created,
         updated: result.updated,
+        announced: result.announced,
+        announcedUpdated: result.announcedUpdated,
         unchanged: result.unchanged,
         skipped: result.skipped,
         newStages: result.newStages,
@@ -237,7 +269,7 @@ export default function createLineupImportRoute(deps: any) {
     }
   });
 
-  router.get('/:id/imports', adminAuth, async (req: any, res: any) => {
+  router.get('/:id/imports', festivalAccess({ action: 'lineup.history' }), async (req: any, res: any) => {
     try {
       setNoStore(res);
       const festivalId = sanitizeIdentifier(req.params.id, 100);
@@ -253,7 +285,7 @@ export default function createLineupImportRoute(deps: any) {
 
   router.post(
     '/:id/imports/:importId/undo',
-    adminAuth,
+    festivalAccess({ action: 'lineup.import' }),
     rateLimit(5, 'lineup-import-undo'),
     async (req: any, res: any) => {
       try {
@@ -265,6 +297,14 @@ export default function createLineupImportRoute(deps: any) {
         const festival = await stores.festivals.getById(festivalId);
         const outcome = await stores.lineupImports.undo(festivalId, importId);
         if ('notFound' in outcome) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
+        if ('olderThanUpgrade' in outcome) {
+          return sendError(
+            res,
+            400,
+            'This import is older than the artist upgrade. Edit the sets by hand instead.',
+            ErrorCodes.INVALID_INPUT,
+          );
+        }
         if ('refused' in outcome) {
           return sendError(
             res,
@@ -275,13 +315,21 @@ export default function createLineupImportRoute(deps: any) {
         }
         invalidateFestivalCache();
         announceSetsChanged(festival);
+        // Marks that lost their automatic picks reach open devices, then conversion runs again in case
+        // a set that stayed still covers a marked act.
+        void deps.interestConversion
+          ?.announce(outcome.changedProfileIds ?? [])
+          .then(() => deps.interestConversion.convert(festivalId));
         log.info('lineup import undone', { festivalId, importId, ...outcome.result, kept: outcome.result.kept.length });
         await writeAuditRow(req, res, AUDIT_ACTIONS.LINEUP_IMPORT_UNDONE, festivalId, {
           importId,
           removed: outcome.result.removed,
           restored: outcome.result.restored,
+          removedEntries: outcome.result.removedEntries,
+          restoredEntries: outcome.result.restoredEntries,
           removedStages: outcome.result.removedStages,
           removedDays: outcome.result.removedDays,
+          autoPicksRemoved: outcome.result.autoPicksRemoved,
           kept: outcome.result.kept.length,
         });
         return sendSuccess(res, outcome.result);

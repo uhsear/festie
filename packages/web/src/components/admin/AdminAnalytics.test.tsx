@@ -14,6 +14,7 @@ const mockFetch = vi.fn();
 const mockInsight = vi.fn();
 vi.mock('@festie/shared/services/admin', () => ({
   fetchAdminAnalytics: (...a: unknown[]) => mockFetch(...a),
+  fetchAdminGrowth: () => new Promise(() => {}),
   fetchAdminPickInsight: (...a: unknown[]) => mockInsight(...a),
 }));
 

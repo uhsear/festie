@@ -99,6 +99,7 @@ async function collectGdprData(
       picks: profile.picks || {},
       notes: profile.notes || {},
       reminders: profile.reminders || {},
+      interests: profile.interests || {},
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     });

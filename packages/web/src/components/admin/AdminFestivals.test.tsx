@@ -47,7 +47,9 @@ vi.mock('./FestivalEditForm', () => ({
     notifyPickers,
     onNotifyPickersChange,
     engagementError,
+    changes,
   }: {
+    changes: { total: number };
     onSave: () => void;
     onDiscard: () => void;
     notifyPickers: boolean;
@@ -58,6 +60,8 @@ vi.mock('./FestivalEditForm', () => ({
   }) => (
     <div>
       {engagementError && <p>Couldn't load pick counts.</p>}
+      <span data-testid="change-total">{changes.total}</span>
+      <button onClick={() => setFormData({ ...formData, seriesId: 'fest-series' })}>link series</button>
       <button onClick={onSave}>save form</button>
       <button onClick={onDiscard}>discard form</button>
       <input
@@ -94,9 +98,9 @@ vi.mock('./FestivalEditForm', () => ({
     </div>
   ),
 }));
-vi.mock('./FestivalLinks', () => ({
+vi.mock('./FestivalArtists', () => ({
   default: ({ festivalName, onClose }: { festivalName: string; onClose: () => void }) => (
-    <button onClick={onClose}>links panel for {festivalName}</button>
+    <button onClick={onClose}>artists panel for {festivalName}</button>
   ),
 }));
 
@@ -210,7 +214,7 @@ describe('AdminFestivals', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith(
-        'Saved. No one had picked or set a reminder on the changed sets, so no alerts were sent.',
+        'Saved. No one had picked, set a reminder on or marked what changed, so no alerts were sent.',
         'success',
       ),
     );
@@ -264,6 +268,14 @@ describe('AdminFestivals', () => {
     expect(days.map((d) => d.textContent)).toEqual(['day-0:Changed', 'day-1:Sat']);
   });
 
+  it('counts a series-only edit as a change so Save stays enabled', async () => {
+    render(<AdminFestivals />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
+    expect(await screen.findByTestId('change-total')).toHaveTextContent('0');
+    await userEvent.click(screen.getByRole('button', { name: 'link series' }));
+    expect(screen.getByTestId('change-total')).toHaveTextContent('1');
+  });
+
   it('remounts the form on Discard so local drafts show the saved values again', async () => {
     render(<AdminFestivals />);
     await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
@@ -275,11 +287,11 @@ describe('AdminFestivals', () => {
   });
 });
 
-describe('AdminFestivals Links button', () => {
-  it('opens the links panel for the row and returns to the list', async () => {
+describe('AdminFestivals Artists button', () => {
+  it('opens the artists panel for the row and returns to the list', async () => {
     render(<AdminFestivals />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Spotify links for Fest' }));
-    await userEvent.click(await screen.findByText('links panel for Fest'));
+    await userEvent.click(await screen.findByRole('button', { name: 'Artists for Fest' }));
+    await userEvent.click(await screen.findByText('artists panel for Fest'));
     expect(await screen.findByRole('button', { name: 'Edit Fest' })).toBeInTheDocument();
   });
 

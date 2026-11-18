@@ -7,6 +7,7 @@ import request from 'supertest';
 import createFestivalsRoutes from '../routes/festivals.js';
 import { schemas, validate, sanitizeFestivalPayload } from '../lib/schemas.js';
 import { validateFestivalIssues } from '../lib/helpers/validation.js';
+import { FestivalChangedError } from '../lib/db/stores/festivals.js';
 
 const noop = () => {};
 const pass = (_req: any, _res: any, next: any) => next();
@@ -82,6 +83,7 @@ function appFor(stores: any) {
       sanitizeFestivalPayload(input, ex, config, (prefix: string) => `${prefix}-id${++counter}`),
     stores: { pool: { query: async () => ({ rows: [] }) }, ...stores },
   };
+  deps.festivalAccess = () => deps.adminAuth;
   const app = express();
   app.use(express.json());
   app.use(createFestivalsRoutes(deps));
@@ -128,8 +130,12 @@ describe('festival lineup saves', () => {
     assert.equal(update.mock.callCount(), 0);
   });
 
-  test('a PUT with a stale token answers FESTIVAL_CHANGED', async () => {
-    const app = appFor({ festivals: { update: updateStore() } });
+  test('a PUT whose token the save refuses answers FESTIVAL_CHANGED', async () => {
+    // The token is checked inside the store's transaction, under the row lock (tests/festival-edit-token.test.ts).
+    const update = mock.fn(async () => {
+      throw new FestivalChangedError();
+    });
+    const app = appFor({ festivals: { update } });
     const res = await request(app)
       .put('/f1')
       .send({ lineup: [{ artists: [{ name: 'A' }] }], expectedUpdatedAt: '2026-11-01T00:00:00.000Z' })

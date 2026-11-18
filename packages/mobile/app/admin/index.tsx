@@ -60,7 +60,7 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  *   /admin/lineup-import?id=  — CSV lineup import for a festival
  *   /admin/festival-preview?id=  — read-only attendee schedule preview
  *   /admin/festival-map?id=   — festival map editor
- *   /admin/festival-links?id= — Spotify links for a festival's artists
+ *   /admin/festival-links?id= — the Artists screen: links and notes for a festival's artists
  *
  * Gated on useAuthStore isAdmin; a non-admin sees an "Admins only" EmptyState.
  * The Festivals card has a Select mode: tick festivals, then Archive them through
@@ -445,10 +445,10 @@ export default function AdminScreen() {
                         },
                         { label: 'Map', icon: 'map-outline', path: 'festival-map', a11y: `Edit map for ${f.name}` },
                         {
-                          label: 'Links',
+                          label: 'Artists',
                           icon: 'musical-notes-outline',
                           path: 'festival-links',
-                          a11y: `Spotify links for ${f.name}`,
+                          a11y: `Artists for ${f.name}`,
                         },
                         { label: 'Preview', icon: 'eye-outline', path: 'festival-preview', a11y: `Preview ${f.name}` },
                       ] as const

@@ -23,6 +23,9 @@ export default function createSpotifyRoutes(deps: any) {
     previewCache.set(setId, { data, expiresAt: Date.now() + CACHE_TTL });
   }
 
+  // An artist edit rewrites the sets' copies; their cached previews would show the old artist. In-process only.
+  deps.clearSpotifyPreview = (setId: string) => previewCache.delete(setId);
+
   function artistEmbed(artistId: string, artistName: string) {
     return {
       embedType: 'artist',

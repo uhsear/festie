@@ -1,7 +1,7 @@
 import type { Festival, FestivalDay, FestivalSet, LineupEntry, Stage } from '../types/domain';
 import { festivalPhase } from './festivalTime';
 import { formatTime } from './format';
-import { coverLineup, lineupNameKey, type LineupCover } from './lineupCover';
+import { coverLineup, entryDayIndex, lineupNameKey, type LineupCover } from './lineupCover';
 import { byStartTime, formatDayChip } from './scheduleFormat';
 import { foldSearch } from './setSearch';
 
@@ -267,4 +267,24 @@ export function lineupReplacesEmptyState(model: AnnouncedLineupModel, searchQuer
     model.daySetCount === 0 &&
     (model.noSets || model.selection.active.length > 0)
   );
+}
+
+/**
+ * What the follow banner says for the festival on screen. Null when a set has a time (or the festival
+ * is a draft): there is nothing left to wait for. 'days' when no act has a day yet, so the banner
+ * names days as well as set times. 'times' otherwise.
+ */
+export function setTimesBannerKind(
+  festival: Festival | null | undefined,
+  days: readonly FestivalDay[] | null | undefined,
+  sets: readonly FestivalSet[] | null | undefined,
+): 'days' | 'times' | null {
+  if (!festival || festival.publishedAt === null) return null;
+  const allSets = sets ?? [];
+  if (allSets.some((set) => !!set.startTime)) return null;
+  if (allSets.length > 0) return 'times';
+  const lineupHasDay = (festival.lineup ?? []).some(
+    (entry) => entry.status !== 'cancelled' && entryDayIndex(entry, [...(days ?? [])]) >= 0,
+  );
+  return lineupHasDay ? 'times' : 'days';
 }

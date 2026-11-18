@@ -86,6 +86,7 @@ const HAND_VALIDATED_QUERY: Record<string, string> = {
   'email-auth.ts GET /verify-email': 'Reads one token string; the store lookup bounds it.',
   'notifications.ts GET /history': 'Clamps limit and offset by hand.',
   'pages.ts GET /reset-password': 'Reads one token string and only forwards it.',
+  'pages.ts GET /f/:slug': 'Reads one ref string and only matches it against a fixed allow-list.',
 };
 const REQUIRE_RECENT_AUTH = [
   'admin-users.ts POST /users/:id/roles', 'admin-users.ts DELETE /users/:id/roles/:role', 'admin-users.ts POST /users/:id/reset-link',
@@ -176,7 +177,8 @@ const adminMounted = new Set(files.filter((f) => {
   });
 }));
 const has = (r: Route, re: RegExp) => re.test(r.mw);
-const isAdmin = (r: Route) => adminMounted.has(r.file) || has(r, /(^|[\s.|])adminAuth\b/);
+// festivalAccess refuses every non-admin until organizer roles exist, so it counts as an admin gate.
+const isAdmin = (r: Route) => adminMounted.has(r.file) || has(r, /(^|[\s.|])(adminAuth|festivalAccess)\b/);
 const isAuthed = (r: Route) => isAdmin(r) || has(r, /(^|[\s|])userAuth\b/);
 const fail = (r: Route, msg: string) => problems.push(`${r.where} ${r.verb} ${r.path}: ${msg}`);
 
@@ -190,7 +192,7 @@ const LIMITED_EVENTS = ['join:festival', 'leave:festival', 'join:crew', 'leave:c
 test('route security inventory', () => {
   for (const r of routes) {
     if (!isAuthed(r) && !PUBLIC_ROUTES[r.key]) fail(r, `no session middleware. Add userAuth, or add '${r.key}' to PUBLIC_ROUTES with a reason.`);
-    if (r.file.startsWith('admin') && !isAdmin(r) && !ADMIN_EXEMPT[r.key]) fail(r, 'admin route without adminAuth. Add adminAuth.');
+    if (r.file.startsWith('admin') && !isAdmin(r) && !ADMIN_EXEMPT[r.key]) fail(r, 'admin route without adminAuth or festivalAccess. Add one.');
     if (/\b_?req\.(body|validatedBody)\b/.test(r.body) && !has(r, /\bvalidate\(/) && !HAND_VALIDATED_BODY[r.key]) fail(r, `reads the body without validate(schemas.x). Add a Zod schema in lib/schemas.ts, or add '${r.key}' to HAND_VALIDATED_BODY with a reason.`);
     if (/\b_?req\.(query|validatedQuery)\b/.test(r.body) && !has(r, /\bvalidateQuery\(/) && !HAND_VALIDATED_QUERY[r.key]) fail(r, `reads the query without validateQuery(schemas.x). Add one, or add '${r.key}' to HAND_VALIDATED_QUERY with a reason.`);
     if (r.verb !== 'GET' && !has(r, /\b(rateLimit|rl)\(/)) fail(r, 'write route without a scoped rate limiter. Add rateLimit(max, scope).');
@@ -225,4 +227,32 @@ test('socket event inventory', () => {
     if (!limiter.test(byEvent.get(event) ?? '')) issues.push(`socket ${event}: no rate limiter (consumeSocketRateLimit).`);
   }
   assert.equal(issues.length, 0, `\n${issues.join('\n')}`);
+});
+
+test('artist routes stay admin only, validated and rate limited', () => {
+  const artistRoutes = routes.filter((r) => r.file === 'artists.ts');
+  assert.deepEqual(
+    artistRoutes.map((r) => r.key).sort(),
+    [
+      'artists.ts GET /',
+      'artists.ts GET /:id/impact',
+      'artists.ts PATCH /:id',
+      'artists.ts POST /',
+      'artists.ts POST /:id/merge',
+      'artists.ts POST /match',
+      'artists.ts POST /spotify-candidates',
+      'artists.ts POST /spotify-picks',
+    ],
+  );
+  for (const r of artistRoutes) {
+    assert.ok(isAdmin(r), `${r.key} must be mounted behind adminAuth in server.ts`);
+    if (r.verb !== 'GET') assert.ok(has(r, /\bvalidate\(/), `${r.key} must validate its body`);
+  }
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts PATCH /:id')!, /rateLimit\(60, 'artist-update'\)/));
+  const mergeRoute = artistRoutes.find((r) => r.key === 'artists.ts POST /:id/merge')!;
+  assert.ok(has(mergeRoute, /rateLimit\(10, 'artist-merge'\)/));
+  assert.ok(has(mergeRoute, /\brequireRecentAuth\b/), 'a merge needs a recent re-auth, as a festival delete does');
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /match')!, /rateLimit\(60, 'artist-match'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-candidates')!, /rateLimit\(6, 'artist-spotify-search'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-picks')!, /rateLimit\(20, 'artist-spotify-pick'\)/));
 });

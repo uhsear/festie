@@ -24,6 +24,8 @@ export interface ProfileUpdatedPayload extends VersionedPayload {
   name?: string;
   avatarUrl?: string;
   picks?: Record<string, Priority>;
+  /** An interest mark changed or converted. The marks themselves never travel: they are private to their owner. */
+  interestsChanged?: boolean;
   updatedAt?: string;
 }
 

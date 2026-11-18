@@ -29,6 +29,7 @@ import {
   hydrateFailedSync,
   surfaceFailedSync,
   MAX_RETRIES,
+  MAX_EDGE_RETRIES,
   type QueuedMutation,
 } from '../offlineQueue';
 import { useUIStore } from '../../stores/uiStore';
@@ -198,6 +199,77 @@ describe('offlineQueue', () => {
 
       expect(readPersisted()).toHaveLength(1); // still queued
       expect(useUIStore.getState().failedSync).toHaveLength(0); // not a permanent fail
+    });
+
+    it('stops the drain on an edge 5xx and keeps every entry, consuming no retry (origin down)', async () => {
+      seed([makeMutation({ clientId: 'a', createdAt: Date.now() - 1_000 }), makeMutation({ clientId: 'b' })]);
+      vi.mocked(api.put).mockRejectedValue(new ApiClientError('Bad gateway', 502));
+
+      await drainQueue();
+
+      expect(api.put).toHaveBeenCalledTimes(1); // the outage stops the pass at the first entry
+      const queued = readPersisted();
+      expect(queued.map((q) => q.clientId).sort()).toEqual(['a', 'b']);
+      expect(queued.every((q) => (q.retries ?? 0) === 0)).toBe(true);
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
+      // Replays bypass api.ts, so the drain must flip offline itself for the next good response to restart it.
+      expect(useUIStore.getState().offlineMode).toBe(true);
+    });
+
+    it('surfaces a first-attempt DELETE 404 as failed (could be "not a member", not a finished delete)', async () => {
+      seed([makeMutation({ clientId: 'd', method: 'DELETE', url: '/crews/c1/polls/x', body: undefined })]);
+      vi.mocked(api.delete).mockRejectedValue(new ApiClientError('Not found', 404));
+
+      await drainQueue();
+
+      expect(readPersisted()).toHaveLength(0);
+      expect(useUIStore.getState().failedSync.map((f) => f.clientId)).toEqual(['d']);
+    });
+
+    it('treats a DELETE 404 after an earlier ambiguous attempt as done', async () => {
+      seed([makeMutation({ clientId: 'd', method: 'DELETE', url: '/crews/c1/polls/x', body: undefined })]);
+      vi.mocked(api.delete).mockRejectedValueOnce(new ApiClientError('Bad gateway', 502));
+      await drainQueue();
+      expect(readPersisted()[0]!.maybeSent).toBe(true);
+
+      useUIStore.setState({ offlineMode: false });
+      vi.mocked(api.delete).mockRejectedValue(new ApiClientError('Not found', 404));
+      await drainQueue();
+
+      expect(readPersisted()).toHaveLength(0);
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
+    });
+
+    it('retries an edge-5xx entry up to MAX_EDGE_RETRIES, then surfaces it and drains later entries', async () => {
+      const t = Date.now();
+      seed([makeMutation({ clientId: 'bad', createdAt: t - 2_000 }), makeMutation({ clientId: 'ok', url: '/profiles/p2', createdAt: t - 1_000 })]);
+      vi.mocked(api.put).mockImplementation(async (url: string) => {
+        if (url === '/profiles/p1') throw new ApiClientError('Bad gateway', 502);
+        return undefined as never;
+      });
+
+      for (let i = 0; i < MAX_EDGE_RETRIES - 1; i++) {
+        useUIStore.setState({ offlineMode: false });
+        await drainQueue();
+        expect(readPersisted().map((q) => q.clientId)).toEqual(['bad', 'ok']);
+      }
+      expect(readPersisted()[0]!.edgeRetries).toBe(MAX_EDGE_RETRIES - 1);
+
+      useUIStore.setState({ offlineMode: false });
+      await drainQueue();
+
+      expect(readPersisted()).toHaveLength(0);
+      expect(useUIStore.getState().failedSync.map((f) => f.clientId)).toEqual(['bad']);
+    });
+
+    it('still surfaces a 404 on a replayed PUT as failed', async () => {
+      seed([makeMutation({ clientId: 'p' })]);
+      vi.mocked(api.put).mockRejectedValue(new ApiClientError('Not found', 404));
+
+      await drainQueue();
+
+      expect(readPersisted()).toHaveLength(0);
+      expect(useUIStore.getState().failedSync).toHaveLength(1);
     });
 
     it('keeps a 429 queued, skips it until Retry-After passes, and never consumes a retry', async () => {

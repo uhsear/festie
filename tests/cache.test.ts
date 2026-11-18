@@ -258,3 +258,38 @@ describe('cache: getUserFestivalProfile fallback', () => {
     assert.equal(profile.id, 'p1');
   });
 });
+
+// ─── Rebuild that races an invalidation ──────────────────────────────────────
+
+describe('cache: festival rebuild that races an invalidation', () => {
+  it('is returned to its caller but not kept, so the next read sees the new data', async () => {
+    let rows = [{ id: 'f1', name: 'Old name' }];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let reads = 0;
+    const stores: any = {
+      ...makeStores(),
+      festivals: {
+        readAll: async () => {
+          reads += 1;
+          const snapshot = [...rows];
+          // The first read started before an artist edit committed and returns the old rows late.
+          if (reads === 1) await gate;
+          return snapshot;
+        },
+      },
+    };
+    const cache = createCacheHelpers({ stores, redis: null, log: noopLog });
+
+    const slow = cache.getFestivalById('f1');
+    rows = [{ id: 'f1', name: 'New name' }];
+    cache.invalidateFestivalCache();
+    release();
+    assert.equal((await slow)?.name, 'Old name');
+
+    assert.equal((await cache.getFestivalById('f1'))?.name, 'New name');
+    assert.equal(reads, 2, 'the raced result was not cached');
+  });
+});
