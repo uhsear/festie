@@ -143,6 +143,8 @@ export const DEFAULTS = {
   // crew_activity row + pushes safety-critical alerts.
   LIVE_LOCATION_ENABLED: true,
   SOS_ENABLED: true,
+  // Cancel alerts for marked acts stay dark until the owner turns them on (LINEUP_CANCEL_ALERTS_ENABLED=true).
+  LINEUP_CANCEL_ALERTS_ENABLED: false,
   REMINDER_TICK_INTERVAL_MS: 60_000,
   REMINDER_FIRE_WINDOW_MS: 65_000,
   REMINDER_DEDUP_TTL_MS: 7_200_000,
@@ -406,6 +408,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   CLUSTER_SIZE: number;
   LIVE_LOCATION_ENABLED: boolean;
   SOS_ENABLED: boolean;
+  LINEUP_CANCEL_ALERTS_ENABLED: boolean;
   LOG_LEVEL: string;
   SENTRY_DSN: string;
   SENTRY_TRACES_RATE: number;
@@ -690,6 +693,10 @@ export function loadConfig(overrides: Record<string, any> = {}): {
       DEFAULTS.LIVE_LOCATION_ENABLED,
     ),
     SOS_ENABLED: readBool(overrides.SOS_ENABLED ?? process.env.SOS_ENABLED, DEFAULTS.SOS_ENABLED),
+    LINEUP_CANCEL_ALERTS_ENABLED: readBool(
+      overrides.LINEUP_CANCEL_ALERTS_ENABLED ?? process.env.LINEUP_CANCEL_ALERTS_ENABLED,
+      DEFAULTS.LINEUP_CANCEL_ALERTS_ENABLED,
+    ),
 
     // Deep linking — populate when you have your Apple/Android signing credentials
     // APPLE_TEAM_ID comes from `...oauth` below; the AASA file and Apple sign-in share it.

@@ -229,13 +229,16 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     }
   }
 
-  /** One alert per person who picked a set that moved or left the lineup. Never throws. */
-  async function scheduleChanged({ festival, changes, pickersBySet }: any) {
+  /**
+   * One alert per person who picked a set that moved or left the lineup, and one per person whose open
+   * mark is on an act that was cancelled (`interestedByEntry`). Never throws.
+   */
+  async function scheduleChanged({ festival, changes, pickersBySet, interestedByEntry }: any) {
     if (!notificationService?.isConfigured || typeof notificationService.send !== 'function') return;
     try {
       const muted: Set<string> =
         (await stores?.topicSubscriptions?.getUnsubscribedUsers?.(festival.id, 'schedule')) || new Set();
-      const messages = buildSchedulePushes(festival.name, changes, pickersBySet).filter((m) => !muted.has(m.userId));
+      const messages = buildSchedulePushes(festival.name, changes, pickersBySet, interestedByEntry).filter((m) => !muted.has(m.userId));
       for (let i = 0; i < messages.length; i += SCHEDULE_PUSH_CHUNK) {
         const results = await Promise.allSettled(
           messages.slice(i, i + SCHEDULE_PUSH_CHUNK).map(({ userId, title, body, setId }) =>

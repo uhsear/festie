@@ -146,6 +146,69 @@ describe('buildLineupCsv', () => {
   });
 });
 
+describe('buildLineupCsv: formula names', () => {
+  it('prefixes a name that starts like a formula, and the parser takes the prefix off again', () => {
+    const names = ['=SUM(1)', '+Kai', '-Mira', '@Zed'];
+    const csv = buildLineupCsv({
+      days: [{ label: 'Friday', sets: names.map((artist, i) => ({ id: `s${i}`, artist, stageId: '', startTime: null, endTime: null })) }],
+    });
+    expect(csv).toContain("'=SUM(1)");
+    const parsed = parseLineupTable(csv);
+    expect(toImportRows(parsed.rows, defaultMapping(parsed.rows, true), true, parsed.lines).map((r) => r.artist)).toEqual(names);
+  });
+});
+
+describe('buildLineupCsv: announced acts', () => {
+  const act = (id: string, names: string[], extra: Record<string, unknown> = {}) => ({
+    id,
+    artists: names.map((name) => ({ name, links: {} })),
+    displayName: null,
+    tier: null,
+    dayDate: null,
+    status: 'announced' as const,
+    announcedAt: '2026-11-01',
+    linkedSetIds: [],
+    ...extra,
+  });
+  const festival = {
+    b2bSeparator: 'vs',
+    stages: [{ id: 'st1', name: 'Main' }],
+    days: [
+      { label: 'Friday', date: '2026-08-21', sets: [{ id: 's1', artist: 'Kai', stageId: 'st1', startTime: '20:00', endTime: '21:00' }] },
+      { label: '', date: '2026-08-22', sets: [] },
+    ],
+    lineup: [
+      act('a', ['Kai'], { dayDate: '2026-08-21' }),
+      act('b', ['Mira', 'Zed'], { dayDate: '2026-08-21', displayName: 'Mira and Zed' }),
+      act('c', ['Dawn'], { dayDate: '2026-08-22' }),
+      act('d', ['Nova']),
+      act('e', ['Gone'], { dayDate: '2026-08-21', status: 'cancelled' as const }),
+      act('f', ['Old'], { dayDate: '2026-12-01' }),
+      act('g', ['Linked'], { linkedSetIds: ['s1'] }),
+    ],
+  };
+  const rowsOf = (f: typeof festival) => {
+    const parsed = parseLineupTable(buildLineupCsv(f));
+    return toImportRows(parsed.rows, defaultMapping(parsed.rows, true), true, parsed.lines);
+  };
+
+  it('adds a row with no set id, stage or times for each act that no set covers and is not cancelled', () => {
+    expect(rowsOf(festival)).toEqual([
+      { row: 2, setId: 's1', day: 'Friday', stage: 'Main', artist: 'Kai', startTime: '20:00', endTime: '21:00' },
+      { row: 3, setId: '', day: 'Friday', stage: '', artist: 'Mira vs Zed', startTime: '', endTime: '' },
+      { row: 4, setId: '', day: '2026-08-22', stage: '', artist: 'Dawn', startTime: '', endTime: '' },
+      { row: 5, setId: '', day: '', stage: '', artist: 'Nova', startTime: '', endTime: '' },
+      { row: 6, setId: '', day: '', stage: '', artist: 'Old', startTime: '', endTime: '' },
+    ]);
+  });
+
+  it('leaves the CSV unchanged for a festival with no lineup', () => {
+    const { lineup: _lineup, ...bare } = festival;
+    expect(buildLineupCsv(bare)).toBe(buildLineupCsv({ ...bare, lineup: [] }));
+    expect(rowsOf({ ...festival, lineup: [] } as typeof festival)).toHaveLength(1);
+  });
+});
+
 describe('planSummary', () => {
   const c = { new: 0, changed: 0, unchanged: 0, error: 0, skipped: 0, newStages: 0, newDays: 0 };
   it('says nothing to change when all zero', () => {

@@ -49,6 +49,8 @@ export interface FestivalEditFormProps {
   venueGuessed?: boolean;
   /** Days as last saved, for the lineup's save-summary checks. */
   savedDays?: Day[];
+  /** The lineup as last saved, so the save summary can count marks on entries a save removes. */
+  savedLineup?: LineupDraft[];
   /** Picks and reminders per set id; undefined until loaded. */
   engagement?: SetEngagementMap;
   engagementError?: boolean;
@@ -83,6 +85,7 @@ export default function FestivalEditForm({
   saving,
   venueGuessed,
   savedDays,
+  savedLineup,
   engagement,
   engagementError,
   interestCounts,
@@ -453,10 +456,12 @@ export default function FestivalEditForm({
           lineup={formData.lineup}
           days={formData.days || []}
           savedDays={savedDays}
+          savedLineup={savedLineup}
+          stages={formData.stages}
           separator={formData.b2bSeparator}
           savedAt={formData.updatedAt}
           interestCounts={interestCounts}
-          onChange={(lineup) => setFormData({ ...formData, lineup })}
+          onChange={(lineup, days) => setFormData({ ...formData, lineup, ...(days ? { days } : {}) })}
         />
       )}
 
@@ -585,7 +590,7 @@ export default function FestivalEditForm({
               Tell people whose picks changed
             </label>
             <span className="text-xs text-text-muted">
-              Sends one alert to each person who picked a set you moved, removed or gave its first time on a day whose set-time alert already went out.
+              Sends one alert to each person who picked a set you moved, removed or gave its first time on a day whose set-time alert already went out, and to each person who marked an act you cancelled.
             </span>
           </div>
         </div>

@@ -3,6 +3,7 @@
 
 import crypto from 'crypto';
 import { planPickerAlerts } from '../lib/picker-alerts.js';
+import { diffCancelledEntries } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { coverLineup, scheduleProgress } from '../lib/lineup.js';
@@ -194,10 +195,39 @@ export default function createFestivalsRoutes(deps: any) {
     return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
   }
 
+  // A save that only cancels acts removes nothing, so its confirm leads with the alert count instead.
+  function removalMessage(removal: { days: number; sets: number; picks: number; ratings: number }) {
+    const removes = removalSummary(removal);
+    return removes ? `This save removes ${removes}. Confirm to continue.` : 'This save sends cancel alerts. Confirm to continue.';
+  }
+
   async function countOnSets(table: 'festival_profile_picks' | 'set_ratings', setIds: string[]) {
     if (setIds.length === 0) return 0;
     const result = await stores.pool.query(`SELECT COUNT(*) AS count FROM ${table} WHERE set_id = ANY($1)`, [setIds]);
     return Number.parseInt(result.rows[0]?.count ?? '0', 10) || 0;
+  }
+
+  // The cancel line of the removal confirm: what cancelling these acts takes away and who hears about it.
+  // `pickersBySet` holds the pickers of every moved or removed set, the map the send reads, so the counts
+  // here are the counts that get an alert: `picked` people hear about a changed set, `marked` only about the act.
+  async function cancelSummary(
+    festival: any,
+    cancelled: { entryId: string; artist: string; setIds: string[] }[],
+    removedIds: string[],
+    interestedByEntry: Map<string, string[]>,
+    pickersBySet: Map<string, string[]>,
+  ) {
+    const removed = new Set(removedIds);
+    const setIds = [...new Set(cancelled.flatMap((c) => c.setIds))].filter((id) => removed.has(id));
+    const pickers = new Set([...pickersBySet.values()].flat());
+    const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId)));
+    return {
+      acts: cancelled.map((c) => c.artist),
+      sets: setIds.length,
+      picks: await countOnSets('festival_profile_picks', setIds),
+      picked: pickers.size,
+      marked: marked.size,
+    };
   }
 
   router.get('/', rateLimit(120, 'festival-list'), async (req: any, res: any) => {
@@ -464,34 +494,68 @@ export default function createFestivalsRoutes(deps: any) {
         // editors leave them out so a map save cannot rewrite the lineup.
         const daysSent = body.days !== undefined;
         const stats = { setsAdded: 0, setsRemoved: 0, setsChanged: 0, picksLost: 0 };
+        // A cancelled act alerts the people whose mark on it is still open. Converted marks are pickers already.
+        // The alert stays off until the owner sets LINEUP_CANCEL_ALERTS_ENABLED, so no cancel counts or sends before then.
+        const cancelAlertsOn = config.LINEUP_CANCEL_ALERTS_ENABLED === true && body.lineup !== undefined;
+        const cancelCover: Record<string, { setIds: string[] }> = cancelAlertsOn
+          ? coverLineup(existingFestival.lineup ?? [], existingFestival.days ?? [], existingFestival.b2bSeparator || 'b2b')
+          : {};
+        const cancelled = (cancelAlertsOn ? diffCancelledEntries(existingFestival, nextFestival) : []).map((change) => ({
+          ...change,
+          setIds: cancelCover[change.entryId]?.setIds ?? [],
+        }));
+        const interestedByEntry: Map<string, string[]> = cancelled.length
+          ? await stores.profiles.interestedProfilesByEntry(
+              existingFestival.id,
+              cancelled.map((change) => change.entryId),
+            )
+          : new Map();
+
+        // Only a moved or removed set, or a set timed on an already released date, alerts anyone, and only
+        // the people who picked it. No save sends the festival-wide set-times alert: the admin releases it per date.
+        // The pickers are read before the update, which deletes picks on removed sets. The confirm and the send share this map.
+        const { changes, pickersBySet } = daysSent
+          ? await planPickerAlerts({ stores, before: existingFestival, after: nextFestival })
+          : { changes: [], pickersBySet: new Map<string, string[]>() };
+
+        let removedIds: string[] = [];
+        let picks = 0;
+        let ratings = 0;
         if (daysSent) {
           const storedSets = setsOf(existingFestival);
-          const storedById = new Map(storedSets.map((set: any) => [set.id, set]));
-          const nextSets = setsOf(nextFestival);
-          const nextIds = new Set(nextSets.map((set: any) => set.id));
-          const removedIds = storedSets.map((set: any) => set.id).filter((id: string) => !nextIds.has(id));
-          const [picks, ratings] = await Promise.all([
+          const nextIds = new Set(setsOf(nextFestival).map((set: any) => set.id));
+          removedIds = storedSets.map((set: any) => set.id).filter((id: string) => !nextIds.has(id));
+          [picks, ratings] = await Promise.all([
             countOnSets('festival_profile_picks', removedIds),
             countOnSets('set_ratings', removedIds),
           ]);
-          if (picks + ratings > 0 && body.confirmRemovals !== true) {
-            const removal = {
-              days: Math.max(0, (existingFestival.days || []).length - nextFestival.days.length),
-              sets: removedIds.length,
-              picks,
-              ratings,
-            };
-            return sendError(
-              res,
-              409,
-              `This save removes ${removalSummary(removal)}. Confirm to continue.`,
-              ErrorCodes.CONFIRM_REMOVALS,
-              { removal },
-            );
-          }
+        }
+        const cancel = cancelled.length
+          ? await cancelSummary(existingFestival, cancelled, removedIds, interestedByEntry, pickersBySet)
+          : undefined;
+        // A cancel that alerts anyone needs the admin to see the count first, even when no pick or rating is lost.
+        const cancelTellsPeople = !!cancel && cancel.picked + cancel.marked > 0 && req.validatedBody.notify !== false;
+        if ((picks + ratings > 0 || cancelTellsPeople) && body.confirmRemovals !== true) {
+          const removal = {
+            days: daysSent ? Math.max(0, (existingFestival.days || []).length - nextFestival.days.length) : 0,
+            sets: removedIds.length,
+            picks,
+            ratings,
+            ...(cancel ? { cancel } : {}),
+          };
+          return sendError(
+            res,
+            409,
+            removalMessage(removal),
+            ErrorCodes.CONFIRM_REMOVALS,
+            { removal },
+          );
+        }
+        if (daysSent) {
+          const storedById = new Map(setsOf(existingFestival).map((set: any) => [set.id, set]));
           stats.setsRemoved = removedIds.length;
           stats.picksLost = picks;
-          for (const set of nextSets) {
+          for (const set of setsOf(nextFestival)) {
             const before: any = storedById.get(set.id);
             if (!before) stats.setsAdded++;
             else if (
@@ -507,13 +571,6 @@ export default function createFestivalsRoutes(deps: any) {
         if (body.confirmRemovals === true && !hasRecentAuth(req)) {
           return sendError(res, 403, 'Confirm your password to continue.', ErrorCodes.REAUTH_REQUIRED);
         }
-
-        // Only a moved or removed set, or a set timed on an already released date, alerts anyone, and only
-        // the people who picked it. No save sends the festival-wide set-times alert: the admin releases it per date.
-        // The pickers are read before the update, which deletes picks on removed sets.
-        const { changes, pickersBySet } = daysSent
-          ? await planPickerAlerts({ stores, before: existingFestival, after: nextFestival })
-          : { changes: [], pickersBySet: new Map<string, string[]>() };
 
         const festival = await stores.festivals.update(req.validatedParams.id, {
           expectedUpdatedAt: body.expectedUpdatedAt,
@@ -532,22 +589,25 @@ export default function createFestivalsRoutes(deps: any) {
         invalidateFestivalCache();
 
         invalidateFestivalListCache();
-        const people = new Set([...pickersBySet.values()].flat()).size;
+        const pickers = new Set([...pickersBySet.values()].flat());
+        // A person who picked a changed set gets that alert only, so marks are counted once.
+        const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
+        const people = pickers.size + marked;
         const notified = req.validatedBody.notify !== false && people > 0;
-        const scheduleNotice = { changes: changes.length, people, notified };
+        const scheduleNotice = { changes: changes.length + cancelled.length, people, notified, ...(marked > 0 ? { marked } : {}) };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
         // The saved row lacks stages and days, so those come from the payload that was written.
         const fieldChanges = festivalAuditChanges(existingFestival, { ...nextFestival, ...festival }, daysSent);
         audit(AUDIT_ACTIONS.FESTIVAL_UPDATED, 'festival', festival.id, req, {
           name: festival.name,
           ...stats,
-          scheduleChanges: changes.length,
+          scheduleChanges: changes.length + cancelled.length,
           notifiedPeople: notified ? people : 0,
           ...(Object.keys(fieldChanges).length > 0 ? { changes: fieldChanges } : {}),
         });
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
-        if (notified) void emitter.scheduleChanged({ festival, changes, pickersBySet });
+        if (notified) void emitter.scheduleChanged({ festival, changes: [...changes, ...cancelled], pickersBySet, interestedByEntry });
         // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
         if (daysSent || body.lineup !== undefined || body.b2bSeparator !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';

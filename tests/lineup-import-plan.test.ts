@@ -543,3 +543,189 @@ describe('planLineupImport: re-import visibility', () => {
     assert.equal(p.rows[0]!.stageName, "Dragon's Den");
   });
 });
+
+const entry = (id: string, names: string[], extra: any = {}) => ({
+  id,
+  artists: names.map((name) => ({ name, links: {} })),
+  displayName: null,
+  tier: null,
+  dayDate: null,
+  status: 'announced',
+  announcedAt: '2026-11-01',
+  linkedSetIds: [],
+  ...extra,
+});
+
+describe('planLineupImport: poster names', () => {
+  const posterFestival = (lineup: any[]) => festival({ lineup });
+
+  it('a new set takes the poster name of the announced act with the same artists, whatever the order', () => {
+    const f = posterFestival([entry('lu-1', ['INFEKT', 'MODAL NODES'], { displayName: 'Port Zero presents: INFEKT vs MODAL NODES' })]);
+    const { plan: p, writes } = plan([row(2, { artist: 'Modal Nodes b2b Infekt', stage: 'Forest', day: 'Friday' })], {}, f);
+    assert.equal(p.rows[0]!.status, 'new');
+    assert.equal(p.rows[0]!.displayName, 'Port Zero presents: INFEKT vs MODAL NODES');
+    assert.equal(writes.inserts[0]!.displayName, 'Port Zero presents: INFEKT vs MODAL NODES');
+  });
+
+  it('leaves display_name empty for an act with no poster name, a cancelled act and a solo set of a B2B act', () => {
+    const f = posterFestival([
+      entry('lu-1', ['Kai']),
+      entry('lu-2', ['Mira'], { displayName: 'MIRA!', status: 'cancelled' }),
+      entry('lu-3', ['Zed', 'Ana'], { displayName: 'Zed and Ana' }),
+    ]);
+    const { writes } = plan(
+      [
+        row(2, { artist: 'Kai', stage: 'Forest', day: 'Friday' }),
+        row(3, { artist: 'Mira', stage: 'Forest', day: 'Friday', startTime: '20:00', endTime: '21:00' }),
+        row(4, { artist: 'Zed', stage: 'Main Stage', day: 'Friday' }),
+      ],
+      {},
+      f,
+    );
+    assert.deepEqual(writes.inserts.map((s) => s.displayName), [null, null, null]);
+  });
+
+  it('does not touch a set that already exists', () => {
+    const f = posterFestival([entry('lu-1', ['DJ Alpha'], { displayName: 'ALPHA' })]);
+    f.days[0]!.sets.push(alpha);
+    const { plan: p, writes } = plan([row(2, { artist: 'DJ Alpha', day: 'Friday', startTime: '20:30' })], { updateExisting: true }, f);
+    assert.equal(p.rows[0]!.status, 'changed');
+    assert.equal(p.rows[0]!.displayName, undefined);
+    assert.equal('displayName' in writes.updates[0]!.after, false);
+  });
+});
+
+describe('planLineupImport: announced acts that match no set', () => {
+  const lineup = [
+    entry('lu-kai', ['Kai'], { dayDate: '2026-08-21' }),
+    entry('lu-sub', ['Subtronics'], { dayDate: '2026-08-21', displayName: 'SUBTRONICS (live)' }),
+    entry('lu-mira', ['Mira'], { dayDate: '2026-08-22' }),
+    entry('lu-tba', ['Nova']),
+    entry('lu-gone', ['Zed'], { dayDate: '2026-08-21', status: 'cancelled' }),
+  ];
+
+  it('names an act on a day the import fills when no row spells it the same way', () => {
+    const { plan: p } = plan(
+      [row(2, { artist: 'Kai', stage: 'Forest', day: 'Friday' }), row(3, { artist: 'Subtronix', stage: 'Forest', day: 'Friday', startTime: '20:00', endTime: '21:00' })],
+      {},
+      festival({ lineup }),
+    );
+    assert.deepEqual(p.unmatchedActs, [{ entryId: 'lu-sub', name: 'SUBTRONICS (live)', dayLabel: 'Friday' }]);
+  });
+
+  it('skips acts on days the import does not fill, acts with no day and cancelled acts', () => {
+    const { plan: p } = plan([row(2, { artist: 'Kai', stage: 'Forest', day: 'Friday' })], {}, festival({ lineup }));
+    assert.deepEqual(p.unmatchedActs.map((a) => a.entryId), ['lu-sub']);
+  });
+
+  it('counts an existing set, a name that folds the same and a hand link as a match', () => {
+    const f = festival({
+      lineup: [
+        entry('lu-1', ['Zeds Dead'], { dayDate: '2026-08-21' }),
+        entry('lu-2', ['Linked Act'], { dayDate: '2026-08-21', linkedSetIds: ['set-a'] }),
+        entry('lu-3', ['DJ Alpha'], { dayDate: '2026-08-21' }),
+      ],
+    });
+    f.days[0]!.sets.push(alpha);
+    const { plan: p } = plan([row(2, { artist: "Zed's Dead", stage: 'Forest', day: 'Friday' })], {}, f);
+    assert.deepEqual(p.unmatchedActs, []);
+  });
+
+  it('lists nothing when the only row has an error, because that row fills no day', () => {
+    const { plan: p } = plan([row(2, { artist: 'Kai', stage: 'Nowhere', day: 'Friday' })], { createMissing: false }, festival({ lineup }));
+    assert.equal(p.counts.error, 1);
+    assert.deepEqual(p.unmatchedActs, []);
+  });
+
+  it('is empty for a festival with no lineup', () => {
+    assert.deepEqual(plan([row(2, { artist: 'Kai', stage: 'Forest', day: 'Friday' })]).plan.unmatchedActs, []);
+  });
+});
+
+describe('lineup CSV round trip with announced acts', () => {
+  const names = Array.from({ length: 10 }, (_, i) => `Act ${i + 1}`);
+  const lineup = [
+    ...names.map((n, i) => entry(`lu-${i}`, [n], { dayDate: '2026-08-21', displayName: `${n} (poster)` })),
+    entry('lu-tba', ['No Day'], {}),
+    entry('lu-cancelled', ['Cancelled Act'], { dayDate: '2026-08-21', status: 'cancelled' }),
+    entry('lu-scheduled', ['DJ Alpha'], { dayDate: '2026-08-21' }),
+  ];
+  const base = () => {
+    const f = festival({ lineup });
+    f.days[0]!.sets.push(alpha);
+    return f;
+  };
+  const exportRows = (f: any) => {
+    const parsed = parseLineupTable(buildLineupCsv(f));
+    return toImportRows(parsed.rows, defaultMapping(parsed.rows, true), true, parsed.lines);
+  };
+
+  it('exports one row per act that has no set and is not cancelled, after the sets', () => {
+    const rows = exportRows(base());
+    assert.equal(rows.length, 1 + 10 + 1);
+    assert.deepEqual(rows[0], { row: 2, setId: 'set-a', artist: 'DJ Alpha', day: 'Friday', stage: 'Main Stage', startTime: '20:00', endTime: '21:00' });
+    assert.deepEqual(rows[1], { row: 3, setId: '', artist: 'Act 1', day: 'Friday', stage: '', startTime: '', endTime: '' });
+    assert.deepEqual(rows.at(-1), { row: 13, setId: '', artist: 'No Day', day: '', stage: '', startTime: '', endTime: '' });
+    assert.equal(rows.some((r) => r.artist === 'Cancelled Act'), false);
+  });
+
+  it('joins a B2B act with the festival separator', () => {
+    const f = festival({ lineup: [entry('lu-b', ['Kai', 'Mira'], { dayDate: '2026-08-21' })] });
+    assert.equal(exportRows(f)[0]!.artist, 'Kai vs Mira');
+  });
+
+  it('shows 10 New with poster names kept after the stage and times are filled, then 10 Unchanged', () => {
+    const f = base();
+    // Only the 10 'Act ' rows are filled in; the DJ Alpha row and the 'No Day' row stay as exported.
+    const filled = exportRows(f).map((r, i) =>
+      r.artist.startsWith('Act ')
+        ? { ...r, stage: 'Forest', startTime: `${String(12 + i).padStart(2, '0')}:00`, endTime: `${String(12 + i).padStart(2, '0')}:45` }
+        : r,
+    );
+    const first = plan(filled, { updateExisting: true }, f);
+    assert.deepEqual(
+      { new: first.plan.counts.new, error: first.plan.counts.error, changed: first.plan.counts.changed },
+      { new: 10, error: 0, changed: 0 },
+    );
+    assert.equal(first.plan.counts.unchanged, 2);
+    assert.deepEqual(first.writes.inserts.map((s) => s.displayName), names.map((n) => `${n} (poster)`));
+    assert.deepEqual(first.plan.unmatchedActs, []);
+
+    // Apply the writes to the festival, then import the same sheet again.
+    for (const s of first.writes.inserts) {
+      f.days[s.dayIndex]!.sets.push({ id: s.id, artist: s.artist, artists: s.artists, stageId: s.stageId, startTime: s.startTime, endTime: s.endTime, linkUrl: s.linkUrl });
+    }
+    const second = plan(filled, { updateExisting: true }, f);
+    assert.deepEqual(
+      { new: second.plan.counts.new, changed: second.plan.counts.changed, unchanged: second.plan.counts.unchanged, error: second.plan.counts.error },
+      { new: 0, changed: 0, unchanged: 12, error: 0 },
+    );
+  });
+
+  const untouched = (f: any) => {
+    const { plan: p, writes } = plan(exportRows(f), { updateExisting: true, createMissing: false }, f);
+    assert.equal(p.counts.error, 0);
+    assert.equal(p.counts.new, 0);
+    assert.equal(p.counts.changed, 0);
+    assert.equal(p.counts.unchanged, 12);
+    assert.equal(writes.inserts.length + writes.updates.length, 0);
+    assert.match(p.rows[1]!.warnings[0]!, /Not placed yet/);
+  };
+
+  it('imports an untouched export on a two-stage festival with no errors and no writes', () => {
+    untouched(base());
+  });
+
+  it('imports an untouched export on a one-stage festival without making TBA sets', () => {
+    const f = base();
+    f.stages = [f.stages[0]!];
+    untouched(f);
+  });
+
+  it('still makes a TBA set on a one-stage festival when the row has a name and no stage but names an unannounced act', () => {
+    const f = base();
+    f.stages = [f.stages[0]!];
+    const { plan: p } = plan([row(2, { artist: 'Walk-in', day: 'Friday' })], {}, f);
+    assert.equal(p.counts.new, 1);
+  });
+});

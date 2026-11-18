@@ -11,7 +11,7 @@
  * will cover the date, so a per-set alert would double up. Moves and removals always alert.
  */
 
-import { diffPickedSchedule, isTbaToTime, type ScheduleChange } from './schedule-diff.js';
+import { diffPickedSchedule, isTbaToTime, type SetChange } from './schedule-diff.js';
 
 /** The date of each set in a festival, keyed by set id. A day with no date has none. */
 function dateBySet(festival: any): Map<string, string> {
@@ -37,7 +37,7 @@ export async function planPickerAlerts({
   before: any;
   after: any;
   tbaOnly?: boolean;
-}): Promise<{ changes: ScheduleChange[]; pickersBySet: Map<string, string[]> }> {
+}): Promise<{ changes: SetChange[]; pickersBySet: Map<string, string[]> }> {
   let changes = diffPickedSchedule(before, after);
   if (tbaOnly) changes = changes.filter(isTbaToTime);
   if (changes.some(isTbaToTime)) {

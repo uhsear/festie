@@ -210,7 +210,7 @@ describe('AdminFestivals', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
     await waitFor(() =>
       expect(toast).toHaveBeenCalledWith(
-        'Saved. No one had picked or set a reminder on the changed sets, so no alerts were sent.',
+        'Saved. No one had picked, set a reminder on or marked what changed, so no alerts were sent.',
         'success',
       ),
     );

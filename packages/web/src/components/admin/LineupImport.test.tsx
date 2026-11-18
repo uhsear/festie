@@ -265,4 +265,28 @@ describe('LineupImport', () => {
     await userEvent.click(buttons[buttons.length - 1]);
     expect(api.undo).toHaveBeenCalledWith('f1', 'imp-9');
   });
+
+  it('names the announced acts that match no set, and the poster name a new set keeps', async () => {
+    api.preview.mockResolvedValue({
+      ...plan([planRow({ displayName: 'Port Zero presents: INFEKT' })], { new: 1 }),
+      unmatchedActs: [{ entryId: 'lu-1', name: 'Subtronics (live)', dayLabel: 'Friday' }],
+    });
+    await pasteSampleAndCheck();
+    expect(await screen.findByText('Poster name kept: Port Zero presents: INFEKT')).toBeInTheDocument();
+    expect(screen.getByText(/1 announced act matches no set on the days this import fills/)).toBeInTheDocument();
+    expect(screen.getByText('Subtronics (live) (Friday)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('shows no unmatched-acts block when the server sends none', async () => {
+    api.preview.mockResolvedValue(plan([planRow()], { new: 1 }));
+    await pasteSampleAndCheck();
+    await screen.findByRole('button', { name: 'Approve' });
+    expect(screen.queryByText(/match no set/)).toBeNull();
+  });
+
+  it('describes the spreadsheet round trip on the first step', () => {
+    render(<LineupImport festivalId="f1" festivalName="Fest" />);
+    expect(screen.getByText(/Export, fill in stages and times in a sheet, then import/)).toBeInTheDocument();
+  });
 });

@@ -271,7 +271,7 @@ export default function AdminFestivals() {
     } catch (err: unknown) {
       const removal = removalFromError(err);
       if (removal) {
-        setPendingRemoval(describeRemovals(removal));
+        setPendingRemoval(describeRemovals(removal, notifyPickers));
         return;
       }
       const found = issuesFromError(err);
@@ -441,6 +441,7 @@ export default function AdminFestivals() {
         saving={saving}
         venueGuessed={!!festivalId && venueGuessedFor === festivalId}
         savedDays={original?.days}
+        savedLineup={original?.lineup}
         engagement={engagement}
         engagementError={engagementError}
         interestCounts={interestCounts}
