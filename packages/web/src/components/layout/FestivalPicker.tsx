@@ -60,7 +60,7 @@ export default function FestivalPicker() {
 
   // Same pattern as DetailPanel's set share: native sheet first, clipboard as the fallback.
   const handleShare = async (f: Festival & { slug: string }) => {
-    const url = buildFestivalPageUrl(f.slug, window.location.origin);
+    const url = buildFestivalPageUrl(f.slug, window.location.origin, 'share-festival');
     const nav = navigator as Navigator & { share?: (data: ShareData) => Promise<void> };
     if (typeof nav.share === 'function') {
       try {

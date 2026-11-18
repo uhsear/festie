@@ -639,6 +639,7 @@ describe('GET /api/v1/festivals/:id?depth= (tiered loading)', () => {
     assert.ok(fest.id && fest.name && fest.location);
     assert.equal(typeof fest.stageCount, 'number');
     assert.equal(typeof fest.dayCount, 'number');
+    assert.equal(typeof fest.lineupCount, 'number');
     assert.equal(fest.stages, undefined);
     assert.equal(fest.days, undefined);
   });

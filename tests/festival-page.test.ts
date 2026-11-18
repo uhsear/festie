@@ -4,7 +4,7 @@ import { describe, it, mock } from 'node:test';
 import sharp from 'sharp';
 
 import createPageRoutes from '../routes/pages';
-import { buildFestivalPageDays, festivalTimeZoneLine } from '../lib/festival-page';
+import { buildFestivalPageDays, buildFestivalPageLineup, festivalTimeZoneLine, renderFestivalPage } from '../lib/festival-page';
 import { buildFestivalOgSvg } from '../lib/helpers/share-og-image';
 
 // Public festival page /f/:slug and its preview image (T50). No DB: the routes are
@@ -96,9 +96,9 @@ async function getPage(deps: any, slug: string) {
   return res;
 }
 
-async function getOg(deps: any, slug: string) {
+async function getOg(deps: any, slug: string, handler = handlerFor(deps, '/f/:slug/og.png')) {
   const res = mockRes();
-  await handlerFor(deps, '/f/:slug/og.png')({ params: { slug } }, res);
+  await handler({ params: { slug } }, res);
   return res;
 }
 
@@ -229,7 +229,7 @@ describe('festival page: GET /f/:slug', () => {
     assert.ok(!html.includes('class="fp-line"'));
     assert.ok(html.includes('Times are local to the festival.'));
     assert.ok(!html.includes('"startDate"'));
-    assert.ok(html.includes('content="Lineup and set times for Soon Fest. Plan your days with Festie."'));
+    assert.ok(html.includes('content="Lineup for Soon Fest. Plan your days with Festie."'));
   });
 });
 
@@ -268,6 +268,30 @@ describe('festival page: GET /f/:slug/og.png', () => {
     assert.equal(meta.height, 630);
   });
 
+  it('serves a second request inside 10 minutes from the cache and renders again after', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+    const { deps } = buildDeps();
+    const og = handlerFor(deps, '/f/:slug/og.png');
+    const first = await getOg(deps, 'edc-orlando-2026', og);
+    t.mock.timers.tick(9 * 60 * 1000);
+    const second = await getOg(deps, 'edc-orlando-2026', og);
+    assert.equal(second._sent, first._sent, 'same buffer: sharp skipped');
+    t.mock.timers.tick(61 * 1000);
+    const third = await getOg(deps, 'edc-orlando-2026', og);
+    assert.notEqual(third._sent, first._sent, 'rendered again after the TTL');
+    assert.equal(third._headers['Content-Type'], 'image/png');
+  });
+
+  it('does not serve a cached image once the festival stops being public', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'], now: 1_000_000 });
+    const { deps, findPublicIdBySlug } = buildDeps();
+    const og = handlerFor(deps, '/f/:slug/og.png');
+    await getOg(deps, 'edc-orlando-2026', og);
+    findPublicIdBySlug.mock.mockImplementation(async () => null);
+    const res = await getOg(deps, 'edc-orlando-2026', og);
+    assert.equal(res._status, 404);
+  });
+
   it('answers an empty 404 for an unknown or malformed slug', async () => {
     const unknown = await getOg(buildDeps({ publicId: null }).deps, 'nope');
     assert.equal(unknown._status, 404);
@@ -303,5 +327,90 @@ describe('festival page: GET /f/:slug/og.png', () => {
     assert.ok(full.includes('>Nov 6 – Nov 8, 2026<'));
     assert.ok(full.includes('>12 sets · 3 stages<'));
     assert.ok(full.includes('text-anchor="end"'));
+  });
+});
+
+describe('festival page: announced lineup', () => {
+  const entry = (id: string, names: string[], extra: any = {}) => ({
+    id,
+    artists: names.map((name) => ({ name, links: {} })),
+    displayName: null,
+    tier: null,
+    dayDate: null,
+    status: 'announced',
+    announcedAt: '2026-11-20',
+    linkedSetIds: [],
+    ...extra,
+  });
+  const base = (lineup: any[], days: any[]) => ({
+    id: 'f-1',
+    name: 'Names Fest',
+    location: 'Field',
+    b2bSeparator: 'b2b',
+    stages: [{ id: 'main', name: 'Main', color: '#ff3366' }],
+    days,
+    lineup,
+  });
+  const render = (festival: any) => renderFestivalPage({ festival, origin: 'https://festie.us', slug: 'names-fest' });
+  const noSets = [
+    { label: 'Fri', date: '2026-11-06', sets: [] },
+    { label: 'Sat', date: '2026-11-07', sets: [] },
+  ];
+
+  it('places entries under their day, in the announced section by tier, and in the cancelled list', () => {
+    const lineup = [
+      entry('lu-1', ['Low Tier'], { tier: 3 }),
+      entry('lu-2', ['Top Tier'], { tier: 1 }),
+      entry('lu-3', ['No Tier']),
+      entry('lu-4', ['Friday Act'], { dayDate: '2026-11-06' }),
+      entry('lu-5', ['Gone Act'], { status: 'cancelled' }),
+      entry('lu-6', ['Moved Day'], { dayDate: '2030-01-01' }),
+    ];
+    const lineupParts = buildFestivalPageLineup(base(lineup, noSets));
+    assert.deepEqual(lineupParts.perDay, [['Friday Act'], []]);
+    assert.deepEqual(lineupParts.undated, ['Top Tier', 'Low Tier', 'No Tier', 'Moved Day']);
+    assert.deepEqual(lineupParts.cancelled, ['Gone Act']);
+
+    const html = render(base(lineup, noSets));
+    assert.ok(html.includes('Stages and times to come.'));
+    assert.ok(html.includes('<h2>Announced lineup</h2>'));
+    assert.ok(html.includes('Days and times to come.'));
+    assert.ok(html.includes('<h2>Cancelled</h2>'));
+    assert.ok(html.includes('Set times to come.'), 'Saturday has no sets and no acts');
+    assert.ok(html.indexOf('Top Tier') < html.indexOf('Low Tier'));
+    assert.ok(html.indexOf('Announced lineup') < html.indexOf('Cancelled'));
+  });
+
+  it('leaves out a covered entry, since its set is already listed, and says "Lineup for" with no sets', () => {
+    const days = [{ label: 'Fri', date: '2026-11-06', sets: [{ id: 's1', artist: 'Covered Act', stageId: 'main', startTime: '20:00', endTime: '21:00' }] }];
+    const festival = base([entry('lu-1', ['Covered Act'], { dayDate: '2026-11-06' }), entry('lu-2', ['Still Open'])], days);
+    const html = render(festival);
+    assert.equal(html.split('Covered Act').length - 1, 1, 'the covered act shows once, as a set');
+    assert.ok(html.includes('Still Open'));
+    assert.ok(html.includes('content="Lineup and set times for Names Fest'));
+    assert.ok(render(base([entry('lu-1', ['Still Open'])], noSets)).includes('content="Lineup for Names Fest'));
+  });
+
+  it('prints organizer text escaped, and prints no links', () => {
+    const evil = '<img src=x onerror=alert(1)>';
+    const html = render(
+      base(
+        [
+          entry('lu-1', [evil, 'Plain'], { artists: [{ name: evil, links: { web: 'javascript:alert(1)' } }] }),
+          entry('lu-2', ['A'], { displayName: '<script>alert(2)</script>', status: 'cancelled' }),
+        ],
+        noSets,
+      ),
+    );
+    assert.ok(!html.includes('<img src=x'));
+    assert.ok(!html.includes('<script>alert(2)'));
+    assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'));
+    assert.ok(html.includes('&lt;script&gt;alert(2)&lt;/script&gt;'));
+    assert.ok(!html.includes('javascript:alert(1)'));
+  });
+
+  it("keeps the empty-lineup line only when there are no days and no entries", () => {
+    assert.ok(render(base([], [])).includes("The lineup isn't out yet."));
+    assert.ok(!render(base([entry('lu-1', ['Solo'])], [])).includes("The lineup isn't out yet."));
   });
 });

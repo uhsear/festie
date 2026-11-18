@@ -52,7 +52,7 @@ vi.mock('./FestivalEditForm', () => ({
     onDiscard: () => void;
     notifyPickers: boolean;
     onNotifyPickersChange: (v: boolean) => void;
-    formData: { name?: string; days?: { id: string; label: string }[] };
+    formData: { name?: string; days?: { id: string; label: string }[]; lineup?: unknown[] };
     setFormData: (f: unknown) => void;
     engagementError?: boolean;
   }) => (
@@ -83,6 +83,13 @@ vi.mock('./FestivalEditForm', () => ({
         }
       >
         edit day 1
+      </button>
+      <button
+        onClick={() =>
+          setFormData({ ...formData, lineup: [...(formData.lineup ?? []), { id: 'lu-2', artists: [{ name: 'Mira' }] }] })
+        }
+      >
+        add lineup entry
       </button>
     </div>
   ),
@@ -165,6 +172,23 @@ describe('AdminFestivals', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Remove and save' }));
     await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
     expect(mockPut.mock.calls[1][1]).toMatchObject({ confirmRemovals: true, expectedUpdatedAt: FULL.updatedAt });
+  });
+
+  it('resends the lineup only when it changed', async () => {
+    const stored = [{ id: 'lu-1', artists: [{ name: 'Kai' }], status: 'announced' }];
+    fetchAdminFestival.mockResolvedValue({ ...FULL, lineup: stored });
+    mockPut.mockResolvedValue({ ...FULL });
+    render(<AdminFestivals />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit Fest' }));
+    // An unchanged lineup is left out, so a large list cannot 413 the save.
+    await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
+    await waitFor(() => expect(mockPut).toHaveBeenCalled());
+    expect('lineup' in mockPut.mock.calls[0][1]).toBe(false);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'add lineup entry' }));
+    await userEvent.click(screen.getByRole('button', { name: 'save form' }));
+    await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
+    expect(mockPut.mock.calls[1][1].lineup).toHaveLength(2);
   });
 
   it('sends notify: false when the box is unchecked', async () => {

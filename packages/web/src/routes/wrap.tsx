@@ -25,7 +25,7 @@ import Switch from '../components/ui/Switch';
 import CrewWrapPoster, { type CrewWrapData } from '../components/features/CrewWrapPoster';
 import CrewPhotosCard from '../components/crew/CrewPhotosCard';
 import { useToast } from '../lib/toastContext';
-import { sharePoster } from '../lib/sharePoster';
+import { sharePoster, wrapShareLink } from '../lib/sharePoster';
 import WrapHero from '../components/wrap/WrapHero';
 import PosterPreview from '../components/wrap/PosterPreview';
 import WrapCarousel from '../components/wrap/WrapCarousel';
@@ -62,6 +62,7 @@ function WrapPageInner() {
   const [tab, setTab] = useState<'me' | 'crew'>('me');
 
   const festivalId = search.festival ?? currentFestival?.id;
+  const slug = useFestivalStore((s) => s.festivals.find((f) => f.id === festivalId)?.slug);
   // The active crew belongs to one festival; only send it for that festival's wrap.
   const crewParam = activeCrew && activeCrew.festivalId === festivalId ? activeCrew.id : null;
 
@@ -82,7 +83,13 @@ function WrapPageInner() {
       if (!data) return;
       setSharing(true);
       try {
-        await sharePoster(node, `festie-wrap-${data.festival.id}-${index + 1}.png`, `My ${COPY.wrap.name}`, toast);
+        await sharePoster(
+          node,
+          `festie-wrap-${data.festival.id}-${index + 1}.png`,
+          `My ${COPY.wrap.name}`,
+          toast,
+          wrapShareLink(slug, data.festival.name),
+        );
       } catch (e: unknown) {
         // AbortError = user cancelled share sheet; suppress.
         const isAbort = e instanceof DOMException && e.name === 'AbortError';
@@ -91,7 +98,7 @@ function WrapPageInner() {
         setSharing(false);
       }
     },
-    [data, toast, toastError],
+    [data, slug, toast, toastError],
   );
 
   if (!user) return <GuestTeaser mode="wrap" />;
@@ -350,6 +357,7 @@ function CrewWrapTab({
 }) {
   const { toast, toastError } = useToast();
   const posterRef = useRef<HTMLDivElement>(null);
+  const slug = useFestivalStore((s) => s.festivals.find((f) => f.id === festivalId)?.slug);
   const [sharing, setSharing] = useState(false);
   const [showMoney, setShowMoney] = useState(false);
 
@@ -365,14 +373,20 @@ function CrewWrapTab({
     if (!posterRef.current) return;
     setSharing(true);
     try {
-      await sharePoster(posterRef.current, `festie-crew-wrap-${crewId}.png`, `Our ${COPY.wrap.crewName}`, toast);
+      await sharePoster(
+        posterRef.current,
+        `festie-crew-wrap-${crewId}.png`,
+        `Our ${COPY.wrap.crewName}`,
+        toast,
+        wrapShareLink(slug, festivalName),
+      );
     } catch (e: unknown) {
       const isAbort = e instanceof DOMException && e.name === 'AbortError';
       if (!isAbort) toastError(e, "Couldn't share your wrap. Try again.");
     } finally {
       setSharing(false);
     }
-  }, [crewId, toast, toastError]);
+  }, [crewId, slug, festivalName, toast, toastError]);
 
   if (!crewId) {
     return (

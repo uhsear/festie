@@ -387,6 +387,75 @@ describe('GridView', () => {
     expect(screen.queryByText('Jump to now')).not.toBeInTheDocument();
   });
 
+  describe('announced lineup', () => {
+    const announcedAct = {
+      id: 'lu-1',
+      artists: [{ name: 'Announced Act' }],
+      displayName: null,
+      tier: null,
+      dayDate: null,
+      status: 'announced',
+      announcedAt: '2098-12-01',
+      linkedSetIds: [],
+    };
+    beforeEach(() => {
+      Object.assign(storeState, {
+        currentFestival: { id: 'f1', name: 'Bonnaroo', startDate: '2099-06-12', endDate: '2099-06-12', lineup: [announcedAct] },
+        days: [{ index: 0, label: 'Friday', date: '2099-06-12' }],
+        sets: [],
+        selectedDay: 0,
+      });
+    });
+
+    it('stands in for "No sets scheduled" when the festival has no sets', () => {
+      setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+      render(<GridView />);
+      expect(screen.getByText('1 act announced · Set times TBA')).toBeInTheDocument();
+      expect(screen.getByText('Announced Act')).toBeInTheDocument();
+      expect(screen.queryByTestId('empty-state')).not.toBeInTheDocument();
+    });
+
+    it('keeps the empty state when a filter emptied a day that has sets', () => {
+      storeState.sets = [timedSet];
+      setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+      render(<GridView />);
+      expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+      expect(screen.queryByText('Announced Act')).not.toBeInTheDocument();
+    });
+
+    it('lists matching announced acts under the no-results state of a search', () => {
+      storeState.searchQuery = 'ann';
+      setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+      render(<GridView />);
+      expect(screen.getByTestId('empty-state')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Announced acts' })).toBeInTheDocument();
+      expect(screen.getByText('Announced Act')).toBeInTheDocument();
+    });
+
+    it('leaves the empty state to the search when nothing announced matches', () => {
+      storeState.searchQuery = 'zzz';
+      setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
+      render(<GridView />);
+      expect(screen.queryByRole('heading', { name: 'Announced lineup' })).not.toBeInTheDocument();
+      expect(screen.queryByText('Announced Act')).not.toBeInTheDocument();
+    });
+
+    it('follows the TBA section when only timeless sets exist', () => {
+      setFilters({ timedSets: [], timelessSets: [{ id: 's1', artist: 'TBA Artist', stageId: 'st1', dayIndex: 0 }] });
+      render(<GridView />);
+      expect(screen.getByRole('heading', { name: "Set times aren't out yet" })).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Announced lineup' })).toBeInTheDocument();
+    });
+
+    it('is a footer under the grid when the day has timed sets', () => {
+      storeState.sets = [timedSet];
+      setFilters(timedDay);
+      render(<GridView />);
+      expect(screen.getByTestId('timeline-grid')).toBeInTheDocument();
+      expect(screen.getByText('Announced Act')).toBeInTheDocument();
+    });
+  });
+
   it('renders the TBA section alongside the grid when timeless sets exist', () => {
     setFilters({
       ...timedDay,

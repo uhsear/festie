@@ -20,7 +20,7 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
 if [ -z "$OFFSITE_TARGET" ]; then
   log "WARNING: No off-site backup target configured (OFFSITE_TARGET). Data is at risk from single-host failures."
   log "SKIP: OFFSITE_TARGET not configured in .env"
-  exit 0
+  exit 3
 fi
 
 log "Starting off-site sync to $OFFSITE_TARGET"
