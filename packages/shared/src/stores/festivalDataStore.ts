@@ -711,7 +711,8 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         get,
         set,
         `/profiles/${currentProfile.id}`,
-        { picks: mergedPicks },
+        // pickRemove tells the server this clear is deliberate, so its guard on converted picks lets it through.
+        request.priority ? { picks: mergedPicks } : { picks: mergedPicks, pickRemove: [request.setId] },
         `pick-${currentProfile.id}-${request.setId}`,
       );
       swapPickSync(get, set, request.setId, syncEntry, outcome === 'queued' ? { ...syncEntry, state: 'queued' } : undefined);
@@ -833,7 +834,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         get,
         set,
         `/profiles/${currentProfile.id}`,
-        { picks: mergedPicks },
+        { picks: mergedPicks, pickRemove: [setId] },
         `pick-${currentProfile.id}-${setId}`,
       );
       swapPickSync(get, set, setId, syncEntry, outcome === 'queued' ? { ...syncEntry, state: 'queued' } : undefined);

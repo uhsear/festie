@@ -73,8 +73,9 @@ const CONVERTED_PICK_GUARD_MS = 72 * 60 * 60 * 1000;
 /**
  * The picks a full-map write must keep: converted in the last 72 hours, still stored, and missing
  * from the incoming map. An explicit `interestRemove` deletes the mark, so it ends the protection.
+ * An id in `removed` (the request's `pickRemove`) is the user clearing that pick on purpose, so it is not kept.
  */
-async function keepConvertedPicks(client: any, profileId: string, picks: Record<string, any>) {
+async function keepConvertedPicks(client: any, profileId: string, picks: Record<string, any>, removed: string[] = []) {
   const { rows } = await client.query(
     'SELECT interests_json AS interests FROM festival_profiles WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
     [profileId],
@@ -83,7 +84,7 @@ async function keepConvertedPicks(client: any, profileId: string, picks: Record<
   const guarded = new Set<string>();
   for (const mark of Object.values<any>(rows[0]?.interests ?? {})) {
     if (mark?.state !== 'converted' || !(Date.parse(mark.at) >= cutoff)) continue;
-    for (const setId of mark.sets ?? []) if (!(setId in picks)) guarded.add(setId);
+    for (const setId of mark.added ?? []) if (!(setId in picks) && !removed.includes(setId)) guarded.add(setId);
   }
   if (guarded.size === 0) return picks;
   const stored = await client.query(
@@ -424,13 +425,13 @@ export default function createProfilesStore(pool: Pool, utils: any) {
     },
 
     async update(profileId: string, fields: any) {
-      // fields: picks, notes, reminders, interestAdd, interestRemove, userId, name, updatedAt
+      // fields: picks, pickRemove, notes, reminders, interestAdd, interestRemove, userId, name, updatedAt
       // Use transaction to ensure main record and normalized tables stay in sync (#CRITICAL)
       return withTransaction(pool, async (client) => {
         const sets: string[] = [];
         const values: any[] = [];
         let idx = 1;
-        const picks = fields.picks === undefined ? undefined : await keepConvertedPicks(client, profileId, fields.picks);
+        const picks = fields.picks === undefined ? undefined : await keepConvertedPicks(client, profileId, fields.picks, fields.pickRemove);
         if (picks !== undefined) {
           sets.push(`picks_json = $${idx}`);
           values.push(serializeJson(picks));

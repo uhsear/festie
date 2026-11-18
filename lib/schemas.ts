@@ -174,6 +174,8 @@ export const profileUpdateSchema = z
     picks: picksMap,
     notes: notesMap,
     reminders: remindersMap,
+    // Set ids the user cleared in this full-map write. They end the server's 72-hour guard on converted picks.
+    pickRemove: z.array(z.string().max(100)).max(200).optional(),
     // Interest marks travel as deltas, never as a whole map, so two devices cannot erase each other's marks.
     interestAdd: z.array(identifier).max(50).optional(),
     interestRemove: z.array(identifier).max(50).optional(),

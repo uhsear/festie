@@ -26,8 +26,18 @@ describe('planInterestConversion', () => {
       existingSetIds: new Set(['s1', 's2']),
     });
     assert.deepEqual(result.added, { s1: 'want-to-see', s2: 'want-to-see' });
-    assert.deepEqual(result.marks.a, { state: 'converted', sets: ['s1', 's2'], at: NOW });
+    assert.deepEqual(result.marks.a, { state: 'converted', sets: ['s1', 's2'], added: ['s1', 's2'], at: NOW });
     assert.equal(result.changed, true);
+  });
+
+  test('a mark lists as `added` only the picks conversion made, not ones the profile already had', () => {
+    const result = plan({
+      marks: { a: { state: 'open' } },
+      picks: { s1: 'want-to-see' },
+      cover: { a: cover('scheduled', ['s1', 's2']) },
+      existingSetIds: new Set(['s1', 's2']),
+    });
+    assert.deepEqual(result.marks.a, { state: 'converted', sets: ['s1', 's2'], added: ['s2'], at: NOW });
   });
 
   test('an act with no set, or a cancelled one, stays open and changes nothing', () => {
@@ -87,7 +97,7 @@ describe('planInterestConversion', () => {
       existingSetIds: new Set(['new']),
     });
     assert.deepEqual(result.added, { new: 'want-to-see' });
-    assert.deepEqual(result.marks.a, { state: 'converted', sets: ['new'], at: NOW });
+    assert.deepEqual(result.marks.a, { state: 'converted', sets: ['new'], added: ['new'], at: NOW });
   });
 
   test('a converted mark whose sets are gone and that nothing covers goes back to open', () => {

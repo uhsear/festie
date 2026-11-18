@@ -279,6 +279,22 @@ describe('Integration: interest marks', { concurrency: 1 }, () => {
     assert.equal((await alice.row()).interests_json[entry('Zeta')].state, 'converted');
   });
 
+  test('a full map with pickRemove drops a converted pick inside the 72 hours, a stale map without it does not', async () => {
+    const { entry, user, importRows, setIdOf } = await setup();
+    const alice = await user('alice');
+    await alice.put({ interestAdd: [entry('Zeta')] }).expect(200);
+    await importRows([importRow(2, 'Zeta', '16:00')]).expect(200);
+    const [zetaSet] = await setIdOf('Zeta');
+    await until(async () => (await alice.row()).interests_json[entry('Zeta')]?.state === 'converted', 'Zeta to convert');
+
+    await alice.put({ picks: { 'set-a': 'must' } }).expect(200);
+    assert.deepEqual(await alice.dbPicks(), { 'set-a': 'must', [zetaSet!]: 'want-to-see' });
+
+    const cleared = await alice.put({ picks: { 'set-a': 'must' }, pickRemove: [zetaSet!] }).expect(200);
+    assert.deepEqual(cleared.body.data.picks, { 'set-a': 'must' });
+    assert.deepEqual(await alice.dbPicks(), { 'set-a': 'must' });
+  });
+
   test('privacy: other attendees and crew mates never get marks, the owner and the export do', async () => {
     const { server, entry, user } = await setup();
     const alice = await user('alice');

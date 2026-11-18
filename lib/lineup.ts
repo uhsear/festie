@@ -196,11 +196,15 @@ export function coverLineup(lineup: any[], days: any[], separator: string): Reco
 }
 
 export const MAX_INTEREST_SETS = 10;
+// A release-day import can convert thousands of profiles; announce reads them this many at a time.
+const ANNOUNCE_CHUNK = 50;
 
 export interface InterestMark {
   state: 'open' | 'converted';
-  /** Set ids a converted mark picked, at most MAX_INTEREST_SETS. */
+  /** Set ids that covered the act when it converted, at most MAX_INTEREST_SETS. */
   sets?: string[];
+  /** The subset of `sets` that conversion itself picked. Import undo and the converted-pick guard read it. */
+  added?: string[];
   /** When the server converted it (ISO). The converted-pick guard reads it. */
   at?: string;
 }
@@ -245,7 +249,7 @@ export function planInterestConversion(input: {
     if (pickCount + fresh.length > maxPicks) continue;
     for (const setId of fresh) added[setId] = 'want-to-see';
     pickCount += fresh.length;
-    next[entryId] = { state: 'converted', sets: setIds, at: now };
+    next[entryId] = { state: 'converted', sets: setIds, added: fresh, at: now };
     changed = true;
   }
   return { marks: next, added, changed };
@@ -261,7 +265,11 @@ export function createInterestConversion({ pool, stores, emitter, log, config }:
   async function announce(profileIds: string[]) {
     if (profileIds.length === 0) return;
     try {
-      const profiles = (await Promise.all(profileIds.map((id) => stores.profiles.getById(id)))).filter(Boolean);
+      const profiles: any[] = [];
+      for (let i = 0; i < profileIds.length; i += ANNOUNCE_CHUNK) {
+        const chunk = await Promise.all(profileIds.slice(i, i + ANNOUNCE_CHUNK).map((id) => stores.profiles.getById(id)));
+        profiles.push(...chunk.filter(Boolean));
+      }
       const users = await stores.users.getByIds([...new Set(profiles.map((p: any) => p.userId).filter(Boolean))]);
       for (const profile of profiles) {
         emitter.profileUpdated({ profile, user: users.get(profile.userId) ?? null, changedFields: { interests: true } });

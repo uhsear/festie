@@ -66,7 +66,7 @@ export function planInterestConversion(input: {
     if (pickCount + fresh.length > maxPicks) continue;
     for (const setId of fresh) added[setId] = 'want-to-see';
     pickCount += fresh.length;
-    next[entryId] = { state: 'converted', sets: setIds, at: now };
+    next[entryId] = { state: 'converted', sets: setIds, added: fresh, at: now };
     changed = true;
   }
   return { marks: next, added, changed };

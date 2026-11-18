@@ -154,7 +154,7 @@ async function newestOpenImportId(client: any, festivalId: string): Promise<stri
 }
 
 /**
- * Takes back the picks that conversion made on these sets: the profile's converted mark lists the set,
+ * Takes back the picks that conversion made on these sets: the profile's converted mark lists the set as one it added,
  * the pick is still want-to-see, and the profile has no note, reminder or rating on it. The mark loses
  * the set id and goes back to `open` when none are left. Any other pick stays and keeps its set.
  * Returns the profiles it changed, so the caller can tell their open devices.
@@ -197,11 +197,12 @@ async function removeConversionPicks(client: any, festivalId: string, setIds: st
     const removed = new Set<string>();
     for (const [entryId, mark] of Object.entries(marks)) {
       if (mark?.state !== 'converted') continue;
-      const taken = (mark.sets ?? []).filter((setId: string) => row.candidates.includes(setId));
+      const taken = (mark.added ?? []).filter((setId: string) => row.candidates.includes(setId));
       if (taken.length === 0) continue;
       taken.forEach((setId: string) => removed.add(setId));
       const left = (mark.sets ?? []).filter((setId: string) => !taken.includes(setId));
-      marks[entryId] = left.length > 0 ? { ...mark, sets: left } : { state: 'open' };
+      const addedLeft = (mark.added ?? []).filter((setId: string) => !taken.includes(setId));
+      marks[entryId] = left.length > 0 ? { ...mark, sets: left, added: addedLeft } : { state: 'open' };
     }
     if (removed.size === 0) continue;
     const ids = [...removed];

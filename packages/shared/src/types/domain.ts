@@ -262,6 +262,7 @@ export interface Profile {
 export interface InterestMark {
   state: 'open' | 'converted';
   sets?: string[];
+  added?: string[];
   at?: string;
 }
 

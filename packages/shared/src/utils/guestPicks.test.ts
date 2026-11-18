@@ -38,7 +38,7 @@ describe('planInterestConversion', () => {
   it('converts an open mark on a covered act onto every covering set', () => {
     const r = plan({ marks: { a: { state: 'open' } }, cover: { a: cover('scheduled', ['s1', 's2']) }, existingSetIds: new Set(['s1', 's2']) });
     expect(r.added).toEqual({ s1: 'want-to-see', s2: 'want-to-see' });
-    expect(r.marks.a).toEqual({ state: 'converted', sets: ['s1', 's2'], at: NOW });
+    expect(r.marks.a).toEqual({ state: 'converted', sets: ['s1', 's2'], added: ['s1', 's2'], at: NOW });
   });
 
   it('leaves an act with no set or a cancelled act open', () => {
