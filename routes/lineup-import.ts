@@ -114,16 +114,10 @@ export default function createLineupImportRoute(deps: any) {
   // A Link column value for an empty platform of an artist that exists: written after the import
   // commits, through the artist's own locks (festivals first, then the artist), so every festival that
   // lists the artist gets it. A failure is logged and never fails the import.
-  async function applyLinkFills(fills: Array<{ artistId: string; url: string }>, userId: string | null) {
+  async function applyLinkFills(fills: Array<{ artistId: string; url: string }>, userId: string | null, ip: string | null) {
     for (const fill of fills) {
       try {
-        const current = await stores.artists.getById(fill.artistId);
-        if (!current) continue;
-        const result = await stores.artists.update(fill.artistId, {
-          expectedUpdatedAt: new Date(current.updated_at).toISOString(),
-          changes: { addLink: fill.url },
-          userId,
-        });
+        const result = await stores.artists.fillLink(fill.artistId, { link: fill.url, userId, ip });
         await deps.afterArtistSync?.(result.synced);
       } catch (error: any) {
         log.warn('import link not added to the artist', { artistId: fill.artistId, error: error?.message });
@@ -192,7 +186,7 @@ export default function createLineupImportRoute(deps: any) {
 
       invalidateFestivalCache();
       announceSetsChanged(festival);
-      await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null);
+      await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null, getRequestIp(req));
       if (outcome.refs?.ignoredLinkEdits) {
         warnings.push(
           `${outcome.refs.ignoredLinkEdits} ${outcome.refs.ignoredLinkEdits === 1 ? 'link differs' : 'links differ'} from the artist's links and ${outcome.refs.ignoredLinkEdits === 1 ? 'was' : 'were'} not used. Change them on the Artists tab.`,

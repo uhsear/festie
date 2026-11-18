@@ -283,3 +283,38 @@ describe('isCurrentOrUpcoming', () => {
     assert.equal(isCurrentOrUpcoming({ timeZone: 'America/New_York', lastDate: '2026-05-30' }, now), false);
   });
 });
+
+describe('global artist changes leave an audit row and updated_by', { skip, concurrency: 1 }, () => {
+  const auditRows = (pool: any, artistId: string) =>
+    pool.query(`SELECT actor_id, ip, details_json FROM audit_log WHERE target_type = 'artist' AND target_id = $1 AND action = 'artist.updated' ORDER BY created_at`, [artistId]);
+
+  test('fillLink fills an empty platform, audits it, and never overwrites an existing link', async () => {
+    const artist = await createArtist(app, { name: 'Fill Link Act', link: 'https://soundcloud.com/filllinkact' });
+    const element = { id: artist.id, name: 'Fill Link Act', links: { soundcloud: 'https://soundcloud.com/filllinkact' } };
+    await withPool(async (pool) => {
+      await seedFestival(pool, { id: 'fest-fill-link', sets: [{ id: 'fill-link-s1', artist: 'Fill Link Act', artists: [element] }] });
+      const store = createArtistsStore(pool);
+      const kept = await store.fillLink(artist.id, { link: 'https://soundcloud.com/someoneelse', userId: null });
+      assert.deepEqual(kept.synced, []);
+      const filled = await store.fillLink(artist.id, { link: 'https://www.instagram.com/filllinkact', userId: null, ip: '203.0.113.9' });
+      assert.deepEqual(filled.synced.map((f) => f.id), ['fest-fill-link']);
+      const { rows } = await pool.query('SELECT links FROM artists WHERE id = $1', [artist.id]);
+      assert.deepEqual(rows[0].links, { soundcloud: 'https://soundcloud.com/filllinkact', instagram: 'https://www.instagram.com/filllinkact' });
+      assert.equal((await setRow(pool, 'fill-link-s1')).artists[0].links.instagram, 'https://www.instagram.com/filllinkact');
+      const audit = await auditRows(pool, artist.id);
+      assert.equal(audit.rows.length, 1);
+      assert.equal(audit.rows[0].ip, '203.0.113.9');
+      assert.equal(audit.rows[0].details_json.source, 'fill');
+    });
+  });
+
+  test('update records the audit row in its own transaction', async () => {
+    const artist = await createArtist(app, { name: 'Audit Update Act' });
+    await rename(artist, { name: 'Audit Update Act Two' }).expect(200);
+    await withPool(async (pool) => {
+      const audit = await auditRows(pool, artist.id);
+      assert.equal(audit.rows.length, 1);
+      assert.equal(audit.rows[0].details_json.renamedFrom, 'Audit Update Act');
+    });
+  });
+});

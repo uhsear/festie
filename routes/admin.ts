@@ -413,7 +413,7 @@ export default function createAdminRoutes(deps: any): Router {
             for (const entry of write.artists) {
               const fill = fills.get(entry);
               if (!fill) continue;
-              const filled = await stores.artists.fillEmpty(client, entry.id, fill);
+              const filled = await stores.artists.fillEmpty(client, entry.id, fill, { userId: req.user?.userId ?? null, ip: getRequestIp(req) });
               if (!filled) continue;
               Object.assign(entry, { links: { ...(filled.artist.links ?? {}) } });
               if (filled.artist.photo) entry.photo = filled.artist.photo;
