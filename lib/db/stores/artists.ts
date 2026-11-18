@@ -20,7 +20,7 @@ import { duplicatePartners } from '../../artist-duplicates';
 import { detectPlatform, normalizeArtistLink } from '../../artist-links';
 import { todayInZone } from '../../lineup';
 import { AUDIT_ACTIONS } from '../../audit-actions';
-import { lockFestivalAny } from './lineup-imports';
+import { lockFestivalAny } from './festival-lock';
 
 export const MAX_ARTIST_NAME = 300;
 export const MAX_ARTIST_LABEL = 40;
