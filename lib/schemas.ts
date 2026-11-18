@@ -797,6 +797,9 @@ export const artistMergeSchema = z.object({
 });
 export type ArtistMergeInput = z.infer<typeof artistMergeSchema>;
 
+// The artist id backfill. `run` needs a recent re-auth; the other two modes write nothing.
+export const artistBackfillSchema = z.object({ mode: z.enum(['dry-run', 'run', 'verify']) });
+
 // "Find Spotify links": the candidates for the artists on one festival, and the editor's picks.
 export const artistSpotifyCandidatesSchema = z.object({
   festivalId: identifier,
@@ -1834,6 +1837,7 @@ export const schemas = {
   artistCreate: artistCreateSchema,
   artistUpdate: artistUpdateSchema,
   artistMerge: artistMergeSchema,
+  artistBackfill: artistBackfillSchema,
   artistListQuery: artistListQuerySchema,
   artistSpotifyCandidates: artistSpotifyCandidatesSchema,
   artistSpotifyPicks: artistSpotifyPicksSchema,

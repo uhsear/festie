@@ -12,9 +12,13 @@ import {
   type SyncedFestival,
 } from '../lib/db/stores/artists.js';
 import * as spotify from '../lib/spotify.js';
+import { applyBackfillPlan, planBackfill, verifyBackfill } from '../lib/artist-backfill.js';
 
 /** Artists searched per "Find Spotify links" run. The rest wait for the next run, after the editor skips or links these. */
 const MAX_CANDIDATE_ARTISTS = 150;
+
+// Postgres advisory lock key ("FESTIE_A"), next to the migration runner's "FESTIE_M" key. Two runs never overlap.
+const BACKFILL_LOCK_KEY = '5063544977519632193';
 
 /**
  * Artist routes, admin only, mounted at /api/v1/admin/artists. An edit changes every festival that
@@ -38,8 +42,11 @@ export default function createArtistsRoutes(deps: any) {
     getRequestIp,
     requireRecentAuth,
     invalidateFestivalCache,
+    setNoStore,
     config,
   } = deps;
+  // deps.artistBackfill lets a route test swap the three backfill steps.
+  const backfill = deps.artistBackfill ?? { planBackfill, applyBackfillPlan, verifyBackfill };
 
   const router = express.Router();
 
@@ -259,6 +266,67 @@ export default function createArtistsRoutes(deps: any) {
       }
     },
   );
+
+  /**
+   * The artist id backfill, the sanctioned production path (scripts/artist-backfill.ts refuses
+   * production by design). It runs on the app's own pool, so it skips assertSafeBackfillDatabase on purpose.
+   * dry-run and verify write nothing. run needs a recent re-auth, holds an advisory lock, writes one audit
+   * row and clears the festival caches, which the script cannot do.
+   */
+  const runOnlyReauth = (req: any, res: any, next: any) => (req.validatedBody.mode === 'run' ? requireRecentAuth(req, res, next) : next());
+  router.post('/backfill', rateLimit(10, 'artist-backfill'), validate(schemas.artistBackfill), runOnlyReauth, async (req: any, res: any) => {
+    const { mode } = req.validatedBody;
+    let lock: any = null;
+    let held = false;
+    try {
+      setNoStore(res);
+      const pool = stores.pool;
+      if (mode === 'verify') return sendSuccess(res, { mode, result: await backfill.verifyBackfill(pool) });
+      if (mode === 'dry-run') return sendSuccess(res, { mode, report: (await backfill.planBackfill(pool)).report });
+
+      lock = await pool.connect();
+      const { rows } = await lock.query('SELECT pg_try_advisory_lock($1::bigint) AS locked', [BACKFILL_LOCK_KEY]);
+      held = !!rows[0]?.locked;
+      if (!held) {
+        return sendError(res, 409, 'An artist backfill is already running. Wait for it to finish.', ErrorCodes.ALREADY_EXISTS);
+      }
+      const plan = await backfill.planBackfill(pool);
+      const result = await backfill.applyBackfillPlan(pool, plan);
+      // The data is committed: a failed cache or audit step must not turn into an error response.
+      try {
+        invalidateFestivalCache();
+        deps.invalidateFestivalListCache?.();
+      } catch (error: any) {
+        log.warn('artist backfill cache clear failed', { error: error?.message });
+      }
+      audit(AUDIT_ACTIONS.ARTIST_BACKFILL_RUN, result.runId, req, {
+        runId: result.runId,
+        counts: plan.report.counts,
+        festivalsWritten: result.festivalsWritten.length,
+        festivalsSkipped: result.festivalsSkipped.length,
+        artistsCreated: result.artistsCreated,
+        conflicts: result.conflicts.length,
+      });
+      log.info('artist:backfilled', { runId: result.runId, artistsCreated: result.artistsCreated });
+      return sendSuccess(res, { mode, report: plan.report, result });
+    } catch (error: any) {
+      return sendArtistError(res, error, 'run the artist backfill');
+    } finally {
+      if (lock) {
+        let unlocked = !held;
+        if (held) {
+          try {
+            await lock.query('SELECT pg_advisory_unlock($1::bigint)', [BACKFILL_LOCK_KEY]);
+            unlocked = true;
+          } catch (error: any) {
+            log.warn('artist backfill unlock failed', { error: error?.message });
+          }
+        }
+        // A session that kept the lock is destroyed, not returned to the pool.
+        lock.release(!unlocked);
+      }
+    }
+  });
 
   router.get('/:id/impact',validateParams(schemas.genericIdParams), async (req: any, res: any) => {
     try {
