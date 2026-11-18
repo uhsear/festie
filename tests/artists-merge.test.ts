@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { resolveArtistRefs } from '../lib/artist-refs';
+import { withTransactionRetry } from '../lib/db/connection';
 import { ArtistError, createArtistsStore } from '../lib/db/stores/artists';
 import { lockFestivalAny } from '../lib/db/stores/lineup-imports';
 import { TEST_DATABASE_URL } from './_integration-helpers';
@@ -295,6 +296,16 @@ describe('artist merge route', { skip, concurrency: 1 }, () => {
     const at = [a, b, c].map((artist) => ids.indexOf(artist.id)).sort((x, y) => x - y);
     assert.equal(at[2]! - at[0]!, 2, 'the three rows sit next to each other');
   });
+
+  test('"Possible duplicates" never lists a partner id that the limit cut off the page', async () => {
+    await createArtist(app, { name: 'Dupe Limit Orchard' });
+    await createArtist(app, { name: 'Dupe Limit Orchard', label: 'UK' });
+    const res = await app.get('/api/v1/admin/artists?duplicates=true&limit=1').expect(200);
+    const list: any[] = res.body.data.artists;
+    const ids = new Set(list.map((row) => row.id));
+    assert.ok(list.length >= 1);
+    for (const row of list) for (const partner of row.duplicateOf) assert.ok(ids.has(partner), `${partner} is on the page`);
+  });
 });
 
 describe('artist merge races a festival save', { skip, concurrency: 1 }, () => {
@@ -366,5 +377,41 @@ describe('artist merge races a festival save', { skip, concurrency: 1 }, () => {
     await assert.rejects(merging, (error: any) => error instanceof ArtistError && error.status === 409 && error.details?.festivals === 2);
     assert.equal((await artistRow(loser.id)).merged_into, null);
     assert.equal((await withPool((p) => setRow(p, 'mg-race-consent-new-s'))).artists[0].id, loser.id);
+  });
+
+  test('a save of a festival the merge never locked starts over and points at the survivor, not the tombstone', async () => {
+    const survivor = await createArtist(app, { name: 'Race Survivor tomb' });
+    const loser = await createArtist(app, { name: 'Race Loser tomb' });
+    await withPool((p) => seedFestival(p, { id: 'mg-race-tomb-other', sets: [] }));
+    // The merge holds the loser lock first. It is not waiting on the save: the save's festival is not in its set.
+    const m = await pool.connect();
+    await m.query('BEGIN');
+    await m.query('SELECT id FROM artists WHERE id = $1 FOR UPDATE', [loser.id]);
+    let attempts = 0;
+    const saving = withTransactionRetry(pool, async (client) => {
+      attempts++;
+      await lockFestivalAny(client, 'mg-race-tomb-other');
+      const resolved = await resolveArtistRefs(client, {
+        festivalId: 'mg-race-tomb-other',
+        days: [{ sets: [{ id: 'mg-race-tomb-other-s', artist: loser.name, artists: [element(loser)] }] }],
+        separator: 'b2b',
+        userId: null,
+      });
+      const set = resolved.days![0].sets[0];
+      await client.query(
+        `INSERT INTO festival_sets (id, festival_id, day_index, artist, stage_id, start_time, end_time, sort_order, artists)
+         VALUES ($1, $2, 0, $3, $4, '20:00', '23:00', 0, $5::jsonb)`,
+        ['mg-race-tomb-other-s', 'mg-race-tomb-other', set.artist, 'mg-race-tomb-other-main', JSON.stringify(set.artists)],
+      );
+    });
+    assert.equal(await settled(saving), false, 'the save waits on the loser lock');
+    await m.query('UPDATE artists SET merged_into = $2 WHERE id = $1', [loser.id, survivor.id]);
+    await m.query('COMMIT');
+    m.release();
+    await saving;
+    assert.equal(attempts, 2, 'the first attempt saw the tombstone and started over');
+    const row = await withPool((p) => setRow(p, 'mg-race-tomb-other-s'));
+    assert.equal(row.artists[0].id, survivor.id);
+    assert.equal(row.artists[0].name, survivor.name);
   });
 });

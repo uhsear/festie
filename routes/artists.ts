@@ -101,7 +101,9 @@ export default function createArtistsRoutes(deps: any) {
   // The single-link set route and the Spotify fill write through the same follow-up.
   deps.afterArtistSync = afterSync;
 
-  router.get('/', validateQuery(schemas.artistListQuery), async (req: any, res: any) => {
+  // The duplicates list scans every live artist, so it is limited; the plain lists are not.
+  const duplicatesLimit = rateLimit(30, 'artist-duplicates');
+  router.get('/', validateQuery(schemas.artistListQuery), (req: any, res: any, next: any) => (req.validatedQuery.duplicates === 'true' ? duplicatesLimit(req, res, next) : next()), async (req: any, res: any) => {
     try {
       const { festivalId, q, limit, duplicates } = req.validatedQuery;
       const artists = await stores.artists.list({

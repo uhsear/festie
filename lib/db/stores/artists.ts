@@ -997,13 +997,16 @@ export function createArtistsStore(pool: Pool) {
         const { rows: keys } = await pool.query('SELECT id, name_key FROM artists WHERE merged_into IS NULL');
         partners = duplicatePartners(keys);
         ({ rows } = await pool.query(
-          `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = ANY($1::text[]) ORDER BY name_key, lower(label), id LIMIT $2`,
-          [[...partners.keys()], opts.limit],
+          `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = ANY($1::text[]) ORDER BY name_key, lower(label), id`,
+          [[...partners.keys()]],
         ));
         // A pair stays together: sort by the first name key in the pair. The sort is stable, so the SQL order holds inside a pair.
         const keyOf = new Map<string, string>(keys.map((k: { id: string; name_key: string }) => [k.id, k.name_key]));
         const first = (id: string) => [id, ...(partners.get(id) ?? [])].map((other) => keyOf.get(other) ?? '').reduce((a, b) => (b < a ? b : a));
         rows.sort((a, b) => (first(a.id) < first(b.id) ? -1 : first(a.id) > first(b.id) ? 1 : 0));
+        // The limit cuts after the sort, then pulls in the partners of the kept rows, so a duplicateOf id is always on the page.
+        const page = new Set(rows.slice(0, opts.limit).flatMap((row) => [row.id, ...(partners.get(row.id) ?? [])]));
+        rows = rows.filter((row) => page.has(row.id));
       } else if (opts.festivalId) {
         ({ rows } = await pool.query(
           `
