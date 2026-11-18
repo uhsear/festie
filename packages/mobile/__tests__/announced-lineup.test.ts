@@ -68,6 +68,17 @@ describe('announced lineup on mobile: the shared rules the home screen renders',
   });
 });
 
+describe('grid bottom panel rows', () => {
+  it('a fully scheduled day with a lineup has no active or cancelled acts to list', () => {
+    const sets = [{ id: 's1', dayIndex: 0, artist: 'Alpha', artists: [{ name: 'Alpha' }] }] as unknown as FestivalSet[];
+    const lineup = [entry('a', 'Alpha', { linkedSetIds: ['s1'] })];
+    const model = announcedLineupModel(festival(lineup), DAYS, sets, 0, Date.now());
+    expect(model.visible).toBe(true);
+    expect(model.selection.active).toEqual([]);
+    expect(model.selection.cancelled).toEqual([]);
+  });
+});
+
 describe('lineupView helpers', () => {
   it('parseLineupView falls back to the Poster view', () => {
     expect(parseLineupView('az')).toBe('az');
@@ -115,11 +126,19 @@ describe('announced lineup wiring (source guards)', () => {
     expect(grid).toContain("import AnnouncedLineup from '../components/AnnouncedLineup';");
     expect(grid).toContain('const announced = useAnnouncedLineup();');
     expect(grid).toContain('if (lineupReplacesEmptyState(announced, searchQuery)) {');
-    expect(grid).toContain('{getCurrentDaySets().length === 0 && searchQuery.trim() ? (');
-    expect(grid).toContain('{untimedSets.length > 0 || announced.visible ? (');
+    expect(grid).toContain('{searchQuery.trim() ? (');
+    expect(grid).not.toContain('getCurrentDaySets().length === 0 && searchQuery.trim()');
+    expect(grid).toContain('{untimedSets.length > 0 || lineupHasRows ? (');
+    expect(grid).not.toContain('untimedSets.length > 0 || announced.visible');
     expect(grid.match(/<AnnouncedLineup model=\{announced\} hPad=\{t\.spacing\[4\]\} \/>/g)).toHaveLength(4);
     // The hook must run before the early returns.
     expect(grid.indexOf('useAnnouncedLineup();')).toBeLessThan(grid.indexOf('if (!currentFestival) {'));
+  });
+
+  it('the grid says set times are not out when the festival has no days', () => {
+    const grid = read('app/grid.tsx');
+    expect(grid).toContain('} else if (getDays().length === 0) {');
+    expect(grid).toContain('title: DISCOVER_COPY.banner.title');
   });
 
   it('a festival with no days says set times are not out instead of "No sets for this day"', () => {

@@ -10,7 +10,7 @@ describe('Grid', () => {
 
   it('renders the TBA list under the grid on a day that also has timed sets', () => {
     expect(src.match(/<TBASection/g)).toHaveLength(2);
-    expect(src).toMatch(/untimedSets\.length > 0 \|\| announced\.visible \? \(\s*<ScrollView style=\{styles\.tbaWrap\}>/);
+    expect(src).toMatch(/untimedSets\.length > 0 \|\| lineupHasRows \? \(\s*<ScrollView style=\{styles\.tbaWrap\}>/);
   });
 
   it('lets guests pick: canPick comes from useCanPick, not the signed-in user', () => {

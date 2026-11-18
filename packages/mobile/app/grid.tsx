@@ -17,7 +17,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFestivalDataStore, useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { usePicks, useCanPick, useFestival, useDayClashes, useViewAs, useCrew } from '@festie/shared/hooks';
-import { COPY } from '@festie/shared/constants';
+import { COPY, DISCOVER_COPY } from '@festie/shared/constants';
 import {
   festivalLoadState,
   GRID_ZOOM_LEVELS,
@@ -41,6 +41,7 @@ import {
   type GridCrewProfile,
   searchEmptyCopy,
   searchHiddenByFilters,
+  searchLineupEntries,
   searchOtherDays,
   type GridBounds,
   type HourMark,
@@ -382,6 +383,12 @@ export default function GridScreen() {
     viewAs.clear();
   };
   const otherDayGroups = searchQuery.trim() ? searchOtherDays(allSets, searchQuery, selectedDay, stages) : [];
+  // The bottom panel takes grid height, so it opens only when the lineup block has rows to show.
+  const lineupHasRows =
+    announced.visible &&
+    (searchQuery.trim()
+      ? searchLineupEntries(announced.lineup, announced.cover, searchQuery).length > 0
+      : announced.selection.active.length > 0 || announced.selection.cancelled.length > 0);
   const otherDayMatches = (
     <OtherDayMatches
       groups={otherDayGroups}
@@ -472,6 +479,8 @@ export default function GridScreen() {
       empty = { ...scheduleEmptyCopy('stages', dayLabel), onAction: () => setActiveStages([]) };
     } else if (reason === 'genres') {
       empty = { ...scheduleEmptyCopy('genres', dayLabel), onAction: () => setActiveGenres([]) };
+    } else if (getDays().length === 0) {
+      empty = { title: DISCOVER_COPY.banner.title, message: 'The schedule has not been posted yet. Check back soon.' };
     } else {
       empty = {
         title: 'No timed sets to display',
@@ -491,7 +500,7 @@ export default function GridScreen() {
         />
         {otherDayMatches}
         {/* A search lists the matching announced acts under the set results, even when no set matches. */}
-        {getCurrentDaySets().length === 0 && searchQuery.trim() ? (
+        {searchQuery.trim() ? (
           <ScrollView style={styles.tbaWrap}>
             <AnnouncedLineup model={announced} hPad={t.spacing[4]} />
           </ScrollView>
@@ -777,7 +786,7 @@ export default function GridScreen() {
           </TouchableOpacity>
         ) : null}
       </View>
-      {untimedSets.length > 0 || announced.visible ? (
+      {untimedSets.length > 0 || lineupHasRows ? (
         <ScrollView style={styles.tbaWrap}>
           <TBASection
             sets={untimedSets}
