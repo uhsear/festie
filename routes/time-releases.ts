@@ -198,7 +198,8 @@ export default function createTimeReleasesRoute(deps: any) {
           }
         } catch (err) {
           // The claim is committed but no job exists for it: free the dates, or they stay ALREADY_RELEASED for ten minutes.
-          if (newKey && !newKeyEnqueued) await stores.timeReleases.unclaim(festivalId, newKey);
+          // A job that started and then threw (queue unavailable, so it ran inline) keeps its claim; reclaimStuck handles it.
+          if (newKey && !newKeyEnqueued && !(err as any)?.timeReleaseJobStarted) await stores.timeReleases.unclaim(festivalId, newKey);
           throw err;
         }
 

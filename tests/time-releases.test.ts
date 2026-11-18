@@ -290,6 +290,16 @@ describe('time-release routes', { skip, concurrency: 1 }, () => {
     assert.equal(sendTimeRelease.mock.calls.length, 2);
   });
 
+  test('an inline job that fails after it started keeps its claim, so a retry cannot double-send', async () => {
+    await create(festival(FULL_DAYS));
+    sendTimeRelease.mock.mockImplementationOnce(async () => {
+      throw Object.assign(new Error('stamp failed'), { timeReleaseJobStarted: true });
+    });
+    await post({ dates: [FRI] }).expect(500);
+    assert.equal((await sql('SELECT 1 FROM festival_time_releases WHERE festival_id = $1', [ID])).length, 1);
+    await post({ dates: [FRI] }).expect(409);
+  });
+
   describe('the send job and the stuck window', () => {
     const KEY = `times:${ID}:22222222-2222-4222-8222-222222222222`;
     let triggers: any;
@@ -352,6 +362,17 @@ describe('time-release routes', { skip, concurrency: 1 }, () => {
       } finally {
         mock.timers.reset();
       }
+    });
+
+    test('a failure inside the job is tagged as started, so the route keeps the claim', async () => {
+      release();
+      const failing = createReengagementTriggers({
+        stores: { festivals: { getById: async () => festival(FULL_DAYS) } },
+        config: {},
+        log: { info() {}, warn() {}, debug() {}, error() {} },
+        pool: { query: async (text: string) => { if (text.includes('FROM festival_time_releases')) throw new Error('db blip'); return { rows: [] }; } },
+      } as any);
+      await assert.rejects(() => failing.sendTimeRelease(ID, KEY), (err: any) => err.timeReleaseJobStarted === true);
     });
 
     test('a send that reached nobody leaves the date claimable and unstamped', async () => {

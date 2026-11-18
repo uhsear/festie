@@ -692,6 +692,11 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     heartbeat.unref?.();
     try {
       return await deliverTimeRelease(festivalId, eventKey);
+    } catch (err: any) {
+      // Marks a failure of the job itself, which the queue's inline fallback lets reach the route. The route
+      // keeps the claim then, because pushes may already be out; only a failed enqueue frees the dates.
+      if (err && typeof err === 'object') err.timeReleaseJobStarted = true;
+      throw err;
     } finally {
       clearInterval(heartbeat);
     }
