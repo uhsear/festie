@@ -105,7 +105,7 @@ describe('emitter: profileUpdated', () => {
     emitter.flushAll();
   });
 
-  it('flags an interest change with a boolean only, and a later pick write does not hide it', async () => {
+  it('flags an interest change to the author only, and a later pick write does not hide it', async () => {
     const io = makeIo();
     const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({ c1: ['user-1', 'bob'] }) }));
     const profile = {
@@ -121,9 +121,10 @@ describe('emitter: profileUpdated', () => {
     emitter.profileUpdated({ profile, user: {}, changedFields: { picks: true } });
 
     await new Promise((r) => setTimeout(r, 300));
-    const payload = io._rooms['user:user-1,crew:c1'][0][1];
+    const payload = io._rooms['user:user-1'][0][1];
     assert.equal(payload.interestsChanged, true);
     assert.equal(JSON.stringify(payload).includes('lu-1'), false, 'the payload also reaches crew rooms');
+    assert.equal(io._rooms['crew:c1'][0][1].interestsChanged, false, 'a crew mate never gets the flag');
     emitter.flushAll();
   });
 
