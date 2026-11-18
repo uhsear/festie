@@ -4,7 +4,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { normalizeTime, planLineupImport, artistsNeedingLinks } from '../lib/lineup-import-plan.js';
+import { normalizeTime, planLineupImport } from '../lib/lineup-import-plan.js';
 import { register } from 'tsx/cjs/api';
 
 // packages/shared loads as CommonJS with extensionless imports, which only the tsx require hook resolves.
@@ -338,28 +338,18 @@ describe('planLineupImport: caps', () => {
   });
 });
 
-describe('planLineupImport: Spotify', () => {
-  it('fills links only for new sets without a link', () => {
+describe('planLineupImport: links', () => {
+  it('never searches Spotify: a new set keeps only the link column and spotifyMatched stays 0', () => {
     const f = withSets([{ day: 0, set: { ...alpha, artists: [{ name: 'DJ Alpha', links: {} }], linkUrl: null } }]);
-    const spotify = new Map([
-      ['dj alpha', { spotifyUrl: 'https://open.spotify.com/artist/x' }],
-      ['kai', { spotifyUrl: 'https://open.spotify.com/artist/kai', imageUrl: 'https://i.scdn.co/kai.jpg', genres: ['house'] }],
-      ['mira', { spotifyUrl: 'https://open.spotify.com/artist/mira' }],
-    ]);
     const rows = [
-      row(2, { artist: 'DJ Alpha', day: 'Friday', startTime: '20:30', endTime: '21:00' }),
       row(3, { artist: 'Kai b2b Mira', stage: 'Forest', day: 'Friday' }),
       row(4, { artist: 'Linked', stage: 'Forest', day: 'Saturday', link: 'https://soundcloud.com/linked' }),
     ];
-    const first = plan(rows, { updateExisting: true }, f);
-    assert.deepEqual(artistsNeedingLinks(first.writes), ['Kai', 'Mira']);
-    const { writes } = plan(rows, { updateExisting: true }, f, { spotify });
-    assert.equal(writes.spotifyMatched, 2);
-    const kai = writes.inserts[0]!;
-    assert.equal(kai.linkUrl, 'https://open.spotify.com/artist/kai');
-    assert.deepEqual(kai.artists[0], { name: 'Kai', links: { spotify: 'https://open.spotify.com/artist/kai' }, photo: 'https://i.scdn.co/kai.jpg', genres: ['house'] });
+    const { writes } = plan(rows, { updateExisting: true }, f);
+    assert.equal(writes.spotifyMatched, 0);
+    assert.deepEqual(writes.inserts[0]!.artists.map((a) : unknown => a.links), [{}, {}]);
+    assert.equal(writes.inserts[0]!.linkUrl, null);
     assert.equal(writes.inserts[1]!.linkUrl, 'https://soundcloud.com/linked');
-    assert.deepEqual(writes.updates[0]!.after.artists[0]!.links, {});
   });
 });
 

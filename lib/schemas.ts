@@ -370,14 +370,21 @@ export const stageSchema = z.object({
 });
 export type StageInput = z.infer<typeof stageSchema>;
 
+// An unknown platform key is dropped, not rejected, so a save that carries a newer key still works.
+const KNOWN_LINK_PLATFORMS = new Set<string>(ALLOWED_LINK_PLATFORMS);
+
 export const artistLinkSchema = z.object({
+  // The artists row this element copies. The server decides what it means (resolveArtistRefs).
+  id: z.string().max(100).optional(),
   name: z.string().min(1).max(300),
   links: z
-    .record(z.enum(ALLOWED_LINK_PLATFORMS), z.string().url().max(500).or(z.literal('')).optional().nullable())
+    .record(z.string().max(40), z.string().url().max(500).or(z.literal('')).optional().nullable())
     .optional()
     .default({} as Record<string, string | null | undefined>)
     .transform((obj: any) =>
-      Object.fromEntries(Object.entries(obj || {}).filter(([, v]: any) => v != null && v !== '')),
+      Object.fromEntries(
+        Object.entries(obj || {}).filter(([k, v]: any) => KNOWN_LINK_PLATFORMS.has(k) && v != null && v !== ''),
+      ),
     ),
 });
 export type ArtistLinkInput = z.infer<typeof artistLinkSchema>;
@@ -579,7 +586,7 @@ export const festivalUpdateSchema = festivalCreateSchema
     confirmRemovals: z.boolean().optional(),
     // The festival's updatedAt when the editor loaded it. A mismatch returns
     // FESTIVAL_CHANGED so a stale form cannot overwrite a newer save.
-    expectedUpdatedAt: z.string().max(40).optional(),
+    expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
   })
   .partial()
   // false saves without pushing schedule alerts to people whose picks changed.
@@ -713,10 +720,100 @@ export const setLinkSchema = z.object({
 });
 export type SetLinkInput = z.infer<typeof setLinkSchema>;
 
+// ── Artist schemas (admin) ───────────────────────────────────────
+// The artist routes check links with lib/artist-links.ts, so a raw link is only length-bounded here.
+export const artistMatchSchema = z.object({
+  items: z
+    .array(z.object({ name: z.string().max(300), spotify: z.string().max(500).nullable().optional() }))
+    .min(1)
+    .max(500),
+});
+export type ArtistMatchInput = z.infer<typeof artistMatchSchema>;
+
+export const artistCreateSchema = z.object({
+  name: z.string().trim().min(1).max(300),
+  // The note that tells same-name artists apart. Required when another artist has the name.
+  label: z.string().max(200).optional(),
+  link: z.string().max(500).optional(),
+});
+export type ArtistCreateInput = z.infer<typeof artistCreateSchema>;
+
+export const artistUpdateSchema = z.object({
+  // The artist's updatedAt the editor loaded (millisecond precision).
+  expectedUpdatedAt: z.string().datetime({ offset: true }),
+  changes: z
+    .object({
+      name: z.string().max(300).optional(),
+      label: z.string().max(200).optional(),
+      addLink: z.string().max(500).optional(),
+      removeLinks: z.array(z.string().max(40)).max(12).optional(),
+    })
+    .refine((c) => Object.values(c).some((v) => v !== undefined), 'At least one change required'),
+});
+export type ArtistUpdateInput = z.infer<typeof artistUpdateSchema>;
+
+export const artistListQuerySchema = z.object({
+  festivalId: z.string().max(100).optional(),
+  q: z.string().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(1000).optional(),
+  // "Possible duplicates": artists with the same name key or a key one character apart, on any festival.
+  duplicates: z.enum(['true']).optional(),
+});
+export type ArtistListQuery = z.infer<typeof artistListQuerySchema>;
+
+// Merge the artist in the path (the survivor) with `loserId`. Admin only, web only, behind a recent re-auth.
+const mergeSide = z.enum(['survivor', 'loser']);
+export const artistMergeSchema = z.object({
+  loserId: identifier,
+  // Each artist's updatedAt the editor loaded (millisecond precision).
+  survivorUpdatedAt: z.string().datetime({ offset: true }),
+  loserUpdatedAt: z.string().datetime({ offset: true }),
+  // How many festivals, archived ones included, the editor saw in the preview. The server counts again under its locks and refuses a higher count.
+  acceptedFestivals: z.number().int().min(0).max(10_000),
+  // Per field, which artist's value the merged artist keeps. A field left out keeps the survivor's.
+  pick: z
+    .object({
+      name: mergeSide.optional(),
+      label: mergeSide.optional(),
+      photo: mergeSide.optional(),
+      genres: mergeSide.optional(),
+      links: z.record(z.string().max(40), mergeSide).refine((links) => Object.keys(links).length <= 12, 'Too many link choices').optional(),
+    })
+    .optional(),
+});
+export type ArtistMergeInput = z.infer<typeof artistMergeSchema>;
+
+// "Find Spotify links": the candidates for the artists on one festival, and the editor's picks.
+export const artistSpotifyCandidatesSchema = z.object({
+  festivalId: identifier,
+  // Artists the editor skipped or Spotify could not match. They leave the search so the next ones reach it.
+  exclude: z.array(identifier).max(1000).optional(),
+});
+export type ArtistSpotifyCandidatesInput = z.infer<typeof artistSpotifyCandidatesSchema>;
+
+export const artistSpotifyPicksSchema = z.object({
+  festivalId: identifier,
+  picks: z
+    .array(
+      z.object({
+        artistId: identifier,
+        // The artist's updatedAt the editor loaded (millisecond precision).
+        expectedUpdatedAt: z.string().datetime({ offset: true }),
+        // Spotify's 22-character artist id. The server builds the link and reads the photo and genres from Spotify.
+        spotifyId: z.string().regex(/^[A-Za-z0-9]{22}$/, 'Not a Spotify artist id'),
+        // How many other festivals the editor confirmed the artist is on. The server counts again under the locks and refuses a higher count.
+        acceptedAlsoOn: z.number().int().min(0).max(10_000).optional(),
+      }),
+    )
+    .min(1)
+    .max(200),
+});
+export type ArtistSpotifyPicksInput = z.infer<typeof artistSpotifyPicksSchema>;
+
 // Spotify backfill body. All optional: old mobile bundles post no body.
 export const spotifyBackfillSchema = z
   .object({
-    force: z.boolean().optional(),
+    // `force` is gone: a guess never overwrites a link. An old client that sends it is ignored (keys are stripped).
     skipSearch: z.boolean().optional(),
     // Artist name -> verified link, preferred over search.
     overrides: z
@@ -876,6 +973,7 @@ export function normalizeSetArtists(set: any): any[] {
     return set.artists
       .slice(0, _MAX_ARTISTS)
       .map((a: any) => ({
+        ...artistIdOf(a),
         name: sanitizeString(a.name || '', 300),
         links: sanitizeLinkRecord(a.links),
       }))
@@ -890,12 +988,18 @@ export function normalizeSetArtists(set: any): any[] {
   return [{ name, links }];
 }
 
+/** The artists row id of an element, as `{ id }`, or nothing. Every writer keeps it. */
+function artistIdOf(element: any): { id?: string } {
+  const id = sanitizeIdentifier(element?.id, 100);
+  return id ? { id } : {};
+}
+
 const _escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 function _cleanArtistList(list: any[]): any[] {
   return list
     .slice(0, _MAX_ARTISTS)
-    .map((a: any) => ({ name: sanitizeString(a?.name || '', 300), links: sanitizeLinkRecord(a?.links) }))
+    .map((a: any) => ({ ...artistIdOf(a), name: sanitizeString(a?.name || '', 300), links: sanitizeLinkRecord(a?.links) }))
     .filter((a: any) => a.name);
 }
 
@@ -979,7 +1083,12 @@ export function resolveSetArtists(set: any, storedSet: any, sep = 'b2b'): any[] 
       result[0].links.spotify = rawUrl.slice(0, 500);
     }
   }
-  return result.map((a: any) => ({ ...a, ..._storedArtistExtras(_findArtist(stored, a.name)) }));
+  // An element without an id takes the id of the sent or stored element with the same name.
+  return result.map((a: any) => ({
+    ...(a.id ? {} : artistIdOf(_findArtist(payload, a.name) ?? _findArtist(stored, a.name))),
+    ...a,
+    ..._storedArtistExtras(_findArtist(stored, a.name)),
+  }));
 }
 
 export function normalizePickPayload(input: any, config: any): { error?: string; value?: any } {
@@ -1707,6 +1816,13 @@ export const schemas = {
   crewTransfer: crewTransferSchema,
   crewAddMember: crewAddMemberSchema,
   setLink: setLinkSchema,
+  artistMatch: artistMatchSchema,
+  artistCreate: artistCreateSchema,
+  artistUpdate: artistUpdateSchema,
+  artistMerge: artistMergeSchema,
+  artistListQuery: artistListQuerySchema,
+  artistSpotifyCandidates: artistSpotifyCandidatesSchema,
+  artistSpotifyPicks: artistSpotifyPicksSchema,
   spotifyBackfill: spotifyBackfillSchema,
   festivalAnnouncement: festivalAnnouncementSchema,
   timeReleaseSend: timeReleaseSendSchema,

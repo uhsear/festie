@@ -6,7 +6,7 @@
  * Backend only. No client copy: a client sends the raw link and shows the server's message.
  * Callers: the artist backfill, and later the artist routes, organizer festival saves and import
  * link columns. A festival save by an admin never rejects a link with these rules.
- * Platforms are the keys of ALLOWED_LINK_PLATFORMS. youtube and apple_music arrive with that list.
+ * Platforms are the keys of ALLOWED_LINK_PLATFORMS.
  */
 
 import { ALLOWED_LINK_PLATFORMS } from './constants';
@@ -25,6 +25,8 @@ const LABELS: Record<ArtistLinkPlatform, string> = {
   tiktok: 'TikTok',
   facebook: 'Facebook',
   website: 'Website',
+  youtube: 'YouTube',
+  apple_music: 'Apple Music',
 };
 
 const HOST_PLATFORM: Record<string, ArtistLinkPlatform> = {
@@ -37,6 +39,9 @@ const HOST_PLATFORM: Record<string, ArtistLinkPlatform> = {
   'tiktok.com': 'tiktok',
   'facebook.com': 'facebook',
   'fb.com': 'facebook',
+  'youtube.com': 'youtube',
+  'youtu.be': 'youtube',
+  'music.apple.com': 'apple_music',
 };
 
 const SPOTIFY_ID = /^[A-Za-z0-9]{22}$/;
@@ -148,6 +153,32 @@ function normalizeFacebook(parsed: URL): ArtistLinkResult {
   return { ok: true, url: `https://www.facebook.com/${segments[0]}` };
 }
 
+function normalizeYoutube(parsed: URL): ArtistLinkResult {
+  const host = canonicalHost(parsed.hostname);
+  const segments = segmentsOf(parsed);
+  if (host === 'youtu.be' || segments[0] === 'watch' || segments[0] === 'shorts' || segments[0] === 'playlist') {
+    return fail('This is a video. Copy the channel link.');
+  }
+  if (host !== 'youtube.com') return fail('This is not a YouTube link.');
+  const [kind, name] = segments;
+  if (segments.length === 1 && kind?.startsWith('@')) return { ok: true, url: `https://www.youtube.com/${kind}` };
+  if (segments.length === 2 && kind && ['channel', 'c', 'user'].includes(kind) && name) {
+    return { ok: true, url: `https://www.youtube.com/${kind}/${name}` };
+  }
+  return fail('Copy the channel link, for example youtube.com/@name.');
+}
+
+function normalizeAppleMusic(parsed: URL): ArtistLinkResult {
+  if (canonicalHost(parsed.hostname) !== 'music.apple.com') return fail('This is not an Apple Music link.');
+  const segments = segmentsOf(parsed);
+  // /<country>/artist/<slug>/<id>
+  const [country, kind, slug, id] = segments;
+  if (segments.length !== 4 || kind !== 'artist' || !/^[a-z]{2}$/i.test(country!) || !/^\d+$/.test(id!)) {
+    return fail('Open the artist page in Apple Music and copy that link.');
+  }
+  return { ok: true, url: `https://music.apple.com/${country!.toLowerCase()}/artist/${slug}/${id}` };
+}
+
 function normalizeWebsite(parsed: URL): ArtistLinkResult {
   const known = HOST_PLATFORM[canonicalHost(parsed.hostname)];
   if (known) {
@@ -185,5 +216,7 @@ export function normalizeArtistLink(platform: ArtistLinkPlatform, url: string): 
     case 'tiktok': return normalizeTiktok(parsed);
     case 'facebook': return normalizeFacebook(parsed);
     case 'website': return normalizeWebsite(parsed);
+    case 'youtube': return normalizeYoutube(parsed);
+    case 'apple_music': return normalizeAppleMusic(parsed);
   }
 }

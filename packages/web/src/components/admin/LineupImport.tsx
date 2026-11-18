@@ -1,5 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { lineupImportApi } from '@festie/shared/services/lineupImport';
+import { matchArtists } from '@festie/shared/services';
 import {
   LINEUP_IMPORT_FIELDS,
   LINEUP_IMPORT_LIMITS,
@@ -85,6 +86,8 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [historyKey, setHistoryKey] = useState(0);
+  // Names in the preview that fit an artist Festie already has, and those that fit more than one.
+  const [nameMatches, setNameMatches] = useState<{ matching: number; pick: string[] } | null>(null);
   const [releases, setReleases] = useState<TimeReleasePanelData | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   // Whether the last checked mapping had a set_id column. Update turns on by default only when that changes.
@@ -122,6 +125,24 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
     setStep('map');
   };
 
+  /** The import saves names only, so a name that fits two artists cannot be picked here: list it for the set editor. */
+  const checkNames = async (checked: LineupImportPlan) => {
+    const names = [...new Set(checked.rows.flatMap((r) => r.artists).map((n) => n.trim()).filter(Boolean))];
+    setNameMatches(null);
+    if (names.length === 0) return;
+    try {
+      const found = [];
+      for (let i = 0; i < names.length; i += 500) found.push(...(await matchArtists(names.slice(i, i + 500).map((name) => ({ name })))));
+      setNameMatches({
+        matching: found.filter((f) => f.outcome !== 'new').length,
+        pick: found.filter((f) => f.outcome === 'pick').map((f) => f.name),
+      });
+    } catch (err) {
+      // The server still resolves the names when the import commits.
+      console.warn('Could not match the imported names', err);
+    }
+  };
+
   const runPreview = async (nextRows: LineupImportRow[], update = updateExisting, create = createMissing) => {
     if (nextRows.length === 0) {
       toast('No rows left to import.', 'error');
@@ -130,8 +151,10 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
     }
     setLoading(true);
     try {
-      setPlan(await lineupImportApi.preview(festivalId, { rows: nextRows, updateExisting: update, createMissing: create, skipSpotify: false }));
+      const checked = await lineupImportApi.preview(festivalId, { rows: nextRows, updateExisting: update, createMissing: create, skipSpotify: false });
+      setPlan(checked);
       setStep('preview');
+      void checkNames(checked);
     } catch (err: unknown) {
       toastError(err, "Couldn't check the rows. Try again.");
     } finally {
@@ -333,6 +356,19 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
             </span>
           ))}
         </div>
+        {nameMatches && nameMatches.matching > 0 && (
+          <div role="status" className="space-y-1 text-sm text-text-primary">
+            <p>
+              {nameMatches.matching} {nameMatches.matching === 1 ? 'name matches an artist' : 'names match artists'} already in Festie.
+            </p>
+            {nameMatches.pick.length > 0 && (
+              <p className="text-accent-amber">
+                {nameMatches.pick.join(', ')}: more than one artist has {nameMatches.pick.length === 1 ? 'this name' : 'these names'}. The import saves{' '}
+                {nameMatches.pick.length === 1 ? 'it' : 'them'} without an artist. Pick the artist in the set editor afterwards.
+              </p>
+            )}
+          </div>
+        )}
         {p.newStages.length > 0 && (
           <p className="text-sm text-text-muted">New stages: {p.newStages.map((s) => s.name).join(', ')}</p>
         )}
@@ -520,8 +556,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
     <div className="space-y-4">
       <p role="status" className="bg-accent-aqua/10 border border-accent-aqua/30 rounded-lg p-4 text-sm text-text-primary">
         Import done. Added {r.created} sets, updated {r.updated}, created {r.newStages} stages and {r.newDays} days.
-        {r.skipped > 0 && ` Skipped ${r.skipped} ${r.skipped === 1 ? 'row' : 'rows'} that name another day.`} Spotify linked{' '}
-        {r.spotifyMatched} artists.
+        {r.skipped > 0 && ` Skipped ${r.skipped} ${r.skipped === 1 ? 'row' : 'rows'} that name another day.`}
       </p>
       {r.warnings.length > 0 && (
         <ul className="text-sm text-text-muted space-y-1">

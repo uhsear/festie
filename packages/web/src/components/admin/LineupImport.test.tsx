@@ -25,6 +25,8 @@ vi.mock('@festie/shared/services/lineupImport', () => ({ lineupImportApi: api })
 // The release panel loads its own data; null renders nothing here.
 const releaseApi = vi.hoisted(() => ({ panel: vi.fn(), send: vi.fn() }));
 vi.mock('@festie/shared/services/timeReleases', () => ({ timeReleaseApi: releaseApi }));
+const matchArtists = vi.hoisted(() => vi.fn());
+vi.mock('@festie/shared/services', async (orig) => ({ ...(await orig<typeof import('@festie/shared/services')>()), matchArtists }));
 
 const counts = (over: Record<string, number> = {}) => ({
   new: 0,
@@ -67,6 +69,7 @@ const plan = (rows: unknown[], c: Record<string, number>, problems: string[] = [
 beforeEach(() => {
   vi.clearAllMocks();
   releaseApi.panel.mockResolvedValue(null);
+  matchArtists.mockResolvedValue([]);
   api.history.mockResolvedValue({ festivalName: 'Fest', imports: [] });
   api.announcement.mockResolvedValue({
     festivalName: 'Fest',
@@ -240,7 +243,7 @@ describe('LineupImport', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Import' }));
     expect(await screen.findByText(/Import done. Added 3 sets/)).toBeInTheDocument();
     expect(screen.getByText(/Skipped 2 rows that name another day/)).toBeInTheDocument();
-    expect(screen.getByText(/Spotify linked 2 artists/)).toBeInTheDocument();
+    expect(screen.queryByText(/Spotify linked/)).toBeNull();
     expect(screen.getByText('Row 7: link dropped')).toBeInTheDocument();
   });
 
@@ -288,5 +291,18 @@ describe('LineupImport', () => {
   it('describes the spreadsheet round trip on the first step', () => {
     render(<LineupImport festivalId="f1" festivalName="Fest" />);
     expect(screen.getByText(/Export, fill in stages and times in a sheet, then import/)).toBeInTheDocument();
+  });
+
+  it('the preview says how many names match known artists and lists the ones that fit two', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ artists: ['Aurora Lights'] }), planRow({ row: 3, artists: ['Kai', 'Mira'] })], { new: 2 }));
+    matchArtists.mockResolvedValue([
+      { name: 'Aurora Lights', outcome: 'linked', candidates: [] },
+      { name: 'Kai', outcome: 'new', candidates: [] },
+      { name: 'Mira', outcome: 'pick', candidates: [] },
+    ]);
+    await pasteSampleAndCheck();
+    expect(await screen.findByText('2 names match artists already in Festie.')).toBeInTheDocument();
+    expect(matchArtists).toHaveBeenCalledWith([{ name: 'Aurora Lights' }, { name: 'Kai' }, { name: 'Mira' }]);
+    expect(screen.getByText(/Mira: more than one artist has this name\./)).toBeInTheDocument();
   });
 });

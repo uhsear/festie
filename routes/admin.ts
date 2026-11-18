@@ -33,6 +33,9 @@ import mountAdminBulkRoutes from './admin-bulk.js';
 import * as spotify from '../lib/spotify.js';
 import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { withTransactionRetry } from '../lib/db/connection.js';
+import { lockFestivalAny } from '../lib/db/stores/lineup-imports.js';
+import { rewriteCopies, type ArtistRecord } from '../lib/db/stores/artists.js';
 import { recentRequestTotals } from '../lib/recent-requests.js';
 import type { Router } from 'express';
 
@@ -337,9 +340,9 @@ export default function createAdminRoutes(deps: any): Router {
       if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
       // Optional body: verified overrides (artistName -> spotifyUrl) take
-      // precedence over search; `force` re-links sets that already have a link.
+      // precedence over search. A guess never replaces a link, and never touches an artist that
+      // other festivals list: those artists are edited on the Artists tab.
       const body = parsed.data;
-      const force = body.force === true;
       const skipSearch = body.skipSearch === true; // overrides-only, no Spotify calls
       const setIds = body.setIds;
       const normName = (s: any) =>
@@ -365,20 +368,23 @@ export default function createAdminRoutes(deps: any): Router {
           .filter(Boolean);
 
       const setFilter = setIds ? ' AND id = ANY($2::text[])' : '';
-      // Without force, also pick a B2B set where only some artists are linked:
+      // Also pick a B2B set where only some artists are linked:
       // link_url holds the first linked artist, so it alone hides the others.
       const missingLink = `(link_url IS NULL OR link_url = '' OR EXISTS (
           SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(artists) = 'array' THEN artists ELSE '[]'::jsonb END) a
           WHERE COALESCE(a->'links'->>'spotify', '') = ''))`;
       const { rows: sets } = await stores.pool.query(
-        force
-          ? `SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1${setFilter}`
-          : `SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1 AND ${missingLink}${setFilter}`,
+        `SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1 AND ${missingLink}${setFilter}`,
         setIds ? [festivalId, setIds] : [festivalId],
       );
       if (sets.length === 0) {
         return sendSuccess(res, { updated: 0, skipped: 0, total: 0, unmatched: [], message: 'No sets to backfill' });
       }
+      // Artists that sit on another festival too, archived ones included, are left alone and listed.
+      // This read only spares the searches: the transaction checks again under the locks.
+      const elementIds: string[] = sets.flatMap((set: any) => (set.artists ?? []).map((a: any) => a?.id).filter(Boolean));
+      const sharedIds: Set<string> = await stores.artists.sharedElsewhere(festivalId, [...new Set(elementIds)]);
+      const skippedShared = new Set<string>();
 
       // Collect cleaned sub-artist names that need a search (skip overridden).
       const searchNames = new Set<string>();
@@ -386,6 +392,7 @@ export default function createAdminRoutes(deps: any): Router {
         for (const set of sets) {
           const arr = set.artists?.length ? set.artists : [{ name: set.artist }];
           for (const a of arr) {
+            if (a?.id && sharedIds.has(a.id)) continue;
             for (const part of splitB2B(a?.name)) {
               if (overrideMap.has(normName(part))) continue;
               const cleaned = spotify.cleanArtistName(part) || part;
@@ -406,12 +413,18 @@ export default function createAdminRoutes(deps: any): Router {
 
       // Cleaned names that still have no Spotify link after this run.
       const unmatched = new Set<string>();
-      let updated = 0;
+      const writes: Array<{ id: string; before: string; artists: any[] }> = [];
+      const fills = new Map<any, { spotifyUrl?: string; photo?: string; genres?: string[]; original: any }>();
       for (const set of sets) {
         const arr = set.artists?.length ? set.artists : [{ name: set.artist }];
         const newArtists: any[] = [];
         let changed = false;
         for (const a of arr) {
+          if (a?.id && sharedIds.has(a.id)) {
+            skippedShared.add(a.name);
+            newArtists.push(a);
+            continue;
+          }
           const parts = splitB2B(a?.name);
           if (parts.length > 1) {
             // B2B → one entry per sub-artist, each with its own link
@@ -430,30 +443,78 @@ export default function createAdminRoutes(deps: any): Router {
           } else {
             const m = resolve(a?.name);
             const entry: any = { ...a, links: { ...(a?.links || {}) } };
-            if (m?.spotifyUrl && (force || !entry.links.spotify)) {
+            if (m?.spotifyUrl && !entry.links.spotify) {
               entry.links.spotify = m.spotifyUrl;
               changed = true;
             }
             if (m?.imageUrl && !entry.photo) entry.photo = m.imageUrl;
             if (m?.genres?.length && !entry.genres?.length) entry.genres = m.genres;
             if (!m?.spotifyUrl && !entry.links.spotify) unmatched.add(spotify.cleanArtistName(a?.name) || a?.name);
+            // An artist that has a row takes the guess into the row, not only into this copy.
+            if (entry.id) fills.set(entry, { spotifyUrl: m?.spotifyUrl, photo: m?.imageUrl, genres: m?.genres, original: a });
             newArtists.push(entry);
           }
         }
-        if (changed) {
-          const firstSpotify = newArtists.find((x) => x.links?.spotify)?.links.spotify || null;
-          await stores.pool.query(
-            'UPDATE festival_sets SET artists = $1, link_url = COALESCE($2, link_url) WHERE id = $3',
-            [JSON.stringify(newArtists), firstSpotify, set.id],
-          );
-          updated++;
-        }
+        if (changed) writes.push({ id: set.id, before: JSON.stringify(set.artists ?? []), artists: newArtists });
       }
 
-      // Bump the festival timestamp so the list/detail cache (keyed on
-      // updated_at) actually invalidates — set updates alone don't change it.
-      if (updated > 0) {
-        await stores.pool.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
+      // One transaction under the festival lock. Artist rows lock after it, in id order. A set that
+      // changed since it was read is left for the next run.
+      let updated = 0;
+      if (writes.length > 0) {
+        updated = await withTransactionRetry(stores.pool, async (client: any) => {
+          const locked = await lockFestivalAny(client, festivalId);
+          if (!locked || locked.deleted_at) return 0;
+          const { rows: current } = await client.query(
+            'SELECT id, artists FROM festival_sets WHERE festival_id = $1 AND id = ANY($2::text[]) FOR UPDATE',
+            [festivalId, writes.map((w) => w.id)],
+          );
+          const unchanged = new Set(
+            current.filter((row: any) => JSON.stringify(row.artists ?? []) === writes.find((w) => w.id === row.id)?.before).map((row: any) => row.id),
+          );
+          const fillIds = [
+            ...new Set(writes.filter((w) => unchanged.has(w.id)).flatMap((w) => w.artists.filter((e) => fills.has(e)).map((e) => e.id as string))),
+          ].sort();
+          if (fillIds.length > 0) await client.query('SELECT id FROM artists WHERE id = ANY($1::text[]) ORDER BY id FOR UPDATE', [fillIds]);
+          // Under the festival and artist locks no save can add an artist to another festival unseen, so
+          // this is the check that counts. A shared artist keeps the copy the set already holds.
+          const sharedNow = await stores.artists.sharedElsewhere(festivalId, fillIds, client);
+          let written = 0;
+          const refreshed: ArtistRecord[] = [];
+          for (const write of writes) {
+            if (!unchanged.has(write.id)) continue;
+            write.artists = write.artists.map((entry) => {
+              const fill = fills.get(entry);
+              if (!fill || !sharedNow.has(entry.id)) return entry;
+              skippedShared.add(entry.name);
+              return fill.original;
+            });
+            if (JSON.stringify(write.artists) === write.before) continue;
+            for (const entry of write.artists) {
+              const fill = fills.get(entry);
+              if (!fill) continue;
+              const filled = await stores.artists.fillEmpty(client, entry.id, fill, { userId: req.user?.userId ?? null, ip: getRequestIp(req) });
+              if (!filled) continue;
+              Object.assign(entry, { links: { ...(filled.artist.links ?? {}) } });
+              if (filled.artist.photo) entry.photo = filled.artist.photo;
+              if (filled.artist.genres?.length) entry.genres = filled.artist.genres;
+              if (filled.skippedSpotify) unmatched.add(entry.name);
+              if (filled.changed) refreshed.push(filled.artist);
+            }
+            const firstSpotify = write.artists.find((x) => x.links?.spotify)?.links.spotify || null;
+            await client.query('UPDATE festival_sets SET artists = $1, link_url = COALESCE($2, link_url) WHERE id = $3', [
+              JSON.stringify(write.artists),
+              firstSpotify,
+              write.id,
+            ]);
+            written++;
+          }
+          // The row is the truth: the artist's copy in the announced lineup and in sets this run left out follows it.
+          for (const artist of refreshed) await rewriteCopies(client, [festivalId], artist);
+          // Bump the festival timestamp so the list/detail cache (keyed on updated_at) invalidates.
+          if (written > 0) await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
+          return written;
+        });
       }
       if (_invalidateFestivalCache) _invalidateFestivalCache();
       const unmatchedList = [...unmatched]
@@ -490,8 +551,13 @@ export default function createAdminRoutes(deps: any): Router {
         skipped: sets.length - updated,
         total: sets.length,
         unmatched: unmatchedList,
+        // On other festivals too: add their links on the Artists tab.
+        skippedShared: [...skippedShared].sort((x, y) => x.localeCompare(y)).slice(0, 200),
       });
     } catch (error: any) {
+      if (error?.code === 'SPOTIFY_RATE_LIMITED') {
+        return sendError(res, 503, 'Spotify is busy right now. Try again in a minute.', ErrorCodes.SPOTIFY_RATE_LIMITED);
+      }
       log.error('spotify backfill failed', { error: error.message, festivalId: req.params.id });
       return sendError(res, 500, 'Spotify backfill failed', ErrorCodes.INTERNAL_ERROR);
     }

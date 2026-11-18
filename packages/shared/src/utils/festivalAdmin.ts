@@ -20,7 +20,7 @@ export interface FestivalIssue {
 export interface ChecklistItem {
   key:
     | 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps'
-    | 'duration_odd' | 'start_unusual_hour' | 'artist_double_booked';
+    | 'duration_odd' | 'start_unusual_hour' | 'artist_double_booked' | 'artists';
   status: 'done' | 'todo' | 'warn';
   label: string;
 }

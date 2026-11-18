@@ -601,8 +601,7 @@ export default function LineupImportScreen() {
           <View style={[styles.banner, styles.bannerOk]}>
             <Text style={styles.bannerText}>
               Import done. Added {result.created} sets, updated {result.updated}, created {result.newStages} stages and{' '}
-              {result.newDays} days.{result.skipped > 0 ? ` Skipped ${result.skipped} ${result.skipped === 1 ? 'row' : 'rows'} that name another day.` : ''} Spotify linked{' '}
-              {result.spotifyMatched} artists.
+              {result.newDays} days.{result.skipped > 0 ? ` Skipped ${result.skipped} ${result.skipped === 1 ? 'row' : 'rows'} that name another day.` : ''}
             </Text>
           </View>
           {result.warnings.length > 0 ? (

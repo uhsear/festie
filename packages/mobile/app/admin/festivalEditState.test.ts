@@ -15,6 +15,7 @@ import {
   removeSet,
   setSetField,
   setSetArtistNames,
+  artistsPayload,
   withoutIndex,
   type FormState,
   type SetRow,
@@ -191,6 +192,33 @@ describe('setSetArtistNames', () => {
     expect(next.days[0].sets[0].artist).toBe('A vs C');
     next = setSetArtistNames(next, 'd1', 's1', spliced, ['A', 'C', 'D']);
     expect(next.days[0].sets[0].artists[2]).toEqual({ name: 'D', links: {} });
+  });
+});
+
+describe('artist ids on mobile', () => {
+  it('a renamed slot drops its id, links and photo; the other slot keeps its id', () => {
+    const origin = [
+      { id: 'art-1', name: 'A', links: { spotify: 'https://a' }, photo: 'p' },
+      { id: 'art-2', name: 'B', links: { spotify: 'https://b' } },
+    ];
+    const f = form({ days: [day({ id: 'd1', sets: [set({ id: 's1', artists: origin })] })] });
+    const next = setSetArtistNames(f, 'd1', 's1', origin, ['A', 'B2']);
+    expect(next.days[0].sets[0].artists).toEqual([origin[0], { name: 'B2', links: {} }]);
+  });
+
+  it('a save sends each artist id with its name and links, and nothing for a slot without one', () => {
+    const payload = artistsPayload(
+      set({
+        artists: [
+          { id: 'art-1', name: 'A', links: { spotify: 'https://a' }, photo: 'p', genres: ['house'] },
+          { name: 'New', links: {} },
+        ],
+      }),
+    );
+    expect(payload).toEqual([
+      { id: 'art-1', name: 'A', links: { spotify: 'https://a' } },
+      { name: 'New', links: {} },
+    ]);
   });
 });
 

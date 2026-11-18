@@ -256,7 +256,7 @@ export function validateFestival(config: any, body: any) {
 export interface ChecklistItem {
   key:
     | 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps'
-    | 'duration_odd' | 'start_unusual_hour' | 'artist_double_booked';
+    | 'duration_odd' | 'start_unusual_hour' | 'artist_double_booked' | 'artists';
   /** 'todo' blocks publish; 'warn' does not. */
   status: 'done' | 'todo' | 'warn';
   label: string;
@@ -424,7 +424,7 @@ export function artistDoubleBookedWarnings(festival: any): string[] {
  * The "Before you publish" checklist, computed from the saved festival.
  * POST /:id/publish refuses while any item is 'todo'.
  */
-export function publishChecklist(config: any, festival: any): ChecklistItem[] {
+export function publishChecklist(config: any, festival: any, extras: { ambiguousNames?: number } = {}): ChecklistItem[] {
   const stages: any[] = Array.isArray(festival?.stages) ? festival.stages : [];
   const days: any[] = Array.isArray(festival?.days) ? festival.days : [];
   const sets = days.flatMap((day: any) => (Array.isArray(day?.sets) ? day.sets : []));
@@ -515,5 +515,15 @@ export function publishChecklist(config: any, festival: any): ChecklistItem[] {
         label: `${firstAndCount(doubleBooked)} Name match. Two different artists with one name show here too.`,
       };
 
-  return [timeZone, stagesItem, daysItem, setsItem, errors, pins, times, overlaps, durationOdd, startUnusual, artistDouble];
+  const ambiguous = extras.ambiguousNames ?? 0;
+  // A name that fits two artists saves without an id: the editor picks one on the web. It never blocks a publish.
+  const artists: ChecklistItem[] = ambiguous > 0
+    ? [{
+        key: 'artists',
+        status: 'warn',
+        label: `${ambiguous} ${ambiguous === 1 ? 'name matches' : 'names match'} more than one artist. Pick one.`,
+      }]
+    : [];
+
+  return [timeZone, stagesItem, daysItem, setsItem, errors, pins, times, overlaps, durationOdd, startUnusual, artistDouble, ...artists];
 }

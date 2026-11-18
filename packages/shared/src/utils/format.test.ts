@@ -217,6 +217,8 @@ describe('artistSubtitle', () => {
 describe('platformLabel', () => {
   it('maps known link keys to display names and passes unknown keys through', () => {
     expect(platformLabel('soundcloud')).toBe('SoundCloud');
+    expect(platformLabel('apple_music')).toBe('Apple Music');
+    expect(platformLabel('youtube')).toBe('YouTube');
     expect(platformLabel('website')).toBe('Website');
     expect(platformLabel('twitter')).toBe('X');
     expect(platformLabel('bandcamp')).toBe('bandcamp');
