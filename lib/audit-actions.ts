@@ -25,6 +25,8 @@ export const AUDIT_ACTIONS = {
   LINEUP_ANNOUNCED: 'festival.lineup.announced',
   SPOTIFY_BACKFILLED: 'festival.spotify.backfilled',
   SET_LINK_UPDATED: 'set.link.updated',
+  ARTIST_CREATED: 'artist.created',
+  ARTIST_UPDATED: 'artist.updated',
   USER_ROLE_GRANTED: 'user.role.granted',
   USER_ROLE_REVOKED: 'user.role.revoked',
   USER_RESET_LINK_CREATED: 'user.password_reset_link.created',

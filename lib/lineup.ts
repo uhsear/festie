@@ -114,10 +114,14 @@ export function normalizeLineup(incoming: any[], stored: any[], ctx: NormalizeCo
   }
   const taken = new Set((incoming ?? []).map((entry) => sanitizeIdentifier(entry?.id, 100)).filter(Boolean));
   return (incoming ?? []).slice(0, MAX_LINEUP_ENTRIES).map((entry: any) => {
-    const artists = (entry.artists ?? []).map((artist: any) => ({
-      name: sanitizeString(artist.name, 300),
-      links: sanitizeLinkRecord(artist.links),
-    }));
+    const artists = (entry.artists ?? []).map((artist: any) => {
+      const artistId = sanitizeIdentifier(artist.id, 100);
+      return {
+        ...(artistId ? { id: artistId } : {}),
+        name: sanitizeString(artist.name, 300),
+        links: sanitizeLinkRecord(artist.links),
+      };
+    });
     let id = sanitizeIdentifier(entry.id, 100);
     let known = id ? storedById.get(id) : undefined;
     if (!id) {

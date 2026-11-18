@@ -131,6 +131,7 @@ import createAccountRoutes from './routes/account';
 import createAdminRoutes from './routes/admin';
 import createAdminSiteplanRoutes from './routes/admin-siteplan';
 import createFestivalRoutes from './routes/festivals';
+import createArtistsRoutes from './routes/artists';
 import createProfileRoutes from './routes/profiles';
 import createExportRoutes from './routes/export';
 import createNotificationRoutes from './routes/notifications';
@@ -280,6 +281,7 @@ async function createFestieApp(overrides: any = {}) {
   const accountRoutes = createAccountRoutes(deps);
   const adminRoutes = createAdminRoutes(deps);
   const festivalRoutes = createFestivalRoutes(deps);
+  const artistRoutes = createArtistsRoutes(deps);
   const festivalDiscoveryRoutes = createFestivalDiscoveryRoutes(deps);
   const profileRoutes = createProfileRoutes(deps);
   const exportRoutes = createExportRoutes(deps);
@@ -311,6 +313,7 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/admin', adminRoutes);
   app.use('/api/v1/admin', createAdminSiteplanRoutes(deps));
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
+  app.use('/api/v1/admin/artists', deps.adminAuth, artistRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);
   app.use('/api/v1/festivals', festivalDiscoveryRoutes);

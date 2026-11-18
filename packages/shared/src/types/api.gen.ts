@@ -2441,10 +2441,13 @@ export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
         Artist: {
+            genres?: string[];
+            id?: string;
             links?: {
                 [key: string]: string;
             };
             name: string;
+            photo?: string;
         };
         AuthEnvelope: {
             pendingEmail?: string | null;
@@ -2646,10 +2649,13 @@ export type components = {
                 sets: {
                     artist: string | null;
                     artists: {
+                        genres?: string[];
+                        id?: string;
                         links?: {
                             [key: string]: string;
                         };
                         name: string;
+                        photo?: string;
                     }[];
                     endTime: string | null;
                     id: string;
@@ -2670,10 +2676,13 @@ export type components = {
             lineup: {
                 announcedAt: string;
                 artists: {
+                    genres?: string[];
+                    id?: string;
                     links?: {
                         [key: string]: string;
                     };
                     name: string;
+                    photo?: string;
                 }[];
                 dayDate: string | null;
                 displayName: string | null;
@@ -2757,10 +2766,13 @@ export type components = {
                 sets: {
                     artist: string | null;
                     artists: {
+                        genres?: string[];
+                        id?: string;
                         links?: {
                             [key: string]: string;
                         };
                         name: string;
+                        photo?: string;
                     }[];
                     endTime: string | null;
                     id: string;
@@ -2780,10 +2792,13 @@ export type components = {
             lineup: {
                 announcedAt: string;
                 artists: {
+                    genres?: string[];
+                    id?: string;
                     links?: {
                         [key: string]: string;
                     };
                     name: string;
+                    photo?: string;
                 }[];
                 dayDate: string | null;
                 displayName: string | null;
@@ -2872,10 +2887,13 @@ export type components = {
         FestivalSet: {
             artist: string | null;
             artists: {
+                genres?: string[];
+                id?: string;
                 links?: {
                     [key: string]: string;
                 };
                 name: string;
+                photo?: string;
             }[];
             endTime: string | null;
             id: string;

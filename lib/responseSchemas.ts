@@ -87,8 +87,12 @@ export type StageResponse = z.infer<typeof stageResponseSchema>;
  * by default, so older rows carrying extra fields still parse.
  */
 export const artistResponseSchema = z.object({
+  // The artists row this element copies. Absent on a name that matches more than one artist.
+  id: z.string().optional(),
   name: z.string(),
   links: z.record(z.string(), z.string()).optional(),
+  photo: z.string().optional(),
+  genres: z.array(z.string()).optional(),
 });
 export type ArtistResponse = z.infer<typeof artistResponseSchema>;
 

@@ -18,7 +18,7 @@ export interface FestivalIssue {
   target: FestivalIssueTarget;
 }
 export interface ChecklistItem {
-  key: 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps';
+  key: 'timeZone' | 'stages' | 'days' | 'sets' | 'errors' | 'pins' | 'times' | 'overlaps' | 'artists';
   status: 'done' | 'todo' | 'warn';
   label: string;
 }

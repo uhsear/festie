@@ -73,6 +73,17 @@ function appFor(router: any) {
   return app;
 }
 
+/**
+ * A pool whose connect() hands out a client that shares one query mock, so a route that runs in
+ * withTransactionRetry is observable. `answer` returns rows for a statement; BEGIN and COMMIT answer empty.
+ */
+function txPool(answer: (sql: string, params?: unknown[]) => any) {
+  const query = mock.fn(async (sql: string, params?: unknown[]) => answer(sql, params) ?? { rows: [], rowCount: 0 });
+  const pool = { query, connect: async () => ({ query, release: noop }) };
+  return { pool, query };
+}
+const statements = (query: any) => query.mock.calls.map((c: any) => String(c.arguments[0]));
+
 // ── Spotify backfill ────────────────────────────────────────────────
 
 describe('POST /festivals/:id/backfill-spotify', () => {
@@ -95,15 +106,23 @@ describe('POST /festivals/:id/backfill-spotify', () => {
     globalThis.fetch = originalFetch;
   });
 
-  function backfillApp(sets: any[]) {
-    const query = mock.fn(async (sql: string, _params?: unknown[]) => {
+  function backfillApp(sets: any[], extra: { shared?: string[]; fill?: any; currentArtists?: (set: any) => any } = {}) {
+    const { pool, query } = txPool((sql) => {
       if (sql.startsWith('SELECT id FROM festivals')) return { rows: [{ id: 'f1' }] };
       if (sql.startsWith('SELECT id, artist, artists')) return { rows: sets };
-      return { rows: [] };
+      if (sql.startsWith('SELECT id, published_at, deleted_at FROM festivals')) return { rows: [{ id: 'f1', deleted_at: null }] };
+      if (sql.startsWith('SELECT id, artists FROM festival_sets')) {
+        return { rows: sets.map((set) => ({ id: set.id, artists: extra.currentArtists ? extra.currentArtists(set) : set.artists })) };
+      }
+      return null;
     });
     const auditInsert = mock.fn(async () => {});
-    const deps = baseDeps({ stores: { pool: { query }, auditLog: { insert: auditInsert } } });
-    return { app: appFor(createAdminRoutes(deps)), query, auditInsert };
+    const artists = {
+      sharedElsewhere: mock.fn(async () => new Set(extra.shared ?? [])),
+      fillEmpty: mock.fn(extra.fill ?? (async () => null)),
+    };
+    const deps = baseDeps({ stores: { pool, auditLog: { insert: auditInsert }, artists } });
+    return { app: appFor(createAdminRoutes(deps)), query, auditInsert, artists };
   }
 
   test('accepts a request with no body (old mobile bundles)', async () => {
@@ -133,11 +152,10 @@ describe('POST /festivals/:id/backfill-spotify', () => {
     const { app, query } = backfillApp([]);
     await request(app)
       .post('/festivals/f1/backfill-spotify')
-      .send({ setIds: ['S'], force: true })
+      .send({ setIds: ['S'] })
       .expect(200);
     const setQuery = query.mock.calls.find((c: any) => c.arguments[0].startsWith('SELECT id, artist, artists'))!;
     assert.match(setQuery.arguments[0], /id = ANY\(\$2::text\[\]\)/);
-    assert.doesNotMatch(setQuery.arguments[0], /link_url IS NULL/);
     assert.deepEqual(setQuery.arguments[1], ['f1', ['S']]);
   });
 
@@ -147,7 +165,7 @@ describe('POST /festivals/:id/backfill-spotify', () => {
       { id: 's2', artist: 'Gamma (DJ Set)', artists: [] },
     ]);
     const res = await request(app).post('/festivals/f1/backfill-spotify').send({}).expect(200);
-    assert.deepEqual(res.body.data, { updated: 1, skipped: 1, total: 2, unmatched: ['Beta', 'Gamma'] });
+    assert.deepEqual(res.body.data, { updated: 1, skipped: 1, total: 2, unmatched: ['Beta', 'Gamma'], skippedShared: [] });
 
     const update = query.mock.calls.find((c: any) => c.arguments[0].startsWith('UPDATE festival_sets'))!;
     assert.equal(update.arguments[1]![2], 's1');
@@ -168,7 +186,7 @@ describe('POST /festivals/:id/backfill-spotify', () => {
     assert.deepEqual(res.body.data.unmatched, []);
   });
 
-  test('without force, picks sets where any artist lacks a link and keeps the linked one', async () => {
+  test('picks sets where any artist lacks a link and keeps the linked one', async () => {
     const { app, query } = backfillApp([
       {
         id: 's1',
@@ -180,12 +198,67 @@ describe('POST /festivals/:id/backfill-spotify', () => {
     const setQuery = query.mock.calls.find((c: any) => c.arguments[0].startsWith('SELECT id, artist, artists'))!;
     assert.match(setQuery.arguments[0], /link_url IS NULL OR link_url = '' OR EXISTS/);
     assert.match(setQuery.arguments[0], /a->'links'->>'spotify'/);
-    assert.deepEqual(res.body.data, { updated: 1, skipped: 0, total: 1, unmatched: [] });
+    assert.deepEqual(res.body.data, { updated: 1, skipped: 0, total: 1, unmatched: [], skippedShared: [] });
     const update = query.mock.calls.find((c: any) => c.arguments[0].startsWith('UPDATE festival_sets'))!;
     assert.deepEqual(JSON.parse(update.arguments[1]![0] as string), [
       { name: 'Alpha', links: { spotify: 'https://open.spotify.com/artist/a' } },
       { name: 'Beta', links: { spotify: 'https://open.spotify.com/artist/b' } },
     ]);
+  });
+
+  test('force is gone: an old client that sends it never re-links a linked artist', async () => {
+    const { app, query } = backfillApp([
+      { id: 's1', artist: 'Alpha', artists: [{ name: 'Alpha', links: { spotify: 'https://open.spotify.com/artist/old' } }] },
+    ]);
+    const res = await request(app).post('/festivals/f1/backfill-spotify').send({ force: true }).expect(200);
+    const setQuery = query.mock.calls.find((c: any) => c.arguments[0].startsWith('SELECT id, artist, artists'))!;
+    assert.match(setQuery.arguments[0], /link_url IS NULL OR link_url = '' OR EXISTS/);
+    assert.equal(res.body.data.updated, 0);
+    assert.ok(!statements(query).some((sql: string) => sql.startsWith('UPDATE festival_sets')));
+  });
+
+  test('writes in one transaction under the festival lock, and bumps edited_at', async () => {
+    const { app, query } = backfillApp([{ id: 's1', artist: 'Alpha', artists: [{ name: 'Alpha' }] }]);
+    await request(app).post('/festivals/f1/backfill-spotify').send({}).expect(200);
+    const sql = statements(query);
+    const at = (prefix: string) => sql.findIndex((statement: string) => statement.startsWith(prefix));
+    assert.ok(at('BEGIN') < at('SELECT id, published_at, deleted_at FROM festivals'));
+    assert.ok(at('SELECT id, published_at, deleted_at FROM festivals') < at('SELECT id, artists FROM festival_sets'));
+    assert.ok(at('SELECT id, artists FROM festival_sets') < at('UPDATE festival_sets'));
+    assert.ok(at('UPDATE festival_sets') < at('UPDATE festivals SET updated_at = NOW(), edited_at = NOW()'));
+    assert.ok(at('UPDATE festivals SET updated_at = NOW(), edited_at = NOW()') < at('COMMIT'));
+  });
+
+  test('a set that changed after it was read is left for the next run', async () => {
+    const { app, query } = backfillApp([{ id: 's1', artist: 'Alpha', artists: [{ name: 'Alpha' }] }], {
+      currentArtists: () => [{ name: 'Alpha Edited' }],
+    });
+    const res = await request(app).post('/festivals/f1/backfill-spotify').send({}).expect(200);
+    assert.equal(res.body.data.updated, 0);
+    assert.ok(!statements(query).some((sql: string) => sql.startsWith('UPDATE festival_sets')));
+  });
+
+  test('an artist that is on other festivals is left alone and listed', async () => {
+    const { app, query, artists } = backfillApp(
+      [{ id: 's1', artist: 'Alpha', artists: [{ id: 'art-1', name: 'Alpha' }] }],
+      { shared: ['art-1'] },
+    );
+    const res = await request(app).post('/festivals/f1/backfill-spotify').send({}).expect(200);
+    assert.equal(res.body.data.updated, 0);
+    assert.deepEqual(res.body.data.skippedShared, ['Alpha']);
+    assert.equal(artists.fillEmpty.mock.callCount(), 0);
+    assert.ok(!statements(query).some((sql: string) => sql.startsWith('UPDATE festival_sets')));
+  });
+
+  test('a guess goes into the artist row, and a Spotify id another artist holds is reported, not a 500', async () => {
+    const { app, artists } = backfillApp(
+      [{ id: 's1', artist: 'Alpha', artists: [{ id: 'art-1', name: 'Alpha' }] }],
+      { fill: async () => ({ artist: { links: {}, photo: null, genres: [] }, skippedSpotify: true }) },
+    );
+    const res = await request(app).post('/festivals/f1/backfill-spotify').send({}).expect(200);
+    assert.equal(artists.fillEmpty.mock.callCount(), 1);
+    assert.deepEqual((artists.fillEmpty.mock.calls[0]!.arguments as any)[2].spotifyUrl, 'https://open.spotify.com/artist/a');
+    assert.deepEqual(res.body.data.unmatched, ['Alpha']);
   });
 });
 
@@ -232,15 +305,22 @@ describe('GET /festivals/:id/set-engagement', () => {
 // ── Set link per artist ─────────────────────────────────────────────
 
 describe('PUT /:festivalId/sets/:setId/link', () => {
-  function linkApp(set: any) {
+  function linkApp(set: any, extra: { hasArtistRow?: boolean } = {}) {
     const festival = { id: 'f1', days: [{ label: 'Day 1', sets: [set] }] };
-    const query = mock.fn(async () => ({ rows: [] }));
-    const deps = baseDeps({
-      getFestivalById: mock.fn(async () => festival),
-      stores: { pool: { query } },
+    const { pool, query } = txPool((sql) => {
+      if (sql.startsWith('SELECT id, published_at, deleted_at FROM festivals')) return { rows: [{ id: 'f1', deleted_at: null }] };
+      if (sql.startsWith('SELECT artist, artists FROM festival_sets')) return { rows: [{ artist: set.artist, artists: set.artists }] };
+      if (sql.startsWith('SELECT 1 FROM artists')) return { rows: extra.hasArtistRow ? [{}] : [], rowCount: extra.hasArtistRow ? 1 : 0 };
+      return null;
     });
-    return { app: appFor(createFestivalsRoutes(deps)), query };
+    const artists = {
+      getById: mock.fn(async () => ({ updated_at: new Date('2026-06-01T00:00:00.123Z') })),
+      update: mock.fn(async () => ({ synced: [] })),
+    };
+    const deps = baseDeps({ getFestivalById: mock.fn(async () => festival), stores: { pool, artists } });
+    return { app: appFor(createFestivalsRoutes(deps)), query, artists };
   }
+  const writeOf = (query: any) => query.mock.calls.find((c: any) => String(c.arguments[0]).startsWith('UPDATE festival_sets'))!;
   const twoArtists = () => ({
     id: 's1',
     artist: 'A b2b B',
@@ -257,13 +337,29 @@ describe('PUT /:festivalId/sets/:setId/link', () => {
       .send({ linkUrl: 'https://open.spotify.com/artist/x', artistIndex: 1 })
       .expect(200);
     assert.deepEqual(res.body.data, { setId: 's1', artistIndex: 1, linkUrl: 'https://open.spotify.com/artist/x' });
-    const [sql, params] = query.mock.calls[0]!.arguments as any;
+    const [sql, params] = writeOf(query).arguments as any;
     assert.equal(sql, 'UPDATE festival_sets SET artists = $1, link_url = $2 WHERE id = $3 AND festival_id = $4');
     assert.deepEqual(JSON.parse(params[0]), [
       { name: 'A', links: { spotify: 'https://open.spotify.com/artist/a' } },
       { name: 'B', links: { spotify: 'https://open.spotify.com/artist/x' } },
     ]);
     assert.deepEqual(params.slice(1), ['https://open.spotify.com/artist/a', 's1', 'f1']);
+  });
+
+  test('runs in one transaction: lock the festival, read the set row, write, bump edited_at, commit', async () => {
+    const { app, query } = linkApp(twoArtists());
+    await request(app).put('/f1/sets/s1/link').send({ linkUrl: 'https://open.spotify.com/artist/x', artistIndex: 1 }).expect(200);
+    const sql = statements(query);
+    const order = [
+      'BEGIN',
+      'SELECT id, published_at, deleted_at FROM festivals',
+      'SELECT artist, artists FROM festival_sets',
+      'UPDATE festival_sets',
+      'UPDATE festivals SET updated_at = NOW(), edited_at = NOW()',
+      'COMMIT',
+    ].map((prefix) => sql.findIndex((statement: string) => statement.startsWith(prefix)));
+    assert.ok(order.every((index, i) => index >= 0 && (i === 0 || index > order[i - 1]!)), sql.join(' | '));
+    assert.match(sql.find((statement: string) => statement.startsWith('SELECT artist, artists FROM festival_sets'))!, /FOR UPDATE/);
   });
 
   test('refuses an artist that is not on the set', async () => {
@@ -273,13 +369,13 @@ describe('PUT /:festivalId/sets/:setId/link', () => {
       .send({ linkUrl: 'https://open.spotify.com/artist/x', artistIndex: 2 })
       .expect(400);
     assert.equal(res.body.error.message, 'That artist is not on this set.');
-    assert.equal(query.mock.callCount(), 0);
+    assert.ok(!statements(query).some((sql: string) => sql.startsWith('UPDATE festival_sets')));
   });
 
   test('builds the artists array for a set saved without one', async () => {
     const { app, query } = linkApp({ id: 's1', artist: 'Solo', artists: [] });
     await request(app).put('/f1/sets/s1/link').send({ linkUrl: 'https://open.spotify.com/artist/s' }).expect(200);
-    const params = (query.mock.calls[0]!.arguments as any)[1];
+    const params = (writeOf(query).arguments as any)[1];
     assert.deepEqual(JSON.parse(params[0]), [
       { name: 'Solo', links: { spotify: 'https://open.spotify.com/artist/s' } },
     ]);
@@ -289,9 +385,20 @@ describe('PUT /:festivalId/sets/:setId/link', () => {
   test('removing the first artist link clears link_url', async () => {
     const { app, query } = linkApp(twoArtists());
     await request(app).put('/f1/sets/s1/link').send({ linkUrl: '' }).expect(200);
-    const params = (query.mock.calls[0]!.arguments as any)[1];
+    const params = (writeOf(query).arguments as any)[1];
     assert.deepEqual(JSON.parse(params[0])[0].links, {});
     assert.equal(params[1], null);
+  });
+
+  test('an artist that has a row owns the link: the row is edited, which rewrites every festival', async () => {
+    const set = { id: 's1', artist: 'A', artists: [{ id: 'art-1', name: 'A', links: {} }] };
+    const { app, query, artists } = linkApp(set, { hasArtistRow: true });
+    await request(app).put('/f1/sets/s1/link').send({ linkUrl: 'https://open.spotify.com/artist/x' }).expect(200);
+    assert.ok(!statements(query).some((sql: string) => sql.startsWith('UPDATE festival_sets')));
+    const [artistId, input] = artists.update.mock.calls[0]!.arguments as any;
+    assert.equal(artistId, 'art-1');
+    assert.equal(input.expectedUpdatedAt, '2026-06-01T00:00:00.123Z');
+    assert.deepEqual(input.changes, { spotifyLink: 'https://open.spotify.com/artist/x' });
   });
 });
 

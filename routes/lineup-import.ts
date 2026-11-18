@@ -18,20 +18,16 @@
  * A commit and an undo also drop the festival list cache, and on a published festival emit
  * festival:updated, so open clients reload and the announced lineup shows what the sets now cover.
  *
- * If SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET are configured, commit searches
- * Spotify once for the artists of new sets that have no link.
+ * The import does not search Spotify: one wrong guess would reach every festival that shares the
+ * artist. Links come from the Link column or the Artists tab. Inside the commit and the undo
+ * transaction every artist element is tied to its artists row (resolveArtistRefs), so a set gets
+ * the canonical name and links. A link that differs from the artist's links is not used.
  */
 
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
-import {
-  artistsNeedingLinks,
-  planLineupImport,
-  type LineupImportPlan,
-  type LineupImportWrites,
-  type SpotifyHit,
-} from '../lib/lineup-import-plan.js';
+import { planLineupImport, type LineupImportPlan, type LineupImportWrites } from '../lib/lineup-import-plan.js';
 
 const SKIPPED_MESSAGE = 'Matches an existing set. Not updated because Update sets that match was off.';
 
@@ -87,21 +83,6 @@ export default function createLineupImportRoute(deps: any) {
 
   const router = express.Router();
 
-  // Spotify integration — optional, only if credentials configured
-  let spotify: any = null;
-  const spotifyClientId = config.SPOTIFY_CLIENT_ID;
-  const spotifyClientSecret = config.SPOTIFY_CLIENT_SECRET;
-  if (spotifyClientId && spotifyClientSecret) {
-    import('../lib/spotify.js')
-      .then((mod) => {
-        spotify = (mod as any).default || mod;
-        log.info('spotify integration enabled for lineup import');
-      })
-      .catch(() => {
-        log.warn('spotify module not available');
-      });
-  }
-
   // Sets changed, so the list's lineupCount is stale and open clients must reload.
   // A draft has no attendees, and the event goes to every socket.
   function announceSetsChanged(festival: any) {
@@ -130,15 +111,23 @@ export default function createLineupImportRoute(deps: any) {
     res.locals.auditWritten = true;
   }
 
-  async function searchSpotify(names: string[], warnings: string[]) {
-    if (!spotify || names.length === 0) return undefined;
-    try {
-      const hits: Map<string, SpotifyHit> = await spotify.bulkSearchArtists(names, spotifyClientId, spotifyClientSecret, { log });
-      return new Map([...hits].map(([name, hit]) => [name.toLowerCase(), hit]));
-    } catch (err: any) {
-      log.warn('spotify auto-linking failed, continuing without', { error: err?.message });
-      warnings.push('Spotify search failed, so sets were imported without Spotify links.');
-      return undefined;
+  // A Link column value for an empty platform of an artist that exists: written after the import
+  // commits, through the artist's own locks (festivals first, then the artist), so every festival that
+  // lists the artist gets it. A failure is logged and never fails the import.
+  async function applyLinkFills(fills: Array<{ artistId: string; url: string }>, userId: string | null) {
+    for (const fill of fills) {
+      try {
+        const current = await stores.artists.getById(fill.artistId);
+        if (!current) continue;
+        const result = await stores.artists.update(fill.artistId, {
+          expectedUpdatedAt: new Date(current.updated_at).toISOString(),
+          changes: { addLink: fill.url },
+          userId,
+        });
+        await deps.afterArtistSync?.(result.synced);
+      } catch (error: any) {
+        log.warn('import link not added to the artist', { artistId: fill.artistId, error: error?.message });
+      }
     }
   }
 
@@ -190,16 +179,12 @@ export default function createLineupImportRoute(deps: any) {
       setNoStore(res);
       const loaded = await loadRequest(req, res);
       if (!loaded) return;
-      const { festivalId, festival, body, base } = loaded;
+      const { festivalId, festival, base } = loaded;
 
       const warnings: string[] = [];
-      const first = planLineupImport({ festival, ...base });
-      const clean = first.plan.counts.error === 0 && first.plan.problems.length === 0;
-      const spotifyMap = clean && !body.skipSpotify ? await searchSpotify(artistsNeedingLinks(first.writes), warnings) : undefined;
-
       const outcome = await stores.lineupImports.commit(
         festivalId,
-        (current: any) => planLineupImport({ festival: current, ...base, spotify: spotifyMap, makeId }),
+        (current: any) => planLineupImport({ festival: current, ...base, makeId }),
         { createdBy: req.user?.userId ?? null },
       );
       if ('notFound' in outcome) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
@@ -207,6 +192,15 @@ export default function createLineupImportRoute(deps: any) {
 
       invalidateFestivalCache();
       announceSetsChanged(festival);
+      await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null);
+      if (outcome.refs?.ignoredLinkEdits) {
+        warnings.push(
+          `${outcome.refs.ignoredLinkEdits} ${outcome.refs.ignoredLinkEdits === 1 ? 'link differs' : 'links differ'} from the artist's links and ${outcome.refs.ignoredLinkEdits === 1 ? 'was' : 'were'} not used. Change them on the Artists tab.`,
+        );
+      }
+      if (outcome.writes.inserts.some((s: any) => s.artists.some((a: any) => !Object.keys(a.links ?? {}).length))) {
+        warnings.push('Add links on the Artists tab. The import does not search Spotify.');
+      }
       // The executor checks publish state, the marker and the times itself.
       reengagement
         ?.sendSetTimesOut?.(festivalId)
@@ -265,6 +259,14 @@ export default function createLineupImportRoute(deps: any) {
         const festival = await stores.festivals.getById(festivalId);
         const outcome = await stores.lineupImports.undo(festivalId, importId);
         if ('notFound' in outcome) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
+        if ('olderThanUpgrade' in outcome) {
+          return sendError(
+            res,
+            400,
+            'This import is older than the artist upgrade. Edit the sets by hand instead.',
+            ErrorCodes.INVALID_INPUT,
+          );
+        }
         if ('refused' in outcome) {
           return sendError(
             res,

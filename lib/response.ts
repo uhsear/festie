@@ -24,6 +24,9 @@ export const ErrorCodes = {
   REAUTH_REQUIRED: 'REAUTH_REQUIRED',
   CONFIRM_REMOVALS: 'CONFIRM_REMOVALS',
   FESTIVAL_CHANGED: 'FESTIVAL_CHANGED',
+  // An artist edit that clashes with another artist, or that started from an out-of-date copy.
+  ARTIST_EXISTS: 'ARTIST_EXISTS',
+  ARTIST_CHANGED: 'ARTIST_CHANGED',
   PUBLISH_BLOCKED: 'PUBLISH_BLOCKED',
   // Sign in with Google and Apple (T45)
   PROVIDER_NOT_CONFIGURED: 'PROVIDER_NOT_CONFIGURED',

@@ -13,6 +13,7 @@ import { withTransaction } from '../connection';
 import { buildMultiInsert, insertSetsBatch } from './festivals';
 import type { LineupImportPlan, LineupImportWrites, SetValues } from '../../lineup-import-plan';
 import { nextMoveMark, type SlotAt } from '../../set-moves';
+import { resolveSetValues } from '../../artist-refs';
 
 export type BuildPlan = (festival: any) => { plan: LineupImportPlan; writes: LineupImportWrites };
 
@@ -227,25 +228,57 @@ async function restoreUpdatedSets(
   result: UndoResult,
   ctx: MarkContext,
 ) {
+  const restoredIds: string[] = [];
   for (const u of updated) {
     const { rows } = await client.query(
-      'SELECT stage_id, start_time, end_time, artist, link_url FROM festival_sets WHERE id = $1 AND festival_id = $2',
+      'SELECT stage_id, start_time, end_time, artist, artists, link_url FROM festival_sets WHERE id = $1 AND festival_id = $2',
       [u.id, festivalId],
     );
     const cur = rows[0];
+    // An artist edit rewrites the flat name and link of every set that lists the artist. Those sets
+    // still list the same artist ids, so the rewrite is not a hand edit of the set.
+    const idsOf = (list: any) => (Array.isArray(list) ? list.map((a: any) => a?.id ?? '') : []);
+    const sameArtistIds = idsOf(cur?.artists).length > 0 && idsOf(cur?.artists).join() === idsOf(u.after.artists).join() && !idsOf(cur?.artists).includes('');
     const untouched =
       cur &&
       sameText(cur.stage_id, u.after.stageId) &&
       sameText(cur.start_time, u.after.startTime) &&
       sameText(cur.end_time, u.after.endTime) &&
-      sameText(cur.artist, u.after.artist) &&
-      sameText(cur.link_url, u.after.linkUrl);
+      ((sameText(cur.artist, u.after.artist) && sameText(cur.link_url, u.after.linkUrl)) || sameArtistIds);
     if (!untouched) {
       result.kept.push({ setId: u.id, artist: cur?.artist ?? u.after.artist, reason: 'edited' });
       continue;
     }
     await writeSetValues(client, festivalId, u.id, u.before, ctx);
     result.restored++;
+    restoredIds.push(u.id);
+  }
+  await canonicalizeRestoredSets(client, festivalId, restoredIds);
+}
+
+/**
+ * The restored sets hold the artist copies from before the import. An artist edit may have changed
+ * the artist since, so tie each restored set to its artists row again: canonical name and links.
+ */
+async function canonicalizeRestoredSets(client: any, festivalId: string, setIds: string[]) {
+  if (setIds.length === 0) return;
+  const { rows: festival } = await client.query("SELECT COALESCE(b2b_separator, 'b2b') AS separator FROM festivals WHERE id = $1", [
+    festivalId,
+  ]);
+  const { rows } = await client.query(
+    `SELECT id, artist, artists, link_url FROM festival_sets
+      WHERE festival_id = $1 AND id = ANY($2::text[]) AND jsonb_typeof(artists) = 'array' AND jsonb_array_length(artists) > 0`,
+    [festivalId, setIds],
+  );
+  const targets = rows.map((row: any) => ({ id: row.id, values: { artists: row.artists, artist: row.artist, linkUrl: row.link_url ?? null } }));
+  await resolveSetValues(client, { festivalId, separator: festival[0]?.separator ?? 'b2b', userId: null }, targets);
+  for (const { id, values } of targets) {
+    await client.query('UPDATE festival_sets SET artists = $2::jsonb, artist = $3, link_url = $4 WHERE id = $1', [
+      id,
+      JSON.stringify(values.artists),
+      values.artist,
+      values.linkUrl,
+    ]);
   }
 }
 
@@ -305,11 +338,21 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         const { plan, writes } = buildPlan(festival);
         if (plan.counts.error > 0 || plan.problems.length > 0) return { committed: false as const, plan };
 
+        // Every artist element gets the artists row's name and links, and the flat name and link follow.
+        const refs = await resolveSetValues(
+          client,
+          { festivalId, separator: festival.b2bSeparator || 'b2b', userId: meta.createdBy, fillEmptyLinks: true },
+          [
+            ...writes.inserts.map((s) => ({ id: s.id, values: s })),
+            ...writes.updates.map((u) => ({ id: u.setId, values: u.after })),
+          ],
+        );
+
         await insertNewStages(client, festivalId, writes.newStages);
         await insertNewDays(client, festivalId, writes.newDays);
         await insertNewSets(client, festivalId, writes.inserts);
         for (const u of writes.updates) await writeSetValues(client, festivalId, u.setId, u.after, ctx);
-        await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
+        await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
 
         const importId = `import-${crypto.randomBytes(8).toString('hex')}`;
         const counts = {
@@ -350,7 +393,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
             changedNothing ? new Date().toISOString() : null,
           ],
         );
-        return { committed: true as const, plan, writes, importId };
+        return { committed: true as const, plan, writes, importId, refs };
       });
     },
 
@@ -412,6 +455,12 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         if (record.undone_at || (await newestOpenImportId(client, festivalId)) !== importId) {
           return { refused: true as const };
         }
+        // The undo would restore artist copies from before the backfill gave every element an id.
+        const { rowCount: backfilled } = await client.query(
+          'SELECT 1 FROM artist_backfill_runs WHERE festival_id = $1 AND created_at > $2 LIMIT 1',
+          [festivalId, record.created_at],
+        );
+        if (backfilled) return { olderThanUpgrade: true as const };
 
         const result: UndoResult = { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] };
         await removeCreatedSets(client, festivalId, record.created_set_ids, result);
@@ -421,7 +470,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           importId,
           JSON.stringify(result),
         ]);
-        await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
+        await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
         return { result };
       });
     },

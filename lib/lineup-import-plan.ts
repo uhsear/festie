@@ -74,13 +74,8 @@ export interface LineupImportWrites {
   newDays: { dayIndex: number; label: string; date: string }[];
   inserts: (SetValues & { index: number; id: string; dayIndex: number })[];
   updates: { index: number; setId: string; before: SetValues; after: SetValues }[];
+  /** Always 0. The import no longer searches Spotify; the field stays so the response shape does not change. */
   spotifyMatched: number;
-}
-
-export interface SpotifyHit {
-  spotifyUrl?: string;
-  imageUrl?: string;
-  genres?: string[];
 }
 
 export interface PlanInput {
@@ -88,8 +83,6 @@ export interface PlanInput {
   rows: LineupImportRowInput[];
   options: { updateExisting: boolean; createMissing: boolean };
   config: { MAX_IMPORT_SETS: number; MAX_STAGES: number; MAX_DAYS: number; MAX_SETS_PER_DAY: number };
-  /** Lower-case artist name to Spotify search hit. Fills links of new sets only. */
-  spotify?: Map<string, SpotifyHit>;
   /** Id factory for new stages and sets. The default is deterministic, for previews. */
   makeId?: (prefix: string) => string;
 }
@@ -579,7 +572,6 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
     }
   }
 
-  const spotifyMatched = fillSpotify(ctx);
   const missingFromFile = ctx.existing
     .filter((s) => !ctx.matchedIds.has(s.id))
     .map((s) => ({ setId: s.id, artist: s.values.artist, dayLabel: s.dayLabel }));
@@ -609,31 +601,7 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
     newDays: newDays.map((d) => ({ dayIndex: d.index, label: d.label, date: d.date })),
     inserts: ctx.inserts.map(({ dayKey, ...s }) => ({ ...s, dayIndex: dayIndexOf.get(dayKey)! })),
     updates: ctx.updates,
-    spotifyMatched,
+    spotifyMatched: 0,
   };
   return { plan, writes };
-}
-
-/** Fills Spotify link, photo and genres of new sets' artists that have no link. */
-function fillSpotify(ctx: Ctx): number {
-  const { spotify } = ctx.input;
-  if (!spotify) return 0;
-  let matched = 0;
-  for (const set of ctx.inserts) {
-    for (const artist of set.artists) {
-      const hit = artist.links.spotify ? undefined : spotify.get(artist.name.toLowerCase());
-      if (!hit?.spotifyUrl) continue;
-      artist.links.spotify = hit.spotifyUrl;
-      if (hit.imageUrl) artist.photo = hit.imageUrl;
-      if (hit.genres?.length) artist.genres = hit.genres;
-      matched++;
-    }
-    set.linkUrl = set.artists[0]?.links.spotify ?? set.linkUrl;
-  }
-  return matched;
-}
-
-/** Names of the artists of new sets that have no link: the Spotify search list. */
-export function artistsNeedingLinks(writes: LineupImportWrites): string[] {
-  return [...new Set(writes.inserts.flatMap((s) => s.artists.filter((a) => !a.links.spotify).map((a) => a.name)))];
 }

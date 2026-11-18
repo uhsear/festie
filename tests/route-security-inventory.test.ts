@@ -226,3 +226,17 @@ test('socket event inventory', () => {
   }
   assert.equal(issues.length, 0, `\n${issues.join('\n')}`);
 });
+
+test('artist routes stay admin only, validated and rate limited', () => {
+  const artistRoutes = routes.filter((r) => r.file === 'artists.ts');
+  assert.deepEqual(
+    artistRoutes.map((r) => r.key).sort(),
+    ['artists.ts GET /', 'artists.ts GET /:id/impact', 'artists.ts PATCH /:id', 'artists.ts POST /', 'artists.ts POST /match'],
+  );
+  for (const r of artistRoutes) {
+    assert.ok(isAdmin(r), `${r.key} must be mounted behind adminAuth in server.ts`);
+    if (r.verb !== 'GET') assert.ok(has(r, /\bvalidate\(/), `${r.key} must validate its body`);
+  }
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts PATCH /:id')!, /rateLimit\(60, 'artist-update'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /match')!, /rateLimit\(60, 'artist-match'\)/));
+});
