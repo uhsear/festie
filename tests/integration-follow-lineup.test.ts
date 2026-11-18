@@ -92,6 +92,14 @@ describe('Integration: follow loop', { concurrency: 1 }, () => {
     assert.equal(partial.reason, undefined);
     assert.deepEqual(await sql("SELECT id FROM notification_log WHERE type = 'days_out'"), []);
 
+    // Giving an act a day by lineup import sends nothing either.
+    const imported = await admin(server.request.post(`/api/v1/admin/festivals/${id}/import-lineup`))
+      .send({ rows: [{ row: 1, artist: 'D', stage: 'Main', day: 'Fri', date: '2027-02-05' }], createMissing: true, skipSpotify: true })
+      .expect(200);
+    assert.equal(imported.body.data.committed, true);
+    await new Promise((resolve) => setTimeout(resolve, 200)); // the import's alert hook runs after the response
+    assert.deepEqual(await sql("SELECT id FROM notification_log WHERE type IN ('days_out', 'lineup_drop')"), []);
+
     // With every act on a day, the button sends and writes one audit row.
     const saved = (await admin(server.request.get(`/api/v1/admin/festivals/${id}`)).expect(200)).body.data;
     const full = saved.lineup.map((entry: any) => ({ ...entry, dayDate: '2027-02-06' }));

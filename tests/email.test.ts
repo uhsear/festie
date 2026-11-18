@@ -352,6 +352,17 @@ describe('email: re-engagement senders', () => {
       assert.ok(msg.text.endsWith(`${sentence} Turn it off: https://festie.test/account`));
     });
   }
+
+  for (const [name, fn] of cases) {
+    it(`${name}: footer carries the postal address when one is set`, async () => {
+      const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+      const config = createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', EMAIL_POSTAL_ADDRESS: '1 Main St & Co, Springfield' });
+      await fn({ ...base, config, log: createMockLog(), _client: createMockClient(send) });
+      const msg = (send.mock.calls as any[])[0].arguments[0];
+      assert.ok(msg.html.includes('1 Main St &amp; Co, Springfield'));
+      assert.ok(msg.text.endsWith('\n1 Main St & Co, Springfield'));
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------

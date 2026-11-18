@@ -7,6 +7,7 @@ import {
   type LineupAnnouncementCount,
   type LineupImportHistoryItem,
   type LineupImportUndoResult,
+  lineupAudienceSummary,
 } from '@festie/shared/utils/lineupImport';
 import { useToast } from '../../lib/toastContext';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
@@ -78,6 +79,8 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
 
   const recipients = lineupCount?.recipients ?? null;
   const lineupEmailNote = lineupCount ? announcementEmailNote(lineupCount) : null;
+  // Push may be done while the daily email limit cut some followers: the server accepts another press for them.
+  const canAnnounceLineup = !!lineupCount && (lineupCount.recipients > 0 || lineupCount.emailCut > 0);
   const days = daysCount ? daysAnnouncementSummary(daysCount) : null;
 
   const doAnnounceDays = async () => {
@@ -168,23 +171,19 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
           Send a push and an inbox alert to people who follow {festivalName} or went to an earlier edition. Followers
           also get an email. Editions match when the name is the same apart from the year.
         </p>
-        {lineupCount && (
-          <p className="text-sm text-text-muted mb-3">
-            {`${lineupCount.followers} followers get push and email. ${lineupCount.priorAttendees} people from earlier editions get push only.`}
-            {lineupCount.matchedFestivalNames.length > 0 &&
-              ` Matched editions: ${lineupCount.matchedFestivalNames.join(', ')}.`}
-          </p>
-        )}
+        {lineupCount && <p className="text-sm text-text-muted mb-3">{lineupAudienceSummary(lineupCount)}</p>}
         {lineupEmailNote && <p className="text-sm text-text-muted mb-3">{lineupEmailNote}</p>}
         <button
           type="button"
           className={buttonClass}
-          disabled={!recipients || busy}
+          disabled={!canAnnounceLineup || busy}
           onClick={() => setAnnounceOpen(true)}
         >
           {`Announce to ${recipients ?? 0} people`}
         </button>
-        {recipients === 0 && <p className="text-sm text-text-muted mt-2">No one to notify right now.</p>}
+        {lineupCount && !canAnnounceLineup && (
+          <p className="text-sm text-text-muted mt-2">No one to notify right now.</p>
+        )}
       </section>
 
       <section>

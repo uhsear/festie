@@ -507,7 +507,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     if (coverage.actsWithDay === 0) return refused('no_days', named);
 
     const userIds = await resolveFollowersAndProfileHolders(festivalId);
-    const fresh = userIds.length ? await filterFresh(userIds, 'days_out', `days:${festivalId}`) : [];
+    if (userIds.length === 0) return refused('no_audience', named);
+    const fresh = await filterFresh(userIds, 'days_out', `days:${festivalId}`);
     return { ...named, userIds, fresh, reason: undefined as string | undefined };
   }
 
@@ -715,10 +716,14 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const fresh = await filterFresh(userIds, type, `${eventKey}#email`);
     const prefKey = PREF_MAP[type];
     let ids: string[] = [];
-    for (const uid of fresh) {
-      if (!users.get(uid)?.email) continue;
+    const withEmail = fresh.filter((uid) => users.get(uid)?.email);
+    // One batched read (the admin dry runs call this per panel load); a store without getMany reads per user.
+    let prefsByUser = new Map<string, any>();
+    if (stores?.notificationPrefs?.getMany) prefsByUser = await stores.notificationPrefs.getMany(withEmail);
+    else for (const uid of withEmail) prefsByUser.set(uid, await stores?.notificationPrefs?.get?.(uid));
+    for (const uid of withEmail) {
       // Per-type opt-out gates email as well as push.
-      const prefs = await stores?.notificationPrefs?.get?.(uid);
+      const prefs = prefsByUser.get(uid);
       if (prefs && prefKey && !prefs[prefKey]) continue; // store returns 0/1, same falsy check as send.ts
       ids.push(uid);
     }
@@ -735,19 +740,21 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
    * or vice-versa, still gets exactly one of each per event). Best-effort: a
    * failed send (incl. RESEND_API_KEY unset) is logged and counted as not-sent.
    * `limit` stops after that many sent; the rest stay un-emailed and a later run picks them up.
+   * `budgetLeft` is re-read before each send, so two jobs running at once share the budget.
    */
   async function emailFanout(
     userIds: string[],
     type: string,
     eventKey: string,
     sendFn: (user: any) => Promise<boolean>,
-    { limit = Infinity, noPushFirst = false } = {},
+    { limit = Infinity, noPushFirst = false, budgetLeft }: { limit?: number; noPushFirst?: boolean; budgetLeft?: () => Promise<number> } = {},
   ): Promise<number> {
     const { ids, users } = await emailPlan(userIds, type, eventKey, { noPushFirst });
     const emailEventKey = `${eventKey}#email`;
     let sent = 0;
     for (const uid of ids) {
       if (sent >= limit) break;
+      if (budgetLeft && (await budgetLeft()) <= 0) break;
       const user = users.get(uid);
       let ok: boolean;
       try {
@@ -790,6 +797,9 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   // These two alerts email without a postal address never (CAN-SPAM; the push and inbox row do not
   // depend on it) and at most EMAIL_DAILY_BUDGET emails a day across all re-engagement mail, because
   // the mail provider's plan caps a day. People the budget cuts stay un-emailed; the next press reaches them.
+  // The fan-out re-reads the budget before every send, so concurrent jobs overshoot by a send or two, not a batch.
+  // wrap_ready, crew_reformed and set_times_out are not capped: each goes to one festival's or crew's own
+  // audience, and a cut there could not be retried (no button), so they only count against the budget.
   const hasPostalAddress = () => !!String(config?.EMAIL_POSTAL_ADDRESS ?? '').trim();
 
   async function emailBudgetLeft(): Promise<number> {
@@ -812,7 +822,11 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     sendFn: (user: any) => Promise<boolean>,
   ): Promise<number> {
     if (!hasPostalAddress()) return 0;
-    return emailFanout(userIds, type, eventKey, sendFn, { limit: await emailBudgetLeft(), noPushFirst: true });
+    return emailFanout(userIds, type, eventKey, sendFn, {
+      limit: await emailBudgetLeft(),
+      noPushFirst: true,
+      budgetLeft: emailBudgetLeft,
+    });
   }
 
   return {

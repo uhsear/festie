@@ -110,17 +110,28 @@ export interface DaysAnnouncementCount {
   emailRecipients: number;
   emailCut: number;
   emailOff: string | null;
-  reason?: 'draft' | 'set_times_out' | 'no_days' | 'already_heard';
+  reason?: 'draft' | 'set_times_out' | 'no_days' | 'no_audience' | 'already_heard';
 }
 
 const DAYS_BLOCKED: Record<NonNullable<DaysAnnouncementCount['reason']>, string> = {
   draft: 'Publish the festival before you announce its days.',
   set_times_out: 'Set times are already out. The set-times alert covered this.',
   no_days: 'Give acts a day before you announce days.',
+  no_audience: 'No one follows this festival or has joined it yet.',
   already_heard: 'Everyone who follows has already heard.',
 };
 
 const people = (n: number) => `${n} ${n === 1 ? 'person' : 'people'}`;
+
+/** Who hears the lineup alert, with singular forms, and which earlier editions matched. */
+export function lineupAudienceSummary(
+  count: Pick<LineupAnnouncementCount, 'followers' | 'priorAttendees' | 'matchedFestivalNames'>,
+): string {
+  const followers = `${count.followers} ${count.followers === 1 ? 'follower gets' : 'followers get'} push and email.`;
+  const prior = `${people(count.priorAttendees)} from earlier editions ${count.priorAttendees === 1 ? 'gets' : 'get'} push only.`;
+  const matched = count.matchedFestivalNames.length ? ` Matched editions: ${count.matchedFestivalNames.join(', ')}.` : '';
+  return `${followers} ${prior}${matched}`;
+}
 
 /** What the email part of a dry run says, or null when everyone who should get one does. */
 export function announcementEmailNote(count: Pick<DaysAnnouncementCount, 'emailOff' | 'emailCut'>): string | null {

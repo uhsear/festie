@@ -94,4 +94,26 @@ describe('LineupImportHistory', () => {
       await screen.findByText(/3 followers get push and email\. 2 people from earlier editions get push only\. Matched editions: Fest 2025, Fest 2024\./),
     ).toBeInTheDocument();
   });
+
+  it('Announce lineup: stays pressable when push is done but the email limit cut followers', async () => {
+    api.announcement.mockResolvedValue({
+      recipients: 0,
+      followers: 5,
+      priorAttendees: 0,
+      matchedFestivalNames: [],
+      emailRecipients: 0,
+      emailCut: 3,
+      emailOff: null,
+    });
+    render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);
+    expect(await screen.findByText(/3 people get no email today/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Announce to 0 people' })).toBeEnabled();
+    expect(screen.queryByText('No one to notify right now.')).not.toBeInTheDocument();
+  });
+
+  it('Announce lineup: disabled with the reason when no one is left to reach', async () => {
+    render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);
+    expect(await screen.findByText('No one to notify right now.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Announce to 0 people' })).toBeDisabled();
+  });
 });

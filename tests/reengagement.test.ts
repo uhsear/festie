@@ -921,12 +921,13 @@ describe('createReengagementTriggers days_out', () => {
     followers = ['f1', 'f2'],
     profileHolders = ['p1', 'f1'],
     postal = '',
-    emailsToday = 0,
+    emailsToday = 0 as number | (() => number),
     withPush = [] as string[],
     resendKey = '',
     emailLog = log as any,
   } = {}) {
     const sends: any[] = [];
+    const prefReads = { single: 0, batch: 0 };
     const seen = new Set<string>();
     const emailed = new Set<string>();
     const pool = {
@@ -951,7 +952,16 @@ describe('createReengagementTriggers days_out', () => {
         getByIds: async (ids: string[]) =>
           new Map(ids.map((id) => [id, { email: `${id}@example.com`, username: id }] as const)),
       },
-      notificationPrefs: { get: async () => ({ lineupDrops: 1 }) },
+      notificationPrefs: {
+        get: async () => {
+          prefReads.single += 1;
+          return { lineupDrops: 1 };
+        },
+        getMany: async (ids: string[]) => {
+          prefReads.batch += 1;
+          return new Map(ids.map((id) => [id, { lineupDrops: 1 }] as const));
+        },
+      },
       deviceTokens: { listByUsers: async () => withPush.map((userId) => ({ userId })) },
       notificationLog: {
         existsForEvents: async (uids: string[], type: string, key: string) =>
@@ -960,7 +970,7 @@ describe('createReengagementTriggers days_out', () => {
               key.endsWith('#email') ? emailed.has(`${u}|${type}|${key}`) : seen.has(`${u}|${type}|${key}`),
             ),
           ),
-        countEmailsSince: async () => emailsToday,
+        countEmailsSince: async () => (typeof emailsToday === 'function' ? emailsToday() : emailsToday),
         insert: async (row: any) => {
           if (row.platform === 'email') emailed.add(`${row.userId}|${row.type}|${JSON.parse(row.dataJson).eventKey}`);
         },
@@ -968,7 +978,7 @@ describe('createReengagementTriggers days_out', () => {
     };
     const cfg = { ...config, RESEND_API_KEY: resendKey, EMAIL_POSTAL_ADDRESS: postal };
     const triggers = createReengagementTriggers({ stores, config: cfg, log: emailLog, notificationService, pool });
-    return { triggers, sends };
+    return { triggers, sends, prefReads };
   }
 
   it('act 1 of 118 with a day: the dry run reports the split, and nothing sends', async () => {
@@ -1019,6 +1029,13 @@ describe('createReengagementTriggers days_out', () => {
     }
   });
 
+  it('a festival nobody follows or joined says so, not "already heard"', async () => {
+    const { triggers, sends } = build({ followers: [], profileHolders: [] });
+    assert.equal((await triggers.countDaysOut('fest-1')).reason, 'no_audience');
+    assert.equal((await triggers.sendDaysOut('fest-1')).reason, 'no_audience');
+    assert.equal(sends.length, 0);
+  });
+
   it('a cancelled act does not count, and a set with a day counts as an act with a day', async () => {
     const days = [{ ...DAYS[0], sets: [{ id: 's1', artist: 'Solo', artists: [{ name: 'Solo' }], startTime: null }] }, DAYS[1]];
     const lineup = [entry('a1', 'Act 1'), entry('a2', 'Gone', '2027-02-05', 'cancelled')];
@@ -1029,6 +1046,12 @@ describe('createReengagementTriggers days_out', () => {
   });
 
   describe('email', () => {
+    it('reads the opt-out switches in one batch, not one query per person', async () => {
+      const { triggers, prefReads } = build({ postal: '1 Main St, Town' });
+      await triggers.countDaysOut('fest-1');
+      assert.deepEqual(prefReads, { single: 0, batch: 1 });
+    });
+
     it('is off without a postal address, and the dry run says so', async () => {
       const { triggers } = build();
       const dry = await triggers.countDaysOut('fest-1');
@@ -1061,6 +1084,25 @@ describe('createReengagementTriggers days_out', () => {
       assert.equal(dry.recipients, 0, 'everyone has the push');
       assert.equal(dry.emailCut, 3);
       assert.equal(dry.reason, undefined, 'not "already heard": three people still have no email');
+    });
+
+    it('re-reads the budget before each send, so a second job running at once shares it', async () => {
+      const bodies: any[] = [];
+      const fetchMock = mock.method(globalThis, 'fetch', async (_url: any, init: any) => {
+        bodies.push(JSON.parse(init.body));
+        return new Response(JSON.stringify({ id: 'e1' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      });
+      try {
+        // The first read shows room for all three; by the first send another job has used the rest.
+        let reads = 0;
+        const { triggers } = build({ resendKey: 're_test', postal: '1 Main St, Town', emailsToday: () => (++reads === 1 ? 0 : 90) });
+        const r = await triggers.sendDaysOut('fest-1');
+        assert.equal(r.sent, 3);
+        assert.equal(r.emailSent, 0);
+        assert.equal(bodies.length, 0);
+      } finally {
+        fetchMock.mock.restore();
+      }
     });
 
     it('stops at the daily budget and puts people with no push token first', async () => {

@@ -21,6 +21,7 @@ const DAYS_REFUSALS: Record<string, [number, string]> = {
   draft: [409, 'Publish the festival before you announce its days.'],
   set_times_out: [409, 'Set times are already out. The set-times alert covered this.'],
   no_days: [400, 'Give acts a day before you announce days.'],
+  no_audience: [400, 'No one follows this festival or has joined it yet.'],
   already_heard: [400, 'Everyone who follows has already heard.'],
 };
 

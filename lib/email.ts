@@ -257,11 +257,13 @@ function reengagementHeaders(config: any) {
 }
 
 // Footer + plain-text line naming the notification setting that gates this email.
+// CAN-SPAM wants a postal address in marketing mail; it is added when EMAIL_POSTAL_ADDRESS is set.
 function _reengagementFooter(label: string, config: any) {
   const url = `${_origin(config)}/account`;
+  const postal = String(config?.EMAIL_POSTAL_ADDRESS ?? '').trim();
   return {
-    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${url}" style="color:rgba(255,255,255,0.5)">Turn it off</a>.`,
-    text: `You get this email because "${label}" is on in your Festie notification settings. Turn it off: ${url}`,
+    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${url}" style="color:rgba(255,255,255,0.5)">Turn it off</a>.${postal ? `<br>${escapeHtml(postal)}` : ''}`,
+    text: `You get this email because "${label}" is on in your Festie notification settings. Turn it off: ${url}${postal ? `\n${postal}` : ''}`,
   };
 }
 
