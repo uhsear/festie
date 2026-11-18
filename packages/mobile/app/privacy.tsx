@@ -130,7 +130,7 @@ const SECTIONS: PolicySection[] = [
           'Sign-in sessions: a session token, when the session started and when it was last used, and a device name worked out from your browser or app, so you can tell your sessions apart. We store only a hash of each token.',
           'Error reports: When Festie hits an error, Sentry receives the error details, timings of a small sample of screens and requests, and the app or browser version. Reports from our server also carry your user ID, but never your cookies or sign-in token.',
           'Usage counts: The website reports page-speed measurements. It also counts when the install prompt is shown, accepted or dismissed, with the user-agent text that your browser sends. None of this is linked to your account.',
-          'Sign-up source: If you sign up from a link with a source tag, we add one to a daily count for that tag. The count holds nothing about you.',
+          'Sign-up source: Links that Festie\'s share buttons create carry a source tag in the address, such as share-festival, share-wrap, share-picks or crew-invite. If you sign up from a link with a source tag, we add one to a daily count for that tag. The count holds nothing about you.',
         ],
       },
     ],

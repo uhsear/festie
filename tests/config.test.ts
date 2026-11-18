@@ -328,6 +328,23 @@ describe('config: an explicit empty RESEND_API_KEY override disables email', () 
   });
 });
 
+describe('config: EMAIL_POSTAL_ADDRESS', () => {
+  it('defaults to empty, trims, and lets an explicit empty override beat the environment', () => {
+    const saved = process.env.EMAIL_POSTAL_ADDRESS;
+    try {
+      delete process.env.EMAIL_POSTAL_ADDRESS;
+      assert.equal(loadConfig({ PUBLIC_ORIGIN: '' }).EMAIL_POSTAL_ADDRESS, '');
+      assert.equal(loadConfig({ EMAIL_POSTAL_ADDRESS: '  PO Box 1  ' }).EMAIL_POSTAL_ADDRESS, 'PO Box 1');
+      process.env.EMAIL_POSTAL_ADDRESS = 'PO Box ambient';
+      assert.equal(loadConfig({ PUBLIC_ORIGIN: '', EMAIL_POSTAL_ADDRESS: '' }).EMAIL_POSTAL_ADDRESS, '');
+      assert.equal(loadConfig({ PUBLIC_ORIGIN: '' }).EMAIL_POSTAL_ADDRESS, 'PO Box ambient');
+    } finally {
+      if (saved === undefined) delete process.env.EMAIL_POSTAL_ADDRESS;
+      else process.env.EMAIL_POSTAL_ADDRESS = saved;
+    }
+  });
+});
+
 describe('ANDROID_CERT_FINGERPRINTS', () => {
   const saved = process.env.ANDROID_CERT_FINGERPRINTS;
   afterEach(() => {

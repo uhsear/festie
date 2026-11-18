@@ -769,6 +769,18 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
     async update(festivalId: string, fields: any) {
       // fields: name, location, stages, days (wrapped in transaction for consistency)
       return withTransaction(pool, async (client) => {
+        // The route's stale check reads a cached copy outside this transaction. Locking the row and
+        // comparing here makes two saves with the same token serialize, so the second one fails.
+        if (fields.expectedUpdatedAt !== undefined) {
+          const current = await client.query(
+            'SELECT updated_at FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+            [festivalId],
+          );
+          const stored = current.rows[0]?.updated_at;
+          if (stored && new Date(fields.expectedUpdatedAt).getTime() !== new Date(stored).getTime()) {
+            throw Object.assign(new Error('Festival changed since it was loaded'), { code: 'FESTIVAL_CHANGED' });
+          }
+        }
         const sets: string[] = [];
         const values: any[] = [];
         let idx = 1;

@@ -143,7 +143,7 @@ describe('pages: /join/:code', () => {
           getMembers: mock.fn(async () => [{ userId: 'u1', role: 'owner', username: 'dj', name: 'DJ Dana' }]),
         },
       },
-      getFestivalById: mock.fn(async () => ({ id: 'fest-1', name: 'EDC Orlando', days: [{ date: '2026-11-06' }] })),
+      getFestivalById: mock.fn(async () => ({ id: 'fest-1', name: 'EDC Orlando', publishedAt: '2026-01-01T00:00:00.000Z', days: [{ date: '2026-11-06' }] })),
       rateLimit: (max: any, key: any) => {
         opts.rateCalls?.push({ max, key });
         return (_req: any, _res: any, next: any) => next();
@@ -163,7 +163,7 @@ describe('pages: /join/:code', () => {
     assert.equal(res._status, 200);
     assert.ok(res._sent.includes('og:title" content="Join Bass Gang on Festie"'));
     assert.ok(res._sent.includes('EDC Orlando'));
-    assert.ok(res._sent.includes('href="https://festie.us/?joinCrew=ABC123"'));
+    assert.ok(res._sent.includes('href="https://festie.us/?joinCrew=ABC123&amp;ref=crew-invite"'));
     assert.ok(res._sent.includes('og:url" content="https://festie.us/join/ABC123"'));
     assert.equal(res._redirectUrl, null);
     assert.equal(res._headers['Content-Type'], 'text/html; charset=utf-8');
@@ -236,7 +236,7 @@ describe('pages: /join/:code/save.ics', () => {
     { userId: 'u-1', role: 'owner', username: 'ana', name: 'Ana Lopez' },
     { userId: 'u-2', role: 'member', username: 'ben', name: 'Ben Ortiz' },
   ];
-  const DATED = { id: 'fest-1', name: 'EDC Orlando', days: [{ date: '2026-11-08' }, { date: '2026-11-06' }] };
+  const DATED = { id: 'fest-1', name: 'EDC Orlando', publishedAt: '2026-01-01T00:00:00.000Z', days: [{ date: '2026-11-08' }, { date: '2026-11-06' }] };
 
   function icsDeps(opts: { crew?: any; festival?: any; throws?: boolean; rateCalls?: any[] } = {}) {
     return buildDeps({
@@ -315,7 +315,7 @@ describe('pages: /join/:code/save.ics', () => {
   });
 
   it('redirects when the festival has no dated days', async () => {
-    const res = await get(icsDeps({ crew: CREW, festival: { id: 'fest-1', name: 'EDC Orlando', days: [] } }), 'ABC123');
+    const res = await get(icsDeps({ crew: CREW, festival: { id: 'fest-1', name: 'EDC Orlando', publishedAt: '2026-01-01T00:00:00.000Z', days: [] } }), 'ABC123');
     assert.equal(res._status, 302);
     assert.equal(res._redirectUrl, '/join/ABC123');
   });
