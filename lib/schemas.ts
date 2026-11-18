@@ -166,6 +166,13 @@ export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 const pickValue = z.enum(PICK_PRIORITY_VALUES);
 const picksMap = z.record(z.string().max(100), pickValue).optional();
+// A delta changes only the sets it names: a priority sets the pick, null removes it.
+// Sets the delta leaves out keep whatever the server holds, so a replayed offline
+// write cannot erase picks that arrived after the device last synced.
+const pickDeltasMap = z
+  .record(z.string().max(100), pickValue.nullable())
+  .refine((d) => Object.keys(d).length > 0, { message: 'pickDeltas needs at least one set' })
+  .optional();
 const notesMap = z.record(z.string().max(100), shortText).optional();
 const allowedReminderMinutes = z.union(REMINDER_MINUTE_VALUES.map((m: any) => z.literal(m)) as any);
 const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optional();
@@ -173,6 +180,7 @@ const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optio
 export const profileUpdateSchema = z
   .object({
     picks: picksMap,
+    pickDeltas: pickDeltasMap,
     notes: notesMap,
     reminders: remindersMap,
     // Set ids the user cleared in this full-map write. They end the server's 72-hour guard on converted picks.
@@ -183,6 +191,10 @@ export const profileUpdateSchema = z
   })
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
+  })
+  .refine((d) => d.picks === undefined || d.pickDeltas === undefined, {
+    message: 'Send either picks or pickDeltas, not both',
+    path: ['pickDeltas'],
   });
 export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 

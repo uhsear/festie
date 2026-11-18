@@ -20,6 +20,27 @@ function batchInsert(client: any, table: string, columns: string[], rows: any[][
   return client.query(`INSERT INTO ${table} (${colStr}) VALUES ${placeholders.join(', ')}`, values);
 }
 
+// Upsert and remove only the pick rows a delta names, then return the profile's whole pick map.
+async function applyPickDeltas(client: any, profileId: string, deltas: { set?: Record<string, string>; remove?: string[] }) {
+  const upserts = Object.entries(deltas.set ?? {});
+  if (upserts.length > 0) {
+    await client.query(
+      `INSERT INTO festival_profile_picks (profile_id, set_id, priority)
+       SELECT $1, u.set_id, u.priority FROM unnest($2::text[], $3::text[]) AS u(set_id, priority)
+       ON CONFLICT (profile_id, set_id) DO UPDATE SET priority = EXCLUDED.priority`,
+      [profileId, upserts.map(([setId]) => setId), upserts.map(([, priority]) => priority)],
+    );
+  }
+  if (deltas.remove?.length) {
+    await client.query('DELETE FROM festival_profile_picks WHERE profile_id = $1 AND set_id = ANY($2::text[])', [
+      profileId,
+      deltas.remove,
+    ]);
+  }
+  const { rows } = await client.query('SELECT set_id, priority FROM festival_profile_picks WHERE profile_id = $1', [profileId]);
+  return Object.fromEntries(rows.map((row: any) => [row.set_id, row.priority]));
+}
+
 // #24: Normalized read fragment — reconstructs picks/notes/reminders from
 // dedicated tables instead of the legacy JSONB columns. JSONB columns remain
 // for dual-write rollback safety but are no longer the read source.
@@ -424,17 +445,45 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return mapProfileRow(rows[0]);
     },
 
-    async update(profileId: string, fields: any) {
-      // fields: picks, pickRemove, notes, reminders, interestAdd, interestRemove, userId, name, updatedAt
+    async update(profileId: string, fields: any, { expectedEtag, maxPicks }: { expectedEtag?: string; maxPicks?: number } = {}) {
+      // fields: picks, pickRemove, pickDeltas, notes, reminders, interestAdd, interestRemove, userId, name, updatedAt
+      // pickDeltas ({ set: {setId: priority}, remove: [setId] }) changes only the sets it names.
+      // expectedEtag (the If-Match value) is checked under the row lock, so two writes that both
+      // read the same version cannot both pass. A mismatch throws code VERSION_MISMATCH with the
+      // current profile; a delta that pushes the pick map past maxPicks throws TOO_MANY_PICKS.
+      // Either throw rolls the transaction back.
       // Use transaction to ensure main record and normalized tables stay in sync (#CRITICAL)
       return withTransaction(pool, async (client) => {
         const sets: string[] = [];
         const values: any[] = [];
         let idx = 1;
+        let deltaPicks: Record<string, string> | undefined;
+        if (fields.pickDeltas !== undefined || expectedEtag) {
+          // Lock the row so writes to one profile apply one after the other.
+          const locked = await client.query(
+            `SELECT ${PROFILE_SELECT} FROM festival_profiles fp WHERE fp.id = $1 AND fp.deleted_at IS NULL FOR UPDATE OF fp`,
+            [profileId],
+          );
+          if (locked.rows.length === 0) return null;
+          const current = mapProfileRow(locked.rows[0]);
+          if (expectedEtag && current.updatedAt && expectedEtag !== `"${current.updatedAt}"`) {
+            throw Object.assign(new Error('Profile was modified since your last fetch'), { code: 'VERSION_MISMATCH', current });
+          }
+        }
+        if (fields.pickDeltas !== undefined) {
+          deltaPicks = await applyPickDeltas(client, profileId, fields.pickDeltas);
+          if (maxPicks !== undefined && Object.keys(deltaPicks).length > maxPicks) {
+            throw Object.assign(new Error('Too many picks'), { code: 'TOO_MANY_PICKS' });
+          }
+        }
         const picks = fields.picks === undefined ? undefined : await keepConvertedPicks(client, profileId, fields.picks, fields.pickRemove);
         if (picks !== undefined) {
           sets.push(`picks_json = $${idx}`);
           values.push(serializeJson(picks));
+          idx++;
+        } else if (deltaPicks !== undefined) {
+          sets.push(`picks_json = $${idx}`);
+          values.push(serializeJson(deltaPicks));
           idx++;
         }
         if (fields.notes !== undefined) {
