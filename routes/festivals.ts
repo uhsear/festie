@@ -827,6 +827,7 @@ export default function createFestivalsRoutes(deps: any) {
             expectedUpdatedAt: new Date(current.updated_at).toISOString(),
             changes: { spotifyLink: cleanUrl },
             userId: req.user?.userId ?? null,
+            ip: getRequestIp(req),
           });
           await deps.afterArtistSync?.(result.synced);
         }

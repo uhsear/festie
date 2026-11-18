@@ -18,6 +18,7 @@ import { sanitizeString } from '../../helpers/sanitize';
 import { artistNameKey } from '../../artist-key';
 import { detectPlatform, normalizeArtistLink } from '../../artist-links';
 import { todayInZone } from '../../lineup';
+import { AUDIT_ACTIONS } from '../../audit-actions';
 import { lockFestivalAny } from './lineup-imports';
 
 export const MAX_ARTIST_NAME = 300;
@@ -58,6 +59,46 @@ export class ArtistError extends Error {
 /** The error a transaction throws to start over: withTransactionRetry retries 40001. */
 function retryTransaction(reason: string): Error {
   return Object.assign(new Error(reason), { code: '40001' });
+}
+
+export interface ArtistActor {
+  userId: string | null;
+  ip?: string | null;
+}
+
+/** The audit row of a global artist change, written in the change's own transaction so the two never disagree. */
+async function insertArtistAudit(client: any, artistId: string, actor: ArtistActor, details: Record<string, unknown>) {
+  await client.query(
+    `
+  INSERT INTO
+    audit_log (
+      id,
+      actor_type,
+      actor_id,
+      action,
+      target_type,
+      target_id,
+      details_json,
+      ip,
+      status,
+      created_at
+    )
+  VALUES
+    (
+      $1,
+      'admin',
+      $2,
+      $3,
+      'artist',
+      $4,
+      $5,
+      $6,
+      'success',
+      NOW()
+    )
+`,
+    [createOpaqueId('aud'), actor.userId, AUDIT_ACTIONS.ARTIST_UPDATED, artistId, JSON.stringify(details), actor.ip ?? null],
+  );
 }
 
 const iso = (value: unknown) => (value ? new Date(value as any).toISOString() : null);
@@ -506,7 +547,7 @@ export function createArtistsStore(pool: Pool) {
      */
     async update(
       id: string,
-      input: { expectedUpdatedAt: string; changes: ArtistChanges; userId: string | null },
+      input: { expectedUpdatedAt: string; changes: ArtistChanges; userId: string | null; ip?: string | null },
     ): Promise<{ artist: ArtistRecord; synced: SyncedFestival[]; before: ArtistRecord }> {
       try {
         return await withTransactionRetry(pool, async (client) => {
@@ -534,6 +575,16 @@ export function createArtistsStore(pool: Pool) {
           if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list the artist');
           const copyChanged = before.name !== artist.name || JSON.stringify(before.links ?? {}) !== JSON.stringify(artist.links ?? {});
           const synced = copyChanged ? await rewriteCopies(client, festivalIds, artist) : [];
+          await insertArtistAudit(client, id, { userId: input.userId, ip: input.ip }, {
+            name: artist.name,
+            ...(before.name !== artist.name ? { renamedFrom: before.name } : {}),
+            fields: Object.keys(input.changes).filter((key) => (input.changes as Record<string, unknown>)[key] !== undefined),
+            festivalsUpdated: synced.length,
+            // Enough to see what changed and where: the festival ids are capped so one row stays small.
+            before: { name: before.name, label: before.label, links: before.links ?? {} },
+            after: { name: artist.name, label: artist.label, links: artist.links ?? {} },
+            festivalIds: synced.slice(0, 200).map((festival) => festival.id),
+          });
           return { artist, synced, before };
         });
       } catch (error: any) {
@@ -579,7 +630,7 @@ export function createArtistsStore(pool: Pool) {
           if (elsewhere > 0 && !input.acceptShared) return { status: 'shared' as const, alsoOn: elsewhere };
           const spotifyUrl = `https://open.spotify.com/artist/${input.spotify.spotifyId}`;
           await assertNoClash(client, id, { key: before.name_key, label: before.label, spotifyId: input.spotify.spotifyId });
-          const filled = await this.fillEmpty(client, id, { spotifyUrl, photo: input.spotify.photo ?? undefined, genres: input.spotify.genres });
+          const filled = await this.fillEmpty(client, id, { spotifyUrl, photo: input.spotify.photo ?? undefined, genres: input.spotify.genres }, { userId: input.userId });
           if (!filled || filled.skippedSpotify) throw retryTransaction('the Spotify link could not be stored');
           await client.query('UPDATE artists SET updated_by = $2 WHERE id = $1', [id, input.userId]);
           const artist = filled.artist;
@@ -588,6 +639,26 @@ export function createArtistsStore(pool: Pool) {
           if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list the artist');
           const synced = await rewriteCopies(client, festivalIds, artist);
           return { status: 'saved' as const, artist, before, synced };
+        });
+      } catch (error: any) {
+        throw artistConflict(error) ?? error;
+      }
+    },
+
+    /**
+     * Fills one raw link into an artist that has none for its platform, under the festival and artist
+     * locks, and rewrites every copy. A link that is already there stays: a concurrent edit wins.
+     */
+    async fillLink(id: string, input: { link: string; userId: string | null; ip?: string | null }): Promise<{ synced: SyncedFestival[] }> {
+      try {
+        return await withTransactionRetry(pool, async (client) => {
+          const festivalIds = await festivalIdsUsing(client, id);
+          for (const festivalId of festivalIds) await lockFestivalAny(client, festivalId);
+          const filled = await this.fillEmpty(client, id, { link: input.link }, { userId: input.userId, ip: input.ip });
+          const again = await festivalIdsUsing(client, id);
+          if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list the artist');
+          if (!filled?.changed) return { synced: [] };
+          return { synced: await rewriteCopies(client, festivalIds, filled.artist) };
         });
       } catch (error: any) {
         throw artistConflict(error) ?? error;
@@ -701,7 +772,8 @@ export function createArtistsStore(pool: Pool) {
     async fillEmpty(
       client: any,
       id: string,
-      fill: { spotifyUrl?: string; photo?: string; genres?: string[] },
+      fill: { spotifyUrl?: string; link?: string; photo?: string; genres?: string[] },
+      actor: ArtistActor = { userId: null },
     ): Promise<{ artist: ArtistRecord; skippedSpotify: boolean; changed: boolean } | null> {
       const { rows } = await client.query(`SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 AND merged_into IS NULL FOR UPDATE`, [id]);
       const row = rows[0] as ArtistRecord | undefined;
@@ -709,8 +781,15 @@ export function createArtistsStore(pool: Pool) {
       const links: Links = { ...(row.links ?? {}) };
       let spotifyId = row.spotify_id;
       let skippedSpotify = false;
-      if (fill.spotifyUrl && !links.spotify) {
-        const result = normalizeArtistLink('spotify', fill.spotifyUrl);
+      // `link` is one raw link of any platform: it fills only a platform the artist has no link for.
+      const linkPlatform = fill.link ? (detectPlatform(fill.link) ?? 'website') : null;
+      const spotifyUrl = fill.spotifyUrl ?? (linkPlatform === 'spotify' ? fill.link : undefined);
+      if (fill.link && linkPlatform && linkPlatform !== 'spotify' && !links[linkPlatform]) {
+        const result = normalizeArtistLink(linkPlatform, fill.link);
+        if (result.ok) links[linkPlatform] = result.url;
+      }
+      if (spotifyUrl && !links.spotify) {
+        const result = normalizeArtistLink('spotify', spotifyUrl);
         if (result.ok) {
           const taken = await client.query('SELECT 1 FROM artists WHERE spotify_id = $1 AND merged_into IS NULL AND id <> $2', [
             result.spotifyId,
@@ -735,10 +814,16 @@ export function createArtistsStore(pool: Pool) {
         return { artist: row, skippedSpotify, changed: false };
       }
       const { rows: updated } = await client.query(
-        `UPDATE artists SET links = $2::jsonb, spotify_id = $3, photo = $4, genres = $5::jsonb, updated_at = now()
+        `UPDATE artists SET links = $2::jsonb, spotify_id = $3, photo = $4, genres = $5::jsonb, updated_by = $6, updated_at = now()
           WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
-        [id, JSON.stringify(links), spotifyId, photo, JSON.stringify(genres)],
+        [id, JSON.stringify(links), spotifyId, photo, JSON.stringify(genres), actor.userId],
       );
+      await insertArtistAudit(client, id, actor, {
+        source: 'fill',
+        name: row.name,
+        before: { links: row.links ?? {}, photo: row.photo, genres: row.genres ?? [] },
+        after: { links, photo, genres },
+      });
       return { artist: updated[0] as ArtistRecord, skippedSpotify, changed: true };
     },
   };

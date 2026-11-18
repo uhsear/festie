@@ -32,7 +32,7 @@ async function inRolledBackTx<T>(fn: (client: any) => Promise<T>): Promise<T> {
   });
 }
 
-const daysOf = (...artists: any[][]) => [{ sets: artists.map((list, i) => ({ id: `set-${i}`, artist: 'stale', artists: list })) }];
+const daysOf = (...artists: any[][]) => [{ sets: artists.map((list, i) => ({ id: `set-${i}`, artist: list.map((a) => a.name).join(' b2b '), artists: list })) }];
 const run = (client: any, days: any[], extra: Record<string, unknown> = {}) =>
   resolveArtistRefs(client, { festivalId: 'fest-none', days, separator: 'b2b', userId: null, ...extra });
 
@@ -61,10 +61,24 @@ describe('resolveArtistRefs', { skip, concurrency: 1 }, () => {
     const first = await createArtist(app, { name: 'Flat One', link: 'https://open.spotify.com/artist/5Pb27ujIyYb33zBqVysBkj' });
     const second = await createArtist(app, { name: 'Flat Two' });
     await inRolledBackTx(async (client) => {
-      const out = await run(client, daysOf([{ id: first.id, name: 'x', links: {} }, { id: second.id, name: 'y', links: {} }]), { separator: 'x' });
+      const days = daysOf([{ id: first.id, name: 'x', links: {} }, { id: second.id, name: 'y', links: {} }]);
+      days[0]!.sets[0]!.artist = 'x x y';
+      const out = await run(client, days, { separator: 'x' });
       const set = out.days![0].sets[0];
       assert.equal(set.artist, 'Flat One x Flat Two');
       assert.equal(set.linkUrl, 'https://open.spotify.com/artist/5Pb27ujIyYb33zBqVysBkj');
+    });
+  });
+
+  test('a custom flat name that differs from the joined names survives; one that equals them is rebuilt', async () => {
+    const one = await createArtist(app, { name: 'Custom One' });
+    const two = await createArtist(app, { name: 'Custom Two' });
+    await inRolledBackTx(async (client) => {
+      const days = daysOf([{ id: one.id, name: 'Custom One', links: {} }, { id: two.id, name: 'Custom Two', links: {} }], [{ id: one.id, name: 'Old Spelling', links: {} }]);
+      days[0]!.sets[0]!.artist = 'Skull Machine';
+      const out = await run(client, days);
+      assert.equal(out.days![0].sets[0].artist, 'Skull Machine');
+      assert.equal(out.days![0].sets[1].artist, 'Custom One');
     });
   });
 
