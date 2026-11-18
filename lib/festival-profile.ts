@@ -9,7 +9,8 @@
 export type EnsureFestivalProfileResult =
   | { profile: any; user: any; error?: undefined }
   | { error: 'limit' }
-  | { error: 'user-missing' };
+  | { error: 'user-missing' }
+  | { error: 'festival-unavailable' };
 
 export async function ensureFestivalProfile(
   deps: any,
@@ -17,6 +18,14 @@ export async function ensureFestivalProfile(
   festivalId: string,
 ): Promise<EnsureFestivalProfileResult> {
   const { config, log, getUserFestivalProfile, getUserById, getProfiles, createOpaqueId, emitter, stores } = deps;
+
+  // A missing, deleted or draft festival reads as missing. Runs before the
+  // existing-profile early return, so a profile left in a draft cannot be reused.
+  const festivalRow = await stores.pool.query(
+    'SELECT 1 FROM festivals WHERE id = $1 AND deleted_at IS NULL AND published_at IS NOT NULL',
+    [festivalId],
+  );
+  if (festivalRow.rows.length === 0) return { error: 'festival-unavailable' };
 
   // Check if user already has profile for this festival
   let profile = await getUserFestivalProfile(reqUser.userId, festivalId);

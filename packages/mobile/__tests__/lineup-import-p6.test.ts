@@ -6,7 +6,7 @@ import {
   groupPlanRows,
   importBlocked,
   parseNameList,
-  updateBanner,
+  updateOffBanner,
   withArtistChoice,
 } from '@festie/shared/utils';
 
@@ -28,7 +28,7 @@ describe('lineup import logic the screen uses', () => {
 
   it('turns Update on for an export file and shows the banner otherwise', () => {
     expect(defaultUpdateExisting({ artist: 0, setId: 1 })).toBe(true);
-    expect(updateBanner({ changed: 2 }, false)).toBe('2 rows change existing sets or announced acts. Turn on Update to apply them.');
+    expect(updateOffBanner({ changed: 2 }, false)).toBe('2 rows change existing sets or announced acts. Turn on Update to apply them.');
   });
 
   it('keeps one id per B2B name and blocks a plan with errors', () => {

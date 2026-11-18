@@ -131,12 +131,16 @@ import createAccountRoutes from './routes/account';
 import createAdminRoutes from './routes/admin';
 import createAdminSiteplanRoutes from './routes/admin-siteplan';
 import createFestivalRoutes from './routes/festivals';
+import createArtistsRoutes from './routes/artists';
 import createProfileRoutes from './routes/profiles';
 import createExportRoutes from './routes/export';
 import createNotificationRoutes from './routes/notifications';
 import createCrewRoutes from './routes/crews';
 import createLineupImportRoutes from './routes/lineup-import';
 import createLineupAnnounceRoutes from './routes/lineup-announce';
+import createTimeReleasesRoutes from './routes/time-releases';
+import createLineupInterestRoutes from './routes/lineup-interest';
+import { createInterestConversion } from './lib/lineup';
 import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from './routes/festival-announcements';
 import createShareRoutes from './routes/share';
 import { createRatingsRoutes } from './routes/ratings';
@@ -243,6 +247,8 @@ async function createFestieApp(overrides: any = {}) {
   });
   ctx.reminderScheduler = reminderScheduler;
   deps.emitter = emitter;
+  // Turns interest marks on announced acts into picks after any writer that adds sets or names.
+  deps.interestConversion = createInterestConversion({ pool, stores: ctx.stores, emitter, log, config });
   const crewNotify = createCrewNotifier({ stores: ctx.stores, notificationService, log });
   const pollCloser = createPollCloser({
     stores: ctx.stores,
@@ -280,6 +286,7 @@ async function createFestieApp(overrides: any = {}) {
   const accountRoutes = createAccountRoutes(deps);
   const adminRoutes = createAdminRoutes(deps);
   const festivalRoutes = createFestivalRoutes(deps);
+  const artistRoutes = createArtistsRoutes(deps);
   const festivalDiscoveryRoutes = createFestivalDiscoveryRoutes(deps);
   const profileRoutes = createProfileRoutes(deps);
   const exportRoutes = createExportRoutes(deps);
@@ -287,6 +294,8 @@ async function createFestieApp(overrides: any = {}) {
   const crewRoutes = createCrewRoutes(deps);
   const lineupImportRoutes = createLineupImportRoutes(deps);
   const lineupAnnounceRoutes = createLineupAnnounceRoutes(deps);
+  const timeReleasesRoutes = createTimeReleasesRoutes(deps);
+  const lineupInterestRoutes = createLineupInterestRoutes(deps);
   const adminAnnouncementRoutes = createAdminAnnouncementRoutes(deps);
   const publicAnnouncementRoutes = createPublicAnnouncementRoutes(deps);
   const shareRoutes = createShareRoutes(deps);
@@ -311,8 +320,11 @@ async function createFestieApp(overrides: any = {}) {
   app.use('/api/v1/admin', adminRoutes);
   app.use('/api/v1/admin', createAdminSiteplanRoutes(deps));
   app.use('/api/v1/admin/festivals', deps.adminAuth, festivalRoutes);
+  app.use('/api/v1/admin/artists', deps.adminAuth, artistRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupImportRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, lineupAnnounceRoutes);
+  app.use('/api/v1/admin/festivals', deps.adminAuth, timeReleasesRoutes);
+  app.use('/api/v1/admin/festivals', deps.adminAuth, lineupInterestRoutes);
   app.use('/api/v1/festivals', festivalDiscoveryRoutes);
   app.use('/api/v1/admin/festivals', deps.adminAuth, adminAnnouncementRoutes);
   app.use('/api/v1/festivals', publicAnnouncementRoutes);

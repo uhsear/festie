@@ -2,10 +2,16 @@
 // All Rights Reserved. See the LICENSE file.
 
 import crypto from 'crypto';
-import { diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
+import { planPickerAlerts } from '../lib/picker-alerts.js';
+import { diffCancelledEntries } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
-import { coverLineup } from '../lib/lineup.js';
+import { coverLineup, scheduleProgress } from '../lib/lineup.js';
+import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
+import { FestivalChangedError } from '../lib/db/stores/festivals.js';
+import { ArtistError } from '../lib/db/stores/artists.js';
+import { lockFestivalAny } from '../lib/db/stores/lineup-imports.js';
+import { withTransactionRetry } from '../lib/db/connection.js';
 
 export default function createFestivalsRoutes(deps: any) {
   const {
@@ -36,7 +42,6 @@ export default function createFestivalsRoutes(deps: any) {
     validateParams,
     invalidateFestivalCache,
     geocodeVenue,
-    reengagement,
   } = deps;
 
   const router = express.Router();
@@ -55,7 +60,8 @@ export default function createFestivalsRoutes(deps: any) {
         return false;
       }
       const { guessed, ...coords } = found;
-      const festival = await stores.festivals.update(festivalId, coords);
+      // Not an admin edit of the form, so an open form keeps its token.
+      const festival = await stores.festivals.update(festivalId, coords, { touchEdited: false });
       if (!festival) return false;
       invalidateFestivalCache();
       invalidateFestivalListCache();
@@ -74,6 +80,16 @@ export default function createFestivalsRoutes(deps: any) {
   const visible = (festival: any, req: any) => (festival && (festival.publishedAt || isAdminReq(req)) ? festival : null);
 
   // 400 with one issue per problem; `message` stays one sentence for old clients.
+  // Names that fit two artists. The checklist only warns, so a failed lookup never blocks the page.
+  async function ambiguousNamesOf(festival: any): Promise<number> {
+    try {
+      return (await stores.artists?.countAmbiguousNames(festival)) ?? 0;
+    } catch (error: any) {
+      log.warn('ambiguous artist names lookup failed', { error: error?.message });
+      return 0;
+    }
+  }
+
   function sendIssues(res: any, issues: any[]) {
     const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
     return sendError(res, 400, `${issues[0].message}${more}`, ErrorCodes.INVALID_INPUT, { issues });
@@ -162,21 +178,13 @@ export default function createFestivalsRoutes(deps: any) {
     });
   }
 
-  // Fire and forget after the write. A rejection must not become an unhandled
-  // rejection, which shuts the server down (server.ts).
-  function notifySetTimesOut(festivalId: string) {
-    reengagement
-      ?.sendSetTimesOut?.(festivalId)
-      ?.catch((err: any) => log.warn('set_times_out notify failed', { festivalId, error: err?.message }));
-  }
-
   const setsOf = (festival: any): any[] => (festival?.days || []).flatMap((d: any) => d.sets || []);
 
   // Field-level before and after for the festival.updated audit row. Lists count only.
   function festivalAuditChanges(before: any, after: any, daysSent: boolean) {
     const changes: Record<string, [unknown, unknown]> = {};
     const norm = (v: unknown) => (v === undefined || v === '' ? null : v);
-    for (const key of ['name', 'location', 'timeZone', 'b2bSeparator']) {
+    for (const key of ['name', 'location', 'timeZone', 'b2bSeparator', 'seriesId']) {
       if (norm(before[key]) !== norm(after[key])) changes[key] = [norm(before[key]), norm(after[key])];
     }
     const counts: Array<[string, (f: any) => number]> = [['stages', (f) => (f.stages || []).length]];
@@ -203,10 +211,39 @@ export default function createFestivalsRoutes(deps: any) {
     return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
   }
 
+  // A save that only cancels acts removes nothing, so its confirm leads with the alert count instead.
+  function removalMessage(removal: { days: number; sets: number; picks: number; ratings: number }) {
+    const removes = removalSummary(removal);
+    return removes ? `This save removes ${removes}. Confirm to continue.` : 'This save sends cancel alerts. Confirm to continue.';
+  }
+
   async function countOnSets(table: 'festival_profile_picks' | 'set_ratings', setIds: string[]) {
     if (setIds.length === 0) return 0;
     const result = await stores.pool.query(`SELECT COUNT(*) AS count FROM ${table} WHERE set_id = ANY($1)`, [setIds]);
     return Number.parseInt(result.rows[0]?.count ?? '0', 10) || 0;
+  }
+
+  // The cancel line of the removal confirm: what cancelling these acts takes away and who hears about it.
+  // `pickersBySet` holds the pickers of every moved or removed set, the map the send reads, so the counts
+  // here are the counts that get an alert: `picked` people hear about a changed set, `marked` only about the act.
+  async function cancelSummary(
+    festival: any,
+    cancelled: { entryId: string; artist: string; setIds: string[] }[],
+    removedIds: string[],
+    interestedByEntry: Map<string, string[]>,
+    pickersBySet: Map<string, string[]>,
+  ) {
+    const removed = new Set(removedIds);
+    const setIds = [...new Set(cancelled.flatMap((c) => c.setIds))].filter((id) => removed.has(id));
+    const pickers = new Set([...pickersBySet.values()].flat());
+    const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId)));
+    return {
+      acts: cancelled.map((c) => c.artist),
+      sets: setIds.length,
+      picks: await countOnSets('festival_profile_picks', setIds),
+      picked: pickers.size,
+      marked: marked.size,
+    };
   }
 
   router.get('/', rateLimit(120, 'festival-list'), async (req: any, res: any) => {
@@ -235,16 +272,19 @@ export default function createFestivalsRoutes(deps: any) {
             lineupCount: Object.values(coverLineup(festival.lineup ?? [], festival.days ?? [], festival.b2bSeparator)).filter(
               (cover) => cover.state === 'announced',
             ).length,
+            // How far the schedule has come: set times, days only, lineup only, or nothing yet.
+            scheduleProgress: scheduleProgress(festival),
             startDate: dates[0] || null,
             endDate: dates[dates.length - 1] || null,
             slug: festival.slug ?? null,
+            seriesId: festival.seriesId ?? null,
             published: !!festival.publishedAt,
             updatedAt: festival.updatedAt,
           };
         });
         const published = all
           .filter((item: any) => item.published)
-          .map(({ published: _published, updatedAt: _updatedAt, ...item }: any) => item);
+          .map(({ published: _published, updatedAt: _updatedAt, seriesId: _seriesId, ...item }: any) => item);
         _festivalListCache = {
           admin: { items: all, etag: listETag(all) },
           public: { items: published, etag: listETag(published) },
@@ -273,12 +313,12 @@ export default function createFestivalsRoutes(deps: any) {
       const setId = String(req.params.setId || '');
       if (!setId) return sendError(res, 400, 'Set ID required', ErrorCodes.INVALID_INPUT);
       const result = await stores.pool.query(
-        `SELECT fs.festival_id FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
+        `SELECT fs.festival_id, (f.published_at IS NOT NULL) AS published FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
          WHERE fs.id = $1 AND f.deleted_at IS NULL AND (f.published_at IS NOT NULL OR $2::boolean) LIMIT 1`,
         [setId, isAdminReq(req)],
       );
       if (!result.rows.length) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
-      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.setHeader('Cache-Control', result.rows[0].published ? 'public, max-age=300' : 'private, no-store');
       return sendSuccess(res, { festivalId: result.rows[0].festival_id });
     } catch (error: any) {
       log.error('locate-set failed', { error: error.message });
@@ -397,10 +437,11 @@ export default function createFestivalsRoutes(deps: any) {
             ...festival,
             publishedAt: festival.publishedAt ?? null,
             updatedByUsername: editor?.username ?? null,
-            checklist: publishChecklist(config, festival),
+            checklist: publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival) }),
           });
         }
-        return sendSuccess(res, festival);
+        const { seriesId: _seriesId, ...publicFestival } = festival;
+        return sendSuccess(res, publicFestival);
       } catch (error: any) {
         log.error('festival load failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to load festival', ErrorCodes.INTERNAL_ERROR);
@@ -453,52 +494,76 @@ export default function createFestivalsRoutes(deps: any) {
         const issues = validateFestivalIssues(config, { ...existingFestival, lineup: undefined, ...body });
         if (issues.length > 0) return sendIssues(res, issues);
 
-        if (
-          body.expectedUpdatedAt !== undefined &&
-          new Date(body.expectedUpdatedAt).getTime() !== new Date(existingFestival.updatedAt).getTime()
-        ) {
-          return sendError(
-            res,
-            409,
-            'This festival changed since you opened it. Reload it, then make your change again.',
-            ErrorCodes.FESTIVAL_CHANGED,
-          );
-        }
-
+        // The token is checked inside the save, under the festival row lock, against the last form edit.
+        // A check here would compare the cache's updatedAt, which an artist edit moves.
         const nextFestival = sanitizeFestivalPayload(body, existingFestival);
         const venueSent = body.latitude !== undefined || body.longitude !== undefined;
         // Days and sets are touched only when the payload sends them; the map
         // editors leave them out so a map save cannot rewrite the lineup.
         const daysSent = body.days !== undefined;
         const stats = { setsAdded: 0, setsRemoved: 0, setsChanged: 0, picksLost: 0 };
+        // A cancelled act alerts the people whose mark on it is still open. Converted marks are pickers already.
+        // The alert stays off until the owner sets LINEUP_CANCEL_ALERTS_ENABLED, so no cancel counts or sends before then.
+        const cancelAlertsOn = config.LINEUP_CANCEL_ALERTS_ENABLED === true && body.lineup !== undefined;
+        const cancelCover: Record<string, { setIds: string[] }> = cancelAlertsOn
+          ? coverLineup(existingFestival.lineup ?? [], existingFestival.days ?? [], existingFestival.b2bSeparator || 'b2b')
+          : {};
+        const cancelled = (cancelAlertsOn ? diffCancelledEntries(existingFestival, nextFestival) : []).map((change) => ({
+          ...change,
+          setIds: cancelCover[change.entryId]?.setIds ?? [],
+        }));
+        const interestedByEntry: Map<string, string[]> = cancelled.length
+          ? await stores.profiles.interestedProfilesByEntry(
+              existingFestival.id,
+              cancelled.map((change) => change.entryId),
+            )
+          : new Map();
+
+        // Only a moved or removed set, or a set timed on an already released date, alerts anyone, and only
+        // the people who picked it. No save sends the festival-wide set-times alert: the admin releases it per date.
+        // The pickers are read before the update, which deletes picks on removed sets. The confirm and the send share this map.
+        const { changes, pickersBySet } = daysSent
+          ? await planPickerAlerts({ stores, before: existingFestival, after: nextFestival })
+          : { changes: [], pickersBySet: new Map<string, string[]>() };
+
+        let removedIds: string[] = [];
+        let picks = 0;
+        let ratings = 0;
         if (daysSent) {
           const storedSets = setsOf(existingFestival);
-          const storedById = new Map(storedSets.map((set: any) => [set.id, set]));
-          const nextSets = setsOf(nextFestival);
-          const nextIds = new Set(nextSets.map((set: any) => set.id));
-          const removedIds = storedSets.map((set: any) => set.id).filter((id: string) => !nextIds.has(id));
-          const [picks, ratings] = await Promise.all([
+          const nextIds = new Set(setsOf(nextFestival).map((set: any) => set.id));
+          removedIds = storedSets.map((set: any) => set.id).filter((id: string) => !nextIds.has(id));
+          [picks, ratings] = await Promise.all([
             countOnSets('festival_profile_picks', removedIds),
             countOnSets('set_ratings', removedIds),
           ]);
-          if (picks + ratings > 0 && body.confirmRemovals !== true) {
-            const removal = {
-              days: Math.max(0, (existingFestival.days || []).length - nextFestival.days.length),
-              sets: removedIds.length,
-              picks,
-              ratings,
-            };
-            return sendError(
-              res,
-              409,
-              `This save removes ${removalSummary(removal)}. Confirm to continue.`,
-              ErrorCodes.CONFIRM_REMOVALS,
-              { removal },
-            );
-          }
+        }
+        const cancel = cancelled.length
+          ? await cancelSummary(existingFestival, cancelled, removedIds, interestedByEntry, pickersBySet)
+          : undefined;
+        // A cancel that alerts anyone needs the admin to see the count first, even when no pick or rating is lost.
+        const cancelTellsPeople = !!cancel && cancel.picked + cancel.marked > 0 && req.validatedBody.notify !== false;
+        if ((picks + ratings > 0 || cancelTellsPeople) && body.confirmRemovals !== true) {
+          const removal = {
+            days: daysSent ? Math.max(0, (existingFestival.days || []).length - nextFestival.days.length) : 0,
+            sets: removedIds.length,
+            picks,
+            ratings,
+            ...(cancel ? { cancel } : {}),
+          };
+          return sendError(
+            res,
+            409,
+            removalMessage(removal),
+            ErrorCodes.CONFIRM_REMOVALS,
+            { removal },
+          );
+        }
+        if (daysSent) {
+          const storedById = new Map(setsOf(existingFestival).map((set: any) => [set.id, set]));
           stats.setsRemoved = removedIds.length;
           stats.picksLost = picks;
-          for (const set of nextSets) {
+          for (const set of setsOf(nextFestival)) {
             const before: any = storedById.get(set.id);
             if (!before) stats.setsAdded++;
             else if (
@@ -515,57 +580,68 @@ export default function createFestivalsRoutes(deps: any) {
           return sendError(res, 403, 'Confirm your password to continue.', ErrorCodes.REAUTH_REQUIRED);
         }
 
-        // Only a moved or removed set alerts anyone, and only the people who picked it.
-        let changes = daysSent ? diffPickedSchedule(existingFestival, nextFestival) : [];
-        // The first timed save of a published festival sends "set times are out" to
-        // everyone, so its TBA-to-time changes do not also send a "moved" alert.
-        const hasTimes = (f: any) => setsOf(f).some((set: any) => set.startTime);
-        const timesOut =
-          daysSent &&
-          !!existingFestival.publishedAt &&
-          !hasTimes(existingFestival) &&
-          hasTimes(nextFestival) &&
-          (await stores.festivals.getSetTimesOutAt(existingFestival.id)) === null;
-        if (timesOut) changes = changes.filter((change) => !isTbaToTime(change));
-        // Read pickers before the update: it deletes picks on removed sets.
-        const pickersBySet: Map<string, string[]> = changes.length
-          ? await stores.profiles.pickersBySet(existingFestival.id, changes.map((change) => change.setId))
-          : new Map();
-
-        const festival = await stores.festivals.update(req.validatedParams.id, {
-          name: nextFestival.name,
-          location: nextFestival.location,
-          b2bSeparator: nextFestival.b2bSeparator,
-          timeZone: nextFestival.timeZone,
-          stages: nextFestival.stages,
-          ...(daysSent ? { days: nextFestival.days } : {}),
-          // Only a body that sends the lineup rewrites it, so mobile and map saves keep the stored list.
-          ...(body.lineup !== undefined ? { lineup: nextFestival.lineup } : {}),
-          mapConfig: nextFestival.mapConfig,
-          updatedBy: req.user?.userId ?? null,
-          ...(venueSent ? { latitude: nextFestival.latitude, longitude: nextFestival.longitude } : {}),
-        });
+        // Sets and lineup entries get an artist id inside the save transaction (resolveArtistRefs).
+        const refsSeen: { value: RefsResult | null } = { value: null };
+        const refsNeeded = daysSent || body.lineup !== undefined;
+        const festival = await stores.festivals.update(
+          req.validatedParams.id,
+          {
+            name: nextFestival.name,
+            location: nextFestival.location,
+            b2bSeparator: nextFestival.b2bSeparator,
+            timeZone: nextFestival.timeZone,
+            stages: nextFestival.stages,
+            ...(daysSent ? { days: nextFestival.days } : {}),
+            // Only a body that sends the lineup rewrites it, so mobile and map saves keep the stored list.
+            ...(body.lineup !== undefined ? { lineup: nextFestival.lineup } : {}),
+            mapConfig: nextFestival.mapConfig,
+            seriesId: nextFestival.seriesId,
+            updatedBy: req.user?.userId ?? null,
+            ...(venueSent ? { latitude: nextFestival.latitude, longitude: nextFestival.longitude } : {}),
+          },
+          {
+            expectedUpdatedAt: body.expectedUpdatedAt,
+            // The removal count above came from the cache; under the lock the stored sets must still be those.
+            storedSetIds: daysSent ? setsOf(existingFestival).map((set: any) => set.id) : undefined,
+            beforeChildren: refsNeeded
+              ? async (client: any, fields: any) => {
+                  refsSeen.value = await resolveArtistRefs(client, {
+                    festivalId: req.validatedParams.id,
+                    days: daysSent ? fields.days : undefined,
+                    lineup: body.lineup !== undefined ? fields.lineup : undefined,
+                    separator: nextFestival.b2bSeparator,
+                    userId: req.user?.userId ?? null,
+                  });
+                  return { days: refsSeen.value.days, lineup: refsSeen.value.lineup };
+                }
+              : undefined,
+          },
+        );
+        if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
         invalidateFestivalCache();
 
         invalidateFestivalListCache();
-        const people = new Set([...pickersBySet.values()].flat()).size;
+        const pickers = new Set([...pickersBySet.values()].flat());
+        // A person who picked a changed set gets that alert only, so marks are counted once.
+        const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
+        const people = pickers.size + marked;
         const notified = req.validatedBody.notify !== false && people > 0;
-        const scheduleNotice = { changes: changes.length, people, notified };
+        const scheduleNotice = { changes: changes.length + cancelled.length, people, notified, ...(marked > 0 ? { marked } : {}) };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
         // The saved row lacks stages and days, so those come from the payload that was written.
         const fieldChanges = festivalAuditChanges(existingFestival, { ...nextFestival, ...festival }, daysSent);
         audit(AUDIT_ACTIONS.FESTIVAL_UPDATED, 'festival', festival.id, req, {
           name: festival.name,
           ...stats,
-          scheduleChanges: changes.length,
+          scheduleChanges: changes.length + cancelled.length,
           notifiedPeople: notified ? people : 0,
           ...(Object.keys(fieldChanges).length > 0 ? { changes: fieldChanges } : {}),
         });
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
-        if (notified) void emitter.scheduleChanged({ festival, changes, pickersBySet });
-        // The executor checks publish state, the marker and the times itself.
-        if (daysSent) notifySetTimesOut(festival.id);
+        if (notified) void emitter.scheduleChanged({ festival, changes: [...changes, ...cancelled], pickersBySet, interestedByEntry });
+        // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
+        if (daysSent || body.lineup !== undefined || body.b2bSeparator !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
         // An admin-set venue wins over the geocoder until the location text changes in a later save.
         const venueSetByAdmin =
@@ -576,8 +652,28 @@ export default function createFestivalsRoutes(deps: any) {
           !venueSetByAdmin &&
           (venueMissing || nextFestival.location !== existingFestival.location) &&
           (await fillVenueCoords(festival.id, nextFestival.location));
-        return sendSuccess(res, { ...festival, scheduleNotice, ...(venueGuessed ? { venueGuessed } : {}) });
+        const refs = refsSeen.value;
+        return sendSuccess(res, {
+          ...festival,
+          scheduleNotice,
+          ...(venueGuessed ? { venueGuessed } : {}),
+          // The links the save dropped or ignored, and the names that match more than one artist.
+          ...(refs
+            ? { artistRefs: { droppedLinks: refs.droppedLinks, ignoredLinkEdits: refs.ignoredLinkEdits, ambiguous: refs.ambiguous } }
+            : {}),
+        });
       } catch (error: any) {
+        if (error instanceof FestivalChangedError) {
+          return sendError(
+            res,
+            409,
+            'This festival changed since you opened it. Reload it, then make your change again.',
+            ErrorCodes.FESTIVAL_CHANGED,
+          );
+        }
+        if (error?.code === '40P01' || error?.code === '40001') {
+          return sendError(res, 503, 'Festie is busy. Try again.', ErrorCodes.SERVICE_UNAVAILABLE);
+        }
         if (sendIdClash(res, error)) return;
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
@@ -608,7 +704,7 @@ export default function createFestivalsRoutes(deps: any) {
       try {
         const festival = await getFestivalById(req.validatedParams.id);
         if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-        const checklist = publishChecklist(config, festival);
+        const checklist = publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival) });
         if (festival.publishedAt) return sendSuccess(res, { publishedAt: festival.publishedAt, checklist });
         if (checklist.some((item: any) => item.status === 'todo')) {
           return sendError(res, 409, 'Finish the checklist before you publish.', ErrorCodes.PUBLISH_BLOCKED, {
@@ -625,7 +721,6 @@ export default function createFestivalsRoutes(deps: any) {
         });
         log.info('festival:published', { festivalId: festival.id, name: festival.name });
         emitter.festivalCreated({ id: festival.id, name: festival.name });
-        notifySetTimesOut(festival.id);
         return sendSuccess(res, { publishedAt: row.publishedAt, checklist });
       } catch (error: any) {
         log.error('festival publish failed', { error: error.message, festivalId: req.validatedParams?.id });
@@ -733,32 +828,57 @@ export default function createFestivalsRoutes(deps: any) {
         const festival = await getFestivalById(festivalId);
         if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
-        // Validate the set exists in this festival
-        const allSets = (festival.days || []).flatMap((d: any) => d.sets || []);
-        const set = allSets.find((s: any) => s.id === setId);
-        if (!set) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
-
         // Validated by Zod schema — normalize to null if empty
         const cleanUrl = linkUrl && typeof linkUrl === 'string' && linkUrl.trim() ? linkUrl.trim() : null;
 
-        // A set saved before the artists array existed has only its display name.
-        const artists: any[] = set.artists?.length
-          ? set.artists.map((a: any) => ({ ...a, links: { ...(a?.links || {}) } }))
-          : [{ name: set.artist, links: {} }];
-        if (artistIndex >= artists.length) {
-          return sendError(res, 400, 'That artist is not on this set.', ErrorCodes.INVALID_INPUT);
+        // One transaction under the festival lock, reading the set row itself, so a link edit never
+        // rebuilds a set from a cache and never races a festival save.
+        const outcome: any = await withTransactionRetry(stores.pool, async (client: any) => {
+          const locked = await lockFestivalAny(client, festivalId);
+          if (!locked || locked.deleted_at) return { missing: 'Festival not found' };
+          const { rows } = await client.query(
+            'SELECT artist, artists FROM festival_sets WHERE id = $1 AND festival_id = $2 FOR UPDATE',
+            [setId, festivalId],
+          );
+          if (!rows[0]) return { missing: 'Set not found' };
+          // A set saved before the artists array existed has only its display name.
+          const artists: any[] = rows[0].artists?.length
+            ? rows[0].artists.map((a: any) => ({ ...a, links: { ...(a?.links || {}) } }))
+            : [{ name: rows[0].artist, links: {} }];
+          if (artistIndex >= artists.length) return { badIndex: true };
+          const artistId = artists[artistIndex].id;
+          // An artist that has a row owns its link: write the row, which rewrites every copy.
+          if (artistId && (await client.query('SELECT 1 FROM artists WHERE id = $1 AND merged_into IS NULL', [artistId])).rowCount) {
+            return { artistId };
+          }
+          if (cleanUrl) artists[artistIndex].links.spotify = cleanUrl;
+          else delete artists[artistIndex].links.spotify;
+          // link_url mirrors the first artist's Spotify link (backward compat).
+          const firstLink = artists[0].links.spotify || null;
+          await client.query('UPDATE festival_sets SET artists = $1, link_url = $2 WHERE id = $3 AND festival_id = $4', [
+            JSON.stringify(artists),
+            firstLink,
+            setId,
+            festivalId,
+          ]);
+          await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
+          return {};
+        });
+        if (outcome.missing) return sendError(res, 404, outcome.missing, ErrorCodes.NOT_FOUND);
+        if (outcome.badIndex) return sendError(res, 400, 'That artist is not on this set.', ErrorCodes.INVALID_INPUT);
+        if (outcome.artistId) {
+          const current = await stores.artists.getById(outcome.artistId);
+          const result = await stores.artists.update(outcome.artistId, {
+            expectedUpdatedAt: new Date(current.updated_at).toISOString(),
+            changes: { spotifyLink: cleanUrl },
+            userId: req.user?.userId ?? null,
+            ip: getRequestIp(req),
+          });
+          await deps.afterArtistSync?.(result.synced);
         }
-        if (cleanUrl) artists[artistIndex].links.spotify = cleanUrl;
-        else delete artists[artistIndex].links.spotify;
-        // link_url mirrors the first artist's Spotify link (backward compat).
-        const firstLink = artists[0].links.spotify || null;
-
-        await stores.pool.query(
-          'UPDATE festival_sets SET artists = $1, link_url = $2 WHERE id = $3 AND festival_id = $4',
-          [JSON.stringify(artists), firstLink, setId, festivalId],
-        );
-        await stores.pool.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
         invalidateFestivalCache();
+        // A flat set becomes an artists array here, which can change the name key that covers an act.
+        void deps.interestConversion?.convert(festivalId);
 
         audit(AUDIT_ACTIONS.SET_LINK_UPDATED, 'set', setId, req, { festivalId, artistIndex, linkUrl: cleanUrl });
         log.info('set link updated', {
@@ -770,6 +890,7 @@ export default function createFestivalsRoutes(deps: any) {
         });
         return sendSuccess(res, { setId, artistIndex, linkUrl: cleanUrl });
       } catch (error: any) {
+        if (error instanceof ArtistError) return sendError(res, error.status, error.message, ErrorCodes[error.code], error.details);
         log.error('set link update failed', { error: error.message });
         return sendError(res, 500, 'Failed to update set link', ErrorCodes.INTERNAL_ERROR);
       }

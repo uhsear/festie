@@ -10,10 +10,13 @@
 import crypto from 'crypto';
 import { isDeepStrictEqual } from 'node:util';
 import type { Pool } from 'pg';
-import { withTransaction } from '../connection';
+import { withTransactionRetry } from '../connection';
 import { buildMultiInsert, insertSetsBatch } from './festivals';
 import type { ArtistLookup, ArtistRef, LineupImportPlan, LineupImportWrites, SetValues } from '../../lineup-import-plan';
 import { nextMoveMark, type SlotAt } from '../../set-moves';
+import { resolveArtistRefs, resolveSetValues } from '../../artist-refs';
+
+export { lockFestivalAny } from './festival-lock';
 
 /** The second argument carries the locked artist rows, so the plan copies them instead of the earlier lookup. */
 export type BuildPlan = (festival: any, lockedArtists?: Map<string, ArtistRef>) => { plan: LineupImportPlan; writes: LineupImportWrites };
@@ -26,6 +29,8 @@ export interface UndoResult {
   /** Announced lineup entries the import added, and entries it changed that were put back. */
   removedEntries: number;
   restoredEntries: number;
+  /** Picks that interest conversion made on the removed sets and nobody changed. Their marks are open again. */
+  autoPicksRemoved: number;
   /** For an entry, setId holds the entry id. */
   kept: { setId: string; artist: string; reason: 'picked' | 'edited' }[];
 }
@@ -45,17 +50,6 @@ async function lockFestival(client: any, festivalId: string) {
   return (rows[0] as { id: string; published_at: Date | null } | undefined) ?? null;
 }
 
-/**
- * Like lockFestival, but it also locks a soft-deleted festival. Artist sync, merge and the
- * backfill use it so a restored festival shows current copies with no rebuild.
- */
-export async function lockFestivalAny(client: any, festivalId: string) {
-  const { rows } = await client.query(
-    'SELECT id, published_at, deleted_at FROM festivals WHERE id = $1 FOR UPDATE',
-    [festivalId],
-  );
-  return (rows[0] as { id: string; published_at: Date | null; deleted_at: Date | null } | undefined) ?? null;
-}
 
 const markContext = (festival: { published_at: Date | null }): MarkContext => ({
   published: festival.published_at != null,
@@ -259,9 +253,76 @@ async function newestOpenImportId(client: any, festivalId: string): Promise<stri
   return rows[0]?.id ?? null;
 }
 
+/**
+ * Takes back the picks that conversion made on these sets: the profile's converted mark lists the set as one it added,
+ * the pick is still want-to-see, and the profile has no note, reminder or rating on it. The mark loses
+ * the set id and goes back to `open` when none are left. Any other pick stays and keeps its set.
+ * Returns the profiles it changed, so the caller can tell their open devices.
+ */
+async function removeConversionPicks(client: any, festivalId: string, setIds: string[], result: UndoResult) {
+  const { rows } = await client.query(
+    `
+  SELECT
+    fp.id,
+    fp.interests_json AS marks,
+    ARRAY(
+      SELECT
+        p.set_id
+      FROM
+        festival_profile_picks p
+      WHERE
+        p.profile_id = fp.id
+        AND p.set_id = ANY ($2::text[])
+        AND p.priority = 'want-to-see'
+        AND NOT EXISTS (SELECT 1 FROM festival_profile_notes n WHERE n.profile_id = fp.id AND n.set_id = p.set_id)
+        AND NOT (COALESCE(fp.reminders_json, '{}'::jsonb) ? p.set_id)
+        AND NOT EXISTS (SELECT 1 FROM set_ratings sr WHERE sr.user_id = fp.user_id AND sr.set_id = p.set_id)
+    ) AS candidates
+  FROM
+    festival_profiles fp
+  WHERE
+    fp.festival_id = $1
+    AND fp.deleted_at IS NULL
+    AND fp.interests_json <> '{}'::jsonb
+  ORDER BY
+    fp.id
+  FOR UPDATE OF
+    fp
+`,
+    [festivalId, setIds],
+  );
+  const changedProfileIds: string[] = [];
+  for (const row of rows) {
+    const marks: Record<string, any> = { ...row.marks };
+    const removed = new Set<string>();
+    for (const [entryId, mark] of Object.entries(marks)) {
+      if (mark?.state !== 'converted') continue;
+      const taken = (mark.added ?? []).filter((setId: string) => row.candidates.includes(setId));
+      if (taken.length === 0) continue;
+      taken.forEach((setId: string) => removed.add(setId));
+      const left = (mark.sets ?? []).filter((setId: string) => !taken.includes(setId));
+      const addedLeft = (mark.added ?? []).filter((setId: string) => !taken.includes(setId));
+      marks[entryId] = left.length > 0 ? { ...mark, sets: left, added: addedLeft } : { state: 'open' };
+    }
+    if (removed.size === 0) continue;
+    const ids = [...removed];
+    await client.query('DELETE FROM festival_profile_picks WHERE profile_id = $1 AND set_id = ANY($2::text[])', [row.id, ids]);
+    await client.query(
+      `UPDATE festival_profiles
+       SET interests_json = $2::jsonb, picks_json = COALESCE(picks_json, '{}'::jsonb) - $3::text[], updated_at = NOW()
+       WHERE id = $1`,
+      [row.id, JSON.stringify(marks), ids],
+    );
+    result.autoPicksRemoved += ids.length;
+    changedProfileIds.push(row.id);
+  }
+  return changedProfileIds;
+}
+
 /** Deletes the created sets nobody picked, noted, rated or set a reminder on. */
 async function removeCreatedSets(client: any, festivalId: string, setIds: string[], result: UndoResult) {
-  if (setIds.length === 0) return;
+  if (setIds.length === 0) return [];
+  const changedProfileIds = await removeConversionPicks(client, festivalId, setIds, result);
   const { rows } = await client.query(
     `
   SELECT
@@ -310,9 +371,10 @@ async function removeCreatedSets(client: any, festivalId: string, setIds: string
   );
   const removable = rows.filter((r: any) => !r.referenced).map((r: any) => r.id);
   for (const r of rows) if (r.referenced) result.kept.push({ setId: r.id, artist: r.artist, reason: 'picked' });
-  if (removable.length === 0) return;
+  if (removable.length === 0) return changedProfileIds;
   result.removed = removable.length;
   await client.query('DELETE FROM festival_sets WHERE festival_id = $1 AND id = ANY($2::text[])', [festivalId, removable]);
+  return changedProfileIds;
 }
 
 /** True when the day the set moved from still exists, so the set can go back. */
@@ -332,21 +394,25 @@ async function restoreUpdatedSets(
   result: UndoResult,
   ctx: MarkContext,
 ) {
+  const restoredIds: string[] = [];
   for (const u of updated) {
     const { rows } = await client.query(
-      'SELECT stage_id, start_time, end_time, artist, link_url, display_name, day_index FROM festival_sets WHERE id = $1 AND festival_id = $2',
+      'SELECT stage_id, start_time, end_time, artist, artists, link_url, display_name, day_index FROM festival_sets WHERE id = $1 AND festival_id = $2',
       [u.id, festivalId],
     );
     const cur = rows[0];
     const move: DayMove | undefined = u.dayMove;
+    // An artist edit rewrites the flat name and link of every set that lists the artist. Those sets
+    // still list the same artist ids, so the rewrite is not a hand edit of the set.
+    const idsOf = (list: any) => (Array.isArray(list) ? list.map((a: any) => a?.id ?? '') : []);
+    const sameArtistIds = idsOf(cur?.artists).length > 0 && idsOf(cur?.artists).join() === idsOf(u.after.artists).join() && !idsOf(cur?.artists).includes('');
     // Records from before display names carry no displayName, so that column is not compared for them.
     const untouched =
       cur &&
       sameText(cur.stage_id, u.after.stageId) &&
       sameText(cur.start_time, u.after.startTime) &&
       sameText(cur.end_time, u.after.endTime) &&
-      sameText(cur.artist, u.after.artist) &&
-      sameText(cur.link_url, u.after.linkUrl) &&
+      ((sameText(cur.artist, u.after.artist) && sameText(cur.link_url, u.after.linkUrl)) || sameArtistIds) &&
       (u.after.displayName === undefined || sameText(cur.display_name, u.after.displayName)) &&
       (!move || cur.day_index === move.to);
     if (!untouched || (move && !(await dayExists(client, festivalId, move.from)))) {
@@ -355,8 +421,42 @@ async function restoreUpdatedSets(
     }
     await writeSetValues(client, festivalId, u.id, u.before, ctx, move ? { from: move.to, to: move.from } : undefined);
     result.restored++;
+    restoredIds.push(u.id);
+  }
+  await canonicalizeRestoredSets(client, festivalId, restoredIds);
+}
+
+/**
+ * The restored sets hold the artist copies from before the import. An artist edit may have changed
+ * the artist since, so tie each restored set to its artists row again: canonical name and links.
+ */
+async function canonicalizeRestoredSets(client: any, festivalId: string, setIds: string[]) {
+  if (setIds.length === 0) return;
+  const { rows: festival } = await client.query("SELECT COALESCE(b2b_separator, 'b2b') AS separator FROM festivals WHERE id = $1", [
+    festivalId,
+  ]);
+  const { rows } = await client.query(
+    `SELECT id, artist, artists, link_url FROM festival_sets
+      WHERE festival_id = $1 AND id = ANY($2::text[]) AND jsonb_typeof(artists) = 'array' AND jsonb_array_length(artists) > 0`,
+    [festivalId, setIds],
+  );
+  const targets = rows.map((row: any) => ({ id: row.id, values: { artists: row.artists, artist: row.artist, linkUrl: row.link_url ?? null } }));
+  await resolveSetValues(client, { festivalId, separator: festival[0]?.separator ?? 'b2b', userId: null }, targets);
+  for (const { id, values } of targets) {
+    await client.query('UPDATE festival_sets SET artists = $2::jsonb, artist = $3, link_url = $4 WHERE id = $1', [
+      id,
+      JSON.stringify(values.artists),
+      values.artist,
+      values.linkUrl,
+    ]);
   }
 }
+
+/**
+ * An artist edit rewrites the name and links inside every entry that lists the artist. Entries that still
+ * list the same artist ids are the same entry, so the artist elements compare by id.
+ */
+const entryShape = (entry: any) => ({ ...entry, artists: (entry?.artists ?? []).map((a: any) => (a?.id ? { id: a.id } : a)) });
 
 /** Removes the entries the import added and puts back the ones it changed, unless someone edited them since. */
 async function restoreAnnouncedEntries(client: any, festivalId: string, items: any[], result: UndoResult) {
@@ -364,9 +464,10 @@ async function restoreAnnouncedEntries(client: any, festivalId: string, items: a
   const { rows } = await client.query('SELECT lineup FROM festivals WHERE id = $1', [festivalId]);
   const lineup: any[] = Array.isArray(rows[0]?.lineup) ? [...rows[0].lineup] : [];
   let changed = false;
+  const restored: any[] = [];
   for (const item of items) {
     const at = lineup.findIndex((e) => e?.id === item.id);
-    if (at < 0 || !isDeepStrictEqual(lineup[at], item.after)) {
+    if (at < 0 || !isDeepStrictEqual(entryShape(lineup[at]), entryShape(item.after))) {
       const artist = (item.after?.artists ?? []).map((a: any) => a?.name).join(' b2b ');
       result.kept.push({ setId: item.id, artist, reason: 'edited' });
       continue;
@@ -376,11 +477,20 @@ async function restoreAnnouncedEntries(client: any, festivalId: string, items: a
       lineup.splice(at, 1);
       result.removedEntries++;
     } else {
-      lineup[at] = item.before;
+      lineup[at] = structuredClone(item.before);
+      restored.push(lineup[at]);
       result.restoredEntries++;
     }
   }
-  if (changed) await client.query('UPDATE festivals SET lineup = $2::jsonb WHERE id = $1', [festivalId, JSON.stringify(lineup)]);
+  if (!changed) return;
+  if (restored.length > 0) {
+    // The restored entries hold artist copies from before the import. Tie them to their artists rows again.
+    const refs = await resolveArtistRefs(client, { festivalId, lineup: restored, separator: 'b2b', userId: null });
+    refs.lineup!.forEach((entry: any, i: number) => {
+      restored[i].artists = entry.artists;
+    });
+  }
+  await client.query('UPDATE festivals SET lineup = $2::jsonb WHERE id = $1', [festivalId, JSON.stringify(lineup)]);
 }
 
 /** Removes created stages no set uses, then trailing created days that are empty. */
@@ -431,7 +541,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
      * Writes nothing when the fresh plan has errors or problems.
      */
     async commit(festivalId: string, buildPlan: BuildPlan, meta: { createdBy: string | null }) {
-      return withTransaction(pool, async (client) => {
+      return withTransactionRetry(pool, async (client) => {
         const locked = await lockFestival(client, festivalId);
         if (!locked) return { notFound: true as const };
         const ctx = markContext(locked);
@@ -448,12 +558,40 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         const { plan, writes } = first.writes.artistIds.length > 0 ? buildPlan(festival, lockedArtists) : first;
         if (plan.counts.error > 0 || plan.problems.length > 0) return { committed: false as const, plan };
 
+        // Every artist element gets the artists row's name and links, and the flat name and link follow.
+        const refs = await resolveSetValues(
+          client,
+          { festivalId, separator: festival.b2bSeparator || 'b2b', userId: meta.createdBy, fillEmptyLinks: true },
+          [
+            ...writes.inserts.map((s) => ({ id: s.id, values: s })),
+            ...writes.updates.map((u) => ({ id: u.setId, values: u.after })),
+          ],
+        );
+        // Announced entries get the same treatment, so their artist elements carry ids and canonical links too.
+        const entries = [...writes.announced.inserts.map((i) => i.entry), ...writes.announced.updates.map((u) => u.after)];
+        if (entries.length > 0) {
+          const resolved = await resolveArtistRefs(client, {
+            festivalId,
+            lineup: entries,
+            separator: festival.b2bSeparator || 'b2b',
+            userId: meta.createdBy,
+            fillEmptyLinks: true,
+          });
+          resolved.lineup!.forEach((entry: any, i: number) => {
+            entries[i]!.artists = entry.artists;
+          });
+          refs.ignoredLinkEdits += resolved.ignoredLinkEdits;
+          for (const fill of resolved.linkFills) {
+            if (!refs.linkFills.some((f) => f.artistId === fill.artistId && f.platform === fill.platform)) refs.linkFills.push(fill);
+          }
+        }
+
         await insertNewStages(client, festivalId, writes.newStages);
         await insertNewDays(client, festivalId, writes.newDays);
         await insertNewSets(client, festivalId, writes.inserts);
         for (const u of writes.updates) await writeSetValues(client, festivalId, u.setId, u.after, ctx, u.dayMove);
         await writeAnnounced(client, festivalId, writes.announced);
-        await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
+        await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
 
         const importId = `import-${crypto.randomBytes(8).toString('hex')}`;
         const counts = {
@@ -501,7 +639,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
             changedNothing ? new Date().toISOString() : null,
           ],
         );
-        return { committed: true as const, plan, writes, importId };
+        return { committed: true as const, plan, writes, importId, refs };
       });
     },
 
@@ -556,7 +694,27 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
     li.created_at,
     li.counts,
     li.undone_at,
-    u.username
+    u.username,
+    (
+      SELECT
+        COALESCE(array_agg(DISTINCT d.date ORDER BY d.date), '{}')
+      FROM
+        festival_sets s
+        JOIN festival_days d ON d.festival_id = s.festival_id
+        AND d.day_index = s.day_index
+      WHERE
+        s.festival_id = li.festival_id
+        AND d.date <> ''
+        AND (
+          s.id = ANY (li.created_set_ids)
+          OR s.id IN (
+            SELECT
+              u2 ->> 'id'
+            FROM
+              jsonb_array_elements(li.updated_sets) u2
+          )
+        )
+    ) AS touched_dates
   FROM
     lineup_imports li
     LEFT JOIN users u ON u.id = li.created_by
@@ -587,13 +745,15 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           },
           undoneAt: r.undone_at ? new Date(r.undone_at).toISOString() : null,
           canUndo: r.id === newestOpen,
+          // The festival dates this import wrote to, so the undo dialog can warn that a sent alert stays sent.
+          touchedDates: (r.touched_dates ?? []) as string[],
         })),
       };
     },
 
     /** Undoes the newest import that is not undone yet. */
     async undo(festivalId: string, importId: string) {
-      return withTransaction(pool, async (client) => {
+      return withTransactionRetry(pool, async (client) => {
         const locked = await lockFestival(client, festivalId);
         if (!locked) return { notFound: true as const };
         const { rows } = await client.query(
@@ -605,6 +765,12 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         if (record.undone_at || (await newestOpenImportId(client, festivalId)) !== importId) {
           return { refused: true as const };
         }
+        // The undo would restore artist copies from before the backfill gave every element an id.
+        const { rowCount: backfilled } = await client.query(
+          'SELECT 1 FROM artist_backfill_runs WHERE festival_id = $1 AND created_at > $2 LIMIT 1',
+          [festivalId, record.created_at],
+        );
+        if (backfilled) return { olderThanUpgrade: true as const };
 
         const result: UndoResult = {
           removed: 0,
@@ -613,10 +779,11 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           removedDays: 0,
           removedEntries: 0,
           restoredEntries: 0,
+          autoPicksRemoved: 0,
           kept: [],
         };
         const items: any[] = record.updated_sets || [];
-        await removeCreatedSets(client, festivalId, record.created_set_ids, result);
+        const changedProfileIds = await removeCreatedSets(client, festivalId, record.created_set_ids, result);
         await restoreUpdatedSets(client, festivalId, items.filter((i) => i.kind !== 'entry'), result, markContext(locked));
         await restoreAnnouncedEntries(client, festivalId, items.filter((i) => i.kind === 'entry'), result);
         await removeCreatedStagesAndDays(client, festivalId, record, result);
@@ -624,8 +791,8 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           importId,
           JSON.stringify(result),
         ]);
-        await client.query('UPDATE festivals SET updated_at = NOW() WHERE id = $1', [festivalId]);
-        return { result };
+        await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
+        return { result, changedProfileIds };
       });
     },
   };

@@ -1,21 +1,24 @@
 import { describe, it, expect } from 'vitest';
 import {
   parseLineupTable,
+  daysAnnouncementSummary,
+  announcementEmailNote,
+  lineupAudienceSummary,
   looksLikeHeader,
   autoMapColumns,
   mappingProblems,
   toImportRows,
   planSummary,
+  defaultUpdateExisting,
+  updateOffBanner,
   buildResultCsv,
   buildLineupCsv,
   defaultMapping,
   LINEUP_SAMPLE_CSV,
   LEGACY_COLUMN_ORDER,
-  defaultUpdateExisting,
   groupPlanRows,
   importBlocked,
   parseNameList,
-  updateBanner,
   withArtistChoice,
   type LineupImportPlanRow,
 } from './lineupImport';
@@ -145,20 +148,96 @@ describe('buildLineupCsv', () => {
   });
 });
 
+describe('buildLineupCsv: formula names', () => {
+  it('prefixes a name that starts like a formula, and the parser takes the prefix off again', () => {
+    const names = ['=SUM(1)', '+Kai', '-Mira', '@Zed'];
+    const csv = buildLineupCsv({
+      days: [{ label: 'Friday', sets: names.map((artist, i) => ({ id: `s${i}`, artist, stageId: '', startTime: null, endTime: null })) }],
+    });
+    expect(csv).toContain("'=SUM(1)");
+    const parsed = parseLineupTable(csv);
+    expect(toImportRows(parsed.rows, defaultMapping(parsed.rows, true), true, parsed.lines).map((r) => r.artist)).toEqual(names);
+  });
+});
+
+describe('buildLineupCsv: announced acts', () => {
+  const act = (id: string, names: string[], extra: Record<string, unknown> = {}) => ({
+    id,
+    artists: names.map((name) => ({ name, links: {} })),
+    displayName: null,
+    tier: null,
+    dayDate: null,
+    status: 'announced' as const,
+    announcedAt: '2026-11-01',
+    linkedSetIds: [],
+    ...extra,
+  });
+  const festival = {
+    b2bSeparator: 'vs',
+    stages: [{ id: 'st1', name: 'Main' }],
+    days: [
+      { label: 'Friday', date: '2026-08-21', sets: [{ id: 's1', artist: 'Kai', stageId: 'st1', startTime: '20:00', endTime: '21:00' }] },
+      { label: '', date: '2026-08-22', sets: [] },
+    ],
+    lineup: [
+      act('a', ['Kai'], { dayDate: '2026-08-21' }),
+      act('b', ['Mira', 'Zed'], { dayDate: '2026-08-21', displayName: 'Mira and Zed' }),
+      act('c', ['Dawn'], { dayDate: '2026-08-22' }),
+      act('d', ['Nova']),
+      act('e', ['Gone'], { dayDate: '2026-08-21', status: 'cancelled' as const }),
+      act('f', ['Old'], { dayDate: '2026-12-01' }),
+      act('g', ['Linked'], { linkedSetIds: ['s1'] }),
+    ],
+  };
+  const rowsOf = (f: typeof festival) => {
+    const parsed = parseLineupTable(buildLineupCsv(f));
+    return toImportRows(parsed.rows, defaultMapping(parsed.rows, true), true, parsed.lines);
+  };
+
+  it('adds a row with no set id, stage or times for each act that no set covers and is not cancelled', () => {
+    expect(rowsOf(festival)).toEqual([
+      { row: 2, setId: 's1', day: 'Friday', stage: 'Main', artist: 'Kai', startTime: '20:00', endTime: '21:00' },
+      { row: 3, setId: '', day: 'Friday', stage: '', artist: 'Mira vs Zed', startTime: '', endTime: '' },
+      { row: 4, setId: '', day: '2026-08-22', stage: '', artist: 'Dawn', startTime: '', endTime: '' },
+      { row: 5, setId: '', day: '', stage: '', artist: 'Nova', startTime: '', endTime: '' },
+      { row: 6, setId: '', day: '', stage: '', artist: 'Old', startTime: '', endTime: '' },
+    ]);
+  });
+
+  it('leaves the CSV unchanged for a festival with no lineup', () => {
+    const { lineup: _lineup, ...bare } = festival;
+    expect(buildLineupCsv(bare)).toBe(buildLineupCsv({ ...bare, lineup: [] }));
+    expect(rowsOf({ ...festival, lineup: [] } as typeof festival)).toHaveLength(1);
+  });
+});
+
 describe('planSummary', () => {
-  const c = { new: 0, changed: 0, unchanged: 0, error: 0, newStages: 0, newDays: 0 };
+  const c = { new: 0, changed: 0, unchanged: 0, error: 0, skipped: 0, newStages: 0, newDays: 0 };
   it('says nothing to change when all zero', () => {
     expect(planSummary(c, false)).toBe('Nothing to change.');
   });
   it('covers every part with update off', () => {
-    expect(planSummary({ new: 1, changed: 1, unchanged: 1, error: 1, newStages: 1, newDays: 2 }, false)).toBe(
-      'Add 1 set. Leave 2 matching sets as they are. Create 1 stage. Create 2 days. 1 row has errors.',
+    expect(planSummary({ new: 1, changed: 1, unchanged: 1, error: 1, skipped: 2, newStages: 1, newDays: 2 }, false)).toBe(
+      'Add 1 set. Leave 2 matching sets as they are. Create 1 stage. Create 2 days. Skip 2 rows that name another day. 1 row has errors.',
     );
   });
   it('covers update on', () => {
     expect(planSummary({ ...c, new: 3, changed: 2, error: 2 }, true)).toBe(
       'Add 3 sets. Update 2. 2 rows have errors.',
     );
+  });
+});
+
+describe('update default and banner', () => {
+  it('defaults Update on only when a set_id column is mapped', () => {
+    expect(defaultUpdateExisting({ artist: 0, setId: 1 })).toBe(true);
+    expect(defaultUpdateExisting({ artist: 0, day: 1 })).toBe(false);
+  });
+  it('shows the banner only for changed rows with Update off', () => {
+    expect(updateOffBanner({ changed: 3 }, false)).toBe('3 rows change existing sets or announced acts. Turn on Update to apply them.');
+    expect(updateOffBanner({ changed: 1 }, false)).toBe('1 row changes existing sets or announced acts. Turn on Update to apply them.');
+    expect(updateOffBanner({ changed: 3 }, true)).toBeNull();
+    expect(updateOffBanner({ changed: 0 }, false)).toBeNull();
   });
 });
 
@@ -234,20 +313,6 @@ describe('parseNameList', () => {
   });
 });
 
-describe('update default and banner', () => {
-  it('turns Update on when a set id column is mapped', () => {
-    expect(defaultUpdateExisting({ artist: 0, setId: 1 })).toBe(true);
-    expect(defaultUpdateExisting({ artist: 0 })).toBe(false);
-  });
-
-  it('shows a banner only when Update is off and rows would change', () => {
-    expect(updateBanner({ changed: 3 }, false)).toBe('3 rows change existing sets or announced acts. Turn on Update to apply them.');
-    expect(updateBanner({ changed: 1 }, false)).toBe('1 row changes existing sets or announced acts. Turn on Update to apply them.');
-    expect(updateBanner({ changed: 3 }, true)).toBeNull();
-    expect(updateBanner({ changed: 0 }, false)).toBeNull();
-  });
-});
-
 describe('withArtistChoice', () => {
   const rows = [{ row: 2, artist: 'Nina Kraviz vs Kai' }, { row: 3, artist: 'Alok' }];
   it('sets the id of one name and keeps the other positions', () => {
@@ -294,7 +359,7 @@ describe('groupPlanRows', () => {
   });
 
   it('blocks the commit on errors and problems', () => {
-    const counts = { new: 0, changed: 0, unchanged: 0, error: 0, newStages: 0, newDays: 0, missingFromFile: 0 };
+    const counts = { new: 0, changed: 0, unchanged: 0, error: 0, skipped: 0, newStages: 0, newDays: 0, missingFromFile: 0 };
     expect(importBlocked({ counts, problems: [] })).toBe(false);
     expect(importBlocked({ counts: { ...counts, error: 1 }, problems: [] })).toBe(true);
     expect(importBlocked({ counts, problems: ['x'] })).toBe(true);
@@ -303,8 +368,62 @@ describe('groupPlanRows', () => {
 
 describe('planSummary with announced names', () => {
   it('counts announced names apart from sets', () => {
-    const c = { new: 5, changed: 0, unchanged: 0, error: 0, newStages: 0, newDays: 0, announced: 3 };
+    const c = { new: 5, changed: 0, unchanged: 0, error: 0, skipped: 0, newStages: 0, newDays: 0, announced: 3 };
     expect(planSummary(c, false)).toBe('Add 2 sets. Add 3 announced names.');
     expect(planSummary({ ...c, new: 3 }, false)).toBe('Add 3 announced names.');
+  });
+});
+
+describe('daysAnnouncementSummary', () => {
+  const count = {
+    festivalName: 'WL',
+    actsWithDay: 118,
+    actsTotal: 118,
+    recipients: 12,
+    audience: 12,
+    emailRecipients: 12,
+    emailCut: 0,
+    emailOff: null,
+  };
+
+  it('states the split and the audience', () => {
+    const summary = daysAnnouncementSummary({ ...count, actsWithDay: 1 });
+    expect(summary.counts).toBe('1 of 118 acts have a day. 12 people get one alert.');
+    expect(summary.warning).toMatch(/Not every act has a day/);
+    expect(summary.blocked).toBeNull();
+    expect(summary.emailNote).toBeNull();
+  });
+
+  it('does not warn when every act has a day', () => {
+    expect(daysAnnouncementSummary(count).warning).toBeNull();
+  });
+
+  it('says why a send is refused', () => {
+    expect(daysAnnouncementSummary({ ...count, reason: 'already_heard' }).blocked).toBe('Everyone who follows has already heard.');
+    expect(daysAnnouncementSummary({ ...count, reason: 'no_audience' }).blocked).toBe('No one follows this festival or has joined it yet.');
+    expect(daysAnnouncementSummary({ ...count, actsWithDay: 0, reason: 'no_days' }).blocked).toBe('Give acts a day before you announce days.');
+    expect(daysAnnouncementSummary({ ...count, reason: 'set_times_out' }).blocked).toMatch(/Set times are already out/);
+    expect(daysAnnouncementSummary({ ...count, reason: 'draft' }).blocked).toMatch(/Publish the festival/);
+  });
+
+  it('reports email off, or how many the daily limit cuts', () => {
+    expect(daysAnnouncementSummary({ ...count, emailOff: 'no_postal_address' }).emailNote).toBe('Email off: no postal address.');
+    expect(announcementEmailNote({ emailOff: null, emailCut: 1 })).toMatch(/^1 person get no email today/);
+    expect(announcementEmailNote({ emailOff: null, emailCut: 7 })).toMatch(/^7 people get no email today/);
+    expect(announcementEmailNote({ emailOff: null, emailCut: 0 })).toBeNull();
+  });
+});
+
+describe('lineupAudienceSummary', () => {
+  it('uses singular forms for a count of one', () => {
+    expect(lineupAudienceSummary({ followers: 1, priorAttendees: 1, matchedFestivalNames: [] })).toBe(
+      '1 follower gets push and email. 1 person from earlier editions gets push only.',
+    );
+  });
+
+  it('uses plural forms and names the matched editions', () => {
+    expect(lineupAudienceSummary({ followers: 3, priorAttendees: 0, matchedFestivalNames: ['Fest 2025', 'Fest 2024'] })).toBe(
+      '3 followers get push and email. 0 people from earlier editions get push only. Matched editions: Fest 2025, Fest 2024.',
+    );
   });
 });

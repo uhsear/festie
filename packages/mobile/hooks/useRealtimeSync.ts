@@ -196,6 +196,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       const patched = useFestivalDataStore.getState().applyProfilePatch({
         profileId: data?.profileId,
         picks: data?.picks,
+        interestsChanged: data?.interestsChanged,
       });
       if (!patched) reloadProfiles();
     };

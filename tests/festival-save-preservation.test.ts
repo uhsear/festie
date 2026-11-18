@@ -38,8 +38,10 @@ const SET_PICKED = `picked-${RUN_ID}`;
 const PROFILE_ID = `prof-${RUN_ID}`;
 const PICKER_USER_ID = `picker-${RUN_ID}`;
 
-const SPOTIFY_A = 'https://open.spotify.com/artist/a';
-const SPOTIFY_B = 'https://open.spotify.com/artist/b';
+// Valid 22-character artist ids: a save ties an artist without an id to an artists row, and a new row
+// keeps only the links that pass the platform rules.
+const SPOTIFY_A = 'https://open.spotify.com/artist/4Z8W4fKeB5YxbusRsdQVPb';
+const SPOTIFY_B = 'https://open.spotify.com/artist/1Xyo4u8uXC1ZmMpatF05PJ';
 const B2B_ARTISTS = [
   { name: 'Alpha', links: { spotify: SPOTIFY_A }, photo: 'https://i.scdn.co/a.jpg', genres: ['house'] },
   { name: 'Beta', links: { spotify: SPOTIFY_B }, photo: 'https://i.scdn.co/b.jpg', genres: ['techno'] },
@@ -63,6 +65,8 @@ async function withPool<T>(fn: (pool: any) => Promise<T>): Promise<T> {
 }
 
 async function clearSets(pool: any) {
+  // Artists outlive a save: a leftover row from an earlier case would link by name and win over this case's fixture.
+  await pool.query('DELETE FROM artists');
   await pool.query('DELETE FROM festival_profile_picks WHERE profile_id = $1', [PROFILE_ID]);
   await pool.query('DELETE FROM set_ratings WHERE set_id IN (SELECT id FROM festival_sets WHERE festival_id = $1)', [FEST_ID]);
   await pool.query('DELETE FROM festival_sets WHERE festival_id = $1', [FEST_ID]);
@@ -243,7 +247,9 @@ describe('festival save preservation (admin PUT)', { skip, concurrency: 1 }, () 
     });
     assert.equal(res.status, 200, JSON.stringify(res.body));
     const row = (await readSets()).find((s: any) => s.id === SET_B2B);
-    assert.deepEqual(row.artists, B2B_ARTISTS);
+    // The save ties each artist to an artists row: ids are new, everything else is kept.
+    assert.ok(row.artists.every((a: any) => /^art-/.test(a.id)));
+    assert.deepEqual(row.artists.map(({ id: _id, ...rest }: any) => rest), B2B_ARTISTS);
   });
 
   test('a mobile-style save (no artists[], unchanged B2B name) keeps each artist link', async () => {

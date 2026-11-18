@@ -10,6 +10,7 @@ export interface AdminFestivalSummary {
   dayCount: number;
   startDate: string;
   endDate: string;
+  seriesId?: string | null;
   published: boolean;
   updatedAt: string;
 }

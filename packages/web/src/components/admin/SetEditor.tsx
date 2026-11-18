@@ -1,12 +1,17 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
+import { createArtist, matchArtists } from '@festie/shared/services';
+import type { ArtistCandidate } from '@festie/shared/services';
 import {
   artistNamesOf,
   joinArtistNames,
+  platformLabel,
   setEngagementLabel,
   startsAfterMidnight,
   withArtistNames,
 } from '@festie/shared/utils';
 import type { Artist } from '@festie/shared/types';
+import ArtistSlotMatch from './ArtistSlotMatch';
+import type { SlotMatch } from './ArtistSlotMatch';
 
 const MAX_ARTISTS_PER_SET = 4;
 
@@ -48,7 +53,10 @@ export interface SetEditorProps {
 
 /**
  * Edits one set row (artists, stage, startTime, endTime) inside a day.
- * A B2B set holds up to 4 artists; each keeps its own links and photo by index.
+ * A B2B set holds up to 4 artists; each keeps its own id, links and photo by index.
+ * On blur the server matches the typed name: one artist links at once ("Not this one" undoes it),
+ * two or more open the picker, none leaves the name free (the save creates the artist).
+ * Links are read only here: they are edited once, on the Artists tab.
  */
 const FIELD_LABEL = 'flex flex-col gap-1 min-w-0';
 const FIELD_CAPTION = 'text-xs text-text-muted md:sr-only';
@@ -73,10 +81,53 @@ export default function SetEditor({
   const [drafts, setDrafts] = useState<string[]>(() => artistNamesOf(s));
   const [origin, setOrigin] = useState<Artist[] | undefined>(() => s.artists);
 
+  const [matches, setMatches] = useState<Record<number, SlotMatch>>({});
+  // The match answer arrives later: it must read the newest names, not the ones at blur time.
+  const latest = useRef({ drafts, origin });
+  latest.current = { drafts, origin };
+
   const changeDrafts = (next: string[], nextOrigin = origin) => {
     setDrafts(next);
     setOrigin(nextOrigin);
     onSetArtists(withArtistNames(nextOrigin, next));
+  };
+
+  const linkCandidate = (index: number, c: ArtistCandidate) => {
+    const { drafts: names, origin: before } = latest.current;
+    const picked: Artist = { id: c.id, name: c.name, links: {} };
+    const nextOrigin = names.map((_, j) => (j === index ? picked : (before?.[j] ?? { name: '', links: {} })));
+    changeDrafts(names.map((n, j) => (j === index ? c.name : n)), nextOrigin);
+    setMatches((m) => ({ ...m, [index]: { kind: 'linked', candidate: c } }));
+  };
+
+  const matchSlot = async (index: number) => {
+    const name = drafts[index]?.trim();
+    if (!name || (origin?.[index]?.id && origin[index]?.name === name)) return;
+    try {
+      const [found] = await matchArtists([{ name }]);
+      if (!found || latest.current.drafts[index]?.trim() !== name) return;
+      if (found.outcome === 'linked' && found.candidates[0]) linkCandidate(index, found.candidates[0]);
+      else if (found.outcome === 'pick') setMatches((m) => ({ ...m, [index]: { kind: 'pick', name, candidates: found.candidates } }));
+    } catch (err) {
+      // Offline or refused: the name stays free text and the server resolves it on save.
+      console.warn('Could not match the artist name', err);
+    }
+  };
+
+  const notThisOne = (index: number, match: Extract<SlotMatch, { kind: 'linked' }>) => {
+    const { drafts: names, origin: before } = latest.current;
+    changeDrafts(names, names.map((n, j) => (j === index ? { name: n.trim(), links: {} } : (before?.[j] ?? { name: '', links: {} }))));
+    setMatches((m) => ({ ...m, [index]: { kind: 'pick', name: names[index] ?? '', candidates: [match.candidate] } }));
+  };
+
+  const createFor = async (index: number, name: string, label: string): Promise<string | null> => {
+    try {
+      const created = await createArtist({ name, label });
+      linkCandidate(index, { id: created.id, name: created.name, label: created.label, photo: created.photo, platforms: [], lastFestival: null });
+      return null;
+    } catch (err) {
+      return err instanceof Error ? err.message : "Couldn't create the artist. Try again.";
+    }
   };
 
   return (
@@ -101,31 +152,58 @@ export default function SetEditor({
         <div className="space-y-1">
           {drafts.map((name, i) => {
             const label = i === 0 ? 'Artist' : `B2B artist ${i + 1}`;
+            const match = matches[i];
+            const known = origin?.[i];
+            const readOnlyLinks = known?.id && known.name === name.trim() ? Object.keys(known.links ?? {}) : [];
             return (
-              <div key={i} className="flex gap-1">
-                <input
-                  type="text"
-                  placeholder={i === 0 ? 'Artist name' : label}
-                  aria-label={label}
-                  aria-invalid={i === 0 ? invalid('artist') : undefined}
-                  value={name}
-                  onChange={(e) => changeDrafts(drafts.map((d, j) => (j === i ? e.target.value : d)))}
-                  className="flex-1 min-w-0 px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent-aqua"
-                />
-                {i > 0 && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      changeDrafts(
-                        drafts.filter((_, j) => j !== i),
-                        origin?.filter((_, j) => j !== i),
-                      )
-                    }
-                    className="px-2 min-h-11 min-w-11 rounded bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
-                    aria-label={`Remove ${name.trim() || 'artist'}`}
-                  >
-                    ×
-                  </button>
+              <div key={i} className="space-y-1">
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    placeholder={i === 0 ? 'Artist name' : label}
+                    aria-label={label}
+                    aria-invalid={i === 0 ? invalid('artist') : undefined}
+                    value={name}
+                    onChange={(e) => {
+                      setMatches((m) => {
+                        const { [i]: _gone, ...rest } = m;
+                        return rest;
+                      });
+                      changeDrafts(drafts.map((d, j) => (j === i ? e.target.value : d)));
+                    }}
+                    onBlur={() => void matchSlot(i)}
+                    className="flex-1 min-w-0 px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-1 focus:ring-accent-aqua"
+                  />
+                  {i > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMatches({});
+                        changeDrafts(
+                          drafts.filter((_, j) => j !== i),
+                          origin?.filter((_, j) => j !== i),
+                        );
+                      }}
+                      className="px-2 min-h-11 min-w-11 rounded bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
+                      aria-label={`Remove ${name.trim() || 'artist'}`}
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+                {match && (
+                  <ArtistSlotMatch
+                    name={name.trim()}
+                    match={match}
+                    onPick={(c) => linkCandidate(i, c)}
+                    onNotThisOne={() => match.kind === 'linked' && notThisOne(i, match)}
+                    onCreate={(note) => createFor(i, name.trim(), note)}
+                  />
+                )}
+                {readOnlyLinks.length > 0 && !match && (
+                  <p className="text-xs text-text-muted">
+                    {readOnlyLinks.map(platformLabel).join(', ')}. Edit links on the Artists tab.
+                  </p>
                 )}
               </div>
             );

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, FlatList, Alert } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -20,8 +20,8 @@ import {
   parseNameList,
   planSummary,
   toImportRows,
-  updateBanner,
   withArtistChoice,
+  updateOffBanner,
   type LineupColumnMapping,
   type LineupGroupKey,
   type LineupImportCommitResult,
@@ -111,6 +111,8 @@ export default function LineupImportScreen() {
   const [importRows, setImportRows] = useState<LineupImportRow[]>([]);
   const [plan, setPlan] = useState<LineupImportPlan | null>(null);
   const [updateExisting, setUpdateExisting] = useState(false);
+  // Whether the last checked mapping had a set_id column. Update turns on by default only when that changes.
+  const checkedWithSetId = useRef<boolean | null>(null);
   const [createMissing, setCreateMissing] = useState(true);
   const [moveDays, setMoveDays] = useState(false);
   const [listMode, setListMode] = useState(false);
@@ -202,6 +204,7 @@ export default function LineupImportScreen() {
     }
     const header = looksLikeHeader(parsed.rows[0] ?? []);
     setTable(parsed.rows);
+    checkedWithSetId.current = null;
     setLines(parsed.lines);
     setHasHeader(header);
     setMapping(defaultMapping(parsed.rows, header));
@@ -228,13 +231,14 @@ export default function LineupImportScreen() {
       );
       return;
     }
-    // An export file (it has a set id column) is meant to change sets, so Update starts on.
-    const update = defaultUpdateExisting(mapping);
+    const hasSetId = mapping.setId !== undefined;
+    const update = checkedWithSetId.current === hasSetId ? updateExisting : defaultUpdateExisting(mapping);
+    checkedWithSetId.current = hasSetId;
     setListMode(false);
     setUpdateExisting(update);
     setImportRows(rows);
     void runPreview(rows, update, createMissing, moveDays);
-  }, [table, lines, mapping, hasHeader, createMissing, moveDays, runPreview, say]);
+  }, [table, lines, mapping, hasHeader, createMissing, moveDays, updateExisting, runPreview, say]);
 
   // A pasted list of names has no columns to match: each line becomes an announced name.
   const handleCheckList = useCallback(() => {
@@ -251,6 +255,7 @@ export default function LineupImportScreen() {
       say(`That list has ${rows.length} names. The limit is ${LINEUP_IMPORT_LIMITS.maxRows}. Split it and import it in parts.`, true);
       return;
     }
+    checkedWithSetId.current = null;
     setListMode(true);
     setUpdateExisting(false);
     setImportRows(rows);
@@ -423,7 +428,6 @@ export default function LineupImportScreen() {
   );
 
   const blocked = !!plan && importBlocked(plan);
-  const banner = plan ? updateBanner(plan.counts, updateExisting) : null;
   const columnOptions = useMemo<SelectOption[]>(() => {
     const headerRow = hasHeader ? (table[0] ?? []) : [];
     const sample = table[hasHeader ? 1 : 0] ?? [];
@@ -586,6 +590,11 @@ export default function LineupImportScreen() {
                 <Text style={styles.stagePillText}>{`${g.label} ${g.rows.length}`}</Text>
               </View>
             ))}
+            {plan.counts.skipped > 0 ? (
+              <View style={styles.stagePill}>
+                <Text style={styles.stagePillText}>{`Skipped ${plan.counts.skipped}`}</Text>
+              </View>
+            ) : null}
           </View>
           {plan.newStages.length > 0 ? (
             <Text style={styles.helpNote}>New stages: {plan.newStages.map((s) => s.name).join(', ')}</Text>
@@ -594,6 +603,17 @@ export default function LineupImportScreen() {
             <Text style={styles.helpNote}>
               New days: {plan.newDays.map((d) => `${d.label} (${d.date})`).join(', ')}
             </Text>
+          ) : null}
+          {updateOffBanner(plan.counts, updateExisting) ? (
+            <View style={styles.card}>
+              <Text style={styles.helpNote}>{updateOffBanner(plan.counts, updateExisting)}</Text>
+              <Button
+                label="Turn on Update"
+                variant="secondary"
+                onPress={() => handleToggle('update', true)}
+                disabled={working}
+              />
+            </View>
           ) : null}
           <View style={styles.toggleRow}>
             <Text style={styles.toggleLabel}>
@@ -627,12 +647,6 @@ export default function LineupImportScreen() {
               accessibilityLabel="Move sets to the day in the file"
             />
           </View>
-          {banner ? (
-            <View style={[styles.banner, styles.bannerOk]}>
-              <Text style={styles.bannerText}>{banner}</Text>
-              <Button label="Turn on Update" size="sm" variant="secondary" onPress={() => handleToggle('update', true)} disabled={working} />
-            </View>
-          ) : null}
           {plan.problems.length > 0 ? (
             <View style={[styles.card, styles.errorCard]}>
               {plan.problems.map((p, i) => (
@@ -680,8 +694,8 @@ export default function LineupImportScreen() {
               {result.newDays} days.
               {result.announced || result.announcedUpdated
                 ? ` Announced lineup: ${result.announced ?? 0} added, ${result.announcedUpdated ?? 0} updated.`
-                : ''}{' '}
-              Spotify linked {result.spotifyMatched} artists.
+                : ''}
+              {result.skipped > 0 ? ` Skipped ${result.skipped} ${result.skipped === 1 ? 'row' : 'rows'} that name another day.` : ''}
             </Text>
           </View>
           {result.rows.some((x) => x.status === 'skipped') ? (
