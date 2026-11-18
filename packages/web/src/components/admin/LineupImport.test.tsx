@@ -183,3 +183,115 @@ describe('LineupImport', () => {
     expect(api.undo).toHaveBeenCalledWith('f1', 'imp-9');
   });
 });
+
+describe('LineupImport P6', () => {
+  const renderSource = (value: string) => {
+    render(<LineupImport festivalId="f1" festivalName="Fest" />);
+    fireEvent.change(screen.getByLabelText(/paste cells from google sheets/i), { target: { value } });
+  };
+
+  it('previews a pasted list of names as announced rows, with no column step', async () => {
+    api.preview.mockResolvedValue(
+      plan([planRow({ artists: ['Alok'], dayLabel: undefined, target: 'announced' })], { new: 2, announced: 2 }),
+    );
+    renderSource('Alok\n\nKai b2b Mira\n');
+    await userEvent.click(screen.getByRole('button', { name: 'Check as a list of names' }));
+    expect(api.preview).toHaveBeenCalledTimes(1);
+    const body = api.preview.mock.calls[0][1];
+    expect(body.rows).toEqual([{ row: 1, artist: 'Alok' }, { row: 3, artist: 'Kai b2b Mira' }]);
+    expect(body.updateExisting).toBe(false);
+    expect(await screen.findByText('Announced')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeEnabled();
+    await userEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByRole('button', { name: 'Check as a list of names' })).toBeInTheDocument();
+  });
+
+  it('refuses a list of more than 500 names before it calls the server', async () => {
+    renderSource(Array.from({ length: 501 }, (_, i) => `Act ${i}`).join('\n'));
+    await userEvent.click(screen.getByRole('button', { name: 'Check as a list of names' }));
+    expect(api.preview).not.toHaveBeenCalled();
+    expect(useToast().toast).toHaveBeenCalledWith(expect.stringMatching(/501 names/), 'error');
+  });
+
+  it('turns Update on by default when the file has a set id column', async () => {
+    api.preview.mockResolvedValue(plan([planRow()], { changed: 1 }));
+    renderSource('set_id,artist,day,start\ns1,Alok,Friday,21:00\n');
+    await userEvent.click(screen.getByRole('button', { name: 'Next: match columns' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
+    expect(api.preview.mock.calls[0][1].updateExisting).toBe(true);
+    expect((await screen.findByRole('checkbox', { name: 'Update sets that match' }))).toBeChecked();
+  });
+
+  it('shows a banner when changed rows would not be applied, and its button turns Update on', async () => {
+    api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
+    await pasteSampleAndCheck();
+    expect(await screen.findByText('2 rows change existing sets. Turn on Update to apply them.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Turn on Update' }));
+    expect(api.preview.mock.calls[1][1].updateExisting).toBe(true);
+    expect(screen.queryByText(/Turn on Update to apply them/)).toBeNull();
+  });
+
+  it('sends moveDays when Move sets is ticked', async () => {
+    api.preview.mockResolvedValue(plan([planRow()], { new: 1 }));
+    await pasteSampleAndCheck();
+    expect(api.preview.mock.calls[0][1].moveDays).toBe(false);
+    await userEvent.click(await screen.findByRole('checkbox', { name: 'Move sets to the day in the file' }));
+    expect(api.preview.mock.calls[1][1].moveDays).toBe(true);
+  });
+
+  it('groups the rows and blocks Approve until a Needs choice row has an artist', async () => {
+    const choiceRow = planRow({
+      row: 3,
+      status: 'error',
+      artists: ['Nina Kraviz'],
+      errors: [{ field: 'artist', code: 'needs_choice', message: 'Which "Nina Kraviz"? 2 artists have this name. Pick one.' }],
+      resolutions: [
+        {
+          name: 'Nina Kraviz',
+          outcome: 'needs_choice',
+          candidates: [{ id: 'ar-uk', label: 'UK', hint: '' }, { id: 'ar-ru', label: 'Russia', hint: '' }],
+        },
+      ],
+    });
+    api.preview.mockResolvedValueOnce(plan([planRow({ resolutions: [{ name: 'Aurora Lights', outcome: 'new' }] }), choiceRow], { new: 1, error: 1, needsChoice: 1 }));
+    api.preview.mockResolvedValueOnce(plan([planRow()], { new: 2 }));
+    await pasteSampleAndCheck();
+    expect(await screen.findByText('New artists (1)')).toBeInTheDocument();
+    expect(screen.getByText('Needs choice (1)')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
+
+    await userEvent.selectOptions(screen.getByLabelText('Row 3 artist Nina Kraviz'), 'ar-ru');
+    const body = api.preview.mock.calls[1][1];
+    expect(body.rows.find((r: { row: number }) => r.row === 3).artistId).toBe('ar-ru');
+    expect(await screen.findByRole('button', { name: 'Approve' })).toBeEnabled();
+  });
+
+  it('offers "Use" and "Create new" for a Did you mean suggestion', async () => {
+    api.preview.mockResolvedValueOnce(
+      plan([planRow({ warnings: ['Did you mean Subtronics?'], resolutions: [{ name: 'Subtronic', outcome: 'did_you_mean', suggestion: 'Subtronics' }] })], { new: 1 }),
+    );
+    api.preview.mockResolvedValueOnce(plan([planRow()], { new: 1 }));
+    await pasteSampleAndCheck();
+    await userEvent.click(await screen.findByRole('button', { name: 'Create new' }));
+    expect(screen.queryByRole('button', { name: 'Use Subtronics' })).toBeNull();
+  });
+
+  it('lists skipped rows at the top of the result', async () => {
+    const p = plan([planRow()], { new: 1 });
+    api.preview.mockResolvedValue(p);
+    api.commit.mockResolvedValue({
+      committed: true,
+      plan: p,
+      result: {
+        importId: 'i1', created: 1, updated: 0, unchanged: 0, skipped: 1, newStages: 0, newDays: 0, announced: 2, announcedUpdated: 0, spotifyMatched: 0,
+        rows: [{ row: 5, status: 'skipped', setId: 's1', artist: 'DJ Alpha', message: 'Skipped: the file says Saturday, the stored day is Friday.' }],
+        warnings: [],
+      },
+    });
+    await pasteSampleAndCheck();
+    await userEvent.click(await screen.findByRole('button', { name: 'Approve' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByText('Row 5, DJ Alpha: Skipped: the file says Saturday, the stored day is Friday.')).toBeInTheDocument();
+    expect(screen.getByText(/Announced lineup: 2 added, 0 updated/)).toBeInTheDocument();
+  });
+});

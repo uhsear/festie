@@ -9,19 +9,62 @@
  * the write transaction, so what it writes always matches the locked festival.
  * Imports never delete. A field the row leaves out is left alone; an empty
  * string in a mapped field clears that value.
+ *
+ * A row with names (and links) but no day, stage or time is an announced row: it adds to, or fills
+ * in, festivals.lineup. A row with a set id and another day is skipped, or moves the set when
+ * options.moveDays is on. Artist names resolve per name against ctx.input.artists (see
+ * artistLookupKeys): one live artist attaches its id, several stop the row at "Needs choice"
+ * until a row names the id, and a set or entry that already holds the artist keeps it.
  */
 
-import { MAX_ARTISTS_PER_SET } from './constants';
-import { sanitizeLinkRecord, type LineupImportRowInput } from './schemas';
+import { ALLOWED_LINK_PLATFORMS, MAX_ARTISTS_PER_SET } from './constants';
+import type { LineupImportRowInput } from './schemas';
 import { sanitizeString } from './helpers/sanitize';
 import { validateColor, validateTime } from './helpers/validation';
+import { artistNameKey } from './artist-key';
+import { ARTIST_LINK_LABELS, detectPlatform, normalizeArtistLink, type ArtistLinkPlatform } from './artist-links';
+import { MAX_LINEUP_ENTRIES, lineupEntryKey, lineupNameKey, todayInZone } from './lineup';
 
 type ErrorField = 'artist' | 'day' | 'date' | 'stage' | 'startTime' | 'endTime' | 'link' | 'row';
 export type LineupImportRowStatus = 'new' | 'changed' | 'unchanged' | 'error';
 
+/** One live artist row from the artist repository, as the import needs it. */
+export interface ArtistRef {
+  id: string;
+  name: string;
+  label: string;
+  links: Record<string, string>;
+  photo: string | null;
+  genres: string[];
+  mergedInto: string | null;
+}
+
+/** byKey holds live artists only. byId also holds merged ones, so a stale id gets a clear message. */
+export interface ArtistLookup {
+  byKey: Map<string, ArtistRef[]>;
+  byId: Map<string, ArtistRef>;
+}
+
+export interface ArtistCandidate {
+  id: string;
+  label: string;
+  hint: string;
+}
+
+/** What the import decided for one artist name of a row. */
+export interface ArtistResolution {
+  name: string;
+  outcome: 'existing' | 'needs_choice' | 'did_you_mean' | 'new';
+  artistId?: string;
+  candidates?: ArtistCandidate[];
+  suggestion?: string;
+}
+
 export interface LineupImportPlanRow {
   row: number;
   status: LineupImportRowStatus;
+  /** 'announced' rows add to or update the announced lineup, not the schedule. */
+  target?: 'announced';
   setId?: string;
   artists: string[];
   dayLabel?: string;
@@ -29,8 +72,11 @@ export interface LineupImportPlanRow {
   startTime?: string | null;
   endTime?: string | null;
   changes: string[];
-  errors: { field: ErrorField; message: string }[];
+  errors: { field: ErrorField; message: string; code?: 'needs_choice' }[];
   warnings: string[];
+  resolutions: ArtistResolution[];
+  /** Why the row was left out. The row has status unchanged and writes nothing. */
+  skipped?: string;
 }
 
 export interface LineupImportPlan {
@@ -43,6 +89,10 @@ export interface LineupImportPlan {
     newStages: number;
     newDays: number;
     missingFromFile: number;
+    /** Rows that add an entry to the announced lineup (they also count in `new`). */
+    announced: number;
+    skipped: number;
+    needsChoice: number;
   };
   rows: LineupImportPlanRow[];
   newStages: { name: string; color: string }[];
@@ -56,6 +106,20 @@ export interface LineupImportPlan {
 export interface ArtistEntry {
   name: string;
   links: Record<string, string>;
+  id?: string;
+  [extra: string]: unknown;
+}
+
+/** One billing line of festivals.lineup. */
+export interface LineupEntryValue {
+  id: string;
+  artists: ArtistEntry[];
+  displayName: string | null;
+  tier: number | null;
+  dayDate: string | null;
+  status: string;
+  announcedAt: string;
+  linkedSetIds: string[];
   [extra: string]: unknown;
 }
 
@@ -67,13 +131,21 @@ export interface SetValues {
   artist: string;
   artists: ArtistEntry[];
   linkUrl: string | null;
+  displayName: string | null;
 }
 
 export interface LineupImportWrites {
   newStages: { id: string; name: string; color: string }[];
   newDays: { dayIndex: number; label: string; date: string }[];
   inserts: (SetValues & { index: number; id: string; dayIndex: number })[];
-  updates: { index: number; setId: string; before: SetValues; after: SetValues }[];
+  /** dayMove is set when the set changes day: from and to are day indexes. */
+  updates: { index: number; setId: string; before: SetValues; after: SetValues; dayMove?: { from: number; to: number } }[];
+  announced: {
+    inserts: { index: number; entry: LineupEntryValue }[];
+    updates: { index: number; id: string; before: LineupEntryValue; after: LineupEntryValue }[];
+  };
+  /** Artist repository ids that the writes attach. Commit checks they are still live. */
+  artistIds: string[];
   spotifyMatched: number;
 }
 
@@ -86,10 +158,12 @@ export interface SpotifyHit {
 export interface PlanInput {
   festival: any;
   rows: LineupImportRowInput[];
-  options: { updateExisting: boolean; createMissing: boolean };
+  options: { updateExisting: boolean; createMissing: boolean; moveDays?: boolean };
   config: { MAX_IMPORT_SETS: number; MAX_STAGES: number; MAX_DAYS: number; MAX_SETS_PER_DAY: number };
   /** Lower-case artist name to Spotify search hit. Fills links of new sets only. */
   spotify?: Map<string, SpotifyHit>;
+  /** Artist repository rows for the row names and ids (see artistLookupKeys). Absent means no artist matches. */
+  artists?: ArtistLookup;
   /** Id factory for new stages and sets. The default is deterministic, for previews. */
   makeId?: (prefix: string) => string;
 }
@@ -97,7 +171,7 @@ export interface PlanInput {
 const DEFAULT_STAGE_COLOR = '#6a6a88';
 const AFTER_MIDNIGHT_CUTOFF = '06:00';
 
-const normKey = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+const normKey = (s: string) => s.toLowerCase().replace(/[’ʼ]/g, "'").replace(/\s+/g, ' ').trim();
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const blankToNull = (v: any): string | null => (typeof v === 'string' && v ? v : null);
 
@@ -166,6 +240,36 @@ interface ScheduleEntry {
   end: string | null;
 }
 
+/** Splits one billing text into artist names. The festival's separator and " b2b " both split. */
+function nameSplitter(festival: any) {
+  const sep = sanitizeString(festival.b2bSeparator || 'b2b', 10) || 'b2b';
+  const splitRe = new RegExp(`\\s+(?:${escapeRe(sep)}|b2b)\\s+`, 'i');
+  const splitNames = (raw: string) =>
+    raw
+      .split(splitRe)
+      .map((n) => sanitizeString(n, 300))
+      .filter(Boolean);
+  return { sep, splitNames };
+}
+
+/** The artist ids of a row: one per name, "|" between them. An empty position stays empty. */
+function parseArtistIds(raw: string | undefined): string[] {
+  const value = (raw ?? '').trim();
+  return value ? value.split('|').map((id) => id.trim()) : [];
+}
+
+/** The name keys and ids of every row, for one artist lookup before the plan runs. */
+export function artistLookupKeys(festival: any, rows: LineupImportRowInput[]): { keys: string[]; ids: string[] } {
+  const { splitNames } = nameSplitter(festival);
+  const keys = new Set<string>();
+  const ids = new Set<string>();
+  for (const row of rows) {
+    for (const name of splitNames(row.artist)) keys.add(artistNameKey(name));
+    for (const id of parseArtistIds(row.artistId)) if (id) ids.add(id);
+  }
+  return { keys: [...keys], ids: [...ids] };
+}
+
 /** Builds the import plan and the writes a commit would make. */
 export function planLineupImport(input: PlanInput): { plan: LineupImportPlan; writes: LineupImportWrites } {
   const ctx = createContext(input);
@@ -178,13 +282,7 @@ function createContext(input: PlanInput) {
   const { festival } = input;
   let counter = 0;
   const makeId = input.makeId ?? ((prefix: string) => `${prefix}-preview-${++counter}`);
-  const sep = sanitizeString(festival.b2bSeparator || 'b2b', 10) || 'b2b';
-  const splitRe = new RegExp(`\\s+(?:${escapeRe(sep)}|b2b)\\s+`, 'i');
-  const splitNames = (raw: string) =>
-    raw
-      .split(splitRe)
-      .map((n) => sanitizeString(n, 300))
-      .filter(Boolean);
+  const { sep, splitNames } = nameSplitter(festival);
 
   const stages: { id: string; name: string; color: string; isNew: boolean }[] = (festival.stages || []).map(
     (s: any) => ({ id: s.id, name: s.name, color: s.color, isNew: false }),
@@ -217,10 +315,17 @@ function createContext(input: PlanInput) {
           artist: s.artist || '',
           artists,
           linkUrl: blankToNull(s.linkUrl),
+          displayName: blankToNull(s.displayName),
         },
       };
     }),
   );
+  const lineup: LineupEntryValue[] = Array.isArray(festival.lineup) ? festival.lineup : [];
+  const lineupByKey = new Map<string, LineupEntryValue>();
+  for (const entry of lineup) {
+    const key = lineupEntryKey(entry);
+    if (key && !lineupByKey.has(key)) lineupByKey.set(key, entry);
+  }
 
   return {
     input,
@@ -233,11 +338,17 @@ function createContext(input: PlanInput) {
     lastExistingDate,
     existing,
     existingById: new Map(existing.map((s) => [s.id, s])),
+    lineup,
+    lineupByKey,
+    today: todayInZone(festival.timeZone),
     planRows: [] as LineupImportPlanRow[],
     matchedIds: new Set<string>(),
     firstRowOf: new Map<string, number>(),
     inserts: [] as (SetValues & { index: number; id: string; dayKey: string })[],
-    updates: [] as LineupImportWrites['updates'],
+    updates: [] as (LineupImportWrites['updates'][number] & { dayKey?: string })[],
+    announcedInserts: [] as LineupImportWrites['announced']['inserts'],
+    announcedUpdates: [] as LineupImportWrites['announced']['updates'],
+    lookedUpIds: new Set<string>(),
     schedule: [] as ScheduleEntry[],
     spotifyMatched: 0,
   };
@@ -312,8 +423,9 @@ function resolveDay(ctx: Ctx, row: LineupImportRowInput, errors: RowErrors): Day
 function resolveStage(ctx: Ctx, row: LineupImportRowInput, errors: RowErrors): string | undefined | null {
   const raw = sanitizeString(row.stage ?? '', 100);
   if (!raw) return undefined;
-  const key = normKey(raw);
-  const found = ctx.stages.find((s) => normKey(s.name) === key || s.id === raw);
+  // The artist fold: curly and straight quotes, accents and punctuation do not make a second stage.
+  const key = artistNameKey(raw);
+  const found = ctx.stages.find((s) => artistNameKey(s.name) === key || s.id === raw);
   if (found) return found.id;
   if (!ctx.input.options.createMissing) {
     const names = ctx.stages.map((s) => s.name).join(', ') || 'none yet';
@@ -346,15 +458,135 @@ function readTime(raw: string | undefined, field: 'startTime' | 'endTime', error
   return undefined;
 }
 
-/** Returns the clean link, null to clear it, or undefined to leave it. */
-function readLink(raw: string | undefined, warnings: string[]) {
-  if (raw === undefined) return undefined;
-  const value = raw.trim();
-  if (!value) return null;
-  const clean = sanitizeLinkRecord({ spotify: value }).spotify;
-  if (clean) return clean;
-  warnings.push('Link dropped. Use an https link to Spotify, SoundCloud or another allowed site.');
-  return undefined;
+type LinkChanges = Partial<Record<ArtistLinkPlatform, string | null>>;
+
+/** Platform to clean link. null clears that link; a platform that is absent stays as it is. */
+function readLinks(row: LineupImportRowInput, warnings: string[]): LinkChanges {
+  const out: LinkChanges = {};
+  const put = (platform: ArtistLinkPlatform, raw: string, label: string) => {
+    const result = normalizeArtistLink(platform, raw);
+    if (result.ok) out[platform] = result.url;
+    else warnings.push(`${label} dropped. ${result.message}`);
+  };
+  if (row.link !== undefined) {
+    const value = row.link.trim();
+    // An empty single link column has no host to read, so it keeps its old meaning: clear the Spotify link.
+    if (!value) out.spotify = null;
+    else put(detectPlatform(value) ?? 'website', value, 'Link');
+  }
+  for (const platform of ALLOWED_LINK_PLATFORMS) {
+    const raw = row[platform];
+    if (raw === undefined) continue;
+    if (!raw.trim()) out[platform] = null;
+    else put(platform, raw.trim(), `${ARTIST_LINK_LABELS[platform]} link`);
+  }
+  return out;
+}
+
+function applyLinks(artist: ArtistEntry | undefined, links: LinkChanges) {
+  if (!artist) return;
+  for (const [platform, url] of Object.entries(links)) {
+    if (url) artist.links[platform] = url;
+    else delete artist.links[platform];
+  }
+}
+
+function describeLinkChanges(before: Record<string, string>, after: Record<string, string>, links: LinkChanges, fallback?: string | null): string[] {
+  const out: string[] = [];
+  for (const platform of Object.keys(links) as ArtistLinkPlatform[]) {
+    const old = blankToNull(before[platform]) ?? (platform === 'spotify' ? (fallback ?? null) : null);
+    const next = blankToNull(after[platform]);
+    if (old !== next) out.push(`${ARTIST_LINK_LABELS[platform]} link ${old ?? 'none'} → ${next ?? 'none'}`);
+  }
+  return out;
+}
+
+const dayName = (d: DayInfo | undefined) => d?.label || d?.date || '';
+const isBlank = (v: string | undefined) => !(v ?? '').trim();
+
+function artistFromRef(name: string, ref: ArtistRef): ArtistEntry {
+  return {
+    name,
+    id: ref.id,
+    links: { ...ref.links },
+    ...(ref.photo ? { photo: ref.photo } : {}),
+    ...(ref.genres.length > 0 ? { genres: ref.genres } : {}),
+  };
+}
+
+const candidateOf = (ref: ArtistRef): ArtistCandidate => {
+  const url = ref.links.spotify ?? Object.values(ref.links)[0] ?? '';
+  return { id: ref.id, label: ref.label, hint: url.replace(/^https?:\/\/(?:www\.)?/, '') };
+};
+
+interface ResolveOptions {
+  /** The stored artist that a typed name stands for, so its id, links and photo carry over. */
+  findStored: (name: string) => ArtistEntry | undefined;
+  /** A set takes the name as typed; an announced entry keeps the stored spelling. */
+  renameToRow: boolean;
+}
+
+/**
+ * Decides, per name, which artist it is: an explicit id, the stored artist of the set or entry,
+ * one live artist with the same key, or none. Several live artists with one key need a choice.
+ */
+function resolveArtists(ctx: Ctx, names: string[], ids: string[], opts: ResolveOptions, errors: RowErrors, warnings: string[]) {
+  const lookup = ctx.input.artists;
+  const artists: ArtistEntry[] = [];
+  const resolutions: ArtistResolution[] = [];
+  names.forEach((name, i) => {
+    const kept = opts.findStored(name);
+    const keptCopy = (): ArtistEntry => ({ ...kept!, name: opts.renameToRow ? name : kept!.name, links: { ...(kept!.links || {}) } });
+    const plain = (): ArtistEntry => (kept ? keptCopy() : { name, links: {} });
+    const id = ids[i];
+    if (id) {
+      const ref = lookup?.byId.get(id);
+      if (!ref || ref.mergedInto) {
+        const why = ref ? 'was merged into another artist' : 'is not known';
+        errors.push({ field: 'artist', message: `Artist id "${id}" ${why}. Remove the id, or pick the artist again.` });
+        artists.push(plain());
+        resolutions.push({ name, outcome: 'new' });
+        return;
+      }
+      ctx.lookedUpIds.add(ref.id);
+      if (artistNameKey(ref.name) !== artistNameKey(name)) {
+        warnings.push(`"${name}" is not the name of artist "${ref.name}". The artist id wins.`);
+      }
+      artists.push(kept ? { ...keptCopy(), id: ref.id } : artistFromRef(name, ref));
+      resolutions.push({ name, outcome: 'existing', artistId: ref.id });
+      return;
+    }
+    if (kept) {
+      artists.push(keptCopy());
+      resolutions.push({ name, outcome: 'existing', ...(kept.id ? { artistId: kept.id } : {}) });
+      return;
+    }
+    const hits = lookup?.byKey.get(artistNameKey(name)) ?? [];
+    if (hits.length === 1) {
+      ctx.lookedUpIds.add(hits[0]!.id);
+      artists.push(artistFromRef(name, hits[0]!));
+      resolutions.push({ name, outcome: 'existing', artistId: hits[0]!.id });
+    } else if (hits.length > 1) {
+      errors.push({
+        field: 'artist',
+        code: 'needs_choice',
+        message: `Which "${name}"? ${hits.length} artists have this name. Pick one.`,
+      });
+      artists.push({ name, links: {} });
+      resolutions.push({ name, outcome: 'needs_choice', candidates: hits.map(candidateOf) });
+    } else {
+      artists.push({ name, links: {} });
+      resolutions.push({ name, outcome: 'new' });
+    }
+  });
+  return { artists, resolutions };
+}
+
+/** A single new name that is one edit or two from a stored act becomes "Did you mean". */
+function markNear(resolutions: ArtistResolution[], suggestion: string) {
+  if (resolutions.length === 1 && resolutions[0]!.outcome === 'new') {
+    resolutions[0] = { ...resolutions[0]!, outcome: 'did_you_mean', suggestion };
+  }
 }
 
 function findMatch(ctx: Ctx, row: LineupImportRowInput, key: string, day: DayInfo | undefined, stageId: string | undefined, errors: RowErrors) {
@@ -367,11 +599,26 @@ function findMatch(ctx: Ctx, row: LineupImportRowInput, key: string, day: DayInf
   if (cands.length > 1 && stageId) cands = cands.filter((s) => s.values.stageId === stageId);
   if (cands.length <= 1) return cands[0];
   cands.forEach((c) => ctx.matchedIds.add(c.id));
+  const where = day?.label || day?.date || 'several days';
   errors.push({
     field: 'stage',
-    message: `Matches ${cands.length} sets on ${day?.label || 'several days'}. Add the stage to tell them apart.`,
+    message: stageId
+      ? `Matches ${cands.length} sets on ${where} at ${stageNameOf(ctx, stageId) ?? 'this stage'}. Use the export file with set_id.`
+      : `Matches ${cands.length} sets on ${where}. Add the stage to tell them apart.`,
   });
   return undefined;
+}
+
+interface RowParts {
+  row: LineupImportRowInput;
+  index: number;
+  names: string[];
+  ids: string[];
+  links: LinkChanges;
+  /** undefined leaves the name alone, null clears it. */
+  displayName: string | null | undefined;
+  errors: RowErrors;
+  warnings: string[];
 }
 
 function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
@@ -382,11 +629,22 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
   if (names.length > MAX_ARTISTS_PER_SET) {
     errors.push({ field: 'artist', message: `A set can have at most ${MAX_ARTISTS_PER_SET} artists.` });
   }
+  const ids = parseArtistIds(row.artistId);
+  if (ids.length > names.length) {
+    errors.push({ field: 'artist', message: `${ids.length} artist ids for ${names.length} names. Use one id per name, with | between them.` });
+  }
+  const links = readLinks(row, warnings);
+  const displayName = row.displayName === undefined ? undefined : sanitizeString(row.displayName, 300) || null;
+  const parts: RowParts = { row, index, names, ids, links, displayName, errors, warnings };
+
   const day = resolveDay(ctx, row, errors);
   let stageId = resolveStage(ctx, row, errors);
   const start = readTime(row.startTime, 'startTime', errors);
   const end = readTime(row.endTime, 'endTime', errors);
-  const link = readLink(row.link, warnings);
+  // A row with only names (and links) has nothing to schedule: it is an announced act.
+  if (names.length > 0 && day === undefined && stageId === undefined && isBlank(row.setId) && isBlank(row.startTime) && isBlank(row.endTime)) {
+    return planAnnouncedRow(ctx, parts);
+  }
   const key = names.map(normKey).join('|');
 
   const match = names.length > 0 && day !== null ? findMatch(ctx, row, key, day ?? undefined, stageId ?? undefined, errors) : undefined;
@@ -404,15 +662,27 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
     else ctx.firstRowOf.set(dupKey, row.row);
   }
 
-  const dayInfo = match ? ctx.days.find((d) => d.key === match.dayKey) : day ?? undefined;
+  const storedDay = match ? ctx.days.find((d) => d.key === match.dayKey) : undefined;
+  // A set id with another day is a day move. Without the option the row is left out.
+  const otherDay = match && day && day.key !== match.dayKey ? day : undefined;
+  if (match && otherDay && errors.length === 0 && !ctx.input.options.moveDays) {
+    return skipRow(ctx, parts, match, storedDay, otherDay);
+  }
+  const move = otherDay && ctx.input.options.moveDays ? otherDay : undefined;
+
+  const { artists, resolutions } = resolveArtists(ctx, names, ids, storedArtists(match), errors, warnings);
+  const dayInfo = move ?? (match ? storedDay : (day ?? undefined));
   const values = match
-    ? mergedValues(ctx, match.values, names, stageId ?? undefined, start, end, link)
-    : newValues(ctx, names, stageId ?? '', start ?? null, end ?? null, link ?? null);
-  const changes = match ? describeChanges(ctx, match, values, link) : [];
+    ? mergedValues(ctx, match.values, names, artists, stageId ?? undefined, start, end, links, displayName)
+    : newValues(ctx, names, artists, stageId ?? '', start ?? null, end ?? null, links, displayName);
+  const changes = match ? describeChanges(ctx, match, values, links, move) : [];
   if (values.startTime && values.startTime < AFTER_MIDNIGHT_CUTOFF && dayInfo) {
     warnings.push(`Starts after midnight, so it counts as ${dayInfo.label || dayInfo.date} night.`);
   }
-  if (!match && errors.length === 0) addNearMatchWarning(ctx, key, dayInfo, warnings);
+  if (!match && errors.length === 0) {
+    addNearMatchWarning(ctx, key, dayInfo, warnings, resolutions);
+    addSecondSetWarning(ctx, key, dayInfo, warnings);
+  }
 
   const status: LineupImportRowStatus =
     errors.length > 0 ? 'error' : !match ? 'new' : changes.length > 0 ? 'changed' : 'unchanged';
@@ -428,47 +698,142 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
     changes,
     errors,
     warnings,
+    resolutions,
   });
-  recordWrite(ctx, index, status, match, dayInfo, values);
+  recordWrite(ctx, index, status, match, dayInfo, values, move);
 }
 
-function newValues(ctx: Ctx, names: string[], stageId: string, start: string | null, end: string | null, link: string | null): SetValues {
-  const artists: ArtistEntry[] = names.map((name) => ({ name, links: {} }));
-  if (link && artists[0]) artists[0].links.spotify = link;
-  return { stageId, startTime: start, endTime: end, artist: names.join(` ${ctx.sep} `), artists, linkUrl: link };
+/** The stored artist of a matched set that a typed name stands for. */
+const storedArtists = (match: ExistingSet | undefined): ResolveOptions => ({
+  findStored: (name) => match?.values.artists.find((a) => typeof a?.name === 'string' && normKey(a.name) === normKey(name)),
+  renameToRow: true,
+});
+
+/** A set id row whose day is not the stored day: no write, and a warning that says why. */
+function skipRow(ctx: Ctx, parts: RowParts, match: ExistingSet, storedDay: DayInfo | undefined, fileDay: DayInfo) {
+  const reason = `Skipped: the file says ${dayName(fileDay)}, the stored day is ${dayName(storedDay)}. Import cannot move a set to another day. Move it in the editor, then import again.`;
+  ctx.planRows.push({
+    row: parts.row.row,
+    status: 'unchanged',
+    setId: match.id,
+    artists: parts.names,
+    dayLabel: dayName(storedDay) || undefined,
+    stageName: stageNameOf(ctx, match.values.stageId),
+    startTime: match.values.startTime,
+    endTime: match.values.endTime,
+    changes: [],
+    errors: parts.errors,
+    warnings: [reason, ...parts.warnings],
+    resolutions: [],
+    skipped: reason,
+  });
 }
 
-/** The matched set after the row is applied. Each artist keeps its stored photo, genres and links by name. */
+/** A row with names and no day, stage or time. It adds to, or fills in, the announced lineup. */
+function planAnnouncedRow(ctx: Ctx, parts: RowParts) {
+  const { row, index, names, ids, links, displayName, errors, warnings } = parts;
+  const key = lineupEntryKey({ artists: names.map((name) => ({ name })) });
+  const match = ctx.lineupByKey.get(key);
+  const dupKey = `announced|${key}`;
+  const first = ctx.firstRowOf.get(dupKey);
+  if (first !== undefined) errors.push({ field: 'row', message: `Same act as row ${first}.` });
+  else ctx.firstRowOf.set(dupKey, row.row);
+
+  const storedFor = (name: string) => match?.artists.find((a) => lineupNameKey(a.name) === lineupNameKey(name));
+  const { artists, resolutions } = resolveArtists(ctx, names, ids, { findStored: storedFor, renameToRow: false }, errors, warnings);
+  applyLinks(artists[0], links);
+  const after: LineupEntryValue = match
+    ? { ...match, artists, displayName: displayName !== undefined ? displayName : (match.displayName ?? null) }
+    : {
+        id: ctx.makeId('lu'),
+        artists,
+        displayName: displayName ?? null,
+        tier: null,
+        dayDate: null,
+        status: 'announced',
+        announcedAt: ctx.today,
+        linkedSetIds: [],
+      };
+  const changes: string[] = [];
+  if (match) {
+    changes.push(...describeLinkChanges(storedFor(names[0]!)?.links ?? {}, artists[0]?.links ?? {}, links));
+    if ((match.displayName ?? null) !== after.displayName) {
+      changes.push(`Display name ${match.displayName ?? 'none'} → ${after.displayName ?? 'none'}`);
+    }
+  } else if (errors.length === 0) {
+    const near = ctx.lineup.find((e) => {
+      const other = lineupEntryKey(e);
+      // Length gap above 2 means distance above 2; skip the O(n*m) DP (up to 500 x 500 pairs per import).
+      return Math.min(key.length, other.length) >= NEAR_MIN_KEY_LENGTH
+        && Math.abs(key.length - other.length) <= 2
+        && editDistance(key, other) <= 2;
+    });
+    if (near) {
+      const text = near.artists.map((a) => a.name).join(` ${ctx.sep} `);
+      warnings.push(`Did you mean ${text}?`);
+      markNear(resolutions, text);
+    }
+  }
+
+  const status: LineupImportRowStatus = errors.length > 0 ? 'error' : !match ? 'new' : changes.length > 0 ? 'changed' : 'unchanged';
+  ctx.planRows.push({ row: row.row, status, target: 'announced', artists: names, changes, errors, warnings, resolutions });
+  if (status === 'new') ctx.announcedInserts.push({ index, entry: after });
+  else if (status === 'changed' && ctx.input.options.updateExisting && match) {
+    ctx.announcedUpdates.push({ index, id: match.id, before: match, after });
+  }
+}
+
+function newValues(
+  ctx: Ctx,
+  names: string[],
+  artists: ArtistEntry[],
+  stageId: string,
+  start: string | null,
+  end: string | null,
+  links: LinkChanges,
+  displayName: string | null | undefined,
+): SetValues {
+  applyLinks(artists[0], links);
+  return {
+    stageId,
+    startTime: start,
+    endTime: end,
+    artist: names.join(` ${ctx.sep} `),
+    artists,
+    linkUrl: artists[0]?.links.spotify ?? null,
+    displayName: displayName ?? null,
+  };
+}
+
+/** The matched set after the row is applied. Each artist keeps its stored id, photo, genres and links by name. */
 function mergedValues(
   ctx: Ctx,
   before: SetValues,
   names: string[],
+  artists: ArtistEntry[],
   stageId: string | undefined,
   start: string | null | undefined,
   end: string | null | undefined,
-  link: string | null | undefined,
+  links: LinkChanges,
+  displayName: string | null | undefined,
 ): SetValues {
-  const artists: ArtistEntry[] = names.map((name) => {
-    const stored = before.artists.find((a) => typeof a?.name === 'string' && normKey(a.name) === normKey(name));
-    return stored ? { ...stored, name, links: { ...(stored.links || {}) } } : { name, links: {} };
-  });
-  if (link !== undefined && artists[0]) {
-    if (link) artists[0].links.spotify = link;
-    else delete artists[0].links.spotify;
-  }
+  applyLinks(artists[0], links);
   return {
     stageId: stageId ?? before.stageId,
     startTime: start !== undefined ? start : before.startTime,
     endTime: end !== undefined ? end : before.endTime,
     artist: names.join(` ${ctx.sep} `),
     artists,
-    linkUrl: link !== undefined ? link : before.linkUrl,
+    // link_url follows the first artist's Spotify link, as a festival save does.
+    linkUrl: 'spotify' in links ? (artists[0]?.links.spotify ?? null) : before.linkUrl,
+    displayName: displayName !== undefined ? displayName : before.displayName,
   };
 }
 
-function describeChanges(ctx: Ctx, match: ExistingSet, after: SetValues, link: string | null | undefined): string[] {
+function describeChanges(ctx: Ctx, match: ExistingSet, after: SetValues, links: LinkChanges, move: DayInfo | undefined): string[] {
   const before = match.values;
   const changes: string[] = [];
+  if (move) changes.push(`Day ${match.dayLabel || '?'} → ${dayName(move)}`);
   if (after.stageId !== before.stageId) {
     changes.push(`Stage ${stageNameOf(ctx, before.stageId) ?? '?'} → ${stageNameOf(ctx, after.stageId) ?? '?'}`);
   }
@@ -478,20 +843,46 @@ function describeChanges(ctx: Ctx, match: ExistingSet, after: SetValues, link: s
   if (afterNames.join('|') !== match.names.join('|')) {
     changes.push(`Artist ${match.names.join(` ${ctx.sep} `)} → ${afterNames.join(` ${ctx.sep} `)}`);
   }
-  if (link !== undefined) {
-    const old = blankToNull(before.artists[0]?.links?.spotify) ?? before.linkUrl;
-    if (old !== link) changes.push(`Link ${old ?? 'none'} → ${link ?? 'none'}`);
+  after.artists.forEach((a, i) => {
+    if (a.id && a.id !== before.artists[i]?.id) changes.push(`Artist ${a.name} linked to artist ${a.id}`);
+  });
+  changes.push(...describeLinkChanges(before.artists[0]?.links ?? {}, after.artists[0]?.links ?? {}, links, before.linkUrl));
+  if (after.displayName !== before.displayName) {
+    changes.push(`Display name ${before.displayName ?? 'none'} → ${after.displayName ?? 'none'}`);
   }
   return changes;
 }
 
-function addNearMatchWarning(ctx: Ctx, key: string, day: DayInfo | undefined, warnings: string[]) {
+const NEAR_MIN_KEY_LENGTH = 4;
+
+function addNearMatchWarning(ctx: Ctx, key: string, day: DayInfo | undefined, warnings: string[], resolutions: ArtistResolution[]) {
   if (!day) return;
   const near = ctx.existing.find((s) => s.dayKey === day.key && s.key !== key && editDistance(s.key, key) <= 2);
-  if (near) warnings.push(`Did you mean ${near.names.join(` ${ctx.sep} `)}?`);
+  if (!near) return;
+  const text = near.names.join(` ${ctx.sep} `);
+  warnings.push(`Did you mean ${text}?`);
+  markNear(resolutions, text);
 }
 
-function recordWrite(ctx: Ctx, index: number, status: LineupImportRowStatus, match: ExistingSet | undefined, day: DayInfo | undefined, values: SetValues) {
+/** The same act on another day: a corrected day typed without the set id adds a second set. */
+function addSecondSetWarning(ctx: Ctx, key: string, day: DayInfo | undefined, warnings: string[]) {
+  if (!day) return;
+  const other = ctx.existing.find((s) => s.key === key && s.dayKey !== day.key);
+  if (!other) return;
+  warnings.push(
+    `This artist already has a set on ${other.dayLabel || 'another day'}. This row adds a second set on ${dayName(day)}. Use the export file to change a day.`,
+  );
+}
+
+function recordWrite(
+  ctx: Ctx,
+  index: number,
+  status: LineupImportRowStatus,
+  match: ExistingSet | undefined,
+  day: DayInfo | undefined,
+  values: SetValues,
+  move: DayInfo | undefined,
+) {
   if (status === 'error' || !day) return;
   if (status === 'new') {
     const id = ctx.makeId('set-import');
@@ -500,7 +891,7 @@ function recordWrite(ctx: Ctx, index: number, status: LineupImportRowStatus, mat
     return;
   }
   if (status === 'changed' && ctx.input.options.updateExisting && match) {
-    ctx.updates.push({ index, setId: match.id, before: match.values, after: values });
+    ctx.updates.push({ index, setId: match.id, before: match.values, after: values, ...(move ? { dayKey: move.key } : {}) });
   }
 }
 
@@ -511,7 +902,7 @@ function addOverlapErrors(ctx: Ctx) {
     ...ctx.existing.map((s) => {
       const u = updated.get(s.id);
       const v = u ? u.after : s.values;
-      return { rowIndex: u ? u.index : null, dayKey: s.dayKey, stageId: v.stageId, artist: v.artist, start: v.startTime, end: v.endTime };
+      return { rowIndex: u ? u.index : null, dayKey: u?.dayKey ?? s.dayKey, stageId: v.stageId, artist: v.artist, start: v.startTime, end: v.endTime };
     }),
     ...ctx.schedule,
   ].filter((e) => e.start && e.end);
@@ -559,7 +950,7 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
   // Only stages and days that a written set uses are created.
   const usedStageIds = new Set([...ctx.inserts.map((s) => s.stageId), ...ctx.updates.map((u) => u.after.stageId)]);
   const newStages = ctx.stages.filter((s) => s.isNew && usedStageIds.has(s.id));
-  const usedDayKeys = new Set(ctx.inserts.map((s) => s.dayKey));
+  const usedDayKeys = new Set([...ctx.inserts.map((s) => s.dayKey), ...ctx.updates.flatMap((u) => (u.dayKey ? [u.dayKey] : []))]);
   const firstNewIndex = ctx.days.slice(0, ctx.existingDayCount).reduce((max, d) => Math.max(max, (d.index ?? 0) + 1), 0);
   const newDays = ctx.days
     .slice(ctx.existingDayCount)
@@ -572,11 +963,20 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
   if (stageTotal > config.MAX_STAGES) problems.push(`This import would make ${stageTotal} stages. The limit is ${config.MAX_STAGES}.`);
   const dayTotal = ctx.existingDayCount + newDays.length;
   if (dayTotal > config.MAX_DAYS) problems.push(`This import would make ${dayTotal} days. The limit is ${config.MAX_DAYS}.`);
+  const movedTo = new Map(ctx.updates.flatMap((u) => (u.dayKey ? [[u.setId, u.dayKey] as const] : [])));
   for (const day of [...ctx.days.slice(0, ctx.existingDayCount), ...newDays]) {
-    const total = ctx.existing.filter((s) => s.dayKey === day.key).length + ctx.inserts.filter((s) => s.dayKey === day.key).length;
+    const total =
+      ctx.existing.filter((s) => (movedTo.get(s.id) ?? s.dayKey) === day.key).length +
+      ctx.inserts.filter((s) => s.dayKey === day.key).length;
     if (total > config.MAX_SETS_PER_DAY) {
       problems.push(`${day.label || day.date} would have ${total} sets. The limit is ${config.MAX_SETS_PER_DAY}.`);
     }
+  }
+
+  if (ctx.lineup.length + ctx.announcedInserts.length > MAX_LINEUP_ENTRIES) {
+    problems.push(
+      `The announced lineup would have ${ctx.lineup.length + ctx.announcedInserts.length} entries. The limit is ${MAX_LINEUP_ENTRIES}.`,
+    );
   }
 
   const spotifyMatched = fillSpotify(ctx);
@@ -595,6 +995,9 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
       newStages: newStages.length,
       newDays: newDays.length,
       missingFromFile: missingFromFile.length,
+      announced: ctx.announcedInserts.length,
+      skipped: ctx.planRows.filter((r) => r.skipped).length,
+      needsChoice: ctx.planRows.filter((r) => r.resolutions.some((x) => x.outcome === 'needs_choice')).length,
     },
     rows: ctx.planRows,
     newStages: newStages.map((s) => ({ name: s.name, color: s.color })),
@@ -608,7 +1011,13 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
     newStages: newStages.map((s) => ({ id: s.id, name: s.name, color: s.color })),
     newDays: newDays.map((d) => ({ dayIndex: d.index, label: d.label, date: d.date })),
     inserts: ctx.inserts.map(({ dayKey, ...s }) => ({ ...s, dayIndex: dayIndexOf.get(dayKey)! })),
-    updates: ctx.updates,
+    updates: ctx.updates.map(({ dayKey, ...u }) => {
+      if (!dayKey) return u;
+      const from = ctx.days.find((d) => d.key === ctx.existingById.get(u.setId)!.dayKey)!.index!;
+      return { ...u, dayMove: { from, to: dayIndexOf.get(dayKey)! } };
+    }),
+    announced: { inserts: ctx.announcedInserts, updates: ctx.announcedUpdates },
+    artistIds: [...ctx.lookedUpIds],
     spotifyMatched,
   };
   return { plan, writes };
@@ -621,7 +1030,8 @@ function fillSpotify(ctx: Ctx): number {
   let matched = 0;
   for (const set of ctx.inserts) {
     for (const artist of set.artists) {
-      const hit = artist.links.spotify ? undefined : spotify.get(artist.name.toLowerCase());
+      // An artist from the repository owns its links, so a search never fills the copy.
+      const hit = artist.links.spotify || artist.id ? undefined : spotify.get(artist.name.toLowerCase());
       if (!hit?.spotifyUrl) continue;
       artist.links.spotify = hit.spotifyUrl;
       if (hit.imageUrl) artist.photo = hit.imageUrl;
@@ -635,5 +1045,5 @@ function fillSpotify(ctx: Ctx): number {
 
 /** Names of the artists of new sets that have no link: the Spotify search list. */
 export function artistsNeedingLinks(writes: LineupImportWrites): string[] {
-  return [...new Set(writes.inserts.flatMap((s) => s.artists.filter((a) => !a.links.spotify).map((a) => a.name)))];
+  return [...new Set(writes.inserts.flatMap((s) => s.artists.filter((a) => !a.links.spotify && !a.id).map((a) => a.name)))];
 }

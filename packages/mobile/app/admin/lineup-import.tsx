@@ -11,16 +11,24 @@ import {
   LINEUP_SAMPLE_CSV,
   buildResultCsv,
   defaultMapping,
+  defaultUpdateExisting,
+  groupPlanRows,
+  importBlocked,
   looksLikeHeader,
   mappingProblems,
   parseLineupTable,
+  parseNameList,
   planSummary,
   toImportRows,
+  updateBanner,
+  withArtistChoice,
   type LineupColumnMapping,
+  type LineupGroupKey,
   type LineupImportCommitResult,
   type LineupImportField,
   type LineupImportHistoryItem,
   type LineupImportPlan,
+  type LineupImportPlanRow,
   type LineupImportRow,
   type LineupImportUndoResult,
 } from '@festie/shared/utils';
@@ -56,20 +64,19 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  */
 
 type Step = 'source' | 'map' | 'preview' | 'result';
-type Filter = 'all' | 'error' | 'new' | 'changed';
+type Filter = 'all' | LineupGroupKey;
 
-const FILTERS: { key: Filter; label: string }[] = [
-  { key: 'all', label: 'All' },
-  { key: 'error', label: 'Errors' },
-  { key: 'new', label: 'New' },
-  { key: 'changed', label: 'Changes' },
-];
+/** One FlatList entry of the review screen: a group heading or a row of that group. */
+type ReviewItem =
+  | { kind: 'header'; key: string; label: string; count: number }
+  | { kind: 'row'; key: string; row: LineupImportPlanRow; group: LineupGroupKey };
 
 const RULES = [
   "A column you don't map is left alone. An empty cell in a mapped column clears that value, so an empty time becomes TBA.",
   'Imports never delete sets.',
   'Sets that start after midnight and before 6 AM belong to the night before. Put a 1 AM Saturday set on Friday.',
   "Write a B2B set as 'Kai b2b Mira'. Each artist gets their own link.",
+  'No day, stage or time? Those rows join the announced lineup. Paste one name per line and choose "Check as a list of names".',
 ];
 
 const NOT_MAPPED = '-1';
@@ -105,6 +112,10 @@ export default function LineupImportScreen() {
   const [plan, setPlan] = useState<LineupImportPlan | null>(null);
   const [updateExisting, setUpdateExisting] = useState(false);
   const [createMissing, setCreateMissing] = useState(true);
+  const [moveDays, setMoveDays] = useState(false);
+  const [listMode, setListMode] = useState(false);
+  // Rows where the admin chose "Create new" over a "Did you mean" suggestion.
+  const [keepNew, setKeepNew] = useState<Set<number>>(new Set());
   const [filter, setFilter] = useState<Filter>('all');
   const [result, setResult] = useState<LineupImportCommitResult | null>(null);
   const [working, setWorking] = useState(false);
@@ -151,22 +162,23 @@ export default function LineupImportScreen() {
   }, [isAdmin, loadSide]);
 
   const request = useCallback(
-    (rows: LineupImportRow[], update: boolean, create: boolean) => ({
+    (rows: LineupImportRow[], update: boolean, create: boolean, move: boolean) => ({
       rows,
       updateExisting: update,
       createMissing: create,
       skipSpotify: false,
+      moveDays: move,
     }),
     [],
   );
 
   const runPreview = useCallback(
-    async (rows: LineupImportRow[], update: boolean, create: boolean) => {
+    async (rows: LineupImportRow[], update: boolean, create: boolean, move: boolean) => {
       if (!festivalId) return;
       setWorking(true);
       say(null);
       try {
-        setPlan(await lineupImportApi.preview(festivalId, request(rows, update, create)));
+        setPlan(await lineupImportApi.preview(festivalId, request(rows, update, create, move)));
         setStep('preview');
       } catch (err: unknown) {
         say(errMessage(err, 'Preview failed. Try again.'), true);
@@ -216,19 +228,65 @@ export default function LineupImportScreen() {
       );
       return;
     }
+    // An export file (it has a set id column) is meant to change sets, so Update starts on.
+    const update = defaultUpdateExisting(mapping);
+    setListMode(false);
+    setUpdateExisting(update);
     setImportRows(rows);
-    void runPreview(rows, updateExisting, createMissing);
-  }, [table, lines, mapping, hasHeader, updateExisting, createMissing, runPreview, say]);
+    void runPreview(rows, update, createMissing, moveDays);
+  }, [table, lines, mapping, hasHeader, createMissing, moveDays, runPreview, say]);
+
+  // A pasted list of names has no columns to match: each line becomes an announced name.
+  const handleCheckList = useCallback(() => {
+    if (importText.length > LINEUP_IMPORT_LIMITS.maxBytes) {
+      say('This is larger than 200 KB. Split it and import it in parts.', true);
+      return;
+    }
+    const rows = parseNameList(importText);
+    if (rows.length === 0) {
+      say('No names found in that data.', true);
+      return;
+    }
+    if (rows.length > LINEUP_IMPORT_LIMITS.maxRows) {
+      say(`That list has ${rows.length} names. The limit is ${LINEUP_IMPORT_LIMITS.maxRows}. Split it and import it in parts.`, true);
+      return;
+    }
+    setListMode(true);
+    setUpdateExisting(false);
+    setImportRows(rows);
+    void runPreview(rows, false, createMissing, moveDays);
+  }, [importText, createMissing, moveDays, runPreview, say]);
 
   const handleToggle = useCallback(
-    (which: 'update' | 'create', value: boolean) => {
+    (which: 'update' | 'create' | 'move', value: boolean) => {
       const update = which === 'update' ? value : updateExisting;
       const create = which === 'create' ? value : createMissing;
+      const move = which === 'move' ? value : moveDays;
       setUpdateExisting(update);
       setCreateMissing(create);
-      void runPreview(importRows, update, create);
+      setMoveDays(move);
+      void runPreview(importRows, update, create, move);
     },
-    [updateExisting, createMissing, importRows, runPreview],
+    [updateExisting, createMissing, moveDays, importRows, runPreview],
+  );
+
+  const chooseArtist = useCallback(
+    (row: number, position: number, artistId: string) => {
+      if (!artistId) return;
+      const next = withArtistChoice(importRows, row, position, artistId);
+      setImportRows(next);
+      void runPreview(next, updateExisting, createMissing, moveDays);
+    },
+    [importRows, updateExisting, createMissing, moveDays, runPreview],
+  );
+
+  const applySuggestion = useCallback(
+    (row: number, suggestion: string) => {
+      const next = importRows.map((r) => (r.row === row ? { ...r, artist: suggestion } : r));
+      setImportRows(next);
+      void runPreview(next, updateExisting, createMissing, moveDays);
+    },
+    [importRows, updateExisting, createMissing, moveDays, runPreview],
   );
 
   const editRow = useCallback((row: number, field: LineupImportField, value: string) => {
@@ -244,9 +302,9 @@ export default function LineupImportScreen() {
         setStep('source');
         return;
       }
-      void runPreview(next, updateExisting, createMissing);
+      void runPreview(next, updateExisting, createMissing, moveDays);
     },
-    [importRows, updateExisting, createMissing, runPreview],
+    [importRows, updateExisting, createMissing, moveDays, runPreview],
   );
 
   const handleImport = useCallback(async () => {
@@ -255,7 +313,7 @@ export default function LineupImportScreen() {
     setWorking(true);
     say(null);
     try {
-      const res = await lineupImportApi.commit(festivalId, request(importRows, updateExisting, createMissing));
+      const res = await lineupImportApi.commit(festivalId, request(importRows, updateExisting, createMissing, moveDays));
       setPlan(res.plan);
       if (res.committed) {
         setResult(res.result);
@@ -269,7 +327,7 @@ export default function LineupImportScreen() {
     } finally {
       setWorking(false);
     }
-  }, [festivalId, importRows, updateExisting, createMissing, request, loadSide, say]);
+  }, [festivalId, importRows, updateExisting, createMissing, moveDays, request, loadSide, say]);
 
   const shareCsv = useCallback(
     async (suffix: string, makeCsv: () => string | Promise<string>, failure: string) => {
@@ -308,6 +366,8 @@ export default function LineupImportScreen() {
     setImportRows([]);
     setPlan(null);
     setResult(null);
+    setListMode(false);
+    setKeepNew(new Set());
     say(null);
     setStep('source');
   }, [say]);
@@ -322,6 +382,9 @@ export default function LineupImportScreen() {
       setUndoKept(res.kept);
       say(
         `Import undone. Removed ${res.removed} sets and restored ${res.restored}.` +
+          (res.removedEntries || res.restoredEntries
+            ? ` Announced lineup: removed ${res.removedEntries ?? 0}, restored ${res.restoredEntries ?? 0}.`
+            : '') +
           (res.kept.length ? ` ${res.kept.length} sets stayed.` : ''),
       );
       void loadSide();
@@ -347,12 +410,20 @@ export default function LineupImportScreen() {
     }
   }, [festivalId, loadSide, say]);
 
-  const visibleRows = useMemo(() => {
-    const rows = plan?.rows ?? [];
-    return filter === 'all' ? rows : rows.filter((r) => r.status === filter);
-  }, [plan, filter]);
+  const groups = useMemo(() => (plan ? groupPlanRows(plan) : []), [plan]);
+  const items = useMemo<ReviewItem[]>(
+    () =>
+      groups
+        .filter((g) => g.rows.length > 0 && (filter === 'all' || filter === g.key))
+        .flatMap((g) => [
+          { kind: 'header' as const, key: `h-${g.key}`, label: g.label, count: g.rows.length },
+          ...g.rows.map((row) => ({ kind: 'row' as const, key: `${g.key}-${row.row}`, row, group: g.key })),
+        ]),
+    [groups, filter],
+  );
 
-  const blocked = !!plan && (plan.counts.error > 0 || plan.problems.length > 0);
+  const blocked = !!plan && importBlocked(plan);
+  const banner = plan ? updateBanner(plan.counts, updateExisting) : null;
   const columnOptions = useMemo<SelectOption[]>(() => {
     const headerRow = hasHeader ? (table[0] ?? []) : [];
     const sample = table[hasHeader ? 1 : 0] ?? [];
@@ -448,6 +519,12 @@ export default function LineupImportScreen() {
               style={styles.flexBtn}
             />
           </View>
+          <Button
+            label="Check as a list of names"
+            variant="secondary"
+            onPress={handleCheckList}
+            disabled={importText.trim().length === 0 || working}
+          />
         </>
       ) : null}
 
@@ -501,9 +578,12 @@ export default function LineupImportScreen() {
         <>
           <SectionLabel>Preview</SectionLabel>
           <View style={styles.chipRow}>
-            {(['new', 'changed', 'unchanged', 'error'] as const).map((k) => (
-              <View key={k} style={[styles.stagePill, k === 'error' && plan.counts.error > 0 && styles.statusPillError]}>
-                <Text style={styles.stagePillText}>{`${STATUS_LABEL[k]} ${plan.counts[k]}`}</Text>
+            {groups.map((g) => (
+              <View
+                key={g.key}
+                style={[styles.stagePill, (g.key === 'errors' || g.key === 'needsChoice') && g.rows.length > 0 && styles.statusPillError]}
+              >
+                <Text style={styles.stagePillText}>{`${g.label} ${g.rows.length}`}</Text>
               </View>
             ))}
           </View>
@@ -535,6 +615,24 @@ export default function LineupImportScreen() {
               accessibilityLabel="Create new stages and days"
             />
           </View>
+          <View style={styles.toggleRow}>
+            <Text style={styles.toggleLabel}>
+              Move sets to the day in the file. For rows with a set id. When this is off, a row with another day is
+              skipped and the other rows still import.
+            </Text>
+            <AppSwitch
+              value={moveDays}
+              onValueChange={(v) => handleToggle('move', v)}
+              disabled={working}
+              accessibilityLabel="Move sets to the day in the file"
+            />
+          </View>
+          {banner ? (
+            <View style={[styles.banner, styles.bannerOk]}>
+              <Text style={styles.bannerText}>{banner}</Text>
+              <Button label="Turn on Update" size="sm" variant="secondary" onPress={() => handleToggle('update', true)} disabled={working} />
+            </View>
+          ) : null}
           {plan.problems.length > 0 ? (
             <View style={[styles.card, styles.errorCard]}>
               {plan.problems.map((p, i) => (
@@ -557,15 +655,18 @@ export default function LineupImportScreen() {
             </View>
           ) : null}
           <View style={styles.chipRow}>
-            {FILTERS.map((f) => (
-              <Button
-                key={f.key}
-                label={f.label}
-                size="sm"
-                variant={filter === f.key ? 'secondary' : 'ghost'}
-                onPress={() => setFilter(f.key)}
-              />
-            ))}
+            <Button label="All" size="sm" variant={filter === 'all' ? 'secondary' : 'ghost'} onPress={() => setFilter('all')} />
+            {groups
+              .filter((g) => g.rows.length > 0)
+              .map((g) => (
+                <Button
+                  key={g.key}
+                  label={g.label}
+                  size="sm"
+                  variant={filter === g.key ? 'secondary' : 'ghost'}
+                  onPress={() => setFilter(g.key)}
+                />
+              ))}
           </View>
         </>
       ) : null}
@@ -576,9 +677,25 @@ export default function LineupImportScreen() {
           <View style={[styles.banner, styles.bannerOk]}>
             <Text style={styles.bannerText}>
               Import done. Added {result.created} sets, updated {result.updated}, created {result.newStages} stages and{' '}
-              {result.newDays} days. Spotify linked {result.spotifyMatched} artists.
+              {result.newDays} days.
+              {result.announced || result.announcedUpdated
+                ? ` Announced lineup: ${result.announced ?? 0} added, ${result.announcedUpdated ?? 0} updated.`
+                : ''}{' '}
+              Spotify linked {result.spotifyMatched} artists.
             </Text>
           </View>
+          {result.rows.some((x) => x.status === 'skipped') ? (
+            <View style={styles.card}>
+              <Text style={styles.helpTitle}>Skipped rows</Text>
+              {result.rows
+                .filter((x) => x.status === 'skipped')
+                .map((x) => (
+                  <Text key={x.row} style={styles.helpNote}>
+                    {`Row ${x.row}, ${x.artist}: ${x.message}`}
+                  </Text>
+                ))}
+            </View>
+          ) : null}
           {result.warnings.length > 0 ? (
             <View style={styles.card}>
               {result.warnings.map((w, i) => (
@@ -618,7 +735,7 @@ export default function LineupImportScreen() {
             <Button
               label="Check again"
               variant="secondary"
-              onPress={() => void runPreview(importRows, updateExisting, createMissing)}
+              onPress={() => void runPreview(importRows, updateExisting, createMissing, moveDays)}
               disabled={working}
               style={styles.flexBtn}
             />
@@ -632,7 +749,7 @@ export default function LineupImportScreen() {
               style={styles.flexBtn}
             />
           </View>
-          <Button label="Back" variant="ghost" onPress={() => setStep('map')} />
+          <Button label="Back" variant="ghost" onPress={() => setStep(listMode ? 'source' : 'map')} />
         </>
       ) : null}
 
@@ -646,6 +763,9 @@ export default function LineupImportScreen() {
           </Text>
           <Text style={styles.previewMeta}>
             Added {h.counts.created} · Updated {h.counts.updated} · {h.counts.newStages} stages · {h.counts.newDays} days
+            {h.counts.announced || h.counts.announcedUpdated
+              ? ` · Announced ${h.counts.announced ?? 0} added, ${h.counts.announcedUpdated ?? 0} updated`
+              : ''}
           </Text>
           {h.undoneAt ? <Text style={styles.helpNote}>Undone {dateTime(h.undoneAt)}</Text> : null}
           {h.canUndo ? (
@@ -695,8 +815,8 @@ export default function LineupImportScreen() {
       />
 
       <FlatList
-        data={step === 'preview' ? visibleRows : []}
-        keyExtractor={(item) => String(item.row)}
+        data={step === 'preview' ? items : []}
+        keyExtractor={(item) => item.key}
         contentContainerStyle={[
           styles.scroll,
           { paddingBottom: Math.max(t.spacing[6], insets.bottom + t.spacing[2]) },
@@ -705,12 +825,31 @@ export default function LineupImportScreen() {
         keyboardShouldPersistTaps="handled"
         ListHeaderComponent={header}
         ListFooterComponent={footer}
-        renderItem={({ item }) => {
+        renderItem={({ item: entry }) => {
+          if (entry.kind === 'header') {
+            return <SectionLabel>{`${entry.label} (${entry.count})`}</SectionLabel>;
+          }
+          const item = entry.row;
+          // The Warnings group repeats rows from the outcome groups, so it shows the warnings only.
+          if (entry.group === 'warnings') {
+            return (
+              <View style={[styles.card, styles.previewSpacer]} accessibilityLabel={`Row ${item.row}, ${item.artists.join(' b2b ')}, warnings`}>
+                <Text style={styles.previewArtist} numberOfLines={1}>
+                  {item.artists.join(' b2b ') || `Row ${item.row}`}
+                </Text>
+                {item.warnings.map((w) => (
+                  <Text key={w} style={styles.helpNote}>
+                    {w}
+                  </Text>
+                ))}
+              </View>
+            );
+          }
           const isError = item.status === 'error';
           const source = importRows.find((r) => r.row === item.row);
-          const errorFields = [...new Set(item.errors.map((e) => e.field))].filter(
-            (f): f is Exclude<typeof f, 'row'> => f !== 'row',
-          );
+          const errorFields = [
+            ...new Set(item.errors.filter((e) => e.code !== 'needs_choice').map((e) => e.field)),
+          ].filter((f): f is Exclude<typeof f, 'row'> => f !== 'row');
           return (
             <View
               style={[styles.card, isError && styles.errorCard, styles.previewSpacer]}
@@ -727,7 +866,7 @@ export default function LineupImportScreen() {
                 </View>
               </View>
               <Text style={styles.previewMeta} numberOfLines={1}>
-                Row {item.row} · {item.stageName ?? 'No stage'} · {item.dayLabel ?? 'No day'}
+                Row {item.row} · {item.stageName ?? 'No stage'} · {item.dayLabel ?? (item.target === 'announced' ? 'Announced' : 'No day')}
                 {item.startTime ? ` · ${item.startTime}` : ''}
                 {item.endTime ? `–${item.endTime}` : ''}
               </Text>
@@ -746,6 +885,40 @@ export default function LineupImportScreen() {
                   {e.message}
                 </Text>
               ))}
+              {(item.resolutions ?? []).map((x, i) =>
+                x.outcome === 'needs_choice' ? (
+                  <ModalSelect
+                    key={`${x.name}-${i}`}
+                    label={`Which ${x.name}?`}
+                    value=""
+                    options={[
+                      { label: 'Choose an artist', value: '' },
+                      ...(x.candidates ?? []).map((c) => ({
+                        label: `${x.name} (${c.label || 'no note'})${c.hint ? ` ${c.hint}` : ''}`,
+                        value: c.id,
+                      })),
+                    ]}
+                    onSelect={(v) => chooseArtist(item.row, i, v)}
+                  />
+                ) : x.outcome === 'did_you_mean' && x.suggestion && !keepNew.has(item.row) ? (
+                  <View key={`${x.name}-${i}`} style={styles.actionsRow}>
+                    <Button
+                      label={`Use ${x.suggestion}`}
+                      size="sm"
+                      variant="secondary"
+                      onPress={() => applySuggestion(item.row, x.suggestion!)}
+                      style={styles.flexBtn}
+                    />
+                    <Button
+                      label="Create new"
+                      size="sm"
+                      variant="ghost"
+                      onPress={() => setKeepNew((prev) => new Set(prev).add(item.row))}
+                      style={styles.flexBtn}
+                    />
+                  </View>
+                ) : null,
+              )}
               {isError && source ? (
                 <>
                   {errorFields.map((field) => (

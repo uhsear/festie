@@ -53,7 +53,11 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
     try {
       const result = await lineupImportApi.undo(festivalId, undoTarget.id);
       const stayed = result.kept.length ? ` ${result.kept.length} sets stayed.` : '';
-      toast(`Import undone. Removed ${result.removed} sets and restored ${result.restored}.${stayed}`, 'success');
+      const entries =
+        result.removedEntries || result.restoredEntries
+          ? ` Announced lineup: removed ${result.removedEntries ?? 0}, restored ${result.restoredEntries ?? 0}.`
+          : '';
+      toast(`Import undone. Removed ${result.removed} sets and restored ${result.restored}.${entries}${stayed}`, 'success');
       setLastUndo(result);
       setUndoTarget(null);
       await reload();
@@ -107,6 +111,9 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
                   <p className="text-text-muted">
                     Added {item.counts.created} · Updated {item.counts.updated} · {item.counts.newStages} stages ·{' '}
                     {item.counts.newDays} days
+                    {item.counts.announced || item.counts.announcedUpdated
+                      ? ` · Announced ${item.counts.announced ?? 0} added, ${item.counts.announcedUpdated ?? 0} updated`
+                      : ''}
                   </p>
                   {item.undoneAt && (
                     <p className="text-text-muted">Undone {new Date(item.undoneAt).toLocaleDateString()}</p>

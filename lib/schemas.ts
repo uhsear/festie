@@ -581,7 +581,19 @@ export const lineupImportRowSchema = z
     startTime: z.string().max(20).optional(),
     endTime: z.string().max(20).optional(),
     stageColor: z.string().max(20).optional(),
+    // The single link column names no platform: the server reads it from the host.
     link: z.string().max(500).optional(),
+    // One artist id per name, separated by "|" for a B2B set. An empty position leaves that name to the matcher.
+    artistId: z.string().max(450).optional(),
+    // Billed name for the set (new sets) or the announced entry. An empty string clears it.
+    displayName: z.string().max(300).optional(),
+    spotify: z.string().max(500).optional(),
+    soundcloud: z.string().max(500).optional(),
+    instagram: z.string().max(500).optional(),
+    twitter: z.string().max(500).optional(),
+    tiktok: z.string().max(500).optional(),
+    facebook: z.string().max(500).optional(),
+    website: z.string().max(500).optional(),
   })
   .strict();
 export type LineupImportRowInput = z.infer<typeof lineupImportRowSchema>;
@@ -592,6 +604,8 @@ export const lineupImportRequestSchema = z
     updateExisting: z.boolean().default(false),
     createMissing: z.boolean().default(true),
     skipSpotify: z.boolean().default(false),
+    // On: a row with a set_id and another day moves that set. Off: such a row is skipped.
+    moveDays: z.boolean().default(false),
   })
   .strict();
 export type LineupImportRequestInput = z.infer<typeof lineupImportRequestSchema>;

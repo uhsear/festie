@@ -12,6 +12,8 @@
  *
  * The client parses the CSV or TSV file and posts JSON rows (lineupImportRequestSchema).
  * planLineupImport decides each row; commit plans again inside the write transaction.
+ * A row with only names (and links) has no day, stage or time: it adds to the announced lineup.
+ * Rows name artists by key or by id; two live artists with one key stop the commit until a row names the id.
  * Imports never delete sets. The lineup announcement is a separate, manual admin
  * action. A commit that adds a published festival's first set times sends the
  * one-time "set times are out" alert (reengagement.sendSetTimesOut).
@@ -26,6 +28,7 @@ import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
 import {
+  artistLookupKeys,
   artistsNeedingLinks,
   planLineupImport,
   type LineupImportPlan,
@@ -41,21 +44,27 @@ const makeId = (prefix: string) => `${prefix}-${crypto.randomBytes(6).toString('
 function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importId: string, warnings: string[], sep: string) {
   const insertByIndex = new Map(writes.inserts.map((s) => [s.index, s]));
   const updated = new Set(writes.updates.map((u) => u.index));
+  const announcedAdded = new Set(writes.announced.inserts.map((e) => e.index));
+  const announcedUpdated = new Set(writes.announced.updates.map((e) => e.index));
   const rows = plan.rows.map((r, i) => {
     const artist = r.artists.join(` ${sep} `);
     const insert = insertByIndex.get(i);
     if (insert) return { row: r.row, status: 'created' as const, setId: insert.id, artist, message: 'Added.' };
-    if (updated.has(i)) {
+    if (announcedAdded.has(i)) return { row: r.row, status: 'created' as const, artist, message: 'Added to the announced lineup.' };
+    if (updated.has(i) || announcedUpdated.has(i)) {
       return { row: r.row, status: 'updated' as const, setId: r.setId, artist, message: `Updated: ${r.changes.join('; ')}.` };
     }
+    if (r.skipped) return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: r.skipped };
     if (r.status === 'changed') return { row: r.row, status: 'skipped' as const, setId: r.setId, artist, message: SKIPPED_MESSAGE };
     return { row: r.row, status: 'unchanged' as const, setId: r.setId, artist, message: 'No change.' };
   });
   const count = (status: string) => rows.filter((r) => r.status === status).length;
   return {
     importId,
-    created: count('created'),
-    updated: count('updated'),
+    created: writes.inserts.length,
+    updated: writes.updates.length,
+    announced: writes.announced.inserts.length,
+    announcedUpdated: writes.announced.updates.length,
     unchanged: count('unchanged'),
     skipped: count('skipped'),
     newStages: writes.newStages.length,
@@ -160,10 +169,14 @@ export default function createLineupImportRoute(deps: any) {
       return null;
     }
     const body = validation.data;
+    // One lookup serves the preview and the commit's re-plan. Commit checks the ids again under lock.
+    const { keys, ids } = artistLookupKeys(festival, body.rows);
+    const artists = await stores.lineupImports.lookupArtists(keys, ids);
     const base = {
       rows: body.rows,
-      options: { updateExisting: body.updateExisting, createMissing: body.createMissing },
+      options: { updateExisting: body.updateExisting, createMissing: body.createMissing, moveDays: body.moveDays },
       config,
+      artists,
     };
     return { festivalId, festival, body, base };
   }

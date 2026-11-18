@@ -17,7 +17,7 @@ export type ArtistLinkResult = { ok: true; url: string; spotifyId?: string } | {
 
 export const MAX_ARTIST_LINK_LENGTH = 500;
 
-const LABELS: Record<ArtistLinkPlatform, string> = {
+export const ARTIST_LINK_LABELS: Record<ArtistLinkPlatform, string> = {
   spotify: 'Spotify',
   soundcloud: 'SoundCloud',
   instagram: 'Instagram',
@@ -151,7 +151,7 @@ function normalizeFacebook(parsed: URL): ArtistLinkResult {
 function normalizeWebsite(parsed: URL): ArtistLinkResult {
   const known = HOST_PLATFORM[canonicalHost(parsed.hostname)];
   if (known) {
-    const label = LABELS[known];
+    const label = ARTIST_LINK_LABELS[known];
     return fail(`This is ${/^[aeiox]/i.test(label) ? 'an' : 'a'} ${label} link. Put it in the ${label} field.`);
   }
   if (parsed.protocol !== 'https:') return fail('Use an https link.');
