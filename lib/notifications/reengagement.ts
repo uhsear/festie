@@ -118,6 +118,8 @@ export function findRatePromptDay(
   return -1;
 }
 
+/** How often a running release job refreshes its claim; well under the store's 10 minute stuck window. */
+const TIME_RELEASE_HEARTBEAT_MS = 60_000;
 const TIME_RELEASE_BODY = 'See who plays when and build your plan.';
 
 /**
@@ -592,7 +594,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   // enqueues one job per event key; this reads the claimed rows for that key, sends, and stamps them.
   // It sends first and stamps after: a crash between the two is retried by the admin, the stuck row
   // keeps its event key, and the per-user dedup on that key stops repeat sends.
-  async function sendTimeRelease(festivalId: string, eventKey: string) {
+  async function deliverTimeRelease(festivalId: string, eventKey: string) {
     if (!festivalId || !eventKey || !db) return { sent: 0, reason: 'no_festival' };
 
     const { rows: releases } = await db.query(
@@ -650,6 +652,15 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       [[eventKey, `${eventKey}#email`], userIds],
     );
     const recipients: number = reached[0]?.reached ?? 0;
+    if (userIds.length > 0 && recipients === 0) {
+      // Nobody was reached (a push provider outage, say): free the date so the admin can send it again.
+      await db.query('DELETE FROM festival_time_releases WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL', [
+        festivalId,
+        eventKey,
+      ]);
+      log?.warn?.('sendTimeRelease: nobody reached, claim released', { festivalId, eventKey, audience: userIds.length });
+      return { sent: pushSent, emailSent, eventKey, recipients: 0, reason: 'none_reached' };
+    }
     await db.query(
       'UPDATE festival_time_releases SET sent_at = NOW(), recipients = $3 WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL',
       [festivalId, eventKey, recipients],
@@ -667,6 +678,23 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       emailSent,
     });
     return { sent: pushSent, emailSent, eventKey, recipients };
+  }
+
+  // The fan-out is sequential and can outlast the stuck window, so a live job refreshes its claim.
+  async function sendTimeRelease(festivalId: string, eventKey: string) {
+    if (!db) return deliverTimeRelease(festivalId, eventKey);
+    const heartbeat = setInterval(() => {
+      db.query('UPDATE festival_time_releases SET claimed_at = NOW() WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL', [
+        festivalId,
+        eventKey,
+      ]).catch((err: any) => log?.warn?.('sendTimeRelease: heartbeat failed', { festivalId, eventKey, error: err?.message }));
+    }, TIME_RELEASE_HEARTBEAT_MS);
+    heartbeat.unref?.();
+    try {
+      return await deliverTimeRelease(festivalId, eventKey);
+    } finally {
+      clearInterval(heartbeat);
+    }
   }
 
   // ── crew_reformed ─────────────────────────────────────────────────────────

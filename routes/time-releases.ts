@@ -189,7 +189,18 @@ export default function createTimeReleasesRoute(deps: any) {
 
         const datesByKey = new Map<string, string[]>();
         for (const row of taken) datesByKey.set(row.eventKey, [...(datesByKey.get(row.eventKey) ?? []), row.date]);
-        for (const key of datesByKey.keys()) await reengagement.sendTimeRelease(festivalId, key);
+        const newKey = claimed[0]?.eventKey;
+        let newKeyEnqueued = false;
+        try {
+          for (const key of datesByKey.keys()) {
+            await reengagement.sendTimeRelease(festivalId, key);
+            if (key === newKey) newKeyEnqueued = true;
+          }
+        } catch (err) {
+          // The claim is committed but no job exists for it: free the dates, or they stay ALREADY_RELEASED for ten minutes.
+          if (newKey && !newKeyEnqueued) await stores.timeReleases.unclaim(festivalId, newKey);
+          throw err;
+        }
 
         const takenDates = taken.map((r: any) => r.date).sort();
         await recordRelease(req, res, festivalId, {

@@ -16,6 +16,7 @@ import createTimeReleasesRoute from '../routes/time-releases.js';
 import { sanitizeIdentifier } from '../lib/helpers/sanitize.js';
 import { ErrorCodes, sendError, sendSuccess } from '../lib/response.js';
 import { schemas, validate } from '../lib/schemas.js';
+import { createReengagementTriggers } from '../lib/notifications/reengagement.js';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
@@ -277,5 +278,89 @@ describe('time-release routes', { skip, concurrency: 1 }, () => {
     await post({ dates: [FRI] }).expect(202);
     await stores.festivals.hardDelete(ID);
     assert.deepEqual(await sql('SELECT 1 FROM festival_time_releases WHERE festival_id = $1', [ID]), []);
+  });
+  test('a failed enqueue un-claims the dates this request claimed, so the admin can send again', async () => {
+    await create(festival(FULL_DAYS));
+    sendTimeRelease.mock.mockImplementationOnce(async () => {
+      throw new Error('queue down');
+    });
+    await post({ dates: [FRI] }).expect(500);
+    assert.deepEqual(await sql('SELECT 1 FROM festival_time_releases WHERE festival_id = $1', [ID]), []);
+    await post({ dates: [FRI] }).expect(202);
+    assert.equal(sendTimeRelease.mock.calls.length, 2);
+  });
+
+  describe('the send job and the stuck window', () => {
+    const KEY = `times:${ID}:22222222-2222-4222-8222-222222222222`;
+    let triggers: any;
+    let reached: number;
+    let gate: Promise<void>;
+    let release: () => void;
+    let pushStarted: Promise<void>;
+
+    beforeEach(async () => {
+      await create(festival(FULL_DAYS));
+      await stores.timeReleases.claim(ID, [FRI], KEY, null);
+      await pool.query(`UPDATE festival_time_releases SET claimed_at = NOW() - INTERVAL '11 minutes' WHERE festival_id = $1`, [ID]);
+      reached = 3;
+      let started!: () => void;
+      pushStarted = new Promise((r) => (started = r));
+      gate = new Promise((r) => (release = r));
+      // Real festival_time_releases rows; the audience and the delivery log are stubbed.
+      const dbProxy = {
+        query: async (text: string, params: unknown[]) => {
+          if (/festival_follows f\s/.test(text)) return { rows: audience.map((userId) => ({ userId })) };
+          if (text.includes('FROM notification_log')) return { rows: [{ reached }] };
+          return pool.query(text, params as any[]);
+        },
+      };
+      triggers = createReengagementTriggers({
+        stores: {
+          festivals: stores.festivals,
+          users: { getByIds: async () => new Map() },
+          notificationPrefs: { get: async () => null },
+          notificationLog: { existsForEvents: async () => new Set(), insert: async () => {} },
+        },
+        config: { PUBLIC_ORIGIN: 'https://festie.test', RESEND_API_KEY: '', EMAIL_POSTAL_ADDRESS: '' },
+        log: { info() {}, warn() {}, debug() {}, error() {} },
+        notificationService: {
+          isConfigured: true,
+          send: async () => {
+            started();
+            await gate;
+            return { sent: 1 };
+          },
+        },
+        pool: dbProxy,
+      });
+    });
+
+    test('a running job keeps its claim fresh, so reclaimStuck cannot take it', async () => {
+      mock.timers.enable({ apis: ['setInterval'] });
+      try {
+        const job = triggers.sendTimeRelease(ID, KEY);
+        await pushStarted;
+        mock.timers.tick(60_000);
+        for (let i = 0; i < 100; i++) {
+          const [row] = await sql(`SELECT claimed_at > NOW() - INTERVAL '1 minute' AS fresh FROM festival_time_releases WHERE festival_id = $1`, [ID]);
+          if (row.fresh) break;
+          await new Promise((r) => setTimeout(r, 20));
+        }
+        assert.deepEqual(await stores.timeReleases.reclaimStuck(ID, [FRI]), []);
+        release();
+        await job;
+      } finally {
+        mock.timers.reset();
+      }
+    });
+
+    test('a send that reached nobody leaves the date claimable and unstamped', async () => {
+      reached = 0;
+      release();
+      const r = await triggers.sendTimeRelease(ID, KEY);
+      assert.equal(r.reason, 'none_reached');
+      assert.deepEqual(await sql('SELECT 1 FROM festival_time_releases WHERE festival_id = $1', [ID]), []);
+      assert.equal((await stores.timeReleases.claim(ID, [FRI], 'times:retry', null)).length, 1);
+    });
   });
 });

@@ -79,6 +79,14 @@ export function createTimeReleasesStore(pool: Pool) {
       return rows;
     },
 
+    /** Drop the unsent rows of one event key, so their dates can be claimed again. */
+    async unclaim(festivalId: string, eventKey: string): Promise<void> {
+      await pool.query('DELETE FROM festival_time_releases WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL', [
+        festivalId,
+        eventKey,
+      ]);
+    },
+
     /** Take over this request's dates whose earlier claim never finished. The row keeps its stored key. */
     async reclaimStuck(festivalId: string, dates: string[]): Promise<ClaimedRelease[]> {
       const { rows } = await pool.query(
