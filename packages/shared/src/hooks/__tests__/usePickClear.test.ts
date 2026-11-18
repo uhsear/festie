@@ -59,13 +59,13 @@ describe('usePickClear', () => {
     await flush();
 
     expect(puts()).toEqual([
-      ['picks', 'pick-p1-s1'],
+      ['pickDeltas', 'pick-p1-s1'],
       ['reminders', 'reminder-p1-s1'],
-      ['picks', 'pick-p1-s1'],
+      ['pickDeltas', 'pick-p1-s1'],
       ['reminders', 'reminder-p1-s1'],
     ]);
     const calls = vi.mocked(api.put).mock.calls;
-    expect(calls[2]![1]).toEqual({ picks: { s1: 'must' } });
+    expect(calls[2]![1]).toEqual({ pickDeltas: { s1: 'must' }, legacyPicks: { s1: 'must' } });
     expect(calls[3]![1]).toEqual({ reminders: { s1: 15 } });
     expect(useFestivalStore.getState().currentProfile!.picks).toEqual({ s1: 'must' });
   });

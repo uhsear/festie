@@ -617,7 +617,7 @@ describe('festivalDataStore', () => {
   });
 
   describe('bulkSavePicks', () => {
-    it('merges all setIds into the picks map in ONE coalesced PUT', async () => {
+    it('writes ONE delta naming only the sets it changed', async () => {
       useFestivalDataStore.setState({ currentProfile: mockProfile });
       vi.mocked(api.put).mockResolvedValueOnce(undefined);
 
@@ -628,14 +628,11 @@ describe('festivalDataStore', () => {
       expect(api.put).toHaveBeenCalledWith(
         `/profiles/${mockProfile.id}`,
         {
-          picks: {
-            'set-1': 'must', // pre-existing pick preserved
-            'set-2': 'must',
-            'set-3': 'must',
-            'set-4': 'must',
-          },
+          // set-1 is already picked, so it is not in the delta
+          pickDeltas: { 'set-2': 'must', 'set-3': 'must', 'set-4': 'must' },
+          legacyPicks: { 'set-1': 'must', 'set-2': 'must', 'set-3': 'must', 'set-4': 'must' },
         },
-        expect.objectContaining({ clientId: `bulk-${mockProfile.id}` }),
+        expect.objectContaining({ clientId: expect.stringMatching(/^bulk-prof-1-/) }),
       );
 
       // Optimistic local state reflects all merged picks.
@@ -645,19 +642,19 @@ describe('festivalDataStore', () => {
       expect(profile.picks['set-4']).toBe('must');
     });
 
-    it('uses a profile-scoped clientId so repeated bulk applies coalesce', async () => {
+    it('queues each bulk apply under its own clientId so a later delta never replaces an earlier one', async () => {
       useFestivalDataStore.setState({ currentProfile: mockProfile });
       vi.mocked(api.put).mockResolvedValue(undefined);
 
       await useFestivalDataStore.getState().bulkSavePicks(['set-2'], 'want-to-see');
       await useFestivalDataStore.getState().bulkSavePicks(['set-3'], 'maybe');
 
-      // Both writes share the same deterministic clientId so the offline queue
-      // upserts them into one replayed PUT.
       const calls = vi.mocked(api.put).mock.calls;
       expect(calls).toHaveLength(2);
-      expect(calls[0]![2]).toEqual(expect.objectContaining({ clientId: `bulk-${mockProfile.id}` }));
-      expect(calls[1]![2]).toEqual(expect.objectContaining({ clientId: `bulk-${mockProfile.id}` }));
+      const ids = calls.map((c) => (c[2] as { clientId: string }).clientId);
+      expect(ids[0]).not.toBe(ids[1]);
+      expect(calls[0]![1]).toMatchObject({ pickDeltas: { 'set-2': 'want-to-see' } });
+      expect(calls[1]![1]).toMatchObject({ pickDeltas: { 'set-3': 'maybe' } });
     });
 
     it('is idempotent: no write when every set is already at this priority', async () => {
@@ -728,7 +725,7 @@ describe('festivalDataStore', () => {
       await useFestivalDataStore.getState().removePick('fest-1', 'set-1');
       const profile = useFestivalDataStore.getState().currentProfile!;
       expect(profile.picks['set-1']).toBeUndefined();
-      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ picks: {}, pickRemove: ['set-1'] });
+      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ pickDeltas: { 'set-1': null }, legacyPicks: {} });
     });
 
     it('throws when signed in with no current profile', async () => {
@@ -910,7 +907,7 @@ describe('festivalDataStore', () => {
 
       expect(api.put).toHaveBeenCalledWith(
         `/profiles/${mockProfile.id}`,
-        expect.objectContaining({ picks: expect.objectContaining({ 'set-2': 'maybe' }) }),
+        expect.objectContaining({ pickDeltas: { 'set-2': 'maybe' } }),
         expect.objectContaining({ clientId: `pick-${mockProfile.id}-set-2` }),
       );
       // Optimistic update should have taken effect.
@@ -943,7 +940,7 @@ describe('festivalDataStore', () => {
       await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-1', priority: null });
 
       expect(api.put).toHaveBeenCalledTimes(2);
-      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ picks: {}, pickRemove: ['set-1'] });
+      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ pickDeltas: { 'set-1': null }, legacyPicks: {} });
       expect(vi.mocked(api.put).mock.calls[0]![2]).toMatchObject({ clientId: 'pick-prof-1-set-1' });
       expect(vi.mocked(api.put).mock.calls[1]![1]).toEqual({ reminders: { 'set-9': 30 } });
       expect(vi.mocked(api.put).mock.calls[1]![2]).toMatchObject({ clientId: 'reminder-prof-1-set-1' });
@@ -1141,7 +1138,7 @@ describe('festivalDataStore', () => {
   });
 
   describe('restorePicks (plan-import undo)', () => {
-    it('sends one PUT with clientId bulk-<profileId> and deletes keys whose previous value is undefined', async () => {
+    it('sends one delta PUT, with a null for each key whose previous value is undefined', async () => {
       useFestivalDataStore.setState({
         currentProfile: { ...mockProfile, picks: { 'set-1': 'must', 'set-2': 'must', 'set-3': 'maybe' } },
       });
@@ -1152,8 +1149,11 @@ describe('festivalDataStore', () => {
       expect(api.put).toHaveBeenCalledTimes(1);
       expect(api.put).toHaveBeenCalledWith(
         '/profiles/prof-1',
-        { picks: { 'set-1': 'must', 'set-3': 'want-to-see' } },
-        expect.objectContaining({ clientId: 'bulk-prof-1' }),
+        {
+          pickDeltas: { 'set-2': null, 'set-3': 'want-to-see' },
+          legacyPicks: { 'set-1': 'must', 'set-3': 'want-to-see' },
+        },
+        expect.objectContaining({ clientId: expect.stringMatching(/^bulk-prof-1-/) }),
       );
       expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-1': 'must', 'set-3': 'want-to-see' });
     });
@@ -1329,7 +1329,11 @@ describe('festivalDataStore', () => {
     it('savePick with no profile joins once, then writes the pick to the new profile', async () => {
       await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' });
       expect(api.post).toHaveBeenCalledTimes(1);
-      expect(api.put).toHaveBeenCalledWith('/profiles/prof-new', { picks: { 'set-2': 'must' } }, expect.anything());
+      expect(api.put).toHaveBeenCalledWith(
+        '/profiles/prof-new',
+        { pickDeltas: { 'set-2': 'must' }, legacyPicks: { 'set-2': 'must' } },
+        expect.anything(),
+      );
       expect(useFestivalDataStore.getState().currentProfile!.picks).toEqual({ 'set-2': 'must' });
     });
 

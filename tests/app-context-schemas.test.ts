@@ -514,6 +514,15 @@ describe('schemas: profileUpdate refinement', () => {
     });
     assert.ok(result.success);
   });
+
+  it('strips the legacyPicks fallback the client sends beside pickDeltas', () => {
+    const result = schemas.profileUpdate.safeParse({
+      pickDeltas: { 'set-1': 'must', 'set-2': null },
+      legacyPicks: { 'set-1': 'must' },
+    });
+    assert.ok(result.success);
+    assert.deepEqual(result.data, { pickDeltas: { 'set-1': 'must', 'set-2': null } });
+  });
 });
 
 describe('schemas: topicSubscription', () => {

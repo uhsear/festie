@@ -3,6 +3,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '../services/api';
 import { mapErrorToUserMessage } from '../services/errors';
 import { isOffline } from '../services/offlineQueue';
+import { bulkPickClientId, changedPickDeltas, pickDeltaBody } from '../services/pickDeltas';
 import { getStorage } from '../platform/storage';
 import { useAuthStore } from './authStore';
 
@@ -180,11 +181,11 @@ export interface FestivalDataActions {
   convertGuestInterests: () => void;
   savePick: (request: SavePickRequest) => Promise<void>;
   /**
-   * Bulk-apply ONE priority to many sets in a single coalesced write (M2 bulk
-   * pick helpers). Merges every `setId` into the current profile's picks map and
-   * issues exactly ONE `offlinePut` to `/profiles/:id` — never N writes. Reuses
-   * the deterministic-clientId coalescing (`bulk-<profileId>`) so repeated bulk
-   * applies offline collapse to one replayed PUT whose body is the latest map.
+   * Bulk-apply ONE priority to many sets in a single write (M2 bulk pick
+   * helpers). Merges every `setId` into the current profile's picks map and
+   * issues exactly ONE `offlinePut` to `/profiles/:id` — never N writes. The
+   * body is a pick delta naming only the sets that changed, queued under its own
+   * clientId so repeated bulk applies offline replay in order.
    * Offline-native + queued, mirroring savePick's optimistic-then-PUT path.
    * Never DOWNGRADES an existing stronger pick (must > want > maybe): a set
    * already at a higher priority is left untouched; only unpicked sets and
@@ -200,8 +201,8 @@ export interface FestivalDataActions {
   retryPick: (setId: string) => Promise<void>;
   /**
    * Put picks back to `prev` in one write (plan-import undo). An `undefined`
-   * value deletes the key. Shares bulkSavePicks' `bulk-<profileId>` clientId so
-   * an offline import plus undo collapse to one replayed PUT.
+   * value deletes the key. Sent as a delta of just those keys, queued like a
+   * bulk write, so an offline import plus undo replay in order.
    */
   restorePicks: (prev: Record<string, Priority | undefined>) => Promise<void>;
   setError: (error: string | null) => void;
@@ -652,8 +653,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
     return true;
   },
 
-  // FIX: PUT /profiles/:profileId with full picks map.
-  //      Was incorrectly hitting PUT /profiles/:festivalId/picks.
+  // PUT /profiles/:profileId with a pick delta for this one set (see services/pickDeltas.ts).
   savePick: async (request: SavePickRequest) => {
     if (isGuestWrite(get)) {
       const festivalId = guestFestivalKey(request.festivalId);
@@ -711,8 +711,9 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         get,
         set,
         `/profiles/${currentProfile.id}`,
-        // pickRemove tells the server this clear is deliberate, so its guard on converted picks lets it through.
-        request.priority ? { picks: mergedPicks } : { picks: mergedPicks, pickRemove: [request.setId] },
+        // A null delta removes the pick outright, so the server's guard on converted picks (which
+        // reads whole-map writes) does not apply.
+        pickDeltaBody({ [request.setId]: request.priority ?? null }, mergedPicks),
         `pick-${currentProfile.id}-${request.setId}`,
       );
       swapPickSync(get, set, request.setId, syncEntry, outcome === 'queued' ? { ...syncEntry, state: 'queued' } : undefined);
@@ -784,10 +785,16 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         },
       });
 
-      // ONE coalesced write. Deterministic clientId keyed only by profile (not
-      // per-set) so repeated bulk applies collapse to a single replayed PUT
-      // whose body is the latest full map — never N writes.
-      await trackedPut(get, set, `/profiles/${currentProfile.id}`, { picks: mergedPicks }, `bulk-${currentProfile.id}`);
+      // ONE write carrying a delta for just the sets this call changed. Each call queues
+      // under its own clientId: a shared one would coalesce, and the later delta would
+      // replace the earlier one's sets.
+      await trackedPut(
+        get,
+        set,
+        `/profiles/${currentProfile.id}`,
+        pickDeltaBody(changedPickDeltas(basePicks, mergedPicks), mergedPicks),
+        bulkPickClientId(currentProfile.id),
+      );
       return changed;
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to save picks');
@@ -797,8 +804,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
     }
   },
 
-  // FIX: PUT /profiles/:profileId with full picks map (key removed).
-  //      Was incorrectly hitting DELETE /profiles/:festivalId/picks/:setId.
+  // PUT /profiles/:profileId with a null delta for this set (removes the pick).
   removePick: async (festivalId: string, setId: string) => {
     if (isGuestWrite(get)) {
       const key = guestFestivalKey(festivalId);
@@ -829,12 +835,12 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       started = true;
 
       // Same clientId as savePick so a toggle-on-then-off offline sequence
-      // collapses to one PUT whose body is the latest map.
+      // collapses to one PUT whose delta is the latest for this set.
       const outcome = await trackedPut(
         get,
         set,
         `/profiles/${currentProfile.id}`,
-        { picks: mergedPicks, pickRemove: [setId] },
+        pickDeltaBody({ [setId]: null }, mergedPicks),
         `pick-${currentProfile.id}-${setId}`,
       );
       swapPickSync(get, set, setId, syncEntry, outcome === 'queued' ? { ...syncEntry, state: 'queued' } : undefined);
@@ -975,7 +981,14 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
 
       set({ currentProfile: { ...currentProfile, picks: mergedPicks } });
 
-      await trackedPut(get, set, `/profiles/${currentProfile.id}`, { picks: mergedPicks }, `bulk-${currentProfile.id}`);
+      const deltas = Object.fromEntries(setIds.map((setId) => [setId, prev[setId] ?? null]));
+      await trackedPut(
+        get,
+        set,
+        `/profiles/${currentProfile.id}`,
+        pickDeltaBody(deltas, mergedPicks),
+        bulkPickClientId(currentProfile.id),
+      );
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to restore picks');
       rollbackKeys(get, set, 'picks', rollback, message);
@@ -1116,7 +1129,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   //  - Guest picks on set ids no longer in the festival are dropped: PUT /profiles/:id
   //    rejects the whole map when one id is unknown.
   //  - On a set both picked, the account's pick wins; guest picks only fill gaps.
-  //  - One PUT writes the merged map. It is offline-eligible, so a dropped connection
+  //  - One PUT writes the added picks as a delta. It is offline-eligible, so a dropped connection
   //    queues it. Guest picks clear only after the write succeeds or is queued.
   //  - A 404 means the festival is gone, so its guest picks clear. Any other error
   //    keeps them; the next sign-in or app start retries. Nothing drops silently.
@@ -1153,7 +1166,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
           if (added > 0) {
             await api.put(
               `/profiles/${profile.id}`,
-              { picks: merged },
+              pickDeltaBody(changedPickDeltas(profile.picks ?? {}, merged), merged),
               { clientId: `guest-merge-${profile.id}`, offlineLabel: 'Update picks' },
             );
           }

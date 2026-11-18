@@ -2,6 +2,7 @@ import { API_BASE, TRUSTED_MUTATION_HEADER } from '../constants/config';
 import { ApiError } from '../types/api';
 import { useUIStore } from '../stores/uiStore';
 import { canQueueOnEdgeError } from './errors';
+import { legacyPickBody } from './pickDeltas';
 
 type AuthMode = 'cookie' | 'bearer';
 
@@ -398,6 +399,16 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
         undefined,
         errInfo && typeof errInfo === 'object' ? (errInfo as Record<string, unknown>) : undefined,
       );
+      // A server that predates pick deltas rejects the write. Resend it as the whole-map write it
+      // replaces. The retry needs a new Idempotency-Key: the server cached the 400 under the old one.
+      const legacyBody = method === 'PUT' || method === 'PATCH' ? legacyPickBody(options.body, error) : null;
+      if (legacyBody && path.startsWith('/profiles/')) {
+        const sent = options.headers || {};
+        const keyName = Object.keys(sent).find((k) => k.toLowerCase() === 'idempotency-key');
+        const retryHeaders = keyName ? { ...sent, [keyName]: `${sent[keyName]}:legacy` } : sent;
+        // legacyPickBody returns null for a { picks } body, so this resend cannot loop and may still queue.
+        return apiRequest<T>(path, { ...options, body: legacyBody, headers: retryHeaders }, _isRetry);
+      }
       throw error;
     }
 
