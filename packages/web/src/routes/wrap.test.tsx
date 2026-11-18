@@ -25,6 +25,7 @@ vi.mock('@festie/shared/stores', () => {
   const state = {
     user: { id: 'u1', username: 'asir' },
     currentFestival: { id: 'cur', name: 'Current Fest' },
+    festivals: [] as Array<{ id: string; slug?: string }>,
     activeCrew: null,
     selectCrew: vi.fn(),
     wrapShowHandle: true,

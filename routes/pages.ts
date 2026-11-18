@@ -112,20 +112,34 @@ export default function createPageRoutes(deps: any) {
     }
   });
 
+  // shortcut: stale up to 10 minutes after an edit, key by a version if organizers complain.
+  // The cache sits behind loadPublicFestival, so an unpublished festival still 404s at once.
+  const OG_TTL_MS = 10 * 60 * 1000;
+  const OG_MAX_ENTRIES = 200;
+  const ogCache = new Map<string, { png: Buffer; expires: number }>();
+
   router.get('/f/:slug/og.png', rateLimit(30, 'festival-og'), async (req: any, res: any) => {
     try {
-      const festival = await loadPublicFestival(String(req.params.slug || ''));
+      const slug = String(req.params.slug || '');
+      const festival = await loadPublicFestival(slug);
       // Crawlers need no HTML error page.
       if (!festival) return res.status(404).end();
-      const days = festival.days || [];
-      const svg = buildFestivalOgSvg({
-        festivalName: festival.name,
-        dateRange: festivalDateRange(festival),
-        location: festival.location || '',
-        setCount: days.reduce((sum: number, day: any) => sum + (day?.sets?.length || 0), 0),
-        stageCount: (festival.stages || []).length,
-      });
-      const png = await sharp(Buffer.from(svg)).png().toBuffer();
+      const cached = ogCache.get(slug);
+      let png = cached && cached.expires > Date.now() ? cached.png : undefined;
+      if (!png) {
+        const days = festival.days || [];
+        const svg = buildFestivalOgSvg({
+          festivalName: festival.name,
+          dateRange: festivalDateRange(festival),
+          location: festival.location || '',
+          setCount: days.reduce((sum: number, day: any) => sum + (day?.sets?.length || 0), 0),
+          stageCount: (festival.stages || []).length,
+        });
+        png = await sharp(Buffer.from(svg)).png().toBuffer();
+        ogCache.delete(slug);
+        if (ogCache.size >= OG_MAX_ENTRIES) ogCache.delete(ogCache.keys().next().value!);
+        ogCache.set(slug, { png, expires: Date.now() + OG_TTL_MS });
+      }
       res.setHeader('Content-Type', 'image/png');
       res.setHeader('Cache-Control', 'public, max-age=3600');
       return res.send(png);

@@ -110,11 +110,12 @@ export function buildPublicScheduleUrl(username: string, origin?: string): strin
 }
 
 /**
- * Public festival page: `<origin>/f/<slug>`.
+ * Public festival page: `<origin>/f/<slug>`, plus `?ref=<source>` when a share source is given.
  * Mirrors the server route `GET /f/:slug`, which 404s for drafts and archived festivals.
  */
-export function buildFestivalPageUrl(slug: string, origin?: string): string {
-  return absolute(`/f/${encodeURIComponent(slug)}`, origin);
+export function buildFestivalPageUrl(slug: string, origin?: string, ref?: string): string {
+  const url = absolute(`/f/${encodeURIComponent(slug)}`, origin);
+  return ref ? `${url}?ref=${encodeURIComponent(ref)}` : url;
 }
 
 /**
