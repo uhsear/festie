@@ -6,9 +6,12 @@ import {
   issueKey,
   joinArtistNames,
   listTimeZones,
+  otherEditions,
+  seriesIdsIn,
   shiftSetTimes,
+  suggestSeriesId,
 } from '@festie/shared/utils';
-import type { FestivalIssue } from '@festie/shared/utils';
+import type { FestivalIssue, SeriesFestival } from '@festie/shared/utils';
 import type { Artist } from '@festie/shared/types';
 import type { SetEngagementMap } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
@@ -24,6 +27,8 @@ export interface Festival {
   b2bSeparator?: string;
   /** Optional IANA zone — anchors set status + reminders in the festival's zone. */
   timeZone?: string | null;
+  /** Links editions of one recurring festival. */
+  seriesId?: string | null;
   updatedAt?: string;
   stages?: Stage[];
   days?: Day[];
@@ -45,6 +50,8 @@ export interface FestivalEditFormProps {
   /** Picks and reminders per set id; undefined until loaded. */
   engagement?: SetEngagementMap;
   engagementError?: boolean;
+  /** The admin festival list. It feeds the series picker. */
+  festivals?: ReadonlyArray<SeriesFestival>;
   onSave: () => void;
   /** Edit mode: reset to the loaded festival. */
   onDiscard: () => void;
@@ -53,6 +60,7 @@ export interface FestivalEditFormProps {
 }
 
 const ERROR_RING = 'ring-2 ring-accent-coral';
+const NEW_SERIES = '__new__';
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /**
@@ -75,6 +83,7 @@ export default function FestivalEditForm({
   venueGuessed,
   engagement,
   engagementError,
+  festivals = [],
   onSave,
   onDiscard,
   onCancel,
@@ -85,6 +94,26 @@ export default function FestivalEditForm({
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [shiftMinutes, setShiftMinutes] = useState('30');
+  const [newSeries, setNewSeries] = useState(false);
+
+  // Other festivals only: this one's own saved id must not count as a second edition.
+  const otherFestivals = useMemo(() => festivals.filter((f) => f.id !== editingId), [festivals, editingId]);
+  const seriesOptions = useMemo(() => {
+    const ids = seriesIdsIn(otherFestivals);
+    return formData.seriesId && !ids.includes(formData.seriesId) ? [...ids, formData.seriesId].sort() : ids;
+  }, [otherFestivals, formData.seriesId]);
+  const siblings = otherEditions(otherFestivals, formData.seriesId, editingId);
+  const suggestedSeries = suggestSeriesId(formData.name ?? '');
+  const mistypedSeries =
+    !!formData.seriesId &&
+    siblings.length === 0 &&
+    suggestedSeries !== formData.seriesId &&
+    seriesIdsIn(otherFestivals).includes(suggestedSeries);
+  const handleSeriesSelect = (value: string) => {
+    const creating = value === NEW_SERIES;
+    setNewSeries(creating);
+    setFormData({ ...formData, seriesId: creating ? suggestedSeries || null : value || null });
+  };
 
   // Resolve index-only targets to ids so every row finds its messages under one key.
   const resolved = useMemo(
@@ -381,6 +410,42 @@ export default function FestivalEditForm({
           />
           <span>Joins B2B artist names, for example b2b, vs or &amp;.</span>
         </label>
+        <div className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
+          <label htmlFor="festival-series" className="flex flex-col gap-1">
+            Series
+            <select
+              id="festival-series"
+              value={newSeries ? NEW_SERIES : formData.seriesId || ''}
+              onChange={(e) => handleSeriesSelect(e.target.value)}
+              className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            >
+              <option value="">No series</option>
+              {seriesOptions.map((id) => (
+                <option key={id} value={id}>
+                  {id}
+                </option>
+              ))}
+              <option value={NEW_SERIES}>New series…</option>
+            </select>
+          </label>
+          {newSeries && (
+            <input
+              type="text"
+              maxLength={60}
+              aria-label="New series id"
+              value={formData.seriesId || ''}
+              onChange={(e) => setFormData({ ...formData, seriesId: e.target.value.trim().toLowerCase() || null })}
+              className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            />
+          )}
+          {siblings.length > 0 && <span>Also in this series: {siblings.map((s) => s.name).join(', ')}</span>}
+          {mistypedSeries && (
+            <span role="status" className="text-accent-amber">
+              No other festival uses this id. Check the spelling.
+            </span>
+          )}
+          <span>Links editions so followers of an earlier edition hear about this one. Use lower-case letters, digits and hyphens.</span>
+        </div>
       </div>
 
       {/* Stages */}

@@ -426,6 +426,7 @@ export default function AdminFestivals() {
         venueGuessed={!!festivalId && venueGuessedFor === festivalId}
         engagement={engagement}
         engagementError={engagementError}
+        festivals={festivals}
         onSave={handleSave}
         onDiscard={() => {
           setFormData(original ?? {});

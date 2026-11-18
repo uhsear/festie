@@ -2722,6 +2722,7 @@ export type components = {
                 };
             } | null;
             name: string;
+            seriesId?: string | null;
             slug?: string | null;
             stages: {
                 color: string | null;
@@ -2832,6 +2833,7 @@ export type components = {
             id: string;
             location: string;
             name: string;
+            seriesId?: string | null;
             slug?: string | null;
             stageCount: number;
             startDate: string | null;

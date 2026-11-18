@@ -50,6 +50,7 @@ export * from './polls';
 export * from './lineupImport';
 export * from './setArtists';
 export * from './festivalAdmin';
+export * from './festivalSeries';
 export * from './navigation';
 export * from './scheduleFilters';
 export * from './authValidation';

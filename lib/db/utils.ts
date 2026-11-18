@@ -43,6 +43,7 @@ export default function createUtils(pool: Pool) {
         f.latitude,
         f.longitude,
         f.map_config AS "mapConfig",
+        f.series_id AS "seriesId",
         f.created_at AS "createdAt",
         f.updated_at AS "updatedAt",
         f.published_at AS "publishedAt",
