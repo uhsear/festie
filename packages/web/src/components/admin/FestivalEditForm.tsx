@@ -9,6 +9,7 @@ import {
   otherEditions,
   seriesIdsIn,
   shiftSetTimes,
+  slugifySeriesInput,
   suggestSeriesId,
 } from '@festie/shared/utils';
 import type { FestivalIssue, SeriesFestival } from '@festie/shared/utils';
@@ -434,7 +435,7 @@ export default function FestivalEditForm({
               maxLength={60}
               aria-label="New series id"
               value={formData.seriesId || ''}
-              onChange={(e) => setFormData({ ...formData, seriesId: e.target.value.trim().toLowerCase() || null })}
+              onChange={(e) => setFormData({ ...formData, seriesId: slugifySeriesInput(e.target.value) || null })}
               className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
             />
           )}

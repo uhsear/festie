@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { otherEditions, seriesIdsIn, suggestSeriesId } from './festivalSeries';
+import { otherEditions, seriesIdsIn, slugifySeriesInput, suggestSeriesId } from './festivalSeries';
 
 describe('suggestSeriesId', () => {
   it('strips a trailing year and slugifies', () => {
@@ -20,6 +20,14 @@ describe('suggestSeriesId', () => {
   it('returns an empty string when nothing is left', () => {
     expect(suggestSeriesId('2027')).toBe('');
     expect(suggestSeriesId('!!!')).toBe('');
+  });
+});
+
+describe('slugifySeriesInput', () => {
+  it('replaces characters outside the server pattern and keeps edge hyphens', () => {
+    expect(slugifySeriesInput('Café_Fest.2027')).toBe('cafe-fest-2027');
+    expect(slugifySeriesInput('forbidden-')).toBe('forbidden-');
+    expect(slugifySeriesInput('a'.repeat(70))).toHaveLength(60);
   });
 });
 

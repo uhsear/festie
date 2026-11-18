@@ -10,16 +10,19 @@ export interface SeriesFestival {
 /** Mirrors the server's name-minus-year match (lib/notifications/reengagement.ts). */
 const TRAILING_YEAR = /\s*(19|20)\d{2}\s*$/;
 
-/** "Forbidden Kingdom 2027" becomes "forbidden-kingdom". Empty when nothing usable is left. */
-export function suggestSeriesId(name: string): string {
-  return name
-    .replace(TRAILING_YEAR, '')
+/** Lower-cases and replaces each run of characters outside [a-z0-9] with one hyphen. Keeps edge hyphens so typing "a-" works. */
+export function slugifySeriesInput(value: string): string {
+  return value
     .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/\p{M}/gu, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .slice(0, 60)
-    .replace(/^-+|-+$/g, '');
+    .slice(0, 60);
+}
+
+/** "Forbidden Kingdom 2027" becomes "forbidden-kingdom". Empty when nothing usable is left. */
+export function suggestSeriesId(name: string): string {
+  return slugifySeriesInput(name.replace(TRAILING_YEAR, '')).replace(/^-+|-+$/g, '');
 }
 
 /** The distinct series ids in use, sorted, for the editor's picker. */

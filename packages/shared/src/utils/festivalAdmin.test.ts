@@ -70,6 +70,11 @@ describe('shiftSetTimes', () => {
 });
 
 describe('countFestivalChanges', () => {
+  it('counts a series-only edit as one change', () => {
+    expect(countFestivalChanges({ name: 'FK' }, { name: 'FK', seriesId: 'forbidden-kingdom' }).total).toBe(1);
+    expect(countFestivalChanges({ seriesId: 'a' }, { seriesId: null }).total).toBe(1);
+    expect(countFestivalChanges({ name: 'FK' }, { name: 'FK', seriesId: null }).total).toBe(0);
+  });
   it('treats empty and TBA as equal', () => {
     const f = (t: string) => ({ days: [{ sets: [set('x', { startTime: t, endTime: t })] }] });
     expect(countFestivalChanges(f(''), f('TBA')).total).toBe(0);

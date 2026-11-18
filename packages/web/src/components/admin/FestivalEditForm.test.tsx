@@ -177,7 +177,20 @@ describe('FestivalEditForm series picker', () => {
     return setFormData;
   };
 
-  it('picks an existing series id and lists the other editions', () => {
+  it('picks an existing series id from the list', () => {
+    const setFormData = renderSeries({ name: 'Forbidden Kingdom 2027' });
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: 'forbidden-kingdom' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBe('forbidden-kingdom');
+  });
+
+  it('cleans a typed new series id to the server pattern', () => {
+    const setFormData = renderSeries({ name: 'Wasteland Weekend 2027' });
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: '__new__' } });
+    fireEvent.change(screen.getByLabelText('New series id'), { target: { value: 'Café_Fest.2027' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBe('cafe-fest-2027');
+  });
+
+  it('lists the other editions and clears the series', () => {
     const setFormData = renderSeries({ name: 'Forbidden Kingdom 2027', seriesId: 'forbidden-kingdom' });
     expect(screen.getByText('Also in this series: Forbidden Kingdom 2026')).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Series'), { target: { value: '' } });
