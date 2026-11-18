@@ -6,7 +6,7 @@ import { ensureFestivalProfile } from '../lib/festival-profile';
 const REQ_USER = { userId: 'user-1', username: 'testuser' };
 const USER = { id: 'user-1', username: 'testuser' };
 
-function makeDeps(opts: { existing?: any; orphan?: any; count?: number; max?: number; user?: any } = {}) {
+function makeDeps(opts: { published?: boolean; existing?: any; orphan?: any; count?: number; max?: number; user?: any } = {}) {
   const profileCreated = mock.fn();
   const create = mock.fn(async (p: any) => p);
   const claimOrphan = mock.fn(async () => opts.orphan ?? null);
@@ -19,7 +19,10 @@ function makeDeps(opts: { existing?: any; orphan?: any; count?: number; max?: nu
     getProfiles: mock.fn(async () => []),
     createOpaqueId: (prefix: string) => `${prefix}-new`,
     emitter: { profileCreated },
-    stores: { profiles: { claimOrphan, countByFestival, create } },
+    stores: {
+      profiles: { claimOrphan, countByFestival, create },
+      pool: { query: mock.fn(async () => ({ rows: opts.published === false ? [] : [{ '?column?': 1 }] })) },
+    },
   };
   return { deps, profileCreated, create, claimOrphan };
 }
@@ -63,6 +66,13 @@ describe('ensureFestivalProfile', () => {
     assert.ok(!('error' in result) || result.error === undefined);
     assert.equal(profileCreated.mock.callCount(), 1);
     assert.deepEqual((profileCreated.mock.calls[0] as any).arguments[0], { festivalId: 'fest-1', profile: created, user: USER });
+  });
+
+  it('returns festival-unavailable for a draft, even when the profile already exists', async () => {
+    const existing = { id: 'prof-1', userId: 'user-1', festivalId: 'fest-1' };
+    const { deps, create } = makeDeps({ published: false, existing });
+    assert.deepEqual(await ensureFestivalProfile(deps, REQ_USER, 'fest-1'), { error: 'festival-unavailable' });
+    assert.equal(create.mock.callCount(), 0);
   });
 
   it('returns user-missing when the user row is gone', async () => {
