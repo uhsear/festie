@@ -37,7 +37,7 @@ vi.mock('@festie/shared/stores/uiStore', () => {
 });
 
 // Import AFTER mocks are set up
-import { MAX_RETRIES } from '@festie/shared/services';
+import { MAX_RETRIES, MAX_EDGE_RETRIES } from '@festie/shared/services';
 import { useOfflineQueue } from './useOfflineQueue';
 
 const LS_KEY = 'festie-offline-queue';
@@ -316,24 +316,33 @@ describe('useOfflineQueue — localStorage fallback', () => {
     expect(ui.failedSync).toEqual([]);
   });
 
-  it('an edge 502 is treated like a dead network: stays queued with no retry used, and flips offline', async () => {
+  it('an edge 502 stays queued with no retry used and flips offline, until MAX_EDGE_RETRIES, then surfaces and later entries drain', async () => {
     const { result } = renderHook(() => useOfflineQueue());
     await act(async () => {
       await result.current.queueMutation({ clientId: 'edge-1', type: 'api', url: '/crews/abc/expenses', method: 'POST', body: {} });
+      await result.current.queueMutation({ clientId: 'edge-2', type: 'api', url: '/crews/abc/polls', method: 'POST', body: {} });
     });
-    const apiFn = vi.fn().mockRejectedValue(Object.assign(new Error('Bad gateway'), { status: 502 }));
-    for (let i = 0; i < MAX_RETRIES + 1; i++) {
+    const apiFn = vi.fn(async (url: string) => {
+      if (url === '/crews/abc/expenses') throw Object.assign(new Error('Bad gateway'), { status: 502 });
+      return {};
+    });
+    for (let i = 0; i < MAX_EDGE_RETRIES - 1; i++) {
       await act(async () => {
         ui.setOfflineMode(false);
         await result.current.processQueue(apiFn);
       });
+      const queued = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
+      expect(queued.map((q: { clientId: string }) => q.clientId)).toEqual(['edge-1', 'edge-2']);
+      expect(queued[0].retries ?? 0).toBe(0);
+      expect(ui.offlineMode).toBe(true);
+      expect(ui.failedSync).toEqual([]);
     }
-    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')).toEqual([
-      expect.objectContaining({ clientId: 'edge-1' }),
-    ]);
-    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')[0].retries ?? 0).toBe(0);
-    expect(ui.offlineMode).toBe(true);
-    expect(ui.failedSync).toEqual([]);
+    await act(async () => {
+      ui.setOfflineMode(false);
+      await result.current.processQueue(apiFn);
+    });
+    expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')).toEqual([]);
+    expect(ui.failedSync.map((f) => f.clientId)).toEqual(['edge-1']);
   });
 
   it('a 429 stays queued after Retry-After without consuming a retry or surfacing', async () => {

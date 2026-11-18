@@ -2,6 +2,7 @@ import { useEffect, useCallback, useState } from 'react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import {
   MAX_RETRIES,
+  MAX_EDGE_RETRIES,
   MAX_QUEUE_AGE_MS,
   extractRealId,
   parseRetryAfterMs,
@@ -27,6 +28,7 @@ interface QueuedMutation {
   data?: Record<string, unknown>;
   status: 'pending' | 'failed' | 'completed';
   retries: number;
+  edgeRetries?: number;
   createdAt: number;
 }
 
@@ -583,10 +585,18 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
             // and the 24h prune still apply) and stop. The next good response drains. An edge 5xx
             // means the origin is down, so it counts the same: otherwise a flapping origin
             // would burn MAX_RETRIES.
+            const isEdge = isEdgeUnavailable((err as { status?: number } | null)?.status);
+            const edgeRetries = (mutation.edgeRetries || 0) + 1;
             if (
               (err as { isNetworkError?: boolean } | null)?.isNetworkError === true ||
-              isEdgeUnavailable((err as { status?: number } | null)?.status)
+              (isEdge && edgeRetries < MAX_EDGE_RETRIES)
             ) {
+              // One entry that always gets an edge 5xx must not block the queue forever:
+              // count those attempts and surface the entry once MAX_EDGE_RETRIES is reached.
+              if (isEdge) {
+                if (mutation.id) await updateMutation(mutation.id, { edgeRetries });
+                else updateMutationByClientId(mutation.clientId, { edgeRetries });
+              }
               try {
                 useUIStore.getState().setOfflineMode(true);
               } catch {
@@ -607,7 +617,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
             const isClientError = status !== undefined && status >= 400 && status < 500;
             const isConflict = status === 409;
 
-            if (isConflict || retries >= MAX_RETRIES || isClientError) {
+            if (isConflict || retries >= MAX_RETRIES || isClientError || isEdge) {
               // Permanent failure (conflict, other 4xx, or retries exhausted):
               // surface it to the user as a FailedSyncItem BEFORE removing it
               // from IndexedDB, so an offline write is never silently dropped —
