@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Festival, FestivalDay, FestivalSet, LineupEntry, Stage } from '../types/domain';
 import { coverLineup } from './lineupCover';
 import {
+  announcedActsLine,
   announcedLineupModel,
   groupLineupAlphabetically,
   groupLineupByTier,
@@ -285,5 +286,17 @@ describe('setTimesBannerKind', () => {
 
   it('is "times" when an act has a day but no set has a time', () => {
     expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'], { dayDate: '2027-02-05' })] }), days, [])).toBe('times');
+  });
+});
+
+describe('announcedActsLine', () => {
+  it('counts announced acts and skips cancelled ones', () => {
+    expect(announcedActsLine([{ status: 'announced' }, { status: 'announced' }, { status: 'cancelled' }])).toBe(
+      '2 announced acts. Edit them on the web.',
+    );
+    expect(announcedActsLine([{ status: 'announced' }])).toBe('1 announced act. Edit them on the web.');
+    expect(announcedActsLine([{ status: 'cancelled' }])).toBeNull();
+    expect(announcedActsLine([])).toBeNull();
+    expect(announcedActsLine(undefined)).toBeNull();
   });
 });

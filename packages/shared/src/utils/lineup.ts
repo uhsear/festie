@@ -107,6 +107,13 @@ export function lineupSummary(lineup: readonly LineupEntry[], cover: Record<stri
   return { total, scheduled, cancelled, header };
 }
 
+/** The admin editor's read-only line: cancelled entries are not announced acts. Null when there is nothing to say. */
+export function announcedActsLine(lineup: readonly Pick<LineupEntry, 'status'>[] | undefined): string | null {
+  const count = (lineup ?? []).filter((entry) => entry.status !== 'cancelled').length;
+  if (count === 0) return null;
+  return `${count} announced ${count === 1 ? 'act' : 'acts'}. Edit them on the web.`;
+}
+
 /** Case- and accent-insensitive substring match on the poster name and on every artist name. */
 export function lineupEntryMatchesSearch(entry: LineupEntry, query: string): boolean {
   const q = foldSearch(query.trim());

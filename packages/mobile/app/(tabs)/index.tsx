@@ -57,6 +57,7 @@ import {
   scheduleEmptyReason,
   scheduleResultsSummary,
   visibleDayIndexes,
+  lineupReplacesEmptyState,
   type ScheduleView,
   type ScheduleGroupBy,
 } from '@festie/shared/utils';
@@ -69,6 +70,7 @@ import type { TimeBounds } from '../../hooks/useNowIndicator';
 import { useHaptics } from '../../hooks/useHaptics';
 import { undoNotifier } from '../../lib/undoNotifier';
 import { useNow } from '../../hooks/useNow';
+import { useAnnouncedLineup } from '../../hooks/useAnnouncedLineup';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import SegmentedControl from '../../components/SegmentedControl';
 import NowNextStrip from '../../components/NowNextStrip';
@@ -88,6 +90,7 @@ import { Skeleton } from '../../components/Skeleton';
 import TimelineView from '../../components/TimelineView';
 import TBASection from '../../components/TBASection';
 import SetTimesBanner from '../../components/SetTimesBanner';
+import AnnouncedLineup from '../../components/AnnouncedLineup';
 import DiscoverRow from '../../components/DiscoverRow';
 
 const SLOT_MINUTES = 15;
@@ -189,6 +192,7 @@ export default function TimelineScreen() {
   const { getDays, getFilteredSets, getStageColor, getStageName } = useFestival();
   const { getMyPick, getOtherPicks, getMyNote, getMyReminder, savePick } = usePicks();
   const clearPick = usePickClear(undoNotifier);
+  const announced = useAnnouncedLineup();
 
   // DC1 — search bar and the stage/my-picks + phase-action setup chrome fold
   // behind a compact icon row so the timeline owns the viewport on small
@@ -661,6 +665,10 @@ export default function TimelineScreen() {
   // a pull-to-refresh over existing sets never flashes a skeleton.
   const scheduleColdLoading = isLoading && allSets.length === 0 && rows.length === 0;
 
+  // The announced lineup stands in for "No sets for this day" only when the day has no sets at all.
+  // A filter that emptied the day keeps its own empty state, which offers the button that undoes it.
+  const lineupStandsIn = lineupReplacesEmptyState(announced, searchQuery);
+
   const errorScheduleState = (
     <EmptyState
       icon="cloud-offline-outline"
@@ -744,6 +752,15 @@ export default function TimelineScreen() {
     );
   };
 
+  // A festival with no days at all has no "other day" to pick, so "No sets for this day" would mislead.
+  const noDaysState = (
+    <EmptyState
+      icon="time-outline"
+      title={DISCOVER_COPY.banner.title}
+      message="The schedule has not been posted yet. Check back soon."
+    />
+  );
+
   // A filtered-out day still HAS sets, so the filter is blamed instead of the
   // false "No sets for this day". The timeless-sets hint still wins when the day
   // has TBA sets (timelessSets non-empty).
@@ -756,6 +773,8 @@ export default function TimelineScreen() {
       emptyReason === 'genres') &&
     timelessSets.length === 0 ? (
       filterEmptyState(emptyReason)
+    ) : days.length === 0 ? (
+      noDaysState
     ) : (
       <EmptyState
         icon="musical-notes"
@@ -780,13 +799,15 @@ export default function TimelineScreen() {
     <ScheduleSkeleton />
   ) : scheduleLoadError ? (
     errorScheduleState
-  ) : emptyReason === 'search' ? (
+  ) : lineupStandsIn ? undefined : emptyReason === 'search' ? (
     searchEmptyState
   ) : emptyReason === 'viewAs' ||
     emptyReason === 'picks' ||
     emptyReason === 'stages' ||
     emptyReason === 'genres' ? (
     filterEmptyState(emptyReason)
+  ) : days.length === 0 ? (
+    noDaysState
   ) : (
     <EmptyState
       icon="musical-notes"
@@ -1307,6 +1328,8 @@ export default function TimelineScreen() {
                   hPad={hPad}
                   hidden={phase === 'post' || searchQuery.trim() !== '' || stageFilterActive || genreFilterActive}
                 />
+                {/* A search lists the matching announced acts under the set results instead (footer). */}
+                {searchQuery.trim() ? null : <AnnouncedLineup model={announced} hPad={hPad} />}
                 {filteredSets.length > 0 ? (
                   <View style={[styles.groupByRow, { paddingHorizontal: hPad }]}>
                     <Text style={styles.groupByLabel}>Group by</Text>
@@ -1330,7 +1353,12 @@ export default function TimelineScreen() {
             // F2 — a failed festival load surfaces the error + retry rather than a
             // misleading "No sets" empty state (see cardsEmpty).
             ListEmptyComponent={cardsEmpty}
-            ListFooterComponent={rows.length > 0 ? otherDayMatches : undefined}
+            ListFooterComponent={
+              <>
+                {rows.length > 0 ? otherDayMatches : null}
+                {searchQuery.trim() ? <AnnouncedLineup model={announced} /> : null}
+              </>
+            }
             // Perf for big lineups: cap the initial + per-batch render window so a
             // 200-set day paints fast and scrolls without a long first frame.
             initialNumToRender={8}
@@ -1409,12 +1437,14 @@ export default function TimelineScreen() {
                 <ScheduleSkeleton hPad={hPad} />
               ) : scheduleLoadError ? (
                 errorScheduleState
-              ) : (
+              ) : lineupStandsIn ? null : (
                 emptyScheduleState
               )}
               {tbaSection}
             </>
           )}
+          {/* The lineup follows the day's own content; a search lists the matching acts here too. */}
+          <AnnouncedLineup model={announced} hPad={hPad} />
         </ScrollView>
       )}
     </View>

@@ -17,7 +17,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useFestivalDataStore, useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { usePicks, useCanPick, useFestival, useDayClashes, useViewAs, useCrew } from '@festie/shared/hooks';
-import { COPY } from '@festie/shared/constants';
+import { COPY, DISCOVER_COPY } from '@festie/shared/constants';
 import {
   festivalLoadState,
   GRID_ZOOM_LEVELS,
@@ -33,6 +33,7 @@ import {
   resolveFestivalTimeZone,
   hasAnyPick,
   isStageFilterActive,
+  lineupReplacesEmptyState,
   scheduleEmptyCopy,
   scheduleEmptyReason,
   scheduleResultsSummary,
@@ -40,6 +41,7 @@ import {
   type GridCrewProfile,
   searchEmptyCopy,
   searchHiddenByFilters,
+  searchLineupEntries,
   searchOtherDays,
   type GridBounds,
   type HourMark,
@@ -49,6 +51,7 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE, type Tokens } from '.
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
+import { useAnnouncedLineup } from '../hooks/useAnnouncedLineup';
 import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
@@ -58,6 +61,7 @@ import Avatar from '../components/Avatar';
 import ClashHatch from '../components/ClashHatch';
 import ClashChip from '../components/ClashChip';
 import TBASection from '../components/TBASection';
+import AnnouncedLineup from '../components/AnnouncedLineup';
 import OtherDayMatches from '../components/OtherDayMatches';
 import ScheduleDayChips from '../components/ScheduleDayChips';
 import ScheduleResultsRow from '../components/ScheduleResultsRow';
@@ -142,6 +146,7 @@ export default function GridScreen() {
   const { getMyPick, getOtherPicks } = usePicks();
   const allSets = useFestivalDataStore((s) => s.sets);
   const { getStageColor, getStageName, getDays, getFilteredSets, getCurrentDaySets } = useFestival();
+  const announced = useAnnouncedLineup();
   const dayLabel = getDays()[selectedDay]?.label ?? 'Grid';
   const screenTitle = `${dayLabel} · Grid`;
 
@@ -378,6 +383,12 @@ export default function GridScreen() {
     viewAs.clear();
   };
   const otherDayGroups = searchQuery.trim() ? searchOtherDays(allSets, searchQuery, selectedDay, stages) : [];
+  // The bottom panel takes grid height, so it opens only when the lineup block has rows to show.
+  const lineupHasRows =
+    announced.visible &&
+    (searchQuery.trim()
+      ? searchLineupEntries(announced.lineup, announced.cover, searchQuery).length > 0
+      : announced.selection.active.length > 0 || announced.selection.cancelled.length > 0);
   const otherDayMatches = (
     <OtherDayMatches
       groups={otherDayGroups}
@@ -421,6 +432,19 @@ export default function GridScreen() {
               defaultExpanded
               allTba
             />
+            <AnnouncedLineup model={announced} hPad={t.spacing[4]} />
+          </ScrollView>
+        </View>
+      );
+    }
+    // The announced lineup stands in for the empty state only when the day has no sets at all.
+    if (lineupReplacesEmptyState(announced, searchQuery)) {
+      return (
+        <View style={styles.screen}>
+          <Stack.Screen options={{ title: screenTitle, headerShown: true }} />
+          <ScheduleDayChips hPad={t.spacing[4]} />
+          <ScrollView>
+            <AnnouncedLineup model={announced} hPad={t.spacing[4]} />
           </ScrollView>
         </View>
       );
@@ -455,6 +479,8 @@ export default function GridScreen() {
       empty = { ...scheduleEmptyCopy('stages', dayLabel), onAction: () => setActiveStages([]) };
     } else if (reason === 'genres') {
       empty = { ...scheduleEmptyCopy('genres', dayLabel), onAction: () => setActiveGenres([]) };
+    } else if (getDays().length === 0) {
+      empty = { title: DISCOVER_COPY.banner.title, message: 'The schedule has not been posted yet. Check back soon.' };
     } else {
       empty = {
         title: 'No timed sets to display',
@@ -473,6 +499,12 @@ export default function GridScreen() {
           action={empty.actionLabel && empty.onAction ? { label: empty.actionLabel, onPress: empty.onAction } : undefined}
         />
         {otherDayMatches}
+        {/* A search lists the matching announced acts under the set results, even when no set matches. */}
+        {searchQuery.trim() ? (
+          <ScrollView style={styles.tbaWrap}>
+            <AnnouncedLineup model={announced} hPad={t.spacing[4]} />
+          </ScrollView>
+        ) : null}
       </View>
     );
   }
@@ -754,7 +786,7 @@ export default function GridScreen() {
           </TouchableOpacity>
         ) : null}
       </View>
-      {untimedSets.length > 0 ? (
+      {untimedSets.length > 0 || lineupHasRows ? (
         <ScrollView style={styles.tbaWrap}>
           <TBASection
             sets={untimedSets}
@@ -767,6 +799,7 @@ export default function GridScreen() {
             onSavePick={setPick}
             onOpenDetail={openSet}
           />
+          <AnnouncedLineup model={announced} hPad={t.spacing[4]} />
         </ScrollView>
       ) : null}
 
