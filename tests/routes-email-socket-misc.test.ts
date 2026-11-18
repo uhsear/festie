@@ -34,7 +34,7 @@ function makePool(queryResult = { rows: [] }) {
 }
 
 function baseDeps(overrides: any = {}) {
-  return {
+  const deps: any = {
     express,
     config: {
       NODE_ENV: 'test',
@@ -127,6 +127,8 @@ function baseDeps(overrides: any = {}) {
     },
     ...overrides,
   };
+  deps.festivalAccess = () => deps.adminAuth;
+  return deps;
 }
 
 function mountApp(router: any, prefix = '') {
@@ -1803,6 +1805,7 @@ describe('routes/lineup-import', () => {
         pool: storePool,
         festivals: { getById: mock.fn(async () => FESTIVAL) },
         lineupImports: {
+          lookupArtists: mock.fn(async () => ({ byKey: new Map(), byId: new Map() })),
           // Runs the route's plan builder against the mocked festival, like the real store.
           commit: mock.fn(async (_id: string, buildPlan: any) => {
             const { plan, writes } = buildPlan(FESTIVAL);

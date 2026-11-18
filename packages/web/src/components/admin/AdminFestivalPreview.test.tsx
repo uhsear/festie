@@ -29,6 +29,10 @@ beforeEach(() => {
         ],
       },
     ],
+    lineup: [
+      { id: 'lu-1', name: 'Poster Name', tier: 1, dayLabel: 'Day 1', status: 'announced', scheduled: true },
+      { id: 'lu-2', name: 'Moon Dance', tier: null, dayLabel: '', status: 'cancelled', scheduled: false },
+    ],
     stages: [
       { id: 'k', name: 'Kinetic', color: '#ff0000', pinned: true },
       { id: 'c', name: 'Circuit', color: undefined, pinned: false },
@@ -49,6 +53,16 @@ describe('AdminFestivalPreview', () => {
     expect(screen.getByText('No map pin')).toBeInTheDocument();
     expect(mockPreview).toHaveBeenCalledWith('f1');
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  it('lists the announced acts with day and state', async () => {
+    render(<AdminFestivalPreview festivalId="f1" />);
+    expect(await screen.findByText('Announced acts (2)')).toBeInTheDocument();
+    expect(screen.getByText('Poster Name')).toBeInTheDocument();
+    expect(screen.getByText('Tier 1')).toBeInTheDocument();
+    expect(screen.getByText('Scheduled')).toBeInTheDocument();
+    expect(screen.getByText('Day TBA')).toBeInTheDocument();
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
   });
 
   it('draws the warning with theme amber tokens, not palette amber', async () => {

@@ -126,7 +126,7 @@ describe('invite-pages: renderInviteJoinPage', () => {
 
   it('links Join to the app with the code and sets og:url and og:image', () => {
     const html = renderInviteJoinPage(defaultArgs);
-    assert.ok(html.includes('href="https://festie.us/?joinCrew=ABC123"'));
+    assert.ok(html.includes('href="https://festie.us/?joinCrew=ABC123&amp;ref=crew-invite"'));
     assert.ok(html.includes('og:url" content="https://festie.us/join/ABC123"'));
     assert.ok(html.includes('og:type" content="website"'));
     assert.ok(html.includes('og:image" content="https://festie.us/og-image.png"'));

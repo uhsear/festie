@@ -26,6 +26,9 @@ export const MAX_QUEUE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 /** Cap on transient (5xx/network) replay attempts before surfacing (matches web). */
 export const MAX_RETRIES = 5;
 
+/** Cap on edge-5xx replay attempts per entry; a higher bar than MAX_RETRIES because an outage is not the entry's fault, but one poison entry must not block the queue forever. */
+export const MAX_EDGE_RETRIES = 5;
+
 export type QueuedMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 export interface QueuedMutation {
@@ -42,6 +45,10 @@ export interface QueuedMutation {
   retries?: number;
   /** Epoch ms before which drain skips this entry (set from a 429 Retry-After). */
   notBefore?: number;
+  /** Edge-5xx attempts so far; at MAX_EDGE_RETRIES the write is surfaced + dropped. */
+  edgeRetries?: number;
+  /** An earlier attempt may have reached the origin (edge 5xx / network loss after send). */
+  maybeSent?: boolean;
 }
 
 async function readQueueRaw(): Promise<QueuedMutation[]> {
@@ -249,6 +256,10 @@ function isNetworkTimeout(err: unknown): boolean {
   return (err as { isNetworkError?: boolean } | null)?.isNetworkError === true;
 }
 
+function isEdge(err: unknown): boolean {
+  return isEdgeUnavailable((err as { status?: number } | null)?.status);
+}
+
 /** Merge fields into a still-queued entry (no-op if it was removed meanwhile). */
 function patchQueued(clientId: string, patch: Partial<QueuedMutation>): Promise<void> {
   return withQueueLock(async () => {
@@ -320,7 +331,8 @@ async function replay(m: QueuedMutation): Promise<unknown> {
         await api.delete(m.url, opts);
       } catch (err) {
         // A 404 means the target is gone, so a delete the origin ran before its answer was lost succeeded.
-        if ((err as { status?: number } | null)?.status !== 404) throw err;
+        // Only an entry with an earlier ambiguous attempt may swallow it: crew routes also 404 for "not a member".
+        if (!(m.maybeSent && (err as { status?: number } | null)?.status === 404)) throw err;
       }
       return undefined;
   }
@@ -351,7 +363,8 @@ let _draining = false;
  *  - success            -> remove from queue
  *  - offline again      -> stop; keep the rest for the next reconnect
  *  - permanent 4xx/409  -> remove AND push to uiStore.failedSync (no silent drop)
- *  - edge 5xx / network -> stop; the origin is unreachable, keep the rest, no retry used
+ *  - edge 5xx / network -> stop; the origin is unreachable, keep the rest, no retry used.
+ *                          An edge 5xx counts toward MAX_EDGE_RETRIES, then is surfaced like a failure.
  *  - transient 5xx      -> leave in queue, skip to the next entry
  */
 export async function drainQueue(): Promise<void> {
@@ -399,18 +412,23 @@ export async function drainQueue(): Promise<void> {
           // Transient: wait out Retry-After, no retry consumed (24h age-out still bounds it).
           const waitMs = parseRetryAfterMs((err as { retryAfter?: number | string | null }).retryAfter) ?? DEFAULT_RATE_LIMIT_WAIT_MS;
           await patchQueued(m.clientId, { notBefore: Date.now() + waitMs });
-        } else if (isNetworkTimeout(err) || isEdgeUnavailable((err as { status?: number } | null)?.status)) {
+        } else if (isNetworkTimeout(err) || (isEdge(err) && (m.edgeRetries ?? 0) + 1 < MAX_EDGE_RETRIES)) {
           // Weak signal, not a server verdict (an edge 5xx means the origin is down): keep the
-          // entry untouched, retry next drain. Without this, an outage would burn MAX_RETRIES.
+          // entry, retry next drain, and without burning MAX_RETRIES. The attempt may have
+          // reached the origin, so remember that for a replayed DELETE's 404.
           // Replays bypass api.ts's offline marking, so flip it here or the next good
           // response never restarts the drain.
+          await patchQueued(m.clientId, {
+            maybeSent: true,
+            ...(isEdge(err) ? { edgeRetries: (m.edgeRetries ?? 0) + 1 } : {}),
+          });
           try {
             useUIStore.getState().setOfflineMode(true);
           } catch {
             /* store not ready */
           }
           break;
-        } else if (isPermanentFailure(err)) {
+        } else if (isPermanentFailure(err) || isEdge(err)) {
           await withQueueLock(async () => {
             const queue = (await readQueue()).filter((q) => q.clientId !== m.clientId);
             await writeQueue(queue);

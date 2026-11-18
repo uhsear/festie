@@ -58,18 +58,20 @@ function makeApp(publicOrigin: string) {
     stores: { auditLog: { insert: async (row: any) => { auditRows.push(row); } } },
   };
   configureMiddleware(app as any, ctx);
+  const adminAuth = (req: any, res: any, next: any) => {
+    if (req.get('x-test-admin') !== 'yes') return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
+    req.user = { userId: 'admin-1' };
+    req.isAdmin = true;
+    return next();
+  };
   const routes = createAdminSiteplanRoutes({
     ...ctx,
+    festivalAccess: () => adminAuth,
     avatarPool,
     pool: {
       query: async (_sql: string, params: any[]) => ({ rows: params[0] === 'fest-1' ? [{ id: 'fest-1' }] : [] }),
     },
-    adminAuth: (req: any, res: any, next: any) => {
-      if (req.get('x-test-admin') !== 'yes') return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
-      req.user = { userId: 'admin-1' };
-      req.isAdmin = true;
-      return next();
-    },
+    adminAuth,
     validateParams: passthrough,
     schemas: { genericIdParams: {} },
   });

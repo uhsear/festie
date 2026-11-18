@@ -725,6 +725,7 @@ describe('festivalDataStore', () => {
       await useFestivalDataStore.getState().removePick('fest-1', 'set-1');
       const profile = useFestivalDataStore.getState().currentProfile!;
       expect(profile.picks['set-1']).toBeUndefined();
+      expect(vi.mocked(api.put).mock.calls[0]![1]).toEqual({ pickDeltas: { 'set-1': null }, legacyPicks: {} });
     });
 
     it('throws when signed in with no current profile', async () => {

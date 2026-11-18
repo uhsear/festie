@@ -29,6 +29,7 @@ import {
   hydrateFailedSync,
   surfaceFailedSync,
   MAX_RETRIES,
+  MAX_EDGE_RETRIES,
   type QueuedMutation,
 } from '../offlineQueue';
 import { useUIStore } from '../../stores/uiStore';
@@ -215,14 +216,50 @@ describe('offlineQueue', () => {
       expect(useUIStore.getState().offlineMode).toBe(true);
     });
 
-    it('treats a 404 on a replayed DELETE as done: removed from the queue, never surfaced as failed', async () => {
+    it('surfaces a first-attempt DELETE 404 as failed (could be "not a member", not a finished delete)', async () => {
       seed([makeMutation({ clientId: 'd', method: 'DELETE', url: '/crews/c1/polls/x', body: undefined })]);
       vi.mocked(api.delete).mockRejectedValue(new ApiClientError('Not found', 404));
 
       await drainQueue();
 
       expect(readPersisted()).toHaveLength(0);
+      expect(useUIStore.getState().failedSync.map((f) => f.clientId)).toEqual(['d']);
+    });
+
+    it('treats a DELETE 404 after an earlier ambiguous attempt as done', async () => {
+      seed([makeMutation({ clientId: 'd', method: 'DELETE', url: '/crews/c1/polls/x', body: undefined })]);
+      vi.mocked(api.delete).mockRejectedValueOnce(new ApiClientError('Bad gateway', 502));
+      await drainQueue();
+      expect(readPersisted()[0]!.maybeSent).toBe(true);
+
+      useUIStore.setState({ offlineMode: false });
+      vi.mocked(api.delete).mockRejectedValue(new ApiClientError('Not found', 404));
+      await drainQueue();
+
+      expect(readPersisted()).toHaveLength(0);
       expect(useUIStore.getState().failedSync).toHaveLength(0);
+    });
+
+    it('retries an edge-5xx entry up to MAX_EDGE_RETRIES, then surfaces it and drains later entries', async () => {
+      const t = Date.now();
+      seed([makeMutation({ clientId: 'bad', createdAt: t - 2_000 }), makeMutation({ clientId: 'ok', url: '/profiles/p2', createdAt: t - 1_000 })]);
+      vi.mocked(api.put).mockImplementation(async (url: string) => {
+        if (url === '/profiles/p1') throw new ApiClientError('Bad gateway', 502);
+        return undefined as never;
+      });
+
+      for (let i = 0; i < MAX_EDGE_RETRIES - 1; i++) {
+        useUIStore.setState({ offlineMode: false });
+        await drainQueue();
+        expect(readPersisted().map((q) => q.clientId)).toEqual(['bad', 'ok']);
+      }
+      expect(readPersisted()[0]!.edgeRetries).toBe(MAX_EDGE_RETRIES - 1);
+
+      useUIStore.setState({ offlineMode: false });
+      await drainQueue();
+
+      expect(readPersisted()).toHaveLength(0);
+      expect(useUIStore.getState().failedSync.map((f) => f.clientId)).toEqual(['bad']);
     });
 
     it('still surfaces a 404 on a replayed PUT as failed', async () => {

@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import FestivalEditForm from './FestivalEditForm';
 
+// The release panel loads its own data; null renders nothing here.
+vi.mock('@festie/shared/services/timeReleases', () => ({ timeReleaseApi: { panel: vi.fn().mockResolvedValue(null), send: vi.fn() } }));
 const toast = vi.fn();
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast, toastError: vi.fn() }) }));
 
@@ -160,5 +162,77 @@ describe('FestivalEditForm engagement', () => {
   it('says when pick counts failed to load', () => {
     render(<FestivalEditForm {...baseProps} formData={lineup()} setFormData={vi.fn()} engagementError />);
     expect(screen.getByText("Couldn't load pick counts.")).toBeTruthy();
+  });
+});
+
+describe('FestivalEditForm series picker', () => {
+  const festivals = [
+    { id: 'fk-2026', name: 'Forbidden Kingdom 2026', seriesId: 'forbidden-kingdom' },
+    { id: 'f1', name: 'Forbidden Kingdom 2027', seriesId: 'forbidden-kingdom' },
+    { id: 'nc-2026', name: 'North Coast 2026', seriesId: null },
+  ];
+  const renderSeries = (formData: Record<string, unknown>) => {
+    const setFormData = vi.fn();
+    render(
+      <FestivalEditForm {...baseProps} formData={formData} setFormData={setFormData} festivals={festivals} />,
+    );
+    return setFormData;
+  };
+
+  it('picks an existing series id from the list', () => {
+    const setFormData = renderSeries({ name: 'Forbidden Kingdom 2027' });
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: 'forbidden-kingdom' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBe('forbidden-kingdom');
+  });
+
+  it('cleans a typed new series id to the server pattern', () => {
+    const setFormData = renderSeries({ name: 'Wasteland Weekend 2027' });
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: '__new__' } });
+    fireEvent.change(screen.getByLabelText('New series id'), { target: { value: 'Café_Fest.2027' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBe('cafe-fest-2027');
+  });
+
+  it('lists the other editions and clears the series', () => {
+    const setFormData = renderSeries({ name: 'Forbidden Kingdom 2027', seriesId: 'forbidden-kingdom' });
+    expect(screen.getByText('Also in this series: Forbidden Kingdom 2026')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: '' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBeNull();
+  });
+
+  it('New series pre-fills the id suggested from the name', () => {
+    const setFormData = renderSeries({ name: 'Wasteland Weekend 2027' });
+    fireEvent.change(screen.getByLabelText('Series'), { target: { value: '__new__' } });
+    expect(setFormData.mock.calls.at(-1)![0].seriesId).toBe('wasteland-weekend');
+    expect(screen.getByLabelText('New series id')).toBeTruthy();
+  });
+
+  it('warns when the name suggests a known series but no other festival uses the id', () => {
+    renderSeries({ name: 'Forbidden Kingdom 2028', seriesId: 'forbidden-kingdm' });
+    expect(screen.getByText('No other festival uses this id. Check the spelling.')).toBeTruthy();
+  });
+
+  it('does not warn for a first edition of a new series', () => {
+    renderSeries({ name: 'Wasteland Weekend 2027', seriesId: 'wasteland-weekend' });
+    expect(screen.queryByText('No other festival uses this id. Check the spelling.')).toBeNull();
+  });
+});
+
+describe('FestivalEditForm announced names', () => {
+  it('shows the block only when the festival carries a lineup, and a paste calls setFormData with it', () => {
+    const { expanded: _expanded, ...base } = lineup();
+    void _expanded;
+    const setFormData = vi.fn();
+    const { unmount } = render(<FestivalEditForm {...baseProps} formData={base} setFormData={setFormData} />);
+    expect(screen.queryByText('Announced names')).toBeNull();
+    unmount();
+
+    render(<FestivalEditForm {...baseProps} formData={{ ...base, lineup: [] }} setFormData={setFormData} />);
+    expect(screen.getByText('Announced names')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Paste names' }));
+    fireEvent.change(within(screen.getByRole('dialog')).getByLabelText('Names'), { target: { value: 'Kai\nMira' } });
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Add' }));
+    const next = setFormData.mock.calls.at(-1)![0];
+    expect(next.lineup.map((e: { artists: { name: string }[] }) => e.artists[0]!.name)).toEqual(['Kai', 'Mira']);
+    expect(next.name).toBe('Fest');
   });
 });

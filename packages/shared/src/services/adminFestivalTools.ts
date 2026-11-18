@@ -6,37 +6,17 @@ import { api, ApiClientError, getApiBase, getAuthToken } from './api';
 
 export type SetEngagementMap = Record<string, { picks: number; reminders: number }>;
 
-export interface SpotifyBackfillResult {
-  updated: number;
-  skipped: number;
-  total: number;
-  unmatched: string[];
-  message?: string;
-}
-
 const enc = encodeURIComponent;
 
 export function getSetEngagement(festivalId: string): Promise<SetEngagementMap> {
   return api.get<SetEngagementMap>(`/admin/festivals/${enc(festivalId)}/set-engagement`);
 }
 
-export function saveSetLink(
-  festivalId: string,
-  setId: string,
-  linkUrl: string | null,
-  artistIndex: number,
-): Promise<{ setId: string; artistIndex: number; linkUrl: string | null }> {
-  return api.put(`/admin/festivals/${enc(festivalId)}/sets/${enc(setId)}/link`, { linkUrl, artistIndex });
-}
+/** Marks per announced act (admin only): { [entryId]: { open, converted } }. Counts only, never who marked. */
+export type LineupInterestCounts = Record<string, { open: number; converted: number }>;
 
-/** A whole-festival Spotify search can outlast the 15 s default timeout. */
-export function runSpotifyBackfill(
-  festivalId: string,
-  opts?: { setIds?: string[]; force?: boolean },
-): Promise<SpotifyBackfillResult> {
-  return api.post<SpotifyBackfillResult>(`/admin/festivals/${enc(festivalId)}/backfill-spotify`, opts ?? {}, {
-    timeoutMs: 120_000,
-  });
+export function getLineupInterest(festivalId: string): Promise<{ counts: LineupInterestCounts }> {
+  return api.get<{ counts: LineupInterestCounts }>(`/admin/festivals/${enc(festivalId)}/lineup-interest`);
 }
 
 /** Raw fetch (multipart), headers built as the avatar upload does. */

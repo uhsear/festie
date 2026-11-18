@@ -98,6 +98,7 @@ function build(admin = false) {
     validateQuery: () => pass,
     validateParams: () => pass,
   };
+  deps.festivalAccess = () => deps.adminAuth;
   const app = express();
   app.use((req: any, _res, next) => {
     req.isAdmin = admin;

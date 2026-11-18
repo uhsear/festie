@@ -21,6 +21,7 @@ import { withTransaction } from '../lib/db/connection';
 import type { Identity, IdentityProvider } from '../lib/db/stores/identities';
 import {
   checkRegistrationConflicts,
+  countSignupRef,
   createUserWithProfile,
   finishSignIn,
   USERNAME_RULE_MESSAGE,
@@ -163,7 +164,7 @@ export default function createOAuthRoutes(deps: any): Router {
     validate(schemas.oauthComplete),
     async (req: Request, res: Response) => {
       try {
-        const { signupToken, username, dateOfBirth } = req.validatedBody as any;
+        const { signupToken, username, dateOfBirth, ref } = req.validatedBody as any;
         // Username checks run before the token is spent, so a taken name can be retried.
         const cleanUsername = sanitizeString(username, 30);
         if (!validateUsername(cleanUsername))
@@ -221,6 +222,7 @@ export default function createOAuthRoutes(deps: any): Router {
           return sendError(res, 409, OAUTH_MESSAGES.IDENTITY_LINKED_ELSEWHERE, ErrorCodes.IDENTITY_LINKED_ELSEWHERE);
         }
 
+        await countSignupRef(ref, deps);
         res.locals.auditDetail = { provider, outcome: 'created' };
         return await finishSignIn(req, res, user, deps, { status: 201, extra: { emailVerificationSent: Boolean(email) && !emailVerified } });
       } catch (err) {

@@ -131,14 +131,19 @@ export function createCacheHelpers({ stores, redis, log }: { stores: any; redis:
       _festivalMapCache = null;
     }
     if (_festivalMapCache && _festivalMapCacheVersion === _festivalDataVersion) return _festivalMapCache;
+    // The version is read before the await. A rebuild that raced an invalidation (an artist edit that
+    // committed meanwhile) is returned to this caller but not kept, so it cannot pin stale data.
+    const version = _festivalDataVersion;
     const festivals = await getFestivals();
+    const built = new Map<any, any>(festivals.map((festival: any) => [festival.id, festival]));
+    if (version !== _festivalDataVersion) return built;
     // eslint-disable-next-line require-atomic-updates -- module-level cache, not shared across requests
-    _festivalMapCache = new Map(festivals.map((festival: any) => [festival.id, festival]));
+    _festivalMapCache = built;
     // eslint-disable-next-line require-atomic-updates -- module-level cache, not shared across requests
-    _festivalMapCacheVersion = _festivalDataVersion;
+    _festivalMapCacheVersion = version;
     // eslint-disable-next-line require-atomic-updates -- module-level cache, not shared across requests
     _festivalMapCacheAt = Date.now();
-    return _festivalMapCache;
+    return built;
   }
 
   async function getFestivalById(id: any) {

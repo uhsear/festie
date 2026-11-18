@@ -1,5 +1,14 @@
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+
+const matchArtists = vi.fn();
+const createArtist = vi.fn();
+vi.mock('@festie/shared/services', async (orig) => ({
+  ...(await orig<typeof import('@festie/shared/services')>()),
+  matchArtists: (...a: unknown[]) => matchArtists(...a),
+  createArtist: (...a: unknown[]) => createArtist(...a),
+}));
+
 import SetEditor from './SetEditor';
 
 const renderEditor = (startTime: string, dayLabel?: string) =>
@@ -109,5 +118,96 @@ describe('SetEditor phone layout and engagement', () => {
     render(<SetEditor set={base} stages={[]} onSetArtists={vi.fn()} onField={vi.fn()} onRemove={onRemove} />);
     fireEvent.click(screen.getByText('Remove set'));
     expect(onRemove).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('SetEditor artist matching', () => {
+  const candidate = (over: Record<string, unknown> = {}) => ({
+    id: 'art-uk',
+    name: 'HOL',
+    label: 'UK',
+    photo: null,
+    platforms: ['spotify'],
+    lastFestival: { id: 'f1', name: 'Cyclops Cove 2026' },
+    ...over,
+  });
+  const renderSet = (set: object = { artist: '', artists: [] }) => {
+    const onSetArtists = vi.fn();
+    render(<SetEditor set={{ id: 's1', ...set }} stages={[]} onSetArtists={onSetArtists} onField={vi.fn()} onRemove={vi.fn()} />);
+    return onSetArtists;
+  };
+  const typeAndBlur = (name: string) => {
+    const input = screen.getByLabelText('Artist');
+    fireEvent.change(input, { target: { value: name } });
+    fireEvent.blur(input);
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    matchArtists.mockResolvedValue([{ name: 'x', outcome: 'new', candidates: [] }]);
+  });
+
+  it('a single match links on blur, sends the id and offers "Not this one"', async () => {
+    matchArtists.mockResolvedValue([{ name: 'hol', outcome: 'linked', candidates: [candidate()] }]);
+    const onSetArtists = renderSet();
+    typeAndBlur('hol');
+    expect(await screen.findByText(/Linked: HOL \(UK\)\. Last played: Cyclops Cove 2026\./)).toBeTruthy();
+    expect(matchArtists).toHaveBeenCalledWith([{ name: 'hol' }]);
+    expect(onSetArtists.mock.calls.at(-1)![0]).toEqual([{ id: 'art-uk', name: 'HOL', links: {} }]);
+    expect(screen.getByLabelText('Artist')).toHaveValue('HOL');
+    expect(screen.getByText('Not this one')).toBeTruthy();
+  });
+
+  it('two matches show "Pick one", and picking one links that artist', async () => {
+    matchArtists.mockResolvedValue([
+      { name: 'HOL', outcome: 'pick', candidates: [candidate(), candidate({ id: 'art-us', label: 'US', lastFestival: null })] },
+    ]);
+    const onSetArtists = renderSet();
+    typeAndBlur('HOL');
+    expect(await screen.findByText(/Pick one\. 2 artists are named HOL\./)).toBeTruthy();
+    expect(onSetArtists.mock.calls.at(-1)![0]).toEqual([{ links: {}, name: 'HOL' }]);
+    fireEvent.click(screen.getByText('HOL (US)'));
+    expect(onSetArtists.mock.calls.at(-1)![0]).toEqual([{ id: 'art-us', name: 'HOL', links: {} }]);
+    expect(screen.queryByText(/Pick one/)).toBeNull();
+  });
+
+  it('a new artist with a name that exists needs a note before it is created', async () => {
+    matchArtists.mockResolvedValue([{ name: 'HOL', outcome: 'pick', candidates: [candidate(), candidate({ id: 'art-us', label: 'US' })] }]);
+    createArtist.mockResolvedValue({ id: 'art-new', name: 'HOL', label: 'Berlin', photo: null, links: {}, genres: [], spotifyId: null, updatedAt: 'x' });
+    const onSetArtists = renderSet();
+    typeAndBlur('HOL');
+    fireEvent.click(await screen.findByText('+ New artist with this name'));
+    const create = screen.getByText('Create artist') as HTMLButtonElement;
+    expect(create.disabled).toBe(true);
+    fireEvent.change(screen.getByLabelText('Note to tell HOL apart'), { target: { value: 'Berlin' } });
+    fireEvent.click(create);
+    await waitFor(() => expect(createArtist).toHaveBeenCalledWith({ name: 'HOL', label: 'Berlin' }));
+    await waitFor(() => expect(onSetArtists.mock.calls.at(-1)![0]).toEqual([{ id: 'art-new', name: 'HOL', links: {} }]));
+  });
+
+  it('shows the server message when the create is refused', async () => {
+    matchArtists.mockResolvedValue([{ name: 'HOL', outcome: 'pick', candidates: [candidate(), candidate({ id: 'art-us', label: 'US' })] }]);
+    createArtist.mockRejectedValue(new Error('HOL (UK) already exists. Pick that artist, or use a different note.'));
+    renderSet();
+    typeAndBlur('HOL');
+    fireEvent.click(await screen.findByText('+ New artist with this name'));
+    fireEvent.change(screen.getByLabelText('Note to tell HOL apart'), { target: { value: 'UK' } });
+    fireEvent.click(screen.getByText('Create artist'));
+    expect((await screen.findByRole('alert')).textContent).toContain('HOL (UK) already exists');
+  });
+
+  it('keeps the typed name when the match call fails (offline)', async () => {
+    matchArtists.mockRejectedValue(new Error('offline'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const onSetArtists = renderSet();
+    typeAndBlur('Kai');
+    await waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(onSetArtists.mock.calls.at(-1)![0]).toEqual([{ links: {}, name: 'Kai' }]);
+    warn.mockRestore();
+  });
+
+  it('shows the links of a linked artist read only', () => {
+    renderSet({ artist: 'Kai', artists: [{ id: 'art-1', name: 'Kai', links: { spotify: 'https://s/kai', apple_music: 'https://a/kai' } }] });
+    expect(screen.getByText('Spotify, Apple Music. Edit links on the Artists tab.')).toBeTruthy();
   });
 });
