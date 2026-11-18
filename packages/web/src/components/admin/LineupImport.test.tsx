@@ -26,6 +26,7 @@ const counts = (over: Record<string, number> = {}) => ({
   changed: 0,
   unchanged: 0,
   error: 0,
+  skipped: 0,
   newStages: 0,
   newDays: 0,
   missingFromFile: 0,
@@ -151,6 +152,12 @@ describe('LineupImport', () => {
     expect(screen.getByLabelText('Update sets that match')).not.toBeChecked();
   });
 
+  it('shows a Skipped chip when the plan skips rows', async () => {
+    api.preview.mockResolvedValue(plan([planRow()], { unchanged: 1, skipped: 1 }));
+    await pasteSampleAndCheck();
+    expect(await screen.findByText('Skipped 1')).toBeInTheDocument();
+  });
+
   it('disables Approve when the plan has an error row', async () => {
     api.preview.mockResolvedValue(
       plan([planRow({ status: 'error', errors: [{ field: 'day', message: 'Unknown day "Fryday".' }] })], { error: 1 }),
@@ -187,7 +194,7 @@ describe('LineupImport', () => {
         created: 3,
         updated: 0,
         unchanged: 0,
-        skipped: 0,
+        skipped: 2,
         newStages: 1,
         newDays: 1,
         spotifyMatched: 2,
@@ -200,6 +207,7 @@ describe('LineupImport', () => {
     expect(await screen.findByText(/Approve import\?/)).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Import' }));
     expect(await screen.findByText(/Import done. Added 3 sets/)).toBeInTheDocument();
+    expect(screen.getByText(/Skipped 2 rows that name another day/)).toBeInTheDocument();
     expect(screen.getByText(/Spotify linked 2 artists/)).toBeInTheDocument();
     expect(screen.getByText('Row 7: link dropped')).toBeInTheDocument();
   });

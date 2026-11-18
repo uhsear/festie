@@ -402,6 +402,7 @@ describe('planLineupImport: re-import visibility', () => {
     const skipped = p.rows[0]!;
     assert.equal(skipped.status, 'unchanged');
     assert.equal(skipped.skipped, true);
+    assert.equal(p.counts.skipped, 1);
     assert.equal(skipped.setId, 'set-a');
     assert.equal(skipped.dayLabel, 'Friday');
     assert.deepEqual(skipped.changes, []);
@@ -491,9 +492,10 @@ describe('planLineupImport: re-import visibility', () => {
     assert.equal(p.rows[0]!.errors[0]!.message, 'Matches 2 sets on 2026-08-21 at Main Stage. Use the export file with set_id.');
   });
 
-  it('keeps the plain fold for stage names, so a curly quote still names a new stage', () => {
+  it('folds curly apostrophes in stage names, so a curly quote matches the existing stage', () => {
     const f = festival({ stages: [{ id: 'den', name: "Dragon's Den", color: '#ff3366' }] });
     const { plan: p } = plan([row(2, { artist: 'A', stage: 'Dragon’s Den', day: 'Friday' })], {}, f);
-    assert.deepEqual(p.newStages.map((s) => s.name), ['Dragon’s Den']);
+    assert.deepEqual(p.newStages, []);
+    assert.equal(p.rows[0]!.stageName, "Dragon's Den");
   });
 });

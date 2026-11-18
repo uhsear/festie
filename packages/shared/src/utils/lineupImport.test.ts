@@ -144,13 +144,13 @@ describe('buildLineupCsv', () => {
 });
 
 describe('planSummary', () => {
-  const c = { new: 0, changed: 0, unchanged: 0, error: 0, newStages: 0, newDays: 0 };
+  const c = { new: 0, changed: 0, unchanged: 0, error: 0, skipped: 0, newStages: 0, newDays: 0 };
   it('says nothing to change when all zero', () => {
     expect(planSummary(c, false)).toBe('Nothing to change.');
   });
   it('covers every part with update off', () => {
-    expect(planSummary({ new: 1, changed: 1, unchanged: 1, error: 1, newStages: 1, newDays: 2 }, false)).toBe(
-      'Add 1 set. Leave 2 matching sets as they are. Create 1 stage. Create 2 days. 1 row has errors.',
+    expect(planSummary({ new: 1, changed: 1, unchanged: 1, error: 1, skipped: 2, newStages: 1, newDays: 2 }, false)).toBe(
+      'Add 1 set. Leave 2 matching sets as they are. Create 1 stage. Create 2 days. Skip 2 rows that name another day. 1 row has errors.',
     );
   });
   it('covers update on', () => {

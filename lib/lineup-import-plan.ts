@@ -43,6 +43,7 @@ export interface LineupImportPlan {
     changed: number;
     unchanged: number;
     error: number;
+    skipped: number;
     newStages: number;
     newDays: number;
     missingFromFile: number;
@@ -102,7 +103,8 @@ const AFTER_MIDNIGHT_CUTOFF = '06:00';
 
 // Artist names also fold accents and curly quotes. They keep "The" and punctuation, so import never merges two artists.
 const normKey = lineupFoldKey;
-const stageKey = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim();
+// Stage names fold only the curly apostrophes, so "Dragon’s Den" matches "Dragon's Den" but accents still tell stages apart.
+const stageKey = (s: string) => s.toLowerCase().replace(/[’ʼ]/g, "'").replace(/\s+/g, ' ').trim();
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const blankToNull = (v: any): string | null => (typeof v === 'string' && v ? v : null);
 
@@ -623,6 +625,7 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
       changed: count('changed'),
       unchanged: count('unchanged'),
       error: count('error'),
+      skipped: ctx.planRows.filter((r) => r.skipped).length,
       newStages: newStages.length,
       newDays: newDays.length,
       missingFromFile: missingFromFile.length,

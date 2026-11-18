@@ -49,6 +49,7 @@ export interface LineupImportPlanCounts {
   changed: number;
   unchanged: number;
   error: number;
+  skipped: number;
   newStages: number;
   newDays: number;
   missingFromFile: number;
@@ -221,7 +222,7 @@ export function toImportRows(
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 
 export function planSummary(
-  counts: Pick<LineupImportPlanCounts, 'new' | 'changed' | 'unchanged' | 'error' | 'newStages' | 'newDays'>,
+  counts: Pick<LineupImportPlanCounts, 'new' | 'changed' | 'unchanged' | 'error' | 'skipped' | 'newStages' | 'newDays'>,
   updateExisting: boolean,
 ): string {
   const parts: string[] = [];
@@ -234,6 +235,7 @@ export function planSummary(
   }
   if (counts.newStages) parts.push(`Create ${plural(counts.newStages, 'stage')}.`);
   if (counts.newDays) parts.push(`Create ${plural(counts.newDays, 'day')}.`);
+  if (counts.skipped) parts.push(`Skip ${plural(counts.skipped, 'row')} that name${counts.skipped === 1 ? 's' : ''} another day.`);
   if (counts.error) parts.push(`${plural(counts.error, 'row')} ${counts.error === 1 ? 'has' : 'have'} errors.`);
   return parts.length ? parts.join(' ') : 'Nothing to change.';
 }
