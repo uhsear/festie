@@ -80,6 +80,7 @@ function build({ publishedAt = '2026-01-01T00:00:00.000Z' as string | null, exis
       },
     },
   };
+  deps.festivalAccess = () => deps.adminAuth;
   const app = express();
   app.use(express.json());
   app.use(createAuditMiddleware(deps));

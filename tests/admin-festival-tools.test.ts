@@ -27,7 +27,7 @@ const noop = () => {};
 const pass = (_req: any, _res: any, next: any) => next();
 
 function baseDeps(overrides: any = {}) {
-  return {
+  const deps: any = {
     express,
     config: {
       ADMIN_WRITE_RATE_LIMIT_MAX: 100,
@@ -64,6 +64,8 @@ function baseDeps(overrides: any = {}) {
     state: { onlineUsers: new Map() },
     ...overrides,
   };
+  deps.festivalAccess = () => deps.adminAuth;
+  return deps;
 }
 
 function appFor(router: any) {

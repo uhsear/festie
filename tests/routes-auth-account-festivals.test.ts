@@ -229,6 +229,8 @@ function makeMockDeps(overrides: any = {}) {
     ...overrides,
   };
 
+  deps.festivalAccess = () => deps.adminAuth;
+
   // Provide stores overrides deeply merged
   if (overrides.stores) {
     deps.stores = { ...deps.stores, ...overrides.stores };

@@ -93,7 +93,7 @@ export default function createLineupImportRoute(deps: any) {
     express,
     log,
     config,
-    adminAuth,
+    festivalAccess,
     setNoStore,
     rateLimit,
     sanitizeIdentifier,
@@ -195,7 +195,7 @@ export default function createLineupImportRoute(deps: any) {
 
   router.post(
     '/:id/import-lineup/preview',
-    adminAuth,
+    festivalAccess({ action: 'lineup.import' }),
     rateLimit(30, 'lineup-import-preview'),
     async (req: any, res: any) => {
       try {
@@ -210,7 +210,7 @@ export default function createLineupImportRoute(deps: any) {
     },
   );
 
-  router.post('/:id/import-lineup', adminAuth, rateLimit(5, 'lineup-import'), async (req: any, res: any) => {
+  router.post('/:id/import-lineup', festivalAccess({ action: 'lineup.import' }), rateLimit(5, 'lineup-import'), async (req: any, res: any) => {
     try {
       setNoStore(res);
       const loaded = await loadRequest(req, res);
@@ -269,7 +269,7 @@ export default function createLineupImportRoute(deps: any) {
     }
   });
 
-  router.get('/:id/imports', adminAuth, async (req: any, res: any) => {
+  router.get('/:id/imports', festivalAccess({ action: 'lineup.history' }), async (req: any, res: any) => {
     try {
       setNoStore(res);
       const festivalId = sanitizeIdentifier(req.params.id, 100);
@@ -285,7 +285,7 @@ export default function createLineupImportRoute(deps: any) {
 
   router.post(
     '/:id/imports/:importId/undo',
-    adminAuth,
+    festivalAccess({ action: 'lineup.import' }),
     rateLimit(5, 'lineup-import-undo'),
     async (req: any, res: any) => {
       try {

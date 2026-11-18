@@ -29,7 +29,7 @@ export default function createLineupAnnounceRoute(deps: any) {
   const {
     express,
     log,
-    adminAuth,
+    festivalAccess,
     rateLimit,
     sanitizeIdentifier,
     sendSuccess,
@@ -44,7 +44,7 @@ export default function createLineupAnnounceRoute(deps: any) {
 
   const router = express.Router();
 
-  router.get('/:id/lineup-announcement', adminAuth, async (req: any, res: any) => {
+  router.get('/:id/lineup-announcement', festivalAccess({ action: 'lineup.drop' }), async (req: any, res: any) => {
     try {
       const festivalId = sanitizeIdentifier(req.params.id, 100);
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
@@ -57,7 +57,7 @@ export default function createLineupAnnounceRoute(deps: any) {
     }
   });
 
-  router.post('/:id/lineup-announcement', adminAuth, rateLimit(3, 'lineup-announce'), async (req: any, res: any) => {
+  router.post('/:id/lineup-announcement', festivalAccess({ action: 'lineup.drop' }), rateLimit(3, 'lineup-announce'), async (req: any, res: any) => {
     try {
       const festivalId = sanitizeIdentifier(req.params.id, 100);
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
@@ -103,7 +103,7 @@ export default function createLineupAnnounceRoute(deps: any) {
     }
   });
 
-  router.get('/:id/days-announcement', adminAuth, async (req: any, res: any) => {
+  router.get('/:id/days-announcement', festivalAccess({ action: 'lineup.drop' }), async (req: any, res: any) => {
     try {
       const festivalId = sanitizeIdentifier(req.params.id, 100);
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
@@ -118,7 +118,7 @@ export default function createLineupAnnounceRoute(deps: any) {
     }
   });
 
-  router.post('/:id/days-announcement', adminAuth, rateLimit(3, 'days-announce'), async (req: any, res: any) => {
+  router.post('/:id/days-announcement', festivalAccess({ action: 'lineup.drop' }), rateLimit(3, 'days-announce'), async (req: any, res: any) => {
     try {
       const festivalId = sanitizeIdentifier(req.params.id, 100);
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);

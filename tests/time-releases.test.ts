@@ -97,6 +97,7 @@ describe('time-release routes', { skip, concurrency: 1 }, () => {
     };
     app = express();
     app.use(express.json());
+    deps.festivalAccess = () => deps.adminAuth;
     app.use(createTimeReleasesRoute(deps));
   });
 

@@ -39,7 +39,7 @@ export default function createTimeReleasesRoute(deps: any) {
   const {
     express,
     log,
-    adminAuth,
+    festivalAccess,
     rateLimit,
     sanitizeIdentifier,
     sendSuccess,
@@ -75,7 +75,7 @@ export default function createTimeReleasesRoute(deps: any) {
     res.locals.auditWritten = true;
   }
 
-  router.get('/:id/time-releases', adminAuth, async (req: any, res: any) => {
+  router.get('/:id/time-releases', festivalAccess({ action: 'lineup.drop' }), async (req: any, res: any) => {
     try {
       setNoStore(res);
       const festivalId = sanitizeIdentifier(req.params.id, 100);
@@ -122,7 +122,7 @@ export default function createTimeReleasesRoute(deps: any) {
 
   router.post(
     '/:id/time-releases',
-    adminAuth,
+    festivalAccess({ action: 'lineup.drop' }),
     rateLimit(10, 'time-release'),
     validate(schemas.timeReleaseSend),
     async (req: any, res: any) => {

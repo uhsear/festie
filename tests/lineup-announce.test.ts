@@ -71,6 +71,7 @@ function build({
       countDaysOut: async () => ({ ...DAYS_COUNT, festivalName: name, ...days }),
     },
   };
+  deps.festivalAccess = () => deps.adminAuth;
   const app = express();
   app.use('/api/v1/admin/festivals', createLineupAnnounceRoute(deps));
   return { app, calls };

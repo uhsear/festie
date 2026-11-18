@@ -120,6 +120,7 @@ describe('set times: PUT and publish send no festival-wide alert', () => {
       invalidateFestivalCache: () => {},
       reengagement: { sendTimeRelease, sendSetTimesOut: sendTimeRelease },
     };
+    deps.festivalAccess = () => deps.adminAuth;
     const app = express();
     app.use(express.json());
     app.use(createFestivalsRoutes(deps));

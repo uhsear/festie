@@ -88,6 +88,7 @@ function build() {
     validateParams: pass,
     invalidateFestivalCache: () => {},
   };
+  deps.festivalAccess = () => deps.adminAuth;
   const app = express();
   app.use(express.json());
   app.use(createFestivalsRoutes(deps));

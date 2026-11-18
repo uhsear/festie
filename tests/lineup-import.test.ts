@@ -310,6 +310,7 @@ describe('lineup-import commit: picker alerts, no festival-wide alert (mocked de
     };
     const app = express();
     app.use(express.json());
+    deps.festivalAccess = () => deps.adminAuth;
     app.use(createLineupImportRoute(deps));
     return { app, sendTimeRelease, scheduleChanged, warnings };
   }
@@ -414,6 +415,7 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
     };
     const app = express();
     app.use(express.json());
+    deps.festivalAccess = () => deps.adminAuth;
     app.use(createLineupImportRoute(deps));
     return { app, festivalUpdated, invalidateFestivalListCache };
   }
@@ -500,6 +502,7 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
     };
     const app = express();
     app.use(express.json());
+    deps.festivalAccess = () => deps.adminAuth;
     app.use(createLineupImportRoute(deps));
     return { app, festivalUpdated, invalidateFestivalListCache };
   }
@@ -586,6 +589,7 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
     };
     const app = express();
     app.use(express.json());
+    deps.festivalAccess = () => deps.adminAuth;
     app.use(createLineupImportRoute(deps));
     return { app, festivalUpdated, invalidateFestivalListCache };
   }
@@ -672,6 +676,7 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
     };
     const app = express();
     app.use(express.json());
+    deps.festivalAccess = () => deps.adminAuth;
     app.use(createLineupImportRoute(deps));
     return { app, festivalUpdated, invalidateFestivalListCache };
   }
@@ -758,6 +763,7 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
     };
     const app = express();
     app.use(express.json());
+    deps.festivalAccess = () => deps.adminAuth;
     app.use(createLineupImportRoute(deps));
     return { app, festivalUpdated, invalidateFestivalListCache };
   }

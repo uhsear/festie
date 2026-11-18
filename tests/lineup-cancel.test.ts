@@ -105,6 +105,7 @@ function setup(options: { marks?: Record<string, string[]>; pickers?: Record<str
   };
   const app = express();
   app.use(express.json());
+  deps.festivalAccess = () => deps.adminAuth;
   app.use(createFestivalsRoutes(deps));
   return { app, existing, emitter, interested, pickersBySet, update };
 }

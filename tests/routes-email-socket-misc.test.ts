@@ -34,7 +34,7 @@ function makePool(queryResult = { rows: [] }) {
 }
 
 function baseDeps(overrides: any = {}) {
-  return {
+  const deps: any = {
     express,
     config: {
       NODE_ENV: 'test',
@@ -127,6 +127,8 @@ function baseDeps(overrides: any = {}) {
     },
     ...overrides,
   };
+  deps.festivalAccess = () => deps.adminAuth;
+  return deps;
 }
 
 function mountApp(router: any, prefix = '') {

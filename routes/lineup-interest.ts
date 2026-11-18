@@ -11,11 +11,11 @@
  */
 
 export default function createLineupInterestRoute(deps: any) {
-  const { express, log, adminAuth, setNoStore, sanitizeIdentifier, sendSuccess, sendError, ErrorCodes, stores } = deps;
+  const { express, log, festivalAccess, setNoStore, sanitizeIdentifier, sendSuccess, sendError, ErrorCodes, stores } = deps;
 
   const router = express.Router();
 
-  router.get('/:id/lineup-interest', adminAuth, async (req: any, res: any) => {
+  router.get('/:id/lineup-interest', festivalAccess({ action: 'festival.impact' }), async (req: any, res: any) => {
     try {
       setNoStore(res);
       const festivalId = sanitizeIdentifier(req.params.id, 100);

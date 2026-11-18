@@ -79,6 +79,7 @@ describe('festival detail exposes seriesId to admins only', () => {
       req.isAdmin = isAdmin;
       next();
     });
+    deps.festivalAccess = () => deps.adminAuth;
     app.use(createFestivalsRoutes(deps));
     return app;
   };
