@@ -16,6 +16,11 @@ import {
   defaultMapping,
   LINEUP_SAMPLE_CSV,
   LEGACY_COLUMN_ORDER,
+  groupPlanRows,
+  importBlocked,
+  parseNameList,
+  withArtistChoice,
+  type LineupImportPlanRow,
 } from './lineupImport';
 
 describe('parseLineupTable', () => {
@@ -66,10 +71,7 @@ describe('column mapping', () => {
   it('detects headers and reports problems', () => {
     expect(looksLikeHeader(['Kai', 'Main'])).toBe(false);
     expect(looksLikeHeader(['Act', 'x'])).toBe(true);
-    expect(mappingProblems({})).toEqual([
-      'Choose the column that holds the artist.',
-      'Choose a Day or a Date column.',
-    ]);
+    expect(mappingProblems({})).toEqual(['Choose the column that holds the artist.']);
     expect(mappingProblems({ artist: 0, date: 1 })).toEqual([]);
   });
 });
@@ -232,8 +234,8 @@ describe('update default and banner', () => {
     expect(defaultUpdateExisting({ artist: 0, day: 1 })).toBe(false);
   });
   it('shows the banner only for changed rows with Update off', () => {
-    expect(updateOffBanner({ changed: 3 }, false)).toBe('3 rows change existing sets. Turn on Update to apply them.');
-    expect(updateOffBanner({ changed: 1 }, false)).toBe('1 row changes an existing set. Turn on Update to apply it.');
+    expect(updateOffBanner({ changed: 3 }, false)).toBe('3 rows change existing sets or announced acts. Turn on Update to apply them.');
+    expect(updateOffBanner({ changed: 1 }, false)).toBe('1 row changes existing sets or announced acts. Turn on Update to apply them.');
     expect(updateOffBanner({ changed: 3 }, true)).toBeNull();
     expect(updateOffBanner({ changed: 0 }, false)).toBeNull();
   });
@@ -254,6 +256,121 @@ describe('buildResultCsv', () => {
       rows: [{ row: 2, status: 'created', setId: 's1', artist: 'Smith, J', message: 'ok' }],
     });
     expect(csv.split(/\r?\n/)).toEqual(['row,status,set_id,artist,message', '2,created,s1,"Smith, J",ok']);
+  });
+});
+
+describe('P6 columns', () => {
+  it('maps a link column per platform, the display name and the artist id from a header', () => {
+    const m = autoMapColumns(['Artist', 'Spotify', 'SoundCloud', 'Instagram', 'X', 'TikTok', 'Facebook', 'Website', 'Display name', 'Artist ID', 'Link']);
+    expect(m).toEqual({
+      artist: 0, spotify: 1, soundcloud: 2, instagram: 3, twitter: 4, tiktok: 5, facebook: 6, website: 7, displayName: 8, artistId: 9, link: 10,
+    });
+  });
+
+  it('keeps the old single link header mapped to the link field', () => {
+    expect(autoMapColumns(['artist', 'url'])).toEqual({ artist: 0, link: 1 });
+  });
+
+  it('sends platform links, display name and artist id as typed', () => {
+    const out = toImportRows([['Kai', 'https://soundcloud.com/kai', 'Kai Live', 'ar-1']], { artist: 0, soundcloud: 1, displayName: 2, artistId: 3 }, false);
+    expect(out).toEqual([{ row: 1, artist: 'Kai', soundcloud: 'https://soundcloud.com/kai', displayName: 'Kai Live', artistId: 'ar-1' }]);
+  });
+});
+
+describe('mappingProblems with no day column', () => {
+  it('accepts names only, announced rows', () => {
+    expect(mappingProblems({ artist: 0 })).toEqual([]);
+    expect(mappingProblems({ artist: 0, instagram: 1 })).toEqual([]);
+  });
+
+  it('asks for a day when a stage or a time is mapped, unless a set id names the set', () => {
+    const message = 'Choose a Day or a Date column, or leave Stage and the times unmapped to add announced names.';
+    expect(mappingProblems({ artist: 0, stage: 1 })).toEqual([message]);
+    expect(mappingProblems({ artist: 0, startTime: 1 })).toEqual([message]);
+    expect(mappingProblems({ artist: 0, startTime: 1, setId: 2 })).toEqual([]);
+    expect(mappingProblems({ artist: 0, startTime: 1, day: 2 })).toEqual([]);
+  });
+});
+
+describe('parseNameList', () => {
+  it('makes one row per line, with the line as the row number, and skips blanks and headings', () => {
+    expect(parseNameList('Alok\n\n# Friday\r\n- Kai b2b Mira\n2. Sub Focus  \n')).toEqual([
+      { row: 1, artist: 'Alok' },
+      { row: 4, artist: 'Kai b2b Mira' },
+      { row: 5, artist: 'Sub Focus' },
+    ]);
+  });
+
+  it('keeps a comma inside a name', () => {
+    expect(parseNameList('Above & Beyond, live')).toEqual([{ row: 1, artist: 'Above & Beyond, live' }]);
+  });
+
+  it('turns a 118-act list into 118 rows that need no mapping', () => {
+    const text = Array.from({ length: 118 }, (_, i) => `Act ${i}`).join('\n');
+    const rows = parseNameList(text);
+    expect(rows).toHaveLength(118);
+    expect(rows.every((r) => Object.keys(r).join() === 'row,artist')).toBe(true);
+  });
+});
+
+describe('withArtistChoice', () => {
+  const rows = [{ row: 2, artist: 'Nina Kraviz vs Kai' }, { row: 3, artist: 'Alok' }];
+  it('sets the id of one name and keeps the other positions', () => {
+    const first = withArtistChoice(rows, 2, 1, 'ar-kai');
+    expect(first[0]!.artistId).toBe('|ar-kai');
+    expect(withArtistChoice(first, 2, 0, 'ar-ru')[0]!.artistId).toBe('ar-ru|ar-kai');
+    expect(first[1]).toBe(rows[1]);
+  });
+});
+
+describe('groupPlanRows', () => {
+  const base = { artists: ['A'], changes: [], errors: [], warnings: [] };
+  const r = (row: number, extra: Partial<LineupImportPlanRow>): LineupImportPlanRow => ({ row, status: 'new', ...base, ...extra });
+  const rows: LineupImportPlanRow[] = [
+    r(1, { resolutions: [{ name: 'A', outcome: 'new' }] }),
+    r(2, { resolutions: [{ name: 'A', outcome: 'existing', artistId: 'ar-1' }] }),
+    r(3, { status: 'error', errors: [{ field: 'artist', code: 'needs_choice', message: 'Which?' }], resolutions: [{ name: 'A', outcome: 'needs_choice' }] }),
+    r(4, { status: 'changed', changes: ['Start 1 → 2'] }),
+    r(5, { status: 'unchanged', skipped: 'Skipped: the file says Sat.', warnings: ['Skipped: the file says Sat.'] }),
+    r(6, { status: 'unchanged' }),
+    r(7, { status: 'error', errors: [{ field: 'day', message: 'Unknown day' }] }),
+    r(8, { warnings: ['Starts after midnight'], resolutions: [{ name: 'A', outcome: 'did_you_mean', suggestion: 'B' }] }),
+    r(9, { status: 'error', errors: [{ field: 'artist', code: 'needs_choice', message: 'Which?' }, { field: 'day', message: 'Unknown day' }], resolutions: [{ name: 'A', outcome: 'needs_choice' }] }),
+  ];
+  const byKey = Object.fromEntries(groupPlanRows({ rows }).map((g) => [g.key, g.rows.map((x) => x.row)]));
+
+  it('puts each row in one outcome group', () => {
+    expect(byKey).toEqual({
+      newArtists: [1, 8],
+      existingArtists: [2],
+      needsChoice: [3],
+      changedSets: [4],
+      skipped: [5],
+      unchanged: [6],
+      warnings: [8],
+      errors: [7, 9],
+    });
+  });
+
+  it('lists the groups in review order, empty ones included', () => {
+    expect(groupPlanRows({ rows: [] }).map((g) => g.label)).toEqual([
+      'New artists', 'Existing artists', 'Needs choice', 'Changed sets', 'Skipped', 'Unchanged', 'Warnings', 'Errors',
+    ]);
+  });
+
+  it('blocks the commit on errors and problems', () => {
+    const counts = { new: 0, changed: 0, unchanged: 0, error: 0, skipped: 0, newStages: 0, newDays: 0, missingFromFile: 0 };
+    expect(importBlocked({ counts, problems: [] })).toBe(false);
+    expect(importBlocked({ counts: { ...counts, error: 1 }, problems: [] })).toBe(true);
+    expect(importBlocked({ counts, problems: ['x'] })).toBe(true);
+  });
+});
+
+describe('planSummary with announced names', () => {
+  it('counts announced names apart from sets', () => {
+    const c = { new: 5, changed: 0, unchanged: 0, error: 0, skipped: 0, newStages: 0, newDays: 0, announced: 3 };
+    expect(planSummary(c, false)).toBe('Add 2 sets. Add 3 announced names.');
+    expect(planSummary({ ...c, new: 3 }, false)).toBe('Add 3 announced names.');
   });
 });
 

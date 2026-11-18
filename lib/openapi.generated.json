@@ -4422,6 +4422,42 @@
                         "link": {
                           "type": "string",
                           "maxLength": 500
+                        },
+                        "artistId": {
+                          "type": "string",
+                          "maxLength": 450
+                        },
+                        "displayName": {
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "spotify": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "soundcloud": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "instagram": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "twitter": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "tiktok": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "facebook": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "website": {
+                          "type": "string",
+                          "maxLength": 500
                         }
                       },
                       "required": [
@@ -4440,6 +4476,10 @@
                     "type": "boolean"
                   },
                   "skipSpotify": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "moveDays": {
                     "default": false,
                     "type": "boolean"
                   }
@@ -4536,6 +4576,42 @@
                         "link": {
                           "type": "string",
                           "maxLength": 500
+                        },
+                        "artistId": {
+                          "type": "string",
+                          "maxLength": 450
+                        },
+                        "displayName": {
+                          "type": "string",
+                          "maxLength": 300
+                        },
+                        "spotify": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "soundcloud": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "instagram": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "twitter": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "tiktok": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "facebook": {
+                          "type": "string",
+                          "maxLength": 500
+                        },
+                        "website": {
+                          "type": "string",
+                          "maxLength": 500
                         }
                       },
                       "required": [
@@ -4554,6 +4630,10 @@
                     "type": "boolean"
                   },
                   "skipSpotify": {
+                    "default": false,
+                    "type": "boolean"
+                  },
+                  "moveDays": {
                     "default": false,
                     "type": "boolean"
                   }

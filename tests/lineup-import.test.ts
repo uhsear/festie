@@ -24,6 +24,9 @@ import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
 import createLineupImportRoute from '../routes/lineup-import';
+import { createLineupImportsStore } from '../lib/db/stores/lineup-imports';
+import { planLineupImport, withLockedArtists } from '../lib/lineup-import-plan';
+import { artistNameKey } from '../lib/artist-key';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -221,7 +224,9 @@ afterEach(async () => {
       FEST_ID, [STAGE_MAIN, STAGE_FOREST]]);
     await pool.query(`DELETE FROM festival_days WHERE festival_id = $1`, [EMPTY_FEST_ID]);
     await pool.query(`DELETE FROM festival_stages WHERE festival_id = $1`, [EMPTY_FEST_ID]);
-    await pool.query(`UPDATE festivals SET set_times_out_at = NULL WHERE id = ANY($1::text[])`, [[FEST_ID, EMPTY_FEST_ID]]);
+    await pool.query(`UPDATE festivals SET set_times_out_at = NULL, lineup = '[]'::jsonb WHERE id = ANY($1::text[])`, [[FEST_ID, EMPTY_FEST_ID]]);
+    // The import makes an artist row for each new name. Drop the ones the P6 tests create.
+    await pool.query(`DELETE FROM artists WHERE name_key = ANY($1::text[]) AND id NOT LIKE $2`, [['Alok', 'Kai', 'Mira', 'Sub Focus', 'Zed'].map(artistNameKey), `ar-${RUN_ID}-%`]);
   });
 });
 
@@ -285,13 +290,14 @@ describe('lineup-import commit: picker alerts, no festival-wide alert (mocked de
         profiles: { pickersBySet },
         timeReleases: { releasedDates: async () => new Set(released) },
         lineupImports: {
+          lookupArtists: async () => ({ byKey: new Map(), byId: new Map() }),
           commit: async () =>
             committed
               ? {
                   committed: true,
                   plan,
                   importId: 'imp-1',
-                  writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+                  writes: { inserts: [], updates: [], announced: { inserts: [], updates: [] }, newStages: [], newDays: [], spotifyMatched: 0 },
                 }
               : { committed: false, plan },
         },
@@ -387,11 +393,12 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
           },
         },
         lineupImports: {
+          lookupArtists: async () => ({ byKey: new Map(), byId: new Map() }),
           commit: async () => ({
             committed: true,
             plan,
             importId: 'imp-1',
-            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+            writes: { inserts: [], updates: [], announced: { inserts: [], updates: [] }, newStages: [], newDays: [], spotifyMatched: 0 },
           }),
           undo: async () => {
             calls.push('undo');
@@ -471,96 +478,12 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
           },
         },
         lineupImports: {
+          lookupArtists: async () => ({ byKey: new Map(), byId: new Map() }),
           commit: async () => ({
             committed: true,
             plan,
             importId: 'imp-1',
-            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
-          }),
-          undo: async () => {
-            calls.push('undo');
-            return { result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } };
-          },
-        },
-        auditLog: null,
-      },
-      invalidateFestivalCache: () => {},
-      invalidateFestivalListCache,
-      emitter: { festivalUpdated },
-      getRequestIp: () => '127.0.0.1',
-      reengagement: { sendSetTimesOut: async () => ({}) },
-    };
-    const app = express();
-    app.use(express.json());
-    app.use(createLineupImportRoute(deps));
-    return { app, festivalUpdated, invalidateFestivalListCache };
-  }
-  const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
-  const PUBLISHED = '2026-01-01T00:00:00.000Z';
-
-  test('a commit on a published festival drops the list cache and emits festival:updated', async () => {
-    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
-    await request(app).post('/f-1/import-lineup').send(body).expect(200);
-    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
-    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
-  });
-
-  test('an undo on a published festival drops the list cache and emits festival:updated', async () => {
-    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
-    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
-    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
-    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
-  });
-
-  test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
-    const calls: string[] = [];
-    const { app } = build(PUBLISHED, calls);
-    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
-    assert.deepEqual(calls, ['getById', 'undo']);
-  });
-
-  test('a draft festival has no attendees, so nothing is emitted, but the list cache still drops', async () => {
-    const { app, festivalUpdated, invalidateFestivalListCache } = build(null);
-    await request(app).post('/f-1/import-lineup').send(body).expect(200);
-    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
-    assert.equal(festivalUpdated.mock.calls.length, 0);
-    assert.equal(invalidateFestivalListCache.mock.calls.length, 2);
-  });
-});
-
-describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
-  function build(publishedAt: string | null, calls: string[] = []) {
-    const festivalUpdated = mock.fn((_arg: any) => {});
-    const invalidateFestivalListCache = mock.fn(() => {});
-    const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
-    const plan = { rows: [], counts: { error: 0 }, problems: [] };
-    const deps: any = {
-      express,
-      log: { info() {}, warn() {}, error() {}, debug() {} },
-      config: {},
-      adminAuth: (req: any, _res: any, next: any) => {
-        req.user = { userId: 'admin-1' };
-        next();
-      },
-      setNoStore: () => {},
-      rateLimit: () => (_req: any, _res: any, next: any) => next(),
-      sanitizeIdentifier: (v: string) => v,
-      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
-      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
-      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
-      stores: {
-        festivals: {
-          getById: async () => {
-            calls.push('getById');
-            return festival;
-          },
-        },
-        lineupImports: {
-          commit: async () => ({
-            committed: true,
-            plan,
-            importId: 'imp-1',
-            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+            writes: { inserts: [], updates: [], announced: { inserts: [], updates: [] }, newStages: [], newDays: [], spotifyMatched: 0 },
           }),
           undo: async () => {
             calls.push('undo');
@@ -641,11 +564,12 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
           },
         },
         lineupImports: {
+          lookupArtists: async () => ({ byKey: new Map(), byId: new Map() }),
           commit: async () => ({
             committed: true,
             plan,
             importId: 'imp-1',
-            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+            writes: { inserts: [], updates: [], announced: { inserts: [], updates: [] }, newStages: [], newDays: [], spotifyMatched: 0 },
           }),
           undo: async () => {
             calls.push('undo');
@@ -726,11 +650,98 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
           },
         },
         lineupImports: {
+          lookupArtists: async () => ({ byKey: new Map(), byId: new Map() }),
           commit: async () => ({
             committed: true,
             plan,
             importId: 'imp-1',
-            writes: { inserts: [], updates: [], newStages: [], newDays: [], spotifyMatched: 0 },
+            writes: { inserts: [], updates: [], announced: { inserts: [], updates: [] }, newStages: [], newDays: [], spotifyMatched: 0 },
+          }),
+          undo: async () => {
+            calls.push('undo');
+            return { result: { removed: 0, restored: 0, removedStages: 0, removedDays: 0, kept: [] } };
+          },
+        },
+        auditLog: null,
+      },
+      invalidateFestivalCache: () => {},
+      invalidateFestivalListCache,
+      emitter: { festivalUpdated },
+      getRequestIp: () => '127.0.0.1',
+      reengagement: { sendSetTimesOut: async () => ({}) },
+    };
+    const app = express();
+    app.use(express.json());
+    app.use(createLineupImportRoute(deps));
+    return { app, festivalUpdated, invalidateFestivalListCache };
+  }
+  const body = { rows: SAMPLE_ROWS.slice(0, 1), skipSpotify: true };
+  const PUBLISHED = '2026-01-01T00:00:00.000Z';
+
+  test('a commit on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo on a published festival drops the list cache and emits festival:updated', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+  });
+
+  test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
+    const calls: string[] = [];
+    const { app } = build(PUBLISHED, calls);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.deepEqual(calls, ['getById', 'undo']);
+  });
+
+  test('a draft festival has no attendees, so nothing is emitted, but the list cache still drops', async () => {
+    const { app, festivalUpdated, invalidateFestivalListCache } = build(null);
+    await request(app).post('/f-1/import-lineup').send(body).expect(200);
+    await request(app).post('/f-1/imports/imp-1/undo').expect(200);
+    assert.equal(festivalUpdated.mock.calls.length, 0);
+    assert.equal(invalidateFestivalListCache.mock.calls.length, 2);
+  });
+});
+
+describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
+  function build(publishedAt: string | null, calls: string[] = []) {
+    const festivalUpdated = mock.fn((_arg: any) => {});
+    const invalidateFestivalListCache = mock.fn(() => {});
+    const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
+    const plan = { rows: [], counts: { error: 0 }, problems: [] };
+    const deps: any = {
+      express,
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      config: {},
+      adminAuth: (req: any, _res: any, next: any) => {
+        req.user = { userId: 'admin-1' };
+        next();
+      },
+      setNoStore: () => {},
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      sanitizeIdentifier: (v: string) => v,
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      stores: {
+        festivals: {
+          getById: async () => {
+            calls.push('getById');
+            return festival;
+          },
+        },
+        lineupImports: {
+          lookupArtists: async () => ({ byKey: new Map(), byId: new Map() }),
+          commit: async () => ({
+            committed: true,
+            plan,
+            importId: 'imp-1',
+            writes: { inserts: [], updates: [], announced: { inserts: [], updates: [] }, newStages: [], newDays: [], spotifyMatched: 0 },
           }),
           undo: async () => {
             calls.push('undo');
@@ -1029,5 +1040,239 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
       .send({ rows: SAMPLE_ROWS })
       .expect(401);
     assert.equal(await countSets(FEST_ID), 0);
+  });
+});
+
+// ── P6: announced rows, day moves, display names, per-platform links and artist matching ──
+
+const SPOTIFY_22 = 'https://open.spotify.com/artist/0TnOYISbd1XYRBk9myaseg';
+const AR = (suffix: string) => `ar-${RUN_ID}-${suffix}`;
+
+async function seedArtist(pool: any, suffix: string, name: string, label = '', links: any = {}) {
+  await pool.query(
+    `INSERT INTO artists (id, name, name_key, label, links) VALUES ($1, $2, $3, $4, $5::jsonb)`,
+    [AR(suffix), name, artistNameKey(name), label, JSON.stringify(links)],
+  );
+}
+
+const undoImport = (server: any, token: string, festivalId: string, importId: string) =>
+  server.request
+    .post(`/api/v1/admin/festivals/${festivalId}/imports/${importId}/undo`)
+    .set('x-user-token', token)
+    .set(TRUSTED_MUTATION_HEADER, '1');
+
+const lineupOf = (festivalId: string) =>
+  withPool(async (pool) => (await pool.query(`SELECT lineup FROM festivals WHERE id = $1`, [festivalId])).rows[0].lineup);
+
+describe('lineup-import P6: announced rows', { skip }, () => {
+  test('names with no day, stage or time become announced entries, re-import adds nothing, undo removes them', async () => {
+    const { server, admin } = await adminServer();
+    const rows = [
+      { row: 1, artist: 'Alok' },
+      { row: 2, artist: 'Kai b2b Mira', instagram: 'https://instagram.com/kai' },
+    ];
+    const commit = await postImport(server, admin, EMPTY_FEST_ID, { rows, skipSpotify: true }).expect(200);
+    assert.equal(commit.body.data.committed, true);
+    assert.equal(commit.body.data.result.created, 0);
+    assert.equal(commit.body.data.result.announced, 2);
+    assert.deepEqual(commit.body.data.result.rows.map((r: any) => r.message), ['Added to the announced lineup.', 'Added to the announced lineup.']);
+    assert.equal(await countSets(EMPTY_FEST_ID), 0);
+
+    const lineup = await lineupOf(EMPTY_FEST_ID);
+    assert.deepEqual(lineup.map((e: any) => e.artists.map((a: any) => a.name)), [['Alok'], ['Kai', 'Mira']]);
+    assert.deepEqual(lineup[1].artists[0].links, { instagram: 'https://www.instagram.com/kai' });
+    assert.deepEqual({ status: lineup[0].status, dayDate: lineup[0].dayDate, tier: lineup[0].tier }, { status: 'announced', dayDate: null, tier: null });
+    assert.match(lineup[0].announcedAt, /^\d{4}-\d{2}-\d{2}$/);
+
+    const again = await postImport(server, admin, EMPTY_FEST_ID, { rows, skipSpotify: true }, '/preview').expect(200);
+    assert.equal(again.body.data.counts.new, 0);
+    assert.equal(again.body.data.counts.unchanged, 2);
+
+    const undo = await undoImport(server, admin, EMPTY_FEST_ID, commit.body.data.result.importId).expect(200);
+    assert.equal(undo.body.data.removedEntries, 2);
+    assert.deepEqual(await lineupOf(EMPTY_FEST_ID), []);
+  });
+
+  test('undo keeps an entry that someone edited after the import, and puts back a changed one', async () => {
+    const { server, admin } = await adminServer();
+    const first = await postImport(server, admin, EMPTY_FEST_ID, { rows: [{ row: 1, artist: 'Alok' }, { row: 2, artist: 'Sub Focus' }], skipSpotify: true }).expect(200);
+    const second = await postImport(server, admin, EMPTY_FEST_ID, {
+      rows: [{ row: 1, artist: 'Alok', instagram: 'https://instagram.com/alok' }, { row: 2, artist: 'Zed', }],
+      updateExisting: true,
+      skipSpotify: true,
+    }).expect(200);
+    assert.equal(second.body.data.result.announced, 1);
+    assert.equal(second.body.data.result.announcedUpdated, 1);
+    await withPool((pool) => pool.query(
+      `UPDATE festivals SET lineup = (SELECT jsonb_agg(CASE WHEN e->'artists'->0->>'name' = 'Zed' THEN jsonb_set(e, '{tier}', '2') ELSE e END) FROM jsonb_array_elements(lineup) e) WHERE id = $1`,
+      [EMPTY_FEST_ID]));
+
+    const undo = await undoImport(server, admin, EMPTY_FEST_ID, second.body.data.result.importId).expect(200);
+    assert.equal(undo.body.data.restoredEntries, 1);
+    assert.equal(undo.body.data.removedEntries, 0);
+    assert.deepEqual(undo.body.data.kept.map((k: any) => [k.artist, k.reason]), [['Zed', 'edited']]);
+    const lineup = await lineupOf(EMPTY_FEST_ID);
+    assert.deepEqual(lineup.map((e: any) => e.artists[0].name).sort(), ['Alok', 'Sub Focus', 'Zed']);
+    // The link lives on the artist's row, so an undo does not take it back: the restored entry shows the artist's links.
+    assert.deepEqual(lineup.find((e: any) => e.artists[0].name === 'Alok').artists[0].links, { instagram: 'https://www.instagram.com/alok' });
+    void first;
+  });
+});
+
+describe('lineup-import P6: day moves, display names, links', { skip }, () => {
+  const alpha = { row: 2, artist: 'DJ Alpha', stage: 'Main Stage', day: 'Friday', startTime: '20:00', endTime: '21:00' };
+
+  test('a set id row with another day is skipped, moves with the option, and undo moves it back', async () => {
+    const { server, admin } = await adminServer();
+    const created = await postImport(server, admin, FEST_ID, { rows: [alpha], skipSpotify: true }).expect(200);
+    const setId = created.body.data.result.rows[0].setId;
+    const dayOf = async () => withPool(async (pool) => (await pool.query(`SELECT day_index, start_time FROM festival_sets WHERE id = $1`, [setId])).rows[0]);
+    const moveRow = { row: 2, setId, artist: 'DJ Alpha', day: 'Saturday', startTime: '22:00', endTime: '23:00' };
+
+    const skipped = await postImport(server, admin, FEST_ID, { rows: [moveRow], updateExisting: true, skipSpotify: true }).expect(200);
+    assert.equal(skipped.body.data.result.rows[0].status, 'skipped');
+    assert.match(skipped.body.data.result.rows[0].message, /^Skipped: the file says Saturday, the stored day is Friday\./);
+    assert.deepEqual(await dayOf(), { day_index: 0, start_time: '20:00' });
+
+    const moved = await postImport(server, admin, FEST_ID, { rows: [moveRow], updateExisting: true, moveDays: true, skipSpotify: true }).expect(200);
+    assert.equal(moved.body.data.result.rows[0].status, 'updated');
+    assert.deepEqual(await dayOf(), { day_index: 1, start_time: '22:00' });
+
+    const undo = await undoImport(server, admin, FEST_ID, moved.body.data.result.importId).expect(200);
+    assert.equal(undo.body.data.restored, 1);
+    assert.deepEqual(await dayOf(), { day_index: 0, start_time: '20:00' });
+  });
+
+  test('undo keeps a moved set that an editor moved again', async () => {
+    const { server, admin } = await adminServer();
+    const created = await postImport(server, admin, FEST_ID, { rows: [alpha], skipSpotify: true }).expect(200);
+    const setId = created.body.data.result.rows[0].setId;
+    const moved = await postImport(server, admin, FEST_ID, {
+      rows: [{ row: 2, setId, artist: 'DJ Alpha', day: 'Saturday' }], updateExisting: true, moveDays: true, skipSpotify: true,
+    }).expect(200);
+    await withPool((pool) => pool.query(`UPDATE festival_sets SET day_index = 0 WHERE id = $1`, [setId]));
+    const undo = await undoImport(server, admin, FEST_ID, moved.body.data.result.importId).expect(200);
+    assert.equal(undo.body.data.restored, 0);
+    assert.deepEqual(undo.body.data.kept.map((k: any) => k.reason), ['edited']);
+  });
+
+  test('writes the display name and one link per platform, and undo puts the old name back', async () => {
+    const { server, admin } = await adminServer();
+    const first = await postImport(server, admin, FEST_ID, {
+      rows: [{ ...alpha, displayName: 'Alpha Live', spotify: SPOTIFY_22, soundcloud: 'https://soundcloud.com/alpha' }], skipSpotify: true,
+    }).expect(200);
+    const read = () => withPool(async (pool) => (await pool.query(`SELECT display_name, link_url, artists FROM festival_sets WHERE festival_id = $1`, [FEST_ID])).rows[0]);
+    const row = await read();
+    assert.equal(row.display_name, 'Alpha Live');
+    assert.equal(row.link_url, SPOTIFY_22);
+    assert.deepEqual(row.artists[0].links, { spotify: SPOTIFY_22, soundcloud: 'https://soundcloud.com/alpha' });
+
+    const renamed = await postImport(server, admin, FEST_ID, { rows: [{ ...alpha, displayName: 'Alpha Unplugged' }], updateExisting: true, skipSpotify: true }).expect(200);
+    assert.equal((await read()).display_name, 'Alpha Unplugged');
+    await undoImport(server, admin, FEST_ID, renamed.body.data.result.importId).expect(200);
+    assert.equal((await read()).display_name, 'Alpha Live');
+    void first;
+  });
+});
+
+describe('lineup-import P6: artist matching', { skip }, () => {
+  const cleanArtists = (pool: any) =>
+    pool.query(`UPDATE artists SET merged_into = NULL WHERE id LIKE $1`, [`ar-${RUN_ID}-%`])
+      .then(() => pool.query(`DELETE FROM artists WHERE id LIKE $1`, [`ar-${RUN_ID}-%`]));
+
+  test('one live artist attaches its id, two with one name stop at Needs choice until a row names the id', async () => {
+    const { server, admin } = await adminServer();
+    await withPool(async (pool) => {
+      await seedArtist(pool, 'alok', 'Alok', '', { instagram: 'https://www.instagram.com/alok' });
+      await seedArtist(pool, 'uk', 'Nina Kraviz', 'UK');
+      await seedArtist(pool, 'ru', 'Nina Kraviz', 'Russia');
+    });
+    try {
+      const rows = [
+        { row: 2, artist: 'Alok', stage: 'Main Stage', day: 'Friday', startTime: '20:00', endTime: '21:00' },
+        { row: 3, artist: 'Nina Kraviz', stage: 'Forest', day: 'Friday', startTime: '20:00', endTime: '21:00' },
+      ];
+      const blocked = await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }).expect(200);
+      assert.equal(blocked.body.data.committed, false);
+      assert.equal(blocked.body.data.plan.counts.needsChoice, 1);
+      assert.deepEqual(blocked.body.data.plan.rows[1].resolutions[0].candidates.map((c: any) => c.label), ['Russia', 'UK']);
+      assert.equal(await countSets(FEST_ID), 0);
+
+      const picked = [rows[0]!, { ...rows[1]!, artistId: AR('ru') }];
+      const committed = await postImport(server, admin, FEST_ID, { rows: picked, skipSpotify: true }).expect(200);
+      assert.equal(committed.body.data.committed, true);
+      const sets = await withPool((pool) => pool.query(`SELECT artist, artists FROM festival_sets WHERE festival_id = $1 ORDER BY artist`, [FEST_ID]));
+      assert.deepEqual(sets.rows.map((r: any) => [r.artist, r.artists[0].id]), [['Alok', AR('alok')], ['Nina Kraviz', AR('ru')]]);
+      assert.deepEqual(sets.rows[0].artists[0].links, { instagram: 'https://www.instagram.com/alok' });
+
+      const again = await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }, '/preview').expect(200);
+      assert.equal(again.body.data.counts.needsChoice, 0, 'a matched set keeps its stored artist, so a re-import never asks again');
+      assert.equal(again.body.data.counts.error, 0);
+    } finally {
+      await withPool(cleanArtists);
+    }
+  });
+
+  test('a merged artist id is an error row, and commit refuses when an artist merges after the plan', async () => {
+    const { server, admin } = await adminServer();
+    await withPool(async (pool) => {
+      await seedArtist(pool, 'keep', 'Keeper');
+      await seedArtist(pool, 'gone', 'Gone Name');
+      await pool.query(`UPDATE artists SET merged_into = $2 WHERE id = $1`, [AR('gone'), AR('keep')]);
+    });
+    try {
+      const res = await postImport(server, admin, FEST_ID, {
+        rows: [{ row: 2, artist: 'Gone Name', artistId: AR('gone'), stage: 'Main Stage', day: 'Friday' }], skipSpotify: true,
+      }).expect(200);
+      assert.equal(res.body.data.committed, false);
+      assert.match(res.body.data.plan.rows[0].errors[0].message, /was merged into another artist/);
+
+      await withPool(async (pool) => {
+        const store = createLineupImportsStore(pool, { festivals: { getById: async () => ({}) } });
+        const plan = { counts: { error: 0 }, problems: [] as string[] };
+        const writes = { newStages: [], newDays: [], inserts: [], updates: [], announced: { inserts: [], updates: [] }, artistIds: [AR('gone')], spotifyMatched: 0 };
+        const outcome: any = await store.commit(FEST_ID, () => ({ plan, writes }) as any, { createdBy: null });
+        assert.equal(outcome.committed, false);
+        assert.deepEqual(outcome.plan.problems, ['An artist changed while you were importing. Check the rows again.']);
+      });
+    } finally {
+      await withPool(cleanArtists);
+    }
+  });
+
+  test('commit plans from the locked artist rows, so an edit after the lookup reaches the new entry, and the lock query orders by id', async () => {
+    await withPool(async (pool) => {
+      await seedArtist(pool, 'late', 'Late Edit', '', { instagram: 'https://www.instagram.com/old' });
+      const store = createLineupImportsStore(pool, { festivals: { getById: async () => ({}) } });
+      try {
+        const rows = [{ row: 1, artist: 'Late Edit', artistId: AR('late') }];
+        const stale = await store.lookupArtists([], [AR('late')]);
+        await pool.query(`UPDATE artists SET links = $2::jsonb WHERE id = $1`, [AR('late'), JSON.stringify({ instagram: 'https://www.instagram.com/new' })]);
+
+        const sql: string[] = [];
+        const spy = {
+          connect: async () => {
+            const client = await pool.connect();
+            const run = client.query.bind(client);
+            client.query = (text: any, ...rest: any[]) => (sql.push(String(text?.text ?? text)), run(text, ...rest));
+            return client;
+          },
+        };
+        const spied = createLineupImportsStore(spy as any, { festivals: { getById: async () => ({ id: EMPTY_FEST_ID, name: 'Empty', b2bSeparator: 'b2b', stages: [], days: [], lineup: [] }) } });
+        const outcome: any = await spied.commit(
+          EMPTY_FEST_ID,
+          (f: any, locked?: Map<string, any>) =>
+            planLineupImport({ festival: f, rows, options: { updateExisting: false, createMissing: true }, config: { MAX_IMPORT_SETS: 500, MAX_STAGES: 20, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 } as any, artists: locked ? withLockedArtists(stale, locked) : stale }),
+          { createdBy: null },
+        );
+        assert.equal(outcome.committed, true);
+        const lineup = await lineupOf(EMPTY_FEST_ID);
+        assert.deepEqual(lineup.at(-1).artists[0].links, { instagram: 'https://www.instagram.com/new' });
+        assert.match(sql.find((q) => q.includes('FOR SHARE')) ?? '', /ORDER BY\s+id\s+FOR SHARE/);
+      } finally {
+        await pool.query(`UPDATE festivals SET lineup = '[]'::jsonb WHERE id = $1`, [EMPTY_FEST_ID]);
+        await cleanArtists(pool);
+      }
+    });
   });
 });

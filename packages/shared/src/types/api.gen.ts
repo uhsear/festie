@@ -498,17 +498,28 @@ export type paths = {
                     "application/json": {
                         /** @default true */
                         createMissing?: boolean;
+                        /** @default false */
+                        moveDays?: boolean;
                         rows: {
                             artist: string;
+                            artistId?: string;
                             date?: string;
                             day?: string;
+                            displayName?: string;
                             endTime?: string;
+                            facebook?: string;
+                            instagram?: string;
                             link?: string;
                             row: number;
                             setId?: string;
+                            soundcloud?: string;
+                            spotify?: string;
                             stage?: string;
                             stageColor?: string;
                             startTime?: string;
+                            tiktok?: string;
+                            twitter?: string;
+                            website?: string;
                         }[];
                         /** @default false */
                         skipSpotify?: boolean;
@@ -571,17 +582,28 @@ export type paths = {
                     "application/json": {
                         /** @default true */
                         createMissing?: boolean;
+                        /** @default false */
+                        moveDays?: boolean;
                         rows: {
                             artist: string;
+                            artistId?: string;
                             date?: string;
                             day?: string;
+                            displayName?: string;
                             endTime?: string;
+                            facebook?: string;
+                            instagram?: string;
                             link?: string;
                             row: number;
                             setId?: string;
+                            soundcloud?: string;
+                            spotify?: string;
                             stage?: string;
                             stageColor?: string;
                             startTime?: string;
+                            tiktok?: string;
+                            twitter?: string;
+                            website?: string;
                         }[];
                         /** @default false */
                         skipSpotify?: boolean;
