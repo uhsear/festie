@@ -82,6 +82,9 @@ export default function createCrewInviteRoutes(deps: any) {
       // Create the caller's profile in the crew's festival if it is missing.
       // Runs after the cap checks so a refused join leaves no stray profile.
       const profileResult = await ensureFestivalProfile(deps, req.user, crew.festivalId);
+      if (profileResult.error === 'festival-unavailable') {
+        return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      }
       if (profileResult.error === 'limit') {
         return sendError(
           res,

@@ -351,6 +351,22 @@ describe('email: re-engagement senders', () => {
       assert.ok(msg.text.endsWith(`${sentence} Turn it off: https://festie.test/account`));
     });
   }
+
+  for (const [name, fn] of cases) {
+    it(`${name}: postal address in html and text when set, omitted when unset`, async () => {
+      const run = async (to: string, extra: Record<string, string>) => {
+        const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+        await fn({ ...base, to, config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', ...extra }), log: createMockLog(), _client: createMockClient(send) });
+        return (send.mock.calls as any[])[0].arguments[0];
+      };
+      const withAddress = await run(`addr-${name.replace(' ', '')}@example.com`, { EMAIL_POSTAL_ADDRESS: 'PO Box 1 & Co, Orlando, FL 32801' });
+      assert.ok(withAddress.html.includes('PO Box 1 &amp; Co, Orlando, FL 32801'), 'html escaped');
+      assert.ok(withAddress.text.endsWith('\nPO Box 1 & Co, Orlando, FL 32801'), 'text plain');
+      const without = await run(`noaddr-${name.replace(' ', '')}@example.com`, {});
+      assert.ok(!without.html.includes('Orlando') && !without.html.includes('<br>'));
+      assert.ok(without.text.endsWith('Turn it off: https://festie.test/account'));
+    });
+  }
 });
 
 // ---------------------------------------------------------------------------
