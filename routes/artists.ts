@@ -13,7 +13,7 @@ import {
 } from '../lib/db/stores/artists.js';
 import * as spotify from '../lib/spotify.js';
 
-/** Artists searched per "Find Spotify links" run. The rest wait for the next run, after these have a link. */
+/** Artists searched per "Find Spotify links" run. The rest wait for the next run, after the editor skips or links these. */
 const MAX_CANDIDATE_ARTISTS = 150;
 
 /**
@@ -146,8 +146,11 @@ export default function createArtistsRoutes(deps: any) {
       try {
         const missing = spotifyKeysMissing(res);
         if (missing) return missing;
-        const { festivalId } = req.validatedBody;
-        const rows = (await stores.artists.list({ festivalId, limit: 1000 })).filter((row: any) => !row.links?.spotify);
+        const { festivalId, exclude } = req.validatedBody;
+        const skipped = new Set<string>(exclude ?? []);
+        const rows = (await stores.artists.list({ festivalId, limit: 1000 })).filter(
+          (row: any) => !row.links?.spotify && !skipped.has(row.id),
+        );
         const searched = rows.slice(0, MAX_CANDIDATE_ARTISTS);
         const found: Map<string, any[]> = await spotify.bulkSearchCandidates(
           [...new Set(searched.map((row: any) => row.name))],
@@ -223,13 +226,20 @@ export default function createArtistsRoutes(deps: any) {
               const have = synced.get(festival.id);
               synced.set(festival.id, have ? { ...have, setIds: [...have.setIds, ...festival.setIds] } : festival);
             }
+            const { before, artist: after } = outcome;
+            // A pick links Spotify and also fills an empty photo or genre list: audit what really changed.
+            const fields = [
+              ...(before.links?.spotify !== after.links?.spotify ? ['spotify'] : []),
+              ...(before.photo !== after.photo ? ['photo'] : []),
+              ...(JSON.stringify(before.genres ?? []) !== JSON.stringify(after.genres ?? []) ? ['genres'] : []),
+            ];
             audit(AUDIT_ACTIONS.ARTIST_UPDATED, pick.artistId, req, {
-              name: outcome.artist.name,
-              fields: ['spotify'],
+              name: after.name,
+              fields,
               via: 'spotify-pick',
               festivalsUpdated: outcome.synced.length,
-              before: { name: outcome.before.name, label: outcome.before.label, links: outcome.before.links ?? {} },
-              after: { name: outcome.artist.name, label: outcome.artist.label, links: outcome.artist.links ?? {} },
+              before: { name: before.name, label: before.label, links: before.links ?? {}, photo: before.photo ?? null, genres: before.genres ?? [] },
+              after: { name: after.name, label: after.label, links: after.links ?? {}, photo: after.photo ?? null, genres: after.genres ?? [] },
               festivalIds: outcome.synced.slice(0, 200).map((festival: SyncedFestival) => festival.id),
             });
             results.push({ ...result, status: 'saved', artist: publicArtist(outcome.artist), festivalsUpdated: outcome.synced.length });

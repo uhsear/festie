@@ -142,6 +142,20 @@ describe('spotify candidates and picks', { skip, concurrency: 1 }, () => {
     assert.equal(res.body.data.artists.find((r: any) => r.artist.name === 'Cand Good').candidates.length, 1);
   });
 
+  test('candidates: artists in exclude are not searched, so the artists after them can be', async () => {
+    const first = await createArtist(app, { name: 'Excl Alpha' });
+    const second = await createArtist(app, { name: 'Excl Beta' });
+    await withPool((pool) =>
+      seedFestival(pool, { id: 'fest-excl', sets: [first, second].map((a, i) => ({ id: `excl-${i}`, artist: a.name, artists: [elementOf(a)] })) }),
+    );
+    searchTable = { 'Excl Alpha': [], 'Excl Beta': [spotifyArtist(25, 'Excl Beta')] };
+    const res = await app.post('/api/v1/admin/artists/spotify-candidates', { festivalId: 'fest-excl', exclude: [first.id] }).expect(200);
+    assert.deepEqual(res.body.data.artists.map((r: any) => r.artist.name), ['Excl Beta']);
+    assert.equal(res.body.data.notSearched, 0);
+    assert.ok(!spotifyCalls.some((url) => url.includes('Excl%20Alpha')), 'an excluded artist is not searched');
+    await app.post('/api/v1/admin/artists/spotify-candidates', { festivalId: 'fest-excl', exclude: Array(1001).fill('x') }).expect(400);
+  });
+
   test('picks: store the link and spotify_id, fill an empty photo and genres, and rewrite the festival copy', async () => {
     const artist = await createArtist(app, { name: 'Pick Me' });
     await withPool((pool) => seedFestival(pool, { id: 'fest-pick-1', sets: [{ id: 'pick-1-0', artist: 'Pick Me', artists: [elementOf(artist)] }] }));
@@ -161,6 +175,19 @@ describe('spotify candidates and picks', { skip, concurrency: 1 }, () => {
     const festivalAfter = await withPool((pool) => festivalRow(pool, 'fest-pick-1'));
     assert.ok(festivalAfter.updated_at > festivalBefore.updated_at, 'the festival version moved');
     assert.deepEqual(festivalAfter.edited_at, festivalBefore.edited_at, 'a pick is not a festival form edit');
+    // The audit entry names every field the pick changed: the link, and the photo and genres it filled.
+    let entry: any;
+    for (let attempt = 0; attempt < 50 && !entry; attempt++) {
+      entry = await withPool(async (pool) =>
+        (await pool.query(`SELECT details_json FROM audit_log WHERE action = 'artist.updated' AND target_id = $1`, [artist.id])).rows[0],
+      );
+      if (!entry) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const details = typeof entry.details_json === 'string' ? JSON.parse(entry.details_json) : entry.details_json;
+    assert.deepEqual(details.fields, ['spotify', 'photo', 'genres']);
+    assert.equal(details.before.photo, null);
+    assert.equal(details.after.photo, 'https://i.scdn.co/image/30');
+    assert.deepEqual(details.after.genres, ['house', 'techno']);
   });
 
   test('picks: a photo and genres the artist already has stay', async () => {
@@ -269,21 +296,33 @@ describe('spotify candidates and picks', { skip, concurrency: 1 }, () => {
     });
     artistTable[id(38)] = spotifyArtist(38, 'Pick Race');
     const pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 2 });
+    const holder = await pool.connect();
     try {
       // Another save holds the only festival the artist is on, so the pick waits for it.
-      const holder = await pool.connect();
       await holder.query('BEGIN');
       await lockFestivalAny(holder, 'fest-race-a');
       const pending = app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-race-a', artist, id(38), false)).then((r: any) => r);
-      await new Promise((resolve) => setTimeout(resolve, 500));
+      const untouched = await artistRow(artist.id);
+      // Wait until a backend really is blocked on a lock, then check that it wrote nothing while it waited.
+      let blocked = false;
+      for (let attempt = 0; attempt < 100 && !blocked; attempt++) {
+        const { rowCount } = await holder.query(
+          `SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`,
+        );
+        blocked = (rowCount ?? 0) > 0;
+        if (!blocked) await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.ok(blocked, 'the pick is waiting on the festival lock');
+      assert.deepEqual((await artistRow(artist.id)).updated_at, untouched.updated_at, 'nothing was written while the pick waited');
       // Meanwhile the artist is added to a second festival. The pick read only the first before it waited.
       await holder.query(`UPDATE festival_sets SET artists = $1::jsonb WHERE id = 'race-b'`, [JSON.stringify([element])]);
       await holder.query('COMMIT');
-      holder.release();
       const res = await pending;
       assert.equal(res.status, 200);
       assert.deepEqual([res.body.data.results[0].status, res.body.data.results[0].alsoOn], ['shared', 1]);
     } finally {
+      await holder.query('ROLLBACK').catch(() => undefined);
+      holder.release();
       await pool.end();
     }
     assert.deepEqual((await artistRow(artist.id)).links, {});

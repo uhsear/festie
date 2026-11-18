@@ -130,7 +130,7 @@ describe('FestivalArtists', () => {
     await open();
     expect(screen.queryByText('Find missing links')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Find Spotify links' }));
-    await waitFor(() => expect(findSpotifyCandidates).toHaveBeenCalledWith('f1'));
+    await waitFor(() => expect(findSpotifyCandidates).toHaveBeenCalledWith('f1', []));
     expect(await screen.findByRole('region', { name: 'Find Spotify links' })).toBeTruthy();
     expect(updateArtist).not.toHaveBeenCalled();
   });

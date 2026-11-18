@@ -48,12 +48,16 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
   const [busy, setBusy] = useState(false);
   const [confirm, setConfirm] = useState<Confirm | null>(null);
   const started = useRef(false);
+  // Artists the next search leaves out: skipped by the editor, or unmatched by Spotify. Without it they hold the first slots of every run.
+  const skip = useRef(new Set<string>());
 
   const search = useCallback(async () => {
     setFailed(false);
     setRows(null);
     try {
-      const found = await findSpotifyCandidates(festivalId);
+      const found = await findSpotifyCandidates(festivalId, [...skip.current]);
+      // When Spotify answered for everyone, an artist with no candidates has no match. Otherwise it may be a failed search: keep it.
+      if (found.searchFailed === 0) for (const r of found.artists) if (r.candidates.length === 0) skip.current.add(r.artist.id);
       setRows(found.artists);
       setNotSearched(found.notSearched);
       setSearchFailed(found.searchFailed);
@@ -103,7 +107,10 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
         else {
           setMessage(id, result.message ?? "Couldn't save this pick. Try again.");
           const current = result.artist;
-          if (result.status === 'changed' && current) {
+          if (result.status === 'changed' && current?.links?.spotify) {
+            // Someone else linked it: a pick can never replace a link, so the row is done.
+            saved.add(id);
+          } else if (result.status === 'changed' && current) {
             setRows((list) => (list ?? []).map((r) => (r.artist.id === id ? { ...r, artist: { ...r.artist, ...current } } : r)));
           }
         }
@@ -190,7 +197,7 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
           )}
           {notSearched > 0 && (
             <p className="text-sm text-text-muted">
-              {notSearched} more {notSearched === 1 ? 'artist was' : 'artists were'} not searched. Search again after these have links.
+              {notSearched} more {notSearched === 1 ? 'artist was' : 'artists were'} not searched. Link or skip these, then search again.
             </p>
           )}
           <div className="flex flex-wrap gap-2">
@@ -219,7 +226,10 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
                     variant="secondary"
                     disabled={busy}
                     aria-label={`None of these for ${artistTitle(row.artist)}`}
-                    onClick={() => setDismissed((d) => new Set(d).add(row.artist.id))}
+                    onClick={() => {
+                      skip.current.add(row.artist.id);
+                      setDismissed((d) => new Set(d).add(row.artist.id));
+                    }}
                   >
                     None of these
                   </Button>

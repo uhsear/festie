@@ -85,7 +85,7 @@ export interface SpotifyCandidateRow {
 
 export interface SpotifyCandidatesResult {
   artists: SpotifyCandidateRow[];
-  /** Artists without a Spotify link that this run left out. Run it again after these have links. */
+  /** Artists without a Spotify link that this run left out. Run it again after the editor links or skips these. */
   notSearched: number;
   /** Artists whose search Spotify refused. They show no candidates: try again. */
   searchFailed: number;
@@ -149,9 +149,13 @@ export async function getArtistImpact(id: string): Promise<ArtistImpactFestival[
   return data.festivals;
 }
 
-/** The top 3 Spotify candidates for each artist on the festival that has no Spotify link. Writes nothing. */
-export function findSpotifyCandidates(festivalId: string): Promise<SpotifyCandidatesResult> {
-  return api.post<SpotifyCandidatesResult>('/admin/artists/spotify-candidates', { festivalId }, { timeoutMs: 120_000 });
+/** The top 3 Spotify candidates for each artist on the festival that has no Spotify link, except the `exclude` ids. Writes nothing. */
+export function findSpotifyCandidates(festivalId: string, exclude: string[] = []): Promise<SpotifyCandidatesResult> {
+  return api.post<SpotifyCandidatesResult>(
+    '/admin/artists/spotify-candidates',
+    { festivalId, ...(exclude.length > 0 ? { exclude } : {}) },
+    { timeoutMs: 120_000 },
+  );
 }
 
 /** Stores the picks the editor made. Each pick answers on its own row. */
@@ -163,8 +167,13 @@ export async function pickSpotifyCandidates(festivalId: string, picks: SpotifyPi
 /** "1.2M followers". Null when Spotify gave no count. */
 export function followersText(followers: number | null): string | null {
   if (followers === null) return null;
+  // Pick the unit after rounding to a tenth, so 999,950 reads 1M, not 1000K.
   const short =
-    followers >= 1_000_000 ? `${+(followers / 1_000_000).toFixed(1)}M` : followers >= 1_000 ? `${+(followers / 1_000).toFixed(1)}K` : String(followers);
+    Math.round(followers / 100) >= 10_000
+      ? `${+(followers / 1_000_000).toFixed(1)}M`
+      : followers >= 1_000
+        ? `${+(followers / 1_000).toFixed(1)}K`
+        : String(followers);
   return `${short} ${followers === 1 ? 'follower' : 'followers'}`;
 }
 

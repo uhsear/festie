@@ -173,6 +173,31 @@ describe('SpotifyCandidates', () => {
     await waitFor(() => expect(findSpotifyCandidates).toHaveBeenCalledTimes(2));
   });
 
+  it('a search after None of these leaves that artist out, and so does an artist Spotify has no match for', async () => {
+    const nobody = row({ id: 'art-9', name: 'Nobody' }, []);
+    await open([avello(), hol(), nobody]);
+    fireEvent.click(screen.getByRole('button', { name: 'None of these for Avello' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Search again' }));
+    await waitFor(() => expect(findSpotifyCandidates).toHaveBeenCalledTimes(2));
+    expect(findSpotifyCandidates).toHaveBeenLastCalledWith('f1', expect.arrayContaining(['art-1', 'art-9']));
+    expect((findSpotifyCandidates.mock.calls[1]![1] as string[]).includes('art-2')).toBe(false);
+  });
+
+  it('a stale row whose artist now has a Spotify link is removed, since a pick cannot replace a link', async () => {
+    pickSpotifyCandidates.mockResolvedValue([
+      {
+        artistId: 'art-1',
+        status: 'changed',
+        message: 'Avello already has a Spotify link.',
+        artist: artist({ updatedAt: '2026-06-05T00:00:00.000Z', links: { spotify: 'https://open.spotify.com/artist/abc' } }),
+      },
+    ]);
+    await open([avello()]);
+    fireEvent.click(screen.getByRole('button', { name: 'Pick Avello for Avello' }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Pick Avello for Avello' })).toBeNull());
+    expect(onApplied).toHaveBeenCalled();
+  });
+
   it('shows a try again button when the search fails', async () => {
     findSpotifyCandidates.mockRejectedValue(new Error('down'));
     render(<SpotifyCandidates festivalId="f1" onApplied={onApplied} onClose={onClose} />);

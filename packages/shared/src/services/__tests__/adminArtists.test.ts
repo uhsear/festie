@@ -94,6 +94,14 @@ describe('Spotify candidates', () => {
     expect(init.body).toBe(JSON.stringify({ festivalId: 'f1' }));
   });
 
+  it('sends the artists to leave out', async () => {
+    const spy = vi.fn(async () => res(200, { data: { artists: [], notSearched: 0, searchFailed: 0 }, error: null }));
+    vi.stubGlobal('fetch', spy);
+    await findSpotifyCandidates('f1', ['a1', 'a2']);
+    const [, init] = spy.mock.calls[0] as unknown as [string, RequestInit];
+    expect(init.body).toBe(JSON.stringify({ festivalId: 'f1', exclude: ['a1', 'a2'] }));
+  });
+
   it('sends the picks with the artist token and only the Spotify id, and returns each row', async () => {
     const spy = vi.fn(async () =>
       res(200, { data: { results: [{ artistId: 'art-1', status: 'shared', alsoOn: 2 }] }, error: null }),
@@ -112,5 +120,7 @@ describe('Spotify candidates', () => {
     expect(followersText(950)).toBe('950 followers');
     expect(followersText(12_340)).toBe('12.3K followers');
     expect(followersText(1_250_000)).toBe('1.3M followers');
+    expect(followersText(999_949)).toBe('999.9K followers');
+    expect(followersText(999_950)).toBe('1M followers');
   });
 });

@@ -725,7 +725,11 @@ export const artistListQuerySchema = z.object({
 export type ArtistListQuery = z.infer<typeof artistListQuerySchema>;
 
 // "Find Spotify links": the candidates for the artists on one festival, and the editor's picks.
-export const artistSpotifyCandidatesSchema = z.object({ festivalId: identifier });
+export const artistSpotifyCandidatesSchema = z.object({
+  festivalId: identifier,
+  // Artists the editor skipped or Spotify could not match. They leave the search so the next ones reach it.
+  exclude: z.array(identifier).max(1000).optional(),
+});
 export type ArtistSpotifyCandidatesInput = z.infer<typeof artistSpotifyCandidatesSchema>;
 
 export const artistSpotifyPicksSchema = z.object({
