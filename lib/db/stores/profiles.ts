@@ -20,6 +20,27 @@ function batchInsert(client: any, table: string, columns: string[], rows: any[][
   return client.query(`INSERT INTO ${table} (${colStr}) VALUES ${placeholders.join(', ')}`, values);
 }
 
+// Upsert and remove only the pick rows a delta names, then return the profile's whole pick map.
+async function applyPickDeltas(client: any, profileId: string, deltas: { set?: Record<string, string>; remove?: string[] }) {
+  const upserts = Object.entries(deltas.set ?? {});
+  if (upserts.length > 0) {
+    await client.query(
+      `INSERT INTO festival_profile_picks (profile_id, set_id, priority)
+       SELECT $1, u.set_id, u.priority FROM unnest($2::text[], $3::text[]) AS u(set_id, priority)
+       ON CONFLICT (profile_id, set_id) DO UPDATE SET priority = EXCLUDED.priority`,
+      [profileId, upserts.map(([setId]) => setId), upserts.map(([, priority]) => priority)],
+    );
+  }
+  if (deltas.remove?.length) {
+    await client.query('DELETE FROM festival_profile_picks WHERE profile_id = $1 AND set_id = ANY($2::text[])', [
+      profileId,
+      deltas.remove,
+    ]);
+  }
+  const { rows } = await client.query('SELECT set_id, priority FROM festival_profile_picks WHERE profile_id = $1', [profileId]);
+  return Object.fromEntries(rows.map((row: any) => [row.set_id, row.priority]));
+}
+
 // #24: Normalized read fragment — reconstructs picks/notes/reminders from
 // dedicated tables instead of the legacy JSONB columns. JSONB columns remain
 // for dual-write rollback safety but are no longer the read source.
@@ -334,15 +355,30 @@ export default function createProfilesStore(pool: Pool, utils: any) {
     },
 
     async update(profileId: string, fields: any) {
-      // fields: picks, notes, reminders, userId, name, updatedAt
+      // fields: picks, pickDeltas, notes, reminders, userId, name, updatedAt
+      // pickDeltas ({ set: {setId: priority}, remove: [setId] }) changes only the sets it names.
       // Use transaction to ensure main record and normalized tables stay in sync (#CRITICAL)
       return withTransaction(pool, async (client) => {
         const sets: string[] = [];
         const values: any[] = [];
         let idx = 1;
+        let deltaPicks: Record<string, string> | undefined;
+        if (fields.pickDeltas !== undefined) {
+          // Lock the row so two delta writes to one profile apply one after the other.
+          const locked = await client.query(
+            'SELECT id FROM festival_profiles WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+            [profileId],
+          );
+          if (locked.rows.length === 0) return null;
+          deltaPicks = await applyPickDeltas(client, profileId, fields.pickDeltas);
+        }
         if (fields.picks !== undefined) {
           sets.push(`picks_json = $${idx}`);
           values.push(serializeJson(fields.picks));
+          idx++;
+        } else if (deltaPicks !== undefined) {
+          sets.push(`picks_json = $${idx}`);
+          values.push(serializeJson(deltaPicks));
           idx++;
         }
         if (fields.notes !== undefined) {

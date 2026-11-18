@@ -1,5 +1,5 @@
 import { api, ApiClientError } from './api';
-import { parseRetryAfterMs } from './errors';
+import { isEdgeUnavailable, parseRetryAfterMs } from './errors';
 import { getStorage } from '../platform/storage';
 import { useUIStore, type FailedSyncItem } from '../stores/uiStore';
 
@@ -346,7 +346,8 @@ let _draining = false;
  *  - success            -> remove from queue
  *  - offline again      -> stop; keep the rest for the next reconnect
  *  - permanent 4xx/409  -> remove AND push to uiStore.failedSync (no silent drop)
- *  - transient 0/5xx    -> leave in queue, skip to the next entry
+ *  - edge 5xx / network -> stop; the origin is unreachable, keep the rest, no retry used
+ *  - transient 5xx      -> leave in queue, skip to the next entry
  */
 export async function drainQueue(): Promise<void> {
   if (_draining || isOffline()) return;
@@ -393,8 +394,9 @@ export async function drainQueue(): Promise<void> {
           // Transient: wait out Retry-After, no retry consumed (24h age-out still bounds it).
           const waitMs = parseRetryAfterMs((err as { retryAfter?: number | string | null }).retryAfter) ?? DEFAULT_RATE_LIMIT_WAIT_MS;
           await patchQueued(m.clientId, { notBefore: Date.now() + waitMs });
-        } else if (isNetworkTimeout(err)) {
-          // Weak signal, not a server verdict: keep the entry untouched, retry next drain.
+        } else if (isNetworkTimeout(err) || isEdgeUnavailable((err as { status?: number } | null)?.status)) {
+          // Weak signal, not a server verdict (an edge 5xx means the origin is down): keep the
+          // entry untouched, retry next drain. Without this, an outage would burn MAX_RETRIES.
           break;
         } else if (isPermanentFailure(err)) {
           await withQueueLock(async () => {

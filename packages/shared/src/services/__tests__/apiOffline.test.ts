@@ -195,6 +195,52 @@ describe('api offline interception', () => {
     });
   });
 
+  describe('edge 5xx on a mutation (origin down behind the tunnel)', () => {
+    const httpError = (status: number) =>
+      ({
+        ok: false,
+        status,
+        statusText: 'Edge error',
+        headers: { get: () => null },
+        json: async () => {
+          throw new Error('not json');
+        },
+      }) as unknown as Response;
+
+    it('queues an eligible PUT on 502, returns the optimistic result and flips offline', async () => {
+      fetchSpy.mockResolvedValueOnce(httpError(502));
+      const result = await api.put<{ _optimistic: boolean }>('/profiles/p1', { pickDeltas: { s1: 'must' } });
+      expect(result._optimistic).toBe(true);
+      expect(enqueueMutation).toHaveBeenCalledTimes(1);
+      expect(useUIStore.getState().offlineMode).toBe(true);
+    });
+
+    it('queues an eligible POST on 530 (origin never ran it) under the key already sent', async () => {
+      fetchSpy.mockResolvedValueOnce(httpError(530));
+      await api.post('/crews/c1/meeting-points', { label: 'Main gate' });
+      const sentKey = (fetchSpy.mock.calls[0]![1] as { headers: Record<string, string> }).headers['Idempotency-Key'];
+      expect(vi.mocked(enqueueMutation).mock.calls[0]![0].idempotencyKey).toBe(sentKey);
+    });
+
+    it('does NOT queue a POST on 502: the origin may have committed it already', async () => {
+      fetchSpy.mockResolvedValueOnce(httpError(502));
+      await expect(api.post('/crews/c1/meeting-points', { label: 'Main gate' })).rejects.toMatchObject({ status: 502 });
+      expect(enqueueMutation).not.toHaveBeenCalled();
+    });
+
+    it('does NOT queue an ineligible path, or an app 500, or a replay', async () => {
+      fetchSpy.mockResolvedValueOnce(httpError(502));
+      await expect(api.put('/auth/password', { a: 1 })).rejects.toMatchObject({ status: 502 });
+      fetchSpy.mockResolvedValueOnce(httpError(500));
+      await expect(api.put('/profiles/p1', { picks: {} })).rejects.toMatchObject({ status: 500 });
+      fetchSpy.mockResolvedValueOnce(httpError(502));
+      await expect(api.put('/profiles/p1', { picks: {} }, { _bypassOfflineQueue: true })).rejects.toMatchObject({
+        status: 502,
+      });
+      expect(enqueueMutation).not.toHaveBeenCalled();
+    });
+  });
+
   describe('enqueue failure (residual E)', () => {
     it('an up-front enqueue throw falls through to the network error, never the raw storage error', async () => {
       useUIStore.setState({ offlineMode: true });

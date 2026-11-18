@@ -97,7 +97,9 @@ export default function createProfilesRoutes(deps: any) {
     }
   });
 
-  // PUT and PATCH both accept partial payloads
+  // PUT and PATCH both accept partial payloads. `picks` replaces the whole map (old app builds
+  // still send it); `pickDeltas` changes only the sets it names, so a replayed offline write
+  // cannot clobber picks it never saw. A client that wants conflict detection sends If-Match.
   async function updateProfile(req: any, res: any) {
     try {
       setNoStore(res);
@@ -107,6 +109,20 @@ export default function createProfilesRoutes(deps: any) {
         const normalized = normalizePickPayload(req.validatedBody.picks);
         if (normalized.error) return sendError(res, 400, normalized.error, ErrorCodes.INVALID_INPUT);
         nextPicks = normalized.value;
+      }
+
+      // Deltas: { setId: priority | null }, null removing the pick. Every key runs through the
+      // same checks and cap as a full map; a removal rides through as a placeholder priority.
+      let pickDeltas;
+      if (req.validatedBody?.pickDeltas !== undefined) {
+        const requested = req.validatedBody.pickDeltas;
+        const normalized = normalizePickPayload(
+          Object.fromEntries(Object.entries(requested).map(([setId, priority]) => [setId, priority ?? 'maybe'])),
+        );
+        if (normalized.error) return sendError(res, 400, normalized.error, ErrorCodes.INVALID_INPUT);
+        const removals = Object.keys(normalized.value).filter((setId) => requested[setId] === null);
+        const additions = Object.fromEntries(Object.entries(normalized.value).filter(([setId]) => requested[setId] !== null));
+        pickDeltas = { set: additions, remove: removals };
       }
 
       let nextNotes;
@@ -169,6 +185,10 @@ export default function createProfilesRoutes(deps: any) {
       if (nextPicks !== undefined && Object.keys(nextPicks).some((setId) => !validSetIds.has(setId))) {
         return sendError(res, 400, 'Pick references an unknown set', ErrorCodes.INVALID_INPUT);
       }
+      // Removals skip this check: clearing a pick for a set that left the lineup is a harmless no-op.
+      if (pickDeltas && Object.keys(pickDeltas.set).some((setId) => !validSetIds.has(setId))) {
+        return sendError(res, 400, 'Pick references an unknown set', ErrorCodes.INVALID_INPUT);
+      }
       if (nextNotes !== undefined && Object.keys(nextNotes).some((key) => !validSetIds.has(key.startsWith('crew:') ? key.slice(5) : key))) {
         return sendError(res, 400, 'Note references an unknown set', ErrorCodes.INVALID_INPUT);
       }
@@ -180,6 +200,7 @@ export default function createProfilesRoutes(deps: any) {
       // Build update fields
       const updateFields: any = {};
       if (nextPicks !== undefined) updateFields.picks = nextPicks;
+      if (pickDeltas) updateFields.pickDeltas = pickDeltas;
       if (nextNotes !== undefined) updateFields.notes = nextNotes;
       if (nextReminders !== undefined) updateFields.reminders = nextReminders;
 
@@ -191,7 +212,7 @@ export default function createProfilesRoutes(deps: any) {
       emitter.profileUpdated({
         profile,
         user: await getUserById(profile.userId),
-        changedFields: { picks: nextPicks !== undefined },
+        changedFields: { picks: nextPicks !== undefined || pickDeltas !== undefined },
       });
 
       // Set ETag for optimistic concurrency on subsequent updates

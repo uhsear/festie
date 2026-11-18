@@ -200,6 +200,19 @@ describe('offlineQueue', () => {
       expect(useUIStore.getState().failedSync).toHaveLength(0); // not a permanent fail
     });
 
+    it('stops the drain on an edge 5xx and keeps every entry, consuming no retry (origin down)', async () => {
+      seed([makeMutation({ clientId: 'a', createdAt: Date.now() - 1_000 }), makeMutation({ clientId: 'b' })]);
+      vi.mocked(api.put).mockRejectedValue(new ApiClientError('Bad gateway', 502));
+
+      await drainQueue();
+
+      expect(api.put).toHaveBeenCalledTimes(1); // the outage stops the pass at the first entry
+      const queued = readPersisted();
+      expect(queued.map((q) => q.clientId).sort()).toEqual(['a', 'b']);
+      expect(queued.every((q) => (q.retries ?? 0) === 0)).toBe(true);
+      expect(useUIStore.getState().failedSync).toHaveLength(0);
+    });
+
     it('keeps a 429 queued, skips it until Retry-After passes, and never consumes a retry', async () => {
       seed([makeMutation({ clientId: 'a' })]);
       vi.mocked(api.put).mockRejectedValue(Object.assign(new ApiClientError('Slow down', 429), { retryAfter: '60' }));
