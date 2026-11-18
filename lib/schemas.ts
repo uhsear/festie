@@ -562,7 +562,7 @@ export const festivalUpdateSchema = festivalCreateSchema
     confirmRemovals: z.boolean().optional(),
     // The festival's updatedAt when the editor loaded it. A mismatch returns
     // FESTIVAL_CHANGED so a stale form cannot overwrite a newer save.
-    expectedUpdatedAt: z.string().max(40).optional(),
+    expectedUpdatedAt: z.string().datetime({ offset: true }).optional(),
   })
   .partial()
   // false saves without pushing schedule alerts to people whose picks changed.

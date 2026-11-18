@@ -290,18 +290,30 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
 
   // Share-lock the rows this save copies, then copy their newest version: an artist edit that commits
   // in between must not leave this festival with the old name.
+  const joinedNames = (list: any[]) => list.map((a: any) => a?.name).join(` ${input.separator} `);
+  // The flat names the sets held before the elements are replaced by the artist rows' copies.
+  const sentJoined = new Map<any, string[]>();
+  for (const day of days ?? []) {
+    for (const set of day.sets ?? []) {
+      const known = [Array.isArray(set.artists) ? joinedNames(set.artists) : null, set.id ? joinedNames(stored.bySet.get(set.id) ?? []) : null];
+      sentJoined.set(set, known.filter((name): name is string => !!name));
+    }
+  }
   const current = await lockArtistRows(client, [...new Set([...linked.values()].map((row) => row.id))]);
   for (const [slot, row] of linked) slot.list[slot.index] = canonicalElement(current.get(row.id) ?? row);
-  rebuildFlatFields(days, input.separator);
+  rebuildFlatFields(days, input.separator, sentJoined);
   return { ...result, days, lineup };
 }
 
-/** The flat artist and link_url follow the resolved elements, so a stale form never leaves an old flat name. */
-function rebuildFlatFields(days: any[] | undefined, separator: string) {
+/**
+ * The flat artist and link_url follow the resolved elements, so a stale form never leaves an old flat name.
+ * A flat name that differs from the names the set held before (a legacy custom name) stays, as in the backfill.
+ */
+function rebuildFlatFields(days: any[] | undefined, separator: string, previous: Map<any, string[]>) {
   for (const day of days ?? []) {
     for (const set of day.sets ?? []) {
       if (!Array.isArray(set.artists) || set.artists.length === 0) continue;
-      set.artist = set.artists.map((a: any) => a.name).join(` ${separator} `);
+      if (!set.artist || previous.get(set)?.includes(set.artist)) set.artist = set.artists.map((a: any) => a.name).join(` ${separator} `);
       set.linkUrl = set.artists[0]?.links?.spotify || null;
     }
   }
