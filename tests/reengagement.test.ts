@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { describe, it } from 'node:test';
+import { describe, it, mock } from 'node:test';
 
 import { ALLOWED_NOTIFICATION_TYPES } from '../lib/notifications/payload.js';
 import { createSendService } from '../lib/notifications/send.js';
-import { createReengagementTriggers, findRatePromptDay } from '../lib/notifications/reengagement.js';
+import { createReengagementTriggers, EMAIL_DAILY_BUDGET, findRatePromptDay } from '../lib/notifications/reengagement.js';
 
 // ---------------------------------------------------------------------------
 // Minimal logger / config helpers
@@ -160,19 +160,26 @@ describe('createReengagementTriggers.sendCrewReformed', () => {
 });
 
 describe('createReengagementTriggers.sendLineupDrop', () => {
-  // Mock pg pool returning: [name lookup], [prior-attendee query]
-  function mockPool(name: string, priorUserIds: string[]): any {
-    let call = 0;
+  type Prior = { userId: string; festivalName: string };
+  // Fake pg pool: the name lookup, the follower query and the prior-edition query are told apart by their SQL.
+  function mockPool(
+    name: string,
+    { followers = [] as string[], prior = [] as Array<string | Prior>, hasTimes = false } = {},
+  ): any {
     return {
-      query: async () => {
-        call += 1;
-        if (call === 1) return { rows: name ? [{ name }] : [] };
-        return { rows: priorUserIds.map((userId) => ({ userId })) };
+      query: async (sql: string) => {
+        if (sql.includes('festival_follows')) return { rows: followers.map((userId) => ({ userId })) };
+        if (sql.includes('regexp_replace(lower(fp.name)')) {
+          return {
+            rows: prior.map((p) => (typeof p === 'string' ? { userId: p, festivalName: 'North Coast 2026' } : p)),
+          };
+        }
+        return { rows: name ? [{ name, hasTimes }] : [] };
       },
     };
   }
 
-  function build(pool: any) {
+  function build(pool: any, extraConfig: object = {}) {
     const sends: any[] = [];
     const notificationService = {
       isConfigured: true,
@@ -189,76 +196,140 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
         insert: async () => {},
       },
     };
-    const triggers = createReengagementTriggers({ stores, config, log, notificationService, pool });
+    const triggers = createReengagementTriggers({
+      stores,
+      config: { ...config, ...extraConfig },
+      log,
+      notificationService,
+      pool,
+    });
     return { triggers, sends };
   }
 
   it('targets prior-year attendees of the same-named festival', async () => {
-    const { triggers, sends } = build(mockPool('North Coast', ['p1', 'p2']));
+    const { triggers, sends } = build(mockPool('North Coast', { prior: ['p1', 'p2'] }));
     const r = await triggers.sendLineupDrop('fest-2027');
     assert.equal(sends.length, 2);
-    assert.equal(r.priorAttendees, 2);
+    assert.equal(r.recipients, 2);
     assert.equal(sends[0].type, 'lineup_drop');
     assert.equal(sends[0].data.eventKey, 'lineup:fest-2027');
     // A real web route: web reads ?festival=, mobile resolves it via pushTarget.
     assert.equal(sends[0].data.deepLink, 'https://festie.test/?festival=fest-2027');
   });
 
-  describe('email opt-out', () => {
+  it('splits followers from past-edition users and lists the matched festival names', async () => {
+    const prior = [
+      { userId: 'p1', festivalName: 'North Coast 2025' },
+      { userId: 'p2', festivalName: 'North Coast 2024' },
+      // f1 follows too, so f1 is a follower and their past festival is not listed.
+      { userId: 'f1', festivalName: 'North Coast 2023' },
+    ];
+    const { triggers, sends } = build(mockPool('North Coast', { followers: ['f1'], prior }));
+    const dry = await triggers.countLineupDrop('fest-2027');
+    assert.equal(dry.recipients, 3);
+    assert.equal(dry.followers, 1);
+    assert.equal(dry.priorAttendees, 2);
+    assert.deepEqual(dry.matchedFestivalNames, ['North Coast 2024', 'North Coast 2025']);
+    assert.equal(sends.length, 0);
+    await triggers.sendLineupDrop('fest-2027');
+    assert.deepEqual(sends.map((s) => s.userId).sort(), ['f1', 'p1', 'p2']);
+  });
+
+  it('keeps the past-edition query a separate statement from the follower query', async () => {
+    const sqls: string[] = [];
+    const inner = mockPool('North Coast', { followers: ['f1'], prior: ['p1'] });
+    const { triggers } = build({ query: async (sql: string, p: any[]) => (sqls.push(sql), inner.query(sql, p)) });
+    await triggers.countLineupDrop('fest-2027');
+    assert.ok(sqls.every((q) => !(q.includes('festival_follows') && q.includes('regexp_replace'))));
+    assert.ok(sqls.every((q) => !/\bUNION\b/.test(q)));
+  });
+
+  describe('copy', () => {
+    it('with no timed set, the push does not say "picking"', async () => {
+      const { triggers, sends } = build(mockPool('North Coast', { followers: ['f1'], hasTimes: false }));
+      await triggers.sendLineupDrop('fest-2027');
+      assert.equal(sends[0].title, 'North Coast lineup is out');
+      assert.equal(sends[0].body, "See who is playing. We'll tell you when set times are out.");
+      assert.ok(!/picking/i.test(`${sends[0].title} ${sends[0].body}`));
+    });
+
+    it('with a timed set, keeps the picking copy', async () => {
+      const { triggers, sends } = build(mockPool('North Coast', { followers: ['f1'], hasTimes: true }));
+      await triggers.sendLineupDrop('fest-2027');
+      assert.equal(sends[0].title, 'North Coast lineup just dropped');
+      assert.equal(sends[0].body, 'Start picking your sets.');
+    });
+  });
+
+  describe('email', () => {
     // RESEND_API_KEY is unset, so sendEmail logs 'email:skip' (and sends nothing).
-    // That log line shows whether the fan-out reached the email sender.
-    async function run(prefs: any) {
+    // That log line shows which addresses the fan-out reached.
+    async function run(prefs: any, { postal = '1 Main St, Town', followers = ['p1'], prior = [] as string[] } = {}) {
       const skips: any[] = [];
-      const emailLog = { ...log, warn: (msg: string) => { if (msg === 'email:skip') skips.push(msg); } };
+      const emailLog = { ...log, warn: (msg: string, meta: any) => { if (msg === 'email:skip') skips.push(meta); } };
+      const users = new Map(
+        [...followers, ...prior].map((id) => [id, { email: `${id}@example.com`, username: id }] as const),
+      );
       const stores = {
-        users: { getByIds: async () => new Map([['p1', { email: 'p1@example.com', username: 'p1' }]]) },
+        users: { getByIds: async () => users },
         notificationPrefs: { get: async () => prefs },
         notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {} },
       };
-      const pool = { query: async (_sql: string) => ({ rows: _sql.includes('SELECT name') ? [{ name: 'North Coast' }] : [{ userId: 'p1' }] }) };
-      const triggers = createReengagementTriggers({ stores, config: { ...config, RESEND_API_KEY: '' }, log: emailLog, pool });
+      const pool = mockPool('North Coast', { followers, prior });
+      const cfg = { ...config, RESEND_API_KEY: '', EMAIL_POSTAL_ADDRESS: postal };
+      const triggers = createReengagementTriggers({ stores, config: cfg, log: emailLog, pool });
       await triggers.sendLineupDrop('fest-2027');
-      return skips.length;
+      return { skips, dry: await triggers.countLineupDrop('fest-2027') };
     }
 
     it('sends no email when lineupDrops is off', async () => {
-      assert.equal(await run({ lineupDrops: false }), 0);
+      assert.equal((await run({ lineupDrops: false })).skips.length, 0);
     });
 
     it('sends the email when lineupDrops is on', async () => {
-      assert.equal(await run({ lineupDrops: true }), 1);
+      assert.equal((await run({ lineupDrops: true })).skips.length, 1);
+    });
+
+    it('goes to followers only, never to a past-edition user who does not follow', async () => {
+      const { skips } = await run({ lineupDrops: true }, { followers: ['f1'], prior: ['p1'] });
+      assert.deepEqual(skips.map((s) => s.to), ['f1@example.com']);
+    });
+
+    it('sends no email without a postal address, and the dry run says why', async () => {
+      const { skips, dry } = await run({ lineupDrops: true }, { postal: '' });
+      assert.equal(skips.length, 0);
+      assert.equal(dry.emailOff, 'no_postal_address');
+      assert.equal(dry.emailRecipients, 0);
     });
   });
 
   it('countLineupDrop returns the fresh count and sends nothing', async () => {
-    const { triggers, sends } = build(mockPool('North Coast', ['p1', 'p2']));
+    const { triggers, sends } = build(mockPool('North Coast', { prior: ['p1', 'p2'] }));
     const r = await triggers.countLineupDrop('fest-2027');
-    assert.deepEqual(r, { festivalName: 'North Coast', recipients: 2, priorAttendees: 2 });
+    assert.equal(r.festivalName, 'North Coast');
+    assert.equal(r.recipients, 2);
+    assert.equal(r.followers, 0);
+    assert.equal(r.priorAttendees, 2);
     assert.equal(sends.length, 0);
   });
 
   it('edition match ignores a trailing year', async () => {
     const sqls: string[] = [];
-    const pool = {
-      query: async (sql: string) => {
-        sqls.push(sql);
-        return { rows: sql.includes('SELECT name') ? [{ name: 'North Coast 2027' }] : [] };
-      },
-    };
-    const { triggers } = build(pool);
+    const inner = mockPool('North Coast 2027');
+    const { triggers } = build({ query: async (sql: string, p: any[]) => (sqls.push(sql), inner.query(sql, p)) });
     await triggers.countLineupDrop('fest-2027');
     assert.ok(sqls.some((q) => q.includes('regexp_replace(lower(fp.name)')));
   });
 
-  it('no prior attendees → nothing sent', async () => {
-    const { triggers, sends } = build(mockPool('North Coast', []));
+  it('no recipients → nothing sent', async () => {
+    const { triggers, sends } = build(mockPool('North Coast'));
     const r = await triggers.sendLineupDrop('fest-2027');
-    assert.equal(r.reason, 'no_prior_attendees');
+    assert.equal(r.reason, 'no_recipients');
     assert.equal(sends.length, 0);
   });
 
   it('unknown festival → nothing sent', async () => {
-    const { triggers, sends } = build(mockPool('', []));
+    const { triggers, sends } = build(mockPool(''));
     const r = await triggers.sendLineupDrop('fest-x');
     assert.equal(r.reason, 'festival_not_found');
     assert.equal(sends.length, 0);
@@ -810,5 +881,204 @@ describe('re-engagement dedup sees the inbox row', () => {
     assert.equal(inserted.length, 1);
     assert.equal(inserted[0].platform, 'inbox');
     assert.equal(JSON.parse(inserted[0].dataJson).eventKey, 'lineup:f2');
+  });
+});
+
+// =====================================================================
+// days_out — the manual "Announce days" alert. No save sends it, so these tests
+// drive the dry run and the send directly and check what each one reaches.
+// =====================================================================
+describe('createReengagementTriggers days_out', () => {
+  const entry = (id: string, name: string, dayDate: string | null = null, status = 'announced') => ({
+    id,
+    artists: [{ name }],
+    displayName: null,
+    tier: null,
+    dayDate,
+    status,
+    announcedAt: '2026-11-01',
+    linkedSetIds: [],
+  });
+  const DAYS = [
+    { dayIndex: 0, label: 'Fri', date: '2027-02-05', sets: [] as any[] },
+    { dayIndex: 1, label: 'Sat', date: '2027-02-06', sets: [] as any[] },
+  ];
+  const festivalOf = (lineup: any[], over: any = {}) => ({
+    id: 'fest-1',
+    name: 'Wasteland',
+    publishedAt: '2026-11-01T00:00:00.000Z',
+    b2bSeparator: 'b2b',
+    days: DAYS,
+    lineup,
+    ...over,
+  });
+  const withDay = (n: number, total: number) =>
+    Array.from({ length: total }, (_, i) => entry(`a${i}`, `Act ${i}`, i < n ? '2027-02-05' : null));
+
+  function build({
+    festival = festivalOf(withDay(3, 3)) as any,
+    setTimesOutAt = null as string | null,
+    followers = ['f1', 'f2'],
+    profileHolders = ['p1', 'f1'],
+    postal = '',
+    emailsToday = 0,
+    withPush = [] as string[],
+    resendKey = '',
+    emailLog = log as any,
+  } = {}) {
+    const sends: any[] = [];
+    const seen = new Set<string>();
+    const emailed = new Set<string>();
+    const pool = {
+      query: async (sql: string) => {
+        if (/festival_follows f\s/.test(sql)) {
+          return { rows: [...new Set([...followers, ...profileHolders])].map((userId) => ({ userId })) };
+        }
+        throw new Error(`unexpected query: ${sql}`);
+      },
+    };
+    const notificationService = {
+      isConfigured: true,
+      send: async (args: any) => {
+        sends.push(args);
+        seen.add(`${args.userId}|${args.type}|${args.data.eventKey}`);
+        return { sent: 1 };
+      },
+    };
+    const stores = {
+      festivals: { getById: async () => festival, getSetTimesOutAt: async () => setTimesOutAt },
+      users: {
+        getByIds: async (ids: string[]) =>
+          new Map(ids.map((id) => [id, { email: `${id}@example.com`, username: id }] as const)),
+      },
+      notificationPrefs: { get: async () => ({ lineupDrops: 1 }) },
+      deviceTokens: { listByUsers: async () => withPush.map((userId) => ({ userId })) },
+      notificationLog: {
+        existsForEvents: async (uids: string[], type: string, key: string) =>
+          new Set(
+            uids.filter((u) =>
+              key.endsWith('#email') ? emailed.has(`${u}|${type}|${key}`) : seen.has(`${u}|${type}|${key}`),
+            ),
+          ),
+        countEmailsSince: async () => emailsToday,
+        insert: async (row: any) => {
+          if (row.platform === 'email') emailed.add(`${row.userId}|${row.type}|${JSON.parse(row.dataJson).eventKey}`);
+        },
+      },
+    };
+    const cfg = { ...config, RESEND_API_KEY: resendKey, EMAIL_POSTAL_ADDRESS: postal };
+    const triggers = createReengagementTriggers({ stores, config: cfg, log: emailLog, notificationService, pool });
+    return { triggers, sends };
+  }
+
+  it('act 1 of 118 with a day: the dry run reports the split, and nothing sends', async () => {
+    const { triggers, sends } = build({ festival: festivalOf(withDay(1, 118)) });
+    const dry = await triggers.countDaysOut('fest-1');
+    assert.equal(dry.actsWithDay, 1);
+    assert.equal(dry.actsTotal, 118);
+    assert.equal(dry.recipients, 3);
+    assert.equal(dry.reason, undefined);
+    assert.equal(sends.length, 0);
+  });
+
+  it('with every act on a day, one days_out push per follower and profile holder', async () => {
+    const { triggers, sends } = build();
+    const r = await triggers.sendDaysOut('fest-1');
+    assert.equal(r.sent, 3);
+    assert.deepEqual(sends.map((s) => s.userId).sort(), ['f1', 'f2', 'p1']);
+    assert.deepEqual(sends[0], {
+      userId: sends[0].userId,
+      type: 'days_out',
+      title: 'Wasteland days are out',
+      body: 'See who plays which day. Set times come later.',
+      data: { festivalId: 'fest-1', eventKey: 'days:fest-1', deepLink: 'https://festie.test/?festival=fest-1' },
+    });
+  });
+
+  it('a second press sends nothing and the dry run says everyone has heard', async () => {
+    const { triggers, sends } = build();
+    await triggers.sendDaysOut('fest-1');
+    sends.length = 0;
+    const r = await triggers.sendDaysOut('fest-1');
+    assert.equal(r.sent, 0);
+    assert.equal(sends.length, 0);
+    assert.equal((await triggers.countDaysOut('fest-1')).reason, 'already_heard');
+  });
+
+  it('refuses when no act has a day, when the festival is a draft and when set times are out', async () => {
+    for (const [opts, reason] of [
+      [{ festival: festivalOf(withDay(0, 3)) }, 'no_days'],
+      [{ festival: festivalOf(withDay(3, 3), { publishedAt: null }) }, 'draft'],
+      [{ setTimesOutAt: '2026-11-02T00:00:00.000Z' }, 'set_times_out'],
+    ] as const) {
+      const { triggers, sends } = build(opts as any);
+      assert.equal((await triggers.countDaysOut('fest-1')).reason, reason);
+      const r = await triggers.sendDaysOut('fest-1');
+      assert.equal(r.reason, reason);
+      assert.equal(sends.length, 0);
+    }
+  });
+
+  it('a cancelled act does not count, and a set with a day counts as an act with a day', async () => {
+    const days = [{ ...DAYS[0], sets: [{ id: 's1', artist: 'Solo', artists: [{ name: 'Solo' }], startTime: null }] }, DAYS[1]];
+    const lineup = [entry('a1', 'Act 1'), entry('a2', 'Gone', '2027-02-05', 'cancelled')];
+    const { triggers } = build({ festival: festivalOf(lineup, { days }) });
+    const dry = await triggers.countDaysOut('fest-1');
+    assert.equal(dry.actsTotal, 2);
+    assert.equal(dry.actsWithDay, 1);
+  });
+
+  describe('email', () => {
+    it('is off without a postal address, and the dry run says so', async () => {
+      const { triggers } = build();
+      const dry = await triggers.countDaysOut('fest-1');
+      assert.equal(dry.emailOff, 'no_postal_address');
+      assert.equal(dry.emailRecipients, 0);
+    });
+
+    it('sends no email without a postal address even when a mail key is set', async () => {
+      const bodies: any[] = [];
+      const fetchMock = mock.method(globalThis, 'fetch', async (_url: any, init: any) => {
+        bodies.push(JSON.parse(init.body));
+        return new Response(JSON.stringify({ id: 'e1' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      });
+      try {
+        const { triggers } = build({ resendKey: 're_test', postal: '' });
+        const r = await triggers.sendDaysOut('fest-1');
+        assert.equal(r.emailSent, 0);
+        assert.equal(bodies.length, 0);
+      } finally {
+        fetchMock.mock.restore();
+      }
+    });
+
+    it('stops at the daily budget and puts people with no push token first', async () => {
+      const bodies: any[] = [];
+      const fetchMock = mock.method(globalThis, 'fetch', async (_url: any, init: any) => {
+        bodies.push(JSON.parse(init.body));
+        return new Response(JSON.stringify({ id: 'e1' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      });
+      try {
+        // 88 of 90 used: two emails fit. f1 has a push token, so f2 and p1 are emailed and f1 is cut.
+        const opts = { resendKey: 're_test', postal: '1 Main St, Town', emailsToday: 88, withPush: ['f1'] };
+        const { triggers } = build(opts);
+        const dry = await triggers.countDaysOut('fest-1');
+        assert.equal(dry.emailRecipients, 2);
+        assert.equal(dry.emailCut, 1);
+        assert.equal(dry.emailOff, null);
+        const r = await triggers.sendDaysOut('fest-1');
+        assert.equal(r.emailSent, 2);
+        assert.deepEqual(bodies.flatMap((b) => b.to).sort(), ['f2@example.com', 'p1@example.com']);
+        assert.ok(bodies.every((b) => /days are out/.test(b.subject)));
+        assert.equal(EMAIL_DAILY_BUDGET, 90);
+      } finally {
+        fetchMock.mock.restore();
+      }
+    });
+  });
+
+  it('resolveFollowersAndProfileHolders returns each person once', async () => {
+    const { triggers } = build();
+    assert.deepEqual((await triggers.resolveFollowersAndProfileHolders('fest-1')).sort(), ['f1', 'f2', 'p1']);
   });
 });

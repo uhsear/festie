@@ -166,6 +166,26 @@ describe('festival page: GET /f/:slug', () => {
     }
   });
 
+  it('links "Get alerts (free account)" to the app, carrying a share tag or festival-page-follow', async () => {
+    const follow = async (query: Record<string, unknown>) => {
+      const html: string = (await getPage(buildDeps().deps, 'edc-orlando-2026', query))._sent;
+      const [, href, label] = /<a class="fp-link" href="([^"]*)">([^<]*)<\/a>/.exec(html) ?? [];
+      return { href, label };
+    };
+    const tagged = await follow({ ref: 'share-festival' });
+    assert.equal(tagged.label, 'Get alerts (free account)');
+    assert.equal(tagged.href, 'https://festie.us/?festival=fest%201%2Fx&amp;ref=share-festival');
+    for (const ref of ['evil', 'festival-page', '"><script>', undefined]) {
+      assert.equal((await follow({ ref })).href, 'https://festie.us/?festival=fest%201%2Fx&amp;ref=festival-page-follow');
+    }
+  });
+
+  it('keeps "You can start without an account." next to the planning button only', async () => {
+    const html: string = (await getPage(buildDeps().deps, 'edc-orlando-2026'))._sent;
+    assert.equal(html.split('You can start without an account.').length - 1, 1);
+    assert.ok(!/Get alerts[^<]*without an account/.test(html));
+  });
+
   it('shows the billed name on a set row, ahead of the joined artists', async () => {
     const festival = {
       ...FESTIVAL,
@@ -312,6 +332,16 @@ describe('festival page: GET /f/:slug/og.png', () => {
     assert.equal(res._headers['Cache-Control'], 'no-store');
     assert.equal(res._sent, null);
     assert.equal(log.error.mock.calls[0]!.arguments[0], 'festival og render failed');
+  });
+
+  it('buildFestivalOgSvg reads "42 acts announced" when there are no sets', () => {
+    const base = { festivalName: 'Wasteland', dateRange: null, location: '', setCount: 0, stageCount: 0 };
+    assert.ok(buildFestivalOgSvg({ ...base, announcedCount: 42 }).includes('>42 acts announced<'));
+    assert.ok(buildFestivalOgSvg({ ...base, announcedCount: 1 }).includes('>1 act announced<'));
+    assert.ok(buildFestivalOgSvg({ ...base, announcedCount: 42, stageCount: 2 }).includes('>42 acts announced · 2 stages<'));
+    // No announced acts keeps the old line; sets win over announced acts.
+    assert.ok(buildFestivalOgSvg(base).includes('>0 sets · 0 stages<'));
+    assert.ok(buildFestivalOgSvg({ ...base, setCount: 3, announcedCount: 42 }).includes('>3 sets · 0 stages<'));
   });
 
   it('buildFestivalOgSvg counts in the singular, drops an empty date line and escapes text', () => {

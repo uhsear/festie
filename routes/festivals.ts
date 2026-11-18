@@ -5,7 +5,7 @@ import crypto from 'crypto';
 import { diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
-import { coverLineup } from '../lib/lineup.js';
+import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 
 export default function createFestivalsRoutes(deps: any) {
   const {
@@ -235,6 +235,8 @@ export default function createFestivalsRoutes(deps: any) {
             lineupCount: Object.values(coverLineup(festival.lineup ?? [], festival.days ?? [], festival.b2bSeparator)).filter(
               (cover) => cover.state === 'announced',
             ).length,
+            // How far the schedule has come: set times, days only, lineup only, or nothing yet.
+            scheduleProgress: scheduleProgress(festival),
             startDate: dates[0] || null,
             endDate: dates[dates.length - 1] || null,
             slug: festival.slug ?? null,
