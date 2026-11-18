@@ -31,7 +31,8 @@ describe('backfill database guard', () => {
   test('accepts a _test or _staging name and refuses anything else', () => {
     assertSafeBackfillDatabase('postgresql://u:p@localhost:5653/festie_ar2_test');
     assertSafeBackfillDatabase('postgresql://u:p@localhost:5432/festival_planner_staging');
-    for (const url of ['postgresql://u:p@localhost:5432/festival_planner', 'postgresql://u:p@localhost/testing', 'postgresql://u:p@localhost/', 'not a url']) {
+    const disagree = ['socket://x/foo_test?db=festival_planner', 'mysql://u:p@localhost/foo_test'];
+    for (const url of ['postgresql://u:p@localhost:5432/festival_planner', 'postgresql://u:p@localhost/testing', 'postgresql://u:p@localhost/', 'not a url', ...disagree]) {
       assert.throws(() => assertSafeBackfillDatabase(url), /must end in _test or _staging/);
     }
   });
@@ -102,7 +103,7 @@ describe('artist backfill', { skip }, () => {
     await set('s-zed-1', 'fest-2026', 'Zeds Dead', [{ name: 'Zeds Dead', links: { instagram: 'https://www.instagram.com/zedsdead' } }]);
     await set('s-zed-2', 'fest-2025', 'Zeds Dead', [{ name: 'Zeds Dead', links: { instagram: 'https://www.instagram.com/zeds_dead_fake' } }]);
     // A SoundCloud URL under spotify, and a Spotify track link that fails the rules.
-    await set('s-soundcloud', 'fest-2026', 'Seeing Dubble', [{ name: 'Seeing Dubble', links: { spotify: 'https://soundcloud.com/seeingdubble' } }]);
+    await set('s-soundcloud', 'fest-2026', 'Seeing Dubble', [{ name: 'Seeing Dubble', links: { spotify: 'https://soundcloud.com/seeingdubble' } }], { linkUrl: 'https://soundcloud.com/seeingdubble' });
     await set('s-track', 'fest-2026', 'Track Link', [{ name: 'Track Link', links: { spotify: `https://open.spotify.com/track/${SPOTIFY_A}` } }]);
     // An "A b2b B" element with a link, and a set billed under a display name.
     await set('s-b2b', 'fest-2026', 'Alpha b2b Beta', [{ name: 'Alpha b2b Beta', links: { instagram: 'https://www.instagram.com/alphabeta' } }]);
@@ -181,6 +182,7 @@ describe('artist backfill', { skip }, () => {
     assert.deepEqual(zeds.map((a) => a.label), ['unnamed 1', 'unnamed 2']);
 
     assert.deepEqual((await artistsOf('s-soundcloud')).artists[0].links, { soundcloud: 'https://soundcloud.com/seeingdubble' });
+    assert.equal((await artistsOf('s-soundcloud')).link_url, null, 'link_url follows artists[0].links.spotify, as a save does');
     assert.deepEqual((await artistsOf('s-track')).artists[0].links, { spotify: `https://open.spotify.com/track/${SPOTIFY_A}` });
     assert.equal((await artistsOf('s-track')).artists[0].id !== undefined, true);
 
@@ -272,6 +274,47 @@ describe('artist backfill', { skip }, () => {
     assert.equal((await pool.query(`SELECT count(*)::int AS n FROM artist_backfill_runs WHERE festival_id = 'fest-2025'`)).rows[0].n, 0);
     const rerun = await runBackfill(pool);
     assert.deepEqual(rerun.apply.festivalsWritten, ['fest-2025']);
+  });
+
+  test('a set changed without a updated_at bump is skipped and its edit survives', async () => {
+    const plan = await planBackfill(pool);
+    await pool.query(`UPDATE festival_sets SET artist = 'Edited Name', artists = '[{"name":"Edited Name","links":{}}]'::jsonb WHERE id = 's-fred-2'`);
+    const apply = await applyBackfillPlan(pool, plan);
+    assert.deepEqual(apply.festivalsSkipped, [{ festivalId: 'fest-2025', reason: 'changed during the run; run again' }]);
+    assert.deepEqual((await artistsOf('s-fred-2')).artists, [{ name: 'Edited Name', links: {} }]);
+  });
+
+  test('a B2B split that would pass the artist cap is left whole and reported', async () => {
+    await set('s-b2b-five', 'fest-2026', 'A b2b B b2b C b2b D b2b E', [{ name: 'A b2b B b2b C b2b D b2b E', links: {} }]);
+    await set('s-b2b-multi', 'fest-2026', 'P b2b Q, R b2b S, T b2b U', [
+      { name: 'P b2b Q', links: {} },
+      { name: 'R b2b S', links: {} },
+      { name: 'T b2b U', links: {} },
+    ]);
+    const { plan } = await runBackfill(pool);
+    assert.deepEqual(plan.report.b2bNotSplit.map((s) => [s.ownerId, s.name]), [['s-b2b-five', 'A b2b B b2b C b2b D b2b E'], ['s-b2b-multi', 'R b2b S'], ['s-b2b-multi', 'T b2b U']]);
+    assert.deepEqual((await artistsOf('s-b2b-five')).artists.map((a: any) => a.name), ['A b2b B b2b C b2b D b2b E']);
+    assert.deepEqual((await artistsOf('s-b2b-multi')).artists.map((a: any) => a.name), ['P', 'Q', 'R b2b S', 'T b2b U']);
+    assert.equal((await verifyBackfill(pool)).ok, true);
+  });
+
+  test('links under an unknown key or a non-http scheme are dropped and reported', async () => {
+    await set('s-links', 'fest-2026', 'Links Act', [{ name: 'Links Act', links: { fanclub: 'https://example.com/fan', website: 'javascript:alert(1)', instagram: 'https://www.instagram.com/linksact' } }]);
+    const { plan } = await runBackfill(pool);
+    assert.deepEqual((await artistsOf('s-links')).artists[0].links, { instagram: 'https://www.instagram.com/linksact' });
+    assert.deepEqual(plan.report.linksNotCopied.filter((l) => l.ownerId === 's-links').map((l) => l.links), [{ website: 'javascript:alert(1)', fanclub: 'https://example.com/fan' }]);
+  });
+
+  test('an element whose id names a tombstone is rewritten with the survivor id', async () => {
+    await pool.query(
+      `INSERT INTO artists (id, name, name_key, label) VALUES ('art-live', 'Tomb Act', 'tomb act', ''), ('art-old', 'Tomb Act', 'tomb act', 'old')`,
+    );
+    await pool.query(`UPDATE artists SET merged_into = 'art-live' WHERE id = 'art-old'`);
+    await set('s-tomb', 'fest-2026', 'Tomb Act', [{ id: 'art-old', name: 'Tomb Act', links: {} }]);
+    await runBackfill(pool);
+    assert.equal((await artistsOf('s-tomb')).artists[0].id, 'art-live');
+    assert.equal((await planBackfill(pool)).report.counts.ownersToWrite, 0);
+    assert.equal((await verifyBackfill(pool)).ok, true);
   });
 
   test('two runs at once create no duplicate artist and no error', async () => {

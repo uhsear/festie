@@ -11,11 +11,12 @@
  * calls these and refuses any database whose name does not end in _test or _staging.
  */
 
-import type { Pool } from 'pg';
+import { Client, type Pool } from 'pg';
 import { createOpaqueId } from './helpers';
 import { sanitizeString, sanitizeLinkRecord } from './helpers/sanitize';
 import { artistNameKey, shownSetName } from './artist-key';
-import { ALLOWED_LINK_PLATFORMS } from './constants';
+import { ALLOWED_LINK_PLATFORMS, MAX_ARTISTS_PER_SET } from './constants';
+import { normalizeSetArtists } from './schemas';
 import { detectPlatform, normalizeArtistLink, type ArtistLinkPlatform } from './artist-links';
 import { withTransactionRetry } from './db/connection';
 import { lockFestivalAny } from './db/stores/lineup-imports';
@@ -97,6 +98,7 @@ export interface BackfillReport {
   linkFailures: Array<{ festivalId: string; ownerId: string; name: string; platform: string; url: string; message: string }>;
   linkConflicts: Array<{ artist: string; platform: string; kept: string; dropped: string }>;
   b2bSplits: Array<{ festivalId: string; ownerId: string; name: string; parts: string[] }>;
+  b2bNotSplit: Array<{ festivalId: string; ownerId: string; name: string; parts: string[] }>;
   splitLinksToPlace: Array<{ festivalId: string; ownerId: string; name: string; links: Links }>;
   photosNotCopied: Array<{ festivalId: string; ownerId: string; name: string; photo: string }>;
   linksNotCopied: Array<{ festivalId: string; ownerId: string; name: string; links: Links }>;
@@ -154,6 +156,7 @@ const emptyReport = (): BackfillReport => ({
   linkFailures: [],
   linkConflicts: [],
   b2bSplits: [],
+  b2bNotSplit: [],
   splitLinksToPlace: [],
   photosNotCopied: [],
   linksNotCopied: [],
@@ -252,18 +255,23 @@ async function loadArtists(pool: Pool): Promise<ArtistRow[]> {
 
 const isPlatform = (key: string): key is ArtistLinkPlatform => (ALLOWED_LINK_PLATFORMS as readonly string[]).includes(key);
 
-/** Cleans one element's links with lib/artist-links.ts. A link that fails the rules stays as it is. */
-function cleanLinks(raw: unknown, owner: Owner, name: string, report: BackfillReport): Links {
+/**
+ * Cleans one element's links with lib/artist-links.ts. A link that fails the rules stays as it is.
+ * A value that is not http(s), or sits under a key no platform uses, is dropped and reported.
+ */
+function cleanLinks(rawLinks: unknown, owner: Owner, name: string, report: BackfillReport): Links {
+  const raw = sanitizeLinkRecord(rawLinks);
   const out: Links = {};
   const refiles: Array<{ from: string; to: ArtistLinkPlatform; url: string }> = [];
   const base = { festivalId: owner.festival.id, ownerId: owner.ownerId, name };
-  for (const [key, value] of Object.entries(isObject(raw) ? raw : {})) {
-    if (typeof value !== 'string' || !value.trim()) continue;
-    const url = value.trim();
+  const dropped: Links = Object.fromEntries(
+    Object.entries(isObject(rawLinks) ? rawLinks : {}).filter(([key, value]) => typeof value === 'string' && value.trim() && !(key in raw)),
+  ) as Links;
+  for (const [key, url] of Object.entries(raw)) {
     const detected = detectPlatform(url);
     const target = detected && detected !== key ? detected : isPlatform(key) ? key : null;
     if (!target) {
-      out[key] = url;
+      dropped[key] = url;
       continue;
     }
     const result = normalizeArtistLink(target, url);
@@ -279,13 +287,14 @@ function cleanLinks(raw: unknown, owner: Owner, name: string, report: BackfillRe
   for (const refile of refiles) {
     const taken = out[refile.to];
     if (taken && taken !== refile.url) {
-      out[refile.from] = (raw as Links)[refile.from]!.trim();
+      out[refile.from] = raw[refile.from]!;
       report.linkFailures.push({ ...base, platform: refile.from, url: refile.url, message: `The ${refile.to} link is already set to a different address.` });
       continue;
     }
     out[refile.to] = refile.url;
     report.linkRefiles.push({ ...base, from: refile.from, to: refile.to, url: refile.url });
   }
+  if (Object.keys(dropped).length > 0) report.linksNotCopied.push({ ...base, links: dropped });
   return out;
 }
 
@@ -305,11 +314,13 @@ function makeElem(owner: Owner, ordinal: number, original: any, name: string, li
   };
 }
 
-/** Step 1 to 3: the elements of one owner, B2B names split and links cleaned. */
+/**
+ * Step 1 to 3: the elements of one owner, B2B names split and links cleaned. A split that would
+ * push the owner past MAX_ARTISTS_PER_SET is left undone and reported, so the form can still save.
+ */
 function buildItems(owner: Owner, report: BackfillReport): void {
-  const source: any[] = owner.legacy
-    ? [{ name: sanitizeString(owner.flat, MAX_NAME), links: sanitizeLinkRecord(owner.linkUrl && /^https?:\/\//.test(owner.linkUrl) ? { spotify: owner.linkUrl } : {}) }]
-    : owner.original;
+  const source: any[] = owner.legacy ? normalizeSetArtists({ artist: owner.flat, linkUrl: owner.linkUrl }) : owner.original;
+  let projected = source.length;
   for (const original of source) {
     const name = isObject(original) ? String(original.name ?? '').trim() : '';
     if (!name) {
@@ -318,7 +329,10 @@ function buildItems(owner: Owner, report: BackfillReport): void {
     }
     const base = { festivalId: owner.festival.id, ownerId: owner.ownerId, name };
     const parts = name.split(B2B_SPLIT).map((part) => part.trim()).filter(Boolean);
-    if (parts.length > 1) {
+    if (parts.length > 1 && projected + parts.length - 1 > MAX_ARTISTS_PER_SET) {
+      report.b2bNotSplit.push({ ...base, parts });
+    } else if (parts.length > 1) {
+      projected += parts.length - 1;
       report.b2bSplits.push({ ...base, parts });
       const links = sanitizeLinkRecord(original.links);
       if (Object.keys(links).length > 0) report.splitLinksToPlace.push({ ...base, links });
@@ -404,8 +418,12 @@ function groupElements(owners: Owner[], artists: ArtistRow[], report: BackfillRe
   for (const elem of elems) {
     const live = elem.fromId ? liveOf(elem.fromId) : null;
     if (live) {
-      elem.group = byArtistId.get(live.id)!;
-      elem.leftAlone = true;
+      // An id that names a tombstone is rewritten with the survivor's id.
+      const group = byArtistId.get(live.id)!;
+      if (elem.fromId === live.id) {
+        elem.group = group;
+        elem.leftAlone = true;
+      } else addToGroup(group, elem, report);
     } else if (!elem.spotifyId) unplaced.push(elem);
   }
   for (const elem of elems.filter((e) => !e.group && e.spotifyId)) {
@@ -538,7 +556,7 @@ function ownerWrite(owner: Owner, idOf: (group: Group) => string | null): OwnerW
   return {
     artists,
     artist: rebuild ? names.join(` ${sep} `) : owner.flat,
-    linkUrl: firstSpotify ?? owner.linkUrl,
+    linkUrl: firstSpotify || null,
   };
 }
 
@@ -660,16 +678,49 @@ async function findExisting(client: any, group: Group): Promise<string | null> {
 /** Reseeds the edit token. After a rollback below this migration, old writers left edited_at behind. */
 const RESEED_EDITED_AT = 'UPDATE festivals SET edited_at = updated_at WHERE edited_at IS NULL OR edited_at < updated_at';
 
+/**
+ * Locks the festival's set rows and compares the ones to rewrite with what the plan read. The admin
+ * writers that save one set update festival_sets and festivals.updated_at in two statements, so the
+ * updated_at check alone can miss a change that landed between them.
+ */
+async function setsUnchanged(client: any, festival: FestivalInfo, owners: Owner[]): Promise<boolean> {
+  const { rows } = await client.query(
+    `
+  SELECT
+    id,
+    artist,
+    link_url,
+    CASE
+      WHEN jsonb_typeof(artists) = 'array' THEN artists
+      ELSE '[]'::jsonb
+    END AS artists
+  FROM
+    festival_sets
+  WHERE
+    festival_id = $1
+  FOR UPDATE
+`,
+    [festival.id],
+  );
+  const current = new Map(rows.map((r: any) => [r.id, r]));
+  return owners.filter((o) => o.kind === 'set').every((o) => {
+    const row: any = current.get(o.ownerId);
+    return !!row && stable(row.artists) === stable(o.original) && String(row.artist ?? '') === o.flat && (row.link_url ?? null) === o.linkUrl;
+  });
+}
+
 async function writeFestival(client: any, plan: BackfillPlan, festival: FestivalInfo, runId: string) {
   await lockFestivalAny(client, festival.id);
   const { rows } = await client.query('SELECT updated_at::text AS updated_at_text FROM festivals WHERE id = $1', [festival.id]);
   if (rows[0]?.updated_at_text !== festival.updatedAtText) return { skipped: 'changed during the run; run again' as const };
 
   const owners = plan.changedOwners.filter((o) => o.festival === festival);
+  if (!(await setsUnchanged(client, festival, owners))) return { skipped: 'changed during the run; run again' as const };
   const needed = [...new Set(owners.flatMap((o) => o.items.filter((i): i is Elem => !('keep' in i) && !i.leftAlone).map((e) => e.group!)))];
   const { ids, created } = await materializeGroups(client, needed.filter((g) => !g.existing));
   const idOf = (group: Group) => (ids.has(group) ? ids.get(group)! : (group.actualId ?? null));
   const writes = owners.map((owner) => ({ owner, write: ownerWrite(owner, idOf) })).filter(({ owner, write }) => ownerChanged(owner, write));
+  // An inserted group always puts its new id into an element, so created > 0 implies a write here.
   if (writes.length === 0) return { written: false as const, ids, created };
 
   const sets = writes.filter((w) => w.owner.kind === 'set');
@@ -840,9 +891,12 @@ export async function verifyBackfill(pool: Pool): Promise<{ ok: boolean; checks:
 
 // ── Safety and report text ─────────────────────────────────────────────────────────────────────
 
+/** The database name the way pg reads it, so the guard and the connection cannot disagree. */
 export function backfillDatabaseName(databaseUrl: string): string {
   try {
-    return decodeURIComponent(new URL(databaseUrl).pathname.replace(/^\//, ''));
+    const { protocol } = new URL(databaseUrl);
+    if (protocol !== 'postgres:' && protocol !== 'postgresql:') return '';
+    return new Client({ connectionString: databaseUrl }).database ?? '';
   } catch {
     return '';
   }

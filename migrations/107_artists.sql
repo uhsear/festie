@@ -4,8 +4,8 @@
 --     with the same key need different notes (label). A merge makes a tombstone (merged_into), and
 --     merge_refs records what the merge moved. No hard delete, so an id in a copy never dangles.
 --   artist_backfill_runs: the before-values of each festival that a backfill run rewrote.
---   festivals.edited_at: the festival form's conflict token. Writers that change what the form
---     saves set it to the same value as updated_at. Publish, restore and artist syncs do not.
+--   festivals.edited_at: the festival form's conflict token. Only the artist backfill sets it today,
+--     to the same value as updated_at. The admin writers do not set it yet; a later change adds that.
 CREATE TABLE IF NOT EXISTS artists (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL CHECK (char_length(name) BETWEEN 1 AND 300),

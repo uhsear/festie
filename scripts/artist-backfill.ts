@@ -10,7 +10,8 @@
  * It refuses any database whose name does not end in _test or _staging, and it has no default
  * database: the URL comes only from ARTIST_BACKFILL_DATABASE_URL. Migration 107 must be applied.
  * It cannot clear the app's festival cache, so an app that is running shows old data for up to a
- * minute. --report writes the JSON report and a CSV next to it (dry-run and run).
+ * minute. Do not run it with --mode run until admin saves keep artist ids and the single-set
+ * writers lock the festival: until then a save drops the ids that a run wrote. --report writes the JSON report and a CSV next to it (dry-run and run).
  */
 
 import fs from 'node:fs';

@@ -49,7 +49,7 @@ export async function lockFestivalAny(client: any, festivalId: string) {
   return (rows[0] as { id: string; published_at: Date | null; deleted_at: Date | null } | undefined) ?? null;
 }
 
-const markContext =(festival: { published_at: Date | null }): MarkContext => ({
+const markContext = (festival: { published_at: Date | null }): MarkContext => ({
   published: festival.published_at != null,
   now: new Date(),
 });
