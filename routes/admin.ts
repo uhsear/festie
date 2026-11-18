@@ -475,6 +475,9 @@ export default function createAdminRoutes(deps: any): Router {
         skippedShared: [...skippedShared].sort((x, y) => x.localeCompare(y)).slice(0, 200),
       });
     } catch (error: any) {
+      if (error?.code === 'SPOTIFY_RATE_LIMITED') {
+        return sendError(res, 503, 'Spotify is busy right now. Try again in a minute.', ErrorCodes.SPOTIFY_RATE_LIMITED);
+      }
       log.error('spotify backfill failed', { error: error.message, festivalId: req.params.id });
       return sendError(res, 500, 'Spotify backfill failed', ErrorCodes.INTERNAL_ERROR);
     }

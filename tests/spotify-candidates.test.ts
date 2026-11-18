@@ -100,8 +100,17 @@ describe('searchCandidates and bulkSearchCandidates', () => {
     mockFetch([token, search([])]);
     assert.deepEqual(await spotify.searchCandidates('Nobody', 'cid', 'secret'), []);
     spotify = await import(`../lib/spotify.js?candidates=${++importCounter}`);
-    mockFetch([token, { ok: false, status: 429, json: async () => ({}) }]);
+    mockFetch([token, { ok: false, status: 500, json: async () => ({}) }]);
     assert.equal(await spotify.searchCandidates('Busy', 'cid', 'secret'), null);
+  });
+
+  test('the first 429 stops the pool and bulkSearchCandidates throws SPOTIFY_RATE_LIMITED', async () => {
+    const calls = mockFetch([token, { ok: false, status: 429, json: async () => ({}) }]);
+    await assert.rejects(
+      spotify.bulkSearchCandidates(['A', 'B', 'C', 'D', 'E'], 'cid', 'secret', { concurrency: 1 }),
+      (error: any) => error.code === 'SPOTIFY_RATE_LIMITED' && error instanceof spotify.SpotifyRateLimitedError,
+    );
+    assert.equal(calls.length, 2, 'one token call and one search, no more after the 429');
   });
 
   test('without credentials it does not call Spotify', async () => {

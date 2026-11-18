@@ -13,6 +13,16 @@ import { artistNameKey } from './artist-key';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
+const SPOTIFY_TIMEOUT_MS = 10_000;
+
+/** Spotify answered 429. Callers stop calling it and tell the admin to wait. */
+class SpotifyRateLimitedError extends Error {
+  readonly code = 'SPOTIFY_RATE_LIMITED';
+  constructor() {
+    super('Spotify is rate limiting Festie');
+  }
+}
+
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 
@@ -30,8 +40,10 @@ async function getToken(clientId: any, clientSecret: any) {
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: 'grant_type=client_credentials',
+    signal: AbortSignal.timeout(SPOTIFY_TIMEOUT_MS),
   });
 
+  if (resp.status === 429) throw new SpotifyRateLimitedError();
   if (!resp.ok) {
     const body = await resp.text();
     throw new Error(`Spotify token request failed (${resp.status}): ${body}`);
@@ -86,12 +98,15 @@ function pickArtist(data: any, cleanedName: any) {
 async function spotifyGet(path: string, clientId: any, clientSecret: any): Promise<Response> {
   const url = `${SPOTIFY_API_BASE}${path}`;
   const token = await getToken(clientId, clientSecret);
-  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+  const resp = await fetch(url, { headers: { Authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(SPOTIFY_TIMEOUT_MS) });
+  if (resp.status === 429) throw new SpotifyRateLimitedError();
   if (resp.status !== 401) return resp;
   cachedToken = null;
   tokenExpiry = 0;
   const freshToken = await getToken(clientId, clientSecret);
-  return fetch(url, { headers: { Authorization: `Bearer ${freshToken}` } });
+  const retry = await fetch(url, { headers: { Authorization: `Bearer ${freshToken}` }, signal: AbortSignal.timeout(SPOTIFY_TIMEOUT_MS) });
+  if (retry.status === 429) throw new SpotifyRateLimitedError();
+  return retry;
 }
 
 /** The raw search answer for one cleaned name, or null when Spotify refuses. */
@@ -164,6 +179,7 @@ async function getArtistById(spotifyId: string, clientId: any, clientSecret: any
  * Bulk search multiple artist names with a bounded concurrency pool (keeps a
  * large lineup well under request timeouts while staying gentle on the API).
  * Returns Map<artistName, { spotifyUrl, spotifyId, imageUrl, genres }>
+ * The first 429 stops the pool from issuing more calls, then this throws SpotifyRateLimitedError.
  * `search` swaps the lookup (candidates, or an artist by id).
  */
 async function bulkSearchArtists(names: any, clientId: any, clientSecret: any, { concurrency = 6, log, search = searchArtist }: any = {}) {
@@ -180,18 +196,22 @@ async function bulkSearchArtists(names: any, clientId: any, clientSecret: any, {
   }
 
   let cursor = 0;
+  let rateLimited = false;
   async function worker() {
-    while (cursor < uniqueNames.length) {
+    while (!rateLimited && cursor < uniqueNames.length) {
       const name = uniqueNames[cursor++];
       try {
         const result = await search(name, clientId, clientSecret);
         if (result) results.set(name, result);
       } catch (err: any) {
+        // eslint-disable-next-line require-atomic-updates -- a one-way flag the other workers read
+        if (err instanceof SpotifyRateLimitedError) rateLimited = true;
         if (log) log.warn('spotify search failed for artist', { artist: name, error: err.message });
       }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, uniqueNames.length) }, worker));
+  if (rateLimited) throw new SpotifyRateLimitedError();
   return results;
 }
 
@@ -205,4 +225,4 @@ async function getArtistsByIds(ids: string[], clientId: any, clientSecret: any, 
   return bulkSearchArtists(ids, clientId, clientSecret, { concurrency, log, search: getArtistById });
 }
 
-export { searchArtist, bulkSearchArtists, bulkSearchCandidates, searchCandidates, rankCandidates, getArtistsByIds, getToken, cleanArtistName };
+export { SpotifyRateLimitedError, searchArtist, bulkSearchArtists, bulkSearchCandidates, searchCandidates, rankCandidates, getArtistsByIds, getToken, cleanArtistName };
