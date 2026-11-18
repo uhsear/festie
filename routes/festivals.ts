@@ -526,6 +526,7 @@ export default function createFestivalsRoutes(deps: any) {
           : new Map();
 
         const festival = await stores.festivals.update(req.validatedParams.id, {
+          expectedUpdatedAt: body.expectedUpdatedAt,
           name: nextFestival.name,
           location: nextFestival.location,
           b2bSeparator: nextFestival.b2bSeparator,
@@ -571,6 +572,14 @@ export default function createFestivalsRoutes(deps: any) {
           (await fillVenueCoords(festival.id, nextFestival.location));
         return sendSuccess(res, { ...festival, scheduleNotice, ...(venueGuessed ? { venueGuessed } : {}) });
       } catch (error: any) {
+        if (error.code === 'FESTIVAL_CHANGED') {
+          return sendError(
+            res,
+            409,
+            'This festival changed since you opened it. Reload it, then make your change again.',
+            ErrorCodes.FESTIVAL_CHANGED,
+          );
+        }
         if (sendIdClash(res, error)) return;
         log.error('festival update failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
