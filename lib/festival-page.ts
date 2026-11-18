@@ -19,6 +19,7 @@ import {
 import { escapeHtml } from './helpers/sanitize.js';
 import { CLOCK_TIME_RE } from './helpers/share-og-image.js';
 import { formatInviteDateRange } from './invite-preview.js';
+import { coverLineup } from './lineup.js';
 import { artistDisplayName } from './schemas.js';
 import { festivalStartMinutes } from './time-zone.js';
 
@@ -75,6 +76,37 @@ export function buildFestivalPageDays(festival: any) {
   });
 }
 
+/** The poster name of an entry: its own name, or the artists joined with the festival separator. */
+function lineupEntryName(entry: any, separator: string | undefined): string {
+  return entry.displayName || artistDisplayName(entry.artists ?? [], separator);
+}
+
+/**
+ * The announced acts that no set covers, placed for the page: per day (index matches the days
+ * array), the ones with no day or a removed day by tier then billing order, and the cancelled
+ * ones. All text is escaped.
+ */
+export function buildFestivalPageLineup(festival: any) {
+  const lineup: any[] = Array.isArray(festival.lineup) ? festival.lineup : [];
+  const days: any[] = festival.days || [];
+  const separator = festival.b2bSeparator || undefined;
+  const cover = coverLineup(lineup, days, separator ?? 'b2b');
+  const perDay: string[][] = days.map(() => []);
+  const undated: { name: string; tier: number; order: number }[] = [];
+  const cancelled: string[] = [];
+  lineup.forEach((entry, order) => {
+    const placed = cover[entry.id];
+    if (!placed) return;
+    const name = escapeHtml(lineupEntryName(entry, separator));
+    if (placed.state === 'cancelled') cancelled.push(name);
+    else if (placed.state !== 'announced') return;
+    else if (placed.dayIndex >= 0) perDay[placed.dayIndex]!.push(name);
+    else undated.push({ name, tier: entry.tier ?? Number.MAX_SAFE_INTEGER, order });
+  });
+  undated.sort((a, b) => a.tier - b.tier || a.order - b.order);
+  return { perDay, undated: undated.map((entry) => entry.name), cancelled };
+}
+
 /** "Times are local to the festival (EDT)." Without a zone Intl accepts, the line has no abbreviation. */
 export function festivalTimeZoneLine(festival: any): string {
   const plain = 'Times are local to the festival.';
@@ -123,15 +155,28 @@ const PAGE_STYLE = `
     .fp-set-artist { font-size: 0.9375rem; font-weight: 600; margin: 0.125rem 0; overflow-wrap: anywhere; }
     .fp-set-stage { font-size: 0.75rem; color: #aaa; }
     .fp-empty { color: #888; font-size: 0.875rem; padding: 0.5rem 0; }
+    .fp-note { color: #aaa; font-size: 0.8125rem; margin: 0.5rem 0 0.25rem; }
+    .fp-acts { list-style: none; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9375rem; font-weight: 600; }
+    .fp-acts li { overflow-wrap: anywhere; }
+    .fp-cancelled li { color: #888; font-weight: 400; text-decoration: line-through; }
     .fp-footer { font-size: 0.75rem; color: #888; padding: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.1); text-align: center; }
     .fp-link { color: #ff3366; text-decoration: none; font-weight: 600; font-size: 0.875rem; }
     .fp-link:hover { text-decoration: underline; }
     .fp-error { text-align: center; padding: 3rem 0; }
     .fp-error p { font-size: 0.875rem; color: #aaa; margin: 0.75rem 0 2rem; }`;
 
-function renderDay(day: ReturnType<typeof buildFestivalPageDays>[number]) {
+function renderActs(names: string[], className = 'fp-acts') {
+  return `<ul class="${className}">
+        ${names.map((name) => `<li>${name}</li>`).join('\n        ')}
+      </ul>`;
+}
+
+function renderDay(day: ReturnType<typeof buildFestivalPageDays>[number], acts: string[]) {
   const heading = `<h2>${day.label}${day.date ? ` <span class="fp-date">${day.date}</span>` : ''}</h2>`;
-  if (day.sets.length === 0) return `<section class="fp-section">${heading}<p class="fp-empty">Set times to come.</p></section>`;
+  const actsHtml = acts.length > 0 ? `<p class="fp-note">Stages and times to come.</p>\n      ${renderActs(acts)}` : '';
+  if (day.sets.length === 0) {
+    return `<section class="fp-section">${heading}${actsHtml || '<p class="fp-empty">Set times to come.</p>'}</section>`;
+  }
   const rows = day.sets
     .map(
       (set: any) =>
@@ -141,7 +186,7 @@ function renderDay(day: ReturnType<typeof buildFestivalPageDays>[number]) {
   return `<section class="fp-section">${heading}
       <ul class="fp-sets">
         ${rows}
-      </ul>
+      </ul>${actsHtml ? `\n      ${actsHtml}` : ''}
     </section>`;
 }
 
@@ -152,7 +197,8 @@ export function renderFestivalPage({ festival, origin, slug }: { festival: any; 
   const pageUrl = `${origin}/f/${slug}`;
   const ogUrl = `${pageUrl}/og.png`;
   const appUrl = `${origin}/?festival=${encodeURIComponent(festival.id)}&ref=festival-page`;
-  const description = `Lineup and set times for ${name}${dateRange ? ` · ${dateRange}` : ''}${location ? ` · ${location}` : ''}. Plan your days with Festie.`;
+  const hasSets = (festival.days || []).some((day: any) => (day?.sets || []).length > 0);
+  const description = `${hasSets ? 'Lineup and set times' : 'Lineup'} for ${name}${dateRange ? ` · ${dateRange}` : ''}${location ? ` · ${location}` : ''}. Plan your days with Festie.`;
   const placeLine = [dateRange, location].filter(Boolean).join(' · ');
   const tint = festivalTint(name);
   const days = buildFestivalPageDays(festival);
@@ -170,9 +216,24 @@ export function renderFestivalPage({ festival, origin, slug }: { festival: any; 
       </ul>
     </section>`
     : '';
-  const daysHtml = days.length
-    ? days.map(renderDay).join('\n    ')
-    : `<section class="fp-section"><p class="fp-empty">The lineup isn't out yet.</p></section>`;
+  const lineup = buildFestivalPageLineup(festival);
+  const announcedHtml = lineup.undated.length
+    ? `<section class="fp-section">
+      <h2>Announced lineup</h2>
+      <p class="fp-note">Days and times to come.</p>
+      ${renderActs(lineup.undated)}
+    </section>`
+    : '';
+  const cancelledHtml = lineup.cancelled.length
+    ? `<section class="fp-section">
+      <h2>Cancelled</h2>
+      ${renderActs(lineup.cancelled, 'fp-acts fp-cancelled')}
+    </section>`
+    : '';
+  const daysHtml =
+    [...days.map((day: any, index: number) => renderDay(day, lineup.perDay[index] ?? [])), announcedHtml, cancelledHtml]
+      .filter(Boolean)
+      .join('\n    ') || `<section class="fp-section"><p class="fp-empty">The lineup isn't out yet.</p></section>`;
 
   return `<!DOCTYPE html>
 <html lang="en">

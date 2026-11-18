@@ -2862,6 +2862,7 @@ export type components = {
             dayCount: number;
             endDate: string | null;
             id: string;
+            lineupCount: number;
             location: string;
             name: string;
             slug?: string | null;

@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import { diffPickedSchedule, isTbaToTime } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { coverLineup } from '../lib/lineup.js';
 
 export default function createFestivalsRoutes(deps: any) {
   const {
@@ -96,6 +97,8 @@ export default function createFestivalsRoutes(deps: any) {
     _festivalListCache = null;
     _festivalListVersion = null;
   }
+  // Writers outside this router (lineup import and undo) change the sets, which the list's lineupCount reads.
+  deps.invalidateFestivalListCache = invalidateFestivalListCache;
 
   const listETag = (items: any[]) =>
     `"${crypto.createHash('md5').update(JSON.stringify(items)).digest('hex').slice(0, 16)}"`;
@@ -228,6 +231,10 @@ export default function createFestivalsRoutes(deps: any) {
             location: festival.location,
             stageCount: festival.stages?.length || 0,
             dayCount: festival.days?.length || 0,
+            // Announced acts that no set covers yet. Cancelled acts do not count.
+            lineupCount: Object.values(coverLineup(festival.lineup ?? [], festival.days ?? [], festival.b2bSeparator)).filter(
+              (cover) => cover.state === 'announced',
+            ).length,
             startDate: dates[0] || null,
             endDate: dates[dates.length - 1] || null,
             slug: festival.slug ?? null,

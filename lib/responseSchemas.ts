@@ -326,6 +326,8 @@ export const festivalListItemResponseSchema = z.object({
   location: z.string(),
   stageCount: z.number(),
   dayCount: z.number(),
+  /** Announced acts that no set covers yet; cancelled acts are not counted. */
+  lineupCount: z.number(),
   startDate: z.string().nullable(),
   endDate: z.string().nullable(),
   slug: z.string().nullable().optional(),

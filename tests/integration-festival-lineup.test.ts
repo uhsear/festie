@@ -143,4 +143,48 @@ describe('Integration: announced lineup', { concurrency: 1 }, () => {
     assert.equal(loaded.lineup.length, 2);
     assert.match(loaded.lineup[0].announcedAt, /^\d{4}-\d{2}-\d{2}$/);
   });
+
+  test('a names-only festival publishes, shows on the list and /f/, and lineupCount drops as sets arrive', async () => {
+    const { server, token } = await setup();
+    const asAdmin = (req: any) => req.set('x-user-token', token);
+    const created = await asAdmin(server.request.post('/api/v1/admin/festivals'))
+      .send({
+        id: 'fest-names',
+        name: 'Names Fest',
+        location: 'Field',
+        timeZone: 'America/New_York',
+        days: [{ label: 'Fri', date: '2026-06-05', sets: [] }],
+        lineup: [act('INFEKT'), act('Kai'), act('Gone', { status: 'cancelled' })],
+      })
+      .expect(201);
+    const id = created.body.data.id;
+
+    const published = await asAdmin(server.request.post(`/api/v1/admin/festivals/${id}/publish`)).expect(200);
+    const status = (key: string) => published.body.data.checklist.find((item: any) => item.key === key).status;
+    assert.equal(status('stages'), 'warn');
+    assert.equal(status('sets'), 'warn');
+
+    const listed = async () =>
+      (await server.request.get('/api/v1/festivals').expect(200)).body.data.find((festival: any) => festival.id === id);
+    const before = await listed();
+    assert.equal(before.lineupCount, 2, 'cancelled acts are not counted');
+
+    const page = await server.request.get(`/f/${before.slug}`).expect(200);
+    assert.ok(page.text.includes('INFEKT') && page.text.includes('Kai'));
+    assert.ok(page.text.includes('<h2>Cancelled</h2>'));
+
+    await asAdmin(server.request.put(`/api/v1/admin/festivals/${id}`))
+      .send({
+        stages: [{ id: 'main', name: 'Main' }],
+        days: [
+          {
+            label: 'Fri',
+            date: '2026-06-05',
+            sets: [{ id: 'names-s1', artist: 'infekt', stageId: 'main', startTime: '20:00', endTime: '21:00' }],
+          },
+        ],
+      })
+      .expect(200);
+    assert.equal((await listed()).lineupCount, 1);
+  });
 });
