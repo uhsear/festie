@@ -334,8 +334,7 @@ export function createInterestConversion({ pool, stores, emitter, log, config }:
     return changedIds;
   }
 
-  /** Resolves to the number of profiles whose marks changed. */
-  async function convert(festivalId: string): Promise<number> {
+  async function convertOnce(festivalId: string): Promise<number> {
     let changedIds: string[];
     try {
       changedIds = await withTransaction(pool, (client) => convertInTransaction(client, festivalId));
@@ -345,6 +344,37 @@ export function createInterestConversion({ pool, stores, emitter, log, config }:
     }
     await announce(changedIds);
     return changedIds.length;
+  }
+
+  // shortcut: in-flight state is per process (PM2 runs one instance), upgrade to an advisory lock if the app scales out.
+  const running = new Map<string, { dirty: boolean; done: Promise<number> }>();
+
+  /**
+   * Resolves to the number of profiles whose marks changed. Calls for one festival coalesce: while a run
+   * is in flight, further calls mark it dirty and share one trailing run, so a burst costs at most two
+   * transactions on the festival lock.
+   */
+  function convert(festivalId: string): Promise<number> {
+    const active = running.get(festivalId);
+    if (active) {
+      active.dirty = true;
+      return active.done;
+    }
+    const state = { dirty: false, done: Promise.resolve(0) };
+    state.done = (async () => {
+      let changed = 0;
+      try {
+        do {
+          state.dirty = false;
+          changed += await convertOnce(festivalId);
+        } while (state.dirty);
+      } finally {
+        running.delete(festivalId);
+      }
+      return changed;
+    })();
+    running.set(festivalId, state);
+    return state.done;
   }
 
   return { convert, announce };
