@@ -184,6 +184,7 @@ export const festivalResponseSchema = z.object({
   stages: z.array(stageResponseSchema),
   days: z.array(festivalFullDaySchema),
   slug: z.string().nullable().optional(),
+  // Admin only; the public detail response leaves it out.
   seriesId: z.string().nullable().optional(),
 });
 export type FestivalResponse = z.infer<typeof festivalResponseSchema>;

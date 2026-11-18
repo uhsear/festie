@@ -393,7 +393,8 @@ export default function createFestivalsRoutes(deps: any) {
             checklist: publishChecklist(config, festival),
           });
         }
-        return sendSuccess(res, festival);
+        const { seriesId: _seriesId, ...publicFestival } = festival;
+        return sendSuccess(res, publicFestival);
       } catch (error: any) {
         log.error('festival load failed', { error: error.message, festivalId: req.validatedParams?.id });
         return sendError(res, 500, 'Failed to load festival', ErrorCodes.INTERNAL_ERROR);

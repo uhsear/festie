@@ -1,9 +1,12 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { after, before, beforeEach, describe, test } from 'node:test';
+import express from 'express';
 import { Pool } from 'pg';
+import request from 'supertest';
 import { createStores } from '../lib/db/index.js';
 import { createReengagementTriggers } from '../lib/notifications/reengagement.js';
+import createFestivalsRoutes from '../routes/festivals.js';
 import { sanitizeFestivalPayload, schemas } from '../lib/schemas.js';
 
 // Festival series (migration 111): the schema rule, the payload rule, the store round trip and
@@ -35,6 +38,59 @@ describe('series id validation and payload', () => {
     assert.equal(run({ seriesId: null }, stored).seriesId, null);
     assert.equal(run({ seriesId: 'other' }, stored).seriesId, 'other');
     assert.equal(run({}).seriesId, null);
+  });
+});
+
+describe('festival detail exposes seriesId to admins only', () => {
+  const pass = () => (req: any, _res: any, next: any) => {
+    req.validatedParams = req.params;
+    req.validatedQuery = {};
+    next();
+  };
+  const build = (isAdmin: boolean) => {
+    const deps: any = {
+      express,
+      config: {},
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      adminAuth: pass(),
+      hasRecentAuth: () => true,
+      requireRecentAuth: pass(),
+      getFestivalById: async () => ({
+        id: 'f-1',
+        name: 'Fest',
+        publishedAt: '2026-01-01T00:00:00.000Z',
+        seriesId: 'fk',
+        stages: [],
+        days: [],
+      }),
+      publishChecklist: () => [],
+      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
+      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      ErrorCodes: {},
+      rateLimit: pass,
+      stores: { festivals: { getEditor: async () => null } },
+      schemas: {},
+      validate: pass,
+      validateQuery: pass,
+      validateParams: pass,
+    };
+    const app = express();
+    app.use((req: any, _res: any, next: any) => {
+      req.isAdmin = isAdmin;
+      next();
+    });
+    app.use(createFestivalsRoutes(deps));
+    return app;
+  };
+
+  test('an anonymous GET has no seriesId', async () => {
+    const res = await request(build(false)).get('/f-1').expect(200);
+    assert.equal(res.body.data.name, 'Fest');
+    assert.equal('seriesId' in res.body.data, false);
+  });
+  test('an admin GET has it', async () => {
+    const res = await request(build(true)).get('/f-1').expect(200);
+    assert.equal(res.body.data.seriesId, 'fk');
   });
 });
 
