@@ -406,7 +406,8 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
         const sent = options.headers || {};
         const keyName = Object.keys(sent).find((k) => k.toLowerCase() === 'idempotency-key');
         const retryHeaders = keyName ? { ...sent, [keyName]: `${sent[keyName]}:legacy` } : sent;
-        return apiRequest<T>(path, { ...options, body: legacyBody, headers: retryHeaders }, true);
+        // legacyPickBody returns null for a { picks } body, so this resend cannot loop and may still queue.
+        return apiRequest<T>(path, { ...options, body: legacyBody, headers: retryHeaders }, _isRetry);
       }
       throw error;
     }

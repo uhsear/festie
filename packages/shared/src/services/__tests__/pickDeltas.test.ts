@@ -16,6 +16,10 @@ describe('pick delta helpers', () => {
     });
   });
 
+  it('refuses an empty delta, which the server would reject as a validation error', () => {
+    expect(() => pickDeltaBody({}, { s1: 'must' })).toThrow('at least one set');
+  });
+
   it('diffs only the sets whose pick changed, and never emits a removal', () => {
     expect(changedPickDeltas({ a: 'must', b: 'maybe' }, { a: 'must', b: 'must', c: 'maybe' })).toEqual({
       b: 'must',
@@ -29,16 +33,23 @@ describe('pick delta helpers', () => {
 
   describe('legacyPickBody', () => {
     const body = pickDeltaBody({ s1: 'must' }, { s1: 'must', s2: 'maybe' });
+    const oldServer = { status: 400, code: 'VALIDATION_ERROR', message: 'At least one field required' };
     it('returns the whole-map body for the old-server rejection', () => {
-      expect(legacyPickBody(body, { status: 400, code: 'VALIDATION_ERROR' })).toEqual({ picks: { s1: 'must', s2: 'maybe' } });
+      expect(legacyPickBody(body, oldServer)).toEqual({ picks: { s1: 'must', s2: 'maybe' } });
+    });
+    it('returns null for a validation error from a server that knows deltas', () => {
+      expect(
+        legacyPickBody(body, { status: 400, code: 'VALIDATION_ERROR', message: 'pickDeltas: pickDeltas needs at least one set' }),
+      ).toBeNull();
+      expect(legacyPickBody(body, { status: 400, code: 'VALIDATION_ERROR' })).toBeNull();
     });
     it('returns null for other failures and for bodies that are not delta writes', () => {
       expect(legacyPickBody(body, { status: 400, code: 'INVALID_INPUT' })).toBeNull();
       expect(legacyPickBody(body, { status: 409, code: 'VERSION_MISMATCH' })).toBeNull();
       expect(legacyPickBody(body, { status: 500 })).toBeNull();
-      expect(legacyPickBody({ picks: {} }, { status: 400, code: 'VALIDATION_ERROR' })).toBeNull();
-      expect(legacyPickBody({ pickDeltas: { s1: 'must' } }, { status: 400, code: 'VALIDATION_ERROR' })).toBeNull();
-      expect(legacyPickBody(undefined, { status: 400, code: 'VALIDATION_ERROR' })).toBeNull();
+      expect(legacyPickBody({ picks: {} }, oldServer)).toBeNull();
+      expect(legacyPickBody({ pickDeltas: { s1: 'must' } }, oldServer)).toBeNull();
+      expect(legacyPickBody(undefined, oldServer)).toBeNull();
     });
   });
 });
@@ -113,16 +124,31 @@ describe('pick delta writes through api and the offline queue', () => {
 
   it('surfaces a rejected replay in failedSync with its body instead of dropping it', async () => {
     await queueOffline();
-    fetchSpy.mockResolvedValueOnce(reply(409, { code: 'VERSION_MISMATCH', message: 'Profile was modified' }));
+    fetchSpy.mockResolvedValueOnce(reply(400, { code: 'INVALID_INPUT', message: 'Pick references an unknown set' }));
 
     await drainQueue();
 
     const failed = useUIStore.getState().failedSync;
     expect(failed).toHaveLength(1);
-    expect(failed[0]).toMatchObject({ clientId: 'pick-p1-s1', error: 'Profile was modified' });
+    expect(failed[0]).toMatchObject({ clientId: 'pick-p1-s1', error: 'Pick references an unknown set' });
     expect(failed[0]!.body).toMatchObject({ pickDeltas: { s1: 'must' } });
     expect(sent()).toHaveLength(2); // the next entry still replays
     expect(queued()).toEqual([]);
+  });
+
+  it('replays a coalesced per-set entry after a bulk entry queued between its two writes', async () => {
+    let now = 1_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => (now += 10));
+    useUIStore.setState({ offlineMode: true });
+    await api.put('/profiles/p1', pickDeltaBody({ s1: 'must' }, { s1: 'must' }), { clientId: 'pick-p1-s1' });
+    await api.put('/profiles/p1', pickDeltaBody({ s1: null }, {}), { clientId: bulkPickClientId('p1') });
+    await api.put('/profiles/p1', pickDeltaBody({ s1: 'maybe' }, { s1: 'maybe' }), { clientId: 'pick-p1-s1' });
+    useUIStore.setState({ offlineMode: false });
+
+    await drainQueue();
+
+    expect(sent().map((s) => s.body.pickDeltas)).toEqual([{ s1: null }, { s1: 'maybe' }]);
+    vi.restoreAllMocks();
   });
 
   it('keeps a replay queued when the edge answers for a dead origin', async () => {
@@ -159,6 +185,14 @@ describe('pick delta writes through api and the offline queue', () => {
       expect(sent().map((s) => Object.keys(s.body))).toEqual([['pickDeltas', 'legacyPicks'], ['picks'], ['pickDeltas', 'legacyPicks'], ['picks']]);
       expect(queued()).toEqual([]);
       expect(useUIStore.getState().failedSync).toEqual([]);
+    });
+
+    it('queues the whole-map resend when the network drops during it', async () => {
+      fetchSpy.mockResolvedValueOnce(OLD_SERVER).mockRejectedValueOnce(new TypeError('Failed to fetch'));
+
+      await api.put('/profiles/p1', pickDeltaBody({ s1: 'must' }, { s1: 'must', s2: 'maybe' }), { clientId: 'pick-p1-s1' });
+
+      expect(queued().map((q) => q.body)).toEqual([{ picks: { s1: 'must', s2: 'maybe' } }]);
     });
 
     it('does not resend a whole map after any other 400, and does not loop on a rejected resend', async () => {
