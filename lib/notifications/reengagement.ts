@@ -716,7 +716,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const fresh = await filterFresh(userIds, type, `${eventKey}#email`);
     const prefKey = PREF_MAP[type];
     let ids: string[] = [];
-    const withEmail = fresh.filter((uid) => users.get(uid)?.email);
+    // Verified addresses only: /register stores a typed email unverified, so mailing it would mail a stranger.
+    const withEmail = fresh.filter((uid) => users.get(uid)?.email && users.get(uid)?.emailVerifiedAt);
     // One batched read (the admin dry runs call this per panel load); a store without getMany reads per user.
     let prefsByUser = new Map<string, any>();
     if (stores?.notificationPrefs?.getMany) prefsByUser = await stores.notificationPrefs.getMany(withEmail);
