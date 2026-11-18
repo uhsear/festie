@@ -8,6 +8,7 @@ Run: python -m unittest discover -s tests/deploy -p "test_*.py"
 
 import importlib.util
 import io
+import socket
 import sys
 import types
 import unittest
@@ -75,6 +76,22 @@ class PreDeployDumpTest(unittest.TestCase):
         with redirect_stdout(io.StringIO()):
             result = deploy.pre_deploy_dump(object(), runner=lambda client, cmd, timeout=300: (0, "Backup OK", ""))
         self.assertIsNone(result)
+
+    def test_timeout_raises_the_same_system_exit(self):
+        def runner(client, cmd, timeout=300):
+            raise socket.timeout("timed out")
+
+        with redirect_stdout(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                deploy.pre_deploy_dump(object(), runner=runner)
+        self.assertIn("pre-deploy dump failed", str(raised.exception))
+
+    def test_corrupt_dump_warning_fails_even_with_exit_zero(self):
+        log = "WARNING: pg_restore --list failed -- dump may be corrupt"
+        with redirect_stdout(io.StringIO()):
+            with self.assertRaises(SystemExit) as raised:
+                deploy.pre_deploy_dump(object(), runner=lambda client, cmd, timeout=300: (0, log, ""))
+        self.assertIn("pre-deploy dump failed", str(raised.exception))
 
     def test_failing_dump_stops_main_before_git_or_pm2(self):
         client = FakeClient(failing=("backup-pg.sh",))

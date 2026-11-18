@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { beforeEach, describe, test } from 'node:test';
 import {
   __resetMigrationCacheForTests,
+  openPlannerDatabase,
   runPostgresMigrationsWithConnectRetry,
 } from '../lib/planner-db-pg';
 
@@ -70,5 +71,37 @@ describe('migration boot connect retry', () => {
       10_000,
     );
     assert.deepEqual(sleeps.slice(0, 4), [1000, 2000, 4000, 3000]);
+  });
+});
+
+describe('openPlannerDatabase logger adapter', () => {
+  const waitFor = async (check: () => boolean) => {
+    for (let i = 0; i < 100 && !check(); i++) await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.ok(check(), 'timed out waiting for the logger call');
+  };
+
+  test('forwards the migration runner warn and error lines to an object logger', async () => {
+    const calls: { warn: string[]; error: string[] } = { warn: [], error: [] };
+    const log = {
+      warn: (message: string) => calls.warn.push(message),
+      error: (message: string) => calls.error.push(message),
+    };
+    const previousEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    __resetMigrationCacheForTests();
+    try {
+      // Port 1 refuses the connection, so the runner logs a warn and retries.
+      const { pool, migrationsReady } = openPlannerDatabase({ databaseUrl: 'postgresql://u:p@127.0.0.1:1/adapter_probe', log });
+      await waitFor(() => calls.warn.length > 0);
+      // A closed pool fails the retry with a non-retryable error, which logs the error line.
+      await pool.end();
+      await assert.rejects(migrationsReady);
+      assert.equal(calls.warn[0], 'database not accepting connections; retrying migrations');
+      assert.equal(calls.error[0], 'migration runner aborted startup');
+    } finally {
+      if (previousEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousEnv;
+      __resetMigrationCacheForTests();
+    }
   });
 });
