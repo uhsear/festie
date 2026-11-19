@@ -121,9 +121,8 @@ export default defineConfig({
         // avoid a misleading no-op.  If admin-only chunks are later split out
         // with a known naming convention, add a targeted pattern here.
         // The share image is only fetched by link-preview crawlers; keep it out
-        // of the install-time precache. The maplibre chunks (about 265 KB gzip) load
-        // only when a map mounts, so they stay out of every install.
-        globIgnores: ['og-image.png', '**/maplibre-*'],
+        // of the install-time precache.
+        globIgnores: ['og-image.png'],
         cleanupOutdatedCaches: true,
         // Web Push push/notificationclick handlers live in public/push-sw.js.
         importScripts: ['push-sw.js'],
