@@ -27,6 +27,9 @@ const festival = (lineup: LineupEntry[]): Festival =>
     lineup,
   }) as unknown as Festival;
 
+// Pinned before the 2099 fixture days so the model never depends on the wall clock.
+const NOW = Date.parse('2099-04-20T12:00:00.000Z');
+
 const DAYS = [
   { id: 'd1', label: 'Fri', date: '2099-04-24' },
   { id: 'd2', label: 'Sat', date: '2099-04-25' },
@@ -34,7 +37,7 @@ const DAYS = [
 
 describe('announced lineup on mobile: the shared rules the home screen renders', () => {
   it('a names-only festival shows the lineup in place of "No sets for this day"', () => {
-    const model = announcedLineupModel(festival([entry('a', 'Alpha'), entry('b', 'Beta')]), DAYS, [], 0, Date.now());
+    const model = announcedLineupModel(festival([entry('a', 'Alpha'), entry('b', 'Beta')]), DAYS, [], 0, NOW);
     expect(model.visible).toBe(true);
     expect(model.noSets).toBe(true);
     expect(model.summary.header).toBe('2 acts announced · Set times TBA');
@@ -43,27 +46,27 @@ describe('announced lineup on mobile: the shared rules the home screen renders',
   });
 
   it('a search keeps the empty state and lists the matches instead', () => {
-    const model = announcedLineupModel(festival([entry('a', 'Alpha')]), DAYS, [], 0, Date.now());
+    const model = announcedLineupModel(festival([entry('a', 'Alpha')]), DAYS, [], 0, NOW);
     expect(lineupReplacesEmptyState(model, 'alp')).toBe(false);
   });
 
   it('a festival without a lineup keeps the empty state', () => {
-    const model = announcedLineupModel(festival([]), DAYS, [], 0, Date.now());
+    const model = announcedLineupModel(festival([]), DAYS, [], 0, NOW);
     expect(model.visible).toBe(false);
     expect(lineupReplacesEmptyState(model, '')).toBe(false);
   });
 
   it('a day with sets keeps its sets and the lineup follows them', () => {
     const sets = [{ id: 's1', dayIndex: 0, artist: 'Gamma', artists: [{ name: 'Gamma' }] }] as unknown as FestivalSet[];
-    const model = announcedLineupModel(festival([entry('a', 'Alpha')]), DAYS, sets, 0, Date.now());
+    const model = announcedLineupModel(festival([entry('a', 'Alpha')]), DAYS, sets, 0, NOW);
     expect(model.visible).toBe(true);
     expect(lineupReplacesEmptyState(model, '')).toBe(false);
   });
   it('a festival with no days and a names-only lineup shows the lineup, and without one shows no lineup', () => {
-    const named = announcedLineupModel(festival([entry('a', 'Alpha')]), [], [], 0, Date.now());
+    const named = announcedLineupModel(festival([entry('a', 'Alpha')]), [], [], 0, NOW);
     expect(named.visible).toBe(true);
     expect(lineupReplacesEmptyState(named, '')).toBe(true);
-    const bare = announcedLineupModel(festival([]), [], [], 0, Date.now());
+    const bare = announcedLineupModel(festival([]), [], [], 0, NOW);
     expect(lineupReplacesEmptyState(bare, '')).toBe(false);
   });
 });
@@ -72,7 +75,7 @@ describe('grid bottom panel rows', () => {
   it('a fully scheduled day with a lineup has no active or cancelled acts to list', () => {
     const sets = [{ id: 's1', dayIndex: 0, artist: 'Alpha', artists: [{ name: 'Alpha' }] }] as unknown as FestivalSet[];
     const lineup = [entry('a', 'Alpha', { linkedSetIds: ['s1'] })];
-    const model = announcedLineupModel(festival(lineup), DAYS, sets, 0, Date.now());
+    const model = announcedLineupModel(festival(lineup), DAYS, sets, 0, NOW);
     expect(model.visible).toBe(true);
     expect(model.selection.active).toEqual([]);
     expect(model.selection.cancelled).toEqual([]);

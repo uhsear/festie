@@ -24,7 +24,7 @@ describe('T28 mobile SOS tools', () => {
     expect(src).toContain('BEACON_FLASH_MS');
     expect(src).toContain('useReduceMotion');
     expect(src).toContain('onRequestClose');
-    const specs = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
+    const specs = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]!);
     for (const spec of specs) {
       const ok =
         spec.startsWith('.') ||
