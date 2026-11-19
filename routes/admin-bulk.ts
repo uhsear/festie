@@ -201,7 +201,10 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
           try {
             // Read the name first: the audit row needs it after the soft delete.
             const festival = await stores.festivals.getById(festivalId);
-            if (!festival) throw new Error('Festival not found');
+            if (!festival) {
+              results.push({ festivalId, status: 'error', message: 'Festival not found' });
+              continue;
+            }
             names.set(festivalId, festival.name ?? null);
             // H1: evict crew-room sockets before the festival is archived, while
             // listByFestival can still resolve its crews.
@@ -209,7 +212,8 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             await stores.festivals.softDelete(festivalId);
             results.push({ festivalId, status: 'archived' });
           } catch (err: any) {
-            results.push({ festivalId, status: 'error', message: err.message });
+            log.error('bulk archive festival failed', { festivalId, error: err.message });
+            results.push({ festivalId, status: 'error', message: 'Archive failed' });
           }
         }
         if (deps.invalidateFestivalListCache) deps.invalidateFestivalListCache();

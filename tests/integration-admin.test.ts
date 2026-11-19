@@ -7,6 +7,7 @@ import {
   loginUser,
   joinFestivalProfile,
   loginAdmin,
+  Pool,
   connectSocket,
   waitForEvent,
 } from './_integration-helpers';
@@ -259,5 +260,36 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     await server.request.get('/api/v1/auth/me').set('x-user-token', bob.token).expect(401);
     await server.request.post('/api/v1/auth/refresh-token').send({ refreshToken: bob.refreshToken }).expect(401);
     bobSocket.close();
+  });
+
+  test('bulk archive hides internal error text when softDelete throws', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const adminToken = await loginAdmin(server);
+    await reauth(server, adminToken);
+
+    // A trigger makes the softDelete UPDATE throw a distinctive internal message.
+    const internalText = 'internal-trigger-secret-7f3a';
+    const pool = new Pool({ connectionString: server.databaseUrl });
+    await pool.query(`
+      CREATE OR REPLACE FUNCTION test_block_festival_update() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION '${internalText}'; END; $$ LANGUAGE plpgsql`);
+    await pool.query('CREATE TRIGGER test_block_festival_update BEFORE UPDATE ON festivals FOR EACH ROW EXECUTE FUNCTION test_block_festival_update()');
+    try {
+      const res = await server.request
+        .post('/api/v1/admin/bulk/archive-festivals')
+        .set('x-user-token', adminToken)
+        .send({ festivalIds: ['fest-1'] })
+        .expect(200);
+
+      const [result] = res.body.data.results;
+      assert.equal(result.status, 'error');
+      assert.equal(result.message, 'Archive failed');
+      assert.ok(!JSON.stringify(res.body).includes(internalText), JSON.stringify(res.body));
+    } finally {
+      await pool.query('DROP TRIGGER IF EXISTS test_block_festival_update ON festivals');
+      await pool.query('DROP FUNCTION IF EXISTS test_block_festival_update()');
+      await pool.end();
+    }
   });
 });
