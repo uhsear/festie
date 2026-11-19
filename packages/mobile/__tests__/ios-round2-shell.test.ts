@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { read } from './read-source';
 
-const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8');
 
 describe('ios round 2 shell source guards', () => {
   it('root layout hides the back label and syncs the iOS colour scheme', () => {

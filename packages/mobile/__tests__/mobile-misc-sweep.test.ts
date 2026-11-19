@@ -1,7 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { read } from './read-source';
 
-const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8');
 
 describe('mobile misc sweep', () => {
   it('search-hidden Clear filters also clears genres', () => {

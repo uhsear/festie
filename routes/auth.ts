@@ -259,34 +259,40 @@ export default function createAuthRoutes(deps: any): Router {
     }
   });
 
+  // Shared by /verify and /me: look up the user and their roles, or null when the user is gone.
+  async function loadUserWithRoles(userId: string) {
+    const user = await getUserById(userId);
+    if (!user) return null;
+    const roles = await deps.stores.roles.getUserRoles(userId);
+    return { user, roles };
+  }
+
   router.post('/verify', rateLimit(30, 'verify-token'), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
       const { token } = resolveRequestToken(req, 'x-user-token', config.USER_SESSION_COOKIE);
       const session = await validateUserSession(token);
       if (!session) return sendError(res, 401, 'Invalid or expired session', ErrorCodes.AUTH_REQUIRED);
-      const user = await getUserById(session.userId);
-      if (!user) return sendError(res, 401, 'User not found', ErrorCodes.AUTH_REQUIRED);
-      const { serializePublicUser, stores: depStores } = deps;
-      const roles = await depStores.roles.getUserRoles(session.userId);
-      return sendSuccess(res, { valid: true, user: serializePublicUser(user), roles });
+      const found = await loadUserWithRoles(session.userId);
+      if (!found) return sendError(res, 401, 'User not found', ErrorCodes.AUTH_REQUIRED);
+      return sendSuccess(res, { valid: true, user: deps.serializePublicUser(found.user), roles: found.roles });
     } catch (error: any) {
       log.error('verify failed', { error: error.message });
       return sendError(res, 500, 'Verify failed', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
-  // GET /me — mobile-friendly current user endpoint (same as verify but GET)
+  // GET /me — mobile-friendly current user endpoint (same lookup as verify, richer response, GET)
   router.get('/me', userAuth, rateLimit(120, 'get-me'), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const user = await getUserById(req.user.userId);
-      if (!user) return sendError(res, 401, 'User not found', ErrorCodes.AUTH_REQUIRED);
+      const found = await loadUserWithRoles(req.user.userId);
+      if (!found) return sendError(res, 401, 'User not found', ErrorCodes.AUTH_REQUIRED);
+      const { user, roles } = found;
       const { serializePublicUser, stores: depStores } = deps;
       const profiles = depStores.profiles.getByUserId
         ? await depStores.profiles.getByUserId(req.user.userId)
         : (await deps.getProfiles()).filter((p: any) => p.userId === req.user.userId);
-      const roles = await depStores.roles.getUserRoles(req.user.userId);
       const pendingEmail = await depStores.emailTokens.getPendingEmailChange(user.id, user.email ?? null);
       return sendSuccess(res, {
         user: serializePublicUser(user),

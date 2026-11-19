@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { read } from './read-source';
 
-const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8');
 
 describe('crew UX sweep guards', () => {
   it('meeting-point form blocks a picked day with no time and toasts save failures in formOnly mode', () => {

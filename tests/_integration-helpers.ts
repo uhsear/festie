@@ -139,12 +139,19 @@ async function startServer(
   return bootServer(TEST_DATABASE_URL as string, overrides, fixtures);
 }
 
-async function registerUser(server: any, username: string, password: string = DEFAULT_PASSWORD) {
+async function registerUser(server: any, username: string, password: string = DEFAULT_PASSWORD, extra: Record<string, unknown> = {}) {
   const response = await server.request
     .post('/api/v1/auth/register')
-    .send({ username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` })
+    .set(TRUSTED_MUTATION_HEADER, '1')
+    .send({ username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com`, ...extra })
     .expect(201);
   return response.body.data;
+}
+
+// Flattens the register response so callers read user.id and user.token directly.
+async function registerFlatUser(server: any, username: string, password: string = DEFAULT_PASSWORD) {
+  const { user, token, refreshToken } = await registerUser(server, username, password);
+  return { ...user, token, refreshToken };
 }
 
 async function loginUser(server: any, username: string, password: string = DEFAULT_PASSWORD) {
@@ -254,6 +261,7 @@ export {
   startServer,
   // auth + profile helpers
   registerUser,
+  registerFlatUser,
   loginUser,
   joinFestivalProfile,
   loginAdmin,

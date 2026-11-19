@@ -8,6 +8,7 @@ import path from 'path';
 import compression from 'compression';
 import helmet from 'helmet';
 import type { Application } from 'express';
+import type { Redis } from 'ioredis';
 
 import { createTracingMiddleware } from './tracing.js';
 import { mountSwaggerUI } from './swagger-ui-setup.js';
@@ -17,8 +18,8 @@ import { sentry } from './sentry.js';
 import { runWithRequestContext } from './logger.js';
 
 /**
- * Idempotency-Key middleware: caches the JSON response per `${userId||ip}:${key}`
- * and replays it for a repeat of the same key within `ttl`. The user id comes
+ * Idempotency-Key middleware: caches the JSON response per
+ * `${userId||ip}:${method}:${path}:${key}` and replays it for a repeat of the same key within `ttl`. The user id comes
  * from `resolveUserId` (the session), because this runs before any route's
  * userAuth sets req.user; the IP comes from `clientIp` (getRequestIp in the
  * mount), never a forgeable req.ip. A 5xx is never cached, so a retry of a
@@ -30,15 +31,22 @@ import { runWithRequestContext } from './logger.js';
  * the first request is still in flight sees an empty cache and re-executes the
  * mutation (double-write). A concurrent duplicate now finds the pending
  * reservation, awaits the first request's outcome, and replays its response.
+ *
+ * With a Redis client, completed responses are also stored there for `ttl`, so
+ * a retry that lands after a restart or on another process replays instead of
+ * re-executing. Redis errors fall back to the in-process cache. The in-flight
+ * reservation stays per-process.
  */
 function createIdempotencyMiddleware({
   ttl,
   maxEntries,
   resolveUserId,
   clientIp = (req: any) => req.ip,
+  redis = null,
 }: {
   ttl: number;
   maxEntries: number;
+  redis?: Redis | null;
   resolveUserId?: (req: any) => Promise<string | null>;
   clientIp?: (req: any) => string;
 }) {
@@ -64,7 +72,7 @@ function createIdempotencyMiddleware({
 
     // Runs synchronously from here on, so check-then-reserve stays atomic.
     function handle(principal: string) {
-      const cacheKey = `${principal}:${key}`;
+      const cacheKey = `${principal}:${req.method}:${req.baseUrl ?? ''}${req.path ?? ''}:${key}`;
 
       const run = () => {
         // Reserve the slot synchronously, before next(): a concurrent duplicate
@@ -97,6 +105,7 @@ function createIdempotencyMiddleware({
           }
           const record = { status: res.statusCode, body, ts: Date.now() };
           cache.set(cacheKey, record);
+          redis?.set(`idem:${cacheKey}`, JSON.stringify(record), 'PX', ttl).catch(() => {});
           release(record);
           return originalJson(body);
         };
@@ -112,7 +121,20 @@ function createIdempotencyMiddleware({
         res.on('finish', onEnd);
         res.on('close', onEnd);
 
-        next();
+        if (!redis) return next();
+        // Look for a response stored by an earlier process; the reservation
+        // above already holds concurrent duplicates while this round trip runs.
+        redis
+          .get(`idem:${cacheKey}`)
+          .catch(() => null)
+          .then((raw) => {
+            const stored = raw ? JSON.parse(raw) : null;
+            if (!stored) return next();
+            cache.set(cacheKey, stored);
+            release(stored);
+            res.setHeader('X-Idempotency-Replayed', 'true');
+            return res.status(stored.status).json(stored.body);
+          });
       };
 
       let cached = cache.get(cacheKey);
@@ -604,6 +626,7 @@ function configureMiddleware(app: Application, ctx: any) {
     maxEntries: config.IDEMPOTENCY_MAX_ENTRIES,
     resolveUserId,
     clientIp: getRequestIp,
+    redis: ctx.redis,
   });
   state.timers.push(_idempotencyCleanup);
   app.use('/api/v1', idempotencyMiddleware);

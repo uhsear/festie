@@ -177,6 +177,14 @@ describe('health-core: POST /metrics/client', () => {
     assert.equal(res.status, 400);
   });
 
+  it('rejects non-numeric metrics', async () => {
+    const deps = makeDeps();
+    const { app, clientMetrics } = testApp(deps);
+    const res = await request(app, 'POST', '/metrics/client', { lcp: '1500', fid: 50 });
+    assert.equal(res.status, 400);
+    assert.equal(clientMetrics.samples, 0);
+  });
+
   it('increments client metrics counters', async () => {
     const deps = makeDeps();
     const { app, clientMetrics } = testApp(deps);

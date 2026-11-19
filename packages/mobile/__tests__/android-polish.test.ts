@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { read } from './read-source';
 
 // Source-level guards: mobile tests run in plain node with no RN render harness.
-const read = (f: string) => readFileSync(join(__dirname, '..', f), 'utf8');
 
 describe('android polish', () => {
   it('confirms before a long-press removes a packing item', () => {

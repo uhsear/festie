@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { read } from './read-source';
 
-const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8');
 
 describe('mobile Artists screen has no Spotify picker', () => {
   const src = read('app/admin/festival-links.tsx');

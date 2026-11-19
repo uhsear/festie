@@ -17,7 +17,8 @@ import assert from 'node:assert/strict';
 import { afterEach, after as afterAll, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
-import { TRUSTED_MUTATION_HEADER, TEST_DATABASE_URL, startServer, registerUser, joinFestival, loginAdmin, reauthAdmin, servers } from './_coverage-routes-helpers';
+import { TRUSTED_MUTATION_HEADER, TEST_DATABASE_URL, startServer, joinFestival, loginAdmin, reauthAdmin, servers } from './_coverage-routes-helpers';
+import { registerUser } from './_integration-helpers';
 
 afterEach(async () => {
   while (servers.length > 0) {

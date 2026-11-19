@@ -760,7 +760,7 @@ export default function setupSocketHandlers(deps: any) {
         // tell the crew room so no ghost marker lingers (enforces foreground-only
         // + auto-stop-on-disconnect). Broadcast BEFORE the socket leaves rooms.
         const sharingCrewId = socket.data?.sharingCrewId;
-        const sharingUserId = socket.data?.userId;
+        const sharingUserId = socket.data?.sharingUserId ?? socket.data?.userId;
         if (sharingCrewId && sharingUserId) {
           socket.to('crew:' + sharingCrewId).emit('location:peer-stopped', {
             _v: 1,
