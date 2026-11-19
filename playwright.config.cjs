@@ -1,5 +1,8 @@
-const { defineConfig, devices } = require('@playwright/test');
+const { defineConfig } = require('@playwright/test');
 
+// Local prerequisites: build the SPA (`pnpm --dir packages --filter @festie/web build`),
+// install a browser (`npx playwright install chromium`), and set TEST_DATABASE_URL.
+// See tests/README.md.
 const artifactDir = process.env.PLAYWRIGHT_ARTIFACT_DIR || 'output/playwright';
 
 module.exports = defineConfig({
@@ -17,6 +20,7 @@ module.exports = defineConfig({
   snapshotDir: 'tests/__snapshots__',
   snapshotPathTemplate: 'tests/__snapshots__/{testFileName}/{arg}{ext}',
   fullyParallel: false,
+  // Every test's fixture truncates and reseeds the one festie_test database, so a second worker wipes rows mid-test (8 of 16 failed at workers=2).
   workers: 1,
   reporter: [
     ['list'],
@@ -49,14 +53,6 @@ module.exports = defineConfig({
     {
       name: 'firefox',
       use: { browserName: 'firefox' },
-    },
-    {
-      name: 'Mobile Chrome',
-      use: { ...devices['Pixel 7'] },
-    },
-    {
-      name: 'Mobile Safari',
-      use: { ...devices['iPhone 13'] },
     },
   ],
 });

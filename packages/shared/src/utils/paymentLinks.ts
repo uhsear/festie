@@ -12,6 +12,8 @@
  * (leading @/$ stripped) and URL-encoded.
  */
 
+import { centsToInputText } from './money';
+
 export interface PaymentLinkInput {
   /** Payee handle (Venmo username, Cash App $cashtag, or PayPal.me name). */
   handle: string | null | undefined;
@@ -33,7 +35,7 @@ export interface PaymentLink {
 function dollars(amountCents: number): string {
   // Clamp negatives/NaN to 0 — a settle-up amount is always a positive debt.
   const cents = Number.isFinite(amountCents) ? Math.max(0, Math.round(amountCents)) : 0;
-  return (cents / 100).toFixed(2);
+  return centsToInputText(cents);
 }
 
 function normalizeHandle(handle: string | null | undefined): string | null {

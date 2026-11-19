@@ -14,7 +14,13 @@ import DaylightToggle from '../features/DaylightToggle';
 import { SECTION_HREF, activeSection } from './sections';
 import { useLineupHref } from '../../hooks/useLineupHref';
 import { useCrewAttention } from '../../hooks/useCrewAttention';
+import { useInstallPrompt } from '../../hooks/useInstallPrompt';
 import { postInstallEvent } from '../../lib/installAnalytics';
+
+// The button only shows at 768px and wider; count it as shown there.
+function trackInstallShown() {
+  if (window.matchMedia('(min-width: 768px)').matches) postInstallEvent('shown');
+}
 
 export default function Header() {
   const user = useAuthStore((state) => state.user);
@@ -62,23 +68,9 @@ export default function Header() {
     };
   }, []);
 
-  // Capture the `beforeinstallprompt` event so the Install App button can
-  // actually trigger the PWA install flow. Browsers fire this once when the PWA
-  // is installable; we stash it on window for the click handler and mirror
-  // availability in state so the button can hide where it would no-op
-  // (Firefox/Safari, or after a successful install consumes the prompt).
-  const [installAvailable, setInstallAvailable] = useState(false);
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      window.__festieInstallPrompt = e as BeforeInstallPromptEvent;
-      setInstallAvailable(true);
-      // The button only shows at 768px and wider; count it as shown there.
-      if (window.matchMedia('(min-width: 768px)').matches) postInstallEvent('shown');
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
+  // Availability mirrors the captured install prompt so the button hides where
+  // it would no-op (Firefox/Safari, or after a successful install).
+  const [installAvailable, setInstallAvailable] = useInstallPrompt(trackInstallShown);
 
   return (
     <header

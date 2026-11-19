@@ -15,6 +15,8 @@ import {
 // shared package's UI constants. This test is the drift guard for that mirror —
 // imported by relative path since tsx resolves workspace TS source directly.
 import * as shared from '../packages/shared/src/constants/config.js';
+import { toCents as sharedToCents } from '../packages/shared/src/utils/money.js';
+import { toCents } from '../lib/helpers/export-utils.js';
 
 const { PRIORITY_OPTIONS } = shared;
 
@@ -41,5 +43,11 @@ describe('root ↔ @festie/shared constant parity', () => {
       },
       { MAX_CREWS_PER_FESTIVAL, MAX_OPEN_POLLS_PER_CREW, DEFAULT_CREW_MAX_MEMBERS },
     );
+  });
+
+  it('toCents matches the shared mirror', () => {
+    for (const v of [12.4, '12.40', '0.1', 1.005, '-3.2', 'abc', '', NaN, Infinity]) {
+      assert.equal(toCents(v), sharedToCents(v), `toCents(${String(v)})`);
+    }
   });
 });

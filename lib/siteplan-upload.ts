@@ -9,15 +9,20 @@
  * public/uploads/siteplans/, which lib/middleware.ts serves.
  */
 import crypto from 'crypto';
+import fs from 'fs';
 import path from 'path';
 import multer from 'multer';
 
 import { avatarStorage } from './avatar-storage';
 
-export const SITEPLAN_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const SITEPLAN_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const SITEPLAN_MAX_PIXELS = 50_000_000;
 export const SITEPLAN_MAX_EDGE = 4096;
 export const SITEPLAN_WEBP_QUALITY = 80;
+
+// An upload is saved into map_config in a later request, so a young file may be unsaved yet.
+const SITEPLAN_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+const SITEPLAN_FILE_PATTERN = /^[a-f0-9]{32}\.webp$/;
 
 const ALLOWED_SITEPLAN_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const WRONG_TYPE_MESSAGE = 'Upload a PNG, JPEG or WebP image. For a PDF, save the page as a PNG first.';
@@ -54,7 +59,6 @@ export function createSiteplanUpload({ config, sendError, ErrorCodes }: { config
     });
   }
 
-  // shortcut: an upload that is never saved, or a replaced site plan, leaves its file behind; add a sweep when public/uploads/siteplans passes 1 GB.
   async function writeSiteplan(buffer: any) {
     const key = crypto.randomBytes(16).toString('hex');
     if (!/^[a-f0-9]{32}$/.test(key)) throw new Error('Invalid site-plan key');
@@ -64,5 +68,21 @@ export function createSiteplanUpload({ config, sendError, ErrorCodes }: { config
     return key;
   }
 
-  return { siteplanDirPath, handleSiteplanUpload, writeSiteplan };
+  // Removes site-plan files that no map_config references and that are older than minAgeMs.
+  // Never removes a referenced key, however old. Returns the number of files removed.
+  async function sweepOrphanSiteplans(referencedKeys: Set<string>, minAgeMs = SITEPLAN_ORPHAN_MIN_AGE_MS, now = Date.now()) {
+    const dir = siteplanDirPath();
+    if (!fs.existsSync(dir)) return 0;
+    let removed = 0;
+    for (const name of fs.readdirSync(dir)) {
+      if (!SITEPLAN_FILE_PATTERN.test(name) || referencedKeys.has(name.slice(0, -'.webp'.length))) continue;
+      const file = path.join(dir, name);
+      if (now - fs.statSync(file).mtimeMs < minAgeMs) continue;
+      await avatarStorage.removeFile(file);
+      removed += 1;
+    }
+    return removed;
+  }
+
+  return { siteplanDirPath, handleSiteplanUpload, writeSiteplan, sweepOrphanSiteplans };
 }

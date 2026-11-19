@@ -119,7 +119,6 @@ function baseDeps(overrides: any = {}) {
       rateLimits: new Map(),
       metrics: { socketConnections: 0, peakConnections: 0, socketDisconnections: 0, socketErrors: 0 },
       timers: [],
-      _adminResetTokens: new Map(),
     },
     emitter: {
       crewExpenseAdded: noop,
@@ -565,28 +564,8 @@ describe('routes/email-auth', () => {
     assert.ok(deps.disconnectUserSockets.mock.calls.length >= 1);
   });
 
-  test('POST /reset-password — succeeds with admin in-memory token', async () => {
+  test('POST /reset-password — rejects unknown or expired token', async () => {
     const deps = buildEmailAuthDeps();
-    const adminTokHash = crypto.createHash('sha256').update('admin-tok').digest('hex');
-    deps.state._adminResetTokens.set(adminTokHash, { userId: 'user-1', expiresAt: Date.now() + 60_000 });
-    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
-    const router = createEmailAuthRoutes(deps);
-    const app = mountApp(router);
-
-    const res = await request(app)
-      .post('/reset-password')
-      .send({ token: 'admin-tok', newPassword: 'StrongPass1!', confirmPassword: 'StrongPass1!' })
-      .expect(200);
-
-    assert.equal(res.body.error, null);
-    // Token hash should be deleted after use
-    assert.equal(deps.state._adminResetTokens.has(adminTokHash), false);
-  });
-
-  test('POST /reset-password — rejects expired admin token', async () => {
-    const deps = buildEmailAuthDeps();
-    const expiredTokHash = crypto.createHash('sha256').update('expired-tok').digest('hex');
-    deps.state._adminResetTokens.set(expiredTokHash, { userId: 'user-1', expiresAt: Date.now() - 1000 });
     // consumeResetToken returns null by default (no DB token fallback)
     createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
     const router = createEmailAuthRoutes(deps);
@@ -1516,7 +1495,7 @@ describe('routes/ratings', () => {
         crews: {
           getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
           listByUserAndFestival: mock.fn(async () => []),
-          getMemberCount: mock.fn(async () => '3'),
+          getMemberCount: mock.fn(async () => 3),
         },
       },
       ...overrides,

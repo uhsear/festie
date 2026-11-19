@@ -81,19 +81,13 @@ async function ensureTestSchema() {
 async function truncateAllTables(databaseUrl: string) {
   const pool = new Pool({ connectionString: databaseUrl });
   try {
-    await pool.query(`
-      TRUNCATE TABLE
-        email_verification_tokens, password_reset_tokens,
-        audit_log, notification_topic_subs, notification_counts, notification_log,
-        notification_preferences, device_tokens,
-        crew_members, crews, festival_profile_notes,
-        festival_profile_picks, festival_profiles, festival_sets, festival_days,
-        festival_stages, festivals, user_sessions, users,
-        install_events, set_ratings, calendar_tokens,
-        crew_expenses, crew_polls, crew_poll_votes,
-        crew_meeting_points, crew_activity, artist_backfill_runs
-      CASCADE
-    `);
+    // Discover tables so a new migration cannot leave rows behind. roles holds migration-seeded data.
+    const { rows } = await pool.query(
+      `SELECT quote_ident(tablename) AS name FROM pg_tables
+       WHERE schemaname = 'public' AND tablename NOT IN ('schema_migrations', 'roles')`
+    );
+    if (rows.length === 0) return;
+    await pool.query(`TRUNCATE TABLE ${rows.map((r) => r.name).join(', ')} CASCADE`);
   } finally {
     await pool.end();
   }

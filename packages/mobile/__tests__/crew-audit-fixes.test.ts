@@ -8,17 +8,19 @@ const crew = read('app', '(tabs)', 'crew.tsx');
 
 describe('crew switcher sheet keyboard', () => {
   it('lifts the sheet above the keyboard', () => {
-    const src = read('components', 'CrewSwitcherSheet.tsx');
-    expect(src).toContain('KeyboardAvoidingView');
-    expect(src).toContain("Platform.OS === 'ios' ? 'padding' : 'height'");
+    expect(read('components', 'CrewSwitcherSheet.tsx')).toContain('keyboardAvoiding');
+    const shell = read('components', 'SheetShell.tsx');
+    expect(shell).toContain('KeyboardAvoidingView');
+    expect(shell).toContain("Platform.OS === 'ios' ? 'padding' : 'height'");
   });
 });
 
 describe('crew bottom sheets clear the home indicator', () => {
   it.each(['CrewSwitcherSheet', 'HandOverSheet', 'FestivalChoiceSheet', 'InviteQRSheet'])('%s adds insets.bottom', (name) => {
-    const src = read('components', `${name}.tsx`);
-    expect(src).toContain('useSafeAreaInsets');
-    expect(src).toContain('paddingBottom: t.spacing[5] + insets.bottom');
+    expect(read('components', `${name}.tsx`)).toContain('<SheetShell');
+    const shell = read('components', 'SheetShell.tsx');
+    expect(shell).toContain('useSafeAreaInsets');
+    expect(shell).toContain('paddingBottom: t.spacing[5] + insets.bottom');
   });
 });
 

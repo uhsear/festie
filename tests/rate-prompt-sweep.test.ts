@@ -58,7 +58,26 @@ describe('rate_prompt sweep', () => {
 
     const calls = ctx.reengagement.sendRatePrompt.mock.calls.map((c: any) => c.arguments[0]);
     assert.deepEqual(calls, ['f1', 'f2']);
-    assert.ok(ctx.log.debug.mock.calls.some((c: any) => c.arguments[0] === 'rate_prompt sweep: per-festival send failed'));
+    assert.ok(ctx.log.warn.mock.calls.some((c: any) => c.arguments[0] === 'rate_prompt sweep: per-festival send failed'));
+  });
+
+  it('does not start an hourly run while the previous one is still running', async () => {
+    mock.timers.enable({ apis: ['setInterval'] });
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    ctx = makeCtx(async () => gate);
+    createBackgroundTasks(ctx, { io: { of: () => ({ sockets: new Map() }), engine: { clientsCount: 0 } } });
+
+    mock.timers.tick(60 * 60 * 1000);
+    await new Promise((r) => setImmediate(r));
+    mock.timers.tick(60 * 60 * 1000);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(ctx.reengagement.sendRatePrompt.mock.calls.length, 1);
+    assert.equal(ctx.state.sweepsInFlight.size, 1);
+
+    release();
+    await new Promise((r) => setImmediate(r));
+    assert.equal(ctx.state.sweepsInFlight.size, 0);
   });
 
   it('is not registered without a sendRatePrompt trigger', () => {

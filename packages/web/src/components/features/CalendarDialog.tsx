@@ -10,6 +10,7 @@ import { buildPicksIcsExport, describeIcsExport } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { useToast } from '../../lib/toastContext';
+import { saveBlob } from '../../lib/downloadExport';
 
 type CalendarLinks = Awaited<ReturnType<typeof fetchCalendarLinks>>;
 
@@ -66,15 +67,7 @@ export default function CalendarDialog() {
       reminders: currentProfile.reminders,
     });
     const safeName = (currentFestival.name || 'festival').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
-    const blob = new Blob([result.ics], { type: 'text/calendar;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${safeName}_picks.ics`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+    saveBlob(new Blob([result.ics], { type: 'text/calendar;charset=utf-8' }), `${safeName}_picks.ics`);
     toast(describeIcsExport(result), 'success');
     setOpen(false);
   };

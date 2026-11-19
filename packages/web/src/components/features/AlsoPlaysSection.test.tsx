@@ -27,6 +27,7 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
 }));
 vi.mock('@festie/shared/hooks', () => ({
   useAlsoPlays: () => state.slots,
+  useFestival: () => ({ getStageName: (id: string) => ({ st1: 'Main', st2: 'Sahara' })[id] }),
   useCanPick: () => state.canPick,
   usePicks: () => ({ getMyPick: (id: string) => state.picks[id], savePick }),
 }));

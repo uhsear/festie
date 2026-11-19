@@ -70,6 +70,29 @@ describe('useBulkAddPicks', () => {
     expect(result.current.busyKey).toBeNull();
   });
 
+  it('Undo leaves a pick changed by hand while the bulk PUT was in flight', async () => {
+    seed({});
+    let release!: () => void;
+    vi.mocked(api.put).mockReturnValueOnce(new Promise<undefined>((r) => { release = () => r(undefined); }));
+    const { notify, tapUndo } = makeNotify();
+    const { result } = renderHook(() => useBulkAddPicks(notify));
+
+    let pending!: Promise<string>;
+    act(() => { pending = result.current.add(GROUP, 'must'); });
+    await flush();
+    act(() => {
+      const st = useFestivalStore.getState();
+      useFestivalStore.setState({
+        currentProfile: { ...st.currentProfile!, picks: { ...st.currentProfile!.picks, s2: 'maybe' } },
+      });
+    });
+    await act(async () => { release(); await pending; });
+
+    tapUndo();
+    await flush();
+    expect(useFestivalStore.getState().currentProfile!.picks).toEqual({ s2: 'maybe' });
+  });
+
   it('lets a guest undo a bulk add on the device', async () => {
     useAuthStore.setState({ user: null });
     useFestivalStore.setState({ currentFestivalId: 'f1', currentProfile: null, guestPicks: { f1: { s1: 'must' } } });

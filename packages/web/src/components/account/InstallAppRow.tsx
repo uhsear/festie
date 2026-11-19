@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ACCOUNT_COPY } from '@festie/shared/constants';
+import { useInstallPrompt } from '../../hooks/useInstallPrompt';
 import { isIOSSafari, isStandalone } from '../../hooks/useIOSInstall';
 import IOSInstallDrawer from '../features/IOSInstallDrawer';
 import Button from '../ui/Button';
@@ -10,18 +11,8 @@ import Button from '../ui/Button';
  */
 export default function InstallAppRow() {
   const [installed, setInstalled] = useState(() => isStandalone());
-  const [canPrompt, setCanPrompt] = useState(() => Boolean(window.__festieInstallPrompt));
+  const [canPrompt, setCanPrompt] = useInstallPrompt();
   const [showSteps, setShowSteps] = useState(false);
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      e.preventDefault();
-      window.__festieInstallPrompt = e as BeforeInstallPromptEvent;
-      setCanPrompt(true);
-    };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, []);
 
   if (installed) return null;
 

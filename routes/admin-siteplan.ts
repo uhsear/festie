@@ -40,7 +40,23 @@ export default function createAdminSiteplanRoutes(deps: any) {
   } = deps;
 
   const router = express.Router();
-  const { handleSiteplanUpload, writeSiteplan } = createSiteplanUpload({ config, sendError, ErrorCodes });
+  const { handleSiteplanUpload, writeSiteplan, sweepOrphanSiteplans } = createSiteplanUpload({ config, sendError, ErrorCodes });
+
+  // Deleted festivals count as referencing: a restore must not find its image gone.
+  async function sweepUnreferencedSiteplans() {
+    try {
+      const { rows } = await pool.query("SELECT map_config->'siteplan'->>'imageUrl' AS url FROM festivals WHERE map_config->'siteplan' IS NOT NULL");
+      const referencedKeys = new Set<string>();
+      for (const row of rows) {
+        const match = /([a-f0-9]{32})\.webp$/.exec(String(row.url || ''));
+        if (match?.[1]) referencedKeys.add(match[1]);
+      }
+      const removed = await sweepOrphanSiteplans(referencedKeys);
+      if (removed > 0) log.info('siteplan orphan sweep', { removed });
+    } catch (error: any) {
+      log.warn('siteplan orphan sweep failed', { error: error.message });
+    }
+  }
 
   router.post(
     '/festivals/:id/siteplan-image',
@@ -76,6 +92,7 @@ export default function createAdminSiteplanRoutes(deps: any) {
         }
 
         const key = await writeSiteplan(webp);
+        void sweepUnreferencedSiteplans();
         setNoStore(res);
         if (stores.auditLog) {
           res.locals.auditWritten = true;

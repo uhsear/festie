@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent } from '@testing-library/react';
+import { renderWithQueryClient } from '../test-utils';
 import RatePage from './rate';
 
 const mocks = vi.hoisted(() => ({
@@ -72,12 +72,7 @@ const sets = [
 ];
 
 function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <RatePage />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<RatePage />);
 }
 
 describe('RatePage', () => {

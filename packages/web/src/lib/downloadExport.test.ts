@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { downloadExport } from './downloadExport';
+import { downloadExport, saveBlob } from './downloadExport';
 
 const mockFetch = vi.fn();
 vi.mock('@festie/shared/services/account', () => ({
@@ -31,5 +31,19 @@ describe('downloadExport', () => {
   it('propagates errors', async () => {
     mockFetch.mockRejectedValue(new Error('boom'));
     await expect(downloadExport()).rejects.toThrow('boom');
+  });
+});
+
+describe('saveBlob', () => {
+  it('clicks a named anchor, removes it and revokes the url', () => {
+    const seen: { name: string; href: string; connected: boolean; anchor?: HTMLAnchorElement }[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      seen.push({ name: this.download, href: this.href, connected: this.isConnected, anchor: this });
+    });
+    saveBlob(new Blob(['x']), 'a.csv');
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ name: 'a.csv', href: 'blob:mock', connected: true });
+    expect(seen[0].anchor?.isConnected).toBe(false);
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock');
   });
 });

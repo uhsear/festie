@@ -1,6 +1,6 @@
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { useAlsoPicked } from '@festie/shared/hooks';
+import { useAlsoPicked, useFestival } from '@festie/shared/hooks';
 import { DISCOVER_COPY } from '@festie/shared/constants';
 import { artistDisplayName, formatTime } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
@@ -9,7 +9,7 @@ import type { FestivalSet } from '@festie/shared/types';
 export default function AlsoPickedSection({ set }: { set: FestivalSet }) {
   const festivalId = useFestivalStore((s) => s.currentFestival?.id);
   const days = useFestivalStore((s) => s.days);
-  const stages = useFestivalStore((s) => s.stages);
+  const { getStageName } = useFestival();
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { sets, status } = useAlsoPicked(festivalId, set.id);
 
@@ -28,7 +28,7 @@ export default function AlsoPickedSection({ set }: { set: FestivalSet }) {
           const detail = [
             day ? day.label || day.date : '',
             s.startTime ? formatTime(s.startTime) : '',
-            stages.find((st) => st.id === s.stageId)?.name ?? '',
+            getStageName(s.stageId) ?? '',
           ]
             .filter(Boolean)
             .join(' · ');

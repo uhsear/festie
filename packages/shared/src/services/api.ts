@@ -3,6 +3,7 @@ import { ApiError } from '../types/api';
 import { useUIStore } from '../stores/uiStore';
 import { canQueueOnEdgeError } from './errors';
 import { legacyPickBody } from './pickDeltas';
+import { enqueueMutation, drainQueue } from './offlineQueue';
 
 type AuthMode = 'cookie' | 'bearer';
 
@@ -167,8 +168,7 @@ async function enqueueOfflineMutation<T>(path: string, method: string, options: 
   if (typeof window !== 'undefined' && window.__festieQueue?.queueMutation) {
     await window.__festieQueue.queueMutation({ type: 'api', url: path, method, body, clientId, idempotencyKey });
   } else {
-    // Native: dynamic import avoids the api <-> offlineQueue module cycle.
-    const { enqueueMutation } = await import('./offlineQueue');
+    // Native: offlineQueue only uses api inside functions, so the api <-> offlineQueue cycle is safe.
     await enqueueMutation({
       clientId,
       idempotencyKey,
@@ -228,7 +228,7 @@ function markOnlineAndDrain(path: string): void {
     if (typeof window !== 'undefined' && window.__festieQueue?.processQueue) {
       void window.__festieQueue.processQueue()?.catch(() => {});
     } else {
-      void import('./offlineQueue').then((m) => m.drainQueue()).catch(() => {});
+      void drainQueue().catch(() => {});
     }
   } catch {
     /* store not ready */

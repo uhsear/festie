@@ -53,14 +53,14 @@ async function main() {
   try {
     if (mode === 'verify') {
       const result = await verifyBackfill(pool);
-      console.log(JSON.stringify(result, null, 2));
+      process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       process.exitCode = result.ok ? 0 : 1;
       return;
     }
     const plan = await planBackfill(pool);
     const output: Record<string, unknown> = { mode, report: plan.report };
     if (mode === 'run') output.result = await applyBackfillPlan(pool, plan);
-    console.log(JSON.stringify(output, null, 2));
+    process.stdout.write(JSON.stringify(output, null, 2) + '\n');
     if (report) {
       fs.writeFileSync(report, JSON.stringify(output, null, 2));
       fs.writeFileSync(report.replace(/\.json$/i, '') + '.csv', reportToCsv(plan.report));

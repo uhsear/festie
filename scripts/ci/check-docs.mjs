@@ -4,11 +4,11 @@
 //   2. Every Socket.IO event name emitted by server code appears in docs/SOCKET_CONTRACT.md.
 //
 // Usage: node scripts/ci/check-docs.mjs [--root <repo>] [--docs-root <dir holding the docs>]
-// Exit 0 = clean (or docs absent), 1 = drift found.
+// Exit 0 = clean, 1 = drift found or ARCHITECTURE.md missing.
 //
-// Those docs are gitignored in the public repo (see .gitignore, "Internal docs"), so a fresh
-// public checkout has none of them: the script then reports "skipped" and exits 0. It does real
-// work on a workstation or server checkout that holds the docs.
+// ARCHITECTURE.md is published, so it is required: a missing file fails the gate. The socket
+// contract and the ADRs are gitignored in the public repo (see .gitignore, "Internal docs"), so a
+// fresh public checkout has neither: the script reports "skipped" for them and still exits 0.
 //
 // shortcut: event names are found by regex on `.emit('literal'`; a name built at runtime is
 // invisible. Upgrade to the TypeScript AST if an emitter ever computes event names.
@@ -17,7 +17,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const DOC_FILES = ['ARCHITECTURE.md', 'docs/SOCKET_CONTRACT.md'];
+const REQUIRED_DOCS = ['ARCHITECTURE.md'];
+const OPTIONAL_DOCS = ['docs/SOCKET_CONTRACT.md'];
 const ADR_DIR = 'docs/adrs';
 const CONTRACT = 'docs/SOCKET_CONTRACT.md';
 const EMIT_SOURCES = ['lib', 'routes', 'server.ts'];
@@ -117,7 +118,11 @@ export function checkDocs({ root, docsRoot = root }) {
   const adrs = fs.existsSync(adrDir)
     ? fs.readdirSync(adrDir).filter((f) => f.endsWith('.md')).map((f) => `${ADR_DIR}/${f}`)
     : [];
-  const docs = [...DOC_FILES, ...adrs].filter((rel) => {
+  for (const rel of REQUIRED_DOCS) {
+    if (!fs.existsSync(path.join(docsRoot, rel))) problems.push(`${rel} is required but not present under ${docsRoot}.`);
+  }
+  const docs = [...REQUIRED_DOCS, ...OPTIONAL_DOCS, ...adrs].filter((rel) => {
+    if (REQUIRED_DOCS.includes(rel)) return fs.existsSync(path.join(docsRoot, rel));
     if (fs.existsSync(path.join(docsRoot, rel))) return true;
     notes.push(`skipped ${rel}: not present under ${docsRoot}`);
     return false;

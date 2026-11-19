@@ -1354,6 +1354,14 @@ describe('festivalDataStore', () => {
       expect(api.post).not.toHaveBeenCalled();
     });
 
+    it('hydration merge keeps persisted picks of a festival when a pick was made before hydration', () => {
+      const merge = useFestivalDataStore.persist.getOptions().merge!;
+      const current = { ...useFestivalDataStore.getState(), guestPicks: { 'fest-1': { 'set-2': 'must' } } };
+      const persisted = { guestPicks: { 'fest-1': { 'set-1': 'maybe', 'set-2': 'maybe' }, 'fest-2': { 'set-9': 'must' } } };
+      const merged = merge(persisted, current) as { guestPicks: Record<string, Record<string, string>> };
+      expect(merged.guestPicks).toEqual({ 'fest-1': { 'set-1': 'maybe', 'set-2': 'must' }, 'fest-2': { 'set-9': 'must' } });
+    });
+
     it('savePick for a festival other than the selected one throws and sends no POST', async () => {
       await expect(
         useFestivalDataStore.getState().savePick({ festivalId: 'fest-2', setId: 'set-2', priority: 'must' }),

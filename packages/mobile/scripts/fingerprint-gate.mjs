@@ -21,7 +21,7 @@
 // placeholder sentinel hash, this script WRITES the current hash into it and
 // reports baseline_seeded=true + native_changed=false (nothing to compare against
 // yet, so there's nothing to rebuild). The workflow can surface that the seeded
-// baseline needs to be committed. See packages/mobile/.fingerprint/README.md.
+// baseline needs to be committed.
 
 import { createRequire } from 'node:module';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
@@ -33,7 +33,7 @@ const projectRoot = resolve(__dirname, '..'); // packages/mobile
 const baselineDir = join(projectRoot, '.fingerprint');
 const baselinePath = join(baselineDir, 'baseline.json');
 
-// Sentinel used by a freshly-seeded placeholder baseline (see README). Any
+// Sentinel used by a freshly-seeded placeholder baseline. Any
 // baseline whose hash equals this is treated as "no real baseline yet".
 const PLACEHOLDER_HASH = 'PLACEHOLDER-REFRESH-AFTER-FIRST-BUILD';
 
@@ -67,7 +67,7 @@ function writeBaseline(hash) {
     generatedAt: new Date().toISOString(),
     note:
       'Last-BUILT native fingerprint. Refresh this (and commit) after every EAS ' +
-      'build. See README.md in this folder.',
+      'build.',
   };
   writeFileSync(baselinePath, JSON.stringify(payload, null, 2) + '\n', 'utf8');
 }
@@ -133,7 +133,7 @@ async function main() {
         '- **decision:** :hammer_and_wrench: **native changed -> a new EAS BUILD is required**',
         '',
         '> After the build succeeds, refresh `packages/mobile/.fingerprint/baseline.json`',
-        '> with the new hash and commit it (see the folder README).',
+        '> with the new hash and commit it.',
       ].join('\n')
     );
   } else {

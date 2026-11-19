@@ -37,12 +37,19 @@ export default function createProfilesRoutes(deps: any) {
       }
       // listPicksByFestival leaves out notes and reminders, so the viewer's own row
       // comes from ownProfile. A row missing from the list (a delete race) stays missing.
-      const rawProfiles = stores.profiles.listPicksByFestival
-        ? (await stores.profiles.listPicksByFestival(festivalId)).map((profile: any) =>
-          profile.id === ownProfile.id ? ownProfile : profile)
-        : stores.profiles.getByFestival
-          ? await stores.profiles.getByFestival(festivalId)
-          : (await getProfiles()).filter((profile: any) => profile.festivalId === festivalId);
+      const paginated = Boolean(req.query.cursor || req.query.limit);
+      // The paged read slices in SQL, so a large festival costs one page of rows, not all of them.
+      const page = paginated && stores.profiles.listPicksPageByFestival
+        ? await stores.profiles.listPicksPageByFestival(festivalId, req.validatedQuery)
+        : null;
+      const swapOwn = (profile: any) => (profile.id === ownProfile.id ? ownProfile : profile);
+      const rawProfiles = page
+        ? page.profiles.map(swapOwn)
+        : stores.profiles.listPicksByFestival
+          ? (await stores.profiles.listPicksByFestival(festivalId)).map(swapOwn)
+          : stores.profiles.getByFestival
+            ? await stores.profiles.getByFestival(festivalId)
+            : (await getProfiles()).filter((profile: any) => profile.festivalId === festivalId);
       const userIds = [...new Set(rawProfiles.map((p: any) => p.userId).filter(Boolean))];
       const usersById = stores.users.getByIds
         ? await stores.users.getByIds(userIds)
@@ -56,17 +63,22 @@ export default function createProfilesRoutes(deps: any) {
       for (const members of membersByCrew.values()) {
         for (const m of members) crewUserIds.add(m.userId);
       }
-      const pickCounts: Record<string, number> = {};
-      for (const profile of rawProfiles) {
-        if (profile.userId === req.user.userId) continue;
-        for (const setId of Object.keys(profile.picks || {})) pickCounts[setId] = (pickCounts[setId] || 0) + 1;
+      let pickCounts: Record<string, number> = {};
+      if (page) {
+        pickCounts = await stores.profiles.pickCountsByFestival(festivalId, req.user.userId);
+      } else {
+        for (const profile of rawProfiles) {
+          if (profile.userId === req.user.userId) continue;
+          for (const setId of Object.keys(profile.picks || {})) pickCounts[setId] = (pickCounts[setId] || 0) + 1;
+        }
       }
       const profiles = rawProfiles.map((profile: any) => {
         const visible = profile.userId === req.user.userId || crewUserIds.has(profile.userId);
         return serializeProfileForViewer(visible ? profile : { ...profile, picks: {} }, req.user.userId, usersById.get(profile.userId));
       });
       // Support paginated response when params present
-      if (req.query.cursor || req.query.limit) {
+      if (page) return sendSuccess(res, profiles, { pagination: page.pagination, pickCounts });
+      if (paginated) {
         const { limit, cursor } = req.validatedQuery;
         const { items, pagination } = paginateArray(profiles, { limit, cursor });
         return sendSuccess(res, items, { pagination, pickCounts });

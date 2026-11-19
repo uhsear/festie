@@ -60,6 +60,11 @@ export const RETRYABLE_CODES: Set<string> = new Set([
   ErrorCodes.VERSION_MISMATCH,
 ]);
 
+// Envelope rule: every JSON API route answers through sendSuccess and sendError.
+// A route may bypass the envelope only when a non-API client fixes the body format:
+// a platform file (apple-app-site-association, assetlinks.json), Prometheus text,
+// an iCalendar feed, or an HTML or image page. Such a route sends its own
+// Content-Type. Say so in a comment at the bypass, and say how its errors are sent.
 export function sendSuccess<T = unknown>(
   res: Response,
   data: T,

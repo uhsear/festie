@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { Modal, View, Text, TextInput, TouchableOpacity, Pressable, ScrollView, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
+import DialogShell from '../DialogShell';
 import {
   HEX_RE,
   isValidDate,
@@ -158,60 +159,49 @@ export function ModalSelect({
       </TouchableOpacity>
       {hint ? <Text style={styles.hint}>{hint}</Text> : null}
 
-      <Modal
-        visible={open}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setOpen(false)}
-        statusBarTranslucent
-      >
-        <View style={styles.scrim}>
-          <Pressable style={styles.backdrop} onPress={() => setOpen(false)} accessible={false} />
-          <View style={styles.sheet} accessibilityViewIsModal>
-            <Text style={styles.sheetTitle} accessibilityRole="header">
-              {label}
-            </Text>
-            {searchable ? (
-              <TextInput
-                style={styles.input}
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Search"
-                placeholderTextColor={t.colors.text.placeholder}
-                autoCapitalize="none"
-                autoCorrect={false}
-                accessibilityLabel={`Search ${label}`}
-              />
-            ) : null}
-            <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              {visibleOptions.map((opt) => {
-                const isActive = opt.value === value;
-                return (
-                  <TouchableOpacity
-                    key={opt.value}
-                    style={styles.optionRow}
-                    onPress={() => {
-                      onSelect(opt.value);
-                      setOpen(false);
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel={opt.label}
-                    accessibilityState={{ selected: isActive }}
-                  >
-                    <Text style={[styles.optionLabel, isActive && styles.optionLabelActive]} numberOfLines={1}>
-                      {opt.label}
-                    </Text>
-                    {isActive ? (
-                      <Ionicons name="checkmark" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                    ) : null}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
+      <DialogShell visible={open} onClose={() => setOpen(false)} cardStyle={styles.sheet}>
+        <Text style={styles.sheetTitle} accessibilityRole="header">
+          {label}
+        </Text>
+        {searchable ? (
+          <TextInput
+            style={styles.input}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search"
+            placeholderTextColor={t.colors.text.placeholder}
+            autoCapitalize="none"
+            autoCorrect={false}
+            accessibilityLabel={`Search ${label}`}
+          />
+        ) : null}
+        <ScrollView style={styles.sheetList} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+          {visibleOptions.map((opt) => {
+            const isActive = opt.value === value;
+            return (
+              <TouchableOpacity
+                key={opt.value}
+                style={styles.optionRow}
+                onPress={() => {
+                  onSelect(opt.value);
+                  setOpen(false);
+                }}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityLabel={opt.label}
+                accessibilityState={{ selected: isActive }}
+              >
+                <Text style={[styles.optionLabel, isActive && styles.optionLabelActive]} numberOfLines={1}>
+                  {opt.label}
+                </Text>
+                {isActive ? (
+                  <Ionicons name="checkmark" size={t.iconSize.md} color={t.colors.accent.aqua} />
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      </DialogShell>
     </View>
   );
 }
@@ -550,20 +540,6 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('body'),
     color: t.colors.text.placeholder,
     flex: 1,
-  },
-  scrim: {
-    flex: 1,
-    backgroundColor: t.colors.shade[10],
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: t.spacing[5],
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
   },
   sheet: {
     width: '100%',

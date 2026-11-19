@@ -24,6 +24,12 @@ export function relativeLuminance(r: number, g: number, b: number): number {
   return 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
 }
 
+/** WCAG contrast ratio (1-21) between two sRGB colours (channels 0–255). */
+export function contrastRatioRgb(a: [number, number, number], b: [number, number, number]): number {
+  const [la, lb] = [relativeLuminance(...a), relativeLuminance(...b)];
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
 /** Parse #rgb / #rrggbb (with or without leading #) -> [r,g,b] or null. */
 export function parseHex(hex: string): [number, number, number] | null {
   const m = /^#?([0-9a-f]{3,8})$/i.exec(hex);

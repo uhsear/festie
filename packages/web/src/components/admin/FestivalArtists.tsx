@@ -12,6 +12,7 @@ import type { AdminArtistRow } from '@festie/shared/services';
 import { isSafeExternalUrl, platformLabel } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { INPUT_CLASS } from './adminStyles';
 import ArtistMerge from './ArtistMerge';
 import SpotifyCandidates from './SpotifyCandidates';
 
@@ -30,8 +31,6 @@ interface Draft {
   removed: string[];
 }
 
-const INPUT_CLASS =
-  'w-full min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder:text-text-muted text-sm';
 const emptyDraft = (artist: AdminArtistRow): Draft => ({ name: artist.name, addLink: '', label: artist.label, removed: [] });
 const hasChanges = (artist: AdminArtistRow, draft: Draft) =>
   draft.addLink.trim() !== '' ||

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '../test-utils';
 
 const search = { from: 'tok123' as string | undefined };
 vi.mock('@tanstack/react-router', () => ({
@@ -57,12 +57,7 @@ const payload = {
 };
 
 function renderView() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <FriendPicksView />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<FriendPicksView />);
 }
 
 beforeEach(() => {
