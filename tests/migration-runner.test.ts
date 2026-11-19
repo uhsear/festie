@@ -116,6 +116,38 @@ describe('runPostgresMigrations against Postgres', { skip }, () => {
     assert.deepEqual(after.rows, before.rows);
   });
 
+  test('backfills a missing checksum, then refuses an edited ledger row', async () => {
+    const first = discoverMigrationsOnDisk()[0] as any;
+    const sum = (await pool.query('SELECT checksum FROM schema_migrations WHERE version = $1', [first.version])).rows[0]
+      .checksum;
+    assert.match(sum, /^[0-9a-f]{64}$/);
+    await pool.query('UPDATE schema_migrations SET checksum = NULL WHERE version = $1', [first.version]);
+    __resetMigrationCacheForTests();
+    await runPostgresMigrations(pool);
+    const after = await pool.query('SELECT checksum FROM schema_migrations WHERE version = $1', [first.version]);
+    assert.equal(after.rows[0].checksum, sum);
+    await pool.query('UPDATE schema_migrations SET checksum = $2 WHERE version = $1', [first.version, 'deadbeef']);
+    __resetMigrationCacheForTests();
+    await assert.rejects(runPostgresMigrations(pool), /edited after it was applied/);
+    await pool.query('UPDATE schema_migrations SET checksum = $2 WHERE version = $1', [first.version, sum]);
+  });
+
+  test('refuses an unapplied migration numbered below the newest applied one', async () => {
+    const second = discoverMigrationsOnDisk()[1] as any;
+    const row = (await pool.query('SELECT * FROM schema_migrations WHERE version = $1', [second.version])).rows[0];
+    await pool.query('DELETE FROM schema_migrations WHERE version = $1', [second.version]);
+    __resetMigrationCacheForTests();
+    await assert.rejects(runPostgresMigrations(pool), /numbered below the newest applied version/);
+    await pool.query('INSERT INTO schema_migrations (version, name, applied_at, checksum) VALUES ($1, $2, $3, $4)', [
+      row.version,
+      row.name,
+      row.applied_at,
+      row.checksum,
+    ]);
+    __resetMigrationCacheForTests();
+    await runPostgresMigrations(pool);
+  });
+
   test('the process-wide flag short-circuits later calls', async () => {
     const result = await runPostgresMigrations(pool);
     assert.deepEqual(result, { applied: [], current: 0, gap: [] });
