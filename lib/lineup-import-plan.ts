@@ -30,7 +30,7 @@ import { ARTIST_LINK_LABELS, detectPlatform, normalizeArtistLink, type ArtistLin
 import { MAX_LINEUP_ENTRIES, lineupEntryKey, lineupFoldKey, lineupNameKey, todayInZone } from './lineup';
 
 type ErrorField = 'artist' | 'day' | 'date' | 'stage' | 'startTime' | 'endTime' | 'link' | 'row';
-export type LineupImportRowStatus = 'new' | 'changed' | 'unchanged' | 'error';
+type LineupImportRowStatus = 'new' | 'changed' | 'unchanged' | 'error';
 
 /** One live artist row from the artist repository, as the import needs it. */
 export interface ArtistRef {
@@ -58,14 +58,14 @@ export function withLockedArtists(lookup: ArtistLookup, locked: Map<string, Arti
   };
 }
 
-export interface ArtistCandidate {
+interface ArtistCandidate {
   id: string;
   label: string;
   hint: string;
 }
 
 /** What the import decided for one artist name of a row. */
-export interface ArtistResolution {
+interface ArtistResolution {
   name: string;
   outcome: 'existing' | 'needs_choice' | 'did_you_mean' | 'new';
   artistId?: string;
@@ -73,7 +73,7 @@ export interface ArtistResolution {
   suggestion?: string;
 }
 
-export interface LineupImportPlanRow {
+interface LineupImportPlanRow {
   row: number;
   status: LineupImportRowStatus;
   /** 'announced' rows add to or update the announced lineup, not the schedule. */
@@ -120,7 +120,7 @@ export interface LineupImportPlan {
   days: string[];
 }
 
-export interface ArtistEntry {
+interface ArtistEntry {
   name: string;
   links: Record<string, string>;
   id?: string;
@@ -128,7 +128,7 @@ export interface ArtistEntry {
 }
 
 /** One billing line of festivals.lineup. */
-export interface LineupEntryValue {
+interface LineupEntryValue {
   id: string;
   artists: ArtistEntry[];
   displayName: string | null;
