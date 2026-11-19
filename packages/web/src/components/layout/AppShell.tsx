@@ -13,7 +13,7 @@ import RouteAnnouncer from './RouteAnnouncer';
 import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
-import IOSInstallSheet from '../features/IOSInstallSheet';
+import IOSInstallDrawer from '../features/IOSInstallDrawer';
 import NowNextStrip from '../features/NowNextStrip';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
@@ -23,6 +23,7 @@ import Onboarding from '../features/Onboarding';
 import JoinCrewSheet from '../crew/JoinCrewSheet';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { useIOSInstall } from '../../hooks/useIOSInstall';
 import { useInboxRefresh } from '../../hooks/useInboxRefresh';
 import { usePushLanding } from '../../hooks/usePushLanding';
 import { useScrollReset } from '../../hooks/useScrollReset';
@@ -93,6 +94,8 @@ export default function AppShell() {
   const socket = realtime?.socket ?? null;
   useOffline();
   usePushNotifications();
+  // Gated to a return visit (second session), 10s + 1 interaction, and a 30-day cooldown.
+  const iosInstall = useIOSInstall();
   useInboxRefresh();
   usePushLanding();
   useOfflineQueueBridge();
@@ -165,7 +168,7 @@ export default function AppShell() {
 
         <RouteAnnouncer />
         <UpdatePrompt />
-        <IOSInstallSheet />
+        <IOSInstallDrawer open={iosInstall.shouldShow} onClose={iosInstall.dismiss} />
         {onboardingRoutes.includes(location.pathname) && <Onboarding suspended={!!pendingJoinCode} />}
         {joinCrewSheet}
         <Header />
