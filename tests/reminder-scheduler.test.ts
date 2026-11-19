@@ -542,7 +542,7 @@ describe('reminder-scheduler: must-see reminders and set links', () => {
       if (sql.includes('festival_sets')) {
         return { rows: [{ id: 'set-1', day_index: 0, artist: 'DJ Alpha', artists: null, stage_id: 'stage-1', startTime, endTime: '23:00' }] };
       }
-      if (sql.includes('festival_profiles')) return { rows: [profileRow] };
+      if (sql.includes('festival_profiles')) return { rows: [profileRow].flat() };
       return { rows: [] };
     });
     const notifyFn = mock.fn(async () => ({ sent: 1 }));
@@ -561,6 +561,16 @@ describe('reminder-scheduler: must-see reminders and set links', () => {
   it('lets an explicit reminder win over the must-see default', async () => {
     const calls = await runTick({ id: 'fp-1', userId: 'u1', remindersJson: { 'set-1': 5 }, mustSeeLead: 15, mustSetIds: ['set-1'] });
     assert.equal(calls.length, 0, '5-minute lead is not due yet; the 15-minute default must not fire');
+  });
+
+  it('skips a profile with malformed mustSetIds and still serves later profiles', async () => {
+    // One bad row per send worker, so a rejection would leave no worker to reach the good profile.
+    const bad = Array.from({ length: 10 }, (_, i) => ({ id: `fp-bad-${i}`, userId: `bad-${i}`, remindersJson: {}, mustSeeLead: 15, mustSetIds: '{not json' }));
+    const calls = await runTick([
+      ...bad,
+      { id: 'fp-ok', userId: 'u2', remindersJson: {}, mustSeeLead: 15, mustSetIds: ['set-1'] },
+    ]);
+    assert.deepEqual(calls.map((c) => c.userId), ['u2']);
   });
 
   it('sends a deepLink on the public origin set route', async () => {
