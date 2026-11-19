@@ -9,7 +9,7 @@ import {
 } from '@festie/shared/services/admin';
 import { filterAdminCrews, removeMemberCopy } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
-import { useReauthPrompt } from '../../lib/useReauthPrompt';
+import { useReauthPrompt } from '../../hooks/useReauthPrompt';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import UserPickerDialog from './UserPickerDialog';

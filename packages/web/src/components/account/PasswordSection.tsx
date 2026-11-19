@@ -5,7 +5,7 @@ import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { isPasswordIncorrect, mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
-import { useIdentities } from '../../lib/useIdentities';
+import { useIdentities } from '../../hooks/useIdentities';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { Lock } from 'lucide-react';

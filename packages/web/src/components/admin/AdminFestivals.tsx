@@ -30,9 +30,9 @@ import {
   toggleSelection,
   type ScheduleNotice,
 } from '@festie/shared/utils';
-import { useReauthPrompt } from '../../lib/useReauthPrompt';
+import { useReauthPrompt } from '../../hooks/useReauthPrompt';
 import { useToast } from '../../lib/toastContext';
-import { useUnsavedChangesGuard } from '../../lib/useUnsavedChangesGuard';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import LineupImport from './LineupImport';
 import FestivalEditForm, { Festival as FormFestival } from './FestivalEditForm';
 import FestivalMapEditor from './FestivalMapEditor';

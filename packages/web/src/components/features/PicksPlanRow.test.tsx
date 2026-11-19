@@ -29,7 +29,7 @@ vi.mock('@festie/shared/hooks', () => ({
   useSetMove: () => moveMock.value,
 }));
 
-vi.mock('../../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
+vi.mock('../../hooks/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 const mockToast = vi.fn();
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: mockToast }) }));
 vi.mock('../ui/StageBadge', () => ({

@@ -16,7 +16,7 @@ import {
 import StageBadge from '../ui/StageBadge';
 import PriorityIcon from '../ui/PriorityIcon';
 import { useToast } from '../../lib/toastContext';
-import { useUndoNotifier } from '../../lib/useUndoNotifier';
+import { useUndoNotifier } from '../../hooks/useUndoNotifier';
 import { cn } from '@/lib/utils';
 
 interface PicksPlanRowProps {

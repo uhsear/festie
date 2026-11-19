@@ -18,7 +18,7 @@ vi.mock('@festie/shared/services/oauth', () => ({
 }));
 
 const mockAsk = vi.fn();
-vi.mock('../../lib/useReauthPrompt', () => ({
+vi.mock('../../hooks/useReauthPrompt', () => ({
   useReauthPrompt: () => ({ ask: mockAsk, reauthDialog: null }),
 }));
 vi.mock('../auth/ProviderButtons', () => ({

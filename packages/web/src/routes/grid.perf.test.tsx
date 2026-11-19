@@ -16,7 +16,7 @@ vi.mock('@festie/shared/stores', () => ({
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
-vi.mock('../lib/useUndoNotifier', () => ({
+vi.mock('../hooks/useUndoNotifier', () => ({
   useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
 }));
 vi.mock('../lib/toastContext', () => ({

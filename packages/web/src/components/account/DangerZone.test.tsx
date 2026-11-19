@@ -44,11 +44,11 @@ vi.mock('@festie/shared/services/account', () => ({
 }));
 
 let mockHasPassword: boolean | undefined;
-vi.mock('../../lib/useIdentities', () => ({
+vi.mock('../../hooks/useIdentities', () => ({
   useIdentities: () => ({ data: mockHasPassword === undefined ? undefined : { hasPassword: mockHasPassword, identities: [] } }),
 }));
 const mockAsk = vi.fn();
-vi.mock('../../lib/useReauthPrompt', () => ({
+vi.mock('../../hooks/useReauthPrompt', () => ({
   useReauthPrompt: () => ({ ask: mockAsk, reauthDialog: null }),
 }));
 vi.mock('@festie/shared/services/admin', () => ({

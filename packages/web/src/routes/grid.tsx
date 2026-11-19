@@ -21,7 +21,7 @@ import {
 import RefreshableView from '../components/layout/RefreshableView';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import TimelineSkeleton from '../components/ui/skeletons/TimelineSkeleton';
-import TimelineGrid from '../features/TimelineGrid';
+import TimelineGrid from '../components/features/TimelineGrid';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
@@ -44,7 +44,7 @@ import { CalendarX, Music, Filter } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { cn } from '../lib/utils';
-import { useUndoNotifier } from '../lib/useUndoNotifier';
+import { useUndoNotifier } from '../hooks/useUndoNotifier';
 import { useToast } from '../lib/toastContext';
 
 const JumpToNowIcon = CONCEPT_ICON.jumpToNow;

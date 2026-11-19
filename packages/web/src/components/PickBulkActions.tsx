@@ -7,7 +7,7 @@ import { buildBulkPickGroups, BULK_SCOPE_LABEL } from '@festie/shared/utils';
 import Button from './ui/Button';
 import Badge from './ui/Badge';
 import PriorityIcon from './ui/PriorityIcon';
-import { useUndoNotifier } from '../lib/useUndoNotifier';
+import { useUndoNotifier } from '../hooks/useUndoNotifier';
 import { Layers, Sparkles, ChevronDown } from 'lucide-react';
 
 // M2 bulk pick helpers (before-festival planning). Operates ENTIRELY on the

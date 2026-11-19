@@ -33,7 +33,7 @@ import {
 } from '@festie/shared/utils';
 import type { AmenityType, Festival, FestivalMapConfig, Stage } from '@festie/shared/types';
 import { useToast } from '../../lib/toastContext';
-import { useUnsavedChangesGuard } from '../../lib/useUnsavedChangesGuard';
+import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { cn } from '../../lib/utils';
 import Button from '../ui/Button';
 

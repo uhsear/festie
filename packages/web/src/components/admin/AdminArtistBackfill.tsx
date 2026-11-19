@@ -10,7 +10,7 @@ import {
   type BackfillFinding,
   type BackfillReportInput,
 } from '@festie/shared/utils';
-import { useReauthPrompt } from '../../lib/useReauthPrompt';
+import { useReauthPrompt } from '../../hooks/useReauthPrompt';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 

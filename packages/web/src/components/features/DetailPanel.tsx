@@ -27,7 +27,7 @@ import { useSetStatus } from '../../hooks/useSetStatus';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { useReturnFocus } from '../../hooks/useReturnFocus';
 import { useToast } from '../../lib/toastContext';
-import { useUndoNotifier } from '../../lib/useUndoNotifier';
+import { useUndoNotifier } from '../../hooks/useUndoNotifier';
 import { MapPin, Share2 } from 'lucide-react';
 import Button from '../ui/Button';
 import { CHIP_TINT_ALPHA, inactiveChipTextColor } from '../ui/StageBadge';

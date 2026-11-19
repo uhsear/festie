@@ -12,7 +12,7 @@ import { ApiClientError } from '@festie/shared/services/api';
 import { withReauth } from '@festie/shared/services/admin';
 import type { AdminArtistRow, ArtistMergePick, ArtistUse } from '@festie/shared/services';
 import { platformLabel } from '@festie/shared/utils';
-import { useReauthPrompt } from '../../lib/useReauthPrompt';
+import { useReauthPrompt } from '../../hooks/useReauthPrompt';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import { INPUT_CLASS } from './adminStyles';

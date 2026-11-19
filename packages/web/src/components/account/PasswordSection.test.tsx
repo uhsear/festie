@@ -20,7 +20,7 @@ vi.mock('../../lib/toastContext', () => ({
 }));
 
 let mockHasPassword: boolean | undefined;
-vi.mock('../../lib/useIdentities', () => ({
+vi.mock('../../hooks/useIdentities', () => ({
   useIdentities: () => ({ data: mockHasPassword === undefined ? undefined : { hasPassword: mockHasPassword, identities: [] } }),
 }));
 

@@ -54,7 +54,7 @@ vi.mock('@/lib/toastContext', () => ({
   useToast: vi.fn(() => ({ toast: vi.fn() })),
 }));
 
-vi.mock('@/lib/useUndoNotifier', () => ({
+vi.mock('@/hooks/useUndoNotifier', () => ({
   useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
 }));
 
