@@ -13,6 +13,7 @@ import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
+import { registerUser as registerSharedUser } from './_integration-helpers';
 
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
@@ -59,19 +60,9 @@ async function startServer(overrides: any = {}) {
 }
 
 async function registerUser(server: any, username: any, password = DEFAULT_PASSWORD, email?: any) {
-  const body: any = { username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` };
-  if (email) body.email = email;
-  const res = await server.request.post('/api/v1/auth/register').set(TRUSTED_MUTATION_HEADER, '1').send(body);
-  assert.ok(res.status === 201 || res.status === 200, `register failed: ${res.status} ${JSON.stringify(res.body)}`);
-  // Capture id for cleanup
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    const { rows } = await pool.query('SELECT id FROM users WHERE username = $1 LIMIT 1', [username]);
-    if (rows.length) createdUserIds.push(rows[0].id);
-  } finally {
-    await pool.end();
-  }
-  return res.body.data;
+  const data = await registerSharedUser(server, username, password, email ? { email } : {});
+  createdUserIds.push(data.user.id);
+  return data;
 }
 
 const servers: any[] = [];
