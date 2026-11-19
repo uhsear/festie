@@ -3,10 +3,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, mock, after } from 'node:test';
+import net from 'node:net';
 import express from 'express';
 import request from 'supertest';
 
-import { createMetrics, metricsHandler, recordJobRun } from '../lib/metrics.js';
+import { createMetrics, metricsHandler, recordJobRun, startMetricsListener } from '../lib/metrics.js';
 import { createRateLimiters } from '../lib/rate-limiting.js';
 import { createBackgroundTasks } from '../lib/shutdown.js';
 
@@ -125,5 +126,25 @@ describe('metrics: no dead metric', () => {
       (n) => !ALLOWED_UNUSED.has(n) && !new RegExp(`\\b${n}\\??\\.(?:inc|observe|set|startTimer)\\(`).test(code),
     );
     assert.deepEqual(dead, [], `registered metrics with no .inc/.observe/.set/.startTimer call site: ${dead.join(', ')}`);
+  });
+});
+
+describe('metrics: startMetricsListener port clash', () => {
+  it('survives EADDRINUSE without throwing and leaves the other holder in place', async () => {
+    const holder = net.createServer();
+    await new Promise<void>((resolve) => holder.listen(0, '127.0.0.1', resolve));
+    const { port } = holder.address() as net.AddressInfo;
+    const errors: unknown[] = [];
+    const onUncaught = (err: unknown) => errors.push(err);
+    process.on('uncaughtException', onUncaught);
+    try {
+      const stop = startMetricsListener(metrics, { basePort: port, workerId: 0 });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.deepEqual(errors, []);
+      await stop();
+    } finally {
+      process.off('uncaughtException', onUncaught);
+      await new Promise((resolve) => holder.close(resolve));
+    }
   });
 });
