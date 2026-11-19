@@ -54,8 +54,6 @@ export const meetingPointsQuery = (crewId: string) => ({
   },
 });
 
-export const expensesKey = (crewId: string) => ['expenses', crewId] as const;
-
 /** Everything an expense write changes: the list, the settle-up plan and the balances. */
 export function invalidateCrewMoney(qc: QueryClient, crewId: string): void {
   for (const root of ['expenses', 'settlement-plan', 'expense-balances']) {
