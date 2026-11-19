@@ -375,6 +375,18 @@ export function extractRealId(serverResponse: unknown): string | null {
   return null;
 }
 
+/** Replace every occurrence of the temp id in a string, or in any string inside a JSON body. */
+function remapTempId<T>(value: T, tempId: string, realId: string): T {
+  if (typeof value === 'string') return value.split(tempId).join(realId) as T;
+  if (Array.isArray(value)) return value.map((v) => remapTempId(v, tempId, realId)) as T;
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, remapTempId(v, tempId, realId)]),
+    ) as T;
+  }
+  return value;
+}
+
 let _draining = false;
 
 /**
@@ -395,7 +407,9 @@ export async function drainQueue(): Promise<void> {
   _draining = true;
   try {
     const snapshot = (await withQueueLock(() => readQueue())).sort((a, b) => a.createdAt - b.createdAt);
-    for (const m of snapshot) {
+    for (const queued of snapshot) {
+      // Re-read: an earlier entry's temp-id remap may have rewritten this one since the snapshot.
+      const m = (await withQueueLock(() => readQueue())).find((q) => q.clientId === queued.clientId) ?? queued;
       if ((m.notBefore ?? 0) > Date.now()) continue;
       try {
         const serverResponse = await replay(m);
@@ -421,9 +435,11 @@ export async function drainQueue(): Promise<void> {
               const remaining = await readQueue();
               let rewritten = false;
               const patched = remaining.map((q) => {
-                if (q.url.includes(m.clientId)) {
+                const url = remapTempId(q.url, m.clientId, realId);
+                const body = remapTempId(q.body, m.clientId, realId);
+                if (url !== q.url || JSON.stringify(body) !== JSON.stringify(q.body)) {
                   rewritten = true;
-                  return { ...q, url: q.url.replace(m.clientId, realId) };
+                  return { ...q, url, body };
                 }
                 return q;
               });

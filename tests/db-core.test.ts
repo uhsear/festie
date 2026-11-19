@@ -536,7 +536,6 @@ describe('createStores', () => {
       'loginFailures',
       'metricsRollups',
       'counts',
-      'createCleanupTimer',
     ];
 
     for (const key of expectedKeys) {
@@ -564,39 +563,6 @@ describe('createStores', () => {
     assert.equal(typeof result.userSessions, 'number');
   });
 
-  it('createCleanupTimer returns an async function', () => {
-    const pool = mockPool();
-    const stores = createStores(pool);
-    const cleanup = stores.createCleanupTimer();
-    assert.equal(typeof cleanup, 'function');
-  });
-
-  it('createCleanupTimer runs without error when leader', async () => {
-    const pool = mockPool();
-    const stores = createStores(pool);
-    const cleanup = stores.createCleanupTimer();
-    // Cleanup calls deleteExpired, deleteExpiredUserSessions, etc.
-    // These will call pool.query which returns empty results — should not throw
-    await assert.doesNotReject(() => cleanup());
-  });
-
-  it('createCleanupTimer returns no-op when not leader', async () => {
-    const saved = process.env.NODE_APP_INSTANCE;
-    process.env.NODE_APP_INSTANCE = '2';
-    try {
-      const pool = mockPool();
-      const stores = createStores(pool);
-      const cleanup = stores.createCleanupTimer();
-      // Should be a no-op — no queries executed
-      const queriesBefore = pool.queries.length;
-      await cleanup();
-      assert.equal(pool.queries.length, queriesBefore);
-    } finally {
-      if (saved !== undefined) process.env.NODE_APP_INSTANCE = saved;
-      else delete process.env.NODE_APP_INSTANCE;
-    }
-  });
-
   it('stores have object-typed values for all data stores', () => {
     const pool = mockPool();
     const stores = createStores(pool);
@@ -613,74 +579,6 @@ describe('createStores', () => {
     for (const key of objectStores) {
       assert.equal(typeof (stores as any)[key], 'object', `${key} should be an object`);
       assert.notEqual((stores as any)[key], null, `${key} should not be null`);
-    }
-  });
-});
-
-// ═══════════════════════════════════════════════════════════════════════════
-// index.js — isCleanupLeader via createCleanupTimer behavior
-// ═══════════════════════════════════════════════════════════════════════════
-
-describe('isCleanupLeader (via createCleanupTimer)', () => {
-  it('treats unset NODE_APP_INSTANCE as leader', async () => {
-    const saved = process.env.NODE_APP_INSTANCE;
-    delete process.env.NODE_APP_INSTANCE;
-    try {
-      const pool = mockPool();
-      const stores = createStores(pool);
-      const cleanup = stores.createCleanupTimer();
-      // Leader path runs real cleanup (queries the db)
-      await cleanup();
-      assert.ok(pool.queries.length > 0, 'leader should issue queries');
-    } finally {
-      if (saved !== undefined) process.env.NODE_APP_INSTANCE = saved;
-      else delete process.env.NODE_APP_INSTANCE;
-    }
-  });
-
-  it('treats instance 0 as leader', async () => {
-    const saved = process.env.NODE_APP_INSTANCE;
-    process.env.NODE_APP_INSTANCE = '0';
-    try {
-      const pool = mockPool();
-      const stores = createStores(pool);
-      const cleanup = stores.createCleanupTimer();
-      await cleanup();
-      assert.ok(pool.queries.length > 0, 'instance 0 should issue queries');
-    } finally {
-      if (saved !== undefined) process.env.NODE_APP_INSTANCE = saved;
-      else delete process.env.NODE_APP_INSTANCE;
-    }
-  });
-
-  it('treats instance 1 as follower (no-op)', async () => {
-    const saved = process.env.NODE_APP_INSTANCE;
-    process.env.NODE_APP_INSTANCE = '1';
-    try {
-      const pool = mockPool();
-      const stores = createStores(pool);
-      const queriesBefore = pool.queries.length;
-      const cleanup = stores.createCleanupTimer();
-      await cleanup();
-      assert.equal(pool.queries.length, queriesBefore, 'follower should not issue queries');
-    } finally {
-      if (saved !== undefined) process.env.NODE_APP_INSTANCE = saved;
-      else delete process.env.NODE_APP_INSTANCE;
-    }
-  });
-
-  it('treats empty string NODE_APP_INSTANCE as leader', async () => {
-    const saved = process.env.NODE_APP_INSTANCE;
-    process.env.NODE_APP_INSTANCE = '';
-    try {
-      const pool = mockPool();
-      const stores = createStores(pool);
-      const cleanup = stores.createCleanupTimer();
-      await cleanup();
-      assert.ok(pool.queries.length > 0, 'empty string should be treated as leader');
-    } finally {
-      if (saved !== undefined) process.env.NODE_APP_INSTANCE = saved;
-      else delete process.env.NODE_APP_INSTANCE;
     }
   });
 });

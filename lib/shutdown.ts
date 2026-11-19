@@ -161,8 +161,9 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         const { rowCount: refreshPurged } = await stores.pool.query(
           'DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked = TRUE',
         );
-        if (resetPurged > 0 || verifyPurged > 0 || refreshPurged > 0) {
-          log.info('token cleanup', { resetPurged, verifyPurged, refreshPurged });
+        const deviceTokensPurged = await stores.deviceTokens.deleteExpired();
+        if (resetPurged > 0 || verifyPurged > 0 || refreshPurged > 0 || deviceTokensPurged > 0) {
+          log.info('token cleanup', { resetPurged, verifyPurged, refreshPurged, deviceTokensPurged });
         }
         recordJobRun('token_cleanup', true);
       } catch (err: any) {
