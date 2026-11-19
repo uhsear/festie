@@ -1,6 +1,7 @@
 export * from './api';
 export * from './socket';
 export * from './offlineQueue';
+export * from './offlineQueueRegistry';
 export * from './admin';
 export * from './sos';
 export * from './meetingPoints';

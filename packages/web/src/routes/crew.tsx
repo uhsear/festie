@@ -44,6 +44,7 @@ import {
   leaveCrewConfirmMessage,
   parseInviteCode,
   removeMemberConfirmMessage,
+  isCrewOwner,
 } from '@festie/shared/utils';
 import type { Crew, CrewMember } from '@festie/shared/types';
 import type { CrewTabKey } from '@festie/shared/utils';
@@ -262,8 +263,7 @@ function CrewViewInner() {
 
   const crew = activeCrew as CrewWithHomeBase | null;
   const members = crew?.members || [];
-  const meMember = members.find((m) => m.userId === user.id);
-  const isOwner = meMember?.role === 'owner' || crew?.createdBy === user.id || crew?.owner === user.id;
+  const isOwner = isCrewOwner(crew, members, user.id);
 
   return (
     <div className="crew-page space-y-4 pb-6 max-w-[600px] mx-auto min-w-0 w-full">
