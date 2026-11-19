@@ -19,6 +19,10 @@ module.exports = [
       'react-hooks/purity': 'warn',
       'react-hooks/immutability': 'warn',
       'react-hooks/preserve-manual-memoization': 'warn',
+      // mobile-import-guard: a package that only @festie/shared depends on
+      // (e.g. socket.io-client) resolves locally via hoisting but fails CI's
+      // mobile typecheck with TS2307. Import it through @festie/shared instead.
+      'import/no-extraneous-dependencies': ['error', { devDependencies: true }],
     },
   },
   {

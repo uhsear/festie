@@ -88,7 +88,14 @@ export interface Stores {
   crews: {
     getById(crewId: string): Promise<Crew | null>;
     getMember(crewId: string, userId: string): Promise<{ role?: string; [k: string]: unknown } | null>;
-    updateHomeBase(crewId: string, args: { location?: string | null; time?: string | null }): Promise<unknown>;
+    updateHomeBase(
+      crewId: string,
+      args: {
+        location?: string | null;
+        time?: string | null;
+        planB?: string | null;
+      },
+    ): Promise<unknown>;
     meetingPoints: {
       listByCrew(crewId: string): Promise<unknown[]>;
       countByCrew(crewId: string): Promise<number>;

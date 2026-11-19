@@ -527,6 +527,8 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       // Extra fest-1 sets: a NULL `artists` and a padded lower-case name.
       await insertSet(id('zed-1'), 'fest-1', 'Zed', null, 20);
       await insertSet(id('omega-1'), 'fest-1', ' omega ', '[]', 21);
+      // Mix has no artist id here but has one at fest2: seenMost must still join them.
+      await insertSet(id('mix-1'), 'fest-1', 'Mix', '[{"name":"Mix"}]', 22);
 
       await pool.query(
         'INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ($1, $2, $3, NOW(), NOW())',
@@ -546,6 +548,10 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       await insertSet(id('beta'), fest2, 'Beta', '[]', 3);
       await insertSet(id('delta'), fest2, 'Delta', '[]', 4);
       await insertSet(id('omega'), fest2, 'Omega', null, 5);
+      await insertSet(id('mix-2'), fest2, 'Mix', '[{"id":"art-mix","name":"Mix"}]', 6);
+      // Same artist id under two display names: topArtists must merge them.
+      await insertSet(id('x1'), fest2, 'Xan', '[{"id":"art-x","name":"Xan"}]', 7);
+      await insertSet(id('x2'), fest2, 'X.A.N.', '[{"id":"art-x","name":"X.A.N."}]', 8);
     } catch (err) {
       await pool.end();
       throw err;
@@ -575,10 +581,15 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       // fest2: Alpha twice (solo rated + B2B caught), Gamma, Beta, Delta, Omega.
       await rate(id('alpha'), 3);
       await markCaught(server, user.token, id('b2b'), true);
+      await rate(id('b2b'), 5);
       await markCaught(server, user.token, id('gamma'), true);
       await rate(id('beta'), 2);
       await markCaught(server, user.token, id('delta'), true);
       await markCaught(server, user.token, id('omega'), true);
+      await markCaught(server, user.token, id('mix-1'), true);
+      await markCaught(server, user.token, id('mix-2'), true);
+      await rate(id('x1'), 4);
+      await rate(id('x2'), 2);
 
       // Another user's marks never count for this user.
       await markCaught(server, other.token, 'set-b', true);
@@ -594,9 +605,22 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       assert.ok(seenMost.every((row: any) => row.artist === row.artist.trim()));
       assert.deepEqual(
         seenMost.map((row: any) => row.artist.toLowerCase()).sort(),
-        ['alpha', 'gamma', 'omega', 'zed'],
+        ['alpha', 'gamma', 'mix', 'omega', 'zed'],
       );
       assert.ok(!seenMost.some((row: any) => row.artist === 'Alpha b2b Zed'));
+
+      // topArtists splits the b2b set per performer, like seenMost.
+      const lifetime = await server.request.get('/api/v1/ratings/lifetime').set('x-user-token', user.token).expect(200);
+      const top = lifetime.body.data.topArtists;
+      assert.ok(!top.some((row: any) => row.artist === 'Alpha b2b Zed'));
+      const zed = top.find((row: any) => row.artist === 'Zed');
+      assert.equal(zed.timesRated, 2);
+      assert.equal(zed.bestRating, 5);
+      assert.equal(top.find((row: any) => row.artist === 'Alpha').timesRated, 3);
+      const xan = top.filter((row: any) => ['Xan', 'X.A.N.'].includes(row.artist));
+      assert.equal(xan.length, 1);
+      assert.equal(xan[0].timesRated, 2);
+      assert.equal(xan[0].bestRating, 4);
 
       await pool.query('UPDATE festivals SET deleted_at = NOW() WHERE id = $1', [fest2]);
       const afterDelete = await getSeenMost();

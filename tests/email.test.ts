@@ -50,6 +50,21 @@ describe('email: sendEmail', () => {
     assert.equal(log.warn.mock.callCount(), 1);
   });
 
+  it('logs an error, not a warning, when RESEND_API_KEY is missing in production', async () => {
+    const log = createMockLog();
+    const result = await sendEmail({
+      to: 'user@example.com',
+      subject: 'Test',
+      html: '<p>Hi</p>',
+      text: 'Hi',
+      config: { RESEND_API_KEY: '', NODE_ENV: 'production' },
+      log,
+    });
+    assert.equal(result, false);
+    assert.equal(log.error.mock.callCount(), 1);
+    assert.equal(log.warn.mock.callCount(), 0);
+  });
+
   it('returns false when config has no RESEND_API_KEY key at all', async () => {
     const log = createMockLog();
     const result = await sendEmail({

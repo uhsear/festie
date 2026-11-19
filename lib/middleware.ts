@@ -415,9 +415,7 @@ function configureMiddleware(app: Application, ctx: any) {
 
   // ── Service worker (no-cache) ─────────────────────────────────────────
   // Serve the Workbox-generated SW from the React dist/ build.
-  // ponytail: config.WEB_DIST is the prod source (set by loadConfig); the || keeps
-  // partial/test configs from throwing on path.join(undefined).
-  const webDist = config.WEB_DIST || path.join(config.PUBLIC_DIR, '..', 'packages', 'web', 'dist');
+  const webDist = config.WEB_DIST;
   const _reactSwPath = path.join(webDist, 'sw.js');
   app.get('/sw.js', (req: any, res: any) => {
     setNoStore(res);

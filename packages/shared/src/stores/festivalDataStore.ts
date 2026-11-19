@@ -1191,6 +1191,13 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
   },
 });
 
+// Per-set union so a pick made before hydration keeps the persisted picks of that festival.
+function mergeByFestival<T>(persisted: Record<string, Record<string, T>> = {}, current: Record<string, Record<string, T>> = {}) {
+  const out = { ...persisted };
+  for (const [festivalId, entries] of Object.entries(current)) out[festivalId] = { ...persisted[festivalId], ...entries };
+  return out;
+}
+
 export const useFestivalDataStore = create<FestivalDataStore>()(
   persist(festivalDataStore, {
     name: 'festie-festival',
@@ -1236,7 +1243,7 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
     // persisted snapshot (null for a first-time guest) — bouncing the user
     // back to the picker. When the live state already has a selection that
     // the persisted blob doesn't match, keep the live selection.
-    // shortcut: merges per festival, not per set; a same-festival pick made before hydration replaces the persisted map for that festival
+    // shortcut: an unpick made before hydration is not carried over and the persisted entry returns, upgrade when picks track removals
     merge: (persisted, current) => {
       const p = (persisted ?? {}) as Partial<FestivalDataState>;
       if (current.currentFestivalId && p.currentFestivalId !== current.currentFestivalId) {
@@ -1256,15 +1263,15 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
         return {
           ...current,
           ...rest,
-          guestPicks: { ...(p.guestPicks ?? {}), ...current.guestPicks },
-          guestInterests: { ...(p.guestInterests ?? {}), ...current.guestInterests },
+          guestPicks: mergeByFestival(p.guestPicks, current.guestPicks),
+          guestInterests: mergeByFestival(p.guestInterests, current.guestInterests),
         };
       }
       return {
         ...current,
         ...p,
-        guestPicks: { ...(p.guestPicks ?? {}), ...current.guestPicks },
-        guestInterests: { ...(p.guestInterests ?? {}), ...current.guestInterests },
+        guestPicks: mergeByFestival(p.guestPicks, current.guestPicks),
+        guestInterests: mergeByFestival(p.guestInterests, current.guestInterests),
       };
     },
     // A cached festival renders before any fetch (offline, slow start): restore

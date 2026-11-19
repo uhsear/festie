@@ -31,9 +31,11 @@ export default function CreateCrewDialog({ open, onOpenChange }: CreateCrewDialo
     if (!open) return;
     setName('');
     setPicked(null);
-    if (festivals.length === 0) loadFestivals().catch(() => {});
-    // Reset only when the dialog opens.
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  useEffect(() => {
+    if (open && festivals.length === 0) loadFestivals().catch(() => {});
+  }, [open, festivals.length, loadFestivals]);
 
   const choices = useMemo(() => crewFestivalChoices(festivals, currentFestival?.id), [festivals, currentFestival?.id]);
   const chosen = choices.find((f) => f.id === picked) ?? choices[0];
