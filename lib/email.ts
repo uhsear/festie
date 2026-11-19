@@ -51,7 +51,7 @@ function _recordSend(to: any, subject: any) {
  * repeating the request. Opting out skips recording as well as checking, so an
  * exempt message neither suppresses nor is suppressed by anything else.
  */
-export async function sendEmail({ to, subject, html, text, headers, config, log, _client, dedupe = true }: any) {
+export async function sendEmail({ to, subject, html, text, headers, idempotencyKey, config, log, _client, dedupe = true }: any) {
   const apiKey = config.RESEND_API_KEY;
   if (!apiKey) {
     // A missing key in production means every user email is silently lost; surface it as an error.
@@ -66,7 +66,9 @@ export async function sendEmail({ to, subject, html, text, headers, config, log,
   const from = config.EMAIL_FROM || 'Festie <no-reply@festie.us>';
 
   try {
-    const result = await client.emails.send({ from, to: [to], subject, html, text, ...(headers ? { headers } : {}) });
+    // The key goes to Resend as the Idempotency-Key request header (SDK options), not as a mail header.
+    const message = { from, to: [to], subject, html, text, ...(headers ? { headers } : {}) };
+    const result = await client.emails.send(message, ...(idempotencyKey ? [{ idempotencyKey }] : []));
     if (result.error) {
       log.error('email:send-error', { error: result.error.message });
       return false;
@@ -400,7 +402,7 @@ const POLICY_NOTICE_LINE = 'This is a service notice about changes to the Festie
  * dedupe is off: the policy_notice_sends ledger is the idempotency guard, and the 5-minute
  * address+subject guard would report a suppressed send as delivered.
  */
-export async function sendPolicyNoticeEmail({ to, subject, text, html, config, log, _client }: any) {
+export async function sendPolicyNoticeEmail({ to, subject, text, html, idempotencyKey, config, log, _client }: any) {
   const bodyHtml =
     html ??
     text
@@ -412,6 +414,7 @@ export async function sendPolicyNoticeEmail({ to, subject, text, html, config, l
     subject,
     html: _wrapTemplate('Policy update', bodyHtml, POLICY_NOTICE_LINE),
     text: `${text}\n\n${POLICY_NOTICE_LINE}`,
+    idempotencyKey,
     config,
     log,
     _client,

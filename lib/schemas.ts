@@ -809,7 +809,8 @@ export const artistBackfillSchema = z.object({
 export const policyNoticeSchema = z
   .object({
     noticeId: z.string().regex(/^[a-z0-9][a-z0-9._-]{2,63}$/),
-    subject: z.string().trim().min(1).max(150),
+    // No CR or LF: the subject becomes a mail header, so a line break would inject headers.
+    subject: z.string().trim().min(1).max(150).regex(/^[^\r\n]+$/),
     text: z.string().trim().min(1).max(20000),
     html: z.string().trim().min(1).max(100000).optional(),
     mode: z.enum(['dry-run', 'send']),

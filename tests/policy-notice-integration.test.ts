@@ -13,7 +13,11 @@ const NOTICE = 'it-policy-2026';
 let app: ArtistServer;
 const ids: Record<string, string> = {};
 
-const wipe = () => withPool((pool) => pool.query(`DELETE FROM policy_notice_sends WHERE notice_id = $1`, [NOTICE]));
+const wipe = () =>
+  withPool(async (pool) => {
+    await pool.query(`DELETE FROM policy_notice_sends WHERE notice_id = $1`, [NOTICE]);
+    await pool.query(`DELETE FROM policy_notices WHERE notice_id = $1`, [NOTICE]);
+  });
 
 before(async () => {
   if (skip) return;
@@ -61,6 +65,21 @@ describe('policy_notice_sends migration', { skip }, () => {
     await withPool(async (pool) => {
       await assert.rejects(pool.query(`INSERT INTO policy_notice_sends (notice_id, user_id) VALUES ($1, $2)`, [NOTICE, ids['pn-sent']]), { code: '23505' });
       await assert.rejects(pool.query(`INSERT INTO policy_notice_sends (notice_id, user_id) VALUES ($1, 'no-such-user')`, [NOTICE]), { code: '23503' });
+    });
+  });
+});
+
+describe('policy_notices migration', { skip }, () => {
+  test('has the content-binding shape and keeps the first hash per notice', async () => {
+    await withPool(async (pool) => {
+      const { rows } = await pool.query(`SELECT column_name, is_nullable FROM information_schema.columns WHERE table_name = 'policy_notices' ORDER BY column_name`);
+      assert.deepEqual(rows.map((r) => r.column_name), ['content_hash', 'created_at', 'created_by', 'notice_id', 'subject']);
+      assert.equal(rows.find((r) => r.column_name === 'content_hash')?.is_nullable, 'NO');
+      const ins = `INSERT INTO policy_notices (notice_id, content_hash, subject, created_by) VALUES ($1, $2, 's', 'a') ON CONFLICT DO NOTHING`;
+      await pool.query(ins, [NOTICE, 'hash-one']);
+      await pool.query(ins, [NOTICE, 'hash-two']);
+      const pinned = await pool.query(`SELECT content_hash FROM policy_notices WHERE notice_id = $1`, [NOTICE]);
+      assert.deepEqual(pinned.rows, [{ content_hash: 'hash-one' }]);
     });
   });
 });

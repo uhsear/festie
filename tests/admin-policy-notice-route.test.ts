@@ -4,6 +4,7 @@
  * elsewhere; these stubs answer with the same statuses.
  */
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { describe, mock, test } from 'node:test';
 import express from 'express';
 import request from 'supertest';
@@ -15,7 +16,19 @@ import mountAdminPolicyNoticeRoutes from '../routes/admin-policy-notice.js';
 const pass = (_req: any, _res: any, next: any) => next();
 const BODY = { noticeId: 'policy-2026-11', subject: 'Policy update', text: 'We changed the policy.', mode: 'send' };
 
-function build(opts: { users?: Array<{ id: string; email: string }>; sent?: string[]; failFor?: string[] } = {}) {
+const hashOf = (b: { subject: string; text: string; html?: string }) => createHash('sha256').update(`${b.subject}\n${b.text}\n${b.html ?? ''}`).digest('hex');
+
+type Opts = {
+  users?: Array<{ id: string; email: string }>;
+  sent?: string[];
+  failFor?: string[];
+  otherNoticeRecent?: boolean;
+  pinnedHash?: string;
+  throwOnSendCall?: number;
+  blockSend?: boolean;
+};
+
+function build(opts: Opts = {}) {
   const users = opts.users ?? [
     { id: 'u1', email: 'a@example.test' },
     { id: 'u2', email: 'b@example.test' },
@@ -23,8 +36,16 @@ function build(opts: { users?: Array<{ id: string; email: string }>; sent?: stri
   ];
   const ledger = new Set(opts.sent ?? []);
   const state = { recent: false };
+  const events: string[] = [];
+  const pinned = new Map<string, string>(opts.pinnedHash ? [[BODY.noticeId, opts.pinnedHash]] : []);
   const eligible = () => users.filter((u) => !ledger.has(u.id));
   const query = mock.fn(async (sql: string, params: any[] = []) => {
+    if (sql.includes('notice_id <> $1')) return { rows: opts.otherNoticeRecent ? [{ '?column?': 1 }] : [] };
+    if (sql.includes('INSERT INTO policy_notices')) {
+      if (!pinned.has(params[0])) pinned.set(params[0], params[1]);
+      return { rows: [] };
+    }
+    if (sql.includes('FROM policy_notices')) return { rows: [{ content_hash: pinned.get(params[0]) }] };
     if (sql.includes('INSERT INTO policy_notice_sends')) {
       ledger.add(params[1]);
       return { rows: [] };
@@ -37,13 +58,22 @@ function build(opts: { users?: Array<{ id: string; email: string }>; sent?: stri
     throw new Error(`unexpected sql: ${sql}`);
   });
   const lockQuery = mock.fn(async (_sql: string) => ({ rows: [{ locked: true }] }));
-  const insert = mock.fn(async (_row: any) => {});
-  const sendNotice = mock.fn(async ({ to }: any) => !(opts.failFor ?? []).includes(to));
+  const insert = mock.fn(async (row: any) => {
+    events.push(`audit:${row.action}:${row.status}`);
+  });
+  const sendNotice = mock.fn(async ({ to }: any) => {
+    events.push('mail');
+    if (opts.throwOnSendCall && sendNotice.mock.callCount() >= opts.throwOnSendCall) throw new Error('resend down');
+    return !(opts.failFor ?? []).includes(to);
+  });
+  const rateLimit = mock.fn((_max: number, _name: string) => (_req: any, res: any, next: any) =>
+    opts.blockSend ? res.status(429).json({ data: null, error: { code: 'RATE_LIMITED' } }) : next(),
+  );
   const deps: any = {
     express,
     log: { info() {}, warn() {}, error() {}, debug() {} },
     config: {},
-    rateLimit: () => pass,
+    rateLimit,
     validate: (schema: any) => (req: any, res: any, next: any) => {
       const parsed = schema.safeParse(req.body);
       if (!parsed.success) return res.status(400).json({ data: null, error: { code: 'VALIDATION_ERROR' } });
@@ -73,7 +103,7 @@ function build(opts: { users?: Array<{ id: string; email: string }>; sent?: stri
   app.use(express.json());
   app.use('/api/v1/admin', router);
   const post = (body: unknown) => request(app).post('/api/v1/admin/policy-notice').set('x-who', 'admin').send(body as object);
-  return { post, state, ledger, sendNotice, insert, app };
+  return { post, state, ledger, sendNotice, insert, app, events, rateLimit };
 }
 
 describe('POST /admin/policy-notice', () => {
@@ -101,15 +131,15 @@ describe('POST /admin/policy-notice', () => {
     assert.equal(sendNotice.mock.callCount(), 0);
   });
 
-  test('send mails every eligible user once, records each, and writes one audit row', async () => {
+  test('send mails every eligible user once, records each, and writes a started and a completion audit row', async () => {
     const { post, state, ledger, sendNotice, insert } = build();
     state.recent = true;
     const res = await post(BODY).expect(200);
     assert.deepEqual(res.body.data, { mode: 'send', sent: 3, failed: 0, skipped: 0, remaining: 0 });
     assert.equal(sendNotice.mock.callCount(), 3);
     assert.deepEqual([...ledger].sort(), ['u1', 'u2', 'u3']);
-    assert.equal(insert.mock.callCount(), 1);
-    const row = insert.mock.calls[0]?.arguments[0];
+    assert.equal(insert.mock.callCount(), 2, 'a started row and a completion row');
+    const row = insert.mock.calls[1]?.arguments[0];
     assert.equal(row?.action, AUDIT_ACTIONS.POLICY_NOTICE_SENT);
     assert.equal(row?.targetId, BODY.noticeId);
   });
@@ -129,6 +159,79 @@ describe('POST /admin/policy-notice', () => {
     assert.deepEqual(res.body.data, { mode: 'send', sent: 2, failed: 1, skipped: 0, remaining: 1 });
     assert.equal(ledger.has('u2'), false);
     assert.deepEqual([...ledger].sort(), ['u1', 'u3']);
+  });
+});
+
+describe('POST /admin/policy-notice hardening', () => {
+  test('mounts a policy-notice limiter of 2 on send only; dry-run is not blocked by it', async () => {
+    const { post, state, rateLimit, sendNotice } = build({ blockSend: true });
+    state.recent = true;
+    assert.deepEqual(rateLimit.mock.calls[0]?.arguments, [2, 'policy-notice']);
+    await post(BODY).expect(429);
+    assert.equal(sendNotice.mock.callCount(), 0);
+    await post({ ...BODY, mode: 'dry-run' }).expect(200);
+  });
+
+  test('a different noticeId sent in the last 24 hours is 409 and nothing is mailed', async () => {
+    const { post, state, sendNotice, insert } = build({ otherNoticeRecent: true });
+    state.recent = true;
+    const res = await post(BODY).expect(409);
+    assert.equal(res.body.error.code, 'ALREADY_EXISTS');
+    assert.equal(sendNotice.mock.callCount(), 0);
+    assert.equal(insert.mock.callCount(), 0);
+  });
+
+  test('changed content under the same noticeId is 409 and nothing is mailed', async () => {
+    const { post, state, sendNotice } = build({ pinnedHash: hashOf(BODY) });
+    state.recent = true;
+    const res = await post({ ...BODY, text: 'Different text.' }).expect(409);
+    assert.match(res.body.error.message, /content differs from the first send of this noticeId/);
+    assert.equal(sendNotice.mock.callCount(), 0);
+  });
+
+  test('the same content under the same noticeId continues', async () => {
+    const { post, state } = build({ pinnedHash: hashOf(BODY), sent: ['u1'] });
+    state.recent = true;
+    const res = await post(BODY).expect(200);
+    assert.equal(res.body.data.sent, 2);
+  });
+
+  test('the started audit row is written before the first mail, with the content hash', async () => {
+    const { post, state, events, insert } = build();
+    state.recent = true;
+    await post(BODY).expect(200);
+    assert.equal(events[0], `audit:${AUDIT_ACTIONS.POLICY_NOTICE_STARTED}:success`);
+    assert.ok(events.indexOf('mail') > 0);
+    assert.equal(events.at(-1), `audit:${AUDIT_ACTIONS.POLICY_NOTICE_SENT}:success`);
+    assert.equal(JSON.parse(insert.mock.calls[0]?.arguments[0].detailsJson).contentHash, hashOf(BODY));
+  });
+
+  test('a throw mid-run writes a failure audit row and answers 500', async () => {
+    const { post, state, insert } = build({ throwOnSendCall: 2 });
+    state.recent = true;
+    const res = await post(BODY).expect(500);
+    assert.equal(res.body.error.code, 'INTERNAL_ERROR');
+    const last = insert.mock.calls.at(-1)?.arguments[0];
+    assert.equal(last?.action, AUDIT_ACTIONS.POLICY_NOTICE_SENT);
+    assert.equal(last?.status, 'failure');
+    const details = JSON.parse(last?.detailsJson);
+    assert.equal(typeof details.sent, 'number');
+    assert.equal(typeof details.failed, 'number');
+  });
+
+  test('a CRLF subject is 400 and nothing is mailed', async () => {
+    const { post, state, sendNotice } = build();
+    state.recent = true;
+    await post({ ...BODY, subject: 'Policy\r\nBcc: x@example.test' }).expect(400);
+    assert.equal(sendNotice.mock.callCount(), 0);
+  });
+
+  test('each mail carries a per-user idempotency key', async () => {
+    const { post, state, sendNotice } = build();
+    state.recent = true;
+    await post(BODY).expect(200);
+    const keys = sendNotice.mock.calls.map((c) => c.arguments[0].idempotencyKey).sort();
+    assert.deepEqual(keys, ['policy-2026-11:u1', 'policy-2026-11:u2', 'policy-2026-11:u3']);
   });
 });
 
@@ -154,6 +257,14 @@ describe('sendPolicyNoticeEmail', () => {
     assert.match(message.html, /service notice about changes to the Festie Privacy Policy and Terms/);
     assert.match(message.text, /service notice about changes to the Festie Privacy Policy and Terms/);
     assert.equal(message.headers, undefined);
+  });
+
+  test('passes the idempotency key as a Resend request option, not a mail header', async () => {
+    const send = mock.fn(async (_msg: any, _opts?: any) => ({ data: { id: 'm1' }, error: null }));
+    const log = { info() {}, warn() {}, error() {}, debug() {} };
+    await sendPolicyNoticeEmail({ to: 'a@example.test', subject: 's', text: 't', idempotencyKey: 'n:u', config: { RESEND_API_KEY: 'k' }, log, _client: { emails: { send } } });
+    assert.deepEqual(send.mock.calls[0]?.arguments[1], { idempotencyKey: 'n:u' });
+    assert.equal(send.mock.calls[0]?.arguments[0].headers, undefined);
   });
 
   test('uses the admin html as given', async () => {
