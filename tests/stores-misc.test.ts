@@ -858,7 +858,7 @@ import createProfilesStore from '../lib/db/stores/profiles.js';
 
 describe('ProfilesStore', () => {
   describe('profiles.readAll()', () => {
-    it('returns mapped profile rows with default limit', async () => {
+    it('returns mapped profile rows with no row cap', async () => {
       const rows = [{
         id: 'p1', festivalId: 'f1', userId: 'u1', name: 'Alice',
         picksJson: {}, notesJson: {}, remindersJson: {},
@@ -871,7 +871,7 @@ describe('ProfilesStore', () => {
       assert.equal(result.length, 1);
       assert.equal((result[0] as any).id, 'p1');
       assert.equal((result[0] as any).name, 'Alice');
-      assert.equal(pool.queries[0].params[0], 10000); // default limit
+      assert.equal(pool.queries[0].params[0], null); // LIMIT NULL = no cap
     });
 
     it('respects custom limit', async () => {

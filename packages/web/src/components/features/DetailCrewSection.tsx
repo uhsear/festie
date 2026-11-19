@@ -1,4 +1,6 @@
 import { getAvatarColor, getInitials, viewAsButtonLabel } from '@festie/shared/utils';
+import { PRIORITY_LABELS } from '@festie/shared/constants';
+import type { Priority } from '@festie/shared/types';
 import { avatarInk } from '../../lib/avatarInk';
 
 interface OtherPick {
@@ -20,12 +22,6 @@ interface Props {
   canViewAs?: (profileId: string) => boolean;
   onViewAs?: (profileId: string) => void;
 }
-
-const priLabels: Record<string, string> = {
-  must: 'Must See',
-  'want-to-see': 'Want to See',
-  maybe: 'Maybe',
-};
 
 const priColors: Record<string, string> = {
   must: 'var(--color-priority-must)',
@@ -84,7 +80,7 @@ export default function DetailCrewSection({ title, others, crewNotes, canViewAs,
                 </button>
               )}
               <span className={viewable ? 'text-xs font-semibold' : 'text-xs ml-auto font-semibold'} style={{ color: priColors[o.priority] }}>
-                {priLabels[o.priority]}
+                {PRIORITY_LABELS[o.priority as Priority]}
               </span>
             </li>
           );
