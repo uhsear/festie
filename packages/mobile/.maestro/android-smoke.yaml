@@ -8,7 +8,7 @@ tags:
 env:
   TEST_USERNAME: ${TEST_USERNAME}
   TEST_PASSWORD: ${TEST_PASSWORD}
-  FESTIVAL_ID: nc-2026
+  FESTIVAL_ID: ${FESTIVAL_ID || 'nc-2026'}
 ---
 - launchApp:
     clearState: true
