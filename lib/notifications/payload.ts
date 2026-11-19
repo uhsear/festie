@@ -8,10 +8,10 @@ import { loadConfig } from '../config';
 const config = loadConfig();
 
 // External webhook for persistent FCM retry queue
-export const FCM_RETRY_WEBHOOK_URL = config.FCM_RETRY_WEBHOOK_URL;
+const FCM_RETRY_WEBHOOK_URL = config.FCM_RETRY_WEBHOOK_URL;
 
 // HMAC key for hashing device tokens before transmitting to external webhook
-export const WEBHOOK_TOKEN_HMAC_KEY = config.WEBHOOK_TOKEN_HMAC_KEY;
+const WEBHOOK_TOKEN_HMAC_KEY = config.WEBHOOK_TOKEN_HMAC_KEY;
 
 // M3 re-engagement triggers (after-festival growth loops): lineup_drop / crew_reformed / wrap_ready.
 // All event-gated (never cron-spam), per-type opt-out, DND-respecting, deduped once-per-event-per-user.
@@ -46,7 +46,7 @@ export const MAX_BODY_LENGTH = 200;
 export const MAX_DATA_KEYS = 10;
 
 // Hash device token with HMAC-SHA256 before transmitting to webhook
-export function hashDeviceToken(token: any) {
+function hashDeviceToken(token: any) {
   return crypto.createHmac('sha256', WEBHOOK_TOKEN_HMAC_KEY).update(String(token)).digest('hex');
 }
 

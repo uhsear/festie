@@ -29,19 +29,12 @@ import { sendSuccess, sendError, ErrorCodes } from '../lib/response.js';
 import { SOS_RAISE_LIMIT, SOS_RAISE_MIN_GAP } from '../lib/rate-limiting.js';
 const passGap = () => (SOS_RAISE_MIN_GAP as any)._reset();
 import { sanitizeIdentifier } from '../lib/helpers/sanitize.js';
+import { makeIo } from './_make-io';
 
 // ── Shared helpers ────────────────────────────────────────────────────
 
 function noop() {}
 const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
-
-function makeIo() {
-  const emitFn = mock.fn(() => {});
-  return {
-    to: mock.fn(() => ({ emit: emitFn })),
-    _emit: emitFn,
-  };
-}
 
 const VALID_POSITION = {
   lat: 41.88425,

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Socket } from 'socket.io-client';
-import { createSocket } from '../services/socket';
+import { createSocket, createAuthErrorHandler } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
 import { useUIStore } from '../stores/uiStore';
 import { useFestivalStore } from '../stores/festivalStore';
@@ -26,7 +26,6 @@ export function useSocket(festivalId?: string): UseSocketReturn {
   const userToken = useAuthStore((state) => state.userToken);
   const connected = useUIStore((state) => state.connected);
   const setConnected = useUIStore((state) => state.setConnected);
-  const setOnlineUsers = useUIStore((state) => state.setOnlineUsers);
   const addOnlineUser = useUIStore((state) => state.addOnlineUser);
   const removeOnlineUser = useUIStore((state) => state.removeOnlineUser);
   const onlineUsers = useUIStore((state) => state.onlineUsers);
@@ -44,22 +43,7 @@ export function useSocket(festivalId?: string): UseSocketReturn {
       joinedFestivalIdRef.current = null;
       return;
     }
-    const socket = createSocket(userToken || undefined, undefined, () => {
-      // Socket auth failed — attempt a single token refresh, then reconnect
-      // with the new token. On failure stay disconnected (an HTTP request will
-      // drive the refresh/logout path).
-      useAuthStore
-        .getState()
-        .refreshToken()
-        .then(() => {
-          const t = useAuthStore.getState().userToken;
-          if (t && socketRef.current) {
-            socketRef.current.auth = { token: t };
-            socketRef.current.connect();
-          }
-        })
-        .catch((e) => console.warn('socket token refresh failed; realtime paused until the next request', e));
-    });
+    const socket = createSocket(userToken || undefined, undefined, createAuthErrorHandler(() => socketRef.current, useAuthStore.getState));
     // Sync the ref BEFORE wiring handlers so handleConnect reads the
     // right id and cleanup can leave the right room.
     joinedFestivalIdRef.current = joinedFestivalId;
@@ -68,18 +52,12 @@ export function useSocket(festivalId?: string): UseSocketReturn {
       setConnected(true);
       const joinId = joinedFestivalIdRef.current;
       if (joinId) {
-        socket.emit('join:festival', joinId, {});
+        socket.emit('join:festival', joinId, { _v: 1 }, () => {});
       }
     };
 
     const handleDisconnect = () => {
       setConnected(false);
-    };
-
-    const handlePresenceUpdate = (data: { users: OnlineUser[] }) => {
-      if (data.users) {
-        setOnlineUsers(data.users);
-      }
     };
 
     const handleUserOnline = (user: OnlineUser) => {
@@ -96,7 +74,6 @@ export function useSocket(festivalId?: string): UseSocketReturn {
 
     socket.on('connect', handleConnect);
     socket.on('disconnect', handleDisconnect);
-    socket.on('presence:update', handlePresenceUpdate);
     socket.on('user:online', handleUserOnline);
     socket.on('user:offline', handleUserOffline);
     socket.on('error', handleError);
@@ -114,14 +91,13 @@ export function useSocket(festivalId?: string): UseSocketReturn {
       }
       socket.off('connect', handleConnect);
       socket.off('disconnect', handleDisconnect);
-      socket.off('presence:update', handlePresenceUpdate);
       socket.off('user:online', handleUserOnline);
       socket.off('user:offline', handleUserOffline);
       socket.off('error', handleError);
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [userToken, festivalId, currentFestivalId, canJoin, setConnected, setOnlineUsers, addOnlineUser, removeOnlineUser]);
+  }, [userToken, festivalId, currentFestivalId, canJoin, setConnected, addOnlineUser, removeOnlineUser]);
 
   return {
     socket: socketRef.current,

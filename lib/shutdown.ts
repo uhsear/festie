@@ -437,7 +437,11 @@ function createCloseHandler({
     }
 
     // Flush any pending batched events before disconnecting sockets
-    if (emitter?.flushAll) emitter.flushAll();
+    try {
+      await emitter?.flushAll?.();
+    } catch (err: any) {
+      log.warn('emitter flush on shutdown failed', { error: err.message });
+    }
     try {
       await crewNotify?.flushAll();
     } catch (err: any) {
