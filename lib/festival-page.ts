@@ -196,7 +196,7 @@ function renderDay(day: ReturnType<typeof buildFestivalPageDays>[number], acts: 
 const FESTIVAL_PAGE_REFS = new Set(['share-festival', 'share-wrap', 'share-picks', 'crew-invite']);
 
 /** The incoming ?ref= when it is allow-listed, else `fallback`. */
-export function festivalPageRef(ref: unknown, fallback = 'festival-page'): string {
+function festivalPageRef(ref: unknown, fallback = 'festival-page'): string {
   return typeof ref === 'string' && FESTIVAL_PAGE_REFS.has(ref) ? ref : fallback;
 }
 
