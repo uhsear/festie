@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { QueryObserver } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { createTestQueryClient } from '../test-utils';
 import type { Socket } from 'socket.io-client';
@@ -8,6 +9,8 @@ import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { api } from '@festie/shared';
 import { buildCrewQuerySink } from './useCrewQuerySink';
+import { meetingPointsQuery } from '../lib/queryPersist';
+import { pollsQueryOptions } from './useCrewAttention';
 
 /**
  * These tests exercise the WEB crew-realtime wiring end to end:
@@ -206,6 +209,15 @@ describe('buildCrewQuerySink (direct mapping)', () => {
         ? { polls: [{ id: 'p1', votes: [{ user_id: 'u1', option: 0 }, { user_id: null, option: 1 }] }] }
         : { meetingPoints: [{ id: 'mp1' }] },
     );
+    // Active observers are what make invalidateQueries refetch, so mount both first.
+    const observers = [
+      new QueryObserver(queryClient, pollsQueryOptions('c1')),
+      new QueryObserver(queryClient, meetingPointsQuery('c1')),
+    ];
+    const unsubscribe = observers.map((o) => o.subscribe(() => {}));
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(observers.every((o) => !o.getCurrentResult().isFetching)).toBe(true));
+    get.mockClear();
     const sink = buildCrewQuerySink(queryClient);
 
     sink.onMeetingPointUpsert('c1', {} as never);
@@ -217,6 +229,7 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     expect(get).toHaveBeenCalledTimes(2);
     expect(get).toHaveBeenCalledWith('/crews/c1/polls');
     expect(get).toHaveBeenCalledWith('/crews/c1/meeting-points');
+    unsubscribe.forEach((u) => u());
     useCrewStore.setState({ polls: [], meetingPoints: [] });
   });
 
