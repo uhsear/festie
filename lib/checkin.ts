@@ -18,6 +18,9 @@
 import { readLivePosition } from './live-location-cache.js';
 import { appLink } from './notifications/links.js';
 import { coarse } from './sos-raise.js';
+import { createLogger } from './logger.js';
+
+const checkinLog = createLogger('checkin');
 
 const WARN_BEFORE_MS = 5 * 60_000;
 const KEY_GRACE_MS = 60 * 60_000;
@@ -84,7 +87,8 @@ export async function startCheckin(
     // ioredis reports per-command failures inside the results, not by throwing.
     if (!results || results.some(([err]: [unknown]) => err)) return null;
     return { dueAt };
-  } catch {
+  } catch (err: any) {
+    checkinLog.warn('check-in timer start failed', { crewId, error: err?.message });
     return null;
   }
 }
