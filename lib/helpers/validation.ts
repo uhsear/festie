@@ -277,9 +277,7 @@ export function stageOverlapWarnings(festival: any): string[] {
     const byStage = new Map<string, any[]>();
     for (const set of Array.isArray(day?.sets) ? day.sets : []) {
       if (!set?.stageId || !validateTime(set.startTime) || !validateTime(set.endTime)) continue;
-      const start = festivalStartMinutes(set.startTime);
-      let end = festivalStartMinutes(set.endTime);
-      if (end <= start) end += 1440;
+      const { start, end } = setMinuteRange(set)!;
       const artist = set.artists?.length > 0
         ? set.artists.map((a: any) => a?.name).filter(Boolean).join(' b2b ')
         : set.artist;
