@@ -41,7 +41,7 @@ jobs:
 
       - name: expo-doctor
         working-directory: packages/mobile
-        run: npx expo-doctor@latest
+        run: npx expo-doctor@1.21.8
 
       - name: expo install --check (native dep version drift)
         run: pnpm --filter @festie/mobile exec expo install --check

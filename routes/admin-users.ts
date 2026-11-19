@@ -254,7 +254,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
 
         // Get the acting admin's userId from the request session
         const actorId = req.user?.userId || req.userId;
-        if (!actorId) return sendError(res, 401, 'Unauthorized', ErrorCodes.UNAUTHORIZED);
+        if (!actorId) return sendError(res, 401, 'Unauthorized', ErrorCodes.AUTH_REQUIRED);
 
         const rolesBefore = [...(await stores.roles.getUserRoles(targetUserId))].sort();
         await stores.roles.grantRole(targetUserId, roleName, actorId);
@@ -305,7 +305,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
 
         // Prevent revoking own admin role
         const actorId = req.user?.userId || req.userId;
-        if (!actorId) return sendError(res, 401, 'Unauthorized', ErrorCodes.UNAUTHORIZED);
+        if (!actorId) return sendError(res, 401, 'Unauthorized', ErrorCodes.AUTH_REQUIRED);
         if (roleName === 'admin' && targetUserId === actorId) {
           return sendError(res, 400, 'Cannot revoke your own admin role', ErrorCodes.INVALID_INPUT);
         }

@@ -65,7 +65,8 @@ class RollbackTest(unittest.TestCase):
     def test_happy_path_builds_before_touching_pm2(self):
         proc, calls = self.run_rollback("deploy-x")
         self.assertEqual(proc.returncode, 0, proc.stderr)
-        order = ["git reset --hard deploy-x", "npm run build", "pnpm --filter @festie/web build",
+        order = ["git reset --hard deploy-x", "npm ci --omit=dev --no-audit --no-fund",
+                 "pnpm install --frozen-lockfile", "npm run build", "pnpm --filter @festie/web build",
                  "pm2 delete festie", "pm2 start ecosystem.config.cjs --only festie"]
         positions = [next(i for i, c in enumerate(calls) if c == m) for m in order]
         self.assertEqual(positions, sorted(positions))
