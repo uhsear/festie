@@ -9,7 +9,8 @@ import { ensureTestSchema } from './_test-schema';
 
 // Backfill on announced-lineup data (migration 104): festivals with a lineup and no sets, next to a
 // festival with sets. The entries mirror the real shapes of the Forbidden Kingdom and Wasteland
-// Orlando lineups, and are saved through normalizeLineup, the function the admin PUT uses.
+// Orlando lineups. They are saved through normalizeLineup alone, with no artist ids. That reproduces
+// lineups written before resolveArtistRefs existed: the legacy shape the backfill must handle.
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
@@ -84,18 +85,28 @@ describe('artist backfill on lineup entries', { skip }, () => {
 
   test('dry run counts the lineup entries and writes nothing', async () => {
     const before = await pool.query('SELECT id, lineup FROM festivals ORDER BY id');
+    const setsBefore = await pool.query('SELECT id, artists, artist, link_url FROM festival_sets ORDER BY id');
     const { report } = await planBackfill(pool);
     assert.equal(report.counts.festivals, 3);
     assert.equal(report.counts.sets, 2);
     assert.equal(report.counts.lineupEntries, FK_LINEUP.length + WL_LINEUP.length);
     assert.deepEqual(await artistRows(), []);
     assert.deepEqual((await pool.query('SELECT id, lineup FROM festivals ORDER BY id')).rows, before.rows);
+    assert.deepEqual((await pool.query('SELECT id, artists, artist, link_url FROM festival_sets ORDER BY id')).rows, setsBefore.rows);
+    assert.equal((await pool.query('SELECT count(*)::int AS n FROM artist_backfill_runs')).rows[0].n, 0);
   });
 
   test('run puts artist ids on lineup entries as well as sets, and joins shared names', async () => {
+    const lineupBefore = { 'fest-fk': await lineupOf('fest-fk'), 'fest-wl': await lineupOf('fest-wl') };
     const { apply } = await runBackfill(pool, { runId: 'lineup-1' });
     assert.deepEqual(apply.festivalsWritten.sort(), ['fest-a', 'fest-fk', 'fest-wl']);
     assert.deepEqual(apply.conflicts, []);
+
+    for (const [id, lineup] of Object.entries(lineupBefore)) {
+      const run = (await pool.query(`SELECT before FROM artist_backfill_runs WHERE run_id = 'lineup-1' AND festival_id = $1`, [id])).rows[0];
+      assert.deepEqual(run.before.lineup, lineup, `${id} run record keeps the lineup as it was`);
+      assert.deepEqual(run.before.sets, {}, `${id} has no sets to record`);
+    }
     const byKey = async (key: string) => (await artistRows()).filter((a) => a.name_key === key);
 
     for (const e of [...(await lineupOf('fest-fk')), ...(await lineupOf('fest-wl'))]) {
