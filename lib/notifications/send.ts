@@ -119,7 +119,13 @@ export const PUSH_BUDGET_PER_HOUR = 6;
  * set-time changes, so crew chatter cannot use up a person's budget and hold back news
  * that one of their sets moved. The nudge has its own per-recipient cap in crew-nudge.ts.
  */
-export const PUSH_BUDGET_EXEMPT = new Set(['crew_sos', 'set_reminder', 'crew_meeting_point', 'schedule_change', 'crew_nudge']);
+export const PUSH_BUDGET_EXEMPT = new Set([
+  'crew_sos',
+  'set_reminder',
+  'crew_meeting_point',
+  'schedule_change',
+  'crew_nudge',
+]);
 
 /** Per-type push channel/category overrides for critical alerts. */
 const CRITICAL_CHANNEL: Record<string, { channelId: string; category: string }> = {
@@ -177,7 +183,16 @@ async function resolveFestivalTargets(stores: any, festivalId: any, excludeUserI
 // are never passed to sendBatch, so they never trigger this check.
 const OUTAGE_ERROR_RATIO = 0.5;
 
-export function createSendService({ stores, config, log, messaging, retryQueue, apnsProvider, promMetrics, webPush = null }: any) {
+export function createSendService({
+  stores,
+  config,
+  log,
+  messaging,
+  retryQueue,
+  apnsProvider,
+  promMetrics,
+  webPush = null,
+}: any) {
   // Direct APNs provider for iOS device tokens (raw APNs tokens that firebase-admin
   // cannot send). Guarded entirely by isApnsConfigured: when APNs is NOT configured
   // this stays null and iOS tokens are skipped (NOT deleted as stale).
@@ -232,6 +247,30 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     } catch (err: any) {
       log.debug('notification log failed', { error: err.message });
       return null;
+    }
+  }
+
+  // Count-then-log runs under a per-user lock so concurrent sends cannot both pass the cap.
+  // shortcut: in-process only (one PM2 fork serves production); a second process needs a shared counter.
+  const budgetLocks = new Map<string, Promise<void>>();
+  async function withBudgetLocks<T>(userIds: string[], fn: () => Promise<T>): Promise<T> {
+    const releases: (() => void)[] = [];
+    try {
+      // Sorted, so two batches that share users cannot wait on each other.
+      for (const userId of [...new Set(userIds)].sort()) {
+        const prev = budgetLocks.get(userId) ?? Promise.resolve();
+        let release!: () => void;
+        const tail = prev.then(() => new Promise<void>((resolve) => (release = resolve)));
+        budgetLocks.set(userId, tail);
+        await prev;
+        releases.push(() => {
+          release();
+          if (budgetLocks.get(userId) === tail) budgetLocks.delete(userId);
+        });
+      }
+      return await fn();
+    } finally {
+      for (const release of releases) release();
     }
   }
 
@@ -527,16 +566,19 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     // window — an emergency must reach people. prefKey is undefined for these
     // (omitted from PREF_MAP), but guard explicitly so intent is unmistakable.
     if (!isCritical && prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
-    // shortcut: count-then-send is not atomic, so concurrent sends can pass the cap by one or two; use a Redis counter if that matters.
-    let held: string | null = null;
-    if (!isCritical && !DND_EXEMPT_TYPES.has(type) && isInDndWindow(prefs)) held = 'dnd_active';
-    else if (!isCritical && !PUSH_BUDGET_EXEMPT.has(type)) {
-      const count = (await recentPushCounts([userId])).get(userId) ?? 0;
-      if (count >= PUSH_BUDGET_PER_HOUR) held = 'budget';
-    }
-    // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
-    // status 'held' means quiet hours or the hourly budget stopped the push; the push budget counts only 'inbox' rows.
-    await logInboxRow({ userId, type, safeTitle, safeBody, safeData, held });
+    const budgetCounted = !isCritical && !PUSH_BUDGET_EXEMPT.has(type);
+    const held = await withBudgetLocks(budgetCounted ? [userId] : [], async () => {
+      let heldReason: string | null = null;
+      if (!isCritical && !DND_EXEMPT_TYPES.has(type) && isInDndWindow(prefs)) heldReason = 'dnd_active';
+      else if (budgetCounted) {
+        const count = (await recentPushCounts([userId])).get(userId) ?? 0;
+        if (count >= PUSH_BUDGET_PER_HOUR) heldReason = 'budget';
+      }
+      // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
+      // status 'held' means quiet hours or the hourly budget stopped the push; the push budget counts only 'inbox' rows.
+      await logInboxRow({ userId, type, safeTitle, safeBody, safeData, held: heldReason });
+      return heldReason;
+    });
     if (held) return { sent: 0, reason: held };
 
     const tokens = await stores.deviceTokens.listByUser(userId);
@@ -705,7 +747,9 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
       });
       try {
         promMetrics?.pushProviderOutageCounter?.inc({ provider: 'fcm' });
-      } catch { /* ignore metric errors */ }
+      } catch {
+        /* ignore metric errors */
+      }
     }
 
     return { successCount, failureCount, staleTokens };
@@ -756,35 +800,40 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
     // Browser subscriptions routed to per-device Web Push (no multicast either).
     const webSends: any[] = [];
 
-    // shortcut: count-then-send is not atomic, so concurrent sends can pass the cap by one or two; use a Redis counter if that matters.
-    const [prefsMap, tokensMap, badgeMap, pushCounts] = await Promise.all([
-      prefsByUser(batch),
+    // Count-then-log runs under the users' budget locks so a concurrent send cannot pass the cap between them.
+    const [recipients, tokensMap, badgeMap] = await Promise.all([
+      withBudgetLocks(PUSH_BUDGET_EXEMPT.has(type) ? [] : batch, async () => {
+        const [prefsMap, pushCounts] = await Promise.all([
+          prefsByUser(batch),
+          PUSH_BUDGET_EXEMPT.has(type) ? new Map<string, number>() : recentPushCounts(batch),
+        ]);
+
+        const counted: { userId: string; held: string | null }[] = [];
+        for (const userId of batch) {
+          const prefs = prefsMap.get(userId);
+          if (prefs && prefKey && !prefs[prefKey]) continue;
+          const held = isInDndWindow(prefs)
+            ? 'dnd_active'
+            : (pushCounts.get(userId) ?? 0) >= PUSH_BUDGET_PER_HOUR
+              ? 'budget'
+              : null;
+          counted.push({ userId, held });
+        }
+
+        // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
+        // The inserts run INBOX_INSERT_CONCURRENCY at a time in batch order, all before the device step.
+        for (let i = 0; i < counted.length; i += INBOX_INSERT_CONCURRENCY) {
+          await Promise.all(
+            counted
+              .slice(i, i + INBOX_INSERT_CONCURRENCY)
+              .map(({ userId, held }) => logInboxRow({ userId, type, safeTitle, safeBody, safeData, held })),
+          );
+        }
+        return counted;
+      }),
       tokensByUser(batch),
       badgeCounts(batch),
-      PUSH_BUDGET_EXEMPT.has(type) ? new Map<string, number>() : recentPushCounts(batch),
     ]);
-
-    const recipients: { userId: string; held: string | null }[] = [];
-    for (const userId of batch) {
-      const prefs = prefsMap.get(userId);
-      if (prefs && prefKey && !prefs[prefKey]) continue;
-      const held = isInDndWindow(prefs)
-        ? 'dnd_active'
-        : (pushCounts.get(userId) ?? 0) >= PUSH_BUDGET_PER_HOUR
-          ? 'budget'
-          : null;
-      recipients.push({ userId, held });
-    }
-
-    // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
-    // The inserts run INBOX_INSERT_CONCURRENCY at a time in batch order, all before the device step.
-    for (let i = 0; i < recipients.length; i += INBOX_INSERT_CONCURRENCY) {
-      await Promise.all(
-        recipients
-          .slice(i, i + INBOX_INSERT_CONCURRENCY)
-          .map(({ userId, held }) => logInboxRow({ userId, type, safeTitle, safeBody, safeData, held })),
-      );
-    }
 
     for (const { userId, held } of recipients) {
       if (held) continue;
@@ -893,7 +942,9 @@ export function createSendService({ stores, config, log, messaging, retryQueue, 
       });
       try {
         promMetrics?.pushProviderOutageCounter?.inc({ provider: 'apns' });
-      } catch { /* ignore metric errors */ }
+      } catch {
+        /* ignore metric errors */
+      }
     }
 
     // Track unread counts for users who received notifications
