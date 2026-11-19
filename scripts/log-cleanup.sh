@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Rotate Festie application logs (not PM2 logs — pm2-logrotate handles those).
-# Keeps last 7 days of deploy.log and migrate.log; truncates if > 10MB.
+# Keeps last 14 days (same policy as pm2-logrotate) of deploy.log and migrate.log; truncates if > 10MB.
 set -euo pipefail
 
 LOG_DIR="${LOG_DIR:-$(cd "$(dirname "$0")/.." && pwd)/logs}"
@@ -21,6 +21,6 @@ for LOG_FILE in deploy.log migrate.log; do
   fi
 done
 
-# Purge archived logs older than 7 days
-find "$LOG_DIR" -name 'deploy_*.log.gz' -mtime +7 -delete 2>/dev/null || true
-find "$LOG_DIR" -name 'migrate_*.log.gz' -mtime +7 -delete 2>/dev/null || true
+# Purge archived logs older than 14 days
+find "$LOG_DIR" -name 'deploy_*.log.gz' -mtime +14 -delete 2>/dev/null || true
+find "$LOG_DIR" -name 'migrate_*.log.gz' -mtime +14 -delete 2>/dev/null || true
