@@ -79,6 +79,7 @@ function createBackgroundTasks(ctx: any, { io }: any) {
       try {
         await pending;
       } finally {
+        // eslint-disable-next-line require-atomic-updates -- single-flight flag: only this call can clear it
         running = false;
         sweepsInFlight.delete(pending);
       }

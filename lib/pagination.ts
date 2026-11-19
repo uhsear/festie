@@ -28,6 +28,26 @@ export function decodeCursor(cursor: any): Record<string, any> | null {
   }
 }
 
+// Fetch limit+1 rows, then trim the extra one; its presence means another page exists.
+export function takePage<T>(rows: T[], limit: number, toCursor: (last: T) => string): { items: T[]; nextCursor: string | null } {
+  const hasMore = rows.length > limit;
+  if (hasMore) rows.pop();
+  return { items: rows, nextCursor: hasMore ? toCursor(rows[rows.length - 1] as T) : null };
+}
+
+// Wire format `<created_at ISO>|<id>` for (created_at DESC, id DESC) keyset pages.
+export function encodeTimeIdCursor(createdAt: string | Date, id: string): string {
+  return `${new Date(createdAt).toISOString()}|${id}`;
+}
+
+// A cursor without a usable `|` (e.g. a stale bare id) is not a cursor: callers restart from page 1.
+export function decodeTimeIdCursor(cursor: unknown): { createdAt: string; id: string } | null {
+  if (typeof cursor !== 'string') return null;
+  const sep = cursor.lastIndexOf('|');
+  if (sep <= 0) return null;
+  return { createdAt: cursor.slice(0, sep), id: cursor.slice(sep + 1) };
+}
+
 const limitSchema = z.coerce.number().int().min(1);
 // Postgres rejects NUL in text parameters; an array from a repeated ?cursor= is not a cursor either.
 const cursorSchema = z.string().min(1).refine((v) => !v.includes('\u0000'));
