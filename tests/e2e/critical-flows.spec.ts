@@ -104,6 +104,39 @@ test.describe('critical flows', () => {
     await expect(panel.getByText('You raised an SOS')).toHaveCount(0);
   });
 
+  test('an SOS raised by one member shows for another member and clears for them', async ({ app, page, browser }) => {
+    const raiser = `sosfrom_${Date.now()}`;
+    await registerViaApi(page.context(), app, raiser);
+    const crew = await createCrewViaApi(page.context(), app, `SOS Pair ${Date.now()}`);
+    await signIn(page, app, raiser);
+
+    const watcherContext = await openUserContext(browser);
+    try {
+      const watcher = `soswatch_${Date.now()}`;
+      await registerViaApi(watcherContext, app, watcher);
+      const watcherPage = await watcherContext.newPage();
+      await signIn(watcherPage, app, watcher);
+      await watcherPage.goto(`${app.baseUrl}/?joinCrew=${crew.inviteCode}`);
+      await watcherPage.getByRole('button', { name: 'Join crew', exact: true }).click();
+      await expect(watcherPage).toHaveURL(/\/crew\?tab=members/);
+      await watcherPage.goto(`${app.baseUrl}/crew?tab=find`);
+
+      await page.goto(`${app.baseUrl}/crew?tab=find`);
+      await page.getByRole('tabpanel').getByRole('button', { name: 'Send an SOS to your crew' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Send SOS', exact: true }).click();
+      await expect(page.getByRole('tabpanel').getByText('You raised an SOS')).toBeVisible();
+
+      const alert = watcherPage.getByRole('tabpanel').getByText(`${raiser} raised an SOS`);
+      await expect(alert).toBeVisible({ timeout: 30_000 });
+
+      await page.getByRole('tabpanel').getByRole('button', { name: "I'm safe — clear SOS" }).click();
+      await page.getByRole('dialog').getByRole('button', { name: "I'm safe", exact: true }).click();
+      await expect(alert).toHaveCount(0, { timeout: 30_000 });
+    } finally {
+      await watcherContext.close();
+    }
+  });
+
   test('an expense added offline shows as pending, syncs once and is not duplicated', async ({ app, page }) => {
     const username = `spender_${Date.now()}`;
     await registerViaApi(page.context(), app, username);
@@ -132,6 +165,36 @@ test.describe('critical flows', () => {
     const saved = data.filter((e) => e.description === description);
     expect(saved).toHaveLength(1);
     expect(Number(saved[0]?.amount)).toBe(42.5);
+  });
+
+  test('expenses added across two offline cycles each sync once', async ({ app, page }) => {
+    const username = `cycler_${Date.now()}`;
+    await registerViaApi(page.context(), app, username);
+    const crew = await createCrewViaApi(page.context(), app, `Cycle Crew ${Date.now()}`);
+    await signIn(page, app, username);
+    await page.goto(`${app.baseUrl}/crew?tab=money`);
+
+    const descriptions = [`Ice ${Date.now()}`, `Water ${Date.now()}`];
+    for (const description of descriptions) {
+      await page.getByRole('button', { name: 'Add Expense', exact: true }).click();
+      await page.getByLabel('Description').fill(description);
+      await page.getByLabel('Amount').fill('10');
+
+      await page.context().setOffline(true);
+      await page.getByRole('button', { name: 'Add', exact: true }).click();
+      await expect(page.getByText(description)).toBeVisible();
+      await expect(page.getByText('Not sent yet')).toBeVisible();
+
+      await page.context().setOffline(false);
+      await expect(page.getByText('Not sent yet')).toHaveCount(0, { timeout: 30_000 });
+    }
+
+    const res = await page.context().request.get(`${app.baseUrl}/api/v1/crews/${crew.id}/expenses`);
+    expect(res.ok()).toBe(true);
+    const { data } = (await res.json()) as { data: { description: string }[] };
+    for (const description of descriptions) {
+      expect(data.filter((e) => e.description === description)).toHaveLength(1);
+    }
   });
 
   test('an admin imports a pasted lineup and the sets appear in the schedule', async ({ app, page }) => {
