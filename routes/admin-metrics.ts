@@ -207,6 +207,7 @@ export default function createAdminMetricsRoutes(deps: any): { router: Router } 
       );
     }
 
+    // Envelope exception (see lib/response.ts): Prometheus scrapers need the text format.
     res.setHeader('Content-Type', 'text/plain; version=0.0.4; charset=utf-8');
     return res.send(lines.join('\n') + '\n');
     } catch (error: any) {

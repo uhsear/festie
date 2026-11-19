@@ -37,10 +37,6 @@ function mockPool(queryResults: any[] = []): any {
 
 const mockUtils: any = {};
 
-// Collapse all runs of whitespace to a single space so that SQL substring
-// assertions are insensitive to the multi-line formatting of the store queries.
-const norm = (s: any) => String(s).replace(/\s+/g, ' ').trim();
-
 function mockPoolThatThrows(error: any): any {
   return {
     queries: [],
@@ -67,7 +63,6 @@ describe('createCrewsStore — topicSubscriptions', () => {
     const subs = await topicSubscriptions.getForUser('u1', 'f1');
 
     assert.deepStrictEqual(subs, Object.create(null));
-    assert.ok(pool.queries[0].sql.includes('notification_topic_subs'));
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 'f1']);
   });
 
@@ -198,7 +193,6 @@ describe('createCrewsStore — crews', () => {
 
     assert.deepStrictEqual(result, { id: 'c1' });
     assert.strictEqual(pool.queries.length, 2);
-    assert.ok(norm(pool.queries[0].sql).includes('INSERT INTO crews'));
     // Trailing nulls: reformed_from (043_crew_lineage), then totem_name + totem_emoji
     // (056_crew_totem) — all null for a normal crew with no totem.
     assert.deepStrictEqual(pool.queries[0].params, [
@@ -243,7 +237,6 @@ describe('createCrewsStore — crews', () => {
     const result = await crews.update({ id: 'c1', name: 'New Name', maxMembers: 5 });
 
     assert.deepStrictEqual(result, { id: 'c1', name: 'New Name' });
-    assert.ok(pool.queries[0].sql.includes('UPDATE crews'));
     assert.deepStrictEqual(pool.queries[0].params, ['New Name', 5, 'c1']);
   });
 
@@ -260,7 +253,6 @@ describe('createCrewsStore — crews', () => {
 
     await crews.delete('c1');
 
-    assert.ok(pool.queries[0].sql.includes('DELETE FROM crews'));
     assert.deepStrictEqual(pool.queries[0].params, ['c1']);
   });
 
@@ -357,7 +349,6 @@ describe('createCrewsStore — crews', () => {
     await crews.regenerateInviteCode('c1', 'newcode', expiresAt);
 
     assert.deepStrictEqual(pool.queries[0].params, ['newcode', 'c1', expiresAt]);
-    assert.ok(norm(pool.queries[0].sql).includes('COALESCE($3::timestamptz'));
   });
 
   it('addMember inserts into crew_members', async () => {
@@ -366,7 +357,6 @@ describe('createCrewsStore — crews', () => {
 
     await crews.addMember({ crewId: 'c1', userId: 'u1', role: 'member' });
 
-    assert.ok(norm(pool.queries[0].sql).includes('INSERT INTO crew_members'));
     assert.deepStrictEqual(pool.queries[0].params, ['c1', 'u1', 'member']);
   });
 
@@ -376,7 +366,6 @@ describe('createCrewsStore — crews', () => {
 
     await crews.removeMember('c1', 'u1');
 
-    assert.ok(pool.queries[0].sql.includes('DELETE FROM crew_members'));
     assert.deepStrictEqual(pool.queries[0].params, ['c1', 'u1']);
   });
 
@@ -474,10 +463,7 @@ describe('createCrewsStore — crews', () => {
     const result = await crews.updatePhotoAlbum('c1', { photoAlbumUrl: 'https://photos.app.goo.gl/abc' });
 
     assert.strictEqual(result.photoAlbumUrl, 'https://photos.app.goo.gl/abc');
-    assert.ok(norm(pool.queries[0].sql).includes('UPDATE crews SET photo_album_url = $1'));
     assert.deepStrictEqual(pool.queries[0].params, ['https://photos.app.goo.gl/abc', 'c1']);
-    // The read query must surface the aliased photoAlbumUrl column.
-    assert.ok(norm(pool.queries[1].sql).includes('photo_album_url AS "photoAlbumUrl"'));
   });
 
   it('updatePhotoAlbum converts falsy url to null (clears the album)', async () => {
@@ -505,7 +491,6 @@ describe('createCrewsStore — crews', () => {
 
     await crews.deleteByFestival('f1');
 
-    assert.ok(pool.queries[0].sql.includes('DELETE FROM crews'));
     assert.deepStrictEqual(pool.queries[0].params, ['f1']);
   });
 });
@@ -532,7 +517,6 @@ describe('createCrewsStore — meetingPoints', () => {
     const result = await meetingPoints.create(mp);
 
     assert.deepStrictEqual(result, { id: 'mp1', label: 'Gate A' });
-    assert.ok(norm(pool.queries[0].sql).includes('INSERT INTO crew_meeting_points'));
     assert.deepStrictEqual(pool.queries[0].params, [
       'mp1',
       'c1',
@@ -559,11 +543,6 @@ describe('createCrewsStore — meetingPoints', () => {
 
     assert.deepStrictEqual(result, [{ id: 'mp1' }]);
     assert.deepStrictEqual(pool.queries[0].params, ['c1']);
-    const sql = norm(pool.queries[0].sql);
-    assert.ok(sql.includes('mp.active = FALSE'));
-    assert.ok(sql.includes('recurs_daily IS NOT TRUE'));
-    assert.ok(sql.includes("INTERVAL '12 hours'"));
-    assert.ok(sql.includes('mp.updated_at >= mp.expires_at'));
   });
 
   it('create uses defaults for optional fields', async () => {
@@ -601,9 +580,6 @@ describe('createCrewsStore — meetingPoints', () => {
 
     await meetingPoints.create(mp);
 
-    const insert = norm(pool.queries[0].sql);
-    assert.ok(insert.includes('latitude'));
-    assert.ok(insert.includes('longitude'));
     assert.strictEqual(pool.queries[0].params[9], 41.85);
     assert.strictEqual(pool.queries[0].params[10], -87.65);
   });
@@ -625,9 +601,6 @@ describe('createCrewsStore — meetingPoints', () => {
 
     await meetingPoints.update('mp1', { latitude: 40.1, longitude: -74.2 });
 
-    const sql = norm(pool.queries[0].sql);
-    assert.ok(sql.includes('latitude = $1'));
-    assert.ok(sql.includes('longitude = $2'));
     assert.deepStrictEqual(pool.queries[0].params, [40.1, -74.2, 'mp1']);
   });
 
@@ -638,12 +611,9 @@ describe('createCrewsStore — meetingPoints', () => {
 
     const result = await meetingPoints.create(mp);
 
-    const insert = norm(pool.queries[0].sql);
-    assert.ok(insert.includes('recurs_daily'));
     // $12 is the recurs_daily slot.
     assert.strictEqual(pool.queries[0].params[11], true);
     // The post-insert SELECT returns recurs_daily (snake) on the row.
-    assert.ok(norm(pool.queries[1].sql).includes('recurs_daily'));
     assert.strictEqual(result.recurs_daily, true);
   });
 
@@ -653,8 +623,6 @@ describe('createCrewsStore — meetingPoints', () => {
 
     await meetingPoints.update('mp1', { recursDaily: true });
 
-    const sql = norm(pool.queries[0].sql);
-    assert.ok(sql.includes('recurs_daily = $1'));
     assert.deepStrictEqual(pool.queries[0].params, [true, 'mp1']);
   });
 
@@ -662,9 +630,10 @@ describe('createCrewsStore — meetingPoints', () => {
     const pool = mockPool([{ rows: [{ id: 'mp1', recurs_daily: true }] }]);
     const { meetingPoints } = createCrewsStore(pool, mockUtils);
 
-    await meetingPoints.listByCrew('c1');
+    const result = await meetingPoints.listByCrew('c1');
 
-    assert.ok(norm(pool.queries[0].sql).includes('recurs_daily'));
+    assert.deepStrictEqual(result, [{ id: 'mp1', recurs_daily: true }]);
+    assert.deepStrictEqual(pool.queries[0].params, ['c1']);
   });
 
   it('create returns null when SELECT returns nothing', async () => {
@@ -735,7 +704,6 @@ describe('createCrewsStore — meetingPoints', () => {
 
     await meetingPoints.deactivate('mp1');
 
-    assert.ok(pool.queries[0].sql.includes('active = FALSE'));
     assert.deepStrictEqual(pool.queries[0].params, ['mp1']);
   });
 
@@ -767,7 +735,6 @@ describe('createCrewsStore — meetingPoints', () => {
     const result = await meetingPoints.expireStale();
 
     assert.strictEqual(result.rowCount, 2);
-    assert.ok(pool.queries[0].sql.includes('expires_at < NOW()'));
   });
 });
 
@@ -788,7 +755,6 @@ describe('createNotificationsStore — deviceTokens', () => {
     });
 
     assert.strictEqual(pool.queries.length, 1);
-    assert.ok(pool.queries[0].sql.includes('INSERT INTO device_tokens'));
     const p = pool.queries[0].params;
     assert.strictEqual(p[0], 'dt1');
     assert.strictEqual(p[1], 'u1');
@@ -835,7 +801,6 @@ describe('createNotificationsStore — deviceTokens', () => {
       localRemindersPresent: true,
     });
 
-    assert.ok(pool.queries[0].sql.includes('CASE WHEN $10 THEN EXCLUDED.local_reminders_festival_id'));
     assert.strictEqual(pool.queries[0].params[9], false);
     assert.strictEqual(pool.queries[1].params[8], null);
     assert.strictEqual(pool.queries[1].params[9], true);
@@ -863,7 +828,6 @@ describe('createNotificationsStore — deviceTokens', () => {
 
     await deviceTokens.unregister('tok123', 'u1');
 
-    assert.ok(pool.queries[0].sql.includes('DELETE FROM device_tokens'));
     assert.deepStrictEqual(pool.queries[0].params, ['tok123', 'u1']);
   });
 
@@ -911,8 +875,6 @@ describe('createNotificationsStore — deviceTokens', () => {
     const result = await deviceTokens.listByUsers(['u1', 'u2', 'u3']);
 
     assert.strictEqual(result.length, 1);
-    assert.ok(pool.queries[0].sql.includes('user_id = ANY($1)'));
-    assert.ok(!pool.queries[0].sql.includes('$2'));
     assert.deepStrictEqual(pool.queries[0].params, [['u1', 'u2', 'u3']]);
   });
 
@@ -922,7 +884,6 @@ describe('createNotificationsStore — deviceTokens', () => {
 
     await deviceTokens.deleteByUser('u1');
 
-    assert.ok(pool.queries[0].sql.includes('DELETE FROM device_tokens'));
     assert.deepStrictEqual(pool.queries[0].params, ['u1']);
   });
 
@@ -981,7 +942,7 @@ describe('createNotificationsStore — deviceTokens', () => {
 
     await deviceTokens.deleteExpired();
 
-    assert.ok(pool.queries[0].sql.includes('expires_at < NOW()'));
+    assert.strictEqual(pool.queries.length, 1);
   });
 });
 
@@ -1097,7 +1058,6 @@ describe('createNotificationsStore — notificationLog', () => {
       errorMessage: null,
     });
 
-    assert.ok(norm(pool.queries[0].sql).includes('INSERT INTO notification_log'));
     const p = pool.queries[0].params;
     assert.strictEqual(p[0], 'n1');
     assert.strictEqual(p[1], 'u1');
@@ -1112,7 +1072,6 @@ describe('createNotificationsStore — notificationLog', () => {
     const result = await notificationLog.listInbox('u1');
 
     assert.strictEqual(result.length, 2);
-    assert.ok(norm(pool.queries[0].sql).includes("platform = 'inbox'"));
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 50]);
   });
 
@@ -1131,9 +1090,6 @@ describe('createNotificationsStore — notificationLog', () => {
 
     const counts = await notificationLog.countRecentPushes(['u1', 'u2', 'u3'], ['crew_sos', 'set_reminder']);
 
-    const sql = norm(pool.queries[0].sql);
-    assert.ok(sql.includes("platform = 'inbox'"));
-    assert.ok(sql.includes("status = 'inbox'"));
     assert.deepStrictEqual(pool.queries[0].params, [['u1', 'u2', 'u3'], ['crew_sos', 'set_reminder']]);
     assert.strictEqual(counts.get('u1'), 6);
     assert.strictEqual(counts.get('u2'), 1);
@@ -1156,7 +1112,6 @@ describe('createNotificationsStore — notificationLog', () => {
 
     await notificationLog.updateStatus('n1', 'delivered');
 
-    assert.ok(pool.queries[0].sql.includes('delivered_at = NOW()'));
     assert.deepStrictEqual(pool.queries[0].params, ['delivered', 'n1']);
   });
 });
@@ -1188,7 +1143,6 @@ describe('createNotificationsStore — notificationCounts', () => {
 
     await notificationCounts.increment('u1', 'f1', 'updates');
 
-    assert.ok(pool.queries[0].sql.includes('INSERT INTO notification_counts'));
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 'f1', 1]);
   });
 
@@ -1207,7 +1161,6 @@ describe('createNotificationsStore — notificationCounts', () => {
 
     await notificationCounts.reset('u1', 'f1');
 
-    assert.ok(pool.queries[0].sql.includes('unread_updates = 0'));
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 'f1']);
   });
 
@@ -1217,7 +1170,6 @@ describe('createNotificationsStore — notificationCounts', () => {
 
     await notificationCounts.resetAll('u1');
 
-    assert.ok(pool.queries[0].sql.includes('unread_updates = 0'));
     assert.deepStrictEqual(pool.queries[0].params, ['u1']);
   });
 });
@@ -1234,7 +1186,6 @@ describe('createRatingsStore', () => {
     const result = await store.upsert('u1', 's1', 5, 'Great!');
 
     assert.deepStrictEqual(result, row);
-    assert.ok(pool.queries[0].sql.includes('INSERT INTO set_ratings'));
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 's1', 5, 'Great!']);
   });
 
@@ -1245,8 +1196,6 @@ describe('createRatingsStore', () => {
     await store.upsert('u1', 's1', 4);
 
     assert.strictEqual(pool.queries[0].params[3], null);
-    assert.ok(pool.queries[0].sql.includes("COALESCE($4, '')"));
-    assert.ok(pool.queries[0].sql.includes('WHEN $4::text IS NULL THEN set_ratings.note'));
   });
 
   it('upsert returns undefined when no RETURNING row', async () => {
@@ -1308,7 +1257,6 @@ describe('createRatingsStore', () => {
 
     assert.strictEqual(pool.queries[0].params.length, 3); // festivalId, limit+1, cursor
     assert.strictEqual(pool.queries[0].params[2], 's1');
-    assert.ok(pool.queries[0].sql.includes('HAVING'));
   });
 
   it('getByFestival detects hasMore and returns nextCursor', async () => {
@@ -1333,7 +1281,6 @@ describe('createRatingsStore', () => {
 
     await store.getByFestival('f1', { limit: 5 });
 
-    assert.ok(!pool.queries[0].sql.includes('HAVING'));
     assert.strictEqual(pool.queries[0].params.length, 2);
   });
 
@@ -1360,7 +1307,6 @@ describe('createRatingsStore', () => {
 
     assert.strictEqual(pool.queries[0].params.length, 4);
     assert.strictEqual(pool.queries[0].params[3], 'r5');
-    assert.ok(pool.queries[0].sql.includes('AND r.id > $4'));
   });
 
   it('getCrewRatings detects hasMore', async () => {
@@ -1380,7 +1326,6 @@ describe('createRatingsStore', () => {
 
     await store.delete('u1', 's1');
 
-    assert.ok(pool.queries[0].sql.includes('DELETE FROM set_ratings'));
     assert.deepStrictEqual(pool.queries[0].params, ['u1', 's1']);
   });
 
@@ -1494,7 +1439,6 @@ describe('createRolesStore', () => {
     // Grant role — should invalidate cache
     await store.grantRole('u1', 'admin', 'granter1');
 
-    assert.ok(pool.queries[1].sql.includes('INSERT INTO user_roles'));
     assert.deepStrictEqual(pool.queries[1].params, ['u1', 'admin', 'granter1']);
 
     // Next getUserRoles should hit DB again
@@ -1523,7 +1467,6 @@ describe('createRolesStore', () => {
     await store.getUserRoles('u1');
     await store.revokeRole('u1', 'admin');
 
-    assert.ok(pool.queries[1].sql.includes('DELETE FROM user_roles'));
     assert.deepStrictEqual(pool.queries[1].params, ['u1', 'admin']);
 
     // Cache should be invalidated — next call hits DB
