@@ -679,7 +679,7 @@ describe('rate-limiting: Redis failure paths (characterization)', () => {
   it('the in-memory fallback map stays at MAX_RATE_LIMIT_ENTRIES, evicting the oldest key', async () => {
     const deps = makeDeps({ config: { MAX_RATE_LIMIT_ENTRIES: 3 } });
     const middleware = createRateLimiters(deps).rateLimit();
-    for (let i = 1; i <= 5; i++) await middleware(mockReq({ ip: `10.0.0.${i}` }), mockRes(), () => {});
-    assert.deepEqual([...deps.state.rateLimits.keys()], ['10.0.0.3', '10.0.0.4', '10.0.0.5']);
+    for (let i = 1; i <= 5; i++) await middleware(mockReq({ ip: `203.0.113.${i}` }), mockRes(), () => {});
+    assert.deepEqual([...deps.state.rateLimits.keys()], ['203.0.113.3', '203.0.113.4', '203.0.113.5']);
   });
 });
