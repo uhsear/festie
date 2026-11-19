@@ -19,6 +19,8 @@ import { useUIStore, type FailedSyncItem } from '../stores/uiStore';
 
 const QUEUE_KEY = 'festie-offline-queue';
 const FAILED_KEY = 'festie-offline-failed';
+/** Unreadable stored queue is copied here before the next write replaces it. */
+const CORRUPT_KEY = 'festie-offline-queue-corrupt';
 
 /** Drop queued mutations older than this on read (mirrors the web queue policy). */
 export const MAX_QUEUE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -55,8 +57,15 @@ async function readQueueRaw(): Promise<QueuedMutation[]> {
   try {
     const raw = await Promise.resolve(getStorage().getItem(QUEUE_KEY));
     if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+    if (Array.isArray(parsed)) return parsed;
+    await Promise.resolve(getStorage().setItem(CORRUPT_KEY, raw));
+    return [];
   } catch {
     return [];
   }
@@ -214,6 +223,7 @@ export async function clearPersistedFailed(): Promise<void> {
 export async function clearQueue(): Promise<void> {
   await withQueueLock(async () => {
     await writeQueue([]);
+    await Promise.resolve(getStorage().removeItem(CORRUPT_KEY));
   });
 }
 

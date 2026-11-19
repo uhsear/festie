@@ -97,8 +97,8 @@ export default function AccountScreen() {
   const setThemeMode = useUIStore((s) => s.setThemeMode);
   const hapticsEnabled = useUIStore((s) => s.hapticsEnabled);
   const setHapticsEnabled = useUIStore((s) => s.setHapticsEnabled);
-  // The binary forces dark until app.json userInterfaceStyle is 'automatic' (P8), so
-  // the OS scheme cannot be read before that. Hide "Match system" until then.
+  // Binaries built before userInterfaceStyle became 'automatic' force dark, so the OS scheme
+  // cannot be read there. Hide "Match system" on those until they are rebuilt.
   const canMatchSystem = Constants.expoConfig?.userInterfaceStyle === 'automatic';
   const offlineMode = useUIStore((s) => s.offlineMode);
 

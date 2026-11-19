@@ -2,17 +2,13 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchAdminPickInsight } from '@festie/shared/services/admin';
 import { pickClashRows, picksCsvFileName, picksPerSetCsv } from '@festie/shared/utils';
+import { saveBlob } from '../../lib/downloadExport';
 import { ADMIN_QUERY_OPTIONS, adminKeys } from './adminQueries';
 
 const EXPORT_HINT_ID = 'pick-insight-export-hint';
 
 function downloadCsv(csv: string, fileName: string) {
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.click();
-  URL.revokeObjectURL(url);
+  saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), fileName);
 }
 
 /** Overlapping sets that many people picked, plus a counts-only CSV of picks per set. */

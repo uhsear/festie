@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import DialogShell from '../DialogShell';
 import { makeStyles, typeStyle } from '../../hooks/useTokens';
 import { LabeledTextInput, ModalSelect, TimeField, isValidTime, type SelectOption } from './AdminFields';
 
@@ -44,90 +45,71 @@ function ShiftTimesForm({ stages, onCancel, onConfirm }: Omit<ShiftTimesDialogPr
   };
 
   return (
-    <View style={styles.card} accessibilityViewIsModal>
-      <ScrollView
-        contentContainerStyle={styles.cardContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-        bounces={false}
-      >
-        <Text style={styles.title} accessibilityRole="header">
-          Shift set times
-        </Text>
-        <ModalSelect
-          label="Stage"
-          value={stageId}
-          options={[ALL_STAGES, ...stages]}
-          onSelect={setStageId}
-        />
-        <TimeField
-          label="Starting at or after"
-          value={fromTime}
-          onChangeText={setFromTime}
-          hint="Leave blank to shift the whole day."
-        />
-        <LabeledTextInput
-          label="Minutes"
-          value={minutesText}
-          onChangeText={setMinutesText}
-          placeholder="30"
-          autoCapitalize="none"
-          maxLength={4}
-          hint="Use a minus sign to move earlier."
-          error={submitted && minutes === null ? MINUTES_ERROR : null}
-        />
-        <View style={styles.actions}>
-          <TouchableOpacity
-            style={[styles.button, styles.cancelButton]}
-            onPress={onCancel}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
-          >
-            <Text style={styles.cancelLabel}>Cancel</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.button, styles.confirmButton]}
-            onPress={submit}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Shift"
-          >
-            <Text style={styles.confirmLabel}>Shift</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
-    </View>
+    <ScrollView
+      contentContainerStyle={styles.cardContent}
+      showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      bounces={false}
+    >
+      <Text style={styles.title} accessibilityRole="header">
+        Shift set times
+      </Text>
+      <ModalSelect
+        label="Stage"
+        value={stageId}
+        options={[ALL_STAGES, ...stages]}
+        onSelect={setStageId}
+      />
+      <TimeField
+        label="Starting at or after"
+        value={fromTime}
+        onChangeText={setFromTime}
+        hint="Leave blank to shift the whole day."
+      />
+      <LabeledTextInput
+        label="Minutes"
+        value={minutesText}
+        onChangeText={setMinutesText}
+        placeholder="30"
+        autoCapitalize="none"
+        maxLength={4}
+        hint="Use a minus sign to move earlier."
+        error={submitted && minutes === null ? MINUTES_ERROR : null}
+      />
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.button, styles.cancelButton]}
+          onPress={onCancel}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+        >
+          <Text style={styles.cancelLabel}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, styles.confirmButton]}
+          onPress={submit}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Shift"
+        >
+          <Text style={styles.confirmLabel}>Shift</Text>
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
 }
 
 export default function ShiftTimesDialog({ visible, ...rest }: ShiftTimesDialogProps) {
   const styles = useStyles();
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={rest.onCancel} statusBarTranslucent>
-      <View style={styles.scrim}>
-        <Pressable style={styles.backdrop} onPress={rest.onCancel} accessible={false} />
-        <ShiftTimesForm {...rest} />
-      </View>
-    </Modal>
+    <DialogShell visible={visible} onClose={rest.onCancel} cardStyle={styles.card}>
+      <ShiftTimesForm {...rest} />
+    </DialogShell>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  scrim: {
-    flex: 1,
-    backgroundColor: t.colors.shade[10],
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: t.spacing[5],
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
   card: {
     width: '100%',
     maxWidth: 400,

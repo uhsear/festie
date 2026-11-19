@@ -1,6 +1,6 @@
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { usePicks, useSetContext } from '@festie/shared/hooks';
+import { useFestival, usePicks, useSetContext } from '@festie/shared/hooks';
 import { COPY, PRIORITY_LABELS } from '@festie/shared/constants';
 import { artistDisplayName } from '@festie/shared/utils';
 import type { SetContextEntry } from '@festie/shared/utils';
@@ -9,12 +9,12 @@ import type { FestivalSet } from '@festie/shared/types';
 /** "On <stage> that night" neighbours and "Playing at the same time". Each part hides when empty. */
 export default function SetContextSection({ set }: { set: FestivalSet }) {
   const { before, after, overlaps } = useSetContext(set);
-  const stages = useFestivalStore((s) => s.stages);
+  const { getStageName } = useFestival();
   const separator = useFestivalStore((s) => s.currentFestival?.b2bSeparator);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { getMyPick } = usePicks();
 
-  const stageName = (s: FestivalSet) => stages.find((st) => st.id === s.stageId)?.name ?? s.stageName ?? '';
+  const stageName = (s: FestivalSet) => getStageName(s.stageId) ?? s.stageName ?? '';
 
   const row = (e: SetContextEntry, lead?: string) => {
     const artist = artistDisplayName(e.set, separator);

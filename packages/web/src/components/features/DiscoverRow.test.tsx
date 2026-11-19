@@ -13,6 +13,11 @@ vi.mock('@festie/shared/stores', () => ({
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: (sel: (s: { setDetailSet: typeof setDetailSet }) => unknown) => sel({ setDetailSet }),
 }));
+vi.mock('@festie/shared/hooks', () => ({
+  useFestival: () => ({
+    getStageName: (id: string) => (fest.stages as { id: string; name: string }[]).find((s) => s.id === id)?.name,
+  }),
+}));
 vi.mock('../../hooks/useSetStatus', () => ({ useNow: () => Date.parse('2026-05-29T12:00:00Z') }));
 
 import DiscoverRow from './DiscoverRow';

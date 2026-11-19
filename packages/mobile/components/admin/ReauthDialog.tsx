@@ -1,9 +1,10 @@
 import { useCallback, useRef, useState, type ReactElement } from 'react';
-import { Linking, Modal, Platform, View, Text, TouchableOpacity, Pressable } from 'react-native';
+import { Linking, Platform, View, Text, TouchableOpacity } from 'react-native';
 import { PROVIDER_COPY } from '@festie/shared/constants';
 import { REAUTH_COPY, listIdentities, type ReauthBody } from '@festie/shared/services';
 import type { ProviderName } from '@festie/shared/types';
 import { makeStyles, typeStyle } from '../../hooks/useTokens';
+import DialogShell from '../DialogShell';
 import ProviderButtons from '../ProviderButtons';
 import { LabeledTextInput } from './AdminFields';
 
@@ -99,50 +100,45 @@ function ProviderReauthDialog({
   const usable = reauthProvidersFor(linked ?? [], Platform.OS);
   const label = usable.map((p) => PROVIDER_COPY.providerLabel[p]).join(' or ');
   return (
-    <Modal visible={linked !== null} transparent animationType="fade" onRequestClose={() => onResult(null)} statusBarTranslucent>
-      <View style={styles.scrim}>
-        <Pressable style={styles.backdrop} onPress={() => onResult(null)} accessible={false} />
-        <View style={styles.card} accessibilityViewIsModal>
-          <Text style={styles.title} accessibilityRole="header">
-            {REAUTH_COPY.title}
-          </Text>
-          {usable.length > 0 ? (
-            <>
-              <Text style={styles.message}>{PROVIDER_COPY.reauthProviderBody(label)}</Text>
-              <ProviderButtons
-                mode="reauth"
-                only={usable}
-                onCredential={async (provider, body) => {
-                  onResult({ provider, idToken: body.idToken, nonce: body.nonce, authorizationCode: body.authorizationCode });
-                }}
-              />
-            </>
-          ) : (
-            <>
-              <Text style={styles.message}>Confirm on festie.us, or set a password first.</Text>
-              <TouchableOpacity
-                style={[styles.button, styles.confirmButton]}
-                onPress={() => void Linking.openURL(WEB_ACCOUNT_URL)}
-                activeOpacity={0.7}
-                accessibilityRole="link"
-                accessibilityLabel="Open festie.us account page"
-              >
-                <Text style={styles.confirmLabel}>Open festie.us</Text>
-              </TouchableOpacity>
-            </>
-          )}
+    <DialogShell visible={linked !== null} onClose={() => onResult(null)} cardStyle={styles.card}>
+      <Text style={styles.title} accessibilityRole="header">
+        {REAUTH_COPY.title}
+      </Text>
+      {usable.length > 0 ? (
+        <>
+          <Text style={styles.message}>{PROVIDER_COPY.reauthProviderBody(label)}</Text>
+          <ProviderButtons
+            mode="reauth"
+            only={usable}
+            onCredential={async (provider, body) => {
+              onResult({ provider, idToken: body.idToken, nonce: body.nonce, authorizationCode: body.authorizationCode });
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <Text style={styles.message}>Confirm on festie.us, or set a password first.</Text>
           <TouchableOpacity
-            style={[styles.button, styles.cancelButton]}
-            onPress={() => onResult(null)}
+            style={[styles.button, styles.confirmButton]}
+            onPress={() => void Linking.openURL(WEB_ACCOUNT_URL)}
             activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Cancel"
+            accessibilityRole="link"
+            accessibilityLabel="Open festie.us account page"
           >
-            <Text style={styles.cancelLabel}>Cancel</Text>
+            <Text style={styles.confirmLabel}>Open festie.us</Text>
           </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+        </>
+      )}
+      <TouchableOpacity
+        style={[styles.button, styles.cancelButton]}
+        onPress={() => onResult(null)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Cancel"
+      >
+        <Text style={styles.cancelLabel}>Cancel</Text>
+      </TouchableOpacity>
+    </DialogShell>
   );
 }
 
@@ -159,65 +155,46 @@ function ReauthDialog({ visible, password, onChangePassword, onConfirm, onCancel
   const canConfirm = password.length > 0;
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel} statusBarTranslucent>
-      <View style={styles.scrim}>
-        <Pressable style={styles.backdrop} onPress={onCancel} accessible={false} />
-        <View style={styles.card} accessibilityViewIsModal>
-          <Text style={styles.title} accessibilityRole="header">
-            {REAUTH_COPY.title}
-          </Text>
-          <Text style={styles.message}>{REAUTH_COPY.body}</Text>
-          <LabeledTextInput
-            label={REAUTH_COPY.label}
-            value={password}
-            onChangeText={onChangePassword}
-            autoCapitalize="none"
-            maxLength={200}
-            secureTextEntry
-          />
-          <View style={styles.actions}>
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
-              onPress={onCancel}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Cancel"
-            >
-              <Text style={styles.cancelLabel}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.confirmButton, !canConfirm && styles.confirmDisabled]}
-              onPress={onConfirm}
-              disabled={!canConfirm}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={REAUTH_COPY.button}
-              accessibilityState={{ disabled: !canConfirm }}
-            >
-              <Text style={styles.confirmLabel}>{REAUTH_COPY.button}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+    <DialogShell visible={visible} onClose={onCancel} cardStyle={styles.card}>
+      <Text style={styles.title} accessibilityRole="header">
+        {REAUTH_COPY.title}
+      </Text>
+      <Text style={styles.message}>{REAUTH_COPY.body}</Text>
+      <LabeledTextInput
+        label={REAUTH_COPY.label}
+        value={password}
+        onChangeText={onChangePassword}
+        autoCapitalize="none"
+        maxLength={200}
+        secureTextEntry
+      />
+      <View style={styles.actions}>
+        <TouchableOpacity
+          style={[styles.button, styles.cancelButton]}
+          onPress={onCancel}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel="Cancel"
+        >
+          <Text style={styles.cancelLabel}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.button, styles.confirmButton, !canConfirm && styles.confirmDisabled]}
+          onPress={onConfirm}
+          disabled={!canConfirm}
+          activeOpacity={0.7}
+          accessibilityRole="button"
+          accessibilityLabel={REAUTH_COPY.button}
+          accessibilityState={{ disabled: !canConfirm }}
+        >
+          <Text style={styles.confirmLabel}>{REAUTH_COPY.button}</Text>
+        </TouchableOpacity>
       </View>
-    </Modal>
+    </DialogShell>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  scrim: {
-    flex: 1,
-    backgroundColor: t.colors.shade[10],
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: t.spacing[5],
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
   card: {
     width: '100%',
     maxWidth: 400,

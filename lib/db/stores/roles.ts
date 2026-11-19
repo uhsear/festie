@@ -7,7 +7,12 @@ import type { Pool } from 'pg';
  * Role-based access control store.
  * Provides methods for querying and managing user roles.
  */
-export default function createRolesStore(pool: Pool, { nodeEnv }: { nodeEnv?: string } = {}) {
+export default function createRolesStore(
+  pool: Pool,
+  { nodeEnv, onRolesChanged }: { nodeEnv?: string; onRolesChanged?: (userId: string) => void } = {},
+) {
+  // Tells peer workers to drop their role caches. Set after creation by the cache bus wiring.
+  let notifyRolesChanged = onRolesChanged;
   // In-memory role cache: userId → Set of role names
   // Invalidated on grant/revoke. TTL-based staleness via timestamp.
   const roleCache = new Map<string, { roles: string[]; ts: number }>();
@@ -22,6 +27,10 @@ export default function createRolesStore(pool: Pool, { nodeEnv }: { nodeEnv?: st
   }
 
   return {
+    setOnRolesChanged(callback: (userId: string) => void) {
+      notifyRolesChanged = callback;
+    },
+
     /**
      * Get all role names for a user.
      */
@@ -71,6 +80,7 @@ export default function createRolesStore(pool: Pool, { nodeEnv }: { nodeEnv?: st
         ON CONFLICT (user_id, role_id) DO NOTHING
       `, [userId, roleName, grantedBy]);
       invalidateCache(userId);
+      notifyRolesChanged?.(userId);
     },
 
     /**
@@ -91,6 +101,7 @@ export default function createRolesStore(pool: Pool, { nodeEnv }: { nodeEnv?: st
           )
       `, [userId, roleName]);
       invalidateCache(userId);
+      notifyRolesChanged?.(userId);
     },
 
     /**

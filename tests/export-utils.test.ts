@@ -95,6 +95,8 @@ const TEMPLATE = [
 // Pure helpers: time / date / identity
 // ──────────────────────────────────────────────────────────────────────────────
 
+const { toCents, formatMoney } = exportUtils;
+
 describe('export-utils pure helpers', () => {
   test('formatTime converts 24h to 12h AM/PM', () => {
     assert.equal(exportUtils.formatTime('00:00'), '12:00 AM');
@@ -536,5 +538,16 @@ describe('buildExportHtml', () => {
     assert.ok(result);
     assert.equal(result.set.id, 'set-a');
     assert.deepEqual(result.otherNames, ['Cassie']);
+  });
+
+  test('toCents rounds to integer cents and maps non-finite input to 0', () => {
+    assert.equal(toCents('12.40'), 1240);
+    assert.equal(toCents(0.1), 10);
+    assert.equal(toCents('abc'), 0);
+  });
+
+  test('formatMoney formats cents in the given currency', () => {
+    assert.equal(formatMoney(1240, 'USD'), '$12.40');
+    assert.equal(formatMoney(1240, 'EUR'), '€12.40');
   });
 });

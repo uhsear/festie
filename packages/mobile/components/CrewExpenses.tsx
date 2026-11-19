@@ -11,6 +11,7 @@ import {
   formatAmount,
   formatCents,
   toCents,
+  centsToInputText,
   evenShares,
   sharesByDays,
   attendingDayCount,
@@ -147,14 +148,14 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
     const stored = e.split_amounts;
     setUneven(!!stored && Object.keys(stored).length > 0);
     setShareText(
-      Object.fromEntries(Object.entries(stored ?? {}).map(([uid, cents]) => [uid, (cents / 100).toFixed(2)])),
+      Object.fromEntries(Object.entries(stored ?? {}).map(([uid, cents]) => [uid, centsToInputText(cents)])),
     );
     setShowForm(true);
   };
 
   const startUneven = () => {
     setShareText(
-      Object.fromEntries(evenShares(toCents(amount), splitWith).map((sh) => [sh.userId, (sh.cents / 100).toFixed(2)])),
+      Object.fromEntries(evenShares(toCents(amount), splitWith).map((sh) => [sh.userId, centsToInputText(sh.cents)])),
     );
     setUneven(true);
   };
@@ -165,7 +166,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
     );
     if (byDays.length === 0) return;
     setSplitWith((prev) => prev.filter((id) => !removed.includes(id)));
-    setShareText(Object.fromEntries(byDays.map((sh) => [sh.userId, (sh.cents / 100).toFixed(2)])));
+    setShareText(Object.fromEntries(byDays.map((sh) => [sh.userId, centsToInputText(sh.cents)])));
     setRemovedNames(removed.map((id) => members.find((m) => m.userId === id)?.name || 'Member'));
   };
 

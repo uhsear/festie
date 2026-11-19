@@ -5,6 +5,8 @@ import {
   formatAmount,
   formatCents,
   toCents,
+  centsToInputText,
+  ZERO_EPSILON,
   spendingExpenses,
   ledgerRows,
   describePayment,
@@ -113,5 +115,20 @@ describe('currency formatting', () => {
     expect(toCents('12.345')).toBe(1235);
     expect(toCents(12.4)).toBe(1240);
     expect(toCents('abc')).toBe(0);
+  });
+});
+
+describe('centsToInputText / ZERO_EPSILON', () => {
+  it('renders integer cents as a 2-dp input string', () => {
+    expect(centsToInputText(1240)).toBe('12.40');
+    expect(centsToInputText(5)).toBe('0.05');
+    expect(centsToInputText(0)).toBe('0.00');
+  });
+  it('round-trips with toCents', () => {
+    expect(toCents(centsToInputText(1999))).toBe(1999);
+  });
+  it('is the settled threshold formatBalance uses', () => {
+    expect(formatBalance(ZERO_EPSILON)).toBe('$0.00');
+    expect(formatBalance(ZERO_EPSILON + 0.001)).toBe('+$0.01');
   });
 });

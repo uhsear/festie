@@ -55,9 +55,6 @@ import {
   createStores,
   createDbLatencyTracker,
   openPlannerDatabase as openPlannerDatabaseRaw,
-  parseJsonObject,
-  serializeJson,
-  withTransaction,
 } from './db/index.js';
 
 // ── Migration runner ─────────────────────────────────────────────────────
@@ -309,6 +306,10 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
   const log = opts.log || (() => {});
   const client = await pool.connect();
   try {
+    // The pool sets a 30 s statement_timeout. A data-heavy migration, or waiting
+    // on the advisory lock while another instance migrates, would be cancelled.
+    // Lift it for this session only; the finally below restores the pool default.
+    await client.query('SET statement_timeout = 0');
     // ── Cross-instance serialization ────────────────────────────────────
     // Acquire a session advisory lock on THIS client before touching the
     // ledger. Under a multi-instance deploy, N workers boot at once and
@@ -391,7 +392,15 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
       }
     }
   } finally {
-    client.release();
+    // Do not hand a timeout-free client back to the pool: if the restore fails, destroy the connection.
+    const resetFailure = await client.query('RESET statement_timeout').then(
+      () => undefined,
+      (resetErr: any) => {
+        log('warn', 'failed to restore statement_timeout; discarding connection', { error: resetErr && resetErr.message });
+        return resetErr;
+      },
+    );
+    client.release(resetFailure);
   }
 }
 
@@ -537,9 +546,6 @@ export {
   createStores,
   createDbLatencyTracker,
   openPlannerDatabase,
-  parseJsonObject,
-  serializeJson,
-  withTransaction,
   // Newly exposed for tests / ops tooling (non-breaking additions):
   runPostgresMigrations,
   runPostgresMigrationsWithConnectRetry,

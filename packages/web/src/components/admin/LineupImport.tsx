@@ -27,6 +27,7 @@ import {
 } from '@festie/shared/utils/lineupImport';
 import type { TimeReleasePanelData } from '@festie/shared/utils/timeReleases';
 import { useToast } from '../../lib/toastContext';
+import { saveBlob } from '../../lib/downloadExport';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import LineupImportHistory from './LineupImportHistory';
 import SetTimeReleasePanel from './SetTimeReleasePanel';
@@ -58,14 +59,7 @@ const columnLetter = (index: number) => {
   return letter;
 };
 
-const downloadText = (name: string, text: string) => {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' }));
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = name;
-  a.click();
-  URL.revokeObjectURL(url);
-};
+const downloadText = (name: string, text: string) => saveBlob(new Blob([text], { type: 'text/csv' }), name);
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'festival';
 

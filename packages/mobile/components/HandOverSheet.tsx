@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { CrewMember } from '@festie/shared/types';
 import { crewCopy, FESTIE_ORIGIN, memberAvatarUrl } from '@festie/shared/utils';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Avatar from './Avatar';
 import Button from './Button';
+import SheetShell from './SheetShell';
 
 interface HandOverSheetProps {
   visible: boolean;
@@ -20,7 +20,6 @@ interface HandOverSheetProps {
 /** Owner picks who takes over the crew before leaving it. The first candidate is preselected. */
 export default function HandOverSheet({ visible, crewName, candidates, busy, onConfirm, onClose }: HandOverSheetProps) {
   const t = useTokens();
-  const insets = useSafeAreaInsets();
   const styles = useStyles();
   const firstId = candidates[0]?.userId ?? null;
   const [selectedId, setSelectedId] = useState<string | null>(firstId);
@@ -33,82 +32,56 @@ export default function HandOverSheet({ visible, crewName, candidates, busy, onC
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={close}>
-      <View style={styles.root}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={close}
-          accessibilityRole="button"
-          accessibilityLabel="Close hand over"
+    <SheetShell visible={visible} onClose={close} backdropLabel="Close hand over" maxHeight="80%">
+      <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        {crewCopy.handOverTitle(crewName)}
+      </Text>
+      <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        {crewCopy.handOverBody}
+      </Text>
+      <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+        {candidates.map((m) => {
+          const checked = m.userId === picked;
+          const label = m.name || m.username || 'Member';
+          return (
+            <Pressable
+              key={m.userId}
+              style={[styles.row, checked && styles.rowChecked]}
+              onPress={() => setSelectedId(m.userId)}
+              disabled={busy}
+              accessibilityRole="radio"
+              accessibilityState={{ checked, disabled: busy }}
+              accessibilityLabel={label}
+            >
+              <Avatar name={label} image={memberAvatarUrl(m, FESTIE_ORIGIN)} size="md" />
+              <Text style={styles.rowName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {label}
+              </Text>
+              <Ionicons
+                name={checked ? 'radio-button-on' : 'radio-button-off'}
+                size={t.iconSize.action}
+                color={checked ? t.colors.accent.aqua : t.colors.text.secondary}
+              />
+            </Pressable>
+          );
+        })}
+      </ScrollView>
+      <View style={styles.buttons}>
+        <Button label="Cancel" variant="secondary" onPress={close} disabled={busy} style={styles.button} />
+        <Button
+          label={crewCopy.handOverConfirm}
+          variant="danger"
+          loading={busy}
+          disabled={!picked}
+          onPress={() => picked && onConfirm(picked)}
+          style={styles.button}
         />
-        <View style={[styles.sheet, { paddingBottom: t.spacing[5] + insets.bottom }]} accessibilityViewIsModal>
-          <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {crewCopy.handOverTitle(crewName)}
-          </Text>
-          <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {crewCopy.handOverBody}
-          </Text>
-          <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-            {candidates.map((m) => {
-              const checked = m.userId === picked;
-              const label = m.name || m.username || 'Member';
-              return (
-                <Pressable
-                  key={m.userId}
-                  style={[styles.row, checked && styles.rowChecked]}
-                  onPress={() => setSelectedId(m.userId)}
-                  disabled={busy}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked, disabled: busy }}
-                  accessibilityLabel={label}
-                >
-                  <Avatar name={label} image={memberAvatarUrl(m, FESTIE_ORIGIN)} size="md" />
-                  <Text style={styles.rowName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                    {label}
-                  </Text>
-                  <Ionicons
-                    name={checked ? 'radio-button-on' : 'radio-button-off'}
-                    size={t.iconSize.action}
-                    color={checked ? t.colors.accent.aqua : t.colors.text.secondary}
-                  />
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-          <View style={styles.buttons}>
-            <Button label="Cancel" variant="secondary" onPress={close} disabled={busy} style={styles.button} />
-            <Button
-              label={crewCopy.handOverConfirm}
-              variant="danger"
-              loading={busy}
-              disabled={!picked}
-              onPress={() => picked && onConfirm(picked)}
-              style={styles.button}
-            />
-          </View>
-        </View>
       </View>
-    </Modal>
+    </SheetShell>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  root: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: t.colors.shade[9],
-  },
-  sheet: {
-    gap: t.spacing[3],
-    padding: t.spacing[5],
-    maxHeight: '80%',
-    borderTopLeftRadius: t.radii.default,
-    borderTopRightRadius: t.radii.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
   title: {
     ...typeStyle('title'),
     color: t.colors.text.primary,

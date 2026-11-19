@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import {
   groupCrewsByFestival,
@@ -13,6 +12,7 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTo
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
 import CreateCrewForm from './CreateCrewForm';
+import SheetShell from './SheetShell';
 
 type Mode = 'list' | 'create' | 'join';
 
@@ -29,7 +29,6 @@ export default function CrewSwitcherSheet({ visible, onClose, initialMode = 'lis
   const t = useTokens();
   const styles = useStyles();
   const haptics = useHaptics();
-  const insets = useSafeAreaInsets();
 
   const crews = useCrewStore((s) => s.crews);
   const activeCrew = useCrewStore((s) => s.activeCrew);
@@ -72,120 +71,94 @@ export default function CrewSwitcherSheet({ visible, onClose, initialMode = 'lis
   };
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-        <Pressable
-          style={styles.backdrop}
-          onPress={onClose}
-          accessibilityRole="button"
-          accessibilityLabel="Close your crews"
-        />
-        <View style={[styles.sheet, { paddingBottom: t.spacing[5] + insets.bottom }]} accessibilityViewIsModal>
-          <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            Your crews
-          </Text>
-          {mode === 'list' ? (
-            <>
-              <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
-                {groups.map((g) => (
-                  <View key={g.festivalId ?? 'unknown'} style={[styles.group, g.status === 'past' && styles.past]}>
-                    {g.label ? (
-                      <Text style={styles.sectionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                        {g.label}
-                      </Text>
-                    ) : null}
-                    {g.crews.map((c) => {
-                      const selected = c.id === activeCrew?.id;
-                      return (
-                        <Pressable
-                          key={c.id}
-                          style={[styles.row, selected && styles.rowSelected]}
-                          onPress={() => pick(c.id)}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Switch to crew ${c.name}${g.label ? `, ${g.label}` : ''}`}
-                          accessibilityState={{ selected }}
-                        >
-                          <Text style={styles.emoji}>{c.totem_emoji || '🎪'}</Text>
-                          <View style={styles.rowBody}>
-                            <Text style={styles.rowName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                              {c.name}
-                            </Text>
-                            <Text style={styles.rowMeta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                              {memberCountLabel(c.memberCount ?? c.members?.length ?? 0, c.maxMembers)}
-                            </Text>
-                          </View>
-                          {selected ? (
-                            <Ionicons name="checkmark" size={t.iconSize.action} color={t.colors.accent.aqua} />
-                          ) : null}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                ))}
-              </ScrollView>
-              <View style={styles.footer}>
-                <Button label="Create crew" variant="secondary" onPress={() => setMode('create')} style={styles.footerButton} />
-                <Button label="Join with code" variant="secondary" onPress={() => setMode('join')} style={styles.footerButton} />
+    <SheetShell visible={visible} onClose={onClose} backdropLabel="Close your crews" maxHeight="85%" keyboardAvoiding>
+      <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        Your crews
+      </Text>
+      {mode === 'list' ? (
+        <>
+          <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
+            {groups.map((g) => (
+              <View key={g.festivalId ?? 'unknown'} style={[styles.group, g.status === 'past' && styles.past]}>
+                {g.label ? (
+                  <Text style={styles.sectionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                    {g.label}
+                  </Text>
+                ) : null}
+                {g.crews.map((c) => {
+                  const selected = c.id === activeCrew?.id;
+                  return (
+                    <Pressable
+                      key={c.id}
+                      style={[styles.row, selected && styles.rowSelected]}
+                      onPress={() => pick(c.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Switch to crew ${c.name}${g.label ? `, ${g.label}` : ''}`}
+                      accessibilityState={{ selected }}
+                    >
+                      <Text style={styles.emoji}>{c.totem_emoji || '🎪'}</Text>
+                      <View style={styles.rowBody}>
+                        <Text style={styles.rowName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                          {c.name}
+                        </Text>
+                        <Text style={styles.rowMeta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                          {memberCountLabel(c.memberCount ?? c.members?.length ?? 0, c.maxMembers)}
+                        </Text>
+                      </View>
+                      {selected ? (
+                        <Ionicons name="checkmark" size={t.iconSize.action} color={t.colors.accent.aqua} />
+                      ) : null}
+                    </Pressable>
+                  );
+                })}
               </View>
-            </>
-          ) : mode === 'create' ? (
-            <>
-              <CreateCrewForm onCreated={onClose} />
-              <Button label="Back" variant="ghost" onPress={() => setMode('list')} />
-            </>
-          ) : (
-            <>
-              <TextInput
-                style={styles.input}
-                value={code}
-                onChangeText={(v) => {
-                  setCode(v);
-                  setCodeError(null);
-                }}
-                placeholder="K7XQ2M"
-                placeholderTextColor={t.colors.text.placeholder}
-                maxLength={64}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="go"
-                onSubmitEditing={join}
-                accessibilityLabel="Invite code or link"
-              />
-              <Text style={styles.helper} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                6-character code, or paste the invite link
-              </Text>
-              {codeError ? (
-                <Text style={styles.error} accessibilityLiveRegion="polite" maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                  {codeError}
-                </Text>
-              ) : null}
-              <Button label="Join" onPress={join} disabled={!code.trim()} />
-              <Button label="Back" variant="ghost" onPress={() => setMode('list')} />
-            </>
-          )}
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+            ))}
+          </ScrollView>
+          <View style={styles.footer}>
+            <Button label="Create crew" variant="secondary" onPress={() => setMode('create')} style={styles.footerButton} />
+            <Button label="Join with code" variant="secondary" onPress={() => setMode('join')} style={styles.footerButton} />
+          </View>
+        </>
+      ) : mode === 'create' ? (
+        <>
+          <CreateCrewForm onCreated={onClose} />
+          <Button label="Back" variant="ghost" onPress={() => setMode('list')} />
+        </>
+      ) : (
+        <>
+          <TextInput
+            style={styles.input}
+            value={code}
+            onChangeText={(v) => {
+              setCode(v);
+              setCodeError(null);
+            }}
+            placeholder="K7XQ2M"
+            placeholderTextColor={t.colors.text.placeholder}
+            maxLength={64}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            returnKeyType="go"
+            onSubmitEditing={join}
+            accessibilityLabel="Invite code or link"
+          />
+          <Text style={styles.helper} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            6-character code, or paste the invite link
+          </Text>
+          {codeError ? (
+            <Text style={styles.error} accessibilityLiveRegion="polite" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {codeError}
+            </Text>
+          ) : null}
+          <Button label="Join" onPress={join} disabled={!code.trim()} />
+          <Button label="Back" variant="ghost" onPress={() => setMode('list')} />
+        </>
+      )}
+    </SheetShell>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  root: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: t.colors.shade[9],
-  },
-  sheet: {
-    gap: t.spacing[3],
-    padding: t.spacing[5],
-    maxHeight: '85%',
-    borderTopLeftRadius: t.radii.default,
-    borderTopRightRadius: t.radii.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
   title: {
     ...typeStyle('title'),
     color: t.colors.text.primary,

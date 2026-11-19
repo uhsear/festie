@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
+import { useFestival } from '@festie/shared/hooks';
 import {
   selectNowNext,
   resolveFestivalTimeZone,
@@ -21,7 +22,7 @@ export default function NowNextStrip() {
   const user = useAuthStore((s) => s.user);
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
-  const stages = useFestivalStore((s) => s.stages);
+  const { getStageName } = useFestival();
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const nowMs = useNow();
@@ -38,7 +39,7 @@ export default function NowNextStrip() {
 
   const isNow = !!current;
   const name = artistDisplayName(focus.set, currentFestival?.b2bSeparator);
-  const stage = stages.find((s) => s.id === focus.set.stageId)?.name ?? focus.set.stageName ?? '';
+  const stage = getStageName(focus.set.stageId) ?? focus.set.stageName ?? '';
   const timing = isNow ? fmtTimeLeft(focus.end, nowMs) : fmtStartsIn(focus.start, nowMs, timeZone);
   const progress = isNow
     ? Math.min(100, Math.max(0, ((nowMs - focus.start) / Math.max(1, focus.end - focus.start)) * 100))

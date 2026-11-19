@@ -43,6 +43,7 @@ import { DollarSign, Plus, HandCoins } from 'lucide-react';
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import { useRovingTabs } from '@/hooks/useRovingTabs';
 import { inputBase } from '../../lib/styles';
+import { invalidateCrewMoney } from '../../lib/queryPersist';
 
 type RawExpense = CrewExpense;
 
@@ -151,9 +152,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         };
         qc.setQueryData<RawExpense[]>(['expenses', crewId], (old = []) => [placeholder, ...old]);
       } else {
-        qc.invalidateQueries({ queryKey: ['expenses', crewId] });
-        qc.invalidateQueries({ queryKey: ['settlement-plan', crewId] });
-        qc.invalidateQueries({ queryKey: ['expense-balances', crewId] });
+        invalidateCrewMoney(qc, crewId);
       }
       toast(writeOutcomeMessage(outcome, 'Expense added'), outcome === 'queued' ? 'info' : 'success');
       setShowForm(false);
@@ -162,9 +161,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   });
 
   const invalidateMoney = () => {
-    qc.invalidateQueries({ queryKey: ['expenses', crewId] });
-    qc.invalidateQueries({ queryKey: ['settlement-plan', crewId] });
-    qc.invalidateQueries({ queryKey: ['expense-balances', crewId] });
+    invalidateCrewMoney(qc, crewId);
   };
 
   const editExpense = useMutation({
@@ -245,9 +242,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       if (outcome === 'queued') {
         qc.setQueryData<RawExpense[]>(['expenses', crewId], (old = []) => old.filter((e) => e.id !== id));
       } else {
-        qc.invalidateQueries({ queryKey: ['expenses', crewId] });
-        qc.invalidateQueries({ queryKey: ['settlement-plan', crewId] });
-        qc.invalidateQueries({ queryKey: ['expense-balances', crewId] });
+        invalidateCrewMoney(qc, crewId);
       }
       const wasPayment = expenses.some((e) => e.id === id && e.category === 'settlement');
       setRemoveTarget(null);
@@ -264,9 +259,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     mutationFn: (payload: SettleCrewExpenseRequest) => settleExpense(crewId, payload),
     onSuccess: (outcome) => {
       if (outcome === 'sent') {
-        qc.invalidateQueries({ queryKey: ['expenses', crewId] });
-        qc.invalidateQueries({ queryKey: ['settlement-plan', crewId] });
-        qc.invalidateQueries({ queryKey: ['expense-balances', crewId] });
+        invalidateCrewMoney(qc, crewId);
       }
       setPaidTarget(null);
       toast(writeOutcomeMessage(outcome, 'Payment recorded'), outcome === 'queued' ? 'info' : 'success');

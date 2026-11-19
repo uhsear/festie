@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '../test-utils';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -57,12 +57,7 @@ vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toast
 import WrapPage from './wrap';
 
 function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <WrapPage />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<WrapPage />);
 }
 
 const response = {

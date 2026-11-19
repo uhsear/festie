@@ -1,14 +1,10 @@
-import { parseHex, relativeLuminance } from '@festie/shared/utils';
+import { contrastRatioRgb, parseHex } from '@festie/shared/utils';
 
-function luminance(hex: string): number {
-  const rgb = parseHex(hex);
-  return rgb ? relativeLuminance(rgb[0], rgb[1], rgb[2]) : 0;
-}
+const rgbOrBlack = (hex: string): [number, number, number] => parseHex(hex) ?? [0, 0, 0];
 
 /** WCAG contrast ratio between two opaque hex colours. */
 export function contrastRatio(a: string, b: string): number {
-  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x) as [number, number];
-  return (hi + 0.05) / (lo + 0.05);
+  return contrastRatioRgb(rgbOrBlack(a), rgbOrBlack(b));
 }
 
 /**
