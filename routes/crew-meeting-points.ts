@@ -15,6 +15,7 @@ import type {
 } from '../lib/schemas';
 import { MAX_MEETING_POINTS_PER_CREW } from '../lib/constants';
 import { logCrewActivity } from '../lib/db/stores/activity';
+import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
 
 export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
   const {
@@ -248,7 +249,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           return sendError(res, 404, 'Meeting point not found', ErrorCodes.NOT_FOUND);
         }
 
-        if (existing.created_by !== req.user.userId && req.membership.role !== 'owner') {
+        if (!isCreatorOrOwner(existing, req.user.userId, req.membership.role)) {
           return sendError(res, 403, 'Only the creator or crew owner can edit', ErrorCodes.FORBIDDEN);
         }
 
@@ -346,7 +347,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           return sendError(res, 404, 'Meeting point not found', ErrorCodes.NOT_FOUND);
         }
 
-        if (existing.created_by !== req.user.userId && req.membership.role !== 'owner') {
+        if (!isCreatorOrOwner(existing, req.user.userId, req.membership.role)) {
           return sendError(res, 403, 'Only the creator or crew owner can remove', ErrorCodes.FORBIDDEN);
         }
 
