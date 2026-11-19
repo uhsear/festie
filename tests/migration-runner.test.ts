@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { after, before, beforeEach, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import {
@@ -7,6 +8,7 @@ import {
   runPostgresMigrations,
   stripOuterTxBoundaries,
 } from '../lib/planner-db-pg';
+import { splitSqlStatements, usesConcurrently } from '../lib/db/sql-split';
 
 // Characterizes the migration runner: ordering, ledger, idempotence, the
 // advisory lock and failure rollback. The database tests create and drop a
@@ -132,20 +134,18 @@ describe('runPostgresMigrations against Postgres', { skip }, () => {
     await pool.query('UPDATE schema_migrations SET checksum = $2 WHERE version = $1', [first.version, sum]);
   });
 
-  test('refuses an unapplied migration numbered below the newest applied one', async () => {
+  test('warns about, then applies, an unapplied migration numbered below the newest applied one', async () => {
     const second = discoverMigrationsOnDisk()[1] as any;
-    const row = (await pool.query('SELECT * FROM schema_migrations WHERE version = $1', [second.version])).rows[0];
     await pool.query('DELETE FROM schema_migrations WHERE version = $1', [second.version]);
     __resetMigrationCacheForTests();
-    await assert.rejects(runPostgresMigrations(pool), /numbered below the newest applied version/);
-    await pool.query('INSERT INTO schema_migrations (version, name, applied_at, checksum) VALUES ($1, $2, $3, $4)', [
-      row.version,
-      row.name,
-      row.applied_at,
-      row.checksum,
-    ]);
-    __resetMigrationCacheForTests();
-    await runPostgresMigrations(pool);
+    const warnings: any[] = [];
+    const result = await runPostgresMigrations(pool, {
+      log: (level: string, msg: string, meta: any) => level === 'warn' && warnings.push({ msg, meta }),
+    });
+    assert.deepEqual(result.applied, [second.version]);
+    assert.deepEqual(warnings[0].meta.files, [second.file]);
+    const after = await pool.query('SELECT 1 FROM schema_migrations WHERE version = $1', [second.version]);
+    assert.equal(after.rowCount, 1);
   });
 
   test('the process-wide flag short-circuits later calls', async () => {
@@ -158,5 +158,43 @@ describe('runPostgresMigrations against Postgres', { skip }, () => {
       "SELECT count(*)::int AS n FROM pg_locks WHERE locktype = 'advisory' AND database = (SELECT oid FROM pg_database WHERE datname = current_database())",
     );
     assert.equal(rows[0].n, 0);
+  });
+});
+
+// CI applies every migrations/*.sql with psql before the app boots. Migrations
+// that record themselves leave ledger rows; the rest leave none. The runner
+// must boot on that state, not throw on the gaps.
+describe('runPostgresMigrations on a database preloaded outside the runner', { skip }, () => {
+  const PRELOADED_DB = 'festie_migration_runner_preloaded';
+  let admin: Pool;
+  let pool: Pool;
+
+  before(async () => {
+    admin = new Pool({ connectionString: TEST_DATABASE_URL });
+    await admin.query(`DROP DATABASE IF EXISTS ${PRELOADED_DB}`);
+    await admin.query(`CREATE DATABASE ${PRELOADED_DB}`);
+    const url = new URL(TEST_DATABASE_URL!);
+    url.pathname = `/${PRELOADED_DB}`;
+    pool = new Pool({ connectionString: url.toString() });
+    for (const m of discoverMigrationsOnDisk() as any[]) {
+      const sql = fs.readFileSync(m.fullPath, 'utf8');
+      // CONCURRENTLY statements cannot share one multi-statement query.
+      for (const statement of usesConcurrently(sql) ? splitSqlStatements(sql) : [sql]) await pool.query(statement);
+    }
+  });
+
+  after(async () => {
+    await pool?.end();
+    await admin?.query(`DROP DATABASE IF EXISTS ${PRELOADED_DB}`);
+    await admin?.end();
+  });
+
+  test('boots, records every migration and leaves no gap', async () => {
+    __resetMigrationCacheForTests();
+    const onDisk = discoverMigrationsOnDisk();
+    const result = await runPostgresMigrations(pool);
+    assert.deepEqual(result.gap, []);
+    const { rows } = await pool.query('SELECT count(*)::int AS n FROM schema_migrations');
+    assert.equal(rows[0].n, onDisk.length);
   });
 });

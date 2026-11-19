@@ -166,12 +166,14 @@ function checksumOf(fullPath: string) {
 }
 
 /**
- * Refuse to boot when the ledger and the files disagree: an applied migration
- * whose file body changed, or an unapplied migration numbered below one that
- * already ran (it would execute against a schema that moved past it). Backfills
- * the checksum of legacy rows that have none.
+ * Refuse to boot when an applied migration's file body changed. Backfills the
+ * checksum of legacy rows that have none. An unapplied migration numbered below
+ * the newest applied one only WARNs: databases whose ledger has gaps (self-
+ * recording migrations, or files applied outside the runner, as in CI's psql
+ * loop) always look like this, and a throw would crash-loop the boot. The
+ * runner still applies it, forward, in order; migrations are idempotent.
  */
-async function verifyLedger(client: any, onDisk: any[], applied: Set<number>) {
+async function verifyLedger(client: any, onDisk: any[], applied: Set<number>, log: any) {
   const res = await client.query('SELECT version, checksum FROM schema_migrations');
   const recorded = new Map<number, string | null>(res.rows.map((r: any) => [Number(r.version), r.checksum]));
   for (const m of onDisk) {
@@ -192,9 +194,10 @@ async function verifyLedger(client: any, onDisk: any[], applied: Set<number>) {
   const newest = applied.size ? Math.max(...applied) : 0;
   const late = onDisk.filter((m: any) => !applied.has(m.version) && m.version < newest);
   if (late.length > 0) {
-    throw new Error(
-      `unapplied migration(s) ${late.map((m: any) => m.file).join(', ')} are numbered below the newest applied version ${newest}; renumber them above it`,
-    );
+    log('warn', 'unapplied migration(s) are numbered below the newest applied version; applying them now', {
+      newestApplied: newest,
+      files: late.map((m: any) => m.file),
+    });
   }
 }
 
@@ -391,7 +394,7 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
         return { applied: [], current, gap: [] };
       }
 
-      await verifyLedger(client, onDisk, applied);
+      await verifyLedger(client, onDisk, applied, log);
       const pending = onDisk.filter((m: any) => !applied.has(m.version));
       const appliedVersions: number[] = [];
 
