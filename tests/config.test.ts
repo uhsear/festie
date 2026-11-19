@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { describe, it, afterEach } from 'node:test';
 
 import { ANDROID_APP_SIGNING_CERTS, DEFAULTS, loadConfig } from '../lib/config.js';
@@ -273,6 +274,11 @@ describe('config: string fields', () => {
   it('has an APP_VERSION field', () => {
     const config = loadConfig({ PUBLIC_ORIGIN: '' });
     assert.equal(typeof config.APP_VERSION, 'string');
+  });
+
+  it('resolves APP_VERSION to the package.json version, not empty', () => {
+    const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    assert.equal(loadConfig({ PUBLIC_ORIGIN: '' }).APP_VERSION, version);
   });
 });
 
