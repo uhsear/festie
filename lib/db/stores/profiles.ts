@@ -135,7 +135,9 @@ export default function createProfilesStore(pool: Pool, utils: any) {
   const { mapProfileRow } = utils;
 
   const profiles = {
-    async readAll({ limit = 10000 } = {}) {
+    // No default cap: callers (metrics, account export, profile counts) need every row, and a silent
+    // cap under-counts past it. Pass `limit` only to bound a read on purpose.
+    async readAll({ limit }: { limit?: number } = {}) {
       const result = await pool.query(
         `
         SELECT ${PROFILE_SELECT}
@@ -144,7 +146,7 @@ export default function createProfilesStore(pool: Pool, utils: any) {
         ORDER BY fp.created_at ASC, fp.id ASC
         LIMIT $1
       `,
-        [limit],
+        [limit ?? null],
       );
       return result.rows.map(mapProfileRow);
     },
