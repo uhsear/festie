@@ -496,7 +496,7 @@ describe('routes/admin-status.js', () => {
     assert.equal(res.body.error.message, 'Festival not found.');
   });
 
-  test('GET /admin/analytics returns 500 when pool unavailable', async () => {
+  test('GET /admin/analytics returns 503 when pool unavailable', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
     deps.pool = null;
@@ -504,8 +504,9 @@ describe('routes/admin-status.js', () => {
     const { router } = createAdminStatusRoutes(deps);
     const app = buildApp(router);
 
-    const res = await request(app).get('/admin/analytics').expect(200);
+    const res = await request(app).get('/admin/analytics').expect(503);
     assert.equal(res.body.data, null);
+    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
   });
 
   test('GET /admin/analytics returns 500 on query error', async () => {

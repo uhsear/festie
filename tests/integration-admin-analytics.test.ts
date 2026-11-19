@@ -1,4 +1,8 @@
 import { afterEach, describe, test } from 'node:test';
+import express from 'express';
+import request from 'supertest';
+import createAdminStatusRoutes from '../routes/admin-status.js';
+import { ErrorCodes, sendError } from '../lib/response.js';
 import {
   assert,
   Pool,
@@ -235,5 +239,26 @@ describe('Integration — Admin analytics', { concurrency: 1 }, () => {
 
     await server.request.get(path).set('x-user-token', plainToken).expect(403);
     await server.request.get('/api/v1/admin/analytics/festivals/nope/picks').set('x-user-token', adminToken).expect(404);
+  });
+});
+
+describe('Admin analytics without a database pool', () => {
+  test('answers 503 SERVICE_UNAVAILABLE through the error envelope', async () => {
+    const deps: any = {
+      express,
+      config: {},
+      log: { info() {}, warn() {}, error() {}, debug() {} },
+      setNoStore: (res: any) => res.setHeader('Cache-Control', 'no-store'),
+      sendError,
+      ErrorCodes,
+      adminAuth: (_req: any, _res: any, next: any) => next(),
+      pool: null,
+      stores: {},
+    };
+    const app = express();
+    app.use(createAdminStatusRoutes(deps).router);
+    const res = await request(app).get('/admin/analytics').expect(503);
+    assert.equal(res.body.data, null);
+    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
   });
 });

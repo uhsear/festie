@@ -14,6 +14,7 @@ const domTests = [
   'src/hooks/useHaptics.test.ts',
   'src/hooks/useIOSInstall.test.ts',
   'src/hooks/useInboxRefresh.test.ts',
+  'src/hooks/useInstallPrompt.test.ts',
   'src/hooks/useKeyboardTrap.test.ts',
   'src/hooks/useLastKnownFix.test.ts',
   'src/hooks/useLineupHref.test.ts',

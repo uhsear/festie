@@ -861,7 +861,9 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
       assert.ok(res.body.data.token);
-      assert.equal(deleteSession.mock.calls.length, 1);
+      // The old session is replaced inside the create transaction, not deleted separately
+      assert.equal(deleteSession.mock.calls.length, 0);
+      assert.equal(deps.createUserSession.mock.calls[0].arguments[3], 'raw-tok-123');
     });
 
     test('returns 401 when user not found', async () => {
