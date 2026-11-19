@@ -295,7 +295,7 @@ async function writeMoveMarks(client: any, festivalId: string, prior: any, child
 /**
  * Preserve picks, ratings, notes, and caught marks, delete old child rows,
  * batch-insert new days/sets, then restore them and write "moved" marks.
- * Used by replaceAll and update.
+ * Used by update.
  */
 async function replaceChildRows(client: any, festivalId: string, children: any) {
   const { dayRows, setRows, newSetIds, setIdentityMap } = children;
@@ -445,71 +445,6 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
   const festivals = {
     async readAll() {
       return buildFestivalRecords();
-    },
-
-    async replaceAll(nextFestivals: any[]) {
-      return withTransaction(pool, async (client) => {
-        // Unlisted festivals go through the same cascade as hardDelete; a bare DELETE fails on their days.
-        const festivalIds = nextFestivals.map((festival: any) => festival.id);
-        const { rows: unlisted } = await client.query('SELECT id FROM festivals WHERE NOT (id = ANY($1::text[]))', [
-          festivalIds,
-        ]);
-        for (const row of unlisted) await deleteFestivalRows(client, row.id);
-        if (nextFestivals.length === 0) return;
-
-        for (const festival of nextFestivals) {
-          const createdAt = festival.createdAt || new Date().toISOString();
-          const updatedAt = festival.updatedAt || createdAt;
-
-          await client.query(
-            `
-            INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config, series_id)
-            VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11)
-            ON CONFLICT(id) DO UPDATE SET
-              name = EXCLUDED.name,
-              location = EXCLUDED.location,
-              created_at = EXCLUDED.created_at,
-              updated_at = EXCLUDED.updated_at,
-              edited_at = EXCLUDED.edited_at,
-              b2b_separator = EXCLUDED.b2b_separator,
-              latitude = EXCLUDED.latitude,
-              longitude = EXCLUDED.longitude,
-              time_zone = EXCLUDED.time_zone,
-              map_config = EXCLUDED.map_config,
-              series_id = EXCLUDED.series_id
-          `,
-            [
-              festival.id,
-              festival.name,
-              festival.location || '',
-              createdAt,
-              updatedAt,
-              festival.b2bSeparator || 'b2b',
-              festival.latitude ?? null,
-              festival.longitude ?? null,
-              festival.timeZone ?? null,
-              festival.mapConfig == null ? null : JSON.stringify(festival.mapConfig),
-              festival.seriesId ?? null,
-            ],
-          );
-
-          // Upsert stages as update() does: deleting a stage row cascades into its sets
-          // (festival_sets_stage_fkey) before replaceChildRows can carry their user data across.
-          const children = collectFestivalChildren(festival.id, festival);
-          await upsertStagesBatch(client, children.stageRows);
-
-          // Replace days, sets, picks, and ratings in batch
-          await replaceChildRows(client, festival.id, children);
-
-          await client.query(
-            `DELETE FROM festival_stages st
-             WHERE st.festival_id = $1
-               AND NOT (st.id = ANY($2::text[]))
-               AND NOT EXISTS (SELECT 1 FROM festival_sets s WHERE s.festival_id = st.festival_id AND s.stage_id = st.id)`,
-            [festival.id, (festival.stages || []).map((stage: any) => stage.id)],
-          );
-        }
-      });
     },
 
     async softDelete(festivalId: string) {

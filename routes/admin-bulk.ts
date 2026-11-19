@@ -314,12 +314,12 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     '/crews/:id/members/:userId',
     adminAuth,
     adminWriteLimit,
-    validateParams(schemas.genericIdParams),
+    validateParams(schemas.idUserIdParams),
     async (req: any, res: any) => {
       try {
         const crewId = deps.sanitizeIdentifier(req.validatedParams.id, 100);
-        const targetUserId = deps.sanitizeIdentifier(req.params.userId, 100);
-        if (!crewId || !targetUserId) return sendError(res, 400, 'Invalid IDs', ErrorCodes.INVALID_INPUT);
+        const targetUserId = req.validatedParams.userId;
+        if (!crewId) return sendError(res, 400, 'Invalid IDs', ErrorCodes.INVALID_INPUT);
 
         const member = await stores.crews.getMember(crewId, targetUserId);
         if (!member) return sendError(res, 404, 'Member not found', ErrorCodes.NOT_FOUND);

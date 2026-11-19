@@ -64,8 +64,10 @@ function makeDeps(overrides: any = {}) {
       req.validatedQuery = req.query;
       next();
     },
-    validateParams: () => (req: any, res: any, next: any) => {
-      req.validatedParams = req.params;
+    validateParams: (schema?: any) => (req: any, res: any, next: any) => {
+      const result = schema?.safeParse ? schema.safeParse(req.params) : { success: true, data: req.params };
+      if (!result.success) return res.status(400).json({ data: null, error: { message: 'Invalid params' } });
+      req.validatedParams = result.data;
       next();
     },
     schemas: {
@@ -76,6 +78,14 @@ function makeDeps(overrides: any = {}) {
       adminBulkArchive: {},
       adminAuditQuery: {},
       genericIdParams: {},
+      idRoleParams: {
+        safeParse: (p: any) => {
+          const role = String(p.role ?? '').trim().toLowerCase();
+          return ['admin', 'user'].includes(role)
+            ? { success: true, data: { ...p, role } }
+            : { success: false };
+        },
+      },
       festivalIdParams: {},
       pushToken: {},
       deleteToken: {},
@@ -496,7 +506,7 @@ describe('routes/admin-status.js', () => {
     assert.equal(res.body.error.message, 'Festival not found.');
   });
 
-  test('GET /admin/analytics returns 500 when pool unavailable', async () => {
+  test('GET /admin/analytics returns 503 when pool unavailable', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
     deps.pool = null;
@@ -504,8 +514,9 @@ describe('routes/admin-status.js', () => {
     const { router } = createAdminStatusRoutes(deps);
     const app = buildApp(router);
 
-    const res = await request(app).get('/admin/analytics').expect(200);
+    const res = await request(app).get('/admin/analytics').expect(503);
     assert.equal(res.body.data, null);
+    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
   });
 
   test('GET /admin/analytics returns 500 on query error', async () => {

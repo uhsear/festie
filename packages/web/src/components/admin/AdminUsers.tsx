@@ -80,6 +80,7 @@ function AdminUsersList() {
     try {
       await confirm.run();
     } finally {
+    // eslint-disable-next-line require-atomic-updates -- ref flag guards double-submit; the sync check above precedes any await
       confirmRunning.current = false;
       setConfirmBusy(false);
       setConfirm(null);

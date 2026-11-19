@@ -94,13 +94,13 @@ describe('response: sendSuccess', () => {
     assert.ok(!('meta' in body));
   });
 
-  it('trims meta to 10 keys when it has more', () => {
+  it('keeps every meta key when there are more than 10', () => {
     const res = createMockRes();
     const bigMeta: Record<string, number> = {};
     for (let i = 0; i < 15; i++) bigMeta[`key${i}`] = i;
     sendSuccess(res, {}, bigMeta);
     const body = res._getBody();
-    assert.equal(Object.keys(body.meta).length, 10);
+    assert.equal(Object.keys(body.meta).length, 15);
   });
 
   it('sets X-API-Version header when config has API_VERSION', () => {

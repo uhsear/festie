@@ -3,7 +3,7 @@ import { withTransaction } from '../connection';
 
 export default function createSessionsStore(pool: Pool, _utils: any) {
   const sessions: any = {
-    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser, deviceLabel }: any) {
+    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser, deviceLabel, replaceToken }: any) {
       return withTransaction(pool, async (client) => {
         await client.query(
           `
@@ -21,6 +21,11 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
         `,
           [token, userId, username, createdAt, lastAccess, deviceLabel ?? null],
         );
+
+        // A rotating session leaves in the same transaction so it never counts toward eviction
+        if (replaceToken) {
+          await client.query('DELETE FROM user_sessions WHERE token = $1 AND user_id = $2', [replaceToken, userId]);
+        }
 
         // FOR UPDATE locks rows to prevent concurrent session creation from racing on eviction count
         const sessionsResult = await client.query(

@@ -658,6 +658,7 @@ export default function OfflineMap({
   );
   useEffect(() => {
     if (!selfCoord || !pendingNearest) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- replays the pending Nearest request once a GPS fix arrives
     runNearest(pendingNearest);
   }, [selfCoord, pendingNearest, runNearest]);
 
@@ -672,11 +673,13 @@ export default function OfflineMap({
   // Close a card whose pin is no longer mapped (deleted, coords removed, crew or
   // festival changed). An amenity hidden by its chip keeps its card: allPins ignores the filter.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- closes the card when its pin is no longer mapped
     if (place && !findMapPin(place.kind, place.id, allPins)) setPlace(null);
   }, [place, allPins]);
   // Leaving the interactive map (authoring, placing) or switching festival drops the card and any Nearest.
   const festivalId = festival?.id;
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a festival or mode change drops the card and pending Nearest
     setPlace(null);
     setPendingNearest(null);
     setPendingRecenter(false);
@@ -1176,6 +1179,7 @@ export default function OfflineMap({
     if (!pin) return;
     focusedPinRef.current = focusPinId;
     flyTo(pin.longitude, pin.latitude, 17);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- focusing a pin opens its card once the map is ready
     selectPin(pin);
     onFocusHandled?.();
   }, [phase, docGen, focusPinId, stagePins, flyTo, selectPin, onFocusHandled]);
@@ -1208,6 +1212,7 @@ export default function OfflineMap({
   // A more accurate fix can move the user back in range: refresh or clear the shown notice.
   useEffect(() => {
     if (!selfCoord) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- a fresh fix refreshes or clears the far-from-festival notice
     setFarNoticeM((m) => {
       if (m === null) return null;
       const distanceM = distanceFromFestivalM(selfCoord, camera);
@@ -1237,6 +1242,7 @@ export default function OfflineMap({
   }, [selfCoord, flyToSelf, locate]);
   useEffect(() => {
     if (!selfCoord || !pendingRecenter) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- consumes the pending recenter once a fix arrives
     setPendingRecenter(false);
     flyToSelf(selfCoord);
   }, [selfCoord, pendingRecenter, flyToSelf]);
