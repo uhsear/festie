@@ -20,6 +20,10 @@ describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
   before(async () => {
     pool = new Pool({ connectionString: TEST_DATABASE_URL });
     stores = createStores(pool);
+    // Other suites truncate users, which removes the placeholder migration 116 seeds.
+    await pool.query(
+      "INSERT INTO users (id, username, display_name, created_at, deleted_at) VALUES ('deleted-user', '[deleted user]', 'Deleted user', NOW(), '9999-12-31T00:00:00Z') ON CONFLICT (id) DO NOTHING",
+    );
   });
 
   after(async () => {

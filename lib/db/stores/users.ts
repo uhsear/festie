@@ -5,6 +5,9 @@ import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
 import { buildUpdate } from '../utils';
 
+/** Placeholder owner of the expenses a hard-deleted user paid (migration 116). Never a sign-in identity. */
+export const DELETED_USER_ID = 'deleted-user';
+
 export default function createUsersStore(pool: Pool, utils: any) {
   const { toISOString } = utils;
 
@@ -106,8 +109,8 @@ export default function createUsersStore(pool: Pool, utils: any) {
 
     async getByUsername(username: string) {
       const result = await pool.query(
-        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND deleted_at IS NULL LIMIT 1`,
-        [username],
+        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND id <> $2 AND deleted_at IS NULL LIMIT 1`,
+        [username, DELETED_USER_ID],
       );
       return normalizeRow(result.rows[0]);
     },
@@ -115,8 +118,8 @@ export default function createUsersStore(pool: Pool, utils: any) {
     // Caller lower-cases the address; deleted accounts are excluded on purpose.
     async getByEmail(email: string) {
       const result = await pool.query(
-        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL LIMIT 1`,
-        [email],
+        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND id <> $2 AND deleted_at IS NULL LIMIT 1`,
+        [email, DELETED_USER_ID],
       );
       return normalizeRow(result.rows[0]);
     },
@@ -125,25 +128,26 @@ export default function createUsersStore(pool: Pool, utils: any) {
     // matches the copy even if the pg_cron purge runs late.
     async findDeletedByUsername(username: string) {
       const result = await pool.query(
-        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' LIMIT 1`,
-        [username],
+        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND id <> $2 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' LIMIT 1`,
+        [username, DELETED_USER_ID],
       );
       return normalizeRow(result.rows[0]);
     },
 
     async findDeletedByEmail(email: string) {
       const result = await pool.query(
-        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' ORDER BY deleted_at DESC LIMIT 1`,
-        [email],
+        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND id <> $2 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' ORDER BY deleted_at DESC LIMIT 1`,
+        [email, DELETED_USER_ID],
       );
       return normalizeRow(result.rows[0]);
     },
 
     // `update` filters `deleted_at IS NULL`, so it cannot clear a soft delete.
     async reactivate(userId: string) {
+      if (userId === DELETED_USER_ID) return;
       await pool.query(
-        'UPDATE users SET deleted_at = NULL, deleted_by = NULL, deletion_reason = NULL, updated_at = NOW() WHERE id = $1 AND deleted_at IS NOT NULL',
-        [userId],
+        'UPDATE users SET deleted_at = NULL, deleted_by = NULL, deletion_reason = NULL, updated_at = NOW() WHERE id = $1 AND id <> $2 AND deleted_at IS NOT NULL',
+        [userId, DELETED_USER_ID],
       );
     },
 
@@ -220,7 +224,7 @@ export default function createUsersStore(pool: Pool, utils: any) {
         // just orphan silently, so purge explicitly.
         await client.query('DELETE FROM crew_member_status WHERE user_id = $1', [userId]);
         // Keep the expenses so the other members' balances stay put; migration 116 seeds the placeholder.
-        await client.query("UPDATE crew_expenses SET paid_by = 'deleted-user' WHERE paid_by = $1", [userId]);
+        await client.query('UPDATE crew_expenses SET paid_by = $2 WHERE paid_by = $1', [userId, DELETED_USER_ID]);
         await client.query('DELETE FROM crew_activity WHERE user_id = $1', [userId]);
         await client.query('DELETE FROM login_failures WHERE user_id = $1', [userId]);
         await client.query('DELETE FROM email_verification_tokens WHERE user_id = $1', [userId]);

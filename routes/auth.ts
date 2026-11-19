@@ -239,8 +239,10 @@ export default function createAuthRoutes(deps: any): Router {
         );
       }
 
+      // Compare against the dummy hash when there is no hash, so the timing matches a wrong
+      // password, then reject regardless: a hash-less user must never pass, even on the dummy's password.
       const passwordValid = await verifyPassword(String(password), user?.passwordHash || DUMMY_PASSWORD_HASH);
-      if (!user || !passwordValid) {
+      if (!user || !user.passwordHash || !passwordValid) {
         await handleLoginFailure(user, deps);
         const jitter = 500 + Math.floor(Math.random() * 1000);
         log.warn('authentication failed', { username: user ? user.username : 'unknown', ip: req.ip });
