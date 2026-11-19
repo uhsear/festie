@@ -290,8 +290,11 @@ describe('avatar: orphan cleanup timer', () => {
       avatarDirPath: () => tmpDir,
     }, { io: { of: () => ({ sockets: new Map() }), engine: { clientsCount: 0 } } });
     mock.timers.tick(6 * 60 * 60 * 1000);
-    for (let i = 0; i < 100 && fs.existsSync(path.join(tmpDir, 'orphan.webp')); i++) {
-      await new Promise((r) => setImmediate(r));
+    // fs.promises work runs on the libuv threadpool and takes real time, so a
+    // fixed number of setImmediate spins can finish before the unlink does on a
+    // slow runner. Only setInterval is mocked, so setTimeout is real here.
+    for (let i = 0; i < 200 && fs.existsSync(path.join(tmpDir, 'orphan.webp')); i++) {
+      await new Promise((r) => setTimeout(r, 10));
     }
     assert.deepEqual(fs.readdirSync(tmpDir).sort(), ['keep.webp', 'note.txt']);
     assert.equal(queries.length, 1);
