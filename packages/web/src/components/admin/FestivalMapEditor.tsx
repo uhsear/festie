@@ -1,8 +1,7 @@
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@festie/shared/services/api';
 import { uploadSiteplanImage } from '@festie/shared/services';
 import {
-  amenityGlyph,
   amenityCount,
   buildAmenityFeature,
   appendAmenity,
@@ -13,7 +12,6 @@ import {
   setZoneLabel as renameZone,
   parseLatLng,
   stageCoordFromTap,
-  AMENITY_PALETTE,
   humanizeAmenityType,
   buildZoneFeature,
   appendZone,
@@ -36,6 +34,10 @@ import { useToast } from '../../lib/toastContext';
 import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { cn } from '../../lib/utils';
 import Button from '../ui/Button';
+import MapAmenitiesPanel from './MapAmenitiesPanel';
+import MapSiteplanPanel from './MapSiteplanPanel';
+import MapZonesPanel from './MapZonesPanel';
+import type { ArmedTarget, Vertex } from './festivalMapEditorTypes';
 
 // CrewMap is heavy (MapLibre); lazy-load it exactly like the crew surface does so
 // it never lands in the admin bundle until the map editor opens.
@@ -78,46 +80,12 @@ interface StageEdit {
 const DEFAULT_STAGE_COLOR = '#6a6a88';
 const MAX_SITEPLAN_BYTES = 10 * 1024 * 1024;
 
-type ArmedTarget =
-  | { kind: 'stage'; stageId: string }
-  | { kind: 'amenity'; amenityType: AmenityType }
-  | { kind: 'zone' }
-  | { kind: 'siteplan' }
-  | { kind: 'venue' }
-  | { kind: 'move-amenity'; id: string }
-  | { kind: 'move-zone'; id: string }
-  | null;
-
-/** A single tapped vertex while drawing a zone (geo.ts {latitude, longitude}). */
-type Vertex = { latitude: number; longitude: number };
-
 export interface FestivalMapEditorProps {
   festivalId: string;
   /** Back to the festival list/edit view. */
   onClose: () => void;
   /** Leave the map for the festival editor (shown when the festival has no stages). */
   onEditFestival?: () => void;
-}
-
-/** Name field with a local draft; commits on blur or Enter so each keystroke does not rewrite the map config. */
-function NameInput({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
-  const [draft, setDraft] = useState(value);
-  return (
-    <input
-      type="text"
-      aria-label={`Name of ${label}`}
-      placeholder="Unnamed"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => {
-        if (draft !== value) onCommit(draft);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') e.currentTarget.blur();
-      }}
-      className="flex-1 min-w-0 px-2 py-1 rounded-md bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
-    />
-  );
 }
 
 export default function FestivalMapEditor({ festivalId, onClose, onEditFestival }: FestivalMapEditorProps) {
@@ -139,7 +107,6 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival 
   const [venueError, setVenueError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [armed, setArmed] = useState<ArmedTarget>(null);
   const [amenityLabel, setAmenityLabel] = useState('');
   // Zone drawing (Phase 4A): the in-progress polygon vertices + the chosen
@@ -622,319 +589,56 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival 
       </div>
 
       {/* Zones (camping / VIP / no-go / parking) */}
-      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
-        <h3 className="type-label text-text-primary">Zones</h3>
-        <p className="text-xs text-text-muted">
-          Pick a color, name the area, then click the map to drop points. Finish with 3 or more. {zoneCount(mapConfig)}{' '}
-          drawn.
-        </p>
-
-        {/* Color presets + label input */}
-        <input
-          type="text"
-          aria-label="Zone label"
-          placeholder="Zone name — e.g. Camping, VIP, No-go"
-          value={zoneLabel}
-          onChange={(e) => setZoneLabel(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
-        />
-        <div className="flex flex-wrap gap-2">
-          {ZONE_PALETTE.map((preset) => {
-            const selected = zoneColor === preset.color;
-            return (
-              <button
-                key={preset.color}
-                type="button"
-                onClick={() => {
-                  setZoneColor(preset.color);
-                  if (!zoneLabel.trim()) setZoneLabel(preset.label);
-                }}
-                aria-pressed={selected}
-                aria-label={`Use ${preset.label} color`}
-                className={cn(
-                  'flex items-center gap-1.5 px-2 py-1 rounded-full border bg-bg-primary text-sm transition-colors',
-                  selected ? 'border-2' : 'border-glass-border hover:border-accent-aqua',
-                )}
-                style={selected ? { borderColor: preset.color } : undefined}
-              >
-                <span
-                  className="w-5 h-5 rounded-full border border-white"
-                  style={{ backgroundColor: preset.color }}
-                  aria-hidden="true"
-                />
-                <span className="text-text-primary">{preset.label}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Draw controls */}
-        {isDrawingZone ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-text-secondary">
-              {draftVertices.length} {draftVertices.length === 1 ? 'point' : 'points'}
-            </span>
-            <button
-              type="button"
-              onClick={undoVertex}
-              disabled={draftVertices.length === 0}
-              className="px-3 py-1.5 rounded-md text-xs font-medium border border-glass-border text-text-secondary hover:text-text-primary disabled:opacity-50"
-            >
-              Undo point
-            </button>
-            <button
-              type="button"
-              onClick={finishZone}
-              disabled={draftVertices.length < 3}
-              className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua text-bg-primary disabled:opacity-50"
-            >
-              Finish zone
-            </button>
-            <button
-              type="button"
-              onClick={cancelZone}
-              className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={startZone}
-            className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua/20 text-accent-aqua border border-transparent hover:bg-accent-aqua/30"
-          >
-            Draw a zone
-          </button>
-        )}
-
-        {/* Placed zones list */}
-        {placedZones.length > 0 && (
-          <div className="space-y-2 border-t border-glass-border pt-3">
-            {placedZones.map((z) => (
-              <div key={z.id} className="flex items-center gap-2">
-                <span
-                  className="w-5 h-5 rounded-full border border-white shrink-0"
-                  style={{ backgroundColor: z.color }}
-                  aria-hidden="true"
-                />
-                <NameInput label={z.label || 'zone'} value={z.label} onCommit={(v) => renameZoneById(z.id, v)} />
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  aria-pressed={armed?.kind === 'move-zone' && armed.id === z.id}
-                  onClick={() => armMoveZone(z.id)}
-                >
-                  {armed?.kind === 'move-zone' && armed.id === z.id ? 'Cancel' : 'Move'}
-                </Button>
-                <button
-                  onClick={() => removeZoneById(z.id)}
-                  className="px-2 py-1 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
-                  aria-label={`Remove ${z.label || 'zone'}`}
-                >
-                  Remove
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <MapZonesPanel
+        zoneTotal={zoneCount(mapConfig)}
+        placedZones={placedZones}
+        zoneLabel={zoneLabel}
+        zoneColor={zoneColor}
+        drawing={isDrawingZone}
+        draftVertices={draftVertices}
+        armed={armed}
+        onZoneLabelChange={setZoneLabel}
+        onZoneColorChange={setZoneColor}
+        onStartZone={startZone}
+        onUndoVertex={undoVertex}
+        onFinishZone={finishZone}
+        onCancelZone={cancelZone}
+        onRename={renameZoneById}
+        onArmMove={armMoveZone}
+        onRemove={removeZoneById}
+      />
 
       {/* Site plan overlay */}
-      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
-        <h3 className="type-label text-text-primary">Site plan overlay</h3>
-        <p className="text-xs text-text-muted">
-          Upload the organizer’s site-plan image (PNG, JPEG or WebP, up to 10 MB), or paste an https link. Then mark the
-          four corners: top-left, top-right, bottom-right, bottom-left. Got a PDF? Save the page as a PNG first.
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/png,image/jpeg,image/webp"
-          className="hidden"
-          aria-label="Site-plan image file"
-          onChange={(e) => void onSiteplanFile(e)}
-        />
-        <Button variant="secondary" size="sm" disabled={uploading} onClick={() => fileInputRef.current?.click()}>
-          {uploading ? 'Uploading…' : 'Upload image'}
-        </Button>
-        {uploadError && (
-          <p className="text-xs text-[var(--color-text-danger)]" role="alert">
-            {uploadError}
-          </p>
-        )}
-        <input
-          type="url"
-          inputMode="url"
-          aria-label="Site-plan image URL"
-          placeholder="https://…/site-plan.png"
-          value={siteplanUrl}
-          onChange={(e) => onSiteplanUrlChange(e.target.value)}
-          maxLength={2048}
-          className="w-full px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
-        />
-        {siteplanUrl.trim() !== '' && !isHttpsUrl(siteplanUrl) && (
-          <p className="text-xs text-[var(--color-text-danger)]">Image link must start with https://</p>
-        )}
-
-        {/* Corner placement */}
-        {isPlacingSiteplan ? (
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-text-secondary">
-              {draftCorners.length}/{SITEPLAN_CORNER_COUNT} corners
-            </span>
-            <button
-              type="button"
-              onClick={undoCorner}
-              disabled={draftCorners.length === 0}
-              className="px-3 py-1.5 rounded-md text-xs font-medium border border-glass-border text-text-secondary hover:text-text-primary disabled:opacity-50"
-            >
-              Undo corner
-            </button>
-            <button
-              type="button"
-              onClick={applySiteplanCorners}
-              disabled={draftCorners.length !== SITEPLAN_CORNER_COUNT || !isHttpsUrl(siteplanUrl)}
-              className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua text-bg-primary disabled:opacity-50"
-            >
-              Apply corners
-            </button>
-            <button
-              type="button"
-              onClick={cancelSiteplanCorners}
-              className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30"
-            >
-              Cancel
-            </button>
-          </div>
-        ) : (
-          <button
-            type="button"
-            onClick={startSiteplanCorners}
-            disabled={!isHttpsUrl(siteplanUrl)}
-            className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua/20 text-accent-aqua border border-transparent hover:bg-accent-aqua/30 disabled:opacity-50"
-          >
-            {committedSiteplan ? 'Re-place corners' : 'Set corners'}
-          </button>
-        )}
-
-        {/* Opacity slider — only meaningful once an overlay is committed. */}
-        {committedSiteplan && (
-          <div className="space-y-1">
-            <label htmlFor="siteplan-opacity" className="text-xs text-text-secondary">
-              Opacity: {Math.round(siteplanOpacity * 100)}%
-            </label>
-            <input
-              id="siteplan-opacity"
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={siteplanOpacity}
-              onChange={(e) => onSiteplanOpacityChange(parseFloat(e.target.value))}
-              className="w-full accent-accent-aqua"
-            />
-          </div>
-        )}
-
-        {committedSiteplan && (
-          <div className="flex items-center gap-2 border-t border-glass-border pt-3">
-            <span className="text-sm text-text-primary flex-1 truncate">
-              Overlay set ({SITEPLAN_CORNER_COUNT} corners)
-            </span>
-            <button
-              onClick={removeSiteplanOverlay}
-              className="px-2 py-1 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
-              aria-label="Remove site-plan overlay"
-            >
-              Remove
-            </button>
-          </div>
-        )}
-      </div>
+      <MapSiteplanPanel
+        url={siteplanUrl}
+        opacity={siteplanOpacity}
+        committed={!!committedSiteplan}
+        placing={isPlacingSiteplan}
+        draftCorners={draftCorners}
+        uploading={uploading}
+        uploadError={uploadError}
+        onFile={(e) => void onSiteplanFile(e)}
+        onUrlChange={onSiteplanUrlChange}
+        onOpacityChange={onSiteplanOpacityChange}
+        onStartCorners={startSiteplanCorners}
+        onUndoCorner={undoCorner}
+        onApplyCorners={applySiteplanCorners}
+        onCancelCorners={cancelSiteplanCorners}
+        onRemoveOverlay={removeSiteplanOverlay}
+      />
 
       {/* Amenities */}
-      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
-        <h3 className="type-label text-text-primary">Amenities</h3>
-        <p className="text-xs text-text-muted">
-          Pick a type, optionally name it, then click the map to drop it. {amenityCount(mapConfig)} placed.
-        </p>
-        <input
-          type="text"
-          aria-label="Amenity label (optional)"
-          placeholder="Label (optional) — e.g. North water station"
-          value={amenityLabel}
-          onChange={(e) => setAmenityLabel(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
-        />
-        <div className="flex flex-wrap gap-2">
-          {AMENITY_PALETTE.map((type) => {
-            const { glyph, color } = amenityGlyph(type);
-            const isArmed = armed?.kind === 'amenity' && armed.amenityType === type;
-            return (
-              <button
-                key={type}
-                onClick={() => armAmenity(type)}
-                aria-pressed={isArmed}
-                aria-label={`${isArmed ? 'Cancel placing' : 'Place'} ${humanizeAmenityType(type)}`}
-                className={cn(
-                  'flex items-center gap-1.5 px-2 py-1 rounded-full border bg-bg-primary text-sm transition-colors',
-                  isArmed ? 'border-2' : 'border-glass-border hover:border-accent-aqua',
-                )}
-                style={isArmed ? { borderColor: color } : undefined}
-              >
-                <span
-                  className="w-6 h-6 rounded-full flex-center text-[length:var(--font-size-14)] leading-none border border-white"
-                  style={{ backgroundColor: color }}
-                  aria-hidden="true"
-                >
-                  {glyph}
-                </span>
-                <span className="text-text-primary">{humanizeAmenityType(type)}</span>
-              </button>
-            );
-          })}
-        </div>
-
-        {amenityFeatures.length > 0 && (
-          <div className="space-y-2 border-t border-glass-border pt-3">
-            {amenityFeatures.map((f) => {
-              const { glyph, color } = amenityGlyph(f.properties.amenityType);
-              return (
-                <div key={f.properties.id} className="flex items-center gap-2">
-                  <span
-                    className="w-6 h-6 rounded-full flex-center text-[length:var(--font-size-14)] leading-none border border-white shrink-0"
-                    style={{ backgroundColor: color }}
-                    aria-hidden="true"
-                  >
-                    {glyph}
-                  </span>
-                  <NameInput
-                    label={f.properties.label}
-                    value={f.properties.label}
-                    onCommit={(v) => renameAmenityById(f.properties.id, v)}
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    aria-pressed={armed?.kind === 'move-amenity' && armed.id === f.properties.id}
-                    onClick={() => armMoveAmenity(f.properties.id)}
-                  >
-                    {armed?.kind === 'move-amenity' && armed.id === f.properties.id ? 'Cancel' : 'Move'}
-                  </Button>
-                  <button
-                    onClick={() => removeAmenityById(f.properties.id)}
-                    className="px-2 py-1 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
-                    aria-label={`Remove ${f.properties.label}`}
-                  >
-                    Remove
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+      <MapAmenitiesPanel
+        amenityTotal={amenityCount(mapConfig)}
+        amenityFeatures={amenityFeatures}
+        label={amenityLabel}
+        armed={armed}
+        onLabelChange={setAmenityLabel}
+        onArm={armAmenity}
+        onRename={renameAmenityById}
+        onArmMove={armMoveAmenity}
+        onRemove={removeAmenityById}
+      />
 
       <div className="flex gap-2 justify-end">
         <button
