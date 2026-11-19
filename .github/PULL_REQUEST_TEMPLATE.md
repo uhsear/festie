@@ -19,7 +19,7 @@
 
 - [ ] If `lib/schemas.ts` changed, I ran `npm run gen:api-types` and committed the generated files
 - [ ] If the database schema changed, the change is a new migration and I did not edit an applied one
-- [ ] The diff has no secrets, server addresses, hostnames or private paths (`node scripts/ci/check-public-text.mjs` passes)
+- [ ] The diff has no secrets, server addresses, hostnames or private paths (`node scripts/ci/check-public-text.mjs --base origin/main --head HEAD` passes)
 
 ## Screenshots
 
