@@ -658,7 +658,7 @@ export default function OfflineMap({
   );
   useEffect(() => {
     if (!selfCoord || !pendingNearest) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- closes the card when its pin is no longer mapped
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- replays the pending Nearest request once a GPS fix arrives
     runNearest(pendingNearest);
   }, [selfCoord, pendingNearest, runNearest]);
 
@@ -673,7 +673,7 @@ export default function OfflineMap({
   // Close a card whose pin is no longer mapped (deleted, coords removed, crew or
   // festival changed). An amenity hidden by its chip keeps its card: allPins ignores the filter.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- a festival or mode change drops the card and pending Nearest
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- closes the card when its pin is no longer mapped
     if (place && !findMapPin(place.kind, place.id, allPins)) setPlace(null);
   }, [place, allPins]);
   // Leaving the interactive map (authoring, placing) or switching festival drops the card and any Nearest.
