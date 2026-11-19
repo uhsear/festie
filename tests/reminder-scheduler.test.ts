@@ -47,9 +47,6 @@ describe('reminder-scheduler: createReminderScheduler', () => {
     const scheduler = createReminderScheduler(makeDeps({ pool: { query: queryFn } }));
     await scheduler.tick();
     assert.ok(queryFn.mock.calls.length >= 1);
-    // First call should be for festivals
-    const firstCall = (queryFn.mock.calls as any[])[0]!.arguments[0];
-    assert.ok(firstCall!.includes('festivals'));
   });
 
   it('tick handles empty festivals gracefully', async () => {

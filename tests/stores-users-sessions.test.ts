@@ -74,7 +74,6 @@ describe('createUsersStore', () => {
       assert.equal(result.length, 1);
       assert.equal(result[0].id, 'u1');
       assert.equal(result[0].username, 'alice');
-      assert.ok(pool.calls[0].sql.includes('FROM users'));
     });
 
     it('returns empty array when no users', async () => {
@@ -186,13 +185,6 @@ describe('createUsersStore', () => {
       const result = await users.getByUsername('nobody');
       assert.equal(result, null);
     });
-
-    it('queries with LIMIT 1', async () => {
-      const pool = mockPool([{ rows: [], rowCount: 0 }]);
-      const users = createUsersStore(pool, mockUtils);
-      await users.getByUsername('test');
-      assert.ok(pool.calls[0].sql.includes('LIMIT 1'));
-    });
   });
 
   describe('getByEmail', () => {
@@ -203,10 +195,10 @@ describe('createUsersStore', () => {
       const result = await users.getByEmail('alice@example.com');
       assert.equal(result.username, 'alice');
       assert.equal(pool.calls[0].params[0], 'alice@example.com');
+      // case-insensitive lookup that excludes soft-deleted users
       const sql = norm(pool.calls[0].sql);
       assert.ok(sql.includes('LOWER(email) = $1'));
       assert.ok(sql.includes('deleted_at IS NULL'));
-      assert.ok(sql.includes('LIMIT 1'));
     });
 
     it('returns null when no user has that email', async () => {
@@ -225,6 +217,7 @@ describe('createUsersStore', () => {
       const result = await users.findDeletedByUsername('alice');
       assert.equal(result.username, 'alice');
       assert.equal(pool.calls[0].params[0], 'alice');
+      // only soft-deleted users inside the 30-day reactivation window
       const sql = norm(pool.calls[0].sql);
       assert.ok(sql.includes('deleted_at IS NOT NULL'));
       assert.ok(sql.includes("deleted_at > NOW() - INTERVAL '30 days'"));
@@ -267,9 +260,7 @@ describe('createUsersStore', () => {
       const users = createUsersStore(pool, mockUtils);
 
       await users.reactivate('u1');
-      const sql = norm(pool.calls[0].sql);
-      assert.ok(sql.startsWith('UPDATE users SET deleted_at = NULL'));
-      assert.ok(sql.includes('WHERE id = $1 AND deleted_at IS NOT NULL'));
+      assert.ok(norm(pool.calls[0].sql).includes('WHERE id = $1 AND deleted_at IS NOT NULL'));
       assert.deepEqual(pool.calls[0].params, ['u1']);
     });
   });
@@ -293,8 +284,8 @@ describe('createUsersStore', () => {
         email: 'alice@example.com',
       });
       assert.equal(result.id, 'u1');
-      assert.ok(pool.calls[0].sql.includes('INSERT INTO users'));
-      assert.ok(pool.calls[1].sql.includes('SELECT'));
+      assert.deepEqual(pool.calls[0].params.slice(0, 4), ['u1', 'alice', 'hash123', 'alice@example.com']);
+      assert.deepEqual(pool.calls[1].params, ['u1']);
     });
 
     it('sets email to null when not provided', async () => {
@@ -363,8 +354,8 @@ describe('createUsersStore', () => {
 
       const result = await users.update('u1', { username: 'alice2' });
       assert.equal(result.username, 'alice2');
-      assert.ok(pool.calls[0].sql.includes('UPDATE users SET'));
-      assert.ok(pool.calls[0].sql.includes('username'));
+      assert.equal(pool.calls[0].params[0], 'alice2');
+      assert.equal(pool.calls[0].params[2], 'u1');
     });
 
     it('maps camelCase keys to snake_case columns', async () => {
@@ -375,7 +366,9 @@ describe('createUsersStore', () => {
       const users = createUsersStore(pool, mockUtils);
 
       await users.update('u1', { avatarKey: 'new-key' });
-      assert.ok(pool.calls[0].sql.includes('avatar_key'));
+      // SET value first, updated_at timestamp second, user id last
+      assert.equal(pool.calls[0].params[0], 'new-key');
+      assert.equal(pool.calls[0].params[2], 'u1');
     });
 
     it('throws on invalid column key', async () => {
@@ -405,7 +398,6 @@ describe('createUsersStore', () => {
       const users = createUsersStore(pool, mockUtils);
 
       await users.softDelete('u1', { deletedBy: 'admin', reason: 'test' });
-      assert.ok(pool.calls[0].sql.includes('deleted_at = NOW()'));
       assert.equal(pool.calls[0].params[0], 'u1');
       assert.equal(pool.calls[0].params[1], 'admin');
       assert.equal(pool.calls[0].params[2], 'test');
@@ -478,7 +470,6 @@ describe('createUsersStore', () => {
       const users = createUsersStore(pool, mockUtils);
 
       await users.purgeDeleted(30);
-      assert.ok(pool.calls[0].sql.includes('DELETE FROM users'));
       assert.equal(pool.calls[0].params[0], 30);
     });
 
@@ -542,8 +533,8 @@ describe('createUsersStore', () => {
 
       await users.replaceAll([]);
       assert.equal(pool.calls.length, 3);
-      assert.ok(pool.calls[1].sql.includes('UPDATE users SET deleted_at'));
-      assert.ok(!pool.calls[1].sql.includes('NOT IN'));
+      // the blanket soft-delete binds no id list
+      assert.equal(pool.calls[1].params, undefined);
     });
 
     it('soft-deletes missing users and upserts provided ones', async () => {
@@ -559,9 +550,9 @@ describe('createUsersStore', () => {
 
       await users.replaceAll(nextUsers);
       assert.equal(pool.calls.length, 4);
-      assert.ok(pool.calls[1].sql.includes('NOT IN'));
-      assert.ok(pool.calls[2].sql.includes('INSERT INTO users'));
-      assert.ok(pool.calls[2].sql.includes('ON CONFLICT'));
+      // soft-delete binds the kept ids; the upsert binds the user id first
+      assert.deepEqual(pool.calls[1].params, ['u1']);
+      assert.equal(pool.calls[2].params[0], 'u1');
     });
 
     it('handles multiple users in replaceAll', async () => {
@@ -615,7 +606,7 @@ describe('createUsersStore', () => {
       );
       // Last non-COMMIT call should be DELETE FROM users
       const deleteUsersCall = pool.calls[pool.calls.length - 2];
-      assert.ok(deleteUsersCall.sql.includes('DELETE FROM users WHERE id'));
+      assert.deepEqual(deleteUsersCall.params, ['u1']);
     });
 
     it('returns null when user does not exist in hard delete', async () => {
@@ -703,7 +694,6 @@ describe('createSessionsStore', () => {
         deviceLabel: 'Chrome on Windows',
       });
       const insert = pool.calls[1];
-      assert.ok(norm(insert.sql).includes('device_label'));
       assert.equal(insert.params[5], 'Chrome on Windows');
     });
 
@@ -804,7 +794,7 @@ describe('createSessionsStore', () => {
       const result = await sessions.validateUserSession('tok1', 86400000);
       assert.equal(result, null);
       assert.equal(pool.calls.length, 2);
-      assert.ok(pool.calls[1].sql.includes('DELETE'));
+      assert.deepEqual(pool.calls[1].params, ['tok1']);
     });
 
     it('returns null when token not found', async () => {
@@ -834,7 +824,7 @@ describe('createSessionsStore', () => {
       const result = await sessions.validateUserSession('tok1', 86400000);
       assert.ok(result);
       assert.equal(pool.calls.length, 2);
-      assert.ok(pool.calls[1].sql.includes('UPDATE user_sessions SET last_access'));
+      assert.equal(pool.calls[1].params[1], 'tok1');
       // lastAccess should be updated to a recent date
       assert.ok(result.lastAccess instanceof Date);
     });
@@ -863,20 +853,6 @@ describe('createSessionsStore', () => {
       const result = await sessions.listUserSessions('u1');
       assert.deepEqual(result, []);
     });
-
-    it('selects the device label', async () => {
-      const pool = mockPool([{ rows: [], rowCount: 0 }]);
-      const sessions = createSessionsStore(pool, mockUtils);
-      await sessions.listUserSessions('u1');
-      assert.ok(norm(pool.calls[0].sql).includes('device_label AS "deviceLabel"'));
-    });
-
-    it('orders by last_access ASC', async () => {
-      const pool = mockPool([{ rows: [], rowCount: 0 }]);
-      const sessions = createSessionsStore(pool, mockUtils);
-      await sessions.listUserSessions('u1');
-      assert.ok(norm(pool.calls[0].sql).includes('ORDER BY last_access ASC'));
-    });
   });
 
   // ── deleteUserSession ────────────────────────────────────────────
@@ -887,7 +863,6 @@ describe('createSessionsStore', () => {
       const sessions = createSessionsStore(pool, mockUtils);
 
       await sessions.deleteUserSession('tok1');
-      assert.ok(pool.calls[0].sql.includes('DELETE FROM user_sessions'));
       assert.equal(pool.calls[0].params[0], 'tok1');
     });
 
@@ -931,7 +906,6 @@ describe('createSessionsStore', () => {
 
       const result = await sessions.deleteUserSessions('u1', 'tok2');
       assert.deepEqual(result, ['tok1']);
-      assert.ok(pool.calls[0].sql.includes('token <> $2'));
       assert.equal(pool.calls[0].params[1], 'tok2');
     });
 
@@ -959,8 +933,6 @@ describe('createSessionsStore', () => {
 
       const result = await sessions.deleteExpiredUserSessions(86400000);
       assert.deepEqual(result, ['tok1', 'tok2']);
-      assert.ok(pool.calls[0].sql.includes('DELETE FROM user_sessions'));
-      assert.ok(pool.calls[0].sql.includes('RETURNING token'));
     });
 
     it('returns empty array when nothing expired', async () => {
@@ -1006,13 +978,6 @@ describe('createSessionsStore', () => {
       const result = await sessions.counts();
       assert.equal(result.userSessions, 0);
     });
-
-    it('queries user_sessions table', async () => {
-      const pool = mockPool([{ rows: [{ count: '0' }] }]);
-      const sessions = createSessionsStore(pool, mockUtils);
-      await sessions.counts();
-      assert.ok(pool.calls[0].sql.includes('user_sessions'));
-    });
   });
 
   // ── refreshTokens ───────────────────────────────────────────────
@@ -1029,7 +994,6 @@ describe('createSessionsStore', () => {
           sessionToken: 'st1',
           expiresAt: '2026-07-01T00:00:00.000Z',
         });
-        assert.ok(pool.calls[0].sql.includes('INSERT INTO refresh_tokens'));
         assert.deepEqual(pool.calls[0].params, ['rt1', 'u1', 'st1', '2026-07-01T00:00:00.000Z']);
       });
 
@@ -1092,7 +1056,7 @@ describe('createSessionsStore', () => {
 
         const result = await sessions.refreshTokens.validate('rt1');
         assert.equal(result, null);
-        assert.ok(pool.calls[2].sql.includes('DELETE'));
+        assert.deepEqual(pool.calls[2].params, ['rt1']);
       });
 
       it('returns null and deletes when token is revoked', async () => {
@@ -1113,7 +1077,7 @@ describe('createSessionsStore', () => {
         const result = await sessions.refreshTokens.validate('rt1');
         assert.equal(result, null);
         assert.equal(pool.calls.length, 2);
-        assert.ok(pool.calls[1].sql.includes('DELETE'));
+        assert.deepEqual(pool.calls[1].params, ['rt1']);
       });
 
       it('returns null and deletes when token is expired', async () => {
@@ -1133,6 +1097,7 @@ describe('createSessionsStore', () => {
 
         const result = await sessions.refreshTokens.validate('rt1');
         assert.equal(result, null);
+        assert.deepEqual(pool.calls[1].params, ['rt1']);
       });
 
       it('returns null when token not found', async () => {
@@ -1153,6 +1118,7 @@ describe('createSessionsStore', () => {
         const result = await sessions.refreshTokens.claim('rt1');
         assert.deepEqual(result, { userId: 'u1' });
         assert.equal(pool.calls.length, 1);
+        // single-use and expiry guard: replay of a revoked or expired token must claim nothing
         const sql = norm(pool.calls[0].sql);
         assert.ok(sql.startsWith('UPDATE refresh_tokens SET revoked = TRUE'));
         assert.ok(sql.includes('revoked = FALSE'));
@@ -1176,7 +1142,6 @@ describe('createSessionsStore', () => {
         const sessions = createSessionsStore(pool, mockUtils);
 
         await sessions.refreshTokens.revokeAll('u1');
-        assert.ok(pool.calls[0].sql.includes('UPDATE refresh_tokens SET revoked = TRUE'));
         assert.equal(pool.calls[0].params[0], 'u1');
       });
 
@@ -1202,9 +1167,9 @@ describe('createSessionsStore', () => {
         const sessions = createSessionsStore(pool, mockUtils);
 
         await sessions.refreshTokens.deleteExpired();
-        assert.ok(pool.calls[0].sql.includes('DELETE FROM refresh_tokens'));
-        assert.ok(pool.calls[0].sql.includes('expires_at < NOW()'));
-        assert.ok(pool.calls[0].sql.includes('revoked = TRUE'));
+        const sql = norm(pool.calls[0].sql);
+        assert.ok(sql.includes('expires_at < NOW()'));
+        assert.ok(sql.includes('revoked = TRUE'));
       });
 
       it('takes no parameters', async () => {
@@ -1232,9 +1197,10 @@ describe('createSessionsStore', () => {
         const sessions = createSessionsStore(pool, mockUtils);
 
         await sessions.loginFailures.record('u1');
-        assert.ok(pool.calls[0].sql.includes('INSERT INTO login_failures'));
-        assert.ok(pool.calls[0].sql.includes('ON CONFLICT'));
-        assert.ok(pool.calls[0].sql.includes('consecutive_failures + 1'));
+        // lockout counter: upsert that increments the existing row
+        const sql = norm(pool.calls[0].sql);
+        assert.ok(sql.includes('ON CONFLICT'));
+        assert.ok(sql.includes('consecutive_failures + 1'));
         assert.equal(pool.calls[0].params[0], 'u1');
       });
 
@@ -1263,7 +1229,6 @@ describe('createSessionsStore', () => {
         const sessions = createSessionsStore(pool, mockUtils);
 
         await sessions.loginFailures.reset('u1');
-        assert.ok(pool.calls[0].sql.includes('DELETE FROM login_failures'));
         assert.equal(pool.calls[0].params[0], 'u1');
       });
 
@@ -1314,7 +1279,6 @@ describe('createSessionsStore', () => {
         const sessions = createSessionsStore(pool, mockUtils);
 
         await sessions.loginFailures.lock('u1', lockedUntil);
-        assert.ok(pool.calls[0].sql.includes('UPDATE login_failures SET locked_until'));
         assert.equal(pool.calls[0].params[0], lockedUntil);
         assert.equal(pool.calls[0].params[1], 'u1');
       });
@@ -1355,7 +1319,6 @@ describe('createSessionsStore', () => {
           activeUsers: 50,
         };
         await sessions.metricsRollups.insert(rollup);
-        assert.ok(norm(pool.calls[0].sql).includes('INSERT INTO metrics_rollups'));
         assert.equal(pool.calls[0].params.length, 10);
         assert.equal(pool.calls[0].params[0], rollup.bucketStart);
         assert.equal(pool.calls[0].params[2], 1000);

@@ -436,18 +436,22 @@ async function canonicalizeRestoredSets(client: any, festivalId: string, setIds:
     festivalId,
   ]);
   const { rows } = await client.query(
-    `SELECT id, artist, artists, link_url FROM festival_sets
+    `SELECT id, artist, artists, link_url, display_name FROM festival_sets
       WHERE festival_id = $1 AND id = ANY($2::text[]) AND jsonb_typeof(artists) = 'array' AND jsonb_array_length(artists) > 0`,
     [festivalId, setIds],
   );
-  const targets = rows.map((row: any) => ({ id: row.id, values: { artists: row.artists, artist: row.artist, linkUrl: row.link_url ?? null } }));
+  const targets = rows.map((row: any) => ({
+    id: row.id,
+    values: { artists: row.artists, artist: row.artist, linkUrl: row.link_url ?? null, displayName: row.display_name ?? null },
+  }));
   await resolveSetValues(client, { festivalId, separator: festival[0]?.separator ?? 'b2b', userId: null }, targets);
   for (const { id, values } of targets) {
-    await client.query('UPDATE festival_sets SET artists = $2::jsonb, artist = $3, link_url = $4 WHERE id = $1', [
+    await client.query('UPDATE festival_sets SET artists = $2::jsonb, artist = $3, link_url = $4, display_name = $5 WHERE id = $1', [
       id,
       JSON.stringify(values.artists),
       values.artist,
       values.linkUrl,
+      values.displayName ?? null,
     ]);
   }
 }
@@ -488,6 +492,7 @@ async function restoreAnnouncedEntries(client: any, festivalId: string, items: a
     const refs = await resolveArtistRefs(client, { festivalId, lineup: restored, separator: 'b2b', userId: null });
     refs.lineup!.forEach((entry: any, i: number) => {
       restored[i].artists = entry.artists;
+      if (entry.displayName) restored[i].displayName = entry.displayName;
     });
   }
   await client.query('UPDATE festivals SET lineup = $2::jsonb WHERE id = $1', [festivalId, JSON.stringify(lineup)]);
@@ -579,6 +584,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
           });
           resolved.lineup!.forEach((entry: any, i: number) => {
             entries[i]!.artists = entry.artists;
+            if (entry.displayName) entries[i]!.displayName = entry.displayName;
           });
           refs.ignoredLinkEdits += resolved.ignoredLinkEdits;
           for (const fill of resolved.linkFills) {

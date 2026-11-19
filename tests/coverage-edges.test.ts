@@ -141,8 +141,6 @@ describe('offline queue staleness logic (unit)', () => {
 
 describe('withRetry helper', () => {
   test('retries until success; exponential backoff delay observed', async () => {
-    if (typeof withRetry !== 'function') return; // skip: helper not present
-
     let callCount = 0;
     const start = Date.now();
     const result = await withRetry(
@@ -163,8 +161,6 @@ describe('withRetry helper', () => {
   });
 
   test('respects isRetryable predicate (no retry when false)', async () => {
-    if (typeof withRetry !== 'function') return;
-
     let callCount = 0;
     await withRetry(
       async () => {
@@ -179,8 +175,6 @@ describe('withRetry helper', () => {
   });
 
   test('respects maxAttempts cap', async () => {
-    if (typeof withRetry !== 'function') return;
-
     let callCount = 0;
     await withRetry(
       async () => {
@@ -195,8 +189,6 @@ describe('withRetry helper', () => {
   });
 
   test('backoff delays grow exponentially (jitter-tolerant)', async () => {
-    if (typeof withRetry !== 'function') return;
-
     const timestamps: number[] = [];
     await withRetry(
       async (attempt: any) => {
@@ -215,8 +207,6 @@ describe('withRetry helper', () => {
   });
 
   test('maxDelay caps exponential growth', async () => {
-    if (typeof withRetry !== 'function') return;
-
     const timestamps: number[] = [];
     await withRetry(
       async (attempt: any) => {
@@ -356,17 +346,16 @@ describe('isInDndWindow', () => {
   });
 
   test('a bad dndTimeZone falls back to the server clock without throwing', () => {
-    const now = new Date('2026-09-05T09:30:00Z');
-    const hhmm = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    const expected = hhmm >= '23:00' || hhmm < '08:00';
-    assert.equal(isInDndWindow({ dndStart: '23:00', dndEnd: '08:00', dndTimeZone: 'Mars/Base' }, now), expected);
+    const bad = { dndStart: '23:00', dndEnd: '08:00', dndTimeZone: 'Mars/Base' };
+    assert.equal(isInDndWindow(bad, new Date(2026, 8, 5, 2, 30)), true); // 02:30 server-local
+    assert.equal(isInDndWindow(bad, new Date(2026, 8, 5, 12, 0)), false); // 12:00 server-local
   });
 
-  test('wrap-around window 22:00-08:00 matches expected inclusion relative to now', () => {
-    const d = new Date();
-    const nowHHMM = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-    const expected = nowHHMM >= '22:00' || nowHHMM < '08:00';
-    assert.equal(isInDndWindow({ dndStart: '22:00', dndEnd: '08:00' }), expected);
+  test('wrap-around window 22:00-08:00 includes 23:00 and 03:00, excludes 12:00 (server-local)', () => {
+    const prefs = { dndStart: '22:00', dndEnd: '08:00' };
+    assert.equal(isInDndWindow(prefs, new Date(2026, 8, 5, 23, 0)), true);
+    assert.equal(isInDndWindow(prefs, new Date(2026, 8, 5, 3, 0)), true);
+    assert.equal(isInDndWindow(prefs, new Date(2026, 8, 5, 12, 0)), false);
   });
 
   test('same-day window with start == end documents empty-range behavior', () => {

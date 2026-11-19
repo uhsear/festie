@@ -178,7 +178,7 @@ describe('middleware: audit-middleware', () => {
     middleware(req, res, () => {});
     res._emit('finish');
     // Wait for async audit log
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     assert.ok(deps.stores.auditLog.insert.mock.calls.length >= 1);
   });
 
@@ -195,7 +195,7 @@ describe('middleware: audit-middleware', () => {
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     const entry = (deps.stores.auditLog.insert.mock.calls[0] as any).arguments[0];
     assert.equal(entry.action, 'profiles.deleted');
     assert.equal(entry.target_type, 'profiles');
@@ -210,7 +210,7 @@ describe('middleware: audit-middleware', () => {
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     // Should log error, not throw
     assert.ok(deps.log.error.mock.calls.length >= 1);
   });
@@ -222,7 +222,7 @@ describe('middleware: audit-middleware', () => {
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.actor_type, 'admin');
     assert.equal(entry.actor_id, 'admin-1');
@@ -235,7 +235,7 @@ describe('middleware: audit-middleware', () => {
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.actor_type, 'system');
     assert.equal(entry.actor_id, null);
@@ -252,7 +252,7 @@ describe('middleware: audit-middleware', () => {
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.target_type, 'festivals');
     assert.equal(entry.target_id, 'fest-1');
@@ -270,7 +270,7 @@ describe('middleware: audit-middleware', () => {
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.target_type, 'polls');
     assert.equal(entry.target_id, 'crew-1');
@@ -284,7 +284,7 @@ describe('middleware: audit-middleware', () => {
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.target_type, 'unknown');
   });
@@ -300,7 +300,7 @@ describe('middleware: audit-middleware', () => {
     const res = mockRes();
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.action, 'unknown.updated');
   });
@@ -313,7 +313,7 @@ describe('middleware: audit-middleware', () => {
     res.statusCode = 403;
     middleware(req, res, () => {});
     res._emit('finish');
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setImmediate(r));
     const entry = (deps.stores.auditLog.insert.mock.calls as any[])[0]?.arguments[0];
     assert.equal(entry.status, 'failure');
   });
@@ -624,13 +624,14 @@ describe('middleware: idempotency key logic', () => {
     assert.equal(resB.replayed, null);
   });
 
-  it('an entry older than ttl re-executes', async () => {
+  it('an entry older than ttl re-executes', async (t) => {
+    t.mock.timers.enable({ apis: ['Date'] });
     const { middleware } = createIdempotencyMiddleware({ ttl: 50, maxEntries: 5000 });
     const req = { method: 'POST', headers: { 'idempotency-key': 'k-ttl' }, ip: '1.2.3.4' };
     let executions = 0;
     const res1 = mkIdemRes();
     middleware(req, res1, () => { executions += 1; res1.json({ ok: 1 }); });
-    await new Promise((r) => setTimeout(r, 60));
+    t.mock.timers.tick(60);
     const res2 = mkIdemRes();
     middleware(req, res2, () => { executions += 1; res2.json({ ok: 2 }); });
     assert.equal(executions, 2);
