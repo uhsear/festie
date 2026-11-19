@@ -341,6 +341,8 @@ export interface SetValuesTarget {
   artists: any[];
   artist: string;
   linkUrl: string | null;
+  /** Undefined leaves the stored display name alone. A stripped set tag sets it when it is empty. */
+  displayName?: string | null;
 }
 
 /**
@@ -352,11 +354,12 @@ export async function resolveSetValues(
   input: { festivalId: string; separator: string; userId: string | null; fillEmptyLinks?: boolean },
   sets: Array<{ id: string; values: SetValuesTarget }>,
 ): Promise<RefsResult> {
-  const days = [{ sets: sets.map((s) => ({ id: s.id, artists: s.values.artists })) }];
+  const days = [{ sets: sets.map((s) => ({ id: s.id, artists: s.values.artists, displayName: s.values.displayName })) }];
   const result = await resolveArtistRefs(client, { ...input, days });
   result.days![0].sets.forEach((resolved: any, index: number) => {
     const target = sets[index]!.values;
     target.artists = resolved.artists;
+    if (resolved.displayName) target.displayName = resolved.displayName;
     if (resolved.artists.length === 0) return;
     target.artist = resolved.artist;
     target.linkUrl = resolved.linkUrl ?? null;

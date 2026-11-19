@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import type { Pool } from 'pg';
 import { resolveArtistRefs } from '../lib/artist-refs';
-import { artistNameKey } from '../lib/artist-key';
+import { artistNameKey, shownSetName } from '../lib/artist-key';
 import { createArtist, dropFestivalCache, formBody, seedFestival, setRow, skip, startArtistServer, withPool, type ArtistServer } from './_artist-helpers';
 
 let app: ArtistServer;
@@ -315,6 +315,48 @@ describe('import commit and undo', { skip, concurrency: 1 }, () => {
       assert.equal(known.length, 2);
       const { rows: artistRow } = await pool.query('SELECT links FROM artists WHERE id = $1', [existing.id]);
       assert.deepEqual(artistRow[0].links, { soundcloud: 'https://soundcloud.com/importknown', instagram: 'https://www.instagram.com/importknown' });
+    });
+  });
+
+  test('an import strips a set tag and keeps the poster text; undo removes a created set and restores an updated one', async () => {
+    await withPool((pool) =>
+      seedFestival(pool, {
+        id: 'fest-refs-imptag',
+        sets: [{ id: 'refs-imptag-1', artist: 'Kestrel Moon (Sunset Set)', artists: [{ name: 'Kestrel Moon (Sunset Set)', links: {} }], start: '20:00' }],
+      }),
+    );
+    await dropFestivalCache(app);
+    const commit = await app.post('/api/v1/admin/festivals/fest-refs-imptag/import-lineup', {
+      rows: [
+        { row: 2, artist: 'Kestrel Moon (Sunset Set)', stage: 'Main', day: 'Friday', date: '2099-08-21', startTime: '21:00', endTime: '22:00' },
+        { row: 3, artist: 'Sorrel Bay (Sunset Set)', stage: 'Main', day: 'Friday', date: '2099-08-21', startTime: '22:00', endTime: '23:00' },
+      ],
+      updateExisting: true,
+      skipSpotify: true,
+    }).expect(200);
+    assert.equal(commit.body.data.committed, true, JSON.stringify(commit.body.data.plan?.problems));
+    await withPool(async (pool) => {
+      const { rows } = await pool.query(
+        `SELECT id, artist, artists, display_name, start_time FROM festival_sets WHERE festival_id = 'fest-refs-imptag' ORDER BY start_time`,
+      );
+      assert.deepEqual(
+        rows.map((r: any) => [r.artists[0].name, r.artist, r.display_name, r.start_time]),
+        [
+          ['Kestrel Moon', 'Kestrel Moon', 'Kestrel Moon (Sunset Set)', '21:00'],
+          ['Sorrel Bay', 'Sorrel Bay', 'Sorrel Bay (Sunset Set)', '22:00'],
+        ],
+      );
+      const { rows: artists } = await pool.query(`SELECT name FROM artists WHERE name_key LIKE 'kestrel moon%' OR name_key LIKE 'sorrel bay%' ORDER BY name`);
+      assert.deepEqual(artists.map((r: any) => r.name), ['Kestrel Moon', 'Sorrel Bay']);
+    });
+    await app.post(`/api/v1/admin/festivals/fest-refs-imptag/imports/${commit.body.data.result.importId}/undo`).expect(200);
+    await withPool(async (pool) => {
+      const { rows } = await pool.query(`SELECT id, artist, artists, display_name, start_time FROM festival_sets WHERE festival_id = 'fest-refs-imptag'`);
+      assert.deepEqual(rows.map((r: any) => r.id), ['refs-imptag-1'], 'the created set is gone');
+      assert.equal(rows[0].start_time, '20:00');
+      assert.equal(shownSetName({ displayName: rows[0].display_name, artist: rows[0].artist, artists: rows[0].artists }), 'Kestrel Moon (Sunset Set)');
+      assert.equal(rows[0].display_name, 'Kestrel Moon (Sunset Set)');
+      assert.equal(rows[0].artists[0].name, 'Kestrel Moon');
     });
   });
 
