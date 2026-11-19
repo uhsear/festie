@@ -1,17 +1,10 @@
 import { describe, it, expect } from 'vitest';
+import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import { clashBadgeBySetId, detectConflicts, getConflictingSetIds, hasConflict, isHardConflict } from './conflicts';
 import type { FestivalSet, Priority } from '../types/domain';
 
 function makeSet(overrides: Partial<FestivalSet> & { id: string }): FestivalSet {
-  return {
-    festivalId: 'fest-1',
-    stageId: 'stage-1',
-    startTime: '14:00',
-    endTime: '15:00',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
+  return makeFestivalSet(overrides);
 }
 
 describe('detectConflicts', () => {

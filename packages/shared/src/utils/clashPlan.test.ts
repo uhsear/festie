@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
   NOTE_MAX_LENGTH,
   SPLIT_PLAN_PREFIX,
@@ -28,17 +29,7 @@ const CTX: SplitContext = {
 };
 
 function makeSet(id: string, startTime: string, endTime: string, stageId = 'other'): FestivalSet {
-  return {
-    id,
-    festivalId: 'f1',
-    stageId,
-    dayIndex: 0,
-    startTime,
-    endTime,
-    artist: id.toUpperCase(),
-    createdAt: '',
-    updatedAt: '',
-  };
+  return makeFestivalSet({ id, festivalId: 'f1', stageId, dayIndex: 0, startTime, endTime, artist: id.toUpperCase(), createdAt: '', updatedAt: '' });
 }
 
 function group(sets: FestivalSet[], myPicks: Record<string, Priority>, withStages = true): ConflictGroup {

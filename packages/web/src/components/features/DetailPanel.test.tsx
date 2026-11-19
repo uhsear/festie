@@ -1,5 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalSet, Priority } from '@festie/shared/types';
@@ -196,17 +197,7 @@ import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useNotificationPrefsStore, useAuthStore } from '@festie/shared/stores';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
-  return {
-    id: 'set-1',
-    festivalId: 'fest-1',
-    stageId: 'stage-1',
-    startTime: '14:00',
-    endTime: '15:00',
-    artist: 'Daft Punk',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
+  return makeFestivalSet({ artist: 'Daft Punk', ...overrides });
 }
 
 function defaultDetailData() {

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { renderHook } from '@testing-library/react';
 import type { FestivalSet, Stage } from '@festie/shared/types';
 
@@ -56,17 +57,7 @@ function makeStage(id: string, name = id): Stage {
 }
 
 function makeSet(overrides: Partial<FestivalSet> & { id: string }): FestivalSet {
-  return {
-    festivalId: 'fest-1',
-    stageId: 'main',
-    dayIndex: 0,
-    startTime: '14:00',
-    endTime: '15:00',
-    artist: 'Artist',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
+  return makeFestivalSet({ stageId: 'main', dayIndex: 0, artist: 'Artist', ...overrides });
 }
 
 const STAGES = [makeStage('main', 'Main'), makeStage('forest', 'Forest')];

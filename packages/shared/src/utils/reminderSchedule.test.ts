@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
   buildReminderPlan,
   diffReminderPlan,
@@ -27,16 +28,7 @@ const days: FestivalDay[] = [
 ];
 
 function makeSet(id: string, startTime: string, endTime = ''): FestivalSet {
-  return {
-    id,
-    festivalId: 'f1',
-    stageId: 's1',
-    dayIndex: 0,
-    startTime,
-    endTime,
-    createdAt: '',
-    updatedAt: '',
-  };
+  return makeFestivalSet({ id, festivalId: 'f1', stageId: 's1', dayIndex: 0, startTime, endTime, createdAt: '', updatedAt: '' });
 }
 
 // Local-frame epoch for a wall-clock on the festival day (mirrors createDateInLocalFrame).

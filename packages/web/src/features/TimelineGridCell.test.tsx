@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { fireEvent, render } from '@testing-library/react';
 import type { FestivalSet } from '@festie/shared/types';
 import type { ClashMark, GridCrewAvatars } from '@festie/shared/utils';
@@ -7,16 +8,7 @@ import TimelineGridCell from './TimelineGridCell';
 const ROW_HEIGHT = 36;
 
 function makeSet(id: string): FestivalSet {
-  return {
-    id,
-    festivalId: 'fest-1',
-    stageId: 'stage-1',
-    artist: id,
-    startTime: '14:00',
-    endTime: '15:00',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-  };
+  return makeFestivalSet({ id, artist: id });
 }
 
 function renderCell(

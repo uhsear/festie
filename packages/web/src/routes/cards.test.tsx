@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
+import type { FestivalSet } from '@festie/shared/types';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
@@ -51,14 +53,8 @@ vi.mock('../components/layout/RouteErrorBoundary', () => ({
 
 import CardsView from './cards';
 
-const mkSet = (id: string, start: string, end: string) => ({
-  id,
-  dayIndex: 0,
-  startTime: start,
-  endTime: end,
-  stageId: 's1',
-  artist: id,
-});
+const mkSet = (id: string, start: string, end: string): FestivalSet =>
+  makeFestivalSet({ id, dayIndex: 0, startTime: start, endTime: end, stageId: 's1', artist: id });
 
 describe('CardsView order and earlier row', () => {
   beforeEach(() => {
