@@ -303,6 +303,16 @@ describe('LiveLocationControls — active SOS banner', () => {
     expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/sos cleared/i), 'success');
   });
 
+  it('names the resolve dialog after the raiser and closes on Escape', async () => {
+    const user = userEvent.setup();
+    setSos([{ ...baseSos }]);
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    await user.click(screen.getByRole('button', { name: /mark dana's sos resolved/i }));
+    expect(screen.getByRole('dialog', { name: "Mark Dana's SOS resolved?" })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
   it('returns focus to the resolve button on Escape', async () => {
     const user = userEvent.setup();
     setSos([{ ...baseSos }]);

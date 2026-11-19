@@ -14,10 +14,11 @@
 
 set -uo pipefail
 
-APP=festie
-APP_DIR=/home/asir/festival-planner
-CONFIG=ecosystem.config.cjs
-PORT=4000
+# Same overrides as scripts/deploy/deploy.py, so this can be rehearsed on staging.
+APP="${FESTIE_PM2_NAME:-festie}"
+APP_DIR="${FESTIE_APP_DIR:-$HOME/festival-planner}"
+CONFIG="${FESTIE_PM2_CONFIG:-ecosystem.config.cjs}"
+PORT="${FESTIE_PORT:-4000}"
 
 cd "$APP_DIR" || { echo "FATAL: $APP_DIR not found"; exit 1; }
 
@@ -33,7 +34,7 @@ fi
 
 # A daemon restart is only survivable if the saved list can bring the other apps
 # back. Warn loudly rather than discovering it afterwards.
-DUMP=/home/asir/.pm2/dump.pm2
+DUMP="${PM2_HOME:-$HOME/.pm2}/dump.pm2"
 if [ ! -s "$DUMP" ]; then
     echo "WARNING: $DUMP is missing or empty."
     echo "pm2 resurrect will NOT restore the other apps (e.g. festie-staging)."
@@ -44,31 +45,34 @@ echo "=== STEP 1: Kill the PM2 daemon (stops ALL apps) ==="
 pm2 kill 2>/dev/null || true
 sleep 3
 
-echo "=== STEP 2: Kill orphan backend process ==="
-pkill -9 -f "$APP_DIR/dist/server.js" 2>/dev/null || true
+echo "=== STEP 2: Stop orphan backend process ==="
+pkill -TERM -f "$APP_DIR/dist/server.js" 2>/dev/null || true
+for _ in $(seq 1 40); do
+    pgrep -f "$APP_DIR/dist/server.js" >/dev/null 2>&1 || break
+    sleep 1
+done
+pkill -KILL -f "$APP_DIR/dist/server.js" 2>/dev/null || true
 sleep 2
 
-echo "=== STEP 3: Force free port $PORT ==="
-fuser -k -9 "$PORT/tcp" 2>/dev/null || true
-sleep 5
-
-echo "=== STEP 4: Verify port free ==="
-if fuser "$PORT/tcp" 2>/dev/null; then
-    echo "ERROR: Port $PORT still in use!"
+echo "=== STEP 3: Verify port free ==="
+# Never kill whatever holds the port: it may not be this app.
+if fuser "$PORT/tcp" >/dev/null 2>&1; then
+    echo "ERROR: Port $PORT is held by a process that is not $APP_DIR/dist/server.js."
     fuser -v "$PORT/tcp" 2>&1
+    echo "Stop that process yourself, then re-run."
     exit 1
 else
     echo "Port $PORT is free"
 fi
 
-echo "=== STEP 5: Restore every saved app ==="
+echo "=== STEP 4: Restore every saved app ==="
 # resurrect first, so festie-staging and pm2-logrotate come back too. It may
 # fail or restore nothing if the dump is stale; festie is started explicitly
 # below either way.
 pm2 resurrect 2>/dev/null || echo "(resurrect failed or had nothing to restore)"
 sleep 5
 
-echo "=== STEP 6: Start $APP ==="
+echo "=== STEP 5: Start $APP ==="
 # Idempotent against resurrect: if it already brought festie back, start is a
 # no-op on an online app, and this is a no-op rather than a duplicate.
 if pm2 describe "$APP" >/dev/null 2>&1; then
@@ -81,21 +85,21 @@ else
 fi
 sleep 12
 
-echo "=== STEP 7: Check status ==="
+echo "=== STEP 6: Check status ==="
 pm2 list
 echo ""
 
-echo "=== STEP 8: Recent logs ==="
+echo "=== STEP 7: Recent logs ==="
 tail -15 "$APP_DIR/logs/pm2-out.log"
 echo ""
 
-echo "=== STEP 9: Health check ==="
+echo "=== STEP 8: Health check ==="
 HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "http://127.0.0.1:$PORT/api/health")
 echo "HTTP: $HTTP_CODE"
 cat /tmp/health.json
 echo ""
 
-echo "=== STEP 10: PM2 details ==="
+echo "=== STEP 9: PM2 details ==="
 pm2 show "$APP" 2>&1 | grep -E "status|restarts|uptime|pid"
 
 if [ "$HTTP_CODE" != "200" ]; then
