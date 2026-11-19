@@ -25,6 +25,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'artist.created': 'Artist created',
   'artist.updated': 'Artist changed',
   'artist.merged': 'Artists merged',
+  'artist.backfill.run': 'Artist ids backfilled',
   'user.role.granted': 'Role granted',
   'user.role.revoked': 'Role removed',
   'user.password_reset_link.created': 'Password reset link created',
