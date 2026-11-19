@@ -223,7 +223,7 @@ export default function createExportRoutes(deps: any) {
   /**
    * HTML export intentionally uses res.send() instead of sendSuccess().
    * Export endpoints return rendered HTML/ICS content, not JSON envelope.
-   * This is by design — see Finding #54.
+   * This is by design — see Finding #54. Envelope exception rule: lib/response.ts.
    */
   router.get('/export/:festivalId/:profileId', userAuth, rateLimit(30, 'export-html'), validateParams(schemas.festivalIdParams), async (req: any, res: any) => {
     const startTime = Date.now();

@@ -772,4 +772,22 @@ describe('createDbLatencyTracker', () => {
     assert.equal(tracker.stats['s.op']!.count, 3);
     assert.ok(tracker.stats['s.op']!.maxMs >= 0);
   });
+
+  it('records failed calls, rethrows, and logs the failure', async () => {
+    const warns: any[] = [];
+    const tracker = createDbLatencyTracker({ ...mockLog, warn: (...a: any[]) => warns.push(a) });
+    const wrapped = tracker.wrapStore('s', {
+      boom: async () => {
+        throw new Error('timeout');
+      },
+    });
+
+    await assert.rejects(() => wrapped.boom(1), /timeout/);
+
+    assert.equal(tracker.stats['s.boom']!.count, 1);
+    assert.equal(tracker.stats['s.boom']!.errors, 1);
+    assert.equal(warns[0][0], 'db call failed');
+    assert.equal(warns[0][1].method, 'boom');
+    assert.equal(warns[0][1].error, 'timeout');
+  });
 });

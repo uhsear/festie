@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import { withTransaction, serializeJson } from '../connection';
+import { decodeCursor, encodeCursor } from '../../pagination';
 
 // Batch INSERT helper — builds multi-row VALUES clause
 function batchInsert(client: any, table: string, columns: string[], rows: any[][]) {
@@ -172,6 +173,58 @@ export default function createProfilesStore(pool: Pool, utils: any) {
         [festivalId],
       );
       return result.rows.map(mapProfileRow);
+    },
+
+    /**
+     * One keyset page of the picks-only list, in the order paginateArray uses: created_at (cut to the
+     * milliseconds a JS Date keeps, so a cursor round-trips), then id. An unusable cursor starts at the top.
+     */
+    async listPicksPageByFestival(festivalId: string, { limit, cursor }: { limit: number; cursor?: string | null }) {
+      const decoded = decodeCursor(cursor);
+      const usable = typeof decoded?.id === 'string' && !Number.isNaN(Date.parse(decoded.value));
+      const params: any[] = [festivalId, limit + 1];
+      if (usable) params.push(decoded.value, decoded.id);
+      const [page, total] = await Promise.all([
+        pool.query(
+          `
+          SELECT ${PROFILE_SELECT_PICKS}
+          FROM festival_profiles fp
+          WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL
+            ${usable ? "AND (date_trunc('milliseconds', fp.created_at), fp.id) > ($3::timestamptz, $4::text)" : ''}
+          ORDER BY date_trunc('milliseconds', fp.created_at) ASC, fp.id ASC
+          LIMIT $2
+        `,
+          params,
+        ),
+        pool.query('SELECT count(*)::int AS n FROM festival_profiles WHERE festival_id = $1 AND deleted_at IS NULL', [festivalId]),
+      ]);
+      const hasMore = page.rows.length > limit;
+      const items: any[] = page.rows.slice(0, limit).map(mapProfileRow);
+      const last = items[items.length - 1];
+      return {
+        profiles: items,
+        pagination: {
+          hasMore,
+          nextCursor: hasMore && last ? encodeCursor({ value: last.createdAt, id: last.id }) : null,
+          pageSize: limit,
+          total: total.rows[0].n,
+        },
+      };
+    },
+
+    /** How many profiles other than the viewer's picked each set, keyed by set id. */
+    async pickCountsByFestival(festivalId: string, excludeUserId: string): Promise<Record<string, number>> {
+      const result = await pool.query(
+        `
+        SELECT p.set_id AS "setId", count(*)::int AS n
+        FROM festival_profile_picks p
+        JOIN festival_profiles fp ON fp.id = p.profile_id
+        WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL AND fp.user_id IS DISTINCT FROM $2
+        GROUP BY p.set_id
+      `,
+        [festivalId, excludeUserId],
+      );
+      return Object.fromEntries(result.rows.map((row: any) => [row.setId, row.n]));
     },
 
     async userIdsByFestival(festivalId: string) {

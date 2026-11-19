@@ -53,9 +53,7 @@ export function useAnimatedNumber(
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-    // duration/snap are config — re-running on them would restart a live tween.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
+  }, [value, duration, snap]);
 
   return shown.toFixed(decimals);
 }

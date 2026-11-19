@@ -106,4 +106,49 @@ describe('Integration — crew money', { concurrency: 1 }, () => {
 
     assert.equal((await plan(server, crew.id, bob.token)).currency, 'USD');
   });
+
+  test('settling, undoing and planned rows move the stored ledger and plan', async () => {
+    const { server, crew, alice, bob, charlie } = await crewOfThree();
+    const ids = [alice.user.id, bob.user.id, charlie.user.id];
+    const base = `/api/v1/crews/${crew.id}/expenses`;
+
+    await server.request
+      .post(base)
+      .set('x-user-token', alice.token)
+      .send({ description: 'Cabin', amount: 90, splitWith: ids })
+      .expect(201);
+    // A planned budget row must never reach the ledger.
+    await server.request
+      .post(base)
+      .set('x-user-token', bob.token)
+      .send({ description: 'Forecast', amount: 500, splitWith: ids, planned: true })
+      .expect(201);
+
+    const owed = await plan(server, crew.id, alice.token);
+    assert.equal(sumCents(owed.balances), 0);
+    assert.deepEqual(
+      owed.settlements.map((s: any) => [s.fromUserId, s.toUserId, s.amountCents]).sort(),
+      [
+        [bob.user.id, alice.user.id, 3000],
+        [charlie.user.id, alice.user.id, 3000],
+      ].sort(),
+    );
+
+    const settled = await server.request
+      .post(`${base}/settle`)
+      .set('x-user-token', bob.token)
+      .send({ toUserId: alice.user.id, amount: 30 })
+      .expect(201);
+    const afterSettle = await plan(server, crew.id, alice.token);
+    assert.equal(sumCents(afterSettle.balances), 0);
+    assert.deepEqual(
+      afterSettle.settlements.map((s: any) => [s.fromUserId, s.toUserId, s.amountCents]),
+      [[charlie.user.id, alice.user.id, 3000]],
+    );
+
+    await server.request.delete(`${base}/${settled.body.data.id}`).set('x-user-token', bob.token).expect(200);
+    const afterUndo = await plan(server, crew.id, alice.token);
+    assert.equal(afterUndo.settlements.length, 2);
+    assert.equal(sumCents(afterUndo.balances), 0);
+  });
 });

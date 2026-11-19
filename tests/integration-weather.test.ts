@@ -6,6 +6,7 @@ import {
   startServer,
   registerUser,
 } from './_integration-helpers';
+import { seedFestival } from './_artist-helpers';
 
 const servers: any[] = [];
 
@@ -92,6 +93,44 @@ describe('Integration — Weather', { concurrency: 1 }, () => {
       assert.deepEqual(res.body.data.daily.dates, ['2026-06-05']);
       assert.deepEqual(res.body.data.daily.maxTemp, [30]);
       assert.deepEqual(res.body.data.hourly.times, ['2026-06-05T10:00']);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  test('fetches weather for a festival at latitude 0 and longitude 0', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const dana = await registerUser(server, 'weather-dana-' + Date.now());
+    const festivalId = 'weather-zero-' + Date.now();
+
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      await seedFestival(pool, { id: festivalId, published: true, sets: [] });
+      await pool.query('UPDATE festivals SET latitude = 0, longitude = 0 WHERE id = $1', [festivalId]);
+    } finally {
+      await pool.end();
+    }
+
+    const realFetch = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (input: any) => {
+      urls.push(String(input));
+      return new Response(JSON.stringify({ timezone: 'GMT' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as typeof fetch;
+    try {
+      const res = await server.request
+        .get('/api/v1/weather/' + festivalId)
+        .set('x-user-token', dana.token)
+        .expect(200);
+
+      assert.equal(res.body.data.available, true);
+      assert.equal(urls.length, 1);
+      assert.ok(urls[0]?.includes('latitude=0&longitude=0'));
     } finally {
       globalThis.fetch = realFetch;
     }
