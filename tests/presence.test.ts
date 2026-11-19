@@ -555,8 +555,11 @@ describe('presence: clearPresenceTimers', () => {
     pm.emitPresence('fest-1', io);
     pm.emitPresence('fest-2', io);
 
-    // Should clear without throwing
     pm.clearPresenceTimers();
+
+    // Cleared timers must never fire the debounced emit
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(io.to.mock.callCount(), 0);
   });
 });
 
