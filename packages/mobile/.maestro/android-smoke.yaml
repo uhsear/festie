@@ -8,6 +8,7 @@ tags:
 env:
   TEST_USERNAME: ${TEST_USERNAME}
   TEST_PASSWORD: ${TEST_PASSWORD}
+  FESTIVAL_ID: nc-2026
 ---
 - launchApp:
     clearState: true
@@ -29,7 +30,7 @@ env:
 - assertVisible: "Select a Festival"
 - takeScreenshot: 02-festival-picker
 - tapOn:
-    id: "festival-card-nc-2026"
+    id: "festival-card-${FESTIVAL_ID}"
 - extendedWaitUntil:
     visible:
       text: "Timeline|Cards"
