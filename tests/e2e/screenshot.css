@@ -1,5 +1,5 @@
 /* Hide dynamic elements during visual regression screenshots */
-.fm-live-dot, .pulse-soft, .skeleton, [data-testid="live-badge"] {
+.fm-live-dot {
   animation: none !important;
   visibility: hidden !important;
 }
