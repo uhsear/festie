@@ -308,11 +308,6 @@ def main():
             rollback_hint()
             raise SystemExit("web build failed")
 
-        # NOTE: festie.us serves the Vite SPA (packages/web). The Expo
-        # react-native-web export (`pnpm run build:web` in packages/mobile) is no
-        # longer built here — it is kept dormant for a possible future
-        # app.festie.us, but the desktop flagship is the bespoke web SPA.
-
         # 6. Restart the backend
         code, out, err = run(
             client,
