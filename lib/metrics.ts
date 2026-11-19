@@ -16,6 +16,9 @@ import { createLogger } from './logger.js';
 
 const log = createLogger('metrics');
 
+let _loaded: ReturnType<typeof loadConfig> | undefined;
+const cfg = () => (_loaded ??= loadConfig());
+
 let client: any = null;
 let available = false;
 try {
@@ -263,7 +266,7 @@ function metricsHandler(metrics: any) {
  * reachable through the tunnel.
  */
 function hasValidMetricsToken(req: any) {
-  const configured = loadConfig().METRICS_TOKEN;
+  const configured = cfg().METRICS_TOKEN;
   if (!configured) return false;
   const header = req?.headers?.authorization;
   if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false;
@@ -365,6 +368,10 @@ async function startReengagementQueueSampler(
   return () => clearInterval(handle);
 }
 
+const __resetMetricsConfigForTests = () => {
+  _loaded = undefined;
+};
+
 export {
   createMetrics,
   metricsMiddleware,
@@ -373,4 +380,5 @@ export {
   startReengagementQueueSampler,
   recordJobRun,
   startMetricsListener,
+  __resetMetricsConfigForTests,
 };

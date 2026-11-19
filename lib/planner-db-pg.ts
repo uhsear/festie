@@ -575,7 +575,7 @@ function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Pro
   // startup runner against a test DB re-applies migrations that aren't
   // recorded in schema_migrations and breaks NOT-NULL constraints mid-suite.
   const isTestEnv =
-    loadConfig().NODE_ENV === 'test' || (typeof databaseUrl === 'string' && /_test(\?|$)/.test(databaseUrl));
+    opts.nodeEnv === 'test' || (typeof databaseUrl === 'string' && /_test(\?|$)/.test(databaseUrl));
   if (isTestEnv) {
     return Object.assign(result, {
       migrationsReady: Promise.resolve({ applied: [], current: 0, gap: [] }),
