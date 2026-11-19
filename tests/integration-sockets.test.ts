@@ -454,6 +454,20 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     await disconnected;
   });
 
+  test('acks Authentication required before disconnecting on join:festival with an invalid token', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const badSocket = connectSocket(server.baseUrl);
+    await waitForEvent(badSocket, 'connect');
+
+    const disconnected = waitForEvent(badSocket, 'disconnect', () => true);
+    const ack = await new Promise<any>((resolve) =>
+      badSocket.emit('join:festival', 'fest-1', { userToken: 'invalid-token-value' }, resolve));
+    assert.equal(ack.error, 'Authentication required');
+    await disconnected;
+  });
+
   test('disconnects a socket that joins with an invalid token', async () => {
     const server = await startServer();
     servers.push(server);
