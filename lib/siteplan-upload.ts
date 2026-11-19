@@ -15,7 +15,7 @@ import multer from 'multer';
 
 import { avatarStorage } from './avatar-storage';
 
-export const SITEPLAN_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const SITEPLAN_MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const SITEPLAN_MAX_PIXELS = 50_000_000;
 export const SITEPLAN_MAX_EDGE = 4096;
 export const SITEPLAN_WEBP_QUALITY = 80;
