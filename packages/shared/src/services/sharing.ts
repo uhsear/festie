@@ -3,8 +3,6 @@ import { api, ApiClientError, getApiBase } from './api';
 import type { FestivalSet, Priority, Stage } from '../types/domain';
 import { buildPicksShareUrl, buildCalendarLinks } from '../utils/links';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
-import { useAuthStore } from '../stores/authStore';
-import { useCrewStore } from '../stores/crewStore';
 import type { User } from '../types';
 
 export interface SharingStatus {
@@ -44,6 +42,11 @@ export function resetShareLinks(): Promise<{ linksResetAt: string }> {
 export async function stopAllSharing(): Promise<{ clearedStatusLocations: number }> {
   useLiveLocationStore.getState().endShare('user');
   const res = await api.post<{ user: User; clearedStatusLocations: number }>('/account/stop-sharing', {});
+  // Loaded lazily: a static import pulls the whole store graph into the services barrel.
+  const [{ useAuthStore }, { useCrewStore }] = await Promise.all([
+    import('../stores/authStore'),
+    import('../stores/crewStore'),
+  ]);
   const current = useAuthStore.getState().user;
   if (current) useAuthStore.getState().setUser({ ...current, ...res.user });
   const myId = res.user?.id ?? current?.id;
