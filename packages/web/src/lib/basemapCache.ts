@@ -3,20 +3,11 @@
 // rangeRequests rule serves it offline. Readiness is read from the cache on
 // every call, never remembered, because the browser can evict it.
 import { OFFLINE_MAP_CACHE } from '@festie/shared/pwa/runtimeCaching';
+import { createBasemapEnsurer, headContentLength } from '@festie/shared/utils';
 
 export type EnsureResult = { ok: true } | { ok: false; reason: 'quota' | 'network'; bytes: number | null };
 
 const MAX_ARCHIVES = 3;
-const inFlight = new Map<string, Promise<EnsureResult>>();
-const listeners = new Set<() => void>();
-
-/** Runs after any archive attempt settles, so every mounted download hook re-reads the cache. */
-export function subscribeBasemapCache(cb: () => void): () => void {
-  listeners.add(cb);
-  return () => {
-    listeners.delete(cb);
-  };
-}
 
 export function basemapSupported(): boolean {
   return typeof caches !== 'undefined';
@@ -33,16 +24,7 @@ export async function basemapCacheInfo(url: string): Promise<{ cached: boolean; 
   }
 }
 
-export async function basemapSize(url: string): Promise<number | null> {
-  try {
-    const res = await fetch(url, { method: 'HEAD' });
-    if (!res.ok) return null;
-    const len = Number(res.headers.get('content-length'));
-    return Number.isFinite(len) && len > 0 ? len : null;
-  } catch {
-    return null;
-  }
-}
+export const basemapSize = headContentLength;
 
 async function downloadOnce(url: string): Promise<EnsureResult> {
   const bytes = await basemapSize(url);
@@ -66,13 +48,8 @@ async function downloadOnce(url: string): Promise<EnsureResult> {
   }
 }
 
-export function ensureBasemapCached(url: string): Promise<EnsureResult> {
-  const existing = inFlight.get(url);
-  if (existing) return existing;
-  const run = downloadOnce(url).finally(() => {
-    inFlight.delete(url);
-    listeners.forEach((cb) => cb());
-  });
-  inFlight.set(url, run);
-  return run;
-}
+const ensurer = createBasemapEnsurer(downloadOnce);
+
+/** Runs after any archive attempt settles, so every mounted download hook re-reads the cache. */
+export const subscribeBasemapCache = ensurer.subscribe;
+export const ensureBasemapCached = ensurer.ensure;
