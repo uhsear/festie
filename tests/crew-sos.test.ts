@@ -266,8 +266,8 @@ describe('routes/crew-sos.ts — POST /:crewId/sos', () => {
 
     await request(app).post('/crew-1/sos').send({ message: 'help' });
 
-    // push fan-out is fire-and-forget — give the microtask queue a tick
-    await new Promise((r) => setTimeout(r, 20));
+    // push fan-out is fire-and-forget — let it settle
+    await new Promise((r) => setImmediate(r));
 
     // user-2 and user-3 get a push; the raiser (user-1) does not
     assert.equal(sendFn.mock.calls.length, 2);
@@ -283,14 +283,14 @@ describe('routes/crew-sos.ts — POST /:crewId/sos', () => {
     const { app } = await buildApp({ notificationService: { send: sendFn } });
 
     await request(app).post('/crew-1/sos').send({ position: VALID_POSITION });
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setImmediate(r));
     assert.equal((sendFn.mock.calls as any[])[0].arguments[0].body, 'Tap to get directions to their last location.');
 
     (SOS_RAISE_LIMIT as any)._reset();
     passGap();
     sendFn.mock.resetCalls();
     await request(app).post('/crew-1/sos').send({});
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setImmediate(r));
     assert.equal((sendFn.mock.calls as any[])[0].arguments[0].body, 'Tap to see their SOS.');
   });
 
@@ -317,7 +317,7 @@ describe('routes/crew-sos.ts — POST /:crewId/sos', () => {
 
     const res = await request(app).post('/crew-1/sos').send({ message: 'help' });
     assert.equal(res.status, 200);
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setImmediate(r));
   });
 
   // ── Auth + permission ───────────────────────────────────────────────
@@ -508,7 +508,7 @@ describe('routes/crew-sos.ts — POST /:crewId/sos/clear', () => {
     const { app } = await buildApp({ notificationService: { send: sendFn } });
 
     await request(app).post('/crew-1/sos/clear').send({});
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => setImmediate(r));
 
     assert.equal(sendFn.mock.calls.length, 0);
   });
