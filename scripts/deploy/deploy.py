@@ -28,6 +28,10 @@
 #   FESTIE_SSH_USER       prod SSH user                (default asir)
 #   FESTIE_SSH_KEY        path to a private key file   (optional; falls back to
 #                                                        the agent / ~/.ssh keys)
+#   FESTIE_SSH_KNOWN_HOSTS  extra known_hosts file     (optional; ~/.ssh/known_hosts is
+#                                                        always loaded. An unknown or changed
+#                                                        host key aborts — add it with ssh-keyscan
+#                                                        after checking it out of band)
 #   FESTIE_APP_DIR        app dir on the server        (default /home/asir/festival-planner)
 #   FESTIE_PM2_NAME       PM2 process name             (default festie)
 #   FESTIE_READY_URL      readiness URL on the server  (default http://localhost:4000/api/ready)
@@ -54,6 +58,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 HOST = os.environ.get("FESTIE_SSH_HOST", "192.168.0.150")
 USER = os.environ.get("FESTIE_SSH_USER", "asir")
 KEY = os.environ.get("FESTIE_SSH_KEY")  # optional explicit key file
+KNOWN_HOSTS = os.environ.get("FESTIE_SSH_KNOWN_HOSTS")  # optional extra known_hosts file
 APP = os.environ.get("FESTIE_APP_DIR", "/home/asir/festival-planner")
 PM2_NAME = os.environ.get("FESTIE_PM2_NAME", "festie")
 READY_URL = os.environ.get("FESTIE_READY_URL", "http://localhost:4000/api/ready")
@@ -70,9 +75,17 @@ def run(client, cmd, timeout=300):
     return code, out, err
 
 
+def load_host_keys(client):
+    """Verify the server against known_hosts; an unknown or changed key aborts."""
+    client.load_system_host_keys()
+    if KNOWN_HOSTS:
+        client.load_host_keys(KNOWN_HOSTS)
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
+
+
 def connect():
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    load_host_keys(client)
     # Key auth ONLY. With key_filename set we point at the explicit key; without
     # it paramiko uses the SSH agent and the default ~/.ssh identities. We never
     # pass a password and disable interactive password fallback.
