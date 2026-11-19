@@ -88,4 +88,24 @@ describe('Refresh-token rotation (DB)', { concurrency: 1 }, () => {
     assert.equal(await store.claim('claim-expired'), null);
     assert.equal(await store.claim('claim-unknown'), null);
   });
+
+  test('a failed session create during /auth/refresh leaves the old session valid', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const dave = await registerUser(server, 'dave');
+    await server.request.get('/api/v1/auth/me').set('x-user-token', dave.token).expect(200);
+
+    await pool.query(
+      `CREATE FUNCTION refuse_session_insert() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'insert refused'; END $$ LANGUAGE plpgsql`,
+    );
+    await pool.query('CREATE TRIGGER refuse_session_insert BEFORE INSERT ON user_sessions FOR EACH ROW EXECUTE FUNCTION refuse_session_insert()');
+    try {
+      await server.request.post('/api/v1/auth/refresh').set('x-user-token', dave.token).expect(500);
+    } finally {
+      await pool.query('DROP TRIGGER refuse_session_insert ON user_sessions');
+      await pool.query('DROP FUNCTION refuse_session_insert()');
+    }
+
+    await server.request.get('/api/v1/auth/me').set('x-user-token', dave.token).expect(200);
+  });
 });
