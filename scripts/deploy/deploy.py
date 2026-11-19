@@ -10,7 +10,9 @@
 #   1. SSHes to the prod box (KEY AUTH ONLY — no password support).
 #      Before anything changes it runs scripts/backup-pg.sh and aborts if the
 #      dump fails (pre_deploy_dump).
-#   2. git fetch + reset --hard origin/main, then installs root (npm) and
+#   2. git fetch + reset --hard to the deploy ref (default origin/main), after
+#      taking a host-side lock and checking that the commit's CI is green, then
+#      installs root (npm) and
 #      packages/ (pnpm) dependencies.
 #   3. Migrations are app-managed (applied on backend boot); no deploy step.
 #   4. Bundles the backend with `npm run build` (esbuild -> dist/server.js, which
@@ -38,6 +40,13 @@
 #   FESTIE_LOGIN_URL      login URL on the server      (default http://localhost:4000/api/v1/auth/login)
 #   FESTIE_TEST_USER      smoke-login username         (optional — skips login check if unset)
 #   FESTIE_TEST_PASSWORD  smoke-login password         (optional)
+#   FESTIE_DEPLOY_REF     ref to deploy; pin the SHA you rehearsed on staging
+#                                                       (default origin/main)
+#   FESTIE_GH_REPO        GitHub repo for the CI check (default uhsear/festie)
+#   FESTIE_SKIP_CI_CHECK  set to 1 to skip the CI-green check (optional)
+#
+# The deploy lock is a directory on the host (LOCK_DIR). A deploy killed before
+# it finishes leaves the lock behind: check no deploy is running, then remove it.
 #
 # There is NO password-auth path by design. If key auth fails, fix the key —
 # do not add a password.
@@ -45,6 +54,7 @@
 import json
 import os
 import socket
+import subprocess
 import sys
 import time
 
@@ -65,6 +75,10 @@ READY_URL = os.environ.get("FESTIE_READY_URL", "http://localhost:4000/api/ready"
 LOGIN_URL = os.environ.get("FESTIE_LOGIN_URL", "http://localhost:4000/api/v1/auth/login")
 TEST_USER = os.environ.get("FESTIE_TEST_USER")
 TEST_PASSWORD = os.environ.get("FESTIE_TEST_PASSWORD")
+DEPLOY_REF = os.environ.get("FESTIE_DEPLOY_REF", "origin/main")
+GH_REPO = os.environ.get("FESTIE_GH_REPO", "uhsear/festie")
+SKIP_CI_CHECK = os.environ.get("FESTIE_SKIP_CI_CHECK") == "1"
+LOCK_DIR = "/tmp/festie-deploy.lock"  # mkdir is atomic; /tmp clears on reboot
 
 
 def run(client, cmd, timeout=300):
@@ -100,6 +114,44 @@ def connect():
         connect_kwargs["key_filename"] = KEY
     client.connect(**connect_kwargs)
     return client
+
+
+def acquire_lock(client, runner=run):
+    """Take the host-side deploy lock; a second concurrent deploy aborts."""
+    code, out, err = runner(client, f"mkdir {LOCK_DIR}")
+    if code != 0:
+        raise SystemExit(
+            f"deploy lock {LOCK_DIR} is held ({err.strip()}); another deploy may be running. "
+            "If none is, remove the directory on the host and deploy again."
+        )
+
+
+def release_lock(client, runner=run):
+    runner(client, f"rmdir {LOCK_DIR}")
+
+
+def resolve_ref(client, runner=run):
+    """Fetch, then return the full SHA of DEPLOY_REF. Does not touch the working tree."""
+    code, out, err = runner(
+        client, f"cd {APP} && git fetch origin --tags && git rev-parse --verify '{DEPLOY_REF}^{{commit}}'"
+    )
+    sha = out.strip().splitlines()[-1] if out.strip() else ""
+    if code != 0 or not sha:
+        raise SystemExit(f"cannot resolve {DEPLOY_REF} on the host: {err.strip()}; nothing was changed.")
+    return sha
+
+
+def ci_green(sha):
+    """True when the commit has check runs and every one succeeded or was skipped."""
+    result = subprocess.run(
+        ["gh", "api", f"repos/{GH_REPO}/commits/{sha}/check-runs?per_page=100",
+         "--jq", '[.total_count, ([.check_runs[] | select(.conclusion != "success" and .conclusion != "skipped")] | length)] | @tsv'],
+        capture_output=True, text=True, timeout=60,
+    )
+    if result.returncode != 0:
+        raise SystemExit(f"CI check failed to run ({result.stderr.strip()}); set FESTIE_SKIP_CI_CHECK=1 to skip it.")
+    total, bad = (int(n) for n in result.stdout.split())
+    return total > 0 and bad == 0
 
 
 def pre_deploy_dump(client, runner=run):
@@ -171,14 +223,25 @@ def rollback_hint(tag=None):
 def main():
     deploy_tag = "deploy-" + time.strftime("%Y%m%d-%H%M%S", time.gmtime())
     client = connect()
+    locked = False
     try:
+        acquire_lock(client)
+        locked = True
+
+        # Pin the commit before anything changes, so a merge landing mid-deploy
+        # cannot ship, and refuse a commit whose CI is not green.
+        sha = resolve_ref(client)
+        print(f"[ref] {DEPLOY_REF} -> {sha}")
+        if not SKIP_CI_CHECK and not ci_green(sha):
+            raise SystemExit(f"CI is not green for {sha}; nothing was changed. Fix CI or set FESTIE_SKIP_CI_CHECK=1.")
+
         # 0. Dump the database while nothing has changed yet.
         pre_deploy_dump(client)
 
-        # 1. Sync to origin/main
+        # 1. Sync to the pinned commit
         code, out, err = run(
             client,
-            f"cd {APP} && git fetch origin --tags && git reset --hard origin/main && git log --oneline -1",
+            f"cd {APP} && git reset --hard {sha} && git log --oneline -1",
         )
         print(f"[git] exit={code}\n{out}{err}")
         if code != 0:
@@ -195,7 +258,7 @@ def main():
         # (login shell so npm/pnpm are on PATH).
         code, out, err = run(
             client,
-            f"bash -lc 'set -o pipefail; cd {APP} && npm install --omit=dev --no-audit --no-fund "
+            f"bash -lc 'set -o pipefail; cd {APP} && npm ci --omit=dev --no-audit --no-fund "
             f"&& cd {APP}/packages && pnpm install --frozen-lockfile 2>&1 | tail -10'",
             timeout=600,
         )
@@ -245,11 +308,6 @@ def main():
             rollback_hint()
             raise SystemExit("web build failed")
 
-        # NOTE: festie.us serves the Vite SPA (packages/web). The Expo
-        # react-native-web export (`pnpm run build:web` in packages/mobile) is no
-        # longer built here — it is kept dormant for a possible future
-        # app.festie.us, but the desktop flagship is the bespoke web SPA.
-
         # 6. Restart the backend
         code, out, err = run(
             client,
@@ -295,6 +353,8 @@ def main():
 
         print(f"\nDeploy OK — tagged {deploy_tag}")
     finally:
+        if locked:
+            release_lock(client)
         client.close()
 
 

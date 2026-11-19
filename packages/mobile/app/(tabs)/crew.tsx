@@ -43,6 +43,8 @@ import {
   deleteCrewConfirmMessage,
   leaveCrewConfirmMessage,
   removeMemberConfirmMessage,
+  isCrewOwner,
+  memberIsOwner,
   DEFAULT_CREW_TAB,
   parseCrewTab,
   openPollIds,
@@ -825,8 +827,7 @@ export default function CrewScreen() {
   const members: CrewMember[] = crewMembers.length ? crewMembers : (crew.members ?? []);
 
   // Current user's role within this crew drives which admin controls show.
-  const myMembership = members.find((m) => m.userId === user.id);
-  const isOwner = crew.owner === user.id || myMembership?.role === 'owner';
+  const isOwner = isCrewOwner(crew, members, user.id);
   const crewFestival = festivalForCrew(crew, currentFestival);
   const inviteExpiry = formatInviteExpiry(crew.inviteExpiresAt);
   const countText = memberCountLabel(members.length, crew.maxMembers);
@@ -1053,7 +1054,7 @@ export default function CrewScreen() {
           automaticallyAdjustKeyboardInsets
           refreshControl={crewRefreshControl}
           renderItem={({ item }) => {
-            const rowIsOwner = item.role === 'owner' || item.userId === crew.owner;
+            const rowIsOwner = memberIsOwner(item, crew.owner);
             const displayName = item.name || 'Member';
             const isSelf = item.userId === user.id;
             // Owners may manage other members (kick + transfer). Force-add and

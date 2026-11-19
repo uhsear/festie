@@ -34,9 +34,6 @@ vi.mock('../components/account/SignInMethodsSection', () => ({
 vi.mock('../components/account/NotificationSection', () => ({
   default: () => <div data-testid="notification-section" />,
 }));
-vi.mock('../components/account/NotificationPrefsSection', () => ({
-  default: () => <div data-testid="notification-prefs-section" />,
-}));
 vi.mock('../components/account/DangerZone', () => ({
   default: () => <div data-testid="danger-zone" />,
 }));
@@ -128,7 +125,6 @@ describe('AccountPage', () => {
     expect(screen.getByTestId('profile-section')).toBeInTheDocument();
     expect(screen.getByTestId('password-section')).toBeInTheDocument();
     expect(screen.getByTestId('notification-section')).toBeInTheDocument();
-    expect(screen.getByTestId('notification-prefs-section')).toBeInTheDocument();
     expect(screen.getByTestId('danger-zone')).toBeInTheDocument();
     expect(screen.getByTestId('devices-section')).toBeInTheDocument();
     expect(screen.getByText('Help and legal')).toBeInTheDocument();

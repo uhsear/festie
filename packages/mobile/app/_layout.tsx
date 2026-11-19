@@ -57,8 +57,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 // Set the root view background so Android gesture-nav's system navigation bar
 // inherits the app background instead of defaulting to white (which flashes
-// behind the bottom edge on edge-to-edge Android 10+ devices). This is a runtime
-// companion to the androidNavigationBar config in app.json. This module-scope
+// behind the bottom edge on edge-to-edge Android 10+ devices). This module-scope
 // call paints the stage default before first render; AuthGate re-applies it
 // whenever the persisted/toggled theme changes.
 SystemUI.setBackgroundColorAsync(stageColors.bg.primary).catch(() => {});

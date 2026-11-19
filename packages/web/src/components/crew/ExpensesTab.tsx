@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@festie/shared';
+import { fetchCrewExpenses, fetchCrewSettlementPlan, createCrewExpense, deleteCrewExpense } from '@festie/shared/services';
 import { useCrewStore } from '@festie/shared/stores';
 import type {
   SettleCrewExpenseRequest,
@@ -16,16 +16,12 @@ import {
   writeOutcomeMessage,
   createSettleUpFlow,
   confirmPaidMessage,
-  payOptionsFor,
   spendingExpenses,
   ledgerRows,
   settlementPayments,
   describePayment,
   formatCents,
-  settlementSentence,
-  balanceSentence,
   paymentsToConfirm,
-  paymentStatusLine,
   expenseTrailLine,
   expenseShareCents,
 } from '@festie/shared/utils';
@@ -38,8 +34,10 @@ import StaleNote from './StaleNote';
 import Skeleton from '../ui/Skeleton';
 import ExpenseItem from './ExpenseItem';
 import ExpenseForm from './ExpenseForm';
+import SettleUpCard, { type Balance } from './SettleUpCard';
+import PaymentsList from './PaymentsList';
 import ConfirmDialog from '../ui/ConfirmDialog';
-import { DollarSign, Plus, HandCoins } from 'lucide-react';
+import { DollarSign, Plus } from 'lucide-react';
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
 import SegmentedTablist from '@/components/ui/SegmentedTablist';
 import { inputBase } from '../../lib/styles';
@@ -47,11 +45,6 @@ import { invalidateCrewMoney } from '../../lib/queryPersist';
 
 type RawExpense = CrewExpense;
 
-interface Balance {
-  userId: string;
-  username: string;
-  balance: number;
-}
 interface CrewMemberLite {
   userId: string;
   username?: string;
@@ -65,11 +58,6 @@ interface Props {
 }
 
 const EXPENSE_VIEWS = (['actual', 'planned', 'all'] as const).map((v) => ({ value: v, label: v }));
-const SETTLE_VIEWS = [
-  { value: 'fewest', label: 'Fewest payments' },
-  { value: 'everyone', label: "Everyone's balance" },
-] as const;
-
 function balanceColor(value: number): string {
   if (value > 0.01) return 'text-accent-aqua';
   if (value < -0.01) return 'text-[var(--color-text-danger)]';
@@ -107,10 +95,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     refetch,
   } = useQuery<RawExpense[]>({
     queryKey: ['expenses', crewId],
-    queryFn: async () => {
-      const res = await api.get<RawExpense[]>(`/crews/${crewId}/expenses`);
-      return Array.isArray(res) ? res : [];
-    },
+    queryFn: () => fetchCrewExpenses(crewId),
     enabled: !!crewId,
   });
 
@@ -119,10 +104,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   // old raw-balance + Math.min() settle heuristic.
   const { data: plan } = useQuery<CrewSettlementPlan>({
     queryKey: ['settlement-plan', crewId],
-    queryFn: async () => {
-      const res = await api.get<CrewSettlementPlan>(`/crews/${crewId}/expenses/settlement-plan`);
-      return { balances: res?.balances ?? [], settlements: res?.settlements ?? [], currency: res?.currency };
-    },
+    queryFn: () => fetchCrewSettlementPlan(crewId),
     enabled: !!crewId,
   });
   const balances: Balance[] = plan?.balances ?? [];
@@ -130,7 +112,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   const currency = plan?.currency ?? 'USD';
 
   const addExpense = useMutation({
-    mutationFn: (payload: CreateCrewExpenseRequest) => api.post(`/crews/${crewId}/expenses`, payload),
+    mutationFn: (payload: CreateCrewExpenseRequest) => createCrewExpense(crewId, payload),
     onSuccess: (result, payload) => {
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {
@@ -238,7 +220,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   });
 
   const removeExpense = useMutation({
-    mutationFn: (id: string) => api.delete(`/crews/${crewId}/expenses/${id}`),
+    mutationFn: (id: string) => deleteCrewExpense(crewId, id),
     onSuccess: (result, id) => {
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {
@@ -420,102 +402,19 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           per crew member: "You owe {name}" (settle-able) / "{name} owes you"
           (with a reminder button). */}
       {(settlements.length > 0 || nonZeroBalances.length > 0) && (
-        <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
-          <div className="flex items-center justify-between gap-2">
-            <div className="text-xs text-text-muted uppercase tracking-wide">Settle up</div>
-            <SegmentedTablist
-              label="Settle-up view"
-              panelId="settle-view-panel"
-              options={SETTLE_VIEWS}
-              value={settleView}
-              onChange={setSettleView}
-              className="flex gap-1 rounded-lg bg-bg-secondary"
-              tabClassName="px-2.5 py-1 rounded-md"
-            />
-          </div>
-
-          <div id="settle-view-panel">
-          {settleView === 'fewest' ? (
-            myPayments.length === 0 && myReceipts.length === 0 ? (
-              <div className="text-sm text-text-secondary">You're all settled up.</div>
-            ) : (
-              <div className="space-y-3">
-                {/* You owe {name} — settle-able net transfers. */}
-                {myPayments.map((s) => {
-                  // Step 1: the payee's payment links. Step 2 ("I've paid")
-                  // records the settlement after a confirm.
-                  const options = payOptionsFor(s, currency);
-                  return (
-                    <div key={`pay-${s.toUserId}`} className="space-y-2">
-                      <div className="text-sm text-text-primary">{settlementSentence(s, currentUserId, currency)}</div>
-                      {options.length > 0 ? (
-                        <div className="flex flex-wrap gap-2">
-                          {options.map((o) => (
-                            <a
-                              key={o.label}
-                              href={o.link.web}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="min-h-11 px-3 py-1 rounded-full border border-border text-xs text-text-primary hover:border-border-light inline-flex items-center"
-                            >
-                              Pay with {o.label}
-                            </a>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="text-xs text-text-secondary">
-                          {Object.values(s.payeeHandles).some(Boolean)
-                            ? `${s.toName}'s payment apps don't support ${currency}. Pay them directly, then confirm here.`
-                            : `${s.toName} hasn't added a payment handle. Pay them directly, then confirm here.`}
-                        </div>
-                      )}
-                      <Button
-                        variant="outline"
-                        onClick={() => setPaidTarget(s)}
-                        disabled={settle.isPending}
-                        className="!py-1 !px-3 text-xs min-h-11"
-                      >
-                        <HandCoins className="w-3.5 h-3.5" aria-hidden="true" /> I've paid {s.toName}
-                      </Button>
-                    </div>
-                  );
-                })}
-                {/* {name} owes you — the other person settles; I can nudge them. */}
-                {myReceipts.map((s) => (
-                  <div key={`get-${s.fromUserId}`} className="flex items-center justify-between gap-2">
-                    <span className="text-sm text-text-primary">{settlementSentence(s, currentUserId, currency)}</span>
-                    <Button
-                      variant="outline"
-                      onClick={() => remind.mutate({ userId: s.fromUserId, name: s.fromName })}
-                      disabled={remind.isPending}
-                      className="!py-1 !px-3 text-xs min-h-11"
-                    >
-                      Remind {s.fromName}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )
-          ) : nonZeroBalances.length > 0 ? (
-            <div className="space-y-2">
-              {nonZeroBalances.map((b) => (
-                <div key={b.userId} className="flex items-center justify-between gap-2">
-                  <span
-                    className={cn(
-                      'text-sm tabular-nums',
-                      b.balance > 0 ? 'text-accent-aqua' : 'text-[var(--color-text-danger)]',
-                    )}
-                  >
-                    {balanceSentence(b, currentUserId, currency)}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="text-sm text-text-secondary">Everyone's balance is zero.</div>
-          )}
-          </div>
-        </div>
+        <SettleUpCard
+          myPayments={myPayments}
+          myReceipts={myReceipts}
+          nonZeroBalances={nonZeroBalances}
+          settleView={settleView}
+          onSettleViewChange={setSettleView}
+          currentUserId={currentUserId}
+          currency={currency}
+          settlePending={settle.isPending}
+          remindPending={remind.isPending}
+          onPay={setPaidTarget}
+          onRemind={(userId, name) => remind.mutate({ userId, name })}
+        />
       )}
 
       {/* Add / edit form, or the add button */}
@@ -605,35 +504,15 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       </div>
 
       {view !== 'planned' && payments.length > 0 && (
-        <div className="space-y-2">
-          <div>
-            <h3 className="text-xs text-text-muted uppercase tracking-wide">Payments</h3>
-            <p className="text-xs text-text-secondary">Settle-up payments. Not counted in Total spent.</p>
-          </div>
-          {payments.map((p) => (
-            <div
-              key={p.id}
-              className="p-3 rounded-lg bg-bg-card border border-glass-border flex items-center justify-between gap-3"
-            >
-              <div className="min-w-0">
-                <div className="text-sm text-text-primary">{describePayment(p, currentUserId, nameOf, currency)}</div>
-                {paymentStatusLine(p, members, currentUserId) && (
-                  <div className="text-xs text-text-secondary">{paymentStatusLine(p, members, currentUserId)}</div>
-                )}
-              </div>
-              {p.paid_by === currentUserId && !p._optimistic && (
-                <Button
-                  variant="ghost"
-                  onClick={() => setUndoTarget(p)}
-                  disabled={removeExpense.isPending}
-                  className="!py-1 !px-3 text-xs min-h-11"
-                >
-                  Undo payment
-                </Button>
-              )}
-            </div>
-          ))}
-        </div>
+        <PaymentsList
+          payments={payments}
+          members={members}
+          currentUserId={currentUserId}
+          currency={currency}
+          nameOf={nameOf}
+          undoPending={removeExpense.isPending}
+          onUndo={setUndoTarget}
+        />
       )}
 
       <ConfirmDialog

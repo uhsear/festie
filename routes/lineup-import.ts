@@ -30,6 +30,7 @@
 
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
 import { planPickerAlerts } from '../lib/picker-alerts.js';
 import {
@@ -105,6 +106,7 @@ export default function createLineupImportRoute(deps: any) {
     getRequestIp,
     emitter,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const router = express.Router();
 
@@ -128,25 +130,8 @@ export default function createLineupImportRoute(deps: any) {
     })().catch((err: any) => log.warn('import picker alerts failed', { festivalId: before.id, error: err?.message }));
   }
 
-  async function writeAuditRow(req: any, res: any, action: string, festivalId: string, details: any) {
-    if (stores.auditLog) {
-      try {
-        await stores.auditLog.insert({
-          id: crypto.randomUUID(),
-          actorType: 'admin',
-          actorId: req.user?.userId,
-          action,
-          targetType: 'festival',
-          targetId: festivalId,
-          detailsJson: JSON.stringify(details),
-          ip: getRequestIp(req),
-        });
-      } catch (err: any) {
-        log.warn('lineup import audit write failed', { festivalId, action, error: err?.message });
-      }
-    }
-    // Tells the generic audit middleware this request already has its row.
-    res.locals.auditWritten = true;
+  function writeAuditRow(req: any, res: any, action: string, festivalId: string, details: any) {
+    return writeAdminAudit(req, res, { action, targetType: 'festival', targetId: festivalId, details });
   }
 
   // A Link column value for an empty platform of an artist that exists: written after the import

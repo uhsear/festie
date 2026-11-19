@@ -12,7 +12,6 @@ import PaymentHandlesSection from '../components/account/PaymentHandlesSection';
 import PasswordSection from '../components/account/PasswordSection';
 import SignInMethodsSection from '../components/account/SignInMethodsSection';
 import NotificationSection from '../components/account/NotificationSection';
-import NotificationPrefsSection from '../components/account/NotificationPrefsSection';
 import PublicScheduleSection from '../components/account/PublicScheduleSection';
 import PrivacySection from '../components/account/PrivacySection';
 import DevicesSection from '../components/account/DevicesSection';
@@ -77,12 +76,7 @@ function AccountPageInner() {
         <PaymentHandlesSection />
       </>
     ),
-    notifications: (
-      <>
-        <NotificationSection />
-        <NotificationPrefsSection />
-      </>
-    ),
+    notifications: <NotificationSection />,
     privacy: (
       <>
         <PrivacySection />

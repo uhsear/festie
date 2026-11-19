@@ -12,11 +12,10 @@
  */
 
 import type { Pool } from 'pg';
+import { isoOrNull } from './db/connection';
 
 type ExportRow = Record<string, unknown>;
 type ExportLog = { warn: (message: string, meta?: Record<string, unknown>) => void };
-
-export const isoOrNull = (value: unknown) => (value ? new Date(value as string).toISOString() : null);
 
 const numberOrNull = (value: unknown) => (value === null || value === undefined ? null : Number(value));
 

@@ -1,7 +1,7 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import type { PersistQueryClientOptions } from '@tanstack/react-query-persist-client';
 import type { QueryClient } from '@tanstack/react-query';
-import { api, useAuthStore, type CrewMeetingPoint } from '@festie/shared';
+import { fetchMeetingPoints, useAuthStore, type CrewMeetingPoint } from '@festie/shared';
 
 /**
  * Offline-survival persistence for the TanStack Query cache (web).
@@ -48,10 +48,7 @@ const PERSISTED_KEY_ROOTS = new Set<string>([
 
 export const meetingPointsQuery = (crewId: string) => ({
   queryKey: ['meeting-points', crewId] as const,
-  queryFn: async (): Promise<CrewMeetingPoint[]> => {
-    const res = await api.get<CrewMeetingPoint[] | { meetingPoints: CrewMeetingPoint[] }>(`/crews/${crewId}/meeting-points`);
-    return Array.isArray(res) ? res : res?.meetingPoints || [];
-  },
+  queryFn: (): Promise<CrewMeetingPoint[]> => fetchMeetingPoints(crewId),
 });
 
 /** Everything an expense write changes: the list, the settle-up plan and the balances. */

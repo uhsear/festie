@@ -12,19 +12,12 @@ import assert from 'node:assert/strict';
 import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
+import { makeIo } from './_make-io';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
 function noop() {}
 const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
-
-function makeIo() {
-  const emitFn = mock.fn(() => {});
-  return {
-    to: mock.fn(() => ({ emit: emitFn })),
-    _emit: emitFn,
-  };
-}
 
 const DEFAULT_ITEM = {
   id: 'pack-1',
@@ -122,7 +115,7 @@ function makePackingDeps(overrides: any = {}) {
 async function buildPackingApp(overrides: any = {}) {
   const deps = makePackingDeps(overrides);
   const { default: createCrewPackingRoutes } = await import('../routes/crew-packing.js');
-  const router = createCrewPackingRoutes(deps);
+  const router = createCrewPackingRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/', router);
