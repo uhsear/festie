@@ -58,7 +58,6 @@ describe('OfflineBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     sessionStorage.clear();
-    (window as Record<string, unknown>).__festieQueue = undefined;
   });
 
   it('renders nothing when online with no pending sync and no failures', () => {
