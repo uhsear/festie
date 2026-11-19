@@ -120,6 +120,45 @@ export interface Stores {
   [store: string]: any;
 }
 
+/** Fixed-window counter entry; `start` or `windowStart` holds the window's epoch ms. */
+interface RateLimitEntry {
+  count: number;
+  start?: number;
+  windowStart?: number;
+  [k: string]: unknown;
+}
+
+/** In-process state bag shared through the context (lost on restart, per process). */
+export interface AppState {
+  userTaskQueues: Map<string, Promise<unknown>>;
+  rateLimits: Map<string, RateLimitEntry>;
+  routeRateLimits: Map<string, RateLimitEntry>;
+  authRateLimits: Map<string, RateLimitEntry>;
+  adminAuthRateLimits: Map<string, RateLimitEntry>;
+  socketConnectRateLimits: Map<string, RateLimitEntry>;
+  socketRateLimits: Map<string, RateLimitEntry>;
+  userAuthRateLimits: Map<string, RateLimitEntry>;
+  onlineUsers: Map<string, Map<string, { userId: string; username: string }>>;
+  _adminResetTokens: Map<string, { expiresAt: number; [k: string]: unknown }>;
+  sseConnections: Map<string, unknown>;
+  timers: NodeJS.Timeout[];
+  stores: Stores;
+  metrics: {
+    totalRequests: number;
+    totalErrors: number;
+    totalDuration: number;
+    requestCount: number;
+    statusCodes: Record<string, number>;
+    socketConnections: number;
+    socketDisconnections: number;
+    socketErrors: number;
+    peakConnections: number;
+    startedAt: string;
+  };
+  // Other modules attach fields lazily (sweepsInFlight, schedulers); they narrow on use.
+  [extra: string]: unknown;
+}
+
 /**
  * An Express-style auth/rate-limit middleware. Aliased to Express's own
  * `RequestHandler` so these can be passed straight to `router.get(...)` etc.
