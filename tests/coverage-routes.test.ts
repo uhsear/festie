@@ -247,10 +247,11 @@ describe('GET /api/health /api/info /api/ready', () => {
     assert.ok(res.body.data);
   });
 
-  test('/api/ready returns 200 (all deps) or 503 (Redis off)', async () => {
+  test('/api/ready returns 503 until the server is marked ready', async () => {
     const server = await startServer(); servers.push(server);
     const res = await server.request.get('/api/ready');
-    assert.ok(res.status === 200 || res.status === 503);
+    assert.equal(res.status, 503);
+    assert.equal(res.body.data.status, 'not_ready');
   });
 });
 
@@ -268,12 +269,12 @@ describe('metrics endpoints', () => {
     assert.ok(res.body.data !== undefined);
   });
 
-  test('POST /api/metrics/client accepts or rejects unknown payload shape', async () => {
+  test('POST /api/metrics/client rejects unknown payload shape', async () => {
     const server = await startServer(); servers.push(server);
     const res = await server.request
       .post('/api/metrics/client')
       .send({ invalidField: 'value' });
-    assert.ok(res.status === 200 || res.status === 400);
+    assert.equal(res.status, 400);
   });
 
   test('POST /api/v1/metrics/client has rate-limit headers', async () => {
@@ -281,7 +282,7 @@ describe('metrics endpoints', () => {
     const res = await server.request.post('/api/v1/metrics/client')
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ lcp: 1200, fid: 50, cls: 0.05 });
-    assert.ok([200, 204].includes(res.status), `Metrics: ${res.status}`);
+    assert.equal(res.status, 200);
     assert.ok(res.headers['x-ratelimit-limit']);
   });
 
@@ -348,7 +349,7 @@ describe('admin bulk deactivate + archive', () => {
       .set('x-user-token', adminToken)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ festivalIds: [festId] });
-    assert.ok(res.status === 200 || res.status === 400);
+    assert.equal(res.status, 200);
   });
 });
 
@@ -537,14 +538,14 @@ describe('export routes', () => {
 // ════════════════════════════════════════════════════════════════════════
 
 describe('notifications routes', () => {
-  test('badge reset accepts 200 / 204 / 404', async () => {
+  test('badge reset is not routed (404)', async () => {
     const server = await startServer(); servers.push(server);
     const user = await registerUser(server, 'notificationuser');
     const res = await server.request
       .post('/api/v1/notifications/badge/reset')
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1');
-    assert.ok([200, 204, 404].includes(res.status));
+    assert.equal(res.status, 404);
   });
 
   test('unread counts returns object or number when implemented', async () => {
@@ -700,20 +701,20 @@ describe('rate-limit + session', () => {
 // ════════════════════════════════════════════════════════════════════════
 
 describe('misc route edges', () => {
-  test('deep-linking .well-known responses are valid JSON or 404/503', async () => {
-    const server = await startServer(); servers.push(server);
+  test('deep-linking .well-known responses are valid JSON', async () => {
+    const server = await startServer({ APPLE_TEAM_ID: 'ABCDE12345' }); servers.push(server);
     const r1 = await server.request.get('/.well-known/apple-app-site-association');
     const r2 = await server.request.get('/.well-known/assetlinks.json');
-    assert.ok([200, 404, 503].includes(r1.status));
-    assert.ok([200, 404, 503].includes(r2.status));
-    if (r1.status === 200) assert.ok(typeof r1.body === 'object');
-    if (r2.status === 200) assert.ok(typeof r2.body === 'object');
+    assert.equal(r1.status, 200);
+    assert.equal(r2.status, 200);
+    assert.ok(typeof r1.body === 'object');
+    assert.ok(typeof r2.body === 'object');
   });
 
-  test('SSE endpoint returns 200/401/404', async () => {
+  test('SSE endpoint returns 404 for unknown path', async () => {
     const server = await startServer(); servers.push(server);
     const res = await server.request.get('/api/v1/sse/test');
-    assert.ok([200, 401, 404].includes(res.status));
+    assert.equal(res.status, 404);
   });
 
   test('error responses do not leak stack traces', async () => {
@@ -775,7 +776,7 @@ describe('misc route edges', () => {
       .set(TRUSTED_MUTATION_HEADER, '1')
       .set('If-Match', '"stale-etag-000"')
       .send({ picks: { 'set-s1': 'maybe' } });
-    assert.ok([200, 409].includes(staleUpdate.status));
+    assert.equal(staleUpdate.status, 409);
   });
 
   test('Redis-disabled app still starts and serves core routes', async () => {
@@ -1084,13 +1085,11 @@ describe('Spotify preview route', () => {
     assert.ok(res.body.error);
   });
 
-  test('is publicly accessible (no auth required) — 200/404/429', async () => {
+  test('is publicly accessible (no auth required) — 404 for unknown set', async () => {
     const server = await startServer(); servers.push(server);
     const res = await server.request
       .get('/api/v1/spotify/preview/nonexistent-set');
-    if (![200, 404, 429].includes(res.status)) {
-      throw new Error('expected 200/404/429 got ' + res.status);
-    }
+    assert.equal(res.status, 404);
   });
 
   test('returns null embedType for set with empty artists array', async () => {
