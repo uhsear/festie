@@ -334,6 +334,12 @@ describe('request-helpers: enforceAllowedOrigin', () => {
     assertPassed(run({ method: 'POST', headers: { authorization: 'Bearer tok123' } }));
   });
 
+  it('passes through POST with Bearer token and a foreign origin when there is no session cookie', () => {
+    assertPassed(
+      run({ method: 'POST', headers: { authorization: 'Bearer tok123', origin: 'https://evil.com', host: 'festie.us' } }),
+    );
+  });
+
   it('passes through POST with valid origin', () => {
     assertPassed(run({ method: 'POST', headers: { origin: 'https://festie.us', host: 'festie.us' } }));
   });
