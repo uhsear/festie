@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const { revocation, navigate, toast } = vi.hoisted(() => ({ revocation: vi.fn(), navigate: vi.fn(), toast: vi.fn() }));
 const handlers: Record<string, (data?: unknown) => void> = {};
 const fakeSocket = {
   connected: true,
@@ -13,9 +14,9 @@ const fakeSocket = {
 
 vi.mock('@festie/shared/hooks/useSocket', () => ({ useSocket: () => ({ socket: fakeSocket }) }));
 vi.mock('@festie/shared/hooks/useCrewRealtime', () => ({ useCrewRealtime: vi.fn() }));
-vi.mock('@festie/shared/hooks', () => ({ useRevocationRealtime: vi.fn() }));
-vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
-vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn() }) }));
+vi.mock('@festie/shared/hooks', () => ({ useRevocationRealtime: revocation }));
+vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
+vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast }) }));
 vi.mock('./useCrewQuerySink', () => ({ useCrewQuerySink: () => ({}) }));
 
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -79,5 +80,15 @@ describe('useRealtimeSync (T58)', () => {
     act(() => void vi.advanceTimersByTime(400));
     expect(selectCrew).toHaveBeenCalledWith('c1');
     expect(loadCrews).toHaveBeenCalledTimes(1);
+  });
+  it('wires revocation to the socket: session revoke goes to /login, crew notice shows an info toast', () => {
+    revocation.mockClear();
+    renderHook(() => useRealtimeSync());
+    const opts = revocation.mock.calls.at(-1)![0];
+    expect(opts.socket).toBe(fakeSocket);
+    opts.onSessionRevoked();
+    expect(navigate).toHaveBeenCalledWith({ to: '/login' });
+    opts.onCrewNotice({ message: 'You were removed' });
+    expect(toast).toHaveBeenCalledWith('You were removed', 'info');
   });
 });
