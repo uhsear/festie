@@ -4,6 +4,7 @@ import { useUIStore } from '../stores/uiStore';
 import { canQueueOnEdgeError } from './errors';
 import { legacyPickBody } from './pickDeltas';
 import { enqueueMutation, drainQueue } from './offlineQueue';
+import { getOfflineQueue } from './offlineQueueRegistry';
 
 type AuthMode = 'cookie' | 'bearer';
 
@@ -170,8 +171,9 @@ async function enqueueOfflineMutation<T>(path: string, method: string, options: 
 
   // Web PWA: hand off to the IndexedDB-backed bridge so the web + RN paths share
   // one durable queue surface per platform.
-  if (typeof window !== 'undefined' && window.__festieQueue?.queueMutation) {
-    await window.__festieQueue.queueMutation({ type: 'api', url: path, method, body, clientId, idempotencyKey });
+  const webQueue = getOfflineQueue();
+  if (webQueue) {
+    await webQueue.queueMutation({ type: 'api', url: path, method, body, clientId, idempotencyKey });
   } else {
     // Native: offlineQueue only uses api inside functions, so the api <-> offlineQueue cycle is safe.
     await enqueueMutation({
@@ -230,8 +232,9 @@ function markOnlineAndDrain(path: string): void {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
     if (/\/festivals(\/|$|\?)/.test(path)) return;
     useUIStore.getState().setOfflineMode(false);
-    if (typeof window !== 'undefined' && window.__festieQueue?.processQueue) {
-      void window.__festieQueue.processQueue()?.catch(() => {});
+    const webQueue = getOfflineQueue();
+    if (webQueue) {
+      void webQueue.processQueue().catch(() => {});
     } else {
       void drainQueue().catch(() => {});
     }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { getOfflineQueue } from '@festie/shared/services';
 import { createTestQueryClient, queryClientWrapper } from '../test-utils';
 
 type OnSent = (sent: { url: string; method: string }) => void;
@@ -15,7 +16,10 @@ const api = vi.hoisted(() => ({
   patch: vi.fn(),
   delete: vi.fn(),
 }));
-vi.mock('@festie/shared/services', () => ({ api }));
+vi.mock('@festie/shared/services', async (importActual) => {
+  const actual = await importActual<typeof import('@festie/shared/services')>();
+  return { registerOfflineQueue: actual.registerOfflineQueue, getOfflineQueue: actual.getOfflineQueue, api };
+});
 
 import { useOfflineQueueBridge, queryKeysForSentUrl } from './useOfflineQueueBridge';
 
@@ -45,9 +49,9 @@ describe('useOfflineQueueBridge post-send invalidation', () => {
     const queryClient = createTestQueryClient();
     const spy = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
     const wrapper = queryClientWrapper(queryClient);
-    renderHook(() => useOfflineQueueBridge(), { wrapper });
+    const { result } = renderHook(() => useOfflineQueueBridge(), { wrapper });
 
-    await window.__festieQueue!.processQueue();
+    await result.current.processQueue();
     const onSent = processQueue.mock.calls.at(-1)![2]!;
     onSent({ url: '/crews/c1/expenses', method: 'POST' });
 
@@ -70,8 +74,8 @@ describe('useOfflineQueueBridge replay adapter', () => {
 
   async function getAdapter(): Promise<Adapter> {
     const wrapper = queryClientWrapper();
-    renderHook(() => useOfflineQueueBridge(), { wrapper });
-    await window.__festieQueue!.processQueue();
+    const { result } = renderHook(() => useOfflineQueueBridge(), { wrapper });
+    await result.current.processQueue();
     return processQueue.mock.calls.at(-1)![0] as Adapter;
   }
 
@@ -99,5 +103,14 @@ describe('useOfflineQueueBridge replay adapter', () => {
     const adapter = await getAdapter();
     await adapter('/crews/c1/expenses', { body: { a: 1 } });
     expect(api.post).toHaveBeenCalledWith('/crews/c1/expenses', { a: 1 }, { _bypassOfflineQueue: true });
+  });
+});
+
+describe('useOfflineQueueBridge registration', () => {
+  it('registers the bridge for api while mounted and unregisters on unmount', () => {
+    const { result, unmount } = renderHook(() => useOfflineQueueBridge(), { wrapper: queryClientWrapper() });
+    expect(getOfflineQueue()).toBe(result.current);
+    unmount();
+    expect(getOfflineQueue()).toBeNull();
   });
 });

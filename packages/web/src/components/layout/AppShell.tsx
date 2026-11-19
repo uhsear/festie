@@ -27,7 +27,7 @@ import { useIOSInstall } from '../../hooks/useIOSInstall';
 import { useInboxRefresh } from '../../hooks/useInboxRefresh';
 import { usePushLanding } from '../../hooks/usePushLanding';
 import { useScrollReset } from '../../hooks/useScrollReset';
-import { useOfflineQueueBridge } from '../../hooks/useOfflineQueueBridge';
+import { OfflineQueueContext, useOfflineQueueBridge } from '../../hooks/useOfflineQueueBridge';
 import { useFestivalLoader } from '../../hooks/useFestivalLoader';
 import { useFestivalMode } from '../../hooks/useFestivalMode';
 import { prefetchMainRoutes } from '../../router';
@@ -98,7 +98,7 @@ export default function AppShell() {
   const iosInstall = useIOSInstall();
   useInboxRefresh();
   usePushLanding();
-  useOfflineQueueBridge();
+  const offlineQueue = useOfflineQueueBridge();
   const { pendingJoinCode, clearPendingJoin } = useFestivalLoader();
   const { showDayBanner } = useFestivalMode(location.pathname);
 
@@ -145,6 +145,7 @@ export default function AppShell() {
 
   return (
     <SocketContext.Provider value={socket}>
+      <OfflineQueueContext.Provider value={offlineQueue}>
       <div id="app">
         {/* Skip link -- WCAG 2.4.1 Bypass Blocks */}
         <a
@@ -214,6 +215,7 @@ export default function AppShell() {
           />
         )}
       </div>
+      </OfflineQueueContext.Provider>
     </SocketContext.Provider>
   );
 }
