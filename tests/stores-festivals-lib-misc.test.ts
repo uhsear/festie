@@ -321,11 +321,12 @@ describe('lib/db/stores/festivals.js', () => {
         { rows: [] }, // SELECT existing picks
         { rows: [] }, // SELECT existing ratings
         { rows: [] }, // DELETE ratings
+        { rows: [] }, // DELETE notes
         { rows: [] }, // DELETE picks
         { rows: [] }, // DELETE sets
         { rows: [] }, // DELETE days
         { rows: [] }, // INSERT days
-        { rows: [] }, // INSERT sets
+        { rows: [], rowCount: 1 }, // upsert sets: pg reports one row written per set
         { rows: [{ id: 'f1' }] }, // SELECT
         { rows: [] }, // COMMIT
       ]);
