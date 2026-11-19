@@ -294,10 +294,3 @@ export function getApnsProvider(config: ApnsConfig, log: any = console): ApnsPro
   _providerKey = key;
   return _provider;
 }
-
-/** Reset the lazy singleton (test seam). */
-function _resetApnsProvider(): void {
-  if (_provider) _provider.close();
-  _provider = null;
-  _providerKey = null;
-}
