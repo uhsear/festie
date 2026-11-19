@@ -13,7 +13,7 @@ import { festivalStartMinutes, formatClock12 } from './time-zone.js';
 import { MAX_BODY_LENGTH } from './notifications/payload.js';
 
 // dayKey and stageId are the identity; dayLabel and stageName are display text that an admin can rename.
-export type SetSlot = {
+type SetSlot = {
   dayKey: string;
   dayLabel: string;
   startTime: string | null;

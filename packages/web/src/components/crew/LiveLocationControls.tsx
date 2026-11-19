@@ -2,8 +2,8 @@
 // All Rights Reserved. See the LICENSE file.
 
 import React, { useId, useMemo, useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { AlertCircle, Navigation, ShieldCheck, X, MapPin } from 'lucide-react';
+import * as RadixDialog from '@radix-ui/react-dialog';
+import { AlertCircle, Navigation, ShieldCheck, MapPin } from 'lucide-react';
 import { clearCrewSos, sosErrorMessage } from '@festie/shared';
 import type { SosEntry } from '@festie/shared/types';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
@@ -15,9 +15,8 @@ import { formatStaleness, liveShareOptions, resolveFestivalTimeZone, sosSeenLabe
 import { useSharedSocket } from '../../lib/socketContext';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
-import IconButton from '../ui/IconButton';
+import Dialog from '../ui/Dialog';
 import Switch from '../ui/Switch';
-import { useReturnFocus } from '../../hooks/useReturnFocus';
 import SosRaiseButton from './SosRaiseButton';
 import CheckInCard from './CheckInCard';
 import { BeaconButton } from './BeaconOverlay';
@@ -72,7 +71,6 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
   // mobile — the raiser's phone may be dead), but a stray tap must not silently
   // clear a live emergency, so clearing is confirm-gated like the raise. null = closed.
   const [clearTarget, setClearTarget] = useState<SosEntry | null>(null);
-  const returnFocus = useReturnFocus();
 
   function toggleSharing() {
     if (isSharingThisCrew) {
@@ -280,49 +278,41 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
 
       {/* ── Clear-SOS confirm dialog (parity with the raise: one stray tap must
           not silently resolve a live emergency) ────────────────────────────── */}
-      <Dialog.Root open={!!clearTarget} onOpenChange={(o: boolean) => !clearBusy && !o && setClearTarget(null)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
-          <Dialog.Content {...returnFocus} className="fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
-            {clearTarget && (
-              <>
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <Dialog.Title className="flex items-center gap-2 text-base font-bold text-text-primary">
-                      <ShieldCheck className="w-5 h-5 text-accent-aqua" aria-hidden="true" />{' '}
-                      {clearMine ? 'Clear your SOS?' : `Mark ${clearTarget.username}'s SOS resolved?`}
-                    </Dialog.Title>
-                    <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                      {clearMine
-                        ? "This tells your whole crew you're safe and removes the alert for everyone. Only do this once you're actually OK."
-                        : `This clears ${clearTarget.username}'s active emergency alert for everyone in the crew. Only do this if you know they are safe.`}
-                    </Dialog.Description>
-                  </div>
-                  <Dialog.Close asChild>
-                    <IconButton label="Close" icon={<X className="w-5 h-5" />} disabled={clearBusy} />
-                  </Dialog.Close>
-                </div>
-                <div className="flex gap-2">
-                  <Dialog.Close asChild>
-                    <Button variant="outline" type="button" className="flex-1 min-h-11" disabled={clearBusy}>
-                      Cancel
-                    </Button>
-                  </Dialog.Close>
-                  <Button
-                    type="button"
-                    variant="primary"
-                    onClick={() => clearSos(clearTarget.userId)}
-                    isLoading={clearBusy}
-                    className="flex-1 min-h-11"
-                  >
-                    {clearMine ? "I'm safe" : 'Mark resolved'}
-                  </Button>
-                </div>
-              </>
-            )}
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+      <Dialog
+        open={!!clearTarget}
+        onOpenChange={(o) => !clearBusy && !o && setClearTarget(null)}
+        icon={<ShieldCheck className="w-5 h-5 text-accent-aqua" aria-hidden="true" />}
+        title={clearTarget ? (clearMine ? 'Clear your SOS?' : `Mark ${clearTarget.username}'s SOS resolved?`) : ''}
+        description={
+          clearTarget
+            ? clearMine
+              ? "This tells your whole crew you're safe and removes the alert for everyone. Only do this once you're actually OK."
+              : `This clears ${clearTarget.username}'s active emergency alert for everyone in the crew. Only do this if you know they are safe.`
+            : undefined
+        }
+        closeDisabled={clearBusy}
+      >
+        {clearTarget && (
+          <>
+            <div className="flex gap-2">
+              <RadixDialog.Close asChild>
+                <Button variant="outline" type="button" className="flex-1 min-h-11" disabled={clearBusy}>
+                  Cancel
+                </Button>
+              </RadixDialog.Close>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={() => clearSos(clearTarget.userId)}
+                isLoading={clearBusy}
+                className="flex-1 min-h-11"
+              >
+                {clearMine ? "I'm safe" : 'Mark resolved'}
+              </Button>
+            </div>
+          </>
+        )}
+      </Dialog>
     </div>
   );
 }

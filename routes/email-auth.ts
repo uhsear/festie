@@ -119,7 +119,12 @@ export default function createEmailAuthRoutes(deps: any): Router {
         const resetUrl = `${config.PUBLIC_ORIGIN}/reset-password?token=${resetToken}`;
         const sent = await sendPasswordResetEmail({ to: cleanEmail, username: user.username, resetUrl, config, log });
         if (!sent) {
-          log.error('forgot-password:email-failed', { userId: user.id });
+          // The response stays identical so it cannot reveal accounts. sendEmail has already logged
+          // the provider error; this line says which request lost its reset mail.
+          log.warn('forgot-password:email-failed', {
+            userId: user.id,
+            reason: config.RESEND_API_KEY ? 'send-failed' : 'RESEND_API_KEY not configured',
+          });
         }
 
         log.info('forgot-password:requested', { userId: user.id, email: cleanEmail });

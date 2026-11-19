@@ -47,7 +47,7 @@ export interface ApnsResult {
   error?: string;
 }
 
-export interface ApnsSendOpts {
+interface ApnsSendOpts {
   /** APNs push type: 'alert' (default) or 'background' for silent sync. */
   pushType?: 'alert' | 'background';
   /** APNs priority: '10' for alerts, '5' for background. */
@@ -293,11 +293,4 @@ export function getApnsProvider(config: ApnsConfig, log: any = console): ApnsPro
   _provider = createApnsProvider(config, log);
   _providerKey = key;
   return _provider;
-}
-
-/** Reset the lazy singleton (test seam). */
-export function _resetApnsProvider(): void {
-  if (_provider) _provider.close();
-  _provider = null;
-  _providerKey = null;
 }

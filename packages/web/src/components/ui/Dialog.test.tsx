@@ -44,6 +44,25 @@ describe('Dialog', () => {
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
 
+  it('hides the description visually, disables Close and shows the icon when asked', () => {
+    render(
+      <Dialog
+        open
+        onOpenChange={vi.fn()}
+        title="Send SOS"
+        description="Alert the crew."
+        hideDescription
+        closeDisabled
+        icon={<span data-testid="icon" />}
+      >
+        <span />
+      </Dialog>,
+    );
+    expect(screen.getByText('Alert the crew.')).toHaveClass('sr-only');
+    expect(screen.getByRole('button', { name: 'Close' })).toBeDisabled();
+    expect(screen.getByRole('dialog', { name: 'Send SOS' })).toContainElement(screen.getByTestId('icon'));
+  });
+
   it('has no structural a11y violations', async () => {
     renderDialog();
     await expect(screen.getByRole('dialog')).toBeAccessible();
