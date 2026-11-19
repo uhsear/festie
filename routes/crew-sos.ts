@@ -2,6 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 
@@ -61,6 +62,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
     redis,
     emitter,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
   const sosRaiser = createSosRaiser(deps);
@@ -72,6 +74,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
     rateLimit(10, 'crew-sos-raise'),
     validateParams(schemas.crewIdParams),
     validate(schemas.sosRaise),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         if (config?.SOS_ENABLED === false) {
@@ -83,8 +86,6 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         const userId = req.user.userId;
         const username = req.user.username || 'A crew member';
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         // Precise per-user-per-crew throttle (1 per 120s), reset when the SOS is
         // cleared. Defense-in-depth on top of the coarse Redis-backed rateLimit()
@@ -138,6 +139,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
     rateLimit(20, 'crew-sos-clear'),
     validateParams(schemas.crewIdParams),
     validate(schemas.sosClear),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdParams>;
@@ -147,8 +149,6 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         const username = req.user.username || 'A crew member';
         const raiserId = body.raiserId ?? userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         // Clearing someone else's SOS: they must be in this crew, and their
         // username goes on the activity row so the feed shows who cleared it.
@@ -231,6 +231,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
     rateLimit(60, 'crew-sos-seen'),
     validateParams(schemas.crewIdParams),
     validate(schemas.sosSeen),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdParams>;
@@ -240,8 +241,6 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         const username = req.user.username || 'A crew member';
         const { raiserId } = body;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         // The raiser never counts as a viewer of their own SOS.
         if (raiserId === userId) return sendSuccess(res, { seenBy: await listSosSeen(redis, crewId, raiserId) });
@@ -267,6 +266,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
     userAuth,
     rateLimit(60, 'crew-sos-list'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         // SOS positions must never be cached (browser, proxy or service worker).
@@ -274,10 +274,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         if (config?.SOS_ENABLED === false) return sendSuccess(res, { sos: [] });
         const params = req.validatedParams as z.infer<typeof crewIdParams>;
         const crewId = sanitizeIdentifier(params.crewId);
-        const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const entries = await listActiveSos(redis, crewId, Date.now());
         const sos = await Promise.all(

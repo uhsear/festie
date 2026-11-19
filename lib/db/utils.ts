@@ -3,6 +3,29 @@ import { parseJsonObject } from './connection';
 import { cleanLineupLinks } from '../lineup';
 
 /**
+ * Build a parameterized `UPDATE <table> SET ... WHERE id = $n` statement.
+ * `table` and every column name must come from code allowlists, never from input.
+ * `sets` entries are [column, value] or [column, value, cast] (e.g. '::jsonb').
+ * `rawSets` are appended verbatim and take no parameter (e.g. 'updated_at = NOW()').
+ */
+export function buildUpdate(
+  table: string,
+  sets: Array<[string, unknown] | [string, unknown, string]>,
+  id: string,
+  { rawSets = [], extraWhere = '', returning = '' }: { rawSets?: string[]; extraWhere?: string; returning?: string } = {},
+) {
+  const values: unknown[] = [];
+  const assignments = sets.map(([column, value, cast = '']) => {
+    values.push(value);
+    return `${column} = $${values.length}${cast}`;
+  });
+  values.push(id);
+  const where = `id = $${values.length}${extraWhere ? ` AND ${extraWhere}` : ''}`;
+  const text = `UPDATE ${table} SET ${[...assignments, ...rawSets].join(', ')} WHERE ${where}${returning ? ` RETURNING ${returning}` : ''}`;
+  return { text, values };
+}
+
+/**
  * Create utility functions that will be shared across all stores
  * @param pool - PostgreSQL connection pool
  * @returns Utility functions
