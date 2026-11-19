@@ -1,18 +1,11 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
-import path from 'path';
 import crypto from 'crypto';
 import { afterEach, after as afterAll, describe, test } from 'node:test';
-import request from 'supertest';
 import { Pool } from 'pg';
 import { io as createSocketClient } from 'socket.io-client';
-import { createFestivalPlanner } from '../server';
-import { ensureTestSchema } from './_test-schema';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { bootServer } from './_boot-server';
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 export const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 export const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
@@ -113,23 +106,14 @@ async function seedTestData(festivals = createFestivalFixture()) {
 }
 
 export async function startServer(overrides: any = {}) {
-  await ensureTestSchema(TEST_DATABASE_URL!);
-  await truncateAllTables();
-  await seedTestData();
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL, PUBLIC_DIR,
-    NODE_ENV: 'test', REDIS_ENABLED: 'false',
-    AUTH_RATE_LIMIT_MAX: 1000, PUBLIC_ORIGIN: '',
-    RESEND_API_KEY: 'test_fake_key', EMAIL_FROM: 'test@example.com',
-    ...overrides,
-  });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  return {
-    planner,
-    databaseUrl: TEST_DATABASE_URL,
-    request: request(planner.app),
-    async close() { await planner.close(); },
-  };
+  return bootServer(
+    TEST_DATABASE_URL!,
+    { AUTH_RATE_LIMIT_MAX: 1000, RESEND_API_KEY: 'test_fake_key', EMAIL_FROM: 'test@example.com', ...overrides },
+    async () => {
+      await truncateAllTables();
+      await seedTestData();
+    },
+  );
 }
 
 export async function registerUser(server: any, username: any, password = DEFAULT_PASSWORD) {

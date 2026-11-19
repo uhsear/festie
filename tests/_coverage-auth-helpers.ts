@@ -1,17 +1,10 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
-import path from 'path';
 import crypto from 'crypto';
 import { afterEach, describe, test } from 'node:test';
-import request from 'supertest';
 import { Pool } from 'pg';
-import { createFestivalPlanner } from '../server';
-import { ensureTestSchema } from './_test-schema';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { bootServer } from './_boot-server';
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 // NB: must not contain a common email local-part like "test" — several fixtures
 // register with email test@example.com, and checkPasswordPolicy rejects a
 // password that contains the email's local-part.
@@ -42,26 +35,19 @@ async function truncateAllTables() {
 }
 
 export async function startServer(overrides: any = {}) {
-  await ensureTestSchema(TEST_DATABASE_URL!);
-  await truncateAllTables();
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL, PUBLIC_DIR,
-    NODE_ENV: 'test', REDIS_ENABLED: 'false',
-    AUTH_RATE_LIMIT_MAX: 1000, PUBLIC_ORIGIN: '',
-    // MUST stay empty. A non-empty key — even a fake one — takes sendEmail
-    // past its graceful-degrade guard and issues a real HTTPS request to the
-    // provider for every registration, reset and verification this suite
-    // triggers. '' keeps every send on the `email:skip` path.
-    RESEND_API_KEY: '', EMAIL_FROM: 'test@example.com',
-    ...overrides,
-  });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  return {
-    planner,
-    databaseUrl: TEST_DATABASE_URL,
-    request: request(planner.app),
-    async close() { await planner.close(); },
-  };
+  return bootServer(
+    TEST_DATABASE_URL!,
+    {
+      AUTH_RATE_LIMIT_MAX: 1000,
+      // MUST stay empty. A non-empty key — even a fake one — takes sendEmail
+      // past its graceful-degrade guard and issues a real HTTPS request to the
+      // provider for every registration, reset and verification this suite
+      // triggers. '' keeps every send on the `email:skip` path.
+      RESEND_API_KEY: '', EMAIL_FROM: 'test@example.com',
+      ...overrides,
+    },
+    () => truncateAllTables(),
+  );
 }
 
 export async function registerUser(server: any, username: any, password = DEFAULT_PASSWORD, extra: any = {}) {

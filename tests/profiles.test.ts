@@ -12,15 +12,10 @@ import { afterEach, describe, mock, test } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
-import { createFestivalPlanner } from '../server';
-import { ensureTestSchema } from './_test-schema';
+import { bootServer } from './_boot-server';
 import createProfilesRoutes from '../routes/profiles.js';
 import { serializeProfileForViewer } from '../lib/helpers/export-utils.js';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
@@ -144,29 +139,13 @@ async function cleanupCreated() {
 }
 
 async function startServer(overrides: any = {}) {
-  await ensureTestSchema(TEST_DATABASE_URL!);
-  const festival = makeFestivalFixture();
-  await seedFestival(festival);
-  createdFestivalIds.add(festival.id);
-
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR,
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-    AUTH_RATE_LIMIT_MAX: 1000,
-    ...overrides,
+  let festival!: ReturnType<typeof makeFestivalFixture>;
+  const server = await bootServer(TEST_DATABASE_URL!, { AUTH_RATE_LIMIT_MAX: 1000, ...overrides }, async () => {
+    festival = makeFestivalFixture();
+    await seedFestival(festival);
+    createdFestivalIds.add(festival.id);
   });
-  return {
-    planner,
-    festival,
-    request: request(planner.app),
-    async close() {
-      if (typeof planner.close === 'function') await planner.close();
-      else if (planner.server) await new Promise<void>((r: any) => planner.server.close(r));
-    },
-  };
+  return { ...server, festival };
 }
 
 async function registerUser(server: any, username: any, password = DEFAULT_PASSWORD) {

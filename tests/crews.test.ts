@@ -19,18 +19,12 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import path from 'path';
 import { afterEach, describe, mock, test } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
-import { createFestivalPlanner } from '../server';
-import { ensureTestSchema } from './_test-schema';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { bootServer } from './_boot-server';
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
@@ -111,25 +105,11 @@ async function seedTestData(festivals = createFestivalFixture()) {
 }
 
 async function startServer(overrides: any = {}) {
-  await ensureTestSchema(TEST_DATABASE_URL!);
-  await truncateAllTables();
-  await seedTestData();
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR,
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-    ...overrides,
-  });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  return {
-    planner,
-    databaseUrl: TEST_DATABASE_URL,
-    festivalId: `fest-${RUN_TAG}`,
-    request: request(planner.app),
-    async close() { await planner.close(); },
-  };
+  const server = await bootServer(TEST_DATABASE_URL!, overrides, async () => {
+      await truncateAllTables();
+      await seedTestData();
+    });
+  return { ...server, festivalId: `fest-${RUN_TAG}` };
 }
 
 let userCounter = 0;

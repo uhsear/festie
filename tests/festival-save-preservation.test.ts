@@ -12,20 +12,14 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import fs from 'fs';
-import path from 'path';
 import { after, afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
-import { createFestivalPlanner } from '../server';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { bootServer } from './_boot-server';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const ADMIN_PASSWORD = 'test-admin-password-pass';
 
@@ -131,16 +125,7 @@ async function cleanupById(pool: any) {
 }
 
 async function startServer() {
-  await withPool(seed);
-  const planner = await (createFestivalPlanner as any)({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR: fs.existsSync(PUBLIC_DIR) ? PUBLIC_DIR : path.join(__dirname, '..'),
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-  });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  return { request: request(planner.app), close: () => planner.close() };
+  return bootServer(TEST_DATABASE_URL!, {}, () => withPool(seed));
 }
 
 async function loginAdmin(server: any) {
