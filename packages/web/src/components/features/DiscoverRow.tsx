@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { useFestival } from '@festie/shared/hooks';
 import { DISCOVER_COPY } from '@festie/shared/constants';
 import {
   artistDisplayName,
@@ -21,6 +22,7 @@ export default function DiscoverRow() {
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
   const stages = useFestivalStore((s) => s.stages);
+  const { getStageName } = useFestival();
   const searchQuery = useFestivalStore((s) => s.searchQuery);
   const activeStages = useFestivalStore((s) => s.activeStages);
   const activeGenres = useFestivalStore((s) => s.activeGenres);
@@ -63,7 +65,7 @@ export default function DiscoverRow() {
                 <span className="block truncate text-sm font-semibold text-text-primary">{artistDisplayName(s)}</span>
                 {when && <span className="block truncate text-xs text-text-secondary">{when}</span>}
                 <span className="block truncate text-xs text-text-muted">
-                  {stages.find((st) => st.id === s.stageId)?.name ?? ''}
+                  {getStageName(s.stageId) ?? ''}
                 </span>
               </button>
             </li>
