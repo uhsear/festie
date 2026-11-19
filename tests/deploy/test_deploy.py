@@ -70,7 +70,7 @@ class DeployMainTest(unittest.TestCase):
         commands, exit_value, client = run_main()
         self.assertIsNone(exit_value)
         self.assertTrue(client.closed)
-        markers = ["DUMP", "git reset --hard origin/main", "npm install", "npm run build",
+        markers = ["DUMP", "git reset --hard origin/main", "npm ci", "npm run build",
                    "@festie/web build", "pm2 restart festie", "/api/ready", "/auth/login",
                    "git tag deploy-"]
         positions = [next(i for i, c in enumerate(commands) if m in c) for m in markers]
@@ -83,7 +83,7 @@ class DeployMainTest(unittest.TestCase):
     def test_each_failing_step_aborts_before_restart(self):
         for marker, message in [
             ("git reset --hard", "git sync failed"),
-            ("npm install", "dependency install failed"),
+            ("npm ci", "dependency install failed"),
             ("npm run build", "backend bundle build failed"),
             ("@festie/web build", "web build failed"),
         ]:

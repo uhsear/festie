@@ -15,6 +15,9 @@ name: Mobile OTA update (eas update)
 # the CURRENT app version; for native changes or a new app version, cut a build.
 #
 # Staging -> production promote flow (P15):
+#   0. Staging-channel devices need a build from the `staging` profile in
+#      packages/mobile/eas.json (eas build --profile staging); other profiles never see this branch.
+#
 #   1. Publish to staging (this workflow's default):
 #        gh workflow run mobile-ota.yml -f branch=staging -f message="your message"
 #        - or dispatch from the Actions tab with branch=staging.
