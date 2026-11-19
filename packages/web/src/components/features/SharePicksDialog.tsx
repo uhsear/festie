@@ -2,30 +2,21 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useEffect, useMemo, useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
 import { Link } from '@tanstack/react-router';
 import { QRCodeSVG } from 'qrcode.react';
-import { Share2, X } from 'lucide-react';
+import { Share2 } from 'lucide-react';
 import { useFestivalStore, useCrewStore, useAuthStore } from '@festie/shared/stores';
 import { fetchShareLink } from '@festie/shared/services';
-import {
-  encodePlanSnapshot,
-  buildPlanSnapshotInput,
-  buildPlanQrUrl,
-  MAX_ENCODED_LENGTH,
-} from '@festie/shared/utils';
+import { encodePlanSnapshot, buildPlanSnapshotInput, buildPlanQrUrl, MAX_ENCODED_LENGTH } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
 import Button from '../ui/Button';
-import IconButton from '../ui/IconButton';
+import Dialog from '../ui/Dialog';
 
 const NO_PROFILE_TEXT = 'Pick a set at this festival first, then share your picks.';
 const OFFLINE_TEXT = 'Connect to the internet to get your link. Share by QR works offline.';
 
-type LinkState =
-  | { status: 'loading' }
-  | { status: 'ready'; url: string }
-  | { status: 'error'; message: string };
+type LinkState = { status: 'loading' } | { status: 'ready'; url: string } | { status: 'error'; message: string };
 
 /** "Send a link" section: a revocable `/s/<token>` URL with Share, Copy and Open. */
 function LinkSection({ festivalId, festivalName }: { festivalId: string; festivalName: string }) {
@@ -90,7 +81,10 @@ function LinkSection({ festivalId, festivalName }: { festivalId: string; festiva
       )}
       {state.status === 'ready' && (
         <>
-          <code className="block truncate rounded-lg bg-bg-elevated px-3 py-2 text-xs text-text-primary" data-testid="share-link-url">
+          <code
+            className="block truncate rounded-lg bg-bg-elevated px-3 py-2 text-xs text-text-primary"
+            data-testid="share-link-url"
+          >
             {state.url}
           </code>
           <div className="flex flex-wrap gap-2">
@@ -188,52 +182,44 @@ export default function SharePicksDialog({ className }: { className?: string }) 
   const publicSchedule = useAuthStore((s) => s.user?.publicSchedule) === true;
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>
-        <Button variant="secondary" size="sm" type="button" className={className} aria-label="Share my picks">
-          <Share2 className="w-4 h-4" aria-hidden="true" />
-          {COPY.picks.share}
-        </Button>
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
-        <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] max-w-sm max-h-[90vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2
-                     rounded-2xl bg-bg-card border border-border-light shadow-2xl p-5 space-y-5
-                     data-[state=open]:animate-in data-[state=open]:zoom-in-95"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <Dialog.Title className="text-base font-bold text-text-primary">
-              {currentFestival ? `Share your ${currentFestival.name} picks` : COPY.picks.share}
-            </Dialog.Title>
-            <Dialog.Close asChild>
-              <IconButton label="Close" icon={<X className="w-5 h-5" />} />
-            </Dialog.Close>
-          </div>
-          <Dialog.Description className="sr-only">
-            Send a link to your picks or show a QR code.
-          </Dialog.Description>
+    <>
+      <Button
+        variant="secondary"
+        size="sm"
+        type="button"
+        className={className}
+        aria-label="Share my picks"
+        onClick={() => setOpen(true)}
+      >
+        <Share2 className="w-4 h-4" aria-hidden="true" />
+        {COPY.picks.share}
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title={currentFestival ? `Share your ${currentFestival.name} picks` : COPY.picks.share}
+        description="Send a link to your picks or show a QR code."
+        hideDescription
+      >
+        {currentFestival && <LinkSection festivalId={currentFestival.id} festivalName={currentFestival.name} />}
+        <QrSection />
 
-          {currentFestival && <LinkSection festivalId={currentFestival.id} festivalName={currentFestival.name} />}
-          <QrSection />
-
-          <p className="text-sm text-text-secondary">
-            {publicSchedule
-              ? 'Public schedule page is on. It shows your newest festival.'
-              : 'Public schedule page is off.'}{' '}
-            <Link to="/account" className="underline text-text-primary" onClick={() => setOpen(false)}>
-              Change in Account
-            </Link>
-          </p>
-          <p className="text-xs text-text-muted">
-            Sent a link by mistake?{' '}
-            <Link to="/account" className="underline text-text-primary" onClick={() => setOpen(false)}>
-              Reset your links in Account
-            </Link>
-            .
-          </p>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+        <p className="text-sm text-text-secondary">
+          {publicSchedule
+            ? 'Public schedule page is on. It shows your newest festival.'
+            : 'Public schedule page is off.'}{' '}
+          <Link to="/account" className="underline text-text-primary" onClick={() => setOpen(false)}>
+            Change in Account
+          </Link>
+        </p>
+        <p className="text-xs text-text-muted">
+          Sent a link by mistake?{' '}
+          <Link to="/account" className="underline text-text-primary" onClick={() => setOpen(false)}>
+            Reset your links in Account
+          </Link>
+          .
+        </p>
+      </Dialog>
+    </>
   );
 }

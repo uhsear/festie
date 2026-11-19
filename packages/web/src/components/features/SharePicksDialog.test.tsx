@@ -66,6 +66,14 @@ describe('SharePicksDialog', () => {
     expect(screen.getByRole('button', { name: 'Share my picks' })).toHaveTextContent('Share picks');
   });
 
+  it('keeps its title and closes on Escape', async () => {
+    render(<SharePicksDialog />);
+    open();
+    expect(screen.getByRole('dialog', { name: /Share your .* picks/ })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
   it('shows the share URL and copies it', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true, writable: true });
