@@ -76,6 +76,7 @@ export default function CaughtScreen() {
       return () => {
         cancelled = true;
       };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reload is the retry trigger: bumping it refetches
     }, [festivalId, reload]),
   );
 
@@ -143,6 +144,7 @@ export default function CaughtScreen() {
       excludeIds: new Set([...data.planned, ...(data.caughtExtra ?? [])].map((s) => s.setId)),
       query,
       stages,
+      // eslint-disable-next-line react-hooks/purity -- recomputed only when the inputs change; wall-clock is an input
       nowMs: Date.now(),
       timeZone: resolveFestivalTimeZone(data.festival),
       festivalOver: isWrapUnlocked(data.festival),

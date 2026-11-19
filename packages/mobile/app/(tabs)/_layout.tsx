@@ -1,5 +1,4 @@
 import { NativeTabs, type MaterialIcon, type SFSymbolIcon } from 'expo-router/native-tabs';
-import { colors } from '@festie/shared/tokens';
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { useSegments } from 'expo-router';

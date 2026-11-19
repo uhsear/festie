@@ -51,26 +51,12 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
   const current = currentRating?.rating ?? null;
   const savedNote = currentRating?.note?.trim() || '';
 
-  // Offline-aware rate + remove. If navigator.onLine === false AND the
-  // AppShell's offline queue bridge is ready, enqueue with a deterministic
-  // clientId so toggling the same rating several times offline collapses to
-  // one replayed call. TanStack Query's optimistic cache update still
-  // applies instantly either way.
+  // The api layer queues these offline (/ratings/:setId is offline-eligible). The
+  // deterministic clientId collapses repeated toggles of one set into one replayed call.
+  // TanStack Query's optimistic cache update applies instantly either way.
   const rate = useMutation({
-    mutationFn: async ({ rating, note }: { rating: number; note?: string }) => {
-      const body = { rating, ...(note !== undefined ? { note } : {}) };
-      const bridge = window.__festieQueue;
-      if (!navigator.onLine && bridge?.queueMutation) {
-        return bridge.queueMutation({
-          type: 'api',
-          clientId: `rate-${setId}`,
-          url: `/ratings/${setId}`,
-          method: 'POST',
-          body,
-        });
-      }
-      return api.post(`/ratings/${setId}`, body);
-    },
+    mutationFn: ({ rating, note }: { rating: number; note?: string }) =>
+      api.post(`/ratings/${setId}`, { rating, ...(note !== undefined ? { note } : {}) }, { clientId: `rate-${setId}` }),
     onMutate: async ({ rating, note }) => {
       // Optimistic: update the ratings query cache so the UI responds instantly.
       await qc.cancelQueries({ queryKey: ['ratings', festivalId] });
@@ -88,18 +74,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
   });
 
   const remove = useMutation({
-    mutationFn: async () => {
-      const bridge = window.__festieQueue;
-      if (!navigator.onLine && bridge?.queueMutation) {
-        return bridge.queueMutation({
-          type: 'api',
-          clientId: `rate-${setId}`,
-          url: `/ratings/${setId}`,
-          method: 'DELETE',
-        });
-      }
-      return api.delete(`/ratings/${setId}`);
-    },
+    mutationFn: () => api.delete(`/ratings/${setId}`, { clientId: `rate-${setId}` }),
     onMutate: async () => {
       await qc.cancelQueries({ queryKey: ['ratings', festivalId] });
       const prev = qc.getQueryData<Rating[]>(['ratings', festivalId]) || [];

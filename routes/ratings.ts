@@ -14,9 +14,8 @@ export function createRatingsRoutes({
   validateQuery,
 }: any) {
   const router = Router();
-  const noopLimit = (_req: any, _res: any, next: any) => next();
-  const writeLimit = typeof rateLimit === 'function' ? rateLimit(60, 'rating-write') : noopLimit;
-  const readLimit = typeof rateLimit === 'function' ? rateLimit(120, 'rating-read') : noopLimit;
+  const writeLimit = rateLimit(60, 'rating-write');
+  const readLimit = rateLimit(120, 'rating-read');
 
   // Rate a set (upsert)
   router.post(

@@ -22,10 +22,13 @@ fail() { log "FAIL: $*"; exit 1; }
 
 # ── Resolve credentials ──────────────────────────────────────────────
 if [ -z "${PGPASSWORD:-}" ]; then
-  if [ -n "${DATABASE_URL:-}" ]; then
-    PGPASSWORD=$(echo "$DATABASE_URL" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
-  elif [ -f "$SCRIPT_DIR/.env" ]; then
-    PGPASSWORD=$(grep '^DATABASE_URL=' "$SCRIPT_DIR/.env" | sed -n 's|.*://[^:]*:\([^@]*\)@.*|\1|p')
+  DB_URL="${DATABASE_URL:-}"
+  if [ -z "$DB_URL" ] && [ -f "$SCRIPT_DIR/.env" ]; then
+    DB_URL=$(grep '^DATABASE_URL=' "$SCRIPT_DIR/.env" | head -n1 | cut -d= -f2- || true)
+  fi
+  # WHATWG URL parsing handles '@' and ':' in the password; decode percent-escapes.
+  if [ -n "$DB_URL" ]; then
+    PGPASSWORD=$(DB_URL="$DB_URL" node -e 'process.stdout.write(decodeURIComponent(new URL(process.env.DB_URL).password))' 2>/dev/null || true)
   fi
 fi
 export PGPASSWORD="${PGPASSWORD:?Could not resolve database password}"

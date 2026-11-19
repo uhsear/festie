@@ -18,7 +18,7 @@ APP_DIR=/opt/festie
 0 */6 * * * cd $APP_DIR && bash scripts/backup-pg.sh >> logs/backup.log 2>&1
 
 # Off-site encrypted push to the private backups repo, daily at 1:30 AM
-# Needs BACKUP_GPG_PASSPHRASE in .env. backup-offsite.sh (rsync) is unused.
+# Needs BACKUP_GPG_PASSPHRASE in .env.
 30 1 * * * cd $APP_DIR && bash scripts/backup-offsite-git.sh >> logs/backup-offsite.log 2>&1
 
 # Weekly restore drill from the off-site repo, Sunday 4:00 AM

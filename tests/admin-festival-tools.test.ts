@@ -291,7 +291,7 @@ describe('POST /festivals/:id/backfill-spotify', () => {
     });
     await request(app).post('/festivals/f1/backfill-spotify').send({}).expect(200);
     const sql = statements(query);
-    const rewrite = sql.findIndex((s: string) => s.includes('FROM festivals WHERE id = ANY'));
+    const rewrite = sql.findIndex((s: string) => /FROM\s+festivals\s+WHERE\s+id = ANY/.test(s));
     assert.ok(rewrite > sql.findIndex((s: string) => s.startsWith('UPDATE festival_sets SET artists = $1')), 'rewrites after the set write');
     assert.ok(rewrite < sql.indexOf('COMMIT'));
     assert.deepEqual(query.mock.calls[rewrite]!.arguments[1], [['f1']]);
