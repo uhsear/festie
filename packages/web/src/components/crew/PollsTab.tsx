@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  api,
+  fetchCrewPolls,
+  createCrewPoll,
+  voteCrewPoll,
   useCrewStore,
   useFestivalStore,
   useFestivalDataStore,
@@ -82,19 +84,12 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
     refetch,
   } = useQuery<CrewPoll[]>({
     queryKey: ['polls', crewId],
-    queryFn: async () => {
-      const res = await api.get<{ polls: CrewPoll[] } | CrewPoll[]>(`/crews/${crewId}/polls`);
-      const list = Array.isArray(res) ? res : res?.polls || [];
-      return list.map((p) => ({
-        ...p,
-        votes: (p.votes || []).filter((v) => v && v.user_id && typeof v.option === 'number'),
-      }));
-    },
+    queryFn: () => fetchCrewPolls(crewId),
     enabled: !!crewId,
   });
 
   const createPoll = useMutation({
-    mutationFn: (payload: { question: string; options: string[]; closesAt?: string; multiAnswer: boolean }) => api.post(`/crews/${crewId}/polls`, payload),
+    mutationFn: (payload: { question: string; options: string[]; closesAt?: string; multiAnswer: boolean }) => createCrewPoll(crewId, payload),
     onSuccess: (result, payload) => {
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {
@@ -118,7 +113,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
 
   const vote = useMutation({
     mutationFn: ({ pollId, optionIndexes }: { pollId: string; optionIndexes: number[] }) =>
-      api.post(`/crews/${crewId}/polls/${pollId}/vote`, { optionIndexes }),
+      voteCrewPoll(crewId, pollId, optionIndexes),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['polls', crewId] }),
     onError: (e) => {
       warning();
