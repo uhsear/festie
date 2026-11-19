@@ -26,15 +26,14 @@ const ELIGIBLE_SQL = `
     AND NOT EXISTS (SELECT 1 FROM policy_notice_sends s WHERE s.notice_id = $1 AND s.user_id = u.id)`;
 
 export default function mountAdminPolicyNoticeRoutes({ router, deps, ctx }: any): void {
-  const { log, config, setNoStore, sendSuccess, sendError, ErrorCodes, adminAuth, stores, schemas, validate, requireRecentAuth, getRequestIp } = deps;
+  const { log, config, setNoStore, sendSuccess, sendError, ErrorCodes, adminAuth, stores, schemas, validate, requireRecentAuth, getRequestIp, rateLimit } = deps;
   const { adminWriteLimit } = ctx;
-  const sendLimit = deps.rateLimit(2, 'policy-notice');
   const sendNotice = deps.sendPolicyNoticeEmail ?? sendPolicyNoticeEmail;
   const delayMs = deps.policyNoticeBatchDelayMs ?? BATCH_DELAY_MS;
   const sleep = (ms: number) => (ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve());
 
-  const dryRunLimit = (req: any, res: any, next: any) => (req.validatedBody.mode === 'send' ? next() : adminWriteLimit(req, res, next));
-  const sendOnlyLimit = (req: any, res: any, next: any) => (req.validatedBody.mode === 'send' ? sendLimit(req, res, next) : next());
+  // Dry-run keeps the shared admin write limit; only a send takes the tight one.
+  const onlyMode = (mode: string, middleware: any) => (req: any, res: any, next: any) => (req.validatedBody.mode === mode ? middleware(req, res, next) : next());
   const sendOnlyReauth = (req: any, res: any, next: any) => (req.validatedBody.mode === 'send' ? requireRecentAuth(req, res, next) : next());
 
   async function sendBatches(noticeId: string, { subject, text, html }: any, progress: { sent: number; failed: number }) {
@@ -78,7 +77,7 @@ export default function mountAdminPolicyNoticeRoutes({ router, deps, ctx }: any)
     res.locals.auditWritten = true;
   }
 
-  router.post('/policy-notice', adminAuth, validate(schemas.policyNotice), dryRunLimit, sendOnlyLimit, sendOnlyReauth, async (req: any, res: any) => {
+  router.post('/policy-notice', adminAuth, validate(schemas.policyNotice), onlyMode('dry-run', adminWriteLimit), onlyMode('send', rateLimit(2, 'policy-notice')), sendOnlyReauth, async (req: any, res: any) => {
     const { noticeId, mode, subject, text, html } = req.validatedBody;
     let lock: any = null;
     let held = false;
