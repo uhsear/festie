@@ -356,6 +356,83 @@ describe('artist backfill', { skip }, () => {
     assert.equal((await artistsOf('s-fred-2')).artists[0].id, 'art-existing');
   });
 
+  const displayOf = async (setId: string) => (await pool.query('SELECT display_name FROM festival_sets WHERE id = $1', [setId])).rows[0].display_name;
+  const assertSettled = async () => {
+    const verify = await verifyBackfill(pool);
+    assert.equal(verify.ok, true, JSON.stringify(verify.checks));
+    const again = await planBackfill(pool);
+    assert.equal(again.report.counts.artistsToCreate, 0);
+    assert.equal(again.report.counts.ownersToWrite, 0);
+    assert.deepEqual(again.report.renames, []);
+  };
+
+  test('a set tag is stripped: one artist, and the tagged set keeps its poster text', async () => {
+    await set('s-tag', 'fest-2026', 'Quill Harbor (Sunset Set)', [{ name: 'Quill Harbor (Sunset Set)', links: {} }]);
+    await set('s-untagged', 'fest-2025', 'Quill Harbor', [{ name: 'Quill Harbor', links: {} }]);
+    const { plan } = await runBackfill(pool, { runId: 'run-tag' });
+    const quill = (await artistRows()).filter((a) => a.name_key === 'quill harbor' || a.name_key.startsWith('quill harbor'));
+    assert.deepEqual(quill.map((a) => a.name), ['Quill Harbor']);
+    const tagged = await artistsOf('s-tag');
+    assert.deepEqual(tagged.artists.map((a: any) => [a.id, a.name]), [[quill[0].id, 'Quill Harbor']]);
+    assert.equal(await displayOf('s-tag'), 'Quill Harbor (Sunset Set)');
+    assert.equal(await displayOf('s-untagged'), null);
+    assert.ok(!plan.report.renames.some((r) => r.setId === 's-tag'), 'the poster text is unchanged, so no rename');
+    const before = (await pool.query(`SELECT before FROM artist_backfill_runs WHERE run_id = 'run-tag' AND festival_id = 'fest-2026'`)).rows[0].before;
+    assert.equal(before.sets['s-tag'].display_name, null, 'the before-values hold display_name');
+    assert.ok('display_name' in before.sets['s-tag']);
+    await assertSettled();
+  });
+
+  test('a Spotify join of two different names keeps the printed name; a case-only difference still renames', async () => {
+    const spotify = spotifyUrl('D'.repeat(22));
+    await set('s-glow-1', 'fest-2026', 'Tessen Glow', [{ name: 'Tessen Glow', links: { spotify } }]);
+    await set('s-glow-2', 'fest-2025', 'Tessen Glow', [{ name: 'Tessen Glow', links: { spotify } }]);
+    await set('s-glo', 'fest-2025', 'Tessen Glo', [{ name: 'Tessen Glo', links: { spotify } }]);
+    await set('s-pell-1', 'fest-2026', 'Pell Ardent', [{ name: 'Pell Ardent', links: {} }]);
+    await set('s-pell-2', 'fest-2025', 'Pell Ardent', [{ name: 'Pell Ardent', links: {} }]);
+    await set('s-pell-3', 'fest-2025', 'PELL ARDENT', [{ name: 'PELL ARDENT', links: {} }]);
+    const { plan } = await runBackfill(pool);
+    assert.ok(plan.report.joinedBySpotify.some((j) => j.artist === 'Tessen Glow' && j.names.includes('Tessen Glo')));
+    assert.equal((await artistsOf('s-glo')).artists[0].name, 'Tessen Glow');
+    assert.equal(await displayOf('s-glo'), 'Tessen Glo');
+    assert.ok(!plan.report.renames.some((r) => r.setId === 's-glo'));
+    assert.equal(await displayOf('s-glow-2'), null);
+    assert.ok(plan.report.renames.some((r) => r.setId === 's-pell-3' && r.before === 'PELL ARDENT' && r.after === 'Pell Ardent'));
+    assert.equal(await displayOf('s-pell-3'), null, 'a case-only difference sets no display name');
+    await assertSettled();
+  });
+
+  test('an existing artist with no Spotify id takes the Spotify link of a matching set, and the fill is recorded', async () => {
+    const spotify = spotifyUrl('E'.repeat(22));
+    await pool.query(
+      `INSERT INTO artists (id, name, name_key, label, spotify_id, links) VALUES ('art-wren', 'Wren Okafor', 'wren okafor', '', NULL, '{"instagram":"https://www.instagram.com/wrenokafor"}'::jsonb)`,
+    );
+    await set('s-wren-id', 'fest-2026', 'Wren Okafor', [{ id: 'art-wren', name: 'Wren Okafor', links: { instagram: 'https://www.instagram.com/wrenokafor' } }]);
+    await set('s-wren-spotify', 'fest-2025', 'Wren Okafor', [
+      { name: 'Wren Okafor', links: { spotify, instagram: 'https://www.instagram.com/other_wren', soundcloud: 'https://soundcloud.com/wrenokafor' } },
+    ]);
+    const plan = await planBackfill(pool);
+    // The other Instagram link conflicts with the row, so the cluster stays separate.
+    assert.deepEqual(plan.report.rowFills, []);
+    await pool.query(`UPDATE festival_sets SET artists = jsonb_set(artists, '{0,links}', $1::jsonb) WHERE id = 's-wren-spotify'`, [
+      JSON.stringify({ spotify, soundcloud: 'https://soundcloud.com/wrenokafor' }),
+    ]);
+    const { plan: run, apply } = await runBackfill(pool, { runId: 'run-wren' });
+    assert.deepEqual(apply.conflicts, []);
+    const fill = { artistId: 'art-wren', artist: 'Wren Okafor', spotifyId: 'E'.repeat(22), links: { spotify, soundcloud: 'https://soundcloud.com/wrenokafor' } };
+    assert.deepEqual(run.report.rowFills, [fill]);
+    assert.ok(!run.report.separateArtists.some((s) => s.key === 'wren okafor'));
+    assert.ok(!run.report.linksNotCopied.some((l) => l.ownerId === 's-wren-spotify'));
+    const wren = (await artistRows()).filter((a) => a.name_key === 'wren okafor');
+    assert.equal(wren.length, 1);
+    assert.equal(wren[0].spotify_id, 'E'.repeat(22));
+    assert.deepEqual(wren[0].links, { instagram: 'https://www.instagram.com/wrenokafor', ...fill.links });
+    assert.deepEqual((await artistsOf('s-wren-spotify')).artists, [{ id: 'art-wren', name: 'Wren Okafor', links: wren[0].links }]);
+    const before = (await pool.query(`SELECT before FROM artist_backfill_runs WHERE run_id = 'run-wren' AND festival_id = 'fest-2025'`)).rows[0].before;
+    assert.deepEqual(before.rowFills, [{ artistId: 'art-wren', spotifyId: fill.spotifyId, links: fill.links }]);
+    await assertSettled();
+  });
+
   test('lockFestivalAny locks a soft-deleted festival and returns null for a missing one', async () => {
     const client = await pool.connect();
     try {

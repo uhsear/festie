@@ -192,6 +192,29 @@ describe('resolveArtistRefs', { skip, concurrency: 1 }, () => {
       assert.equal(a.id, b.id);
     });
   });
+
+  test('a trailing set tag is stripped from the artist, and the set and entry keep the poster text', async () => {
+    await inRolledBackTx(async (client) => {
+      const days = daysOf([{ name: 'Orrin Vale (DJ Set)', links: {} }], [{ name: 'Orrin Vale', links: {} }], [{ name: 'Sela Dune (UK)', links: {} }]);
+      days[0]!.sets.push({ id: 'set-billed', artist: 'Orrin Vale (Live)', artists: [{ name: 'Orrin Vale (Live)', links: {} }], displayName: 'Night Shift' } as any);
+      const lineup = [{ artists: [{ name: 'Orrin Vale (Closing Set)', links: {} }], displayName: null }];
+      const out = await run(client, days, { lineup });
+      const [tagged, plain, uk, billed] = out.days![0].sets;
+      assert.equal(tagged.artists[0].name, 'Orrin Vale');
+      assert.equal(tagged.artists[0].id, plain.artists[0].id, 'one artist for the tagged and untagged names');
+      assert.equal(tagged.displayName, 'Orrin Vale (DJ Set)');
+      assert.equal(tagged.artist, 'Orrin Vale');
+      assert.equal(plain.displayName, undefined);
+      assert.equal(uk.artists[0].name, 'Sela Dune (UK)', 'other parentheses stay');
+      assert.equal(uk.displayName, undefined);
+      assert.equal(billed.displayName, 'Night Shift', 'an existing display name is kept');
+      assert.equal(billed.artists[0].id, plain.artists[0].id);
+      assert.equal(out.lineup![0].artists[0].id, plain.artists[0].id);
+      assert.equal(out.lineup![0].displayName, 'Orrin Vale (Closing Set)');
+      const { rows } = await client.query(`SELECT name FROM artists WHERE name_key LIKE 'orrin vale%'`);
+      assert.deepEqual(rows.map((r: any) => r.name), ['Orrin Vale']);
+    });
+  });
 });
 
 describe('festival save keeps and resolves artist ids', { skip, concurrency: 1 }, () => {
@@ -232,6 +255,21 @@ describe('festival save keeps and resolves artist ids', { skip, concurrency: 1 }
     const item = loaded.body.data.checklist.find((i: any) => i.key === 'artists');
     assert.equal(item.status, 'warn');
     assert.equal(item.label, '1 name matches more than one artist. Pick one.');
+  });
+
+  test('a save strips a set tag from the artist and stores the poster text as the display name', async () => {
+    await withPool((pool) => seedFestival(pool, { id: 'fest-refs-tag', sets: [] }));
+    await dropFestivalCache(app);
+    await app.put('/api/v1/admin/festivals/fest-refs-tag', formBody({ id: 'fest-refs-tag' }, [
+      { id: 'refs-tag-1', artist: 'Brisa Kell (Sunset Set)', stageId: 'fest-refs-tag-main', startTime: '20:00', endTime: '23:00' },
+    ])).expect(200);
+    await withPool(async (pool) => {
+      const row = await setRow(pool, 'refs-tag-1');
+      assert.equal(row.artists[0].name, 'Brisa Kell');
+      assert.equal(row.display_name, 'Brisa Kell (Sunset Set)');
+      const { rows } = await pool.query(`SELECT name FROM artists WHERE name_key LIKE 'brisa kell%'`);
+      assert.deepEqual(rows.map((r: any) => r.name), ['Brisa Kell']);
+    });
   });
 
   test('announced-lineup elements get ids too', async () => {
