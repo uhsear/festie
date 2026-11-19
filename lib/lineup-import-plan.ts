@@ -651,7 +651,8 @@ interface RowParts {
   warnings: string[];
 }
 
-function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
+/** Read and check the row's artist names, ids, links and display name. */
+function readRowParts(ctx: Ctx, row: LineupImportRowInput, index: number): RowParts {
   const errors: RowErrors = [];
   const warnings: string[] = [];
   const names = ctx.splitNames(row.artist);
@@ -665,7 +666,12 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
   }
   const links = readLinks(row, warnings);
   const displayName = row.displayName === undefined ? undefined : sanitizeString(row.displayName, 300) || null;
-  const parts: RowParts = { row, index, names, ids, links, displayName, errors, warnings };
+  return { row, index, names, ids, links, displayName, errors, warnings };
+}
+
+function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
+  const parts = readRowParts(ctx, row, index);
+  const { names, ids, links, displayName, errors, warnings } = parts;
 
   const day = resolveDay(ctx, row, errors);
   let stageId = resolveStage(ctx, row, errors);
@@ -730,6 +736,28 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
 
   const status: LineupImportRowStatus =
     errors.length > 0 ? 'error' : unplaced ? 'unchanged' : !match ? 'new' : changes.length > 0 ? 'changed' : 'unchanged';
+  pushPlanRow(ctx, { row, status, match, names, dayInfo, values, poster, changes, errors, warnings, resolutions });
+  if (!unplaced) recordWrite(ctx, index, status, match, dayInfo, values, move);
+}
+
+/** Add the row's entry to the preview plan. */
+function pushPlanRow(
+  ctx: Ctx,
+  r: {
+    row: LineupImportRowInput;
+    status: LineupImportRowStatus;
+    match: ExistingSet | undefined;
+    names: string[];
+    dayInfo: DayInfo | undefined;
+    values: SetValues;
+    poster: string | null;
+    changes: string[];
+    errors: RowErrors;
+    warnings: string[];
+    resolutions: ArtistResolution[];
+  },
+) {
+  const { row, status, match, names, dayInfo, values, poster, changes, errors, warnings, resolutions } = r;
   ctx.planRows.push({
     row: row.row,
     status,
@@ -745,7 +773,6 @@ function planRow(ctx: Ctx, row: LineupImportRowInput, index: number) {
     warnings,
     resolutions,
   });
-  if (!unplaced) recordWrite(ctx, index, status, match, dayInfo, values, move);
 }
 
 /** The stored artist of a matched set that a typed name stands for. */
@@ -1015,7 +1042,8 @@ function overlaps(a: ScheduleEntry, b: ScheduleEntry): boolean {
   return as < be && bs < ae;
 }
 
-function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites } {
+/** The import-size limits this import would break, as messages for the plan. */
+function limitProblems(ctx: Ctx, newStages: Ctx['stages'], newDays: DayInfo[]): string[] {
   const { input } = ctx;
   const { config } = input;
   const problems: string[] = [];
@@ -1024,19 +1052,6 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
       `This file has ${input.rows.length} rows. The limit is ${config.MAX_IMPORT_SETS}. Split the file and import it in parts.`,
     );
   }
-
-  // Only stages and days that a written set uses are created.
-  const usedStageIds = new Set([...ctx.inserts.map((s) => s.stageId), ...ctx.updates.map((u) => u.after.stageId)]);
-  const newStages = ctx.stages.filter((s) => s.isNew && usedStageIds.has(s.id));
-  const usedDayKeys = new Set([...ctx.inserts.map((s) => s.dayKey), ...ctx.updates.flatMap((u) => (u.dayKey ? [u.dayKey] : []))]);
-  const firstNewIndex = ctx.days.slice(0, ctx.existingDayCount).reduce((max, d) => Math.max(max, (d.index ?? 0) + 1), 0);
-  const newDays = ctx.days
-    .slice(ctx.existingDayCount)
-    .filter((d) => usedDayKeys.has(d.key))
-    .sort((a, b) => a.date.localeCompare(b.date))
-    .map((d, i) => ({ ...d, index: firstNewIndex + i }));
-  const dayIndexOf = new Map([...ctx.days.slice(0, ctx.existingDayCount), ...newDays].map((d) => [d.key, d.index!]));
-
   const stageTotal = ctx.stages.filter((s) => !s.isNew).length + newStages.length;
   if (stageTotal > config.MAX_STAGES) problems.push(`This import would make ${stageTotal} stages. The limit is ${config.MAX_STAGES}.`);
   const dayTotal = ctx.existingDayCount + newDays.length;
@@ -1056,6 +1071,24 @@ function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites 
       `The announced lineup would have ${ctx.lineup.length + ctx.announcedInserts.length} entries. The limit is ${MAX_LINEUP_ENTRIES}.`,
     );
   }
+  return problems;
+}
+
+function finish(ctx: Ctx): { plan: LineupImportPlan; writes: LineupImportWrites } {
+  const { input } = ctx;
+  // Only stages and days that a written set uses are created.
+  const usedStageIds = new Set([...ctx.inserts.map((s) => s.stageId), ...ctx.updates.map((u) => u.after.stageId)]);
+  const newStages = ctx.stages.filter((s) => s.isNew && usedStageIds.has(s.id));
+  const usedDayKeys = new Set([...ctx.inserts.map((s) => s.dayKey), ...ctx.updates.flatMap((u) => (u.dayKey ? [u.dayKey] : []))]);
+  const firstNewIndex = ctx.days.slice(0, ctx.existingDayCount).reduce((max, d) => Math.max(max, (d.index ?? 0) + 1), 0);
+  const newDays = ctx.days
+    .slice(ctx.existingDayCount)
+    .filter((d) => usedDayKeys.has(d.key))
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((d, i) => ({ ...d, index: firstNewIndex + i }));
+  const dayIndexOf = new Map([...ctx.days.slice(0, ctx.existingDayCount), ...newDays].map((d) => [d.key, d.index!]));
+
+  const problems = limitProblems(ctx, newStages, newDays);
 
   const unmatchedActs = findUnmatchedActs(ctx);
   const missingFromFile = ctx.existing

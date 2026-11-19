@@ -545,46 +545,19 @@ export function createSendService({
     }
   }
 
-  async function send({ userId, type, title, body, data = {}, threadId = null }: any) {
-    // Bail only when NO transport exists. FCM-less + APNs-configured is a
-    // valid deploy: the per-device branch below routes iOS to APNs.
-    if (!messaging && !getApns() && !webPush) return { sent: 0, reason: 'firebase_not_configured' };
-    if (!ALLOWED_NOTIFICATION_TYPES.has(type)) {
-      log.warn('invalid notification type rejected', { type, userId });
-      return { sent: 0, reason: 'invalid_type' };
-    }
-
-    const { safeTitle, safeBody, safeData } = enforcePayloadLimits(title, body, data);
-    const isCritical = CRITICAL_TYPES.has(type);
-    // DC7: critical types override channel; non-critical types may have a per-type
-    // channel (e.g. crew_* → 'crew'); everything else falls back to 'updates'.
-    const { channelId: criticalChannelId, category = 'CREW_UPDATE' } = CRITICAL_CHANNEL[type] || {};
-    const channelId = criticalChannelId ?? TYPE_CHANNEL_MAP[type] ?? 'updates';
-    const prefs = await stores.notificationPrefs.get(userId);
-    const prefKey = PREF_MAP[type];
-    // Safety-critical types (crew_sos) bypass the per-type opt-out and the DND
-    // window — an emergency must reach people. prefKey is undefined for these
-    // (omitted from PREF_MAP), but guard explicitly so intent is unmistakable.
-    if (!isCritical && prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
-    const budgetCounted = !isCritical && !PUSH_BUDGET_EXEMPT.has(type);
-    const held = await withBudgetLocks(budgetCounted ? [userId] : [], async () => {
-      let heldReason: string | null = null;
-      if (!isCritical && !DND_EXEMPT_TYPES.has(type) && isInDndWindow(prefs)) heldReason = 'dnd_active';
-      else if (budgetCounted) {
-        const count = (await recentPushCounts([userId])).get(userId) ?? 0;
-        if (count >= PUSH_BUDGET_PER_HOUR) heldReason = 'budget';
-      }
-      // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
-      // status 'held' means quiet hours or the hourly budget stopped the push; the push budget counts only 'inbox' rows.
-      await logInboxRow({ userId, type, safeTitle, safeBody, safeData, held: heldReason });
-      return heldReason;
-    });
-    if (held) return { sent: 0, reason: held };
-
-    const tokens = await stores.deviceTokens.listByUser(userId);
-    if (tokens.length === 0) return { sent: 0, reason: 'no_tokens' };
-
-    const badgeCount = await getUnreadCount(userId);
+  /** Route one user's device tokens to APNs, Web Push or FCM. Returns counts plus the tokens to unregister. */
+  async function deliverToDevices({
+    tokens,
+    userId,
+    type,
+    threadId,
+    channelId,
+    category,
+    badgeCount,
+    safeTitle,
+    safeBody,
+    safeData,
+  }: any) {
     const apns = getApns();
     let sent = 0;
     let localCovered = 0;
@@ -687,6 +660,66 @@ export function createSendService({
       if (result.sent) sent += 1;
       if (result.stale) staleTokens.push(device.token);
     }
+    return { sent, localCovered, staleTokens };
+  }
+
+  /** Decide whether quiet hours or the hourly budget hold this push, and log the inbox row. Returns the hold reason or null. */
+  async function holdOrLogInbox({ userId, type, isCritical, prefs, safeTitle, safeBody, safeData }: any) {
+    const budgetCounted = !isCritical && !PUSH_BUDGET_EXEMPT.has(type);
+    return withBudgetLocks(budgetCounted ? [userId] : [], async () => {
+      let heldReason: string | null = null;
+      if (!isCritical && !DND_EXEMPT_TYPES.has(type) && isInDndWindow(prefs)) heldReason = 'dnd_active';
+      else if (budgetCounted) {
+        const count = (await recentPushCounts([userId])).get(userId) ?? 0;
+        if (count >= PUSH_BUDGET_PER_HOUR) heldReason = 'budget';
+      }
+      // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
+      // status 'held' means quiet hours or the hourly budget stopped the push; the push budget counts only 'inbox' rows.
+      await logInboxRow({ userId, type, safeTitle, safeBody, safeData, held: heldReason });
+      return heldReason;
+    });
+  }
+
+  async function send({ userId, type, title, body, data = {}, threadId = null }: any) {
+    // Bail only when NO transport exists. FCM-less + APNs-configured is a
+    // valid deploy: the per-device branch below routes iOS to APNs.
+    if (!messaging && !getApns() && !webPush) return { sent: 0, reason: 'firebase_not_configured' };
+    if (!ALLOWED_NOTIFICATION_TYPES.has(type)) {
+      log.warn('invalid notification type rejected', { type, userId });
+      return { sent: 0, reason: 'invalid_type' };
+    }
+
+    const { safeTitle, safeBody, safeData } = enforcePayloadLimits(title, body, data);
+    const isCritical = CRITICAL_TYPES.has(type);
+    // DC7: critical types override channel; non-critical types may have a per-type
+    // channel (e.g. crew_* → 'crew'); everything else falls back to 'updates'.
+    const { channelId: criticalChannelId, category = 'CREW_UPDATE' } = CRITICAL_CHANNEL[type] || {};
+    const channelId = criticalChannelId ?? TYPE_CHANNEL_MAP[type] ?? 'updates';
+    const prefs = await stores.notificationPrefs.get(userId);
+    const prefKey = PREF_MAP[type];
+    // Safety-critical types (crew_sos) bypass the per-type opt-out and the DND
+    // window — an emergency must reach people. prefKey is undefined for these
+    // (omitted from PREF_MAP), but guard explicitly so intent is unmistakable.
+    if (!isCritical && prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
+    const held = await holdOrLogInbox({ userId, type, isCritical, prefs, safeTitle, safeBody, safeData });
+    if (held) return { sent: 0, reason: held };
+
+    const tokens = await stores.deviceTokens.listByUser(userId);
+    if (tokens.length === 0) return { sent: 0, reason: 'no_tokens' };
+
+    const badgeCount = await getUnreadCount(userId);
+    const { sent, localCovered, staleTokens } = await deliverToDevices({
+      tokens,
+      userId,
+      type,
+      threadId,
+      channelId,
+      category,
+      badgeCount,
+      safeTitle,
+      safeBody,
+      safeData,
+    });
 
     if (sent > 0 && safeData.festivalId) {
       await incrementUnread(userId, safeData.festivalId, type);
@@ -754,44 +787,51 @@ export function createSendService({
 
     return { successCount, failureCount, staleTokens };
   }
+  /** Count-then-log for one batch under the budget locks: skips opted-out users, marks held users, writes the inbox rows. */
+  async function logBatchInbox({ batch, type, prefKey, safeTitle, safeBody, safeData }: any) {
+    return withBudgetLocks(PUSH_BUDGET_EXEMPT.has(type) ? [] : batch, async () => {
+      const [prefsMap, pushCounts] = await Promise.all([
+        prefsByUser(batch),
+        PUSH_BUDGET_EXEMPT.has(type) ? new Map<string, number>() : recentPushCounts(batch),
+      ]);
 
-  async function sendToOfflineUsers({
-    festivalId,
+      const counted: { userId: string; held: string | null }[] = [];
+      for (const userId of batch) {
+        const prefs = prefsMap.get(userId);
+        if (prefs && prefKey && !prefs[prefKey]) continue;
+        const held = isInDndWindow(prefs)
+          ? 'dnd_active'
+          : (pushCounts.get(userId) ?? 0) >= PUSH_BUDGET_PER_HOUR
+            ? 'budget'
+            : null;
+        counted.push({ userId, held });
+      }
+
+      // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
+      // The inserts run INBOX_INSERT_CONCURRENCY at a time in batch order, all before the device step.
+      for (let i = 0; i < counted.length; i += INBOX_INSERT_CONCURRENCY) {
+        await Promise.all(
+          counted
+            .slice(i, i + INBOX_INSERT_CONCURRENCY)
+            .map(({ userId, held }) => logInboxRow({ userId, type, safeTitle, safeBody, safeData, held })),
+        );
+      }
+      return counted;
+    });
+  }
+
+  /** Sort the batch recipients' devices into FCM messages, per-device APNs sends and per-device Web Push sends. */
+  function routeBatchDevices({
+    recipients,
+    tokensMap,
+    badgeMap,
     type,
-    title,
-    body,
-    data = {},
-    excludeUserIds = [],
-    userIds = null,
-    topic = null,
-    threadId = null,
+    threadId,
+    channelId,
+    safeTitle,
+    safeBody,
+    safeData,
   }: any) {
-    if (!messaging && !getApns() && !webPush) return { sent: 0 };
-    if (!ALLOWED_NOTIFICATION_TYPES.has(type)) return { sent: 0, reason: 'invalid_type' };
-
-    // An explicit recipient list (e.g. one crew) replaces the festival-wide audience.
-    // The topic filter, preferences, quiet hours and MAX_PUSH_BATCH still apply below.
-    const targetUserIds = Array.isArray(userIds)
-      ? userIds.filter((uid: any) => uid && !(excludeUserIds || []).includes(uid))
-      : await resolveFestivalTargets(stores, festivalId, excludeUserIds);
-
-    // Filter out topic-unsubscribed users
-    const VALID_TOPICS = new Set(['crew', 'schedule']);
-    let topicUnsubscribed: any = new Set();
-    if (topic && VALID_TOPICS.has(topic) && stores.topicSubscriptions?.getUnsubscribedUsers) {
-      topicUnsubscribed = await stores.topicSubscriptions.getUnsubscribedUsers(festivalId, topic);
-    }
-    const filteredIds = targetUserIds.filter((uid: any) => !topicUnsubscribed.has(uid));
-    if (filteredIds.length === 0) return { sent: 0 };
-
-    const batch = filteredIds.slice(0, MAX_PUSH_BATCH);
-    if (filteredIds.length > MAX_PUSH_BATCH) {
-      log.warn('sendToOfflineUsers: batch capped', { festivalId, total: filteredIds.length, capped: MAX_PUSH_BATCH });
-    }
-
-    const { safeTitle, safeBody, safeData } = enforcePayloadLimits(title, body, data);
-    const prefKey = PREF_MAP[type];
-    const channelId = TYPE_CHANNEL_MAP[type] ?? 'updates';
     const apns = getApns();
     const fcmMessages: any[] = [];
     const tokenUserMap = new Map();
@@ -799,41 +839,6 @@ export function createSendService({
     const iosSends: any[] = [];
     // Browser subscriptions routed to per-device Web Push (no multicast either).
     const webSends: any[] = [];
-
-    // Count-then-log runs under the users' budget locks so a concurrent send cannot pass the cap between them.
-    const [recipients, tokensMap, badgeMap] = await Promise.all([
-      withBudgetLocks(PUSH_BUDGET_EXEMPT.has(type) ? [] : batch, async () => {
-        const [prefsMap, pushCounts] = await Promise.all([
-          prefsByUser(batch),
-          PUSH_BUDGET_EXEMPT.has(type) ? new Map<string, number>() : recentPushCounts(batch),
-        ]);
-
-        const counted: { userId: string; held: string | null }[] = [];
-        for (const userId of batch) {
-          const prefs = prefsMap.get(userId);
-          if (prefs && prefKey && !prefs[prefKey]) continue;
-          const held = isInDndWindow(prefs)
-            ? 'dnd_active'
-            : (pushCounts.get(userId) ?? 0) >= PUSH_BUDGET_PER_HOUR
-              ? 'budget'
-              : null;
-          counted.push({ userId, held });
-        }
-
-        // One inbox row per user per notification, before quiet hours, the budget and the device check, so a held or undeliverable push still shows in the in-app inbox.
-        // The inserts run INBOX_INSERT_CONCURRENCY at a time in batch order, all before the device step.
-        for (let i = 0; i < counted.length; i += INBOX_INSERT_CONCURRENCY) {
-          await Promise.all(
-            counted
-              .slice(i, i + INBOX_INSERT_CONCURRENCY)
-              .map(({ userId, held }) => logInboxRow({ userId, type, safeTitle, safeBody, safeData, held })),
-          );
-        }
-        return counted;
-      }),
-      tokensByUser(batch),
-      badgeCounts(batch),
-    ]);
 
     for (const { userId, held } of recipients) {
       if (held) continue;
@@ -890,6 +895,100 @@ export function createSendService({
         fcmMessages.push(msg);
       }
     }
+    return { fcmMessages, tokenUserMap, iosSends, webSends };
+  }
+
+  /** APNs provider-outage signal: same ratio check as FCM sendBatch. */
+  function reportApnsOutage(apnsAttempted: number, apnsSent: number) {
+    const apnsFailed = apnsAttempted - apnsSent;
+    if (apnsAttempted > 0 && apnsFailed / apnsAttempted > OUTAGE_ERROR_RATIO) {
+      log.warn('push-provider outage suspected: high APNs error ratio', {
+        sent: apnsSent,
+        failed: apnsFailed,
+        total: apnsAttempted,
+        ratio: (apnsFailed / apnsAttempted).toFixed(2),
+      });
+      try {
+        promMetrics?.pushProviderOutageCounter?.inc({ provider: 'apns' });
+      } catch {
+        /* ignore metric errors */
+      }
+    }
+  }
+
+  /** Unregister dead tokens after the response path, so the request does not wait on it. */
+  function unregisterStaleTokensLater(allStaleTokens: any[], tokenUserMap: Map<any, any>) {
+    const staleTokensCopy = [...allStaleTokens];
+    const tokenUserMapCopy = new Map(tokenUserMap);
+    setImmediate(async () => {
+      for (const t of staleTokensCopy) {
+        try {
+          const uid = tokenUserMapCopy.get(t);
+          if (uid && t) await stores.deviceTokens.unregister(t, uid);
+        } catch (err: any) {
+          log.warn('stale token cleanup failed', { error: err.message });
+        }
+      }
+    });
+  }
+
+  async function sendToOfflineUsers({
+    festivalId,
+    type,
+    title,
+    body,
+    data = {},
+    excludeUserIds = [],
+    userIds = null,
+    topic = null,
+    threadId = null,
+  }: any) {
+    if (!messaging && !getApns() && !webPush) return { sent: 0 };
+    if (!ALLOWED_NOTIFICATION_TYPES.has(type)) return { sent: 0, reason: 'invalid_type' };
+
+    // An explicit recipient list (e.g. one crew) replaces the festival-wide audience.
+    // The topic filter, preferences, quiet hours and MAX_PUSH_BATCH still apply below.
+    const targetUserIds = Array.isArray(userIds)
+      ? userIds.filter((uid: any) => uid && !(excludeUserIds || []).includes(uid))
+      : await resolveFestivalTargets(stores, festivalId, excludeUserIds);
+
+    // Filter out topic-unsubscribed users
+    const VALID_TOPICS = new Set(['crew', 'schedule']);
+    let topicUnsubscribed: any = new Set();
+    if (topic && VALID_TOPICS.has(topic) && stores.topicSubscriptions?.getUnsubscribedUsers) {
+      topicUnsubscribed = await stores.topicSubscriptions.getUnsubscribedUsers(festivalId, topic);
+    }
+    const filteredIds = targetUserIds.filter((uid: any) => !topicUnsubscribed.has(uid));
+    if (filteredIds.length === 0) return { sent: 0 };
+
+    const batch = filteredIds.slice(0, MAX_PUSH_BATCH);
+    if (filteredIds.length > MAX_PUSH_BATCH) {
+      log.warn('sendToOfflineUsers: batch capped', { festivalId, total: filteredIds.length, capped: MAX_PUSH_BATCH });
+    }
+
+    const { safeTitle, safeBody, safeData } = enforcePayloadLimits(title, body, data);
+    const prefKey = PREF_MAP[type];
+    const channelId = TYPE_CHANNEL_MAP[type] ?? 'updates';
+    const apns = getApns();
+
+    // Count-then-log runs under the users' budget locks so a concurrent send cannot pass the cap between them.
+    const [recipients, tokensMap, badgeMap] = await Promise.all([
+      logBatchInbox({ batch, type, prefKey, safeTitle, safeBody, safeData }),
+      tokensByUser(batch),
+      badgeCounts(batch),
+    ]);
+
+    const { fcmMessages, tokenUserMap, iosSends, webSends } = routeBatchDevices({
+      recipients,
+      tokensMap,
+      badgeMap,
+      type,
+      threadId,
+      channelId,
+      safeTitle,
+      safeBody,
+      safeData,
+    });
 
     if (fcmMessages.length === 0 && iosSends.length === 0 && webSends.length === 0) return { sent: 0 };
 
@@ -930,22 +1029,7 @@ export function createSendService({
       if (r.stale) webStaleTokens.push(device.token);
     }
 
-    // APNs provider-outage signal: same ratio check as FCM sendBatch.
-    const apnsAttempted = iosSends.length;
-    const apnsFailed = apnsAttempted - apnsSent;
-    if (apnsAttempted > 0 && apnsFailed / apnsAttempted > OUTAGE_ERROR_RATIO) {
-      log.warn('push-provider outage suspected: high APNs error ratio', {
-        sent: apnsSent,
-        failed: apnsFailed,
-        total: apnsAttempted,
-        ratio: (apnsFailed / apnsAttempted).toFixed(2),
-      });
-      try {
-        promMetrics?.pushProviderOutageCounter?.inc({ provider: 'apns' });
-      } catch {
-        /* ignore metric errors */
-      }
-    }
+    reportApnsOutage(iosSends.length, apnsSent);
 
     // Track unread counts for users who received notifications
     const notifiedUsers = new Set();
@@ -963,20 +1047,7 @@ export function createSendService({
 
     // Clean up stale tokens (deferred to avoid blocking the request path)
     const allStaleTokens = [...result.staleTokens, ...apnsStaleTokens, ...webStaleTokens];
-    if (allStaleTokens.length > 0) {
-      const staleTokensCopy = [...allStaleTokens];
-      const tokenUserMapCopy = new Map(tokenUserMap);
-      setImmediate(async () => {
-        for (const t of staleTokensCopy) {
-          try {
-            const uid = tokenUserMapCopy.get(t);
-            if (uid && t) await stores.deviceTokens.unregister(t, uid);
-          } catch (err: any) {
-            log.warn('stale token cleanup failed', { error: err.message });
-          }
-        }
-      });
-    }
+    if (allStaleTokens.length > 0) unregisterStaleTokensLater(allStaleTokens, tokenUserMap);
 
     log.info('sendToOfflineUsers: batch complete', {
       festivalId,
