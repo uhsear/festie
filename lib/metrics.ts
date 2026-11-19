@@ -367,6 +367,5 @@ export {
   startMetricsSampler,
   startReengagementQueueSampler,
   recordJobRun,
-  available,
   startMetricsListener,
 };
