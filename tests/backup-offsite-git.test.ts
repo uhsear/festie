@@ -8,6 +8,9 @@ import { dumpStamp, hasCommand, makeTempDir, runScript, stubEnv, writeStub } fro
 const skip = hasCommand('flock') ? false : 'needs util-linux flock (Linux)';
 const SCRIPT = 'scripts/backup-offsite-git.sh';
 
+// A skipped suite is not counted in the summary, so report the skip as a skipped test too.
+if (skip) it('scripts/backup-offsite-git.sh suite', { skip }, () => {});
+
 describe('scripts/backup-offsite-git.sh', { skip }, () => {
   let work: string;
   let backupDir: string;
