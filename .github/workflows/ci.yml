@@ -10,7 +10,7 @@ on:
 # holds runners.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Opt every JS action into the Node 24 runtime ahead of GitHub's 2026-06-16
 # forced migration. This silences the Node 20 deprecation across all actions
