@@ -173,4 +173,34 @@ describe('TimelineGridCell keyboard', () => {
     fireEvent.focus(pick);
     expect(onActivate).toHaveBeenCalledWith('a');
   });
+
+  it('activates on click with no focus event (Safari does not focus buttons on click)', () => {
+    const onActivate = vi.fn();
+    const { container } = render(
+      <TimelineGridCell
+        set={makeSet('a')}
+        stageName="Main"
+        stageColor="#ff3366"
+        columnIndex={0}
+        topSlot={0}
+        spanSlots={4}
+        rowHeight={ROW_HEIGHT}
+        myPick={null}
+        crew={undefined}
+        compact={false}
+        tabbable
+        canPick
+        festival={null}
+        onNavKey={vi.fn()}
+        onActivate={onActivate}
+        onSetClick={vi.fn()}
+        onSavePick={vi.fn()}
+      />,
+    );
+    fireEvent.click(container.querySelector<HTMLElement>('[data-open]')!);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    fireEvent.click(container.querySelector<HTMLElement>('button[aria-pressed]')!);
+    expect(onActivate).toHaveBeenCalledTimes(2);
+    expect(onActivate).toHaveBeenLastCalledWith('a');
+  });
 });

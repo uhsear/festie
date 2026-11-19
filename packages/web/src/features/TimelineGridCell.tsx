@@ -154,7 +154,11 @@ function TimelineGridCell({
           'flex min-h-0 w-full flex-1 flex-col justify-center text-left cursor-pointer',
           'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
         )}
-        onClick={() => onSetClick(set)}
+        onClick={() => {
+          // Safari and Firefox on macOS do not focus a button on click, so onFocus alone misses it.
+          onActivate(set.id);
+          onSetClick(set);
+        }}
         onKeyDown={(e) => onNavKey(e, set.id)}
         tabIndex={tabIndex}
         // The badge above is pointer-events-none, so hovering it lands here and shows this tooltip.
@@ -236,6 +240,7 @@ function TimelineGridCell({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  onActivate(set.id);
                   onSavePick(set.id, active ? null : p);
                 }}
               >
