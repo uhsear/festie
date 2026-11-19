@@ -23,7 +23,7 @@ interface SheetProps {
 /**
  * The one bottom-sheet shell, built on vaul: drag handle, drag-to-dismiss,
  * Escape, focus trap (when modal) and focus return. PendingSyncSheet and
- * IOSInstallSheet render through it. DetailPanel keeps its own drawer.
+ * IOSInstallDrawer render through it. DetailPanel keeps its own drawer.
  */
 export default function Sheet({
   open,
