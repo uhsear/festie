@@ -22,6 +22,12 @@ const FAILED_KEY = 'festie-offline-failed';
 /** Unreadable stored queue is copied here before the next write replaces it. */
 const CORRUPT_KEY = 'festie-offline-queue-corrupt';
 
+/** Cap on persisted failed items; the oldest are dropped first so storage cannot grow without bound. */
+const MAX_FAILED_PERSISTED = 50;
+
+/** A failed item plus the replay state retryFailed must hand back to the queue. */
+type FailedSyncRecord = FailedSyncItem & Pick<QueuedMutation, 'idempotencyKey' | 'maybeSent'>;
+
 /** Drop queued mutations older than this on read (mirrors the web queue policy). */
 export const MAX_QUEUE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -134,8 +140,10 @@ export function isOffline(): boolean {
 
 /** Add a failed item to uiStore.failedSync AND persist it durably. */
 function recordFailed(m: QueuedMutation, error: string): void {
-  const item: FailedSyncItem = {
+  const item: FailedSyncRecord = {
     clientId: m.clientId,
+    idempotencyKey: m.idempotencyKey,
+    maybeSent: m.maybeSent,
     label: m.label ?? `${m.method} ${m.url}`,
     method: m.method,
     url: m.url,
@@ -166,18 +174,20 @@ export async function dismissFailed(clientId: string): Promise<void> {
   await removePersistedFailed(clientId);
 }
 
-async function persistFailedSync(item: FailedSyncItem): Promise<void> {
-  try {
-    const storage = getStorage();
-    const raw = await Promise.resolve(storage.getItem(FAILED_KEY));
-    const list: FailedSyncItem[] = raw ? JSON.parse(raw) : [];
-    const idx = list.findIndex((f) => f.clientId === item.clientId);
-    if (idx >= 0) list[idx] = item;
-    else list.push(item);
-    await Promise.resolve(storage.setItem(FAILED_KEY, JSON.stringify(list)));
-  } catch {
-    /* best-effort */
-  }
+function persistFailedSync(item: FailedSyncItem): Promise<void> {
+  return withQueueLock(async () => {
+    try {
+      const storage = getStorage();
+      const raw = await Promise.resolve(storage.getItem(FAILED_KEY));
+      const list: FailedSyncItem[] = raw ? JSON.parse(raw) : [];
+      const idx = list.findIndex((f) => f.clientId === item.clientId);
+      if (idx >= 0) list[idx] = item;
+      else list.push(item);
+      await Promise.resolve(storage.setItem(FAILED_KEY, JSON.stringify(list.slice(-MAX_FAILED_PERSISTED))));
+    } catch {
+      /* best-effort */
+    }
+  });
 }
 
 export async function hydrateFailedSync(): Promise<void> {
@@ -193,17 +203,19 @@ export async function hydrateFailedSync(): Promise<void> {
   }
 }
 
-export async function removePersistedFailed(clientId: string): Promise<void> {
-  try {
-    const storage = getStorage();
-    const raw = await Promise.resolve(storage.getItem(FAILED_KEY));
-    if (!raw) return;
-    const list: FailedSyncItem[] = JSON.parse(raw);
-    const filtered = list.filter((f) => f.clientId !== clientId);
-    await Promise.resolve(storage.setItem(FAILED_KEY, JSON.stringify(filtered)));
-  } catch {
-    /* best-effort */
-  }
+export function removePersistedFailed(clientId: string): Promise<void> {
+  return withQueueLock(async () => {
+    try {
+      const storage = getStorage();
+      const raw = await Promise.resolve(storage.getItem(FAILED_KEY));
+      if (!raw) return;
+      const list: FailedSyncItem[] = JSON.parse(raw);
+      const filtered = list.filter((f) => f.clientId !== clientId);
+      await Promise.resolve(storage.setItem(FAILED_KEY, JSON.stringify(filtered)));
+    } catch {
+      /* best-effort */
+    }
+  });
 }
 
 export async function clearPersistedFailed(): Promise<void> {
@@ -474,10 +486,12 @@ export async function drainQueue(): Promise<void> {
  * Re-enqueue a previously-failed item (the UI's "retry" button) and clear it
  * from failedSync. The next drain (or reconnect) will replay it.
  */
-export async function retryFailed(item: FailedSyncItem): Promise<void> {
+export async function retryFailed(item: FailedSyncRecord): Promise<void> {
   const method = String(item.method).toUpperCase() as QueuedMethod;
   await enqueueMutation({
     clientId: item.clientId,
+    idempotencyKey: item.idempotencyKey,
+    maybeSent: item.maybeSent,
     url: item.url,
     method,
     body: item.body,
