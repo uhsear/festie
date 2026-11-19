@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import { randomUUID } from 'crypto';
 import { withTransaction } from '../connection';
+import { buildUpdate } from '../utils';
 import { sanitizeString } from '../../helpers/sanitize.js';
 import { createLogger } from '../../logger.js';
 
@@ -236,30 +237,18 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     },
 
     async update(data: any) {
-      const sets: string[] = ['name = $1', 'max_members = $2'];
-      const vals: any[] = [data.name, data.maxMembers];
-      let idx = 3;
+      const sets: Array<[string, unknown]> = [
+        ['name', data.name],
+        ['max_members', data.maxMembers],
+      ];
       // Totem fields follow the optional-field pattern: only written when the
       // caller supplies them, so an update that omits them leaves the crew's
       // existing totem untouched.
-      if (data.totemName !== undefined) {
-        sets.push('totem_name = $' + idx);
-        vals.push(data.totemName);
-        idx++;
-      }
-      if (data.totemEmoji !== undefined) {
-        sets.push('totem_emoji = $' + idx);
-        vals.push(data.totemEmoji);
-        idx++;
-      }
-      if (data.inviteLocked !== undefined) {
-        sets.push('invite_locked = $' + idx);
-        vals.push(data.inviteLocked);
-        idx++;
-      }
-      sets.push('updated_at = NOW()');
-      vals.push(data.id);
-      await pool.query('UPDATE crews SET ' + sets.join(', ') + ' WHERE id = $' + idx, vals);
+      if (data.totemName !== undefined) sets.push(['totem_name', data.totemName]);
+      if (data.totemEmoji !== undefined) sets.push(['totem_emoji', data.totemEmoji]);
+      if (data.inviteLocked !== undefined) sets.push(['invite_locked', data.inviteLocked]);
+      const q = buildUpdate('crews', sets, data.id, { rawSets: ['updated_at = NOW()'] });
+      await pool.query(q.text, q.values);
       const result = await pool.query(`SELECT ${CREW_COLUMNS} FROM crews WHERE id = $1`, [data.id]);
       return result.rows[0] || null;
     },
@@ -805,9 +794,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     },
 
     async update(id: string, fields: Record<string, any>) {
-      const sets: string[] = [];
-      const vals: any[] = [];
-      let idx = 1;
+      const sets: Array<[string, unknown] | [string, unknown, string]> = [];
       for (const [key, val] of Object.entries(fields)) {
         const col = (
           {
@@ -831,21 +818,13 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           let outVal = val;
           if (key === 'label') outVal = sanitizeMeetingPointText(val, 100);
           else if (key === 'location') outVal = sanitizeMeetingPointText(val, 200);
-          if (key === 'editWas') {
-            sets.push(col + ' = $' + idx + '::jsonb');
-            vals.push(val == null ? null : JSON.stringify(val));
-            idx++;
-            continue;
-          }
-          sets.push(col + ' = $' + idx);
-          vals.push(outVal);
-          idx++;
+          if (key === 'editWas') sets.push([col, val == null ? null : JSON.stringify(val), '::jsonb']);
+          else sets.push([col, outVal]);
         }
       }
       if (sets.length === 0) return null;
-      sets.push('updated_at = NOW()');
-      vals.push(id);
-      await pool.query('UPDATE crew_meeting_points SET ' + sets.join(', ') + ' WHERE id = $' + idx, vals);
+      const q = buildUpdate('crew_meeting_points', sets, id, { rawSets: ['updated_at = NOW()'] });
+      await pool.query(q.text, q.values);
       const result = await pool.query(
         `
         SELECT
@@ -1089,9 +1068,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     },
 
     async update(id: string, fields: Record<string, any>) {
-      const sets: string[] = [];
-      const vals: any[] = [];
-      let idx = 1;
+      const sets: Array<[string, unknown]> = [];
       for (const [key, val] of Object.entries(fields)) {
         const col = (
           {
@@ -1102,14 +1079,12 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           } as Record<string, string>
         )[key];
         if (col) {
-          sets.push(col + ' = $' + idx);
-          vals.push(val);
-          idx++;
+          sets.push([col, val]);
         }
       }
       if (sets.length === 0) return null;
-      vals.push(id);
-      await pool.query('UPDATE crew_packing_items SET ' + sets.join(', ') + ' WHERE id = $' + idx, vals);
+      const q = buildUpdate('crew_packing_items', sets, id);
+      await pool.query(q.text, q.values);
       const result = await pool.query(
         `
         SELECT
@@ -1259,9 +1234,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
     },
 
     async update(id: string, fields: Record<string, any>) {
-      const sets: string[] = [];
-      const vals: any[] = [];
-      let idx = 1;
+      const sets: Array<[string, unknown]> = [];
       for (const [key, val] of Object.entries(fields)) {
         const col = (
           {
@@ -1275,14 +1248,12 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
           } as Record<string, string>
         )[key];
         if (col) {
-          sets.push(col + ' = $' + idx);
-          vals.push(val);
-          idx++;
+          sets.push([col, val]);
         }
       }
       if (sets.length === 0) return null;
-      vals.push(id);
-      await pool.query('UPDATE crew_ride_offers SET ' + sets.join(', ') + ' WHERE id = $' + idx, vals);
+      const q = buildUpdate('crew_ride_offers', sets, id);
+      await pool.query(q.text, q.values);
       const result = await pool.query(
         `
         SELECT
