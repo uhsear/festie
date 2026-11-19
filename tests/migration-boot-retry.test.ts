@@ -105,3 +105,24 @@ describe('openPlannerDatabase logger adapter', () => {
     }
   });
 });
+
+describe('migration statement_timeout', () => {
+  beforeEach(() => __resetMigrationCacheForTests());
+
+  test('lifts the pool timeout before the advisory lock and restores it before release', async () => {
+    const events: string[] = [];
+    const client = {
+      query: async (sql: string) => {
+        events.push(sql);
+        return { rows: [], rowCount: 0 };
+      },
+      release: () => events.push('release'),
+    };
+    await runPostgresMigrationsWithConnectRetry({ connect: async () => client }, {});
+    const lock = events.findIndex((e) => e.includes('pg_advisory_lock'));
+    assert.equal(events[0], 'SET statement_timeout = 0');
+    assert.ok(lock > 0);
+    assert.equal(events[events.length - 2], 'RESET statement_timeout');
+    assert.equal(events[events.length - 1], 'release');
+  });
+});
