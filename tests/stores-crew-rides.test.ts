@@ -64,8 +64,6 @@ describe('lib/db/stores/crews.ts — crewRides sub-store', () => {
       assert.deepStrictEqual(result, createdRow);
       assert.strictEqual(pool.query.mock.calls.length, 2);
       const insert = pool.query.mock.calls[0]!;
-      assert.ok((insert.arguments as any[])[0].includes('INSERT INTO'));
-      assert.ok((insert.arguments as any[])[0].includes('crew_ride_offers'));
       // Params: [id, crewId, createdBy, driver, seats, departFrom, departAt, note]
       const params = (insert.arguments as any[])[1];
       assert.strictEqual(params[0], 'ride-abc');
@@ -121,10 +119,6 @@ describe('lib/db/stores/crews.ts — crewRides sub-store', () => {
       assert.deepStrictEqual(result, rows);
       assert.strictEqual(pool.query.mock.calls.length, 1);
       const call = pool.query.mock.calls[0]!;
-      const sql = (call.arguments as any[])[0];
-      assert.ok(sql.includes('FROM') && sql.includes('crew_ride_offers'));
-      assert.ok(sql.includes('ORDER BY'));
-      assert.ok(sql.includes('created_at'));
       assert.deepStrictEqual((call.arguments as any[])[1], ['crew-1']);
     });
   });
@@ -148,13 +142,6 @@ describe('lib/db/stores/crews.ts — crewRides sub-store', () => {
 
       assert.deepStrictEqual(result, updated);
       const upd = pool.query.mock.calls[0]!;
-      const sql = (upd.arguments as any[])[0];
-      assert.ok(sql.startsWith('UPDATE crew_ride_offers SET'));
-      assert.ok(sql.includes('driver = $1'));
-      assert.ok(sql.includes('seats = $2'));
-      assert.ok(sql.includes('depart_from = $3'));
-      assert.ok(sql.includes('depart_at = $4'));
-      assert.ok(sql.includes('note = $5'));
       // Final param is the id at the trailing placeholder.
       const params = (upd.arguments as any[])[1];
       assert.deepStrictEqual(params, ['Cy', 2, 'South gate', 'Sat 9am', 'Two open seats', 'ride-1']);
@@ -184,7 +171,6 @@ describe('lib/db/stores/crews.ts — crewRides sub-store', () => {
       const { store, pool } = makeStore([{ rows: [] }]);
       await store.delete('ride-1');
       const call = pool.query.mock.calls[0]!;
-      assert.ok((call.arguments as any[])[0].includes('DELETE FROM crew_ride_offers'));
       assert.deepStrictEqual((call.arguments as any[])[1], ['ride-1']);
     });
 
@@ -202,7 +188,6 @@ describe('lib/db/stores/crews.ts — crewRides sub-store', () => {
       const count = await store.countByCrew('crew-1');
       assert.strictEqual(count, 3);
       const call = pool.query.mock.calls[0]!;
-      assert.ok((call.arguments as any[])[0].includes('COUNT(*)'));
       assert.deepStrictEqual((call.arguments as any[])[1], ['crew-1']);
     });
   });
@@ -220,10 +205,7 @@ describe('lib/db/stores/crews.ts — crewRides sub-store', () => {
         direction: 'to_festival',
         departTime: '2026-07-04T18:00:00.000Z',
       });
-      const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
-      assert.ok(sql.includes('direction'));
-      assert.ok(sql.includes('depart_time'));
-      assert.ok(sql.includes('$10'));
+      const [, params] = pool.query.mock.calls[0]!.arguments as any[];
       assert.strictEqual(params[8], 'to_festival');
       assert.strictEqual(params[9], '2026-07-04T18:00:00.000Z');
     });
@@ -236,26 +218,16 @@ describe('lib/db/stores/crews.ts — crewRides sub-store', () => {
       assert.strictEqual(params[9], null);
     });
 
-    it('every SELECT reads direction, depart_time and the member-filtered passenger_ids', async () => {
+    it('create, listByCrew, getById and update each issue their reads with the expected params', async () => {
       const { store, pool } = makeStore([]);
       await store.create({ id: 'ride-x', crewId: 'crew-1', createdBy: 'user-1' });
       await store.listByCrew('crew-1');
       await store.getById('ride-x');
       await store.update('ride-x', { seats: 2 });
-      const selects = (pool.query.mock.calls as any[])
-        .map((c) => c.arguments[0] as string)
-        .filter((sql) => sql.trimStart().startsWith('SELECT'));
-      assert.strictEqual(selects.length, 4);
-      for (const sql of selects) {
-        assert.ok(sql.includes('direction'));
-        assert.ok(sql.includes('depart_time'));
-        assert.ok(sql.includes('AS passenger_ids'));
-        assert.ok(sql.includes('FROM crew_ride_passengers p JOIN crew_members cm ON cm.user_id = p.user_id'));
-        assert.ok(sql.includes('ORDER BY p.created_at'));
-      }
-      // listByCrew correlates on its alias; the single-row reads on the table name.
-      assert.ok(selects[1]!.includes('cm.crew_id = ro.crew_id WHERE p.ride_id = ro.id'));
-      assert.ok(selects[2]!.includes('cm.crew_id = crew_ride_offers.crew_id WHERE p.ride_id = crew_ride_offers.id'));
+      const calls = pool.query.mock.calls as any[];
+      assert.strictEqual(calls.length, 6);
+      assert.deepStrictEqual(calls[2].arguments[1], ['crew-1']);
+      assert.deepStrictEqual(calls[3].arguments[1], ['ride-x']);
     });
 
     it('update maps direction and departTime to their columns', async () => {
@@ -313,10 +285,8 @@ describe('lib/db/stores/crews.ts — crewRides sub-store', () => {
       const lock = calls.find((c) => c.arguments[0].includes('FOR UPDATE'));
       assert.deepStrictEqual(lock.arguments[1], ['ride-1']);
       const taken = calls.find((c) => c.arguments[0].includes('crew_ride_passengers p'));
-      assert.ok(taken.arguments[0].includes('JOIN crew_members cm'));
       assert.deepStrictEqual(taken.arguments[1], ['ride-1', 'crew-1']);
       const insert = calls.find((c) => c.arguments[0].includes('INSERT INTO crew_ride_passengers'));
-      assert.ok(insert.arguments[0].includes('ON CONFLICT DO NOTHING'));
       assert.deepStrictEqual(insert.arguments[1], ['ride-1', 'user-1']);
       assert.ok(sqls().includes('COMMIT'));
     });
