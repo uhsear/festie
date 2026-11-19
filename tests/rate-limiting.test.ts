@@ -580,21 +580,35 @@ describe('rate-limiting: scoped rateLimit with unvalidated tokens', () => {
   });
 });
 
-describe('rate-limiting: global limiter with rotating tokens (characterization)', () => {
-  it('never limits one IP that sends a new token on every request: the unscoped path has no IP cap', async () => {
+describe('rate-limiting: global limiter with rotating tokens', () => {
+  it('caps one IP that sends a new token on every request at max * the IP multiplier', async () => {
     const max = 3;
     const deps = makeDeps({
       resolveRequestToken: (req: any) => ({ token: req.headers['x-user-token'] || null }),
     });
     const middleware = createRateLimiters(deps).rateLimit(max);
     let passed = 0;
-    const total = 20 * max;
-    for (let i = 0; i < total; i++) {
+    for (let i = 0; i < 20 * max; i++) {
       const req = mockReq({ headers: { 'x-user-token': crypto.randomUUID() } });
       await middleware(req, mockRes(), () => { passed += 1; });
     }
-    assert.equal(passed, total);
-    assert.equal(deps.state.rateLimits.size, total, 'each junk token gets its own bucket');
+    assert.equal(passed, max * 10);
+  });
+
+  it('does not cap two IPs that each send many distinct tokens under the IP ceiling', async () => {
+    const max = 3;
+    const deps = makeDeps({
+      resolveRequestToken: (req: any) => ({ token: req.headers['x-user-token'] || null }),
+    });
+    const middleware = createRateLimiters(deps).rateLimit(max);
+    let passed = 0;
+    for (const ip of ['1.2.3.4', '5.6.7.8']) {
+      for (let i = 0; i < max * 10; i++) {
+        const req = mockReq({ ip, headers: { 'x-user-token': crypto.randomUUID() } });
+        await middleware(req, mockRes(), () => { passed += 1; });
+      }
+    }
+    assert.equal(passed, max * 10 * 2);
   });
 
   it('limits a repeated token at max', async () => {

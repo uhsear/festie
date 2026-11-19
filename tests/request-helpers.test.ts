@@ -193,6 +193,22 @@ describe('request-helpers: getRequestIp', () => {
 
 // ─── getRawRequestIp ─────────────────────────────────────────────────────────
 
+describe('request-helpers: unresolved IP warning', () => {
+  it('warns when getRequestIp and getRawRequestIp fall back to unknown', () => {
+    const warns: any[] = [];
+    const helpers = createRequestHelpers({
+      config: { ...baseConfig, TRUST_PROXY: false },
+      log: { ...noopLog, warn: (...a: any[]) => warns.push(a) },
+      sendError: noopSendError,
+      ErrorCodes,
+    });
+    const req = mockReq({ ip: undefined, connection: {}, socket: {} });
+    helpers.getRequestIp(req);
+    helpers.getRawRequestIp(req);
+    assert.equal(warns.length, 2);
+  });
+});
+
 describe('request-helpers: getRawRequestIp', () => {
   it('returns socket.remoteAddress', () => {
     const helpers = makeHelpers();

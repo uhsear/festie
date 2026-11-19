@@ -243,15 +243,30 @@ function createRateLimiters({
       }
 
       // Global API rate limit
-      const result = await tryRedisRateCheck({
-        redisClient: null,
-        redisKey: rateLimitKey,
-        max,
-        windowMs: config.RATE_LIMIT_WINDOW,
-        fallbackMap: state.rateLimits,
-        fallbackKey: rateLimitKey,
-        tier: 'global',
-      });
+      const checkGlobal = (key: string, limit: number) =>
+        tryRedisRateCheck({
+          redisClient: null,
+          redisKey: key,
+          max: limit,
+          windowMs: config.RATE_LIMIT_WINDOW,
+          fallbackMap: state.rateLimits,
+          fallbackKey: key,
+          tier: 'global',
+        });
+      let result = await checkGlobal(rateLimitKey, max);
+      // An unvalidated token is caller-chosen, so also cap the real client IP (a rotated token gets a fresh bucket).
+      if (anonToken) {
+        const ipKey = `ip:${ip}`;
+        const ipResult = await checkGlobal(ipKey, max * ANON_TOKEN_IP_MULTIPLIER);
+        const ipCloser =
+          ipResult.limited !== result.limited
+            ? ipResult.limited
+            : ipResult.remaining / ipResult.limit < result.remaining / result.limit;
+        if (ipCloser) {
+          result = ipResult;
+          rateLimitKey = ipKey;
+        }
+      }
       res.setHeader('X-RateLimit-Limit', String(result.limit));
       res.setHeader('X-RateLimit-Remaining', String(result.remaining));
       res.setHeader('X-RateLimit-Reset', String(result.resetHeader));

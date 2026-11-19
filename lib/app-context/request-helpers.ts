@@ -61,6 +61,7 @@ export function createRequestHelpers({
     for (const candidate of candidates) {
       if (candidate && net.isIP(candidate)) return candidate;
     }
+    log.warn('request-ip:unresolved', { fn: 'getRequestIp' });
     return 'unknown';
   }
 
@@ -69,6 +70,7 @@ export function createRequestHelpers({
     for (const candidate of candidates) {
       if (candidate && net.isIP(candidate)) return candidate;
     }
+    log.warn('request-ip:unresolved', { fn: 'getRawRequestIp' });
     return 'unknown';
   }
 
