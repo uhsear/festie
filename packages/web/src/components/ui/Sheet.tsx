@@ -56,7 +56,7 @@ export default function Sheet({
           }}
           className={cn(
             'fixed bottom-0 inset-x-0 z-[var(--z-modal)] rounded-t-2xl bg-bg-primary border-t border-border-light',
-            'shadow-2xl p-5 pb-8 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col outline-none',
+            'shadow-2xl p-5 pb-8 space-y-4 max-h-[90vh] overflow-y-auto flex flex-col outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-aqua',
             className,
           )}
         >
