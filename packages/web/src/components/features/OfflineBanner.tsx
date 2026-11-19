@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { cn } from '../../lib/utils';
+import { useOfflineQueueContext } from '../../hooks/useOfflineQueueBridge';
 import PendingSyncSheet from './PendingSyncSheet';
 
 const DISMISS_KEY = 'fp-offline-banner-dismissed';
@@ -28,6 +29,7 @@ export default function OfflineBanner() {
   const pendingSync = useUIStore((state) => state.pendingSync);
   const failedSync = useUIStore((state) => state.failedSync);
   const failedCount = failedSync.length;
+  const queue = useOfflineQueueContext();
 
   const [dismissed, setDismissed] = useState(() => {
     if (typeof window === 'undefined') return false;
@@ -54,8 +56,7 @@ export default function OfflineBanner() {
   };
 
   const handleFlush = () => {
-    const q = window.__festieQueue;
-    if (q?.processQueue) q.processQueue().catch(() => {});
+    queue?.processQueue().catch(() => {});
   };
 
   // ── State resolution (FAILED > OFFLINE > SYNCING) ─────────────────

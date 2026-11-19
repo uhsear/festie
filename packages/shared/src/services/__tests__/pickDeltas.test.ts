@@ -80,7 +80,6 @@ describe('pick delta writes through api and the offline queue', () => {
   beforeEach(() => {
     getStorage().removeItem(QUEUE_KEY);
     getStorage().removeItem(FAILED_KEY);
-    delete (window as unknown as { __festieQueue?: unknown }).__festieQueue;
     useUIStore.setState({ offlineMode: false, pendingSync: 0, failedSync: [] });
     fetchSpy = vi.fn(async () => reply(200));
     vi.stubGlobal('fetch', fetchSpy);

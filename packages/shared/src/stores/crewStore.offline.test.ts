@@ -60,7 +60,6 @@ describe('crewStore offline optimistic create + reconciliation (Phase 2)', () =>
     vi.clearAllMocks();
     useUIStore.setState({ offlineMode: false, pendingSync: 0, failedSync: [] });
     // Native queue path (no web bridge) so offlineQueue handles enqueue/drain.
-    delete (window as unknown as { __festieQueue?: unknown }).__festieQueue;
     Object.defineProperty(navigator, 'onLine', { writable: true, value: true });
     fetchSpy = vi.fn();
     vi.stubGlobal('fetch', fetchSpy);

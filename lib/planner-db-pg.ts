@@ -51,7 +51,7 @@ import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import { splitSqlStatements, usesConcurrently } from './db/sql-split.js';
+import { splitSqlStatements, stripSqlComments, usesConcurrently } from './db/sql-split.js';
 import { createStores, createDbLatencyTracker, openPlannerDatabase as openPlannerDatabaseRaw } from './db/index.js';
 
 // ── Migration runner ─────────────────────────────────────────────────────
@@ -228,6 +228,26 @@ const RECORD_MIGRATION_SQL = `
     checksum = COALESCE(schema_migrations.checksum, EXCLUDED.checksum)
 `;
 
+const CREATE_INDEX_CONCURRENTLY_RE =
+  /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"((?:[^"]|"")+)"|(\w+))/i;
+
+/**
+ * A cancelled or failed CREATE INDEX CONCURRENTLY leaves an INVALID index that
+ * `IF NOT EXISTS` then skips, so a retry would never rebuild it. Drop such a
+ * leftover before re-running the statement, which makes the migration resumable.
+ */
+async function dropInvalidIndexBeforeCreate(client: any, statement: string) {
+  const m = CREATE_INDEX_CONCURRENTLY_RE.exec(stripSqlComments(statement));
+  if (!m) return;
+  const name = m[1] ? m[1].replace(/""/g, '"') : m[2]!.toLowerCase();
+  const invalid = await client.query(
+    `SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+     WHERE c.relname = $1 AND NOT i.indisvalid AND pg_table_is_visible(c.oid)`,
+    [name],
+  );
+  if (invalid.rowCount > 0) await client.query(`DROP INDEX CONCURRENTLY IF EXISTS "${name.replace(/"/g, '""')}"`);
+}
+
 /**
  * Apply one migration + record it in a SINGLE transaction. Any error
  * from either the SQL body or the bookkeeping INSERT rolls the whole
@@ -260,6 +280,7 @@ async function applyOneMigration(client: any, migration: any, log: any) {
         return false;
       }
       for (const statement of splitSqlStatements(cleaned)) {
+        await dropInvalidIndexBeforeCreate(client, statement);
         await client.query(statement);
       }
       // Some CONCURRENTLY migrations self-record their row; ON CONFLICT keeps
