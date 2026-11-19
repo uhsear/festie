@@ -56,10 +56,10 @@ export function readSignupRef(): string | undefined {
 export function useFestivalLoader() {
   const navigate = useNavigate();
   const checkSession = useAuthStore((s) => s.checkSession);
-  const user = useAuthStore((s) => s.user);
+  const userId = useAuthStore((s) => s.user?.id);
   const loadFestivals = useFestivalStore((s) => s.loadFestivals);
   const selectFestival = useFestivalStore((s) => s.selectFestival);
-  const currentFestival = useFestivalStore((s) => s.currentFestival);
+  const currentFestivalId = useFestivalStore((s) => s.currentFestival?.id);
   const loadCrews = useCrewStore((s) => s.loadCrews);
   const { toast } = useToast();
   const joinAttemptedRef = useRef<string | null>(null);
@@ -117,7 +117,7 @@ export function useFestivalLoader() {
         }
       })
       .catch(() => {});
-  }, [loadFestivals, selectFestival, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- refetch after sign-in/out: logout resets the stores
+  }, [loadFestivals, selectFestival, userId]); // userId: refetch after sign-in/out, logout resets the stores
 
   // Tab back to the app on a later day: move the day tab to today (no fetch).
   useEffect(() => {
@@ -130,10 +130,10 @@ export function useFestivalLoader() {
 
   // Load crews whenever auth state transitions to logged-in
   useEffect(() => {
-    if (user) {
+    if (userId) {
       loadCrews().catch(() => {});
     }
-  }, [user?.id, loadCrews]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: use user.id to avoid re-fetching on every auth object change
+  }, [userId, loadCrews]);
 
   // ?joinCrew=<inviteCode> deep-link handler. Validates the code's shape
   // (mirrors routes/crew-invites.ts:156's own check) and STAGES it for explicit
@@ -144,7 +144,7 @@ export function useFestivalLoader() {
   useEffect(() => {
     const raw = new URLSearchParams(window.location.search).get('joinCrew');
 
-    if (!user) {
+    if (!userId) {
       if (!raw || joinAttemptedRef.current === raw) return;
       try {
         sessionStorage.setItem(PENDING_JOIN_KEY, raw);
@@ -176,7 +176,7 @@ export function useFestivalLoader() {
       return;
     }
     setPendingJoinCode(code);
-  }, [user?.id, navigate, toast]); // eslint-disable-line react-hooks/exhaustive-deps -- intentional: user.id avoids re-running on every auth object change
+  }, [userId, navigate, toast]);
 
   // Dismisses the pending join sheet, whether or not the join happened.
   const clearPendingJoin = () => {
@@ -186,10 +186,10 @@ export function useFestivalLoader() {
 
   // Re-fetch festival profiles on login once a festival is selected
   useEffect(() => {
-    if (user && currentFestival) {
-      selectFestival(currentFestival.id).catch(() => {});
+    if (userId && currentFestivalId) {
+      selectFestival(currentFestivalId).catch(() => {});
     }
-  }, [user?.id, currentFestival?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, currentFestivalId, selectFestival]);
 
   return { pendingJoinCode, clearPendingJoin };
 }
