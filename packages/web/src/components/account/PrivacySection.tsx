@@ -14,6 +14,7 @@ import {
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import { Card } from '../ui/Card';
 
 type StatusLocations = NonNullable<SharingStatus['statusLocations']>;
 
@@ -75,7 +76,7 @@ export default function PrivacySection() {
   };
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+    <Card className="space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
         <ShieldCheck className="w-4 h-4" aria-hidden="true" />
         {PRIVACY_COPY.title}
@@ -130,6 +131,6 @@ export default function PrivacySection() {
         busy={stopping}
         onConfirm={handleStop}
       />
-    </section>
+    </Card>
   );
 }

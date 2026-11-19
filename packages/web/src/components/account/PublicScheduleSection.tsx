@@ -9,6 +9,7 @@ import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Switch from '../ui/Switch';
+import { Card } from '../ui/Card';
 
 /** Opt-in switch for the public schedule page (off by default), plus the reset for every share link. */
 export default function PublicScheduleSection() {
@@ -94,7 +95,7 @@ export default function PublicScheduleSection() {
   const festivalName = status?.publicFestival?.name;
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+    <Card className="space-y-3">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
@@ -157,6 +158,6 @@ export default function PublicScheduleSection() {
         busy={resetting}
         onConfirm={reset}
       />
-    </section>
+    </Card>
   );
 }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '../../test-utils';
 import RateNightBanner from './RateNightBanner';
 
 const mocks = vi.hoisted(() => ({ toRate: [] as unknown[], phase: 'post' as string | null }));
@@ -34,12 +34,7 @@ vi.mock('@festie/shared/utils', () => ({
 }));
 
 function renderBanner() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <RateNightBanner />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<RateNightBanner />);
 }
 
 describe('RateNightBanner', () => {

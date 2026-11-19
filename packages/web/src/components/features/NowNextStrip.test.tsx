@@ -9,6 +9,11 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (sel: (s: Record<string, unknown>) => unknown) => sel(state),
   useAuthStore: (sel: (s: Record<string, unknown>) => unknown) => sel(state),
 }));
+vi.mock('@festie/shared/hooks', () => ({
+  useFestival: () => ({
+    getStageName: (id: string) => (state.stages as { id: string; name: string }[]).find((s) => s.id === id)?.name,
+  }),
+}));
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => nav }));
 vi.mock('../../hooks/useSetStatus', () => ({ useNow: () => nowMs }));
 

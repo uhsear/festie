@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { createTestQueryClient, queryClientWrapper } from '../test-utils';
 
 type OnSent = (sent: { url: string; method: string }) => void;
 const processQueue = vi.fn<(adapter: unknown, socket: unknown, onSent?: OnSent) => Promise<void>>();
@@ -43,11 +42,9 @@ describe('useOfflineQueueBridge post-send invalidation', () => {
   });
 
   it('invalidates the affected crew lists when a queued write is sent', async () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const spy = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue(undefined);
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-    );
+    const wrapper = queryClientWrapper(queryClient);
     renderHook(() => useOfflineQueueBridge(), { wrapper });
 
     await window.__festieQueue!.processQueue();
@@ -72,9 +69,7 @@ describe('useOfflineQueueBridge replay adapter', () => {
   });
 
   async function getAdapter(): Promise<Adapter> {
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={new QueryClient()}>{children}</QueryClientProvider>
-    );
+    const wrapper = queryClientWrapper();
     renderHook(() => useOfflineQueueBridge(), { wrapper });
     await window.__festieQueue!.processQueue();
     return processQueue.mock.calls.at(-1)![0] as Adapter;

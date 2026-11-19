@@ -377,8 +377,6 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
          ON CONFLICT (token_hash) DO UPDATE SET expires_at = $3`,
           [targetUserId, tokenHash, expiresAt.toISOString()],
         );
-        // Also store in memory for same-worker fast path (keyed by hash, not raw token)
-        deps.state._adminResetTokens.set(tokenHash, { userId: targetUserId, expiresAt: expiresAt.getTime() });
 
         const resetUrl = `${config.PUBLIC_ORIGIN}/reset/${resetToken}`;
         const auditLog = createAuditLog('admin_reset_link', 'admin', {

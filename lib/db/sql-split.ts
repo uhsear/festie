@@ -16,9 +16,15 @@
  * they can be unit-tested without a database.
  */
 
-/** Strip line comments and block comments (best-effort, for boolean detection). */
+/**
+ * Strip line and block comments. Quoted text (E'' strings, '' strings and
+ * "" identifiers) is matched first and kept, so `--` inside it survives.
+ */
 export function stripSqlComments(sql: string): string {
-  return sql.replace(/--[^\n]*/g, '').replace(/\/\*[\s\S]*?\*\//g, '');
+  return sql.replace(
+    /[eE]'(?:[^'\\]|\\[\s\S]|'')*'|'(?:[^']|'')*'|"(?:[^"]|"")*"|--[^\n]*|\/\*[\s\S]*?\*\//g,
+    (m) => (m.startsWith('--') || m.startsWith('/*') ? '' : m),
+  );
 }
 
 /** True if the script uses CREATE/DROP INDEX CONCURRENTLY (ignoring comments). */
@@ -28,7 +34,7 @@ export function usesConcurrently(sql: string): boolean {
 
 /**
  * Split a SQL script into individual top-level statements. Semicolons inside
- * single-quoted strings, dollar-quoted blocks, line comments, and block
+ * single-quoted strings (including E'' strings), double-quoted identifiers, dollar-quoted blocks, line comments, and block
  * comments do NOT terminate a statement. Returns trimmed, non-empty
  * statements with their terminating semicolon removed.
  */
@@ -38,6 +44,8 @@ export function splitSqlStatements(sql: string): string[] {
   let i = 0;
   const n = sql.length;
   let inSingle = false;
+  let inEscapeString = false;
+  let inDouble = false;
   let inLineComment = false;
   let inBlockComment = false;
   let dollarTag: string | null = null;
@@ -63,8 +71,27 @@ export function splitSqlStatements(sql: string): string[] {
       i++;
       continue;
     }
+    if (inDouble) {
+      buf += ch;
+      if (ch === '"') {
+        if (next === '"') {
+          buf += next;
+          i += 2;
+          continue;
+        }
+        inDouble = false;
+      }
+      i++;
+      continue;
+    }
     if (inSingle) {
       buf += ch;
+      if (inEscapeString && ch === '\\' && next) {
+        // E'' string: a backslash escapes the next character.
+        buf += next;
+        i += 2;
+        continue;
+      }
       if (ch === "'") {
         if (next === "'") {
           // Escaped quote ('') — consume both, stay in string.
@@ -73,6 +100,7 @@ export function splitSqlStatements(sql: string): string[] {
           continue;
         }
         inSingle = false;
+        inEscapeString = false;
       }
       i++;
       continue;
@@ -102,8 +130,15 @@ export function splitSqlStatements(sql: string): string[] {
       i += 2;
       continue;
     }
+    if (ch === '"') {
+      inDouble = true;
+      buf += ch;
+      i++;
+      continue;
+    }
     if (ch === "'") {
       inSingle = true;
+      inEscapeString = /[eE]/.test(sql[i - 1] ?? '') && !/[\w$]/.test(sql[i - 2] ?? '');
       buf += ch;
       i++;
       continue;

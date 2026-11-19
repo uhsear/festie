@@ -1,8 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderWithQueryClient } from '../../test-utils';
 import AdminAudit from './AdminAudit';
 
 const mockToast = vi.fn();
@@ -46,12 +46,7 @@ const entry = (id: string, extra: Record<string, unknown> = {}) => ({
 });
 
 function renderAudit() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <AdminAudit />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<AdminAudit />);
 }
 
 beforeEach(() => {

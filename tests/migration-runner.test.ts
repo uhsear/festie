@@ -53,7 +53,7 @@ describe('runPostgresMigrations failure handling (fake client)', () => {
     const client = {
       query: async (sql: string) => {
         statements.push(sql.trim().split(/\s+/).slice(0, 3).join(' '));
-        const bookkeeping = /schema_migrations|^\s*(BEGIN|COMMIT|ROLLBACK)|pg_advisory/;
+        const bookkeeping = /schema_migrations|statement_timeout|^\s*(BEGIN|COMMIT|ROLLBACK)|pg_advisory/;
         if (!bookkeeping.test(sql)) throw new Error('boom');
         return { rows: [], rowCount: 0 };
       },

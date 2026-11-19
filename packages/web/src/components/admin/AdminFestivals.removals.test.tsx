@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, waitFor } from '@testing-library/react';
+import { createTestQueryClient, renderWithQueryClient } from '../../test-utils';
 import userEvent from '@testing-library/user-event';
 import { ApiClientError } from '@festie/shared/services/api';
 import AdminFestivals from './AdminFestivals';
@@ -25,9 +25,7 @@ vi.mock('./FestivalEditForm', () => ({
 }));
 
 const render = (ui: React.ReactElement) =>
-  rtlRender(
-    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { gcTime: 0 } } })}>{ui}</QueryClientProvider>,
-  );
+  renderWithQueryClient(ui, createTestQueryClient({ queries: { gcTime: 0 } }));
 
 const mockGet = vi.fn();
 const mockPut = vi.fn();
