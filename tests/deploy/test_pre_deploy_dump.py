@@ -55,6 +55,14 @@ class FakeClient:
         self.closed = True
 
 
+def patched_main_deps(client):
+    """Stub the connection and the ref and CI checks, so main() reaches the dump."""
+    return mock.patch.multiple(
+        deploy, connect=mock.Mock(return_value=client), resolve_ref=mock.Mock(return_value="a" * 40),
+        ci_green=mock.Mock(return_value=True),
+    )
+
+
 class PreDeployDumpTest(unittest.TestCase):
     def test_failing_dump_raises_system_exit(self):
         calls = []
@@ -95,25 +103,25 @@ class PreDeployDumpTest(unittest.TestCase):
 
     def test_failing_dump_stops_main_before_git_or_pm2(self):
         client = FakeClient(failing=("backup-pg.sh",))
-        with mock.patch.object(deploy, "connect", return_value=client):
+        with patched_main_deps(client):
             with redirect_stdout(io.StringIO()):
                 with self.assertRaises(SystemExit):
                     deploy.main()
-        self.assertEqual(len(client.commands), 1)
-        self.assertIn("backup-pg.sh", client.commands[0])
+        self.assertEqual(len(client.commands), 3)  # lock, dump, unlock
+        self.assertIn("backup-pg.sh", client.commands[1])
         for cmd in client.commands:
             self.assertNotIn("git", cmd)
             self.assertNotIn("pm2", cmd)
         self.assertTrue(client.closed)
 
     def test_dump_runs_before_the_git_sync(self):
-        client = FakeClient(failing=("git fetch",))
-        with mock.patch.object(deploy, "connect", return_value=client):
+        client = FakeClient(failing=("git reset",))
+        with patched_main_deps(client):
             with redirect_stdout(io.StringIO()):
                 with self.assertRaises(SystemExit):
                     deploy.main()
-        self.assertIn("backup-pg.sh", client.commands[0])
-        self.assertIn("git fetch", client.commands[1])
+        self.assertIn("backup-pg.sh", client.commands[1])
+        self.assertIn("git reset", client.commands[2])
 
 
 if __name__ == "__main__":

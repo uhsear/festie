@@ -171,6 +171,8 @@ jobs:
         working-directory: packages/mobile/android
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          # Inlined into the JS bundle by Metro; unset, the release ships with Sentry off.
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
           SENTRY_DISABLE_AUTO_UPLOAD: ${{ secrets.SENTRY_AUTH_TOKEN == '' && 'true' || 'false' }}
         run: ./gradlew bundleRelease --no-daemon --stacktrace
 
