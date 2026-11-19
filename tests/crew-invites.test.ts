@@ -10,7 +10,7 @@ import assert from 'node:assert/strict';
 import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
-import { makeIo } from './_integration-helpers';
+import { makeIo } from './_make-io';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 

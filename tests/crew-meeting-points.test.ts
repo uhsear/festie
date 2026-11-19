@@ -16,7 +16,7 @@ import express from 'express';
 import request from 'supertest';
 
 import { createCrewNotifier } from '../lib/notifications/crew-notify.js';
-import { makeIo } from './_integration-helpers';
+import { makeIo } from './_make-io';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 

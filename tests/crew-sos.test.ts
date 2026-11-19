@@ -29,7 +29,7 @@ import { sendSuccess, sendError, ErrorCodes } from '../lib/response.js';
 import { SOS_RAISE_LIMIT, SOS_RAISE_MIN_GAP } from '../lib/rate-limiting.js';
 const passGap = () => (SOS_RAISE_MIN_GAP as any)._reset();
 import { sanitizeIdentifier } from '../lib/helpers/sanitize.js';
-import { makeIo } from './_integration-helpers';
+import { makeIo } from './_make-io';
 
 // ── Shared helpers ────────────────────────────────────────────────────
 
