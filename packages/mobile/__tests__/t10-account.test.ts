@@ -16,7 +16,7 @@ describe('T10 account rows at large text', () => {
   it.each(files)('%s does not clamp rowHint to one line', (f) => {
     expect(read(f)).not.toContain('rowHint} numberOfLines={1}');
   });
-  it.each([files[0], files[4]])('%s does not middle-ellipsize', (f) => {
+  it.each([files[0]!, files[4]!])('%s does not middle-ellipsize', (f) => {
     expect(read(f)).not.toContain('ellipsizeMode="middle"');
   });
 });
