@@ -579,3 +579,107 @@ describe('rate-limiting: scoped rateLimit with unvalidated tokens', () => {
     assert.equal(res._status, 429, 'each session keeps its own max');
   });
 });
+
+describe('rate-limiting: global limiter with rotating tokens (characterization)', () => {
+  it('never limits one IP that sends a new token on every request: the unscoped path has no IP cap', async () => {
+    const max = 3;
+    const deps = makeDeps({
+      resolveRequestToken: (req: any) => ({ token: req.headers['x-user-token'] || null }),
+    });
+    const middleware = createRateLimiters(deps).rateLimit(max);
+    let passed = 0;
+    const total = 20 * max;
+    for (let i = 0; i < total; i++) {
+      const req = mockReq({ headers: { 'x-user-token': crypto.randomUUID() } });
+      await middleware(req, mockRes(), () => { passed += 1; });
+    }
+    assert.equal(passed, total);
+    assert.equal(deps.state.rateLimits.size, total, 'each junk token gets its own bucket');
+  });
+
+  it('limits a repeated token at max', async () => {
+    const deps = makeDeps({
+      config: { RATE_LIMIT_MAX: 2 },
+      resolveRequestToken: () => ({ token: 'a'.repeat(32) }),
+    });
+    const middleware = createRateLimiters(deps).rateLimit();
+    for (let i = 0; i < 2; i++) await middleware(mockReq(), mockRes(), () => {});
+    const res = mockRes();
+    await middleware(mockReq(), res, () => {});
+    assert.equal(res._status, 429);
+  });
+});
+
+describe('rate-limiting: Redis failure paths (characterization)', () => {
+  const redisOk = (limited: boolean) => async () => ({ limited, remaining: limited ? 0 : 7, resetMs: 4500, fallback: false });
+
+  it('scoped: uses the Redis result and skips the in-memory map', async () => {
+    const deps = makeDeps({ redis: {}, redisRateCheck: redisOk(true) });
+    const res = mockRes();
+    let nextCalled = false;
+    await createRateLimiters(deps).rateLimit(5, 'scope-a')(mockReq(), res, () => { nextCalled = true; });
+    assert.equal(nextCalled, false);
+    assert.equal(res._status, 429);
+    assert.equal(res._headers['Retry-After'], '5');
+    assert.equal(res._headers['X-RateLimit-Limit'], '5');
+    assert.equal(deps.state.routeRateLimits.size, 0);
+  });
+
+  it('scoped: a Redis throw falls back to memory, counts the fallback and still limits', async () => {
+    const deps = makeDeps({
+      redis: {},
+      redisRateCheck: async () => { throw new Error('ECONNRESET'); },
+    });
+    const rl = createRateLimiters(deps);
+    const middleware = rl.rateLimit(2, 'scope-b');
+    for (let i = 0; i < 2; i++) await middleware(mockReq(), mockRes(), () => {});
+    const res = mockRes();
+    await middleware(mockReq(), res, () => {});
+    assert.equal(res._status, 429);
+    assert.equal(rl._getFallbackStats().scoped, 3);
+    assert.equal(rl._getFallbackStats().global, 0);
+    assert.equal(deps.state.routeRateLimits.size, 1);
+  });
+
+  it('scoped: a Redis result that signals fallback is served from memory', async () => {
+    const deps = makeDeps({
+      redis: {},
+      redisRateCheck: async () => ({ fallback: true }),
+    });
+    const rl = createRateLimiters(deps);
+    let nextCalled = false;
+    await rl.rateLimit(2, 'scope-c')(mockReq(), mockRes(), () => { nextCalled = true; });
+    assert.ok(nextCalled);
+    assert.equal(rl._getFallbackStats().scoped, 1);
+  });
+
+  it('global: a Redis limiter throw falls back to memory and counts the fallback', async () => {
+    const deps = makeDeps({
+      config: { RATE_LIMIT_MAX: 1 },
+      redisRateLimiter: { check: async () => { throw new Error('redis down'); } },
+    });
+    const rl = createRateLimiters(deps);
+    const middleware = rl.rateLimit();
+    await middleware(mockReq(), mockRes(), () => {});
+    const res = mockRes();
+    await middleware(mockReq(), res, () => {});
+    assert.equal(res._status, 429);
+    assert.equal(rl._getFallbackStats().global, 2);
+  });
+
+  it('global: a Redis limiter that signals fallback is served from memory', async () => {
+    const deps = makeDeps({ redisRateLimiter: { check: async () => ({ fallback: true }) } });
+    const rl = createRateLimiters(deps);
+    let nextCalled = false;
+    await rl.rateLimit()(mockReq(), mockRes(), () => { nextCalled = true; });
+    assert.ok(nextCalled);
+    assert.equal(rl._getFallbackStats().global, 1);
+  });
+
+  it('the in-memory fallback map stays at MAX_RATE_LIMIT_ENTRIES, evicting the oldest key', async () => {
+    const deps = makeDeps({ config: { MAX_RATE_LIMIT_ENTRIES: 3 } });
+    const middleware = createRateLimiters(deps).rateLimit();
+    for (let i = 1; i <= 5; i++) await middleware(mockReq({ ip: `203.0.113.${i}` }), mockRes(), () => {});
+    assert.deepEqual([...deps.state.rateLimits.keys()], ['203.0.113.3', '203.0.113.4', '203.0.113.5']);
+  });
+});

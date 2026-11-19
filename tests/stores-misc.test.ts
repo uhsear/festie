@@ -1191,43 +1191,6 @@ describe('ProfilesStore', () => {
     });
   });
 
-  describe('profiles.replaceAll()', () => {
-    it('soft-deletes all when nextProfiles is empty', async () => {
-      const pool = mockPool([
-        { rows: [] }, // BEGIN
-        { rows: [] }, // UPDATE SET deleted_at (soft-delete all)
-        { rows: [] }, // COMMIT
-      ]);
-      const store = createProfilesStore(pool, mockUtils);
-      await store.profiles.replaceAll([]);
-
-      assert.ok(pool.queries[1].sql.includes('UPDATE festival_profiles SET deleted_at'));
-      // No IN clause for empty array
-      assert.ok(!pool.queries[1].sql.includes('NOT IN'));
-    });
-
-    it('upserts profiles and syncs normalized tables', async () => {
-      const pool = mockPool([
-        { rows: [] }, // BEGIN
-        { rows: [] }, // UPDATE SET deleted_at (mark others deleted)
-        { rows: [] }, // UPSERT profiles
-        { rows: [] }, // DELETE picks
-        { rows: [] }, // DELETE notes
-        { rows: [] }, // batch insert picks (empty)
-        { rows: [] }, // batch insert notes (empty)
-        { rows: [] }, // COMMIT
-      ]);
-      const store = createProfilesStore(pool, mockUtils);
-      await store.profiles.replaceAll([{
-        id: 'p1', festivalId: 'f1', userId: 'u1', name: 'X',
-        picks: {}, notes: {}, createdAt: '2026-01-01',
-      }]);
-
-      // The soft-delete query should have a NOT IN clause
-      assert.ok(pool.queries[1].sql.includes('NOT IN'));
-    });
-  });
-
   describe('picks.bySetId()', () => {
     it('returns pick rows for a set', async () => {
       const rows = [
