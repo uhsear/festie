@@ -115,7 +115,7 @@ function makePollDeps(overrides: any = {}) {
 async function buildPollApp(overrides: any = {}) {
   const deps = makePollDeps(overrides);
   const { default: createCrewPollRoutes } = await import('../routes/crew-polls.js');
-  const router = createCrewPollRoutes(deps);
+  const router = createCrewPollRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/', router);

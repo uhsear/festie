@@ -32,10 +32,10 @@ export type { PublicUser };
 // `ZodType<any>` is Zod's own variance-correct way to accept any schema; the
 // `any` is the output-type parameter, not a real `any` value.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ValidateFactory = (schema: z.ZodType<any>) => RequestHandler;
+type ValidateFactory = (schema: z.ZodType<any>) => RequestHandler;
 
 /** Response helpers (re-exported from lib/response). */
-export type SendSuccess = <T = unknown>(
+type SendSuccess = <T = unknown>(
   res: Response,
   data: T,
   // `meta` mirrors the runtime `sendSuccess` signature (lib/response.ts), an
@@ -45,7 +45,7 @@ export type SendSuccess = <T = unknown>(
   config?: AppConfig | null,
 ) => Response;
 
-export type SendError = (
+type SendError = (
   res: Response,
   status: number,
   message: string,
@@ -93,7 +93,7 @@ export interface Stores {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any;
   };
-  activity: { log(entry: Record<string, unknown>): Promise<unknown> };
+  activity: { log(entry: Record<string, unknown>): Promise<string> };
   // Other stores (profiles, sessions, deviceTokens, notificationPrefs, …) are
   // accessed dynamically by not-yet-typed call sites. `any` (not `unknown`)
   // because those modules destructure deep methods off them; tighten as each is
@@ -146,7 +146,7 @@ export interface AppState {
  * without the augmented-Request fields making the handler signature
  * structurally incompatible with Express's overloads.
  */
-export type Middleware = RequestHandler;
+type Middleware = RequestHandler;
 
 /**
  * The application context — dependency-injection surface for every route module
@@ -237,3 +237,9 @@ export type RouteDeps = AppContext & {
   crewNotify?: CrewNotify;
   pollCloser?: PollCloser;
 };
+
+/** Shape of `req.validatedParams` after `validateParams`: path params are strings. */
+export type Params = Record<string, string>;
+
+/** Shape of `req.validatedQuery` after `validateQuery`; Zod coerces some values (for example numbers). */
+export type Query = Record<string, unknown>;
