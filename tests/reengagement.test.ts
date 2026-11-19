@@ -931,6 +931,33 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
     assert.equal(await emailAttempts({ lineupDrops: true }, ''), 0);
     assert.equal(await emailAttempts({ lineupDrops: true }, '1 Main St', EMAIL_DAILY_BUDGET), 0, 'the daily email budget caps the release email');
   });
+
+  it('a failed email send is counted and logged at warn with the type, never an address', async () => {
+    const warns: any[][] = [];
+    const emailLog = { ...log, warn: (...args: any[]) => { warns.push(args); } };
+    const stores = {
+      festivals: { getById: async () => FEST },
+      users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
+      notificationPrefs: { get: async () => ({ lineupDrops: true }) },
+      notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {}, countEmailsSince: async () => 0 },
+    };
+    const pool = {
+      query: async (sql: string) => {
+        if (sql.includes('FROM festival_time_releases')) return { rows: [{ date: '2027-02-05', note: null }] };
+        if (/festival_follows f\s/.test(sql)) return { rows: [{ userId: 'f1' }] };
+        if (sql.includes('FROM notification_log')) return { rows: [{ reached: 0 }] };
+        return { rows: [] };
+      },
+    };
+    // RESEND_API_KEY is unset, so the send fails.
+    const cfg = { ...config, EMAIL_POSTAL_ADDRESS: '1 Main St' };
+    await createReengagementTriggers({ stores, config: cfg, log: emailLog, pool }).sendTimeRelease('fest-1', KEY);
+
+    const call = warns.find((w) => w[0] === 'reengagement: email fanout had failures');
+    assert.ok(call, 'expected a warn-level fan-out failure line');
+    assert.deepEqual(call[1], { type: 'set_times_out', failed: 1, sent: 0 });
+    assert.ok(!JSON.stringify(warns).includes('f1@example.com'), 'no address in any warn');
+  });
 });
 
 // =====================================================================

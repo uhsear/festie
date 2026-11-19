@@ -101,6 +101,7 @@ function makeMockDeps(overrides: any = {}) {
       INVALID_INPUT: 'INVALID_INPUT',
       NOT_FOUND: 'NOT_FOUND',
       ALREADY_EXISTS: 'ALREADY_EXISTS',
+      SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE',
       MAX_LIMIT_REACHED: 'MAX_LIMIT_REACHED',
       UNAUTHORIZED: 'UNAUTHORIZED',
       SERVER_ERROR: 'SERVER_ERROR',
@@ -2279,6 +2280,27 @@ describe('routes/account.js — POST /email notifies the address on file', () =>
       ['new0@example.com', 'new1@example.com', 'new2@example.com'],
       'the verification link goes to the proposed address only',
     );
+  });
+
+  test('a failed verification send is reported as 503, logs a warn and sends no security notice', async () => {
+    globalThis.fetch = (async (_url: any, init: any) => {
+      sent.push({ to: JSON.parse(init.body).to[0], subject: '' });
+      return new Response(JSON.stringify({ message: 'boom', name: 'application_error' }), {
+        status: 500,
+        headers: { 'content-type': 'application/json' },
+      });
+    }) as any;
+    const warn = mock.fn();
+    const { deps } = makeEmailDeps({ log: { info() {}, warn, error() {}, debug() {} } });
+    const app = createApp(createAccountRoutes(deps));
+
+    const res = await request(app).post('/email').send({ email: 'fresh@example.com', password: 'pw' });
+
+    assert.equal(res.status, 503, JSON.stringify(res.body));
+    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
+    assert.ok(warn.mock.calls.some((c: any) => c.arguments[0] === 'account:email-change-send-failed'));
+    assert.deepEqual(sent.map((s: Skip) => s.to), ['fresh@example.com'], 'no notice goes out for a change with no link');
+    assert.ok(!JSON.stringify(warn.mock.calls).includes('fresh@example.com'), 'the address must not be logged');
   });
 
   test('the pending token is issued through the transactional replace, sparing the address on file', async () => {

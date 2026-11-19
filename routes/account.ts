@@ -722,13 +722,26 @@ export default function createAccountRoutes(deps: RouteDeps) {
         );
 
         const verifyUrl = `${deps.config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
-        await sendEmailChangeConfirmEmail({
+        const confirmSent = await sendEmailChangeConfirmEmail({
           to: cleanEmail,
           username: currentUser.username,
           verifyUrl,
           config: deps.config,
           log,
         });
+        // Outside production an unset key is the normal dev and test setup: sendEmail already logged the skip.
+        const mailOptional = !deps.config.RESEND_API_KEY && deps.config.NODE_ENV !== 'production';
+        if (!confirmSent && !mailOptional) {
+          // The caller is authenticated and supplied the address, so an error reveals nothing.
+          // A retry supersedes the stored token; the security notice is not sent for a change that has no link.
+          log.warn('account:email-change-send-failed', { userId: req.user.userId });
+          return sendError(
+            res,
+            503,
+            'Could not send the verification email. Try again in a few minutes.',
+            ErrorCodes.SERVICE_UNAVAILABLE,
+          );
+        }
 
         // Notify the address on file so a user whose session was stolen finds
         // out. The sender opts out of the idempotency guard — see lib/email.ts.

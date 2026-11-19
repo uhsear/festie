@@ -64,6 +64,12 @@ main() {
   # Both builds run BEFORE anything touches PM2, on purpose. Under `set -e` a
   # build failure aborts here with the app still serving the current release,
   # which is strictly better than stopping it and then discovering it cannot start.
+  # Reinstall first: the reset restores source only, so node_modules would still
+  # match the release being rolled back FROM. `npm ci` follows the committed lock.
+  echo "[rollback] reinstalling dependencies..."
+  npm ci --omit=dev --no-audit --no-fund
+  ( cd packages && pnpm install --frozen-lockfile )
+
   echo "[rollback] rebuilding backend bundle..."
   npm run build
 
