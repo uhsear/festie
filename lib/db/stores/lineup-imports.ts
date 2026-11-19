@@ -308,9 +308,15 @@ async function removeConversionPicks(client: any, festivalId: string, setIds: st
     const ids = [...removed];
     await client.query('DELETE FROM festival_profile_picks WHERE profile_id = $1 AND set_id = ANY($2::text[])', [row.id, ids]);
     await client.query(
-      `UPDATE festival_profiles
-       SET interests_json = $2::jsonb, picks_json = COALESCE(picks_json, '{}'::jsonb) - $3::text[], updated_at = NOW()
-       WHERE id = $1`,
+      `
+  UPDATE festival_profiles
+  SET
+    interests_json = $2::jsonb,
+    picks_json = COALESCE(picks_json, '{}'::jsonb) - $3::text[],
+    updated_at = NOW()
+  WHERE
+    id = $1
+`,
       [row.id, JSON.stringify(marks), ids],
     );
     result.autoPicksRemoved += ids.length;
@@ -372,6 +378,7 @@ async function removeCreatedSets(client: any, festivalId: string, setIds: string
   const removable = rows.filter((r: any) => !r.referenced).map((r: any) => r.id);
   for (const r of rows) if (r.referenced) result.kept.push({ setId: r.id, artist: r.artist, reason: 'picked' });
   if (removable.length === 0) return changedProfileIds;
+  // eslint-disable-next-line require-atomic-updates -- result is owned by this undo call, not shared
   result.removed = removable.length;
   await client.query('DELETE FROM festival_sets WHERE festival_id = $1 AND id = ANY($2::text[])', [festivalId, removable]);
   return changedProfileIds;

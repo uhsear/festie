@@ -31,6 +31,7 @@ export default function AccountPublicScheduleSection() {
 
   useEffect(() => {
     if (!on) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resets sharing status when sharing is turned off
       setStatus(null);
       return;
     }

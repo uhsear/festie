@@ -7,7 +7,6 @@ import {
   formatTime,
   getSetTimeBounds,
   resolveFestivalTimeZone,
-  POLL_END_CHOICES,
   pollClosesAt,
   type PollEndChoice,
   type FestivalSet,
@@ -17,6 +16,7 @@ import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import IconButton from '../ui/IconButton';
+import PollEndPicker from './PollEndPicker';
 import { CalendarClock, X } from 'lucide-react';
 
 interface Props {
@@ -226,27 +226,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
               })}
             </div>
           </div>
-          <div>
-            <span id="schedule-poll-ends-label" className="block text-sm font-medium text-text-primary mb-2">
-              Ends
-            </span>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="schedule-poll-ends-label">
-              {POLL_END_CHOICES.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={endChoice === c.id}
-                  onClick={() => setEndChoice(c.id)}
-                  className={`min-h-11 px-3 rounded-full border text-sm ${
-                    endChoice === c.id ? 'border-accent-aqua text-accent-aqua' : 'border-glass-border text-text-secondary'
-                  }`}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <PollEndPicker labelId="schedule-poll-ends-label" value={endChoice} onChange={setEndChoice} />
           <Button type="submit" variant="primary" isLoading={busy} disabled={!canCreate} className="w-full min-h-11">
             Create schedule poll
           </Button>

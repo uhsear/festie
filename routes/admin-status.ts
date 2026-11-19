@@ -329,7 +329,7 @@ export default function createAdminStatusRoutes(deps: any): { router: Router } {
       setNoStore(res);
 
       const analyticsPool = deps.pool || stores?.pool;
-      if (!analyticsPool) return res.json({ data: null, error: { message: 'Database not available' } });
+      if (!analyticsPool) return sendError(res, 503, 'Database not available', ErrorCodes.SERVICE_UNAVAILABLE);
 
       const festivalId: string | null = req.validatedQuery?.festivalId ?? null;
       let festivalName: string | null = null;

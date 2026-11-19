@@ -122,6 +122,10 @@ packages/web/public/fonts/clash-display/
 /docs/*
 !/docs/brand/
 !/docs/REUSE.md
+!/docs/adrs/
+/docs/adrs/*
+!/docs/adrs/README.md
+!/docs/adrs/template.md
 packages/*/CLAUDE.md
 packages/*/DESIGN.md
 packages/*/PRODUCT.md

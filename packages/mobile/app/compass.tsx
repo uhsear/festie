@@ -16,7 +16,7 @@
  * The compass itself is on-device + offline-honest. Only the optional
  * "Looking for you" button (PeerNudge) uses the network.
  */
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { Stack, router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -75,7 +75,7 @@ export default function CompassScreen() {
   const selfId = useAuthStore((s) => s.user?.id ?? null);
   const now = useNow();
   // The last username seen for a peer while live, so the gone card can still name them.
-  const lastNames = useRef<Record<string, string>>({});
+  const [lastNames, setLastNames] = useState<Record<string, string>>({});
 
   const targets = useMemo(
     () => compassTargets({ meetingPoints, peers, selfUserId: selfId, nowMs: now }),
@@ -106,11 +106,13 @@ export default function CompassScreen() {
     peer != null &&
     hasCoords(peer.lat, peer.lng) &&
     !isPeerStale(peer.serverAt, now, LIVE_LOCATION.STALE_MS);
-  if (peerId && peerLive && peer?.username) lastNames.current[peerId] = peer.username;
+  if (peerId && peerLive && peer?.username && lastNames[peerId] !== peer.username) {
+    setLastNames((prev) => ({ ...prev, [peerId]: peer.username }));
+  }
   // crewMemberName falls back to 'Someone', so only call it for a member we found.
   const member = peerId ? crewMembers.find((m) => m.userId === peerId) : undefined;
   const memberName = member ? crewMemberName(member) : '';
-  const name = peerId ? (memberName || lastNames.current[peerId] || 'your crewmate') : '';
+  const name = peerId ? (memberName || lastNames[peerId] || 'your crewmate') : '';
 
   const target: MeetingPointTarget | null = useMemo(() => {
     if (hasExplicit) {

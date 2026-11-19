@@ -7,6 +7,9 @@ import { createRequire } from 'module';
 
 const require = createRequire(import.meta.url);
 
+// Injected by scripts/build.mjs (esbuild define); undefined when running from source under tsx.
+declare const __APP_VERSION__: string | undefined;
+
 /**
  * SHA-256 certificates allowed to open festie.us links in the Android app (us.festie.app).
  * Public values: every signed APK carries them. The first is the Play App Signing key
@@ -417,12 +420,8 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   APP_VERSION: string;
   SESSION_SECRET: string;
 } {
-  let APP_VERSION = '';
-  try {
-    APP_VERSION = require('../package.json').version;
-  } catch {
-    /* noop */
-  }
+  const APP_VERSION: string =
+    typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : require('../package.json').version;
 
   const nodeEnv = overrides.NODE_ENV || process.env.NODE_ENV || 'development';
   const publicDir = path.resolve(

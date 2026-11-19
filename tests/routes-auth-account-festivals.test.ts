@@ -9,7 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
-import { describe, test, mock, beforeEach } from 'node:test';
+import { describe, test, mock, beforeEach, afterEach } from 'node:test';
 import request from 'supertest';
 import express from 'express';
 import createAuthRoutes from '../routes/auth.js';
@@ -861,7 +861,9 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
       assert.ok(res.body.data.token);
-      assert.equal(deleteSession.mock.calls.length, 1);
+      // The old session is replaced inside the create transaction, not deleted separately
+      assert.equal(deleteSession.mock.calls.length, 0);
+      assert.equal(deps.createUserSession.mock.calls[0].arguments[3], 'raw-tok-123');
     });
 
     test('returns 401 when user not found', async () => {
@@ -2221,16 +2223,31 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
 // ═══════════════════════════════════════════════════════════════════════
 //
 // The DB-backed contract lives in tests/account-email-change.test.ts. What can
-// only be seen here is which address the route hands to sendEmail: with no
-// RESEND_API_KEY configured, sendEmail logs `email:skip` with `to` and
-// `subject` and returns without touching the network, so the injected mock log
-// is a safe record of every send the handler attempted. No mail is ever sent.
+// only be seen here is which address the route hands to sendEmail. sendEmail
+// no longer logs the recipient or subject (they are PII), so the test gives it a
+// dummy API key and stubs global fetch, which the Resend SDK calls: the request
+// bodies are the record of every send the handler attempted. No mail is ever sent.
 
 describe('routes/account.js — POST /email notifies the address on file', () => {
+  type Skip = { to: string; subject: string };
+  const realFetch = globalThis.fetch;
+  let sent: Skip[] = [];
+  beforeEach(() => {
+    sent = [];
+    globalThis.fetch = (async (_url: any, init: any) => {
+      const body = JSON.parse(init.body);
+      sent.push({ to: body.to[0], subject: body.subject });
+      return new Response(JSON.stringify({ id: 'stub' }), { status: 200, headers: { 'content-type': 'application/json' } });
+    }) as any;
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+  });
+
   function makeEmailDeps(overrides: any = {}) {
-    const warn = mock.fn();
     const deps = makeMockDeps({
-      log: { info() {}, warn, error() {}, debug() {} },
+      config: { RESEND_API_KEY: 're_test_dummy' },
+      log: { info() {}, warn() {}, error() {}, debug() {} },
       schemas: { updateEmail: {} },
       stores: {
         emailTokens: {
@@ -2240,17 +2257,11 @@ describe('routes/account.js — POST /email notifies the address on file', () =>
       },
       ...overrides,
     });
-    return { deps, warn };
+    return { deps };
   }
 
-  type Skip = { to: string; subject: string };
-  const skips = (warn: any): Skip[] =>
-    warn.mock.calls
-      .filter((c: any) => c.arguments[0] === 'email:skip')
-      .map((c: any) => c.arguments[1] as Skip);
-
   test('every request alerts the current address, with a subject of its own', async () => {
-    const { deps, warn } = makeEmailDeps();
+    const { deps } = makeEmailDeps();
     const app = createApp(createAccountRoutes(deps));
 
     for (let i = 0; i < 3; i++) {
@@ -2258,11 +2269,11 @@ describe('routes/account.js — POST /email notifies the address on file', () =>
       assert.equal(res.status, 200, JSON.stringify(res.body));
     }
 
-    const alerts = skips(warn).filter((s: Skip) => s.to === 'test@example.com');
+    const alerts = sent.filter((s: Skip) => s.to === 'test@example.com');
     assert.equal(alerts.length, 3, 'the alert must not be deduplicated away — it is a security notice');
     for (const a of alerts) assert.match(a.subject, /Security alert/i);
 
-    const links = skips(warn).filter((s: Skip) => s.to !== 'test@example.com');
+    const links = sent.filter((s: Skip) => s.to !== 'test@example.com');
     assert.deepEqual(
       links.map((s: Skip) => s.to),
       ['new0@example.com', 'new1@example.com', 'new2@example.com'],

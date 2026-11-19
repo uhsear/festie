@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 // --- Mocks ---
@@ -138,12 +138,11 @@ vi.mock('../../lib/toastContext', () => ({
 // component calls .mutate() with the right payloads. Each useMutation call is
 // keyed by call order in the component (create, update, remove). These live in
 // vi.hoisted() so the (hoisted) vi.mock factory can reference them safely.
-const { mockInvalidateQueries, createMutate, updateMutate, mockRefetch, rq } = vi.hoisted(() => {
+const { mockInvalidateQueries, updateMutate, mockRefetch, rq } = vi.hoisted(() => {
   const create = vi.fn();
   const update = vi.fn();
   return {
     mockInvalidateQueries: vi.fn(),
-    createMutate: create,
     updateMutate: update,
     mockRefetch: vi.fn(),
     // Per-render counter: useQueryClient runs once before the two useMutation
