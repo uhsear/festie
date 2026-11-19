@@ -345,7 +345,7 @@ All workflows in `.github/workflows/`:
 | `ci.yml` | push/PR to `main` | Lint, typecheck, backend tests (with coverage gate), frontend vitest, mobile typecheck, security audit, Lighthouse, bundle-size, Docker build |
 | `security-audit.yml` | daily 06:00 UTC | `npm audit` + `pnpm audit` at `--audit-level=high`; blocking |
 | `e2e-web.yml` | nightly 07:30 UTC | Playwright chromium E2E against a real Postgres+Redis stack |
-| `uptime.yml` | every 10 minutes | HTTP health check; auto-opens/closes GitHub issue on failure |
+| `uptime.yml` | every 10 minutes | Off-host reachability check; auto-opens/closes GitHub issue on failure. Liveness and auto-restart live in `scripts/health-check.sh`; error rate, memory, disk and `/api/ready` in `scripts/error-rate-alert.cjs` |
 | `mobile-ota.yml` | manual dispatch | EAS OTA update (`eas update`) to a channel; crash-rate gate |
 | `mobile-release-gate.yml` | manual dispatch | Pre-build gate: expo-doctor, fingerprint diff, typecheck, lint |
 | `android-release.yml` | manual dispatch | Gradle AAB build + optional Play Store internal-track submit |

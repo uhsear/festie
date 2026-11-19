@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
@@ -154,5 +155,13 @@ describe('error-rate-alert: advance', () => {
     assert.equal(state.lastErrorCount, 3);
     const [p1] = run([{ health: bad('h') }], { lastAlertAt: T0, lastErrorCount: 3 });
     assert.equal(p1.alerts.length, 1);
+  });
+});
+
+describe('error-rate-alert: monitor roles', () => {
+  it('leaves the /api/health poll to health-check.sh but keeps the ready check', () => {
+    const src = readFileSync(new URL('../scripts/error-rate-alert.cjs', import.meta.url), 'utf8');
+    assert.doesNotMatch(src, /checkHealth|observations\.health/);
+    assert.match(src, /readyObservations\(await fetchJson\(cfg\.readyUrl\)\)/);
   });
 });
