@@ -217,7 +217,6 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     socketRateLimits: new Map(),
     userAuthRateLimits: new Map(),
     onlineUsers: new Map(),
-    _adminResetTokens: new Map(),
     sseConnections: new Map(),
     timers: [] as any[],
     stores,
@@ -252,9 +251,6 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
       for (const [key, entry] of map) {
         if ((entry[tsField] || 0) < cutoff) map.delete(key);
       }
-    }
-    for (const [token, data] of Array.from(state._adminResetTokens.entries()) as [any, any][]) {
-      if (now > data.expiresAt) state._adminResetTokens.delete(token);
     }
   }, 60_000);
   _rateLimitCleanupTimer.unref();
