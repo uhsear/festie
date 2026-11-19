@@ -47,7 +47,8 @@ vi.mock('./PageTransition', () => ({ default: ({ children }: { children: React.R
 vi.mock('../features/DetailPanel', () => ({ default: () => <div data-testid="detail-panel" /> }));
 vi.mock('../features/OfflineBanner', () => ({ default: () => null }));
 vi.mock('../features/UpdatePrompt', () => ({ default: () => null }));
-vi.mock('../features/IOSInstallSheet', () => ({ default: () => null }));
+vi.mock('../features/IOSInstallDrawer', () => ({ default: () => null }));
+vi.mock('../../hooks/useIOSInstall', () => ({ useIOSInstall: () => ({ shouldShow: false, dismiss: vi.fn() }) }));
 vi.mock('../features/FestivalDayBanner', () => ({ default: () => null }));
 vi.mock('../features/SosBanner', () => ({ default: () => null }));
 vi.mock('../features/Onboarding', () => ({ default: () => <div data-testid="onboarding" /> }));

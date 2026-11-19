@@ -102,7 +102,7 @@ export default tseslint.config(
   },
   {
     // A later flat-config block replaces the rule options, so the base rules repeat here.
-    files: ['src/components/ui/Switch.tsx', 'src/components/crew/MeetingPointsTab.tsx'],
+    files: ['src/components/ui/Switch.tsx', 'src/components/crew/MeetingPointsTab.tsx', 'src/components/crew/MeetingPointForm.tsx'],
     rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED] },
   },
   {

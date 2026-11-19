@@ -59,7 +59,6 @@ export const userResponseSchema = z.object({
   paypalHandle: z.string().nullable(),
   publicSchedule: z.boolean(),
 });
-export type UserResponse = z.infer<typeof userResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Festival sub-entities — Stage, Artist, Set
@@ -72,21 +71,20 @@ export type UserResponse = z.infer<typeof userResponseSchema>;
  * `color` is the hex swatch (sanitize defaults it to '#666666', but a legacy
  * row's column may still be null).
  */
-export const stageResponseSchema = z.object({
+const stageResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
   color: z.string().nullable(),
   latitude: z.number().nullable(),
   longitude: z.number().nullable(),
 });
-export type StageResponse = z.infer<typeof stageResponseSchema>;
 
 /**
  * One artist inside a set's `artists` JSONB array (normalizeSetArtists shape):
  * a `name` plus an optional platform→url `links` map. Unknown keys are stripped
  * by default, so older rows carrying extra fields still parse.
  */
-export const artistResponseSchema = z.object({
+const artistResponseSchema = z.object({
   // The artists row this element copies. Absent on a name that matches more than one artist.
   id: z.string().optional(),
   name: z.string(),
@@ -94,7 +92,6 @@ export const artistResponseSchema = z.object({
   photo: z.string().optional(),
   genres: z.array(z.string()).optional(),
 });
-export type ArtistResponse = z.infer<typeof artistResponseSchema>;
 
 /**
  * A festival SET as serialized in the FULL (depth=2 / getById) festival
@@ -124,13 +121,12 @@ export const festivalSetResponseSchema = z.object({
     })
     .optional(),
 });
-export type FestivalSetResponse = z.infer<typeof festivalSetResponseSchema>;
 
 /**
  * One entry of the announced lineup (festivals.lineup). `scheduled` is not stored: readers derive it
  * from the sets, so it cannot disagree with them (lib/lineup.ts coverLineup).
  */
-export const lineupEntryResponseSchema = z.object({
+const lineupEntryResponseSchema = z.object({
   id: z.string(),
   artists: z.array(artistResponseSchema),
   displayName: z.string().nullable(),
@@ -140,7 +136,6 @@ export const lineupEntryResponseSchema = z.object({
   announcedAt: z.string(),
   linkedSetIds: z.array(z.string()),
 });
-export type LineupEntryResponse = z.infer<typeof lineupEntryResponseSchema>;
 
 // The depth=1 set is the same minus `linkUrl` (the route's L1 mapper drops it).
 const festivalDepth1SetSchema = festivalSetResponseSchema.omit({ linkUrl: true });
@@ -184,14 +179,13 @@ export const festivalDepth1ResponseSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
-export type FestivalDepth1Response = z.infer<typeof festivalDepth1ResponseSchema>;
 
 /**
  * The FULL festival document (depth=2 / omitted depth) — the raw `getById` row.
  * Superset of depth-1: adds `b2bSeparator`, the optional `timeZone`, `dayIndex`
  * on each day, and `linkUrl` on each set.
  */
-export const festivalResponseSchema = z.object({
+const festivalResponseSchema = z.object({
   id: z.string(),
   name: z.string(),
   location: z.string(),
@@ -209,7 +203,6 @@ export const festivalResponseSchema = z.object({
   // Admin only; the public detail response leaves it out.
   seriesId: z.string().nullable().optional(),
 });
-export type FestivalResponse = z.infer<typeof festivalResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Crew — serializeCrewWithMembers() (routes/crews.ts)
@@ -220,7 +213,7 @@ export type FestivalResponse = z.infer<typeof festivalResponseSchema>;
  * `username` (the route uses the handle as the display name); avatar fields are
  * null when unset; `role` is owner|member.
  */
-export const crewMemberResponseSchema = z.object({
+const crewMemberResponseSchema = z.object({
   userId: z.string(),
   username: z.string(),
   name: z.string(),
@@ -229,7 +222,6 @@ export const crewMemberResponseSchema = z.object({
   role: z.enum(['owner', 'member']),
   joinedAt: z.string().optional(),
 });
-export type CrewMemberResponse = z.infer<typeof crewMemberResponseSchema>;
 
 /**
  * A crew as emitted by `serializeCrewWithMembers`. `owner` and `createdBy` are
@@ -270,7 +262,6 @@ export const crewResponseSchema = z.object({
   members: z.array(crewMemberResponseSchema),
   memberCount: z.number(),
 });
-export type CrewResponse = z.infer<typeof crewResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // MeetingPoint — meetingPoints.create()/listByCrew() (lib/db/stores/crews.ts)
@@ -312,7 +303,6 @@ export const meetingPointResponseSchema = z.object({
     .optional(),
   editor_name: z.string().nullable().optional(),
 });
-export type MeetingPointResponse = z.infer<typeof meetingPointResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Festival LIST item — GET /festivals summary (routes/festivals.ts router.get('/'))
@@ -342,7 +332,6 @@ export const festivalListItemResponseSchema = z.object({
   // Admin list only; the public list leaves it out.
   seriesId: z.string().nullable().optional(),
 });
-export type FestivalListItemResponse = z.infer<typeof festivalListItemResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Profile — serializeOwnProfile()/serializeProfileForViewer() (lib/helpers/export-utils.ts)
@@ -354,8 +343,7 @@ export type FestivalListItemResponse = z.infer<typeof festivalListItemResponseSc
  * `normalizePickPayload` filter. Exported standalone (the "Pick" entity) and
  * reused as the value type of the profile `picks` map.
  */
-export const pickPriorityResponseSchema = z.enum(['must', 'want-to-see', 'maybe']);
-export type PickPriorityResponse = z.infer<typeof pickPriorityResponseSchema>;
+const pickPriorityResponseSchema = z.enum(['must', 'want-to-see', 'maybe']);
 
 /**
  * A festival participation profile as serialized to a CLIENT. Models the VIEWER
@@ -376,7 +364,7 @@ export type PickPriorityResponse = z.infer<typeof pickPriorityResponseSchema>;
  * One interest mark on an announced act. `open` means no pick was made yet; `converted` lists the
  * set ids the server picked for it, and `at` is when. Private to the owner, like notes.
  */
-export const interestMarkResponseSchema = z.object({
+const interestMarkResponseSchema = z.object({
   state: z.enum(['open', 'converted']),
   sets: z.array(z.string()).optional(),
   at: z.string().optional(),
@@ -395,7 +383,6 @@ export const profileResponseSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
 });
-export type ProfileResponse = z.infer<typeof profileResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // CrewPoll — polls.listByCrew()/create()/close() (lib/db/stores/polls.ts)
@@ -408,11 +395,10 @@ export type ProfileResponse = z.infer<typeof profileResponseSchema>;
  * `votes` is `[]` when nobody voted. Both fields stay `.nullable()` for clients
  * that still read the old single null element.
  */
-export const crewPollVoteResponseSchema = z.object({
+const crewPollVoteResponseSchema = z.object({
   option: z.number().nullable(),
   user_id: z.string().nullable(),
 });
-export type CrewPollVoteResponse = z.infer<typeof crewPollVoteResponseSchema>;
 
 /**
  * A crew poll. Snake_case straight from Postgres. `options` is the JSONB choice
@@ -438,7 +424,6 @@ export const crewPollResponseSchema = z.object({
   closed_at: z.string().nullable().optional(),
   nudged_at: z.string().nullable().optional(),
 });
-export type CrewPollResponse = z.infer<typeof crewPollResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // CrewExpense — expenses.getByCrew()/create() (lib/db/stores/expenses.ts)
@@ -476,18 +461,16 @@ export const crewExpenseResponseSchema = z.object({
   confirmed_at: z.string().nullable().optional(),
   disputed_at: z.string().nullable().optional(),
 });
-export type CrewExpenseResponse = z.infer<typeof crewExpenseResponseSchema>;
 
 /**
  * A single member's net dollar position in the ledger, as emitted by the
  * settlement-plan/`/balances` endpoints (`balanceCents / 100` → a JS number).
  */
-export const crewBalanceResponseSchema = z.object({
+const crewBalanceResponseSchema = z.object({
   userId: z.string(),
   username: z.string(),
   balance: z.number(),
 });
-export type CrewBalanceResponse = z.infer<typeof crewBalanceResponseSchema>;
 
 /**
  * One directed transfer in the netted settlement plan. `amountCents` is the
@@ -495,7 +478,7 @@ export type CrewBalanceResponse = z.infer<typeof crewBalanceResponseSchema>;
  * carries ONLY the payee's payment handles (each null when unset) so a client
  * can build prefilled pay links without leaking the whole roster's handles.
  */
-export const crewSettlementResponseSchema = z.object({
+const crewSettlementResponseSchema = z.object({
   fromUserId: z.string(),
   fromName: z.string(),
   toUserId: z.string(),
@@ -508,7 +491,6 @@ export const crewSettlementResponseSchema = z.object({
     paypal: z.string().nullable(),
   }),
 });
-export type CrewSettlementResponse = z.infer<typeof crewSettlementResponseSchema>;
 
 /**
  * The settlement-plan response body: the dollar `balances` (mirroring
@@ -520,7 +502,6 @@ export const crewSettlementPlanResponseSchema = z.object({
   /** The crew's currency label (ISO 4217, default USD). Optional for old servers. */
   currency: z.string().optional(),
 });
-export type CrewSettlementPlanResponse = z.infer<typeof crewSettlementPlanResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // CrewPackingItem — crewPacking.listByCrew()/create()/update() (lib/db/stores/crews.ts)
@@ -543,7 +524,6 @@ export const crewPackingItemResponseSchema = z.object({
   created_at: z.string(),
   creator_name: z.string().optional(),
 });
-export type CrewPackingItemResponse = z.infer<typeof crewPackingItemResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // CrewRideOffer — crewRides.listByCrew()/create()/update() (lib/db/stores/crews.ts)
@@ -569,7 +549,6 @@ export const crewRideOfferResponseSchema = z.object({
   created_at: z.string(),
   creator_name: z.string().optional(),
 });
-export type CrewRideOfferResponse = z.infer<typeof crewRideOfferResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // CrewMemberStatus — crewStatus.upsert()/listByCrew() (lib/db/stores/crews.ts)
@@ -602,7 +581,6 @@ export const crewMemberStatusResponseSchema = z.object({
   avatar_key: z.string().nullable().optional(),
   avatar_version: z.string().nullable().optional(),
 });
-export type CrewMemberStatusResponse = z.infer<typeof crewMemberStatusResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // CrewActivityEntry — activity.getByCrew() (lib/db/stores/activity.ts)
@@ -622,7 +600,6 @@ export const crewActivityEntryResponseSchema = z.object({
   created_at: z.string(),
   username: z.string(),
 });
-export type CrewActivityEntryResponse = z.infer<typeof crewActivityEntryResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // NotificationPrefs — notificationPrefs.get() (lib/db/stores/notifications.ts)
@@ -655,7 +632,6 @@ export const notificationPrefsResponseSchema = z.object({
   dndEnd: z.string().nullable(),
   dndTimeZone: z.string().nullable(),
 });
-export type NotificationPrefsResponse = z.infer<typeof notificationPrefsResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Auth envelope — routes/auth.ts (register/login/me/refresh-token)
@@ -676,7 +652,6 @@ export const authEnvelopeResponseSchema = z.object({
   reactivated: z.boolean().optional(),
   pendingEmail: z.string().nullable().optional(),
 });
-export type AuthEnvelopeResponse = z.infer<typeof authEnvelopeResponseSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════
 // Bundle — mirrors the `schemas` namespace style in lib/schemas.ts

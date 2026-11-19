@@ -2,26 +2,25 @@ import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'rea
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   api,
-  meetingTimeDisplay,
   meetAtFromWallInput,
   meetAtToWallInput,
   resolveFestivalTimeZone,
   writeOutcomeOf,
   writeOutcomeMessage,
-  isPending,
   fetchPastMeetingPoints,
   splitMeetingPoints,
   meetingPointDirectionsUrl,
-  MEETING_POINT_PAST_HINT,
 } from '@festie/shared';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { meetingPointEditLine, meetingPointPrefill, type MapPlace } from '@festie/shared/utils';
+import { meetingPointPrefill, type MapPlace } from '@festie/shared/utils';
 import { useCurrentPosition } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useToast } from '../../lib/toastContext';
-import SyncMarker from './SyncMarker';
+import MeetingPointCard from './MeetingPointCard';
+import MeetingPointForm from './MeetingPointForm';
+import PastMeetingPointCard from './PastMeetingPointCard';
 import { useUndoableRemove } from './useUndoableRemove';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
@@ -30,23 +29,12 @@ import Skeleton from '../ui/Skeleton';
 import {
   MapPin,
   Plus,
-  Trash2,
-  X,
-  Navigation,
-  Pencil,
-  LocateFixed,
-  Check,
   Map as MapIcon,
   List,
-  Repeat,
-  Clock,
   Maximize2,
 } from 'lucide-react';
 import { Link } from '@tanstack/react-router';
-import { COPY, MEETING_POINT_KINDS, meetingPointKind } from '@festie/shared/constants';
-import { CONCEPT_ICON } from '../../lib/conceptIcons';
-import IconButton from '../ui/IconButton';
-import { inputBase } from '../../lib/styles';
+import { meetingPointKind } from '@festie/shared/constants';
 import { meetingPointsQuery } from '../../lib/queryPersist';
 import CrewStatus from './CrewStatus';
 import LiveLocationControls from './LiveLocationControls';
@@ -425,135 +413,31 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
       </div>
 
       {showForm && (
-        <form ref={formRef} onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
-          <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-text-primary">
-              {editingId ? COPY.meetingPoint.edit : COPY.meetingPoint.add}
-            </h3>
-            <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />
-          </div>
-
-          <div className="crew-type-grid grid grid-cols-2 gap-2" role="radiogroup" aria-label="Meeting point type">
-            {MEETING_POINT_KINDS.map((k) => {
-              const KindIcon = CONCEPT_ICON[k.icon];
-              return (
-                <button
-                  key={k.type}
-                  type="button"
-                  role="radio"
-                  aria-checked={type === k.type}
-                  onClick={() => setType(k.type)}
-                  className={`px-2 py-2 rounded-lg border text-xs font-medium min-h-11 flex flex-col items-center gap-1 transition-colors ${
-                    type === k.type
-                      ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
-                      : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
-                  }`}
-                >
-                  <KindIcon className="w-4 h-4" aria-hidden="true" />
-                  <span>{k.label}</span>
-                </button>
-              );
-            })}
-          </div>
-
-          <input
-            className={`${inputBase} min-h-11`}
-            placeholder="Label (e.g. 'Main entrance')"
-            aria-label="Label"
-            ref={labelInputRef}
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            maxLength={100}
-            required
-          />
-          <input
-            className={`${inputBase} min-h-11`}
-            placeholder="Location (e.g. 'Near the food court')"
-            aria-label="Location"
-            value={location}
-            onChange={(e) => setLocation(e.target.value)}
-            maxLength={200}
-            required
-          />
-          <input
-            className={`${inputBase} min-h-11`}
-            placeholder="Near stage (optional, e.g. 'Main Stage')"
-            aria-label="Near stage"
-            value={stageRef}
-            onChange={(e) => setStageRef(e.target.value)}
-            maxLength={100}
-          />
-          <input
-            type="datetime-local"
-            className={`${inputBase} min-h-11`}
-            placeholder="Meet at (optional)"
-            aria-label={festivalTimeZone ? 'Meet at time, festival time' : 'Meet at time'}
-            value={meetAt}
-            onChange={(e) => setMeetAt(e.target.value)}
-          />
-          {festivalTimeZone && <p className="text-xs text-text-muted -mt-1">Festival time</p>}
-          {meetAt && !recursDaily && <p className="text-xs text-text-muted">{MEETING_POINT_PAST_HINT}</p>}
-
-          {/* 055: daily-recurrence toggle — only meaningful for a timed point.
-              Aqua = selected (accent discipline); 44px target. */}
-          {meetAt && (
-            <button
-              type="button"
-              role="switch"
-              aria-checked={recursDaily}
-              onClick={() => setRecursDaily((v) => !v)}
-              className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium min-h-11 transition-colors ${
-                recursDaily
-                  ? 'bg-accent-aqua/15 border-accent-aqua text-accent-aqua'
-                  : 'bg-bg-card border-border text-text-secondary hover:border-border-light'
-              }`}
-            >
-              <Repeat className="w-4 h-4 shrink-0" aria-hidden="true" />
-              <span className="flex-1 text-left">Repeats daily</span>
-              {recursDaily && <Check className="w-4 h-4 shrink-0" aria-hidden="true" />}
-            </button>
-          )}
-
-          {/* F4: optional GPS capture. Falls back to free-text on denial. */}
-          <div className="flex items-center gap-2">
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={captureLocation}
-              isLoading={locating}
-              className="min-h-11"
-            >
-              <LocateFixed className="w-4 h-4" aria-hidden="true" /> Use my location
-            </Button>
-            {coords && (
-              <span
-                className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-accent-aqua/15 text-accent-aqua text-xs font-medium"
-                title={`${coords.lat.toFixed(5)}, ${coords.lng.toFixed(5)}`}
-              >
-                <Check className="w-3 h-3" aria-hidden="true" />
-                {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
-                <button
-                  type="button"
-                  aria-label="Clear captured location"
-                  onClick={() => setCoords(null)}
-                  className="ml-0.5 hover:text-accent-coral"
-                >
-                  <X className="w-3 h-3" />
-                </button>
-              </span>
-            )}
-          </div>
-
-          <Button
-            type="submit"
-            variant="primary"
-            isLoading={submitting}
-            className="w-full min-h-11"
-            disabled={!label.trim() || !location.trim()}
-          >
-            {editingId ? 'Save' : 'Add'}
-          </Button>
-        </form>
+        <MeetingPointForm
+          formRef={formRef}
+          labelInputRef={labelInputRef}
+          editing={!!editingId}
+          type={type}
+          label={label}
+          location={location}
+          stageRef={stageRef}
+          meetAt={meetAt}
+          recursDaily={recursDaily}
+          coords={coords}
+          festivalTimeZone={festivalTimeZone}
+          locating={locating}
+          submitting={submitting}
+          onTypeChange={setType}
+          onLabelChange={setLabel}
+          onLocationChange={setLocation}
+          onStageRefChange={setStageRef}
+          onMeetAtChange={setMeetAt}
+          onRecursDailyChange={setRecursDaily}
+          onCoordsChange={setCoords}
+          onSubmit={submit}
+          onReset={reset}
+          onCapture={captureLocation}
+        />
       )}
 
       <div id="meeting-points-panel">
@@ -614,120 +498,28 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           ) : (
             <>
             <div className="space-y-2">
-              {current.filter((p) => !hiddenIds.has(p.id)).map((p) => {
-                const meta = meetingPointKind(p.type);
-                const KindIcon = CONCEPT_ICON[meta.icon];
-                // A queued create has no server id yet, so it cannot be edited or removed.
-                const canEdit = !isPending(p) && (p.created_by === currentUserId || isOwner);
-                const isEmergency = p.type === 'emergency';
-                return (
-                  <div
-                    key={p.id}
-                    className={`p-3 rounded-lg bg-bg-card border animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none ${isEmergency ? 'border-accent-coral' : 'border-border'}`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <KindIcon
-                        className={`w-5 h-5 shrink-0 mt-0.5 ${isEmergency ? 'text-accent-coral-strong' : 'text-text-secondary'}`}
-                        aria-hidden="true"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-text-primary">{p.label}</span>
-                          <span className="text-xs text-text-muted uppercase tracking-wide">{meta.label}</span>
-                        </div>
-                        <div className="text-sm text-text-secondary mt-0.5">{p.location}</div>
-                        <SyncMarker item={p} />
-                        {p.stage_reference && (
-                          <div className="text-xs text-accent-aqua mt-0.5">Near {p.stage_reference}</div>
-                        )}
-                        {p.meet_at &&
-                          (p.recurs_daily ? (
-                            // 055: recurring point — show the daily time-of-day badge
-                            // ("Daily · 3:00 PM") from the shared meetingTime helper.
-                            <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-accent-aqua/15 px-2 py-0.5 text-xs font-medium text-accent-aqua">
-                              <Repeat className="w-3 h-3" aria-hidden="true" />
-                              {`Daily · ${meetingTimeDisplay(p.meet_at, true, festivalDays, new Date(), festivalTimeZone).label.replace(/^daily /, '')}`}
-                            </div>
-                          ) : (
-                            <div className="text-xs text-accent-aqua mt-1 inline-flex items-center gap-1">
-                              <Clock className="w-3 h-3" aria-hidden="true" />
-                              {meetingTimeDisplay(p.meet_at, false, festivalDays, new Date(), festivalTimeZone).label}
-                            </div>
-                          ))}
-                        {(() => {
-                          const editLine = meetingPointEditLine(p, { timeZone: festivalTimeZone, now: new Date(nowMs) });
-                          return editLine ? <div className="text-xs text-text-muted mt-0.5">{editLine}</div> : null;
-                        })()}
-                        {!isPending(p) && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <button
-                              type="button"
-                              aria-pressed={(p.coming ?? []).includes(currentUserId)}
-                              aria-label={`I'll be there: ${p.label}`}
-                              onClick={() => toggleComing(p)}
-                              className="min-h-11 px-3 rounded-full border border-accent-aqua text-sm font-semibold text-text-primary aria-pressed:bg-accent-aqua/15 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
-                            >
-                              {(p.coming ?? []).includes(currentUserId) ? 'Coming' : "I'll be there"}
-                            </button>
-                            {(p.coming?.length ?? 0) > 0 && (
-                              <span className="text-xs text-text-secondary">{p.coming!.length} coming</span>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0">
-                        <IconButton
-                          label={`Directions to ${p.label}`}
-                          icon={<Navigation className="w-4 h-4" />}
-                          onClick={() => openDirections(p)}
-                        />
-                        {canEdit && (
-                          <>
-                            <IconButton
-                              label="Edit meeting point"
-                              icon={<Pencil className="w-4 h-4" />}
-                              onClick={() => startEdit(p)}
-                            />
-                            <IconButton
-                              label={`Remove meeting point ${p.label}`}
-                              variant="danger"
-                              icon={<Trash2 className="w-4 h-4" />}
-                              onClick={() => removePoint(p.id, `"${p.label}"`)}
-                            />
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {current.filter((p) => !hiddenIds.has(p.id)).map((p) => (
+                <MeetingPointCard
+                  key={p.id}
+                  point={p}
+                  currentUserId={currentUserId}
+                  isOwner={isOwner}
+                  festivalDays={festivalDays}
+                  festivalTimeZone={festivalTimeZone}
+                  nowMs={nowMs}
+                  onToggleComing={toggleComing}
+                  onDirections={openDirections}
+                  onEdit={startEdit}
+                  onRemove={removePoint}
+                />
+              ))}
             </div>
             {past.length > 0 && (
               <div className="space-y-2">
                 <h4 className="text-xs font-semibold uppercase tracking-wide text-text-muted">Past</h4>
-                {past.map((p) => {
-                  const meta = meetingPointKind(p.type);
-                  const KindIcon = CONCEPT_ICON[meta.icon];
-                  return (
-                    <div key={p.id} className="p-3 rounded-lg bg-bg-card border border-border opacity-60">
-                      <div className="flex items-start gap-3">
-                        <KindIcon className="w-5 h-5 shrink-0 mt-0.5 text-text-secondary" aria-hidden="true" />
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-semibold text-text-primary">{p.label}</span>
-                            <span className="text-xs text-text-muted uppercase tracking-wide">{meta.label}</span>
-                          </div>
-                          <div className="text-sm text-text-secondary mt-0.5">{p.location}</div>
-                        </div>
-                        <IconButton
-                          label={`Directions to ${p.label}`}
-                          icon={<Navigation className="w-4 h-4" />}
-                          onClick={() => openDirections(p)}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+                {past.map((p) => (
+                  <PastMeetingPointCard key={p.id} point={p} onDirections={openDirections} />
+                ))}
               </div>
             )}
             </>

@@ -1,27 +1,15 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback } from 'react';
 import { Socket } from 'socket.io-client';
 import { useNavigate } from '@tanstack/react-router';
 import { useSocket } from '@festie/shared/hooks/useSocket';
 import { useCrewRealtime } from '@festie/shared/hooks/useCrewRealtime';
+import { useRealtimeStoreSync } from '@festie/shared/hooks/useRealtimeSync';
 import { useRevocationRealtime } from '@festie/shared/hooks';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
-import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
-import { useAuthStore } from '@festie/shared/stores/authStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useToast } from '../lib/toastContext';
 import { useCrewQuerySink } from './useCrewQuerySink';
-import type {
-  ProfileUpdatedPayload,
-  ProfileDeletedPayload,
-  FestivalIdPayload,
-  PresenceUpdatePayload,
-  CrewUpdatedPayload,
-  CrewMemberEventPayload,
-  CrewStatusUpdatedPayload,
-} from '@festie/shared/types/socket-events';
-
-const RECONNECT_FESTIVAL_RELOAD_GAP_MS = 60_000;
 
 export interface UseRealtimeSyncReturn {
   connected: boolean;
@@ -48,18 +36,8 @@ export interface UseRealtimeSyncReturn {
  * debounced with a 300ms trailing guard so we issue one reload per burst.
  */
 export function useRealtimeSync(): UseRealtimeSyncReturn {
-  const socketRef = useRef<Socket | null>(null);
   const currentFestivalId = useFestivalStore((state) => state.currentFestivalId);
-  const isMember = useFestivalDataStore((state) => state.currentProfile != null);
-  const isGuest = useAuthStore((state) => !state.user);
   const connected = useUIStore((state) => state.connected);
-  const setConnected = useUIStore((state) => state.setConnected);
-  const setOnlineUsers = useUIStore((state) => state.setOnlineUsers);
-
-  // Debounce timers keyed by refetch path. setTimeout ids are numbers in
-  // the browser; we store them in a ref to survive re-renders without
-  // triggering effect restarts.
-  const debouncersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   const { socket } = useSocket(currentFestivalId || undefined);
 
@@ -92,199 +70,7 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     onCrewNotice: ({ message }) => toast(message, 'info'),
   });
 
-  // Set up Socket.IO event listeners
-  useEffect(() => {
-    if (!socket) return;
-
-    socketRef.current = socket;
-    // Copy ref value so the cleanup function uses the snapshot captured at
-    // effect-creation time (satisfies react-hooks/exhaustive-deps).
-    const timersSnapshot = debouncersRef.current;
-
-    const schedule = (key: string, fn: () => void, delay = 300) => {
-      const timers = debouncersRef.current;
-      if (timers[key]) clearTimeout(timers[key]);
-      timers[key] = setTimeout(() => {
-        delete timers[key];
-        fn();
-      }, delay);
-    };
-
-    const reloadProfiles = () => {
-      if (!currentFestivalId) return;
-      schedule(`profiles:${currentFestivalId}`, () => {
-        useFestivalStore
-          .getState()
-          .loadProfiles(currentFestivalId)
-          .catch(() => {});
-      });
-    };
-
-    const reloadFestival = () => {
-      if (!currentFestivalId) return;
-      schedule(`festival:${currentFestivalId}`, () => {
-        useFestivalStore
-          .getState()
-          .selectFestival(currentFestivalId)
-          .catch(() => {});
-      });
-    };
-
-    const reloadCrews = (crewId?: string) => {
-      schedule('crews', () => {
-        useCrewStore
-          .getState()
-          .loadCrews()
-          .catch(() => {});
-        const activeId = useCrewStore.getState().activeCrew?.id;
-        const targetId = crewId || activeId;
-        if (targetId && targetId === activeId) {
-          useCrewStore
-            .getState()
-            .selectCrew(targetId)
-            .catch(() => {});
-        }
-      });
-    };
-
-    // Patch a single profile's picks in place from the socket payload (which
-    // carries the full picks map); only fall back to a full /profiles refetch
-    // when the profile isn't loaded yet (a brand-new joiner). Avoids re-fetching
-    // and re-serializing every profile on each remote pick. (B-6)
-    const patchOrReload = (data: ProfileUpdatedPayload) => {
-      const patched = useFestivalStore.getState().applyProfilePatch({
-        profileId: data?.profileId,
-        picks: data?.picks,
-        interestsChanged: data?.interestsChanged,
-      });
-      if (!patched) reloadProfiles();
-    };
-
-    // --- Picks / notes (festivalStore is authoritative) ---
-    const handlePickUpdated = (data: ProfileUpdatedPayload) => patchOrReload(data);
-    const handlePickRemoved = (_data: ProfileDeletedPayload) => reloadProfiles();
-    // note:saved payload carries no notes (notes are per-viewer) — full reload.
-    const handleNoteSaved = (_data: ProfileUpdatedPayload) => reloadProfiles();
-    // Legacy event name kept during transition (server still emits picks:updated).
-    const handlePicksUpdated = (data: ProfileUpdatedPayload) => patchOrReload(data);
-
-    // --- Profiles (festivalStore is authoritative) ---
-    const handleProfileUpdated = (data: ProfileUpdatedPayload) => patchOrReload(data);
-    const handleProfileJoined = (_data: ProfileUpdatedPayload) => reloadProfiles();
-    const handleProfileLeft = (_data: ProfileDeletedPayload) => reloadProfiles();
-
-    // --- Crews (crewStore is authoritative) ---
-    const handleCrewUpdated = (data: CrewUpdatedPayload) => reloadCrews(data?.crewId ?? data?.id);
-    const handleCrewMemberAdded = (data: CrewMemberEventPayload) => reloadCrews(data?.crewId);
-    const handleCrewMemberRemoved = (data: CrewMemberEventPayload) => reloadCrews(data?.crewId);
-
-    // M5: a crewmate's last-synced status changed (degraded-sync, NOT live GPS).
-    // Patch the crewStore row in place — only when it targets the open crew so a
-    // background crew's status never mutates the visible list. applyStatusUpdate
-    // is last-write-wins by timestamp, so a delayed echo can't clobber a newer
-    // local row.
-    const handleCrewStatusUpdated = (data: CrewStatusUpdatedPayload) => {
-      const row = data?.status;
-      if (!row) return;
-      const activeCrewId = useCrewStore.getState().activeCrew?.id ?? null;
-      if (!activeCrewId || row.crew_id !== activeCrewId) return;
-      useCrewStore.getState().applyStatusUpdate(row);
-    };
-
-    // --- Festival / sets (festivalStore selectFestival reloads everything) ---
-    const handleFestivalUpdated = (data: FestivalIdPayload) => {
-      if (data?.id === currentFestivalId) reloadFestival();
-    };
-    const handleSetAdded = (_data: FestivalIdPayload) => reloadFestival();
-    const handleSetUpdated = (_data: FestivalIdPayload) => reloadFestival();
-
-    // --- Presence (uiStore only; no refetch) ---
-    const handlePresenceUpdate = (data: PresenceUpdatePayload) => {
-      if (data.online)
-        setOnlineUsers(
-          data.online.map((u) => ({ id: u.userId, name: u.username, avatar: u.avatarUrl, status: 'online' as const })),
-        );
-    };
-
-    // Events sent while the socket was down are lost (the server keeps no
-    // buffer), so a reconnect re-reads picks and crews. The full festival reload
-    // is the heaviest call and lineup edits are rare: only after a long gap.
-    let connectedBefore = socket.connected;
-    let disconnectedAt: number | null = null;
-    const handleConnect = () => {
-      setConnected(true);
-      if (currentFestivalId && (isGuest || isMember)) {
-        socket.emit('join:festival', currentFestivalId, { _v: 1 }, () => {});
-      }
-      if (connectedBefore) {
-        reloadProfiles();
-        reloadCrews();
-        if (disconnectedAt !== null && Date.now() - disconnectedAt >= RECONNECT_FESTIVAL_RELOAD_GAP_MS) {
-          reloadFestival();
-        }
-      }
-      connectedBefore = true;
-      disconnectedAt = null;
-    };
-
-    const handleDisconnect = () => {
-      setConnected(false);
-      disconnectedAt ??= Date.now();
-    };
-
-    // Register listeners
-    socket.on('pick:updated', handlePickUpdated);
-    socket.on('pick:removed', handlePickRemoved);
-    socket.on('note:saved', handleNoteSaved);
-    socket.on('picks:updated', handlePicksUpdated);
-
-    socket.on('profile:updated', handleProfileUpdated);
-    socket.on('profile:joined', handleProfileJoined);
-    socket.on('profile:left', handleProfileLeft);
-
-    socket.on('crew:updated', handleCrewUpdated);
-    socket.on('crew:member-joined', handleCrewMemberAdded);
-    socket.on('crew:member-left', handleCrewMemberRemoved);
-    socket.on('crew:status-updated', handleCrewStatusUpdated);
-
-    socket.on('festival:updated', handleFestivalUpdated);
-    socket.on('festival:set-added', handleSetAdded);
-    socket.on('festival:set-updated', handleSetUpdated);
-
-    socket.on('presence:update', handlePresenceUpdate);
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
-
-    return () => {
-      socket.off('pick:updated', handlePickUpdated);
-      socket.off('pick:removed', handlePickRemoved);
-      socket.off('note:saved', handleNoteSaved);
-      socket.off('picks:updated', handlePicksUpdated);
-
-      socket.off('profile:updated', handleProfileUpdated);
-      socket.off('profile:joined', handleProfileJoined);
-      socket.off('profile:left', handleProfileLeft);
-
-      socket.off('crew:updated', handleCrewUpdated);
-      socket.off('crew:member-joined', handleCrewMemberAdded);
-      socket.off('crew:member-left', handleCrewMemberRemoved);
-      socket.off('crew:status-updated', handleCrewStatusUpdated);
-
-      socket.off('festival:updated', handleFestivalUpdated);
-      socket.off('festival:set-added', handleSetAdded);
-      socket.off('festival:set-updated', handleSetUpdated);
-
-      socket.off('presence:update', handlePresenceUpdate);
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-
-      // Cancel any pending debounced refetches so we don't fire after unmount.
-      for (const k of Object.keys(timersSnapshot)) {
-        clearTimeout(timersSnapshot[k]);
-        delete timersSnapshot[k];
-      }
-    };
-  }, [socket, currentFestivalId, isGuest, isMember, setConnected, setOnlineUsers]);
+  useRealtimeStoreSync({ socket });
 
   return {
     connected,
