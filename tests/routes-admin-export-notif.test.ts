@@ -64,8 +64,10 @@ function makeDeps(overrides: any = {}) {
       req.validatedQuery = req.query;
       next();
     },
-    validateParams: () => (req: any, res: any, next: any) => {
-      req.validatedParams = req.params;
+    validateParams: (schema?: any) => (req: any, res: any, next: any) => {
+      const result = schema?.safeParse ? schema.safeParse(req.params) : { success: true, data: req.params };
+      if (!result.success) return res.status(400).json({ data: null, error: { message: 'Invalid params' } });
+      req.validatedParams = result.data;
       next();
     },
     schemas: {
@@ -76,6 +78,14 @@ function makeDeps(overrides: any = {}) {
       adminBulkArchive: {},
       adminAuditQuery: {},
       genericIdParams: {},
+      idRoleParams: {
+        safeParse: (p: any) => {
+          const role = String(p.role ?? '').trim().toLowerCase();
+          return ['admin', 'user'].includes(role)
+            ? { success: true, data: { ...p, role } }
+            : { success: false };
+        },
+      },
       festivalIdParams: {},
       pushToken: {},
       deleteToken: {},
