@@ -110,3 +110,4 @@ export * from './setContext';
 export * from './scrubUrl';
 export * from './deepLinks';
 export * from './gridCrewAvatars';
+export * from './basemapCache';
