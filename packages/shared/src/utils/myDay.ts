@@ -5,7 +5,7 @@ import { artistDisplayName } from './format';
 import { stageWalkMinutes } from './geo';
 import { meetAtTimeOfDay, meetingOccurrences } from './meetingTime';
 import { fmtDurationMinutes } from './scheduleFormat';
-import { createDateInLocalFrame, getSetTimeBounds, isSetScheduled, zonedWallTimeToMs } from './setStatus';
+import { createDateInLocalFrame, FESTIVAL_DAY_START_HOUR, getSetTimeBounds, isSetScheduled, zonedWallTimeToMs } from './setStatus';
 
 // ── My day: one itinerary for a festival day, plus the Reminders/Notes lists ──
 // Pure (RN + web safe). Time math reuses getSetTimeBounds / meetingOccurrences,
@@ -18,7 +18,7 @@ export const MY_DAY_MIN_GAP_MINUTES = 30;
 
 /** The part of a festival day a start hour (0-23) belongs to. */
 export function dayPartForHour(hour: number): DayPart {
-  if (hour < 6) return 'after-midnight';
+  if (hour < FESTIVAL_DAY_START_HOUR) return 'after-midnight';
   if (hour < 17) return 'afternoon';
   if (hour < 21) return 'evening';
   return 'late-night';
