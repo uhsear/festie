@@ -35,9 +35,9 @@ export function useBulkAddPicks(notify: UndoNotifier): {
         return 'none';
       }
       const after = selectMyPicks(useFestivalStore.getState()) ?? {};
-      // shortcut: a pick changed by hand while the bulk PUT is in flight is also undone; switch to a store-returned diff if that is ever reported.
+      // Only picks the bulk add set: a pick changed by hand mid-flight no longer holds `priority`, so Undo leaves it alone.
       const previous: Record<string, Priority | undefined> = {};
-      for (const id of group.setIds) if (after[id] !== before[id]) previous[id] = before[id];
+      for (const id of group.setIds) if (before[id] !== priority && after[id] === priority) previous[id] = before[id];
       const onUndo = async () => {
         try {
           await useFestivalStore.getState().restorePicks(previous);
