@@ -193,15 +193,28 @@ export function crewProfilesFor(
   return [...byUser.values()];
 }
 
+/** A member row is the owner by role, or by matching the crew's owner id. */
+export function memberIsOwner(member: Pick<CrewMember, 'userId' | 'role'>, ownerId: string | undefined): boolean {
+  return member.role === 'owner' || member.userId === ownerId;
+}
+
+/** The user owns the crew by role row or by the crew's owner id. */
+export function isCrewOwner(
+  crew: Pick<Crew, 'owner'> | null | undefined,
+  members: Pick<CrewMember, 'userId' | 'role'>[],
+  userId: string,
+): boolean {
+  return crew?.owner === userId || members.some((m) => m.userId === userId && m.role === 'owner');
+}
+
 export function crewOwnerInfo(
   crew: Crew,
   members: CrewMember[],
   myUserId: string,
 ): { isOwner: boolean; ownerName: string | null } {
-  const mine = members.find((m) => m.userId === myUserId);
   const owner = members.find((m) => m.role === 'owner') ?? members.find((m) => m.userId === crew.owner);
   return {
-    isOwner: crew.owner === myUserId || mine?.role === 'owner',
+    isOwner: isCrewOwner(crew, members, myUserId),
     ownerName: owner?.name ?? owner?.username ?? null,
   };
 }

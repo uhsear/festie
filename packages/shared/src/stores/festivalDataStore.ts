@@ -65,6 +65,7 @@ import {
   SaveReminderRequest,
 } from '../types';
 
+import { PRIORITY_WEIGHT } from '../utils/crewNudges';
 import { logicalDayIndexAt } from '../utils/dayOf';
 import {
   guestInterestIdsToMerge,
@@ -272,9 +273,6 @@ function rollbackKeys<T>(
 
 let _lastSelectFestivalId: string | null = null;
 
-// Priority strength order so a bulk "maybe" can't silently clobber a hand-set
-// "must": must > want-to-see > maybe.
-const PICK_RANK: Record<Priority, number> = { maybe: 1, 'want-to-see': 2, must: 3 };
 
 // A guest has no profile and no account: their pick writes stay on the device.
 function isGuestWrite(get: () => FestivalDataStore): boolean {
@@ -767,7 +765,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       let changed = 0;
       for (const setId of setIds) {
         const existing = next[setId];
-        if (existing && PICK_RANK[existing] >= PICK_RANK[priority]) continue;
+        if (existing && PRIORITY_WEIGHT[existing] >= PRIORITY_WEIGHT[priority]) continue;
         next[setId] = priority;
         changed += 1;
       }
@@ -792,7 +790,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         const existing = mergedPicks[setId];
         // Never DOWNGRADE a stronger existing pick — only set unpicked sets or
         // upgrade a weaker one. Count only the sets we actually change.
-        if (existing && PICK_RANK[existing] >= PICK_RANK[priority]) continue;
+        if (existing && PRIORITY_WEIGHT[existing] >= PRIORITY_WEIGHT[priority]) continue;
         prevValues[setId] = existing; // remember only the keys we touch, for rollback
         mergedPicks[setId] = priority;
         changed += 1;
