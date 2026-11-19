@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { api } from '@festie/shared';
@@ -92,11 +92,46 @@ describe('ExpensesTab', () => {
     expect(screen.getByRole('button', { name: /paid Sam/ })).toBeInTheDocument();
   });
 
-  it('opens the confirm dialog before recording a payment', async () => {
+  it('records a payment only after confirming the dialog', async () => {
     mockApi([expense({})]);
+    const settleExpense = vi.fn().mockResolvedValue('sent');
+    useCrewStore.setState({ settleExpense } as never);
     setup();
     await userEvent.click(await screen.findByRole('button', { name: /paid Sam/ }));
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(await screen.findByRole('dialog', { name: 'Record payment' })).toBeInTheDocument();
+    expect(settleExpense).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Yes, I paid' }));
+    await waitFor(() => expect(settleExpense).toHaveBeenCalledWith('crew-1', { toUserId: 'sam', amount: 20 }));
+  });
+
+  it('removes my own expense after confirming', async () => {
+    mockApi([expense({ paid_by: 'me', created_by: 'me', paid_by_name: 'Me' })]);
+    const del = vi.spyOn(api, 'delete').mockResolvedValue({} as never);
+    setup();
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove expense' }));
+    expect(del).not.toHaveBeenCalled();
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove' }));
+    await waitFor(() => expect(del).toHaveBeenCalledWith('/crews/crew-1/expenses/e1'));
+  });
+
+  it('adds an expense through the form', async () => {
+    mockApi([]);
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 'e9' } as never);
+    setup();
+    await userEvent.click(await screen.findByRole('button', { name: 'Add Expense' }));
+    await userEvent.type(screen.getByLabelText('Description'), 'Gas');
+    await userEvent.type(screen.getByLabelText('Amount'), '60');
+    await userEvent.click(screen.getByRole('button', { name: 'Add' }));
+    await waitFor(() =>
+      expect(post).toHaveBeenCalledWith('/crews/crew-1/expenses', {
+        description: 'Gas',
+        amount: 60,
+        splitWith: ['me', 'sam'],
+        category: 'other',
+        planned: false,
+        paidBy: 'me',
+      }),
+    );
   });
 
   it('filters the ledger between actual and planned and tracks aria-selected', async () => {
@@ -123,6 +158,29 @@ describe('ExpensesTab', () => {
     await userEvent.click(everyone);
     expect(everyone).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByText('You owe Sam $20.00')).not.toBeInTheDocument();
+    expect(screen.getByText('You owe $20.00')).toBeInTheDocument();
+    expect(screen.getByText('sam is owed $20.00')).toBeInTheDocument();
+  });
+
+  // Known bug: useRovingTabs attaches on mount, before the tablist exists (loading early return), so arrow keys do nothing. Remove .fails when fixed.
+  it.fails('moves between filter tabs with ArrowRight', async () => {
+    mockApi([expense({})]);
+    setup();
+    const actual = await screen.findByRole('tab', { name: 'actual' });
+    actual.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'planned' })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: 'planned' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it.fails('moves between settle-up tabs with ArrowRight', async () => {
+    mockApi([expense({})]);
+    setup();
+    const fewest = await screen.findByRole('tab', { name: 'Fewest payments' });
+    fewest.focus();
+    await userEvent.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: "Everyone's balance" })).toHaveFocus();
+    expect(screen.getByRole('tab', { name: "Everyone's balance" })).toHaveAttribute('aria-selected', 'true');
   });
 
   it('says all settled up when the plan has no transfer for me', async () => {
