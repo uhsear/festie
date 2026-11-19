@@ -624,6 +624,58 @@ describe('rate-limiting: global limiter with rotating tokens', () => {
   });
 });
 
+describe('rate-limiting: global limiter on the Redis path honours the per-call max', () => {
+  // Counting stubs: the fixed-max limiter caps every key at the base max; redisRateCheck takes max per call.
+  function makeRedisStubs(baseMax: number) {
+    const counts = new Map<string, number>();
+    const bump = (key: string) => counts.set(key, (counts.get(key) || 0) + 1).get(key)!;
+    return {
+      redisRateLimiter: {
+        check: async (key: string) => {
+          const count = bump(`api:${key}`);
+          return { limited: count > baseMax, remaining: Math.max(0, baseMax - count), resetMs: 1000 };
+        },
+      },
+      redisRateCheck: async (_redis: any, key: string, max: number) => {
+        const count = bump(key);
+        return { limited: count > max, count, remaining: Math.max(0, max - count), resetMs: 1000 };
+      },
+    };
+  }
+
+  it('lets one IP rotating tokens reach max * the IP multiplier, not just max', async () => {
+    const max = 3;
+    const deps = makeDeps({
+      redis: {},
+      ...makeRedisStubs(max),
+      resolveRequestToken: (req: any) => ({ token: req.headers['x-user-token'] || null }),
+    });
+    const middleware = createRateLimiters(deps).rateLimit(max);
+    let passed = 0;
+    for (let i = 0; i < 20 * max; i++) {
+      const req = mockReq({ headers: { 'x-user-token': crypto.randomUUID() } });
+      await middleware(req, mockRes(), () => { passed += 1; });
+    }
+    assert.equal(passed, max * 10);
+    assert.equal(deps.state.rateLimits.size, 0);
+  });
+
+  it('skips the IP-wide ceiling when the IP is unresolved', async () => {
+    const max = 3;
+    const deps = makeDeps({
+      getRequestIp: () => 'unknown',
+      resolveRequestToken: (req: any) => ({ token: req.headers['x-user-token'] || null }),
+    });
+    const middleware = createRateLimiters(deps).rateLimit(max);
+    let passed = 0;
+    for (let i = 0; i < 20 * max; i++) {
+      const req = mockReq({ headers: { 'x-user-token': crypto.randomUUID() } });
+      await middleware(req, mockRes(), () => { passed += 1; });
+    }
+    assert.equal(passed, 20 * max);
+  });
+});
+
 describe('rate-limiting: Redis failure paths (characterization)', () => {
   const redisOk = (limited: boolean) => async () => ({ limited, remaining: limited ? 0 : 7, resetMs: 4500, fallback: false });
 

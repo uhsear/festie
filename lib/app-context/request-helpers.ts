@@ -46,6 +46,16 @@ export function createRequestHelpers({
   sendError: any;
   ErrorCodes: any;
 }) {
+  // At most one unresolved-IP warning per fn per minute, so a flood cannot spam the logs.
+  const UNRESOLVED_WARN_INTERVAL_MS = 60_000;
+  const unresolvedLastWarned: Record<string, number> = {};
+  function warnUnresolved(fn: string) {
+    const now = Date.now();
+    if (now - (unresolvedLastWarned[fn] ?? -Infinity) < UNRESOLVED_WARN_INTERVAL_MS) return;
+    unresolvedLastWarned[fn] = now;
+    log.warn('request-ip:unresolved', { fn });
+  }
+
   function getRequestIp(req: any) {
     const candidates: any[] = [];
     if (config.TRUST_PROXY) {
@@ -61,7 +71,7 @@ export function createRequestHelpers({
     for (const candidate of candidates) {
       if (candidate && net.isIP(candidate)) return candidate;
     }
-    log.warn('request-ip:unresolved', { fn: 'getRequestIp' });
+    warnUnresolved('getRequestIp');
     return 'unknown';
   }
 
@@ -70,7 +80,7 @@ export function createRequestHelpers({
     for (const candidate of candidates) {
       if (candidate && net.isIP(candidate)) return candidate;
     }
-    log.warn('request-ip:unresolved', { fn: 'getRawRequestIp' });
+    warnUnresolved('getRawRequestIp');
     return 'unknown';
   }
 
