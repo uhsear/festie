@@ -4,31 +4,12 @@
 /**
  * Backend time-zone helper.
  *
- * The root backend cannot import `@festie/shared` (different package manager, no
- * path mapping — importing the barrel drags in React). So the DST-correct
- * wall-clock→epoch math from packages/shared/src/utils/setStatus.ts
- * (`zonedWallTimeToMs`) is re-implemented here, standalone, for the reminder
- * scheduler. Keep the two in sync if either changes.
+ * `zoneOffsetMsAt` comes from packages/shared/src/utils/setStatus.ts, imported by
+ * relative path: scripts/build.mjs bundles it into dist. Only import shared modules
+ * whose own imports stay free of React and other bare packages, because the build
+ * keeps bare imports external.
  */
-
-/** The offset (ms) the given IANA zone is from UTC at a particular instant. */
-function zoneOffsetMsAt(utcMs: number, timeZone: string): number {
-  const dtf = new Intl.DateTimeFormat('en-US', {
-    timeZone,
-    hourCycle: 'h23',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-  const parts = dtf.formatToParts(new Date(utcMs));
-  const map: Record<string, number> = {};
-  for (const p of parts) if (p.type !== 'literal') map[p.type] = parseInt(p.value, 10);
-  const asUTC = Date.UTC(map.year!, map.month! - 1, map.day!, map.hour!, map.minute!, map.second!);
-  return asUTC - utcMs;
-}
+import { zoneOffsetMsAt } from '../packages/shared/src/utils/setStatus';
 
 /**
  * Epoch-ms for a wall-clock (Y-M-D h:m) interpreted in a specific IANA zone,

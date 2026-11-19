@@ -10,9 +10,8 @@ import {
   MAX_OPEN_POLLS_PER_CREW,
   PICK_PRIORITY_VALUES,
 } from '../lib/constants.js';
-// The root backend deliberately does NOT depend on @festie/shared (separate npm
-// vs pnpm install trees), so the pick-priority enum is hand-mirrored in the
-// shared package's UI constants. This test is the drift guard for that mirror —
+// The pick-priority enum is hand-mirrored in the shared package's UI constants
+// (the root backend only bundles shared leaf modules by relative path). This test is the drift guard for that mirror —
 // imported by relative path since tsx resolves workspace TS source directly.
 import { MAX_SHARE_WINDOW_MS, POSITION_TTL_MS } from '../lib/live-location-cache.js';
 import { mergeMustSeeLeads } from '../lib/reminder-scheduler.js';
