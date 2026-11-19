@@ -65,4 +65,16 @@ describe('retention_cleanup job', () => {
     await new Promise((r) => setImmediate(r));
     assert.ok(ctx.log.warn.mock.calls.some((c: any) => c.arguments[0] === 'retention cleanup failed'));
   });
+
+  it('purges expired device tokens with the 6-hour token cleanup', async () => {
+    mock.timers.enable({ apis: ['setInterval'] });
+    ctx = makeCtx(async () => ({ rows: [], rowCount: 0 }));
+    ctx.stores.deviceTokens = { deleteExpired: mock.fn(async () => 2) };
+    createBackgroundTasks(ctx, { io });
+    mock.timers.tick(6 * 60 * 60 * 1000);
+    await new Promise((r) => setImmediate(r));
+    assert.equal(ctx.stores.deviceTokens.deleteExpired.mock.callCount(), 1);
+    const logged = ctx.log.info.mock.calls.find((c: any) => c.arguments[0] === 'token cleanup');
+    assert.equal(logged.arguments[1].deviceTokensPurged, 2);
+  });
 });
