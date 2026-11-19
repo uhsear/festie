@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Alert, AppState, type AppStateStatus } from 'react-native';
 import { useRouter } from 'expo-router';
-import { createSocket } from '@festie/shared/services';
+import { createSocket, createAuthErrorHandler } from '@festie/shared/services';
 import { API_ORIGIN } from '../lib/apiOrigin';
 // Import the Socket type from the shared barrel (which re-exports it) rather
 // than from 'socket.io-client' directly: socket.io-client is a dependency of
@@ -16,26 +16,14 @@ import {
   useCrewStore,
   useLiveLocationStore,
 } from '@festie/shared/stores';
-import { useCrewRealtime, useRevocationRealtime } from '@festie/shared/hooks';
+import { useCrewRealtime, useRealtimeStoreSync, useRevocationRealtime } from '@festie/shared/hooks';
 // createStoreSink lives in @festie/shared's realtime module, re-exported by the
 // package root barrel (src/index.ts). There is no dedicated `./realtime` subpath
 // export, so it is imported from the bare '@festie/shared' entry, which the
 // package `exports` map resolves. It is the package itself (not a transitive
 // dep), so it is safe for the mobile typecheck and the Metro bundle.
 import { createStoreSink } from '@festie/shared';
-import type {
-  ProfileUpdatedPayload,
-  ProfileDeletedPayload,
-  FestivalIdPayload,
-  PresenceUpdatePayload,
-  PresenceUser,
-  CrewUpdatedPayload,
-  CrewMemberEventPayload,
-  CrewStatusUpdatedPayload,
-} from '@festie/shared/types/socket-events';
 import { setLiveSocket, useLiveSocket } from '../lib/liveSocket';
-
-const RECONNECT_FESTIVAL_RELOAD_GAP_MS = 60_000;
 
 export interface UseRealtimeSyncReturn {
   connected: boolean;
@@ -66,7 +54,6 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
   const activeCrewId = useCrewStore((s) => s.activeCrew?.id ?? null);
   const connected = useUIStore((s) => s.connected);
   const setConnected = useUIStore((s) => s.setConnected);
-  const setOnlineUsers = useUIStore((s) => s.setOnlineUsers);
 
   // ── Crew sub-feature + Live Location/SOS realtime ────────────────────────
   // Delegate crew:* / location:* / sos:* socket routing to the shared hook (the
@@ -95,8 +82,9 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     onCrewNotice: ({ title, message }) => Alert.alert(title, message),
   });
 
-  // Debounce timers to coalesce bursty socket events into single store reloads.
-  const debouncersRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+  // Festival/profile/crew/presence events and the reconnect re-read live in the shared hook;
+  // it also owns join:festival here (mobile has no useSocket) and exposes the foreground backfill.
+  const { backfill } = useRealtimeStoreSync({ socket: liveSocket, joinFestival: true });
 
   // ── Socket connection lifecycle ─────────────────────────────────────────
   useEffect(() => {
@@ -117,189 +105,11 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       return;
     }
 
-    const socket = createSocket(userToken, API_ORIGIN, () => {
-      // Socket auth failed — attempt a single refresh, then reconnect with the
-      // new token. On failure stay disconnected (HTTP/foreground path recovers).
-      useAuthStore
-        .getState()
-        .refreshToken()
-        .then(() => {
-          const t = useAuthStore.getState().userToken;
-          if (t && socketRef.current) {
-            socketRef.current.auth = { token: t };
-            socketRef.current.connect();
-          }
-        })
-        .catch((e) => console.warn('socket token refresh failed; realtime paused until the next request', e));
-    });
+    const socket = createSocket(userToken, API_ORIGIN, createAuthErrorHandler(() => socketRef.current, useAuthStore.getState));
     socketRef.current = socket;
     // Expose this socket to the Live Location publisher (crew screen) which emits
     // location:* on it. Cleared on teardown so a torn-down socket isn't reused.
     setLiveSocket(socket);
-
-    const timersSnapshot = debouncersRef.current;
-
-    // ── Debounced store reloaders ───────────────────────────────────────
-    const schedule = (key: string, fn: () => void, delay = 300) => {
-      const timers = debouncersRef.current;
-      if (timers[key]) clearTimeout(timers[key]);
-      timers[key] = setTimeout(() => {
-        delete timers[key];
-        fn();
-      }, delay);
-    };
-
-    const reloadProfiles = () => {
-      const festivalId = useFestivalDataStore.getState().currentFestivalId;
-      if (!festivalId) return;
-      schedule(`profiles:${festivalId}`, () => {
-        useFestivalDataStore
-          .getState()
-          .loadProfiles(festivalId)
-          .catch(() => {});
-      });
-    };
-
-    const reloadFestival = () => {
-      const festivalId = useFestivalDataStore.getState().currentFestivalId;
-      if (!festivalId) return;
-      schedule(`festival:${festivalId}`, () => {
-        useFestivalDataStore
-          .getState()
-          .selectFestival(festivalId)
-          .catch(() => {});
-      });
-    };
-
-    const reloadCrews = (crewId?: string) => {
-      schedule('crews', () => {
-        useCrewStore
-          .getState()
-          .loadCrews()
-          .catch(() => {});
-        const activeId = useCrewStore.getState().activeCrew?.id;
-        const targetId = crewId || activeId;
-        if (targetId && targetId === activeId) {
-          useCrewStore
-            .getState()
-            .selectCrew(targetId)
-            .catch(() => {});
-        }
-      });
-    };
-
-    // ── Event handlers ─────────────────────────────────────────────────
-    // Patch a single profile's picks in place from the socket payload (carries
-    // the full picks map); fall back to a full reload only for an unloaded
-    // profile (new joiner). Avoids refetching every profile per remote pick. (B-6)
-    const patchOrReload = (data: ProfileUpdatedPayload) => {
-      const patched = useFestivalDataStore.getState().applyProfilePatch({
-        profileId: data?.profileId,
-        picks: data?.picks,
-        interestsChanged: data?.interestsChanged,
-      });
-      if (!patched) reloadProfiles();
-    };
-
-    // Picks / notes -> festivalDataStore
-    const handlePickUpdated = (data: ProfileUpdatedPayload) => patchOrReload(data);
-    const handlePickRemoved = (_data: ProfileDeletedPayload) => reloadProfiles();
-    const handleNoteSaved = (_data: ProfileUpdatedPayload) => reloadProfiles();
-    const handlePicksUpdated = (data: ProfileUpdatedPayload) => patchOrReload(data);
-
-    // Profiles -> festivalDataStore
-    const handleProfileUpdated = (data: ProfileUpdatedPayload) => patchOrReload(data);
-    const handleProfileJoined = (_data: ProfileUpdatedPayload) => reloadProfiles();
-    const handleProfileLeft = (_data: ProfileDeletedPayload) => reloadProfiles();
-
-    // Crews -> crewStore
-    const handleCrewUpdated = (data: CrewUpdatedPayload) => reloadCrews(data?.crewId ?? data?.id);
-    const handleCrewMemberAdded = (data: CrewMemberEventPayload) => reloadCrews(data?.crewId);
-    const handleCrewMemberRemoved = (data: CrewMemberEventPayload) => reloadCrews(data?.crewId);
-
-    // A crewmate's last-synced status changed. Apply it only for the open crew, as web does.
-    const handleCrewStatusUpdated = (data: CrewStatusUpdatedPayload) => {
-      const row = data?.status;
-      if (!row) return;
-      const activeId = useCrewStore.getState().activeCrew?.id ?? null;
-      if (!activeId || row.crew_id !== activeId) return;
-      useCrewStore.getState().applyStatusUpdate(row);
-    };
-
-    // Festival / sets -> festivalDataStore full reload
-    const handleFestivalUpdated = (data: FestivalIdPayload) => {
-      if (data?.id === useFestivalDataStore.getState().currentFestivalId) reloadFestival();
-    };
-    const handleSetAdded = (_data: FestivalIdPayload) => reloadFestival();
-    const handleSetUpdated = (_data: FestivalIdPayload) => reloadFestival();
-
-    // Presence -> uiStore only (no API refetch)
-    const handlePresenceUpdate = (data: PresenceUpdatePayload) => {
-      if (data.online) {
-        setOnlineUsers(
-          data.online.map((u: PresenceUser) => ({
-            id: u.userId,
-            name: u.username,
-            avatar: u.avatarUrl,
-            status: 'online' as const,
-          })),
-        );
-      }
-    };
-
-    // Events sent while the socket was down are lost (the server keeps no
-    // buffer), so a reconnect re-reads picks and crews. The debounce coalesces
-    // these with the foreground backfill. The full festival reload is the
-    // heaviest call and lineup edits are rare: only after a long gap.
-    let connectedBefore = socket.connected;
-    let disconnectedAt: number | null = null;
-    const handleConnect = () => {
-      setConnected(true);
-      const festivalId = useFestivalDataStore.getState().currentFestivalId;
-      if (festivalId) {
-        socket.emit('join:festival', festivalId, { _v: 1 }, () => {});
-      }
-      // The active crew room join is owned by useCrewRealtime (joinRoom: true),
-      // which registers its own 'connect' handler and emits join:crew — so it is
-      // deliberately NOT emitted here (doing both would double-join per connect).
-      if (connectedBefore) {
-        reloadProfiles();
-        reloadCrews();
-        if (disconnectedAt !== null && Date.now() - disconnectedAt >= RECONNECT_FESTIVAL_RELOAD_GAP_MS) {
-          reloadFestival();
-        }
-      }
-      connectedBefore = true;
-      disconnectedAt = null;
-    };
-
-    const handleDisconnect = () => {
-      setConnected(false);
-      disconnectedAt ??= Date.now();
-    };
-
-    // ── Register listeners ─────────────────────────────────────────────
-    socket.on('pick:updated', handlePickUpdated);
-    socket.on('pick:removed', handlePickRemoved);
-    socket.on('note:saved', handleNoteSaved);
-    socket.on('picks:updated', handlePicksUpdated);
-
-    socket.on('profile:updated', handleProfileUpdated);
-    socket.on('profile:joined', handleProfileJoined);
-    socket.on('profile:left', handleProfileLeft);
-
-    socket.on('crew:updated', handleCrewUpdated);
-    socket.on('crew:member-joined', handleCrewMemberAdded);
-    socket.on('crew:member-left', handleCrewMemberRemoved);
-    socket.on('crew:status-updated', handleCrewStatusUpdated);
-
-    socket.on('festival:updated', handleFestivalUpdated);
-    socket.on('festival:set-added', handleSetAdded);
-    socket.on('festival:set-updated', handleSetUpdated);
-
-    socket.on('presence:update', handlePresenceUpdate);
-    socket.on('connect', handleConnect);
-    socket.on('disconnect', handleDisconnect);
 
     // ── AppState lifecycle (background / foreground) ───────────────────
     const handleAppStateChange = (nextAppState: AppStateStatus) => {
@@ -312,12 +122,8 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
           socket.connect();
         }
         // FOREGROUND BACKFILL: the socket was disconnected while backgrounded, so
-        // any festival/pick/crew events emitted meanwhile were missed. Fire the
-        // same debounced reloads the socket-event handlers use so state catches
-        // up automatically (debounce coalesces these with each other).
-        reloadFestival();
-        reloadProfiles();
-        reloadCrews();
+        // any festival/pick/crew events emitted meanwhile were missed.
+        backfill();
       } else if (nextAppState.match(/inactive|background/) && prev === 'active') {
         // Going to background — disconnect to save battery / bandwidth. A socket
         // mid-reconnect is not `connected` but is still `active`: stop it too, or
@@ -352,34 +158,6 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
     return () => {
       appStateSub.remove();
 
-      socket.off('pick:updated', handlePickUpdated);
-      socket.off('pick:removed', handlePickRemoved);
-      socket.off('note:saved', handleNoteSaved);
-      socket.off('picks:updated', handlePicksUpdated);
-
-      socket.off('profile:updated', handleProfileUpdated);
-      socket.off('profile:joined', handleProfileJoined);
-      socket.off('profile:left', handleProfileLeft);
-
-      socket.off('crew:updated', handleCrewUpdated);
-      socket.off('crew:member-joined', handleCrewMemberAdded);
-      socket.off('crew:member-left', handleCrewMemberRemoved);
-      socket.off('crew:status-updated', handleCrewStatusUpdated);
-
-      socket.off('festival:updated', handleFestivalUpdated);
-      socket.off('festival:set-added', handleSetAdded);
-      socket.off('festival:set-updated', handleSetUpdated);
-
-      socket.off('presence:update', handlePresenceUpdate);
-      socket.off('connect', handleConnect);
-      socket.off('disconnect', handleDisconnect);
-
-      // Cancel pending debounced reloads.
-      for (const k of Object.keys(timersSnapshot)) {
-        clearTimeout(timersSnapshot[k]);
-        delete timersSnapshot[k];
-      }
-
       // Stop any in-flight live-location sharing before tearing down the socket
       // (no ghost markers; server also auto-stops on disconnect).
       const sharingCrewId = useLiveLocationStore.getState().sharingCrewId;
@@ -388,17 +166,12 @@ export function useRealtimeSync(): UseRealtimeSyncReturn {
       }
       useLiveLocationStore.getState().stopSharing();
 
-      // Leave the crew room before tearing down (no-op if not joined).
-      const leftCrewId = useCrewStore.getState().activeCrew?.id;
-      if (socket.connected && leftCrewId) {
-        socket.emit('leave:crew', { _v: 1, crewId: leftCrewId });
-      }
-
+      // leave:crew on teardown is owned by useCrewRealtime (joinRoom: true).
       socket.disconnect();
       socketRef.current = null;
       setLiveSocket(null);
     };
-  }, [userToken, currentFestivalId, activeCrewId, setConnected, setOnlineUsers]);
+  }, [userToken, currentFestivalId, activeCrewId, setConnected, backfill]);
 
   return { connected };
 }

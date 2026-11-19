@@ -78,6 +78,28 @@ describe('email: sendEmail', () => {
     assert.equal(result, false);
   });
 
+  it('logs email:sent at info with the Resend id and type, and never the recipient, subject or body', async () => {
+    const log = createMockLog();
+    const sendMock = mock.fn(async () => ({ data: { id: 'msg-sent-1' }, error: null }));
+    const ok = await sendPasswordResetEmail({
+      to: 'private-person@example.com',
+      username: 'privateperson',
+      resetUrl: 'https://festie.test/reset?token=secret',
+      config: createMockConfig(),
+      log,
+      _client: createMockClient(sendMock),
+    });
+    assert.equal(ok, true);
+    const sent = log.info.mock.calls.filter((c: any) => c.arguments[0] === 'email:sent');
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0]!.arguments[1], { id: 'msg-sent-1', type: 'password_reset' });
+    assert.equal(log.debug.mock.callCount(), 0);
+    const logged = JSON.stringify([...log.info.mock.calls, ...log.warn.mock.calls, ...log.error.mock.calls, ...log.debug.mock.calls]);
+    assert.ok(!logged.includes('private-person'), 'the address must not be logged');
+    assert.ok(!logged.includes('Reset your Festie password'), 'the subject must not be logged');
+    assert.ok(!logged.includes('secret'), 'the body must not be logged');
+  });
+
   it('suppresses duplicate sends within the idempotency window', async () => {
     const log = createMockLog();
     const sendMock = mock.fn(async () => ({ data: { id: 'msg-1' }, error: null }));

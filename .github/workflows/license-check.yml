@@ -44,7 +44,7 @@ jobs:
         run: node scripts/ci/check-licenses.mjs --selftest
       - run: npm ci
       - name: Backend (npm) license gate
-        run: npx --yes license-checker-rseidelsohn --production --excludePrivatePackages --json | node scripts/ci/check-licenses.mjs
+        run: npx --yes license-checker-rseidelsohn@5.0.1 --production --excludePrivatePackages --json | node scripts/ci/check-licenses.mjs
       - name: Install workspace
         run: cd packages && pnpm install --frozen-lockfile
       - name: Packages (pnpm) license gate

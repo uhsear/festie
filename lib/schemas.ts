@@ -60,7 +60,7 @@ const shortText = z.string().max(1000);
 const requiredEmail = z.string().trim().min(1, 'Email is required').email('Invalid email address').max(254);
 
 /** True if `iso` (YYYY-MM-DD) is a date at least `years` years before today. */
-export function isAtLeastYearsOld(iso: string, years: number): boolean {
+function isAtLeastYearsOld(iso: string, years: number): boolean {
   const dob = new Date(`${iso}T00:00:00Z`);
   if (Number.isNaN(dob.getTime())) return false;
   const threshold = new Date(Date.UTC(dob.getUTCFullYear() + years, dob.getUTCMonth(), dob.getUTCDate()));
@@ -69,7 +69,7 @@ export function isAtLeastYearsOld(iso: string, years: number): boolean {
 
 // Anonymous sign-up source from a ?ref= link. Lower-cased; anything that does
 // not match the pattern is dropped rather than failing the sign-up.
-export const SIGNUP_REF_PATTERN = /^[a-z0-9_-]{1,40}$/;
+const SIGNUP_REF_PATTERN = /^[a-z0-9_-]{1,40}$/;
 const signupRef = z.string().trim().toLowerCase().regex(SIGNUP_REF_PATTERN).optional().catch(undefined);
 
 const dateOfBirth = z
@@ -97,7 +97,6 @@ export const registerSchema = z
     path: ['confirmPassword'],
   })
   .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
-export type RegisterInput = z.infer<typeof registerSchema>;
 
 // ── Sign in with Google and Apple (T45) ──
 const providerName = z.enum(['google', 'apple']);
@@ -105,9 +104,9 @@ const idToken = z.string().min(20).max(4096);
 const oauthNonce = z.string().min(16).max(128).optional();
 const authorizationCode = z.string().max(512).optional(); // Apple only
 
-export const oauthProviderParams = z.object({ provider: providerName });
+const oauthProviderParams = z.object({ provider: providerName });
 
-export const oauthSignInSchema = z.object({
+const oauthSignInSchema = z.object({
   idToken,
   nonce: oauthNonce,
   authorizationCode,
@@ -120,10 +119,9 @@ export const oauthSignInSchema = z.object({
     })
     .optional(),
 });
-export type OAuthSignInInput = z.infer<typeof oauthSignInSchema>;
 
 // /register minus the password: the provider is the sign-in method.
-export const oauthCompleteSchema = z
+const oauthCompleteSchema = z
   .object({
     signupToken: z.string().min(20).max(128),
     username,
@@ -132,23 +130,20 @@ export const oauthCompleteSchema = z
     ref: signupRef,
   })
   .refine((d) => isAtLeastYearsOld(d.dateOfBirth, 18), adultRule);
-export type OAuthCompleteInput = z.infer<typeof oauthCompleteSchema>;
 
-export const setPasswordSchema = z
+const setPasswordSchema = z
   .object({ newPassword: password, confirmPassword: z.string() })
   .refine((d) => d.newPassword === d.confirmPassword, {
     message: 'Passwords do not match',
     path: ['confirmPassword'],
   });
-export type SetPasswordInput = z.infer<typeof setPasswordSchema>;
 
 export const loginSchema = z.object({
   username: z.string().trim().min(1, 'Username or email required').max(254),
   password: z.string().min(1, 'Password required').max(200),
 });
-export type LoginInput = z.infer<typeof loginSchema>;
 
-export const changePasswordSchema = z
+const changePasswordSchema = z
   .object({
     currentPassword: z.string().min(1, 'Current password required'),
     newPassword: password,
@@ -158,7 +153,6 @@ export const changePasswordSchema = z
     message: 'Passwords do not match',
     path: ['confirmPassword'],
   });
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Profile & Festival Participation Schemas
@@ -177,7 +171,7 @@ const notesMap = z.record(z.string().max(100), shortText).optional();
 const allowedReminderMinutes = z.union(REMINDER_MINUTE_VALUES.map((m: any) => z.literal(m)) as any);
 const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optional();
 
-export const profileUpdateSchema = z
+const profileUpdateSchema = z
   .object({
     picks: picksMap,
     pickDeltas: pickDeltasMap,
@@ -196,23 +190,20 @@ export const profileUpdateSchema = z
     message: 'Send either picks or pickDeltas, not both',
     path: ['pickDeltas'],
   });
-export type ProfileUpdateInput = z.infer<typeof profileUpdateSchema>;
 
-export const joinFestivalSchema = z.object({
+const joinFestivalSchema = z.object({
   festivalId: identifier,
 });
-export type JoinFestivalInput = z.infer<typeof joinFestivalSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Admin Schemas
 // ════════════════════════════════════════════════════════════════════════════════
 
-export const resetPasswordSchema = z.object({
+const resetPasswordSchema = z.object({
   newPassword: password,
 });
-export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 
-export const resetPasswordPublicSchema = z.object({
+const resetPasswordPublicSchema = z.object({
   token: z
     .string()
     .regex(/^[a-f0-9]{64}$/, 'Invalid token')
@@ -220,7 +211,6 @@ export const resetPasswordPublicSchema = z.object({
   newPassword: password,
   confirmPassword: z.string().min(8).max(100),
 });
-export type ResetPasswordPublicInput = z.infer<typeof resetPasswordPublicSchema>;
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Notification & Push Schemas
@@ -238,7 +228,7 @@ const dndTime = z
   .string()
   .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Must be HH:MM (24h)')
   .nullable();
-export const notificationPrefsSchema = z
+const notificationPrefsSchema = z
   .object({
     crewUpdates: z.boolean().optional(),
     setReminders: z.boolean().optional(),
@@ -260,7 +250,6 @@ export const notificationPrefsSchema = z
     dndTimeZone: z.string().max(64).refine(isIanaTimeZone, { message: 'Invalid IANA time zone' }).nullable().optional(),
   })
   .strict();
-export type NotificationPrefsInput = z.infer<typeof notificationPrefsSchema>;
 
 export const pushTokenSchema = z.object({
   token: z.string().min(20).max(4096),
@@ -269,32 +258,27 @@ export const pushTokenSchema = z.object({
   localRemindersFestivalId: z.string().min(1).max(128).nullable().optional(),
   localRemindersCoversUntil: z.number().int().nonnegative().max(8.64e15).nullable().optional(),
 });
-export type PushTokenInput = z.infer<typeof pushTokenSchema>;
 
 // ── Additional notification schemas ──────────────────────────────
-export const deleteTokenSchema = z.object({
+const deleteTokenSchema = z.object({
   token: z.string().min(1, 'Token required').max(4096),
 });
-export type DeleteTokenInput = z.infer<typeof deleteTokenSchema>;
 
-export const markReadSchema = z.object({
+const markReadSchema = z.object({
   festivalId: z.string().max(100).optional(),
 });
-export type MarkReadInput = z.infer<typeof markReadSchema>;
 
 // ── Topic subscription schema ────────────────────────────────────
-export const topicSubscriptionSchema = z
+const topicSubscriptionSchema = z
   .record(z.string(), z.boolean())
   .refine((d) => Object.keys(d).length > 0 && Object.keys(d).length <= 10, {
     message: 'At least one topic required, max 10',
   });
-export type TopicSubscriptionInput = z.infer<typeof topicSubscriptionSchema>;
 
 // ── Account schemas ───────────────────────────────────────────────
-export const usernameChangeSchema = z.object({
+const usernameChangeSchema = z.object({
   username: z.string().trim().min(1, 'Username required').max(40),
 });
-export type UsernameChangeInput = z.infer<typeof usernameChangeSchema>;
 
 // Names reach push and email templates as well as escaped pages, so refuse markup at the door.
 const noMarkup = (s: string) => !/[<>]/.test(s);
@@ -304,7 +288,6 @@ const noMarkupMsg = 'Names cannot contain < or >';
 export const displayNameChangeSchema = z.object({
   displayName: z.string().trim().min(1, 'Display name required').max(50).refine(noMarkup, noMarkupMsg),
 });
-export type DisplayNameChangeInput = z.infer<typeof displayNameChangeSchema>;
 
 // Payment handles for settle-up deep links. All optional; an explicit empty
 // string clears the handle (stored as NULL). Handles are short identifiers, not
@@ -320,13 +303,11 @@ export const paymentHandlesSchema = z
   .refine((v) => v.venmoHandle !== undefined || v.cashappCashtag !== undefined || v.paypalHandle !== undefined, {
     message: 'At least one payment handle is required',
   });
-export type PaymentHandlesInput = z.infer<typeof paymentHandlesSchema>;
 
 // Opt-in switch for the public /u/:username share page.
 export const publicScheduleSchema = z.object({
   publicSchedule: z.boolean(),
 });
-export type PublicScheduleInput = z.infer<typeof publicScheduleSchema>;
 
 export const accountDeleteSchema = z.object({
   // Optional: a provider-only account has no password and confirms with a recent re-auth.
@@ -335,29 +316,25 @@ export const accountDeleteSchema = z.object({
   // earliest-joined active member when a choice is missing or invalid.
   crewHandover: z.array(z.object({ crewId: identifier, newOwnerId: identifier })).max(50).optional(),
 });
-export type AccountDeleteInput = z.infer<typeof accountDeleteSchema>;
 
 // A password, or a fresh token from a linked Google or Apple account.
-export const reauthSchema = z.union([
+const reauthSchema = z.union([
   z.object({ password: z.string().min(1).max(200) }),
   z.object({ provider: providerName, idToken, nonce: oauthNonce, authorizationCode }),
 ]);
-export type ReauthInput = z.infer<typeof reauthSchema>;
 
-export const forgotPasswordSchema = z.object({
+const forgotPasswordSchema = z.object({
   email: z.string().email('Valid email required').max(254),
 });
-export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
 
 export const updateEmailSchema = z.object({
   email: z.string().email('Valid email required').max(254),
   // Optional: a provider-only account has no password and confirms with a recent re-auth.
   password: z.string().min(1, 'Password confirmation required').optional(),
 });
-export type UpdateEmailInput = z.infer<typeof updateEmailSchema>;
 
 // ── Festival schemas (admin) ───────────────────────────────────────
-export const stageSchema = z.object({
+const stageSchema = z.object({
   id: z.string().max(100).optional(),
   name: z.string().min(1).max(100),
   // The shape is checked by validateFestivalIssues, which names the stage at fault.
@@ -368,12 +345,11 @@ export const stageSchema = z.object({
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
 });
-export type StageInput = z.infer<typeof stageSchema>;
 
 // An unknown platform key is dropped, not rejected, so a save that carries a newer key still works.
 const KNOWN_LINK_PLATFORMS = new Set<string>(ALLOWED_LINK_PLATFORMS);
 
-export const artistLinkSchema = z.object({
+const artistLinkSchema = z.object({
   // The artists row this element copies. The server decides what it means (resolveArtistRefs).
   id: z.string().max(100).optional(),
   name: z.string().min(1).max(300),
@@ -387,9 +363,8 @@ export const artistLinkSchema = z.object({
       ),
     ),
 });
-export type ArtistLinkInput = z.infer<typeof artistLinkSchema>;
 
-export const setSchema = z
+const setSchema = z
   .object({
     id: z.string().max(100).optional(),
     // An empty list or no artist at all is reported by validateFestivalIssues, which names the set.
@@ -413,9 +388,8 @@ export const setSchema = z
       .or(z.literal('')),
     linkUrl: z.string().max(500).optional().nullable().or(z.literal('')),
   });
-export type SetInput = z.infer<typeof setSchema>;
 
-export const daySchema = z.object({
+const daySchema = z.object({
   label: z.string().max(100).optional(),
   date: z
     .string()
@@ -423,11 +397,10 @@ export const daySchema = z.object({
     .optional(),
   sets: z.array(setSchema).optional(),
 });
-export type DayInput = z.infer<typeof daySchema>;
 
 // One billing line of the announced lineup (festivals.lineup). The server owns announcedAt and
 // makes the id when it is absent; status defaults to announced (see lib/lineup.ts normalizeLineup).
-export const lineupEntrySchema = z.object({
+const lineupEntrySchema = z.object({
   id: z.string().regex(/^[A-Za-z0-9_-]{1,100}$/).optional(),
   artists: z.array(artistLinkSchema).min(1).max(MAX_ARTISTS_PER_SET),
   displayName: z.string().max(300).optional().nullable(),
@@ -444,7 +417,6 @@ export const lineupEntrySchema = z.object({
     .optional(),
   linkedSetIds: z.array(z.string().max(100)).max(10).optional(),
 });
-export type LineupEntryInput = z.infer<typeof lineupEntrySchema>;
 
 // Optional IANA time-zone id (e.g. `America/New_York`). Anchors set status +
 // reminder fire-times in the festival's zone. Validated by attempting to
@@ -552,9 +524,8 @@ export const festivalMapConfigSchema = z
     offlineBasemap: offlineBasemapSchema.optional(),
   })
   .strict();
-export type FestivalMapConfigInput = z.infer<typeof festivalMapConfigSchema>;
 
-export const festivalCreateSchema = z.object({
+const festivalCreateSchema = z.object({
   id: z.string().max(100).optional(),
   name: z.string().min(1).max(200),
   location: z.string().max(500).optional(),
@@ -577,9 +548,8 @@ export const festivalCreateSchema = z.object({
     .nullable()
     .optional(),
 });
-export type FestivalCreateInput = z.infer<typeof festivalCreateSchema>;
 
-export const festivalUpdateSchema = festivalCreateSchema
+const festivalUpdateSchema = festivalCreateSchema
   .extend({
     // A save that drops sets carrying picks or ratings is refused with
     // CONFIRM_REMOVALS unless this is true (and the session re-authenticated).
@@ -597,11 +567,10 @@ export const festivalUpdateSchema = festivalCreateSchema
     message: 'Saving the lineup needs expectedUpdatedAt, the updatedAt you loaded.',
     path: ['expectedUpdatedAt'],
   });
-export type FestivalUpdateInput = z.infer<typeof festivalUpdateSchema>;
 
 // ── Lineup import (admin) ───────────────────────────────────────────
 // A field that is absent means "column not mapped, leave alone". An empty string means "clear".
-export const lineupImportRowSchema = z
+const lineupImportRowSchema = z
   .object({
     row: z.number().int().min(1).max(100_000), // 1-based line number in the source file
     setId: z.string().max(100).optional(), // a re-imported export matches by id first
@@ -639,7 +608,6 @@ export const lineupImportRequestSchema = z
     moveDays: z.boolean().default(false),
   })
   .strict();
-export type LineupImportRequestInput = z.infer<typeof lineupImportRequestSchema>;
 
 // ── Festival announcements (admin) ──────────────────────────────────
 // Title 80 and body 200 keep the push inside payload.ts MAX_TITLE_LENGTH and MAX_BODY_LENGTH.
@@ -671,7 +639,6 @@ export const crewCreateSchema = z.object({
   totemName: z.string().trim().max(40).optional(),
   totemEmoji: z.string().trim().max(16).optional(),
 });
-export type CrewCreateInput = z.infer<typeof crewCreateSchema>;
 
 export const crewUpdateSchema = z
   .object({
@@ -684,12 +651,10 @@ export const crewUpdateSchema = z
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
   });
-export type CrewUpdateInput = z.infer<typeof crewUpdateSchema>;
 
-export const crewJoinSchema = z.object({
+const crewJoinSchema = z.object({
   inviteCode: z.string().trim().min(4).max(12),
 });
-export type CrewJoinInput = z.infer<typeof crewJoinSchema>;
 
 // Public join-preview path param: same alphanumeric 4-12 shape the invite page enforces.
 export const crewInviteCodeParams = z.object({
@@ -698,29 +663,25 @@ export const crewInviteCodeParams = z.object({
     .trim()
     .regex(/^[a-zA-Z0-9]{4,12}$/, 'Invalid invite code'),
 });
-export type CrewInviteCodeParams = z.infer<typeof crewInviteCodeParams>;
 
 // Reform a crew into a NEW crew in the target festival (M3). Crews are
 // festival-scoped, so "reform" = create a new crew in `targetFestivalId` +
 // invite the prior roster. `:crewId` (the source crew) comes from the path.
-export const crewReformSchema = z.object({
+const crewReformSchema = z.object({
   targetFestivalId: identifier,
 });
-export type CrewReformInput = z.infer<typeof crewReformSchema>;
 
-export const crewTransferSchema = z.object({
+const crewTransferSchema = z.object({
   userId: identifier,
 });
-export type CrewTransferInput = z.infer<typeof crewTransferSchema>;
 
-export const crewAddMemberSchema = z.object({
+const crewAddMemberSchema = z.object({
   userId: identifier,
 });
-export type CrewAddMemberInput = z.infer<typeof crewAddMemberSchema>;
 
 // ── Set link schema (admin) ──────────────────────────────────────
 // https-only to avoid javascript:/data: schemes (mirrors crewPhotoAlbumSchema).
-export const setLinkSchema = z.object({
+const setLinkSchema = z.object({
   linkUrl: z
     .string()
     .url('Must be a valid URL')
@@ -732,27 +693,24 @@ export const setLinkSchema = z.object({
   // Which artist of a B2B set the link belongs to (default 0).
   artistIndex: z.number().int().min(0).max(3).optional(),
 });
-export type SetLinkInput = z.infer<typeof setLinkSchema>;
 
 // ── Artist schemas (admin) ───────────────────────────────────────
 // The artist routes check links with lib/artist-links.ts, so a raw link is only length-bounded here.
-export const artistMatchSchema = z.object({
+const artistMatchSchema = z.object({
   items: z
     .array(z.object({ name: z.string().max(300), spotify: z.string().max(500).nullable().optional() }))
     .min(1)
     .max(500),
 });
-export type ArtistMatchInput = z.infer<typeof artistMatchSchema>;
 
-export const artistCreateSchema = z.object({
+const artistCreateSchema = z.object({
   name: z.string().trim().min(1).max(300),
   // The note that tells same-name artists apart. Required when another artist has the name.
   label: z.string().max(200).optional(),
   link: z.string().max(500).optional(),
 });
-export type ArtistCreateInput = z.infer<typeof artistCreateSchema>;
 
-export const artistUpdateSchema = z.object({
+const artistUpdateSchema = z.object({
   // The artist's updatedAt the editor loaded (millisecond precision).
   expectedUpdatedAt: z.string().datetime({ offset: true }),
   changes: z
@@ -764,20 +722,18 @@ export const artistUpdateSchema = z.object({
     })
     .refine((c) => Object.values(c).some((v) => v !== undefined), 'At least one change required'),
 });
-export type ArtistUpdateInput = z.infer<typeof artistUpdateSchema>;
 
-export const artistListQuerySchema = z.object({
+const artistListQuerySchema = z.object({
   festivalId: z.string().max(100).optional(),
   q: z.string().max(100).optional(),
   limit: z.coerce.number().int().min(1).max(1000).optional(),
   // "Possible duplicates": artists with the same name key or a key one character apart, on any festival.
   duplicates: z.enum(['true']).optional(),
 });
-export type ArtistListQuery = z.infer<typeof artistListQuerySchema>;
 
 // Merge the artist in the path (the survivor) with `loserId`. Admin only, web only, behind a recent re-auth.
 const mergeSide = z.enum(['survivor', 'loser']);
-export const artistMergeSchema = z.object({
+const artistMergeSchema = z.object({
   loserId: identifier,
   // Each artist's updatedAt the editor loaded (millisecond precision).
   survivorUpdatedAt: z.string().datetime({ offset: true }),
@@ -795,7 +751,6 @@ export const artistMergeSchema = z.object({
     })
     .optional(),
 });
-export type ArtistMergeInput = z.infer<typeof artistMergeSchema>;
 
 // The artist id backfill. `run` needs a recent re-auth; the other two modes write nothing.
 export const artistBackfillSchema = z.object({
@@ -818,14 +773,13 @@ export const policyNoticeSchema = z
   .strict();
 
 // "Find Spotify links": the candidates for the artists on one festival, and the editor's picks.
-export const artistSpotifyCandidatesSchema = z.object({
+const artistSpotifyCandidatesSchema = z.object({
   festivalId: identifier,
   // Artists the editor skipped or Spotify could not match. They leave the search so the next ones reach it.
   exclude: z.array(identifier).max(1000).optional(),
 });
-export type ArtistSpotifyCandidatesInput = z.infer<typeof artistSpotifyCandidatesSchema>;
 
-export const artistSpotifyPicksSchema = z.object({
+const artistSpotifyPicksSchema = z.object({
   festivalId: identifier,
   picks: z
     .array(
@@ -842,7 +796,6 @@ export const artistSpotifyPicksSchema = z.object({
     .min(1)
     .max(200),
 });
-export type ArtistSpotifyPicksInput = z.infer<typeof artistSpotifyPicksSchema>;
 
 // Spotify backfill body. All optional: old mobile bundles post no body.
 export const spotifyBackfillSchema = z
@@ -866,7 +819,6 @@ export const spotifyBackfillSchema = z
     setIds: z.array(identifier).max(500).optional(),
   })
   .default({});
-export type SpotifyBackfillInput = z.infer<typeof spotifyBackfillSchema>;
 
 // ── Public beacon bodies (unauthenticated, rate-limited) ────────
 
@@ -912,7 +864,6 @@ export const meetingPointCreateSchema = z.object({
   // festival day. Omitted ⇒ a one-shot point (recurs_daily defaults FALSE).
   recursDaily: z.boolean().optional(),
 });
-export type MeetingPointCreateInput = z.infer<typeof meetingPointCreateSchema>;
 
 export const meetingPointUpdateSchema = z
   .object({
@@ -929,11 +880,9 @@ export const meetingPointUpdateSchema = z
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
   });
-export type MeetingPointUpdateInput = z.infer<typeof meetingPointUpdateSchema>;
 
 // 090: "I'll be there" on a meeting point. The member sets only their own tap.
 export const meetingPointComingSchema = z.object({ coming: z.boolean() });
-export type MeetingPointComingInput = z.infer<typeof meetingPointComingSchema>;
 
 // 090: the member's full set of day answers. A day left out is cleared; `days: []` clears all.
 // The route rejects a dayIndex at or past the festival's day count. A repeated dayIndex: last wins.
@@ -950,7 +899,6 @@ export const crewDaysSchema = z
   })
   // A repeated dayIndex keeps the last answer: a duplicate would collide on the primary key.
   .transform((body) => ({ days: [...new Map(body.days.map((d) => [d.dayIndex, d])).values()] }));
-export type CrewDaysInput = z.infer<typeof crewDaysSchema>;
 
 // ── Validation middleware factory ───────────────────────────────────
 export function validate(schema: z.ZodType<any>) {
@@ -1113,7 +1061,7 @@ function _applyLinkEdit(links: Record<string, string>, rawLinkUrl: any, storedLi
  * normalizeSetArtists stays for the create path.
  */
 /** A set's billed name: the sent value, or the stored one when the payload leaves it out. */
-export function resolveSetDisplayName(set: any, storedSet: any): string | null {
+function resolveSetDisplayName(set: any, storedSet: any): string | null {
   if (set.displayName === undefined) return storedSet?.displayName || null;
   return sanitizeString(set.displayName || '', 300) || null;
 }
@@ -1302,7 +1250,6 @@ export const crewHomeBaseSchema = z.object({
   // T54: undefined keeps the stored Plan B; null or '' clears it.
   planB: z.string().trim().max(140).optional().nullable(),
 });
-export type CrewHomeBaseInput = z.infer<typeof crewHomeBaseSchema>;
 
 // M6 Crew Photo Wall (Phase 1, link-out only). A single shared-album URL per
 // crew (e.g. Google Photos / Apple shared album). https-only and length-bounded
@@ -1319,11 +1266,10 @@ export const crewPhotoAlbumSchema = z.object({
     .optional()
     .or(z.literal('')),
 });
-export type CrewPhotoAlbumInput = z.infer<typeof crewPhotoAlbumSchema>;
 
 // A schedule poll's set link for one option. The server stores these
 // index-aligned with `options` and makes the winner a meeting point on close.
-export const pollSetRefSchema = z
+const pollSetRefSchema = z
   .object({
     setId: z.string().trim().min(1).max(100),
     // Mirrors the option text (max 200); the close route trims it to the meeting-point label limit.
@@ -1332,9 +1278,8 @@ export const pollSetRefSchema = z
     meetAt: z.string().datetime().nullable(),
   })
   .strip();
-export type PollSetRefInput = z.infer<typeof pollSetRefSchema>;
 
-export const pollCreateSchema = z
+const pollCreateSchema = z
   .object({
     question: z.string().trim().min(1, 'Question required').max(500),
     options: z.array(z.string().trim().min(1).max(200)).min(2).max(4),
@@ -1346,10 +1291,9 @@ export const pollCreateSchema = z
     message: 'setRefs must match options',
     path: ['setRefs'],
   });
-export type PollCreateInput = z.infer<typeof pollCreateSchema>;
 
 // Exactly one field: optionIndex (old clients) or optionIndexes (an empty array takes the vote back).
-export const pollVoteSchema = z
+const pollVoteSchema = z
   .object({
     optionIndex: z.number().int().min(0).max(3).optional(),
     optionIndexes: z.array(z.number().int().min(0).max(3)).max(4).optional(),
@@ -1358,17 +1302,15 @@ export const pollVoteSchema = z
     message: 'Send optionIndex or optionIndexes',
     path: ['optionIndexes'],
   });
-export type PollVoteInput = z.infer<typeof pollVoteSchema>;
 
 // ── Crew packing-board schemas (M2 logistics) ───────────────────────
-export const packingCreateSchema = z.object({
+const packingCreateSchema = z.object({
   label: z.string().trim().min(1, 'Label required').max(200),
   broughtBy: z.string().trim().max(100).optional().nullable(),
   claimed: z.boolean().optional(),
 });
-export type PackingCreateInput = z.infer<typeof packingCreateSchema>;
 
-export const packingUpdateSchema = z
+const packingUpdateSchema = z
   .object({
     label: z.string().trim().min(1).max(200).optional(),
     broughtBy: z.string().trim().max(100).optional().nullable(),
@@ -1378,12 +1320,10 @@ export const packingUpdateSchema = z
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
   });
-export type PackingUpdateInput = z.infer<typeof packingUpdateSchema>;
 
-export const packingBatchSchema = z.object({
+const packingBatchSchema = z.object({
   labels: z.array(z.string().trim().min(1).max(200)).min(1).max(30),
 });
-export type PackingBatchInput = z.infer<typeof packingBatchSchema>;
 
 // ── Crew member status schema (M5: on-my-way / ETA) ─────────────────
 // A last-synced, degraded-sync snapshot the member set (often offline) — NOT
@@ -1406,7 +1346,7 @@ const crewStatusPosition = z
   })
   .strip();
 
-export const crewStatusSchema = z
+const crewStatusSchema = z
   .object({
     status: z.enum(['on-my-way', 'here', 'delayed', 'at-camp', 'at-stage', 'break', 'lost']).optional().nullable(),
     targetMeetingPointId: z.string().trim().max(100).optional().nullable(),
@@ -1417,7 +1357,6 @@ export const crewStatusSchema = z
     capturedAt: z.string().datetime().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: 'At least one field required' });
-export type CrewStatusInput = z.infer<typeof crewStatusSchema>;
 
 // ── Live Location + SOS schemas (ephemeral GPS relay + safety SOS) ──
 // Live location is EPHEMERAL: it travels only over Socket.IO to the crew room
@@ -1446,7 +1385,7 @@ const liveCoord = z
   })
   .strip();
 
-export const locationShareSchema = z
+const locationShareSchema = z
   .object({
     _v: z.number().int().min(1).default(1),
     crewId: z.string().min(1).max(100),
@@ -1458,9 +1397,8 @@ export const locationShareSchema = z
     expiresAt: z.string().datetime().optional(),
   })
   .strip();
-export type LocationShareInput = z.infer<typeof locationShareSchema>;
 
-export const locationUpdateSchema = z
+const locationUpdateSchema = z
   .object({
     _v: z.number().int().min(1).default(1),
     crewId: z.string().min(1).max(100),
@@ -1480,15 +1418,13 @@ export const locationUpdateSchema = z
     capturedAt: z.string().datetime(),
   })
   .strip();
-export type LocationUpdateInput = z.infer<typeof locationUpdateSchema>;
 
-export const locationStopSchema = z
+const locationStopSchema = z
   .object({
     _v: z.number().int().min(1).default(1),
     crewId: z.string().min(1).max(100),
   })
   .strip();
-export type LocationStopInput = z.infer<typeof locationStopSchema>;
 
 // T41: one background fix posted over HTTP (POST /crews/:crewId/live-location),
 // because a locked phone has no socket. crewId comes from the path. expiresAt is
@@ -1499,16 +1435,14 @@ export const liveLocationFixSchema = liveCoord
     expiresAt: z.string().datetime(),
   })
   .strip();
-export type LiveLocationFixInput = z.infer<typeof liveLocationFixSchema>;
 
 // Late-joiner snapshot request (Redis-backed); handled by location:sync in routes/socket.ts.
-export const locationSyncSchema = z
+const locationSyncSchema = z
   .object({
     _v: z.number().int().min(1).default(1),
     crewId: z.string().min(1).max(100),
   })
   .strip();
-export type LocationSyncInput = z.infer<typeof locationSyncSchema>;
 
 // SOS raise: a member presses SOS. `message` is a short capped note; `position`
 // is the SINGLE intentional exception to ephemerality — it may be attached to
@@ -1527,17 +1461,14 @@ export const sosRaiseSchema = z
     position: sosPositionSchema.optional(),
   })
   .strip();
-export type SosRaiseInput = z.infer<typeof sosRaiseSchema>;
 
 // SOS clear: the raiser ("I'm safe") or any crew member dismisses an SOS. The
 // actor is req.user; the crew is the path param; `raiserId` names whose SOS to
 // clear and defaults to the caller.
 export const sosClearSchema = z.object({ raiserId: z.string().trim().min(1).max(64).optional() }).strip();
-export type SosClearInput = z.infer<typeof sosClearSchema>;
 
 // SOS seen: a member acks that they saw `raiserId`'s active SOS.
 export const sosSeenSchema = z.object({ raiserId: z.string().trim().min(1).max(64) }).strip();
-export type SosSeenInput = z.infer<typeof sosSeenSchema>;
 
 // Check-in timer: if the member does not tap "I'm OK" within `minutes`, the crew
 // gets an SOS. `position` is the same coarse one-shot fix an SOS may carry.
@@ -1547,10 +1478,9 @@ export const checkinStartSchema = z
     position: sosPositionSchema.optional(),
   })
   .strip();
-export type CheckinStartInput = z.infer<typeof checkinStartSchema>;
 
 // ── Crew carpool / ride-board schemas (M2 logistics) ────────────────
-export const rideCreateSchema = z.object({
+const rideCreateSchema = z.object({
   driver: z.string().trim().max(100).optional().nullable(),
   seats: z.number().int().min(0).max(99).optional().nullable(),
   departFrom: z.string().trim().max(200).optional().nullable(),
@@ -1559,9 +1489,8 @@ export const rideCreateSchema = z.object({
   direction: z.enum(['to_festival', 'home']).optional().nullable(),
   departTime: z.string().datetime().optional().nullable(),
 });
-export type RideCreateInput = z.infer<typeof rideCreateSchema>;
 
-export const rideUpdateSchema = z
+const rideUpdateSchema = z
   .object({
     driver: z.string().trim().max(100).optional().nullable(),
     seats: z.number().int().min(0).max(99).optional().nullable(),
@@ -1574,32 +1503,27 @@ export const rideUpdateSchema = z
   .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
     message: 'At least one field required',
   });
-export type RideUpdateInput = z.infer<typeof rideUpdateSchema>;
 
 // ── Refresh Token schema ────────────────────────────────────────
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1),
 });
-export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
 
 // ── Rating schemas ──────────────────────────────────────────────
-export const ratingCreateSchema = z.object({
+const ratingCreateSchema = z.object({
   rating: z.number().int().min(1).max(5),
   note: z.string().max(500).optional(),
 });
-export type RatingCreateInput = z.infer<typeof ratingCreateSchema>;
 
 // null clears the mark (back to unknown).
 export const caughtUpdateSchema = z.object({
   caught: z.boolean().nullable(),
 });
-export type CaughtUpdateInput = z.infer<typeof caughtUpdateSchema>;
 
 // crewId picks which of the requester's crews the wrap reports on.
 export const wrapQuery = z.object({
   crewId: identifier.optional(),
 });
-export type WrapQueryInput = z.infer<typeof wrapQuery>;
 
 // ── Expense schemas ─────────────────────────────────────────────
 // Keep in sync with CREW_CURRENCIES in packages/shared/src/constants/config.ts
@@ -1608,16 +1532,15 @@ export type WrapQueryInput = z.infer<typeof wrapQuery>;
 // code keep it, and every read path still accepts any string.
 export const CREW_CURRENCIES = ['USD'] as const;
 
-export const expenseShareSchema = z.object({
+const expenseShareSchema = z.object({
   userId: z.string().min(1).max(100),
   cents: z.number().int().positive().max(9_999_999_999),
 });
-export type ExpenseShareInput = z.infer<typeof expenseShareSchema>;
 
 // Column is NUMERIC(10,2) with CHECK (amount > 0): below 0.01 rounds to 0, above 99,999,999.99 overflows.
 const expenseAmount = z.number().min(0.01).max(99_999_999.99);
 
-export const expenseCreateSchema = z
+const expenseCreateSchema = z
   .object({
     description: z.string().min(1).max(200),
     amount: expenseAmount,
@@ -1657,39 +1580,31 @@ export const expenseCreateSchema = z
       ctx.addIssue({ code: 'custom', path: ['shares'], message: 'Shares must add up to the total.' });
     }
   });
-export type ExpenseCreateInput = z.infer<typeof expenseCreateSchema>;
 
 // PUT is a full replacement: the edit form sends every field, so it reuses the
 // create schema (one validation path, last-write-wins offline replay).
-export const expenseUpdateSchema = expenseCreateSchema;
-export type ExpenseUpdateInput = z.infer<typeof expenseUpdateSchema>;
+const expenseUpdateSchema = expenseCreateSchema;
 
-export const expenseCurrencySchema = z.object({ currency: z.enum(CREW_CURRENCIES) });
-export type ExpenseCurrencyInput = z.infer<typeof expenseCurrencySchema>;
+const expenseCurrencySchema = z.object({ currency: z.enum(CREW_CURRENCIES) });
 
-export const expenseConfirmSchema = z.object({ received: z.boolean() });
-export type ExpenseConfirmInput = z.infer<typeof expenseConfirmSchema>;
+const expenseConfirmSchema = z.object({ received: z.boolean() });
 
 // `userId` is the member who owes the caller.
-export const expenseRemindSchema = z.object({ userId: z.string().min(1).max(100) });
-export type ExpenseRemindInput = z.infer<typeof expenseRemindSchema>;
+const expenseRemindSchema = z.object({ userId: z.string().min(1).max(100) });
 
 // ── Admin bulk schemas ──────────────────────────────────────────
 export const adminBulkDeactivateSchema = z.object({
   userIds: z.array(z.string().min(1)).min(1),
 });
-export type AdminBulkDeactivateInput = z.infer<typeof adminBulkDeactivateSchema>;
 
-export const adminBulkArchiveSchema = z.object({
+const adminBulkArchiveSchema = z.object({
   festivalIds: z.array(z.string().min(1)).min(1),
 });
-export type AdminBulkArchiveInput = z.infer<typeof adminBulkArchiveSchema>;
 
 // ── Admin role schema ───────────────────────────────────────────
-export const adminAddRoleSchema = z.object({
+const adminAddRoleSchema = z.object({
   role: z.string().min(1).max(50),
 });
-export type AdminAddRoleInput = z.infer<typeof adminAddRoleSchema>;
 
 // ── Pagination query schema ────────────────────────────────────
 export const paginationQuery = z.object({
@@ -1697,7 +1612,6 @@ export const paginationQuery = z.object({
   cursor: z.string().refine((v) => !v.includes('\u0000'), 'Invalid cursor').optional(),
   limit: z.coerce.number().int().min(1).max(MAX_PUBLIC_PAGE_SIZE).default(DEFAULT_PAGE_SIZE),
 });
-export type PaginationQueryInput = z.infer<typeof paginationQuery>;
 
 // ── Admin audit query schema ──────────────────────────────────
 const validDateString = z.string().refine((v) => !isNaN(new Date(v).getTime()), 'Must be a valid date string');
@@ -1719,113 +1633,94 @@ export const adminAuditQuery = z.object({
   actor: z.string().trim().max(100).optional(),
   user: z.string().trim().max(100).optional(),
 });
-export type AdminAuditQueryInput = z.infer<typeof adminAuditQuery>;
 
 // ── Admin analytics query schema ──────────────────────────────
 export const adminAnalyticsQuery = z.object({
   festivalId: z.string().trim().min(1).max(100).optional(),
 });
-export type AdminAnalyticsQueryInput = z.infer<typeof adminAnalyticsQuery>;
 
 // ── Admin sign-up ref counts query schema ─────────────────────
 export const adminRefCountsQuery = z.object({
   days: z.coerce.number().int().min(1).max(365).default(30),
 });
-export type AdminRefCountsQueryInput = z.infer<typeof adminRefCountsQuery>;
 
 // ── Admin user search query schema ────────────────────────────
-export const adminUserSearchQuery = z.object({
+const adminUserSearchQuery = z.object({
   search: z.string().trim().max(200).optional(),
 });
-export type AdminUserSearchQueryInput = z.infer<typeof adminUserSearchQuery>;
 
 // ── Festival detail depth query schema ────────────────────────
 export const festivalDepthQuery = z.object({
   depth: z.coerce.number().int().min(0).max(2).optional(),
 });
-export type FestivalDepthQueryInput = z.infer<typeof festivalDepthQuery>;
 
 // ── Festival delete query schema ──────────────────────────────
-export const festivalDeleteQuery = z.object({
+const festivalDeleteQuery = z.object({
   hard: z.enum(['true', 'false']).optional(),
 });
-export type FestivalDeleteQueryInput = z.infer<typeof festivalDeleteQuery>;
 
 // ── Crew search query schema ──────────────────────────────────
-export const crewUserSearchQuery = z.object({
+const crewUserSearchQuery = z.object({
   q: z.string().trim().max(100).optional(),
 });
-export type CrewUserSearchQueryInput = z.infer<typeof crewUserSearchQuery>;
 
 // ── Crew list query schema ────────────────────────────────────
-export const crewListQuery = z.object({
+const crewListQuery = z.object({
   festivalId: z.string().max(100).optional(),
 });
-export type CrewListQueryInput = z.infer<typeof crewListQuery>;
 
 // ── Expense settle schema (extended with amount) ──────────────
-export const expenseSettleFullSchema = z.object({
+const expenseSettleFullSchema = z.object({
   toUserId: z.string().min(1),
   amount: expenseAmount,
 });
-export type ExpenseSettleFullInput = z.infer<typeof expenseSettleFullSchema>;
 
 // ── Route param schemas ────────────────────────────────────────
 export const crewIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
 });
-export type CrewIdParams = z.infer<typeof crewIdParams>;
 
-export const crewIdExpenseIdParams = z.object({
+const crewIdExpenseIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
   expenseId: z.string().min(1, 'Expense ID required').max(100),
 });
-export type CrewIdExpenseIdParams = z.infer<typeof crewIdExpenseIdParams>;
 
-export const crewIdPollIdParams = z.object({
+const crewIdPollIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
   pollId: z.string().min(1, 'Poll ID required').max(100),
 });
-export type CrewIdPollIdParams = z.infer<typeof crewIdPollIdParams>;
 
 export const crewIdMpIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
   mpId: z.string().min(1, 'Meeting point ID required').max(100),
 });
-export type CrewIdMpIdParams = z.infer<typeof crewIdMpIdParams>;
 
 export const crewIdUserIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
   userId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/, 'Invalid user ID'),
 });
-export type CrewIdUserIdParams = z.infer<typeof crewIdUserIdParams>;
 
-export const crewIdItemIdParams = z.object({
+const crewIdItemIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
   itemId: z.string().min(1, 'Item ID required').max(100),
 });
-export type CrewIdItemIdParams = z.infer<typeof crewIdItemIdParams>;
 
-export const setIdParams = z.object({
+const setIdParams = z.object({
   setId: z.string().min(1, 'Set ID required').max(100),
 });
-export type SetIdParams = z.infer<typeof setIdParams>;
 
-export const crewIdFestivalIdParams = z.object({
+const crewIdFestivalIdParams = z.object({
   crewId: z.string().min(1, 'Crew ID required').max(100),
   festivalId: z.string().min(1, 'Festival ID required').max(100),
 });
-export type CrewIdFestivalIdParams = z.infer<typeof crewIdFestivalIdParams>;
 
 export const festivalIdParams = z.object({
   festivalId: z.string().min(1, 'Festival ID required').max(100),
 });
-export type FestivalIdParams = z.infer<typeof festivalIdParams>;
 
-export const genericIdParams = z.object({
+const genericIdParams = z.object({
   id: z.string().min(1, 'ID required').max(100),
 });
-export type GenericIdParams = z.infer<typeof genericIdParams>;
 
 const idUserIdParams = z.object({
   id: z.string().min(1, 'ID required').max(100),
@@ -1837,16 +1732,14 @@ const idRoleParams = z.object({
   role: z.string().trim().toLowerCase().pipe(z.enum(['admin', 'user'])),
 });
 
-export const alsoPickedParams = z.object({
+const alsoPickedParams = z.object({
   festivalId: identifier,
   setId: identifier,
 });
-export type AlsoPickedParams = z.infer<typeof alsoPickedParams>;
 
-export const profileIdParams = z.object({
+const profileIdParams = z.object({
   id: z.string().min(1, 'Profile ID required').max(100),
 });
-export type ProfileIdParams = z.infer<typeof profileIdParams>;
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Bundled schemas export (preserves the original `schemas` namespace for

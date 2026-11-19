@@ -3,7 +3,7 @@ import { createRequire } from 'node:module';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-// Every vaul drawer becomes a centred dialog at lg (DetailPanel, IOSInstallSheet). vaul's ::after
+// Every vaul drawer becomes a centred dialog at lg (DetailPanel, IOSInstallDrawer). vaul's ::after
 // overscroll strip then hangs below the dialog as a blank tail (desktop report, 2026-10-29).
 // vitest runs from packages/web; jsdom gives import.meta.url a non-file scheme.
 const themeCss = readFileSync(resolve(process.cwd(), 'src/styles/theme.css'), 'utf8');

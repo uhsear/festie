@@ -4,10 +4,6 @@
 interface Window {
   __fs?: unknown;
   __fms?: unknown;
-  __festieQueue?: {
-    queueMutation?: (args: unknown) => Promise<unknown>;
-    processQueue?: () => Promise<unknown>;
-  };
   __festieInstallPrompt?: BeforeInstallPromptEvent | null;
   // Safari/iOS-only standalone flag used by usePushNotifications.
   navigator: Navigator & { standalone?: boolean };

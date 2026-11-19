@@ -146,7 +146,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 
 | Name | Path | What it does | Example caller |
 |---|---|---|---|
-| `formatTime` | `packages/shared/src/utils/format.ts:64` | Turns an HH:MM string into a 12-hour label for the UI. | `packages/web/src/components/account/NotificationPrefsSection.tsx:44` |
+| `formatTime` | `packages/shared/src/utils/format.ts:64` | Turns an HH:MM string into a 12-hour label for the UI. | `packages/web/src/components/account/NotificationSection.tsx:47` |
 | `formatClock12 (backend)` | `lib/time-zone.ts:96` | Backend 12-hour clock label for emails, reminders and public pages (mirror of shared formatTime). | `lib/reminder-scheduler.ts:18` |
 | `scheduleFormat helpers` | `packages/shared/src/utils/scheduleFormat.ts:23` | Formats countdowns, durations and start-time order for schedule views and images. | `packages/shared/src/utils/myDay.ts:15` |
 | `meetAtFromWallInput / meetAtToWallInput / meetingTimeDisplay` | `packages/shared/src/utils/meetingTime.ts:132` | Converts between festival wall time inputs and stored ISO meet-at times. | `packages/web/src/components/crew/MeetingPointsTab.tsx:337` |

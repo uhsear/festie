@@ -44,7 +44,7 @@
     "test:visual:update": "playwright test tests/e2e/visual-regression.spec.ts --project=chromium --update-snapshots",
     "test:visual:auth": "playwright test --project=visreg-auth",
     "test:visual:auth:update": "playwright test --project=visreg-auth --update-snapshots",
-    "depcruise": "depcruise \"lib/**/*.ts\" \"routes/**/*.ts\" server.ts --config config/dependency-cruiser.cjs",
+    "depcruise": "depcruise \"lib/**/*.ts\" \"routes/**/*.ts\" server.ts --config config/dependency-cruiser.cjs && depcruise packages/web/src --config config/dependency-cruiser.cjs --exclude \"/.expo/|/vendor/\" --ts-config packages/web/tsconfig.app.json && depcruise packages/shared/src --config config/dependency-cruiser.cjs --exclude \"/.expo/|/vendor/\" --ts-config packages/shared/tsconfig.json && depcruise packages/mobile --config config/dependency-cruiser.cjs --exclude \"/.expo/|/vendor/\" --ts-config packages/mobile/tsconfig.json",
     "knip": "knip",
     "syncpack": "syncpack lint"
   },

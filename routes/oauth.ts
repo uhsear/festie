@@ -45,7 +45,7 @@ interface PendingSignup {
 }
 
 /** The public client settings of each configured provider; never a key or secret. */
-export function publicProviders(config: any) {
+function publicProviders(config: any) {
   return {
     google: config.OAUTH_GOOGLE_ENABLED
       ? { webClientId: config.GOOGLE_WEB_CLIENT_ID, iosClientId: config.GOOGLE_IOS_CLIENT_ID || null }
@@ -59,7 +59,7 @@ export function publicProviders(config: any) {
 }
 
 /** A username suggestion only: the given name, else the email local part. */
-export function usernameBase(name: string | null, email: string | null): string {
+function usernameBase(name: string | null, email: string | null): string {
   const source = name || (email ? email.split('@')[0] : '') || '';
   const base = source.replace(/[^A-Za-z0-9_-]/g, '').slice(0, 30);
   return base.length >= 2 ? base : 'festie-fan';
