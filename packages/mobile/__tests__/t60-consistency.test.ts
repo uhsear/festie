@@ -19,10 +19,10 @@ describe('T60 consistency', () => {
     expect(src).not.toContain('"Sign up"');
   });
   it('crew-plan uses the shared Wrap label', () => {
-    expect(read('app/crew-plan.tsx')).toContain('COPY.wrap.open');
+    expect(code('app/crew-plan.tsx')).toContain('COPY.wrap.open');
   });
   it('grid starts a festival load when a deep link lands before the catalogue', () => {
-    expect(code('app/grid.tsx')).toMatch(/!currentFestival && festivals\.length === 0 && !isLoading && !error\)\s*\{\s*loadFestivals\(\)/);
+    expect(code('app/grid.tsx')).toMatch(/\bif \(!currentFestival && festivals\.length === 0 && !isLoading && !error\)\s*\{\s*loadFestivals\(\)/);
   });
   it('only AppSwitch imports Switch from react-native', () => {
     const offenders = [...walk('app'), ...walk('components')].filter((f) => {
