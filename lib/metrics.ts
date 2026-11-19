@@ -284,7 +284,9 @@ function startMetricsSampler(metrics: any, { pool, io }: any = {}, intervalMs = 
       if (io && io.engine && typeof io.engine.clientsCount === 'number') {
         metrics.socketGauge.set(io.engine.clientsCount);
       }
-    } catch { /* ignore sampler errors */ }
+    } catch (err: any) {
+      log.warn('pg/socket gauge sampler failed', { error: err?.message });
+    }
   };
   sample();
   const handle = setInterval(sample, intervalMs);
@@ -352,7 +354,9 @@ async function startReengagementQueueSampler(
         bullQueue.getDelayedCount(),
       ]);
       metrics.reengagementQueueDepthGauge.set(waiting + delayed);
-    } catch { /* ignore sampler errors */ }
+    } catch (err: any) {
+      log.warn('reengagement queue depth sampler failed', { error: err?.message });
+    }
   };
   await sample();
   const handle = setInterval(sample, intervalMs);
