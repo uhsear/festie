@@ -100,7 +100,7 @@ function mount(): () => void {
   h.effects.length = 0;
   const result = render();
   expect(result).toEqual({ connected: h.ui.connected });
-  const cleanup = h.effects[0]();
+  const cleanup = h.effects[0]!();
   return typeof cleanup === 'function' ? cleanup : () => {};
 }
 
@@ -153,7 +153,7 @@ describe('useRealtimeSync: connection gating', () => {
 
   it('routes a revoked session to the login screen', () => {
     mount();
-    h.useRevocationRealtime.mock.calls[0][0].onSessionRevoked();
+    h.useRevocationRealtime.mock.calls[0]![0].onSessionRevoked();
     expect(h.replace).toHaveBeenCalledWith('/(auth)/login');
   });
 
@@ -310,7 +310,7 @@ describe('useRealtimeSync: AppState lifecycle', () => {
     socket.connected = true;
     h.live.sharingCrewId = 'c1';
     mount();
-    h.appStateHandlers[0]('background');
+    h.appStateHandlers[0]!('background');
     expect(socket.emit).toHaveBeenCalledWith('location:stop', { _v: 1, crewId: 'c1' });
     expect(h.live.stopSharing).toHaveBeenCalledTimes(1);
     expect(socket.emit).toHaveBeenCalledWith('leave:festival');
@@ -323,7 +323,7 @@ describe('useRealtimeSync: AppState lifecycle', () => {
     socket.active = true;
     h.live.sharingCrewId = 'c1';
     mount();
-    h.appStateHandlers[0]('inactive');
+    h.appStateHandlers[0]!('inactive');
     expect(h.live.stopSharing).toHaveBeenCalledTimes(1);
     expect(socket.emit).not.toHaveBeenCalled();
     expect(socket.disconnect).toHaveBeenCalledTimes(1);
@@ -331,8 +331,8 @@ describe('useRealtimeSync: AppState lifecycle', () => {
 
   it('reconnects and backfills all three stores when returning to the foreground', () => {
     mount();
-    h.appStateHandlers[0]('background');
-    h.appStateHandlers[0]('active');
+    h.appStateHandlers[0]!('background');
+    h.appStateHandlers[0]!('active');
     expect(socket.connect).toHaveBeenCalledTimes(1);
     vi.advanceTimersByTime(300);
     expect(h.festival.selectFestival).toHaveBeenCalledWith('f1');
@@ -343,14 +343,14 @@ describe('useRealtimeSync: AppState lifecycle', () => {
   it('does not reconnect an already-active socket on foreground', () => {
     socket.active = true;
     mount();
-    h.appStateHandlers[0]('background');
-    h.appStateHandlers[0]('active');
+    h.appStateHandlers[0]!('background');
+    h.appStateHandlers[0]!('active');
     expect(socket.connect).not.toHaveBeenCalled();
   });
 
   it('ignores an active event when the app was already active', () => {
     mount();
-    h.appStateHandlers[0]('active');
+    h.appStateHandlers[0]!('active');
     vi.advanceTimersByTime(300);
     expect(socket.connect).not.toHaveBeenCalled();
     expect(h.festival.selectFestival).not.toHaveBeenCalled();

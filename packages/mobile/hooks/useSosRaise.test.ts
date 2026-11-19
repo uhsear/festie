@@ -33,7 +33,7 @@ const { useSosRaise } = await import('./useSosRaise');
 
 const fix = { latitude: 1, longitude: 2, accuracy: 5 };
 type Button = { text: string; style?: string; onPress?: () => void };
-const sendButton = (call = 0): Button => (h.alert.mock.calls[call][2] as Button[]).find((b) => b.text === 'Send SOS')!;
+const sendButton = (call = 0): Button => (h.alert.mock.calls[call]![2] as Button[]).find((b) => b.text === 'Send SOS')!;
 const settled = () => vi.waitFor(() => expect(h.setRaising).toHaveBeenLastCalledWith(false));
 
 beforeEach(() => {
@@ -47,7 +47,7 @@ describe('useSosRaise', () => {
   it('confirmRaise opens a destructive confirm and sends nothing until the user accepts', () => {
     useSosRaise('c1').confirmRaise();
     expect(h.alert).toHaveBeenCalledTimes(1);
-    const buttons = h.alert.mock.calls[0][2] as Button[];
+    const buttons = h.alert.mock.calls[0]![2] as Button[];
     expect(buttons.find((b) => b.text === 'Cancel')).toMatchObject({ style: 'cancel' });
     expect(sendButton()).toMatchObject({ style: 'destructive' });
     expect(h.raiseSos).not.toHaveBeenCalled();
