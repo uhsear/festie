@@ -21,9 +21,9 @@ vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: mockToast }),
 }));
 let identities: { hasPassword: boolean; identities: { provider: string }[] } | undefined;
-vi.mock('../../lib/useIdentities', () => ({ useIdentities: () => ({ data: identities }) }));
+vi.mock('../../hooks/useIdentities', () => ({ useIdentities: () => ({ data: identities }) }));
 const mockAsk = vi.fn();
-vi.mock('../../lib/useReauthPrompt', () => ({ useReauthPrompt: () => ({ ask: mockAsk, reauthDialog: null }) }));
+vi.mock('../../hooks/useReauthPrompt', () => ({ useReauthPrompt: () => ({ ask: mockAsk, reauthDialog: null }) }));
 const mockWithReauth = vi.fn();
 vi.mock('@festie/shared/services/admin', () => ({
   withReauth: (run: () => Promise<unknown>, ask: unknown) => mockWithReauth(run, ask),

@@ -158,7 +158,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | `resolveFestivalTimeZone` | `packages/shared/src/utils/festivalTime.ts:42` | Returns the festival valid IANA zone or undefined for device-local. | `packages/web/src/components/crew/ActivityTab.tsx:31` |
 | `zonedWallTimeToMs (shared)` | `packages/shared/src/utils/setStatus.ts:127` | DST-safe epoch ms for a date string and time in an IANA zone. | `packages/shared/src/utils/offlineReminder.ts:57` |
 | `zonedWallTimeToMs (backend)` | `lib/time-zone.ts:44` | Backend mirror taking year, month, day, hour, minute, zone; returns NaN on bad input. No parity test yet. | `lib/reminder-scheduler.ts:73` |
-| `festivalStartMinutes / setMinuteRange` | `packages/shared/src/utils/setStatus.ts:13` | Minutes from the logical day midnight; starts before 06:00 count as after midnight and ends roll forward. | `packages/web/src/features/TimelineGrid.tsx:181` |
+| `festivalStartMinutes / setMinuteRange` | `packages/shared/src/utils/setStatus.ts:13` | Minutes from the logical day midnight; starts before 06:00 count as after midnight and ends roll forward. | `packages/web/src/components/features/TimelineGrid.tsx:181` |
 | `FESTIVAL_DAY_START_HOUR / startsAfterMidnight` | `packages/shared/src/utils/setStatus.ts:6` | The 06:00 day boundary constant and an after-midnight test for a start time. | `packages/web/src/components/admin/SetEditor.tsx:279` |
 | `festivalStartMinutes / setMinuteRange (backend)` | `lib/time-zone.ts:73` | Backend mirror, parity-tested against shared in tests/time-zone.test.ts. | `lib/festival-page.ts:64` |
 | `getSetTimeBounds / isSetScheduled / isAfterMidnight` | `packages/shared/src/utils/setStatus.ts:164` | Epoch bounds for a set from its day and zone; checks the set dayIndex is a real day. | `packages/web/src/components/crew/SchedulePollComposer.tsx:129` |
@@ -271,7 +271,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | Name | Path | What it does | Example caller |
 |---|---|---|---|
 | `useToast` | `packages/web/src/lib/toastContext.tsx:144` | toast(msg,type), toastError(err,fallback), toastUndo. | `packages/web/src/components/crew/HomeBaseCard.tsx:33` |
-| `useUndoNotifier` | `packages/web/src/lib/useUndoNotifier.ts` | Adapts the toast host to the shared pick hooks. | `packages/web/src/components/features/SetCard.tsx:71` |
+| `useUndoNotifier` | `packages/web/src/hooks/useUndoNotifier.ts` | Adapts the toast host to the shared pick hooks. | `packages/web/src/components/features/SetCard.tsx:71` |
 | `useUndoableRemove (web wrapper)` | `packages/web/src/components/crew/useUndoableRemove.ts` | One-tap remove with Undo toast; logic lives in the shared hook. | `packages/web/src/components/crew/PackingTab.tsx:64` |
 | `useUIStore.showToast / Toaster` | `packages/mobile/components/Toaster.tsx` | Toast queue rendered by Toaster. Call useUIStore.getState().showToast(msg,{kind,onUndo}). | `packages/mobile/components/AccountDataSection.tsx:32` |
 | `useUndoableRemove` | `packages/mobile/hooks/useUndoableRemove.ts` | One-tap remove with an Undo toast. It hides the row at once and sends the delete after the shared undo window. | `packages/mobile/components/CrewMeetingPoints.tsx:100` |

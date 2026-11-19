@@ -6,7 +6,7 @@ import { useMyPick, useMyNote, usePickActions, usePickSync, usePickClear, useSet
 import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, isAfterMidnight, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { useSetStatus } from '@/hooks/useSetStatus';
-import { useUndoNotifier } from '@/lib/useUndoNotifier';
+import { useUndoNotifier } from '@/hooks/useUndoNotifier';
 import { useHaptics } from '@/hooks/useHaptics';
 import { cn } from '@/lib/utils';
 import LiveBadge from './LiveBadge';

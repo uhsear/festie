@@ -14,7 +14,7 @@ vi.mock('@festie/shared/services', async (orig) => ({
   mergeArtists: (...a: unknown[]) => mergeArtists(...a),
 }));
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast, toastError: vi.fn() }) }));
-vi.mock('../../lib/useReauthPrompt', () => ({ useReauthPrompt: () => ({ askPassword, reauthDialog: null }) }));
+vi.mock('../../hooks/useReauthPrompt', () => ({ useReauthPrompt: () => ({ askPassword, reauthDialog: null }) }));
 
 import { ApiClientError } from '@festie/shared/services/api';
 import ArtistMerge from './ArtistMerge';

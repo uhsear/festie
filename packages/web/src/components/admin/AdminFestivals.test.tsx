@@ -35,7 +35,7 @@ vi.mock('./FestivalMapEditor', () => ({
   default: ({ festivalId }: { festivalId: string }) => <p>map editor for {festivalId}</p>,
 }));
 vi.mock('./FestivalStatusPanel', () => ({ default: () => null }));
-vi.mock('../../lib/useUnsavedChangesGuard', () => ({
+vi.mock('../../hooks/useUnsavedChangesGuard', () => ({
   useUnsavedChangesGuard: () => ({ confirmLeave: (fn: () => void) => fn(), guardDialog: null }),
 }));
 vi.mock('./FestivalEditForm', () => ({

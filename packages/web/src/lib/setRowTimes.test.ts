@@ -52,7 +52,7 @@ vi.mock('@/hooks/useSetStatus', async (importOriginal) => ({
 }));
 vi.mock('@/hooks/useHaptics', () => ({ useHaptics: () => ({ tap: vi.fn(), select: vi.fn(), warning: vi.fn() }) }));
 vi.mock('@/lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn() }) }));
-vi.mock('@/lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }) }));
+vi.mock('@/hooks/useUndoNotifier', () => ({ useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }) }));
 
 import SetCard from '../components/features/SetCard';
 import PicksPlanRow from '../components/features/PicksPlanRow';

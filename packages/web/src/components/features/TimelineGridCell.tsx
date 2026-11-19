@@ -3,9 +3,9 @@ import { FestivalSet, Priority, Festival } from '@festie/shared/types';
 import { fmtShort, artistDisplayName, type ClashMark, type GridCrewAvatars } from '@festie/shared/utils';
 import { TriangleAlert, Users } from 'lucide-react';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
-import { cn } from '../lib/utils';
-import PriorityIcon from '../components/ui/PriorityIcon';
-import Avatar from '../components/ui/Avatar';
+import { cn } from '../../lib/utils';
+import PriorityIcon from '../ui/PriorityIcon';
+import Avatar from '../ui/Avatar';
 
 // Pick-icon ink per priority for the compact cell (no pick buttons there).
 const PICK_ICON_COLOR: Record<string, string> = {

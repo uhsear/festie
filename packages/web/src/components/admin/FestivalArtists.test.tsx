@@ -18,7 +18,7 @@ vi.mock('@festie/shared/services', async (orig) => ({
   findSpotifyCandidates: (...a: unknown[]) => findSpotifyCandidates(...a),
 }));
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError }) }));
-vi.mock('../../lib/useReauthPrompt', () => ({ useReauthPrompt: () => ({ askPassword: vi.fn(), reauthDialog: null }) }));
+vi.mock('../../hooks/useReauthPrompt', () => ({ useReauthPrompt: () => ({ askPassword: vi.fn(), reauthDialog: null }) }));
 
 import { ApiClientError } from '@festie/shared/services/api';
 import FestivalArtists from './FestivalArtists';

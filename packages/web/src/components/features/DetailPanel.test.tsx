@@ -145,7 +145,7 @@ vi.mock('@festie/shared/hooks', async (importOriginal) => ({
   useSetMove: () => moveMock.value,
   useViewAs: () => ({ target: null, clear: vi.fn(), ...mockViewAs }),
 }));
-vi.mock('../../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
+vi.mock('../../hooks/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 vi.mock('./DetailPriorityPicker', () => ({
   default: ({ onPriorityClick }: { onPriorityClick: (p: Priority | null) => void }) => (
     <div data-testid="priority-picker">

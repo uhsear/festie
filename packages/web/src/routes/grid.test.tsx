@@ -13,7 +13,7 @@ vi.mock('@festie/shared/stores', () => ({
 
 vi.mock('../components/features/ScheduleImageDialog', () => ({ default: () => null }));
 
-vi.mock('../lib/useUndoNotifier', () => ({
+vi.mock('../hooks/useUndoNotifier', () => ({
   useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }),
 }));
 vi.mock('../lib/toastContext', () => ({
@@ -108,7 +108,7 @@ vi.mock('../components/layout/RouteErrorBoundary', () => ({
 
 // Lightweight stand-in: exposes the props the route owns (rowHeight, gridRef)
 // and one [data-set-id] cell per set so the clash chip can find its target.
-vi.mock('../features/TimelineGrid', () => ({
+vi.mock('../components/features/TimelineGrid', () => ({
   default: ({
     gridRef,
     timedSets,

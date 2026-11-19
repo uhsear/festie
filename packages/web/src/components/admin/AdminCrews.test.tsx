@@ -7,7 +7,7 @@ vi.mock('../../lib/toastContext', () => ({
   useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }),
 }));
 
-vi.mock('../../lib/useReauthPrompt', () => ({
+vi.mock('../../hooks/useReauthPrompt', () => ({
   useReauthPrompt: () => ({ askPassword: vi.fn(), reauthDialog: null }),
 }));
 vi.mock('./useAdminSearch', () => ({ useAdminSearch: () => [{}, vi.fn()] }));

@@ -26,7 +26,7 @@ import ConfirmDialog from '../ui/ConfirmDialog';
 import PromptDialog from '../ui/PromptDialog';
 import Button from '../ui/Button';
 import { SearchX } from 'lucide-react';
-import { useReauthPrompt } from '../../lib/useReauthPrompt';
+import { useReauthPrompt } from '../../hooks/useReauthPrompt';
 import SelectionBar from './SelectionBar';
 import AdminUserDetail from './AdminUserDetail';
 import { useAdminSearch } from './useAdminSearch';

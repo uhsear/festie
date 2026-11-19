@@ -11,8 +11,8 @@ import {
 } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { cn } from '../lib/utils';
-import { stageTextColor } from '../components/ui/StageBadge';
+import { cn } from '../../lib/utils';
+import { stageTextColor } from '../ui/StageBadge';
 import TimelineGridCell from './TimelineGridCell';
 
 const SLOT_MINUTES = 15;

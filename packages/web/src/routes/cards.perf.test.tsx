@@ -15,7 +15,7 @@ vi.mock('@festie/shared/services/api', () => ({
 vi.mock('@/hooks/useSetStatus', () => ({
   useSetStatus: () => ({ status: 'later', label: '3:00 PM', minutesUntil: 300, progress: 0 }),
 }));
-vi.mock('@/lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }) }));
+vi.mock('@/hooks/useUndoNotifier', () => ({ useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }) }));
 vi.mock('@/hooks/useHaptics', () => ({ useHaptics: () => ({ tap: vi.fn(), select: vi.fn(), warning: vi.fn() }) }));
 
 import SetCard from '../components/features/SetCard';

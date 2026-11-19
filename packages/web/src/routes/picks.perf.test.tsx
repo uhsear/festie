@@ -11,7 +11,7 @@ vi.mock('@festie/shared/services/api', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(() => new Promise(() => {})), delete: vi.fn() },
   mapErrorToUserMessage: (_e: unknown, fallback: string) => fallback,
 }));
-vi.mock('../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }) }));
+vi.mock('../hooks/useUndoNotifier', () => ({ useUndoNotifier: () => ({ info: vi.fn(), error: vi.fn(), undo: vi.fn() }) }));
 vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn() }) }));
 
 import PicksPlanRow from '../components/features/PicksPlanRow';

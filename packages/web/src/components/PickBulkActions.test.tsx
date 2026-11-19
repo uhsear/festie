@@ -12,7 +12,7 @@ vi.mock('@festie/shared/hooks', () => ({
   useBulkAddPicks: () => ({ busyKey: null, add }),
 }));
 
-vi.mock('../lib/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
+vi.mock('../hooks/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 
 import PickBulkActions from './PickBulkActions';
 

@@ -13,7 +13,7 @@ vi.mock('@festie/shared/services/api', async (orig) => {
   const mod = await orig<typeof import('@festie/shared/services/api')>();
   return { ...mod, api: { ...mod.api, post: (...a: unknown[]) => reauthPost(...a) } };
 });
-vi.mock('../../lib/useReauthPrompt', () => ({ useReauthPrompt: () => ({ askPassword, reauthDialog: null }) }));
+vi.mock('../../hooks/useReauthPrompt', () => ({ useReauthPrompt: () => ({ askPassword, reauthDialog: null }) }));
 
 import { ApiClientError } from '@festie/shared/services/api';
 import AdminArtistBackfill from './AdminArtistBackfill';
