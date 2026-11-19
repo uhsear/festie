@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { renderWithQueryClient } from '../../test-utils';
 
 const updatePhotoAlbum = vi.fn();
 vi.mock('@festie/shared/stores', () => ({
@@ -15,12 +15,7 @@ import CrewPhotosCard from './CrewPhotosCard';
 const SAVED = 'https://photos.app.goo.gl/saved';
 
 function renderCard() {
-  const qc = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <CrewPhotosCard crewId="c1" currentUrl={SAVED} />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<CrewPhotosCard crewId="c1" currentUrl={SAVED} />);
 }
 
 describe('CrewPhotosCard', () => {
