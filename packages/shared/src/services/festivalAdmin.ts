@@ -1,6 +1,7 @@
 import { api, ApiClientError } from './api';
 import type { Festival } from '../types/domain';
 import type { ChecklistItem, DeleteImpact, FestivalIssue } from '../utils/festivalAdmin';
+import type { ScheduleNotice } from '../utils/notificationSettings';
 
 export interface AdminFestivalSummary {
   id: string;
@@ -61,3 +62,13 @@ export function checklistFromError(err: unknown): ChecklistItem[] | null {
   const checklist = err.details?.checklist;
   return Array.isArray(checklist) ? (checklist as ChecklistItem[]) : null;
 }
+
+export interface FestivalSaveResult { scheduleNotice?: ScheduleNotice; venueGuessed?: boolean }
+
+export const updateAdminFestival = (id: string, body: unknown) =>
+  api.put<FestivalSaveResult | undefined>(festivalPath(id), body);
+
+export const createAdminFestival = (body: unknown) =>
+  api.post<{ id?: string; venueGuessed?: boolean }>('/admin/festivals', body);
+
+export const deleteAdminFestival = (id: string) => api.delete<void>(festivalPath(id));

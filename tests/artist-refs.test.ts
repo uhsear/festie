@@ -402,3 +402,14 @@ describe('import commit and undo', { skip, concurrency: 1 }, () => {
     assert.equal(refused.body.error.message, 'This import is older than the artist upgrade. Edit the sets by hand instead.');
   });
 });
+
+describe('artist id GIN indexes', { skip }, () => {
+  test('migration 118 indexes festival_sets.artists and festivals.lineup', async () => {
+    await withPool(async (pool: Pool) => {
+      const { rows } = await pool.query(
+        `SELECT indexname FROM pg_indexes WHERE indexname IN ('idx_festival_sets_artists_gin', 'idx_festivals_lineup_gin') ORDER BY indexname`,
+      );
+      assert.deepEqual(rows.map((r: { indexname: string }) => r.indexname), ['idx_festival_sets_artists_gin', 'idx_festivals_lineup_gin']);
+    });
+  });
+});

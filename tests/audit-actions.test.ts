@@ -46,7 +46,7 @@ describe('audit action names', () => {
   it('every audit writer names its action through AUDIT_ACTIONS', () => {
     const writers = [...tsFiles('routes'), ...tsFiles('lib')].filter((file) => {
       const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
-      return /auditLog\s*\.\s*insert|\baudit\(|\bwriteAudit(?:Row)?\(/.test(src);
+      return /auditLog\s*\.\s*insert|\baudit\(|\bwrite(?:Admin)?Audit(?:Row)?\(/.test(src);
     });
     assert.ok(writers.includes(path.join('routes', 'admin-siteplan.ts')), 'the scan must see multi-line inserts');
 

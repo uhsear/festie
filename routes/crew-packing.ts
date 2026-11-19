@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
+import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
 import { randomUUID } from 'crypto';
 
 /**
@@ -22,6 +24,7 @@ export default function createCrewPackingRoutes(deps: any) {
     io,
     emitter,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
 
@@ -31,12 +34,10 @@ export default function createCrewPackingRoutes(deps: any) {
     userAuth,
     rateLimit(120, 'crew-packing-list'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const userId = req.user.userId;
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const items = await stores.crewPacking.listByCrew(crewId);
         return sendSuccess(res, { items });
       } catch (err: any) {
@@ -53,14 +54,13 @@ export default function createCrewPackingRoutes(deps: any) {
     rateLimit(30, 'crew-packing-create'),
     validateParams(schemas.crewIdParams),
     validate(schemas.packingCreate),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const { label, claimed } = req.validatedBody;
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const count = await stores.crewPacking.countByCrew(crewId);
         if (count >= 200) return sendError(res, 409, 'Max 200 packing items per crew', ErrorCodes.CONFLICT);
@@ -98,13 +98,12 @@ export default function createCrewPackingRoutes(deps: any) {
     rateLimit(10, 'crew-packing-batch'),
     validateParams(schemas.crewIdParams),
     validate(schemas.packingBatch),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const current = await stores.crewPacking.listByCrew(crewId);
         const seen = new Set(current.map((i: any) => String(i.label).trim().toLowerCase()));
@@ -150,14 +149,13 @@ export default function createCrewPackingRoutes(deps: any) {
     rateLimit(60, 'crew-packing-update'),
     validateParams(schemas.crewIdItemIdParams),
     validate(schemas.packingUpdate),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const itemId = sanitizeIdentifier(req.validatedParams.itemId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.crewPacking.getById(itemId);
         if (!existing || existing.crew_id !== crewId) {
@@ -183,7 +181,7 @@ export default function createCrewPackingRoutes(deps: any) {
           if (holder !== userId) fields.packed = false;
           holderAfter = userId;
         } else if (wantsClaim === false) {
-          if (holder && holder !== userId && membership.role !== 'owner') {
+          if (holder && holder !== userId && req.membership.role !== 'owner') {
             const name = await nameOf(holder);
             return sendError(
               res,
@@ -218,20 +216,19 @@ export default function createCrewPackingRoutes(deps: any) {
     userAuth,
     rateLimit(30, 'crew-packing-delete'),
     validateParams(schemas.crewIdItemIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const itemId = sanitizeIdentifier(req.validatedParams.itemId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.crewPacking.getById(itemId);
         if (!existing || existing.crew_id !== crewId) {
           return sendError(res, 404, 'Packing item not found', ErrorCodes.NOT_FOUND);
         }
-        if (existing.created_by !== userId && membership.role !== 'owner') {
+        if (!isCreatorOrOwner(existing, userId, req.membership.role)) {
           return sendError(res, 403, 'Only creator or owner can remove item', ErrorCodes.FORBIDDEN);
         }
 

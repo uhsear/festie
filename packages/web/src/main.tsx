@@ -24,7 +24,23 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     environment: import.meta.env.MODE,
     release: import.meta.env.VITE_APP_VERSION || 'dev',
     tracesSampleRate: Number(import.meta.env.VITE_SENTRY_TRACES_RATE ?? 0.05),
-    sendDefaultPii: false,
+    // @sentry/react 11 replaced sendDefaultPii with dataCollection, and an unset
+    // dataCollection now collects cookies, request/response bodies and query data.
+    // This is the v10 sendDefaultPii:false baseline, matching the backend lib/sentry.ts.
+    dataCollection: {
+      userInfo: false,
+      cookies: false,
+      httpHeaders: {
+        request: { deny: ['forwarded', 'referer', '-ip', 'remote-', 'via', '-user'] },
+        response: { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] },
+      },
+      httpBodies: [],
+      urlQueryParams: { deny: ['forwarded', 'token', '-ip', 'remote-', 'via', '-user'] },
+      genAI: { inputs: false, outputs: false },
+      databaseQueryData: false,
+      queues: false,
+      graphQL: { document: false, variables: false },
+    },
     integrations: [Sentry.tanstackRouterBrowserTracingIntegration(router)],
     // The password-reset token travels in the URL: keep it out of Sentry.
     beforeSend(event) {

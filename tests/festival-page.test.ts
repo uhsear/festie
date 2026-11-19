@@ -289,6 +289,14 @@ describe('festival page: helpers', () => {
     assert.match(festivalTimeZoneLine({ timeZone: 'Europe/Berlin', days: [] }), /^Times are local to the festival \(.+\)\.$/);
   });
 
+  it('buildFestivalPageDays shows the flat artist when it differs from the joined artists, as the app does', () => {
+    const [day] = buildFestivalPageDays({
+      stages: [{ id: 'm', name: 'Main', color: '#abc' }],
+      days: [{ date: '2026-11-06', sets: [{ artist: 'Jeanie and Vampa', artists: [{ name: 'Jeanie' }, { name: 'Vampa' }], stageId: 'm', startTime: '20:00' }] }],
+    });
+    assert.equal(day.sets[0].artist, 'Jeanie and Vampa');
+  });
+
   it('buildFestivalPageDays escapes text and falls back to Artist TBA', () => {
     const [day] = buildFestivalPageDays({
       stages: [{ id: 'm', name: '<Main>', color: '#abc' }],
