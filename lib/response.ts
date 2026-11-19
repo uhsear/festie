@@ -26,6 +26,8 @@ export const ErrorCodes = {
   REAUTH_REQUIRED: 'REAUTH_REQUIRED',
   CONFIRM_REMOVALS: 'CONFIRM_REMOVALS',
   FESTIVAL_CHANGED: 'FESTIVAL_CHANGED',
+  // The backfill plan differs from the dry-run report the caller reviewed.
+  PLAN_CHANGED: 'PLAN_CHANGED',
   // An artist edit that clashes with another artist, or that started from an out-of-date copy.
   ARTIST_EXISTS: 'ARTIST_EXISTS',
   ARTIST_CHANGED: 'ARTIST_CHANGED',

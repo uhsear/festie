@@ -52,7 +52,7 @@ describe('T52 mobile compass points at people', () => {
 
   it('imports stay relative, declared mobile deps, or @festie/shared', () => {
     for (const f of FILES) {
-      const specs = [...read(f).matchAll(/from '([^']+)'/g)].map((m) => m[1]);
+      const specs = [...read(f).matchAll(/from '([^']+)'/g)].map((m) => m[1]!);
       for (const spec of specs) {
         const ok = spec.startsWith('.') || ALLOWED.includes(spec) || spec.startsWith('@festie/shared/');
         expect(ok, `${f}: ${spec}`).toBe(true);

@@ -4,19 +4,13 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "forceConsistentCasingInFileNames": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["vitest/globals"]
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     "../shared/src/types/window.d.ts",
     "../shared/src/global.d.ts"
-  ],
-  "exclude": [
-    "**/*.test.ts",
-    "**/*.test.tsx",
-    "__tests__/**",
-    "jest.setup.ts",
-    "jest.config.js"
   ]
 }
