@@ -250,7 +250,21 @@ export default function createUsersStore(pool: Pool, utils: any) {
         ]);
         for (const owned of ownedCrews) {
           const { rows: heirs } = await client.query(
-            'SELECT user_id FROM crew_members WHERE crew_id = $1 AND user_id <> $2 ORDER BY joined_at ASC LIMIT 1',
+            `
+  SELECT
+    cm.user_id
+  FROM
+    crew_members cm
+    JOIN users u ON u.id = cm.user_id
+    AND u.deleted_at IS NULL
+  WHERE
+    cm.crew_id = $1
+    AND cm.user_id <> $2
+  ORDER BY
+    cm.joined_at ASC
+  LIMIT
+    1
+`,
             [owned.id, userId],
           );
           if (heirs[0]) {

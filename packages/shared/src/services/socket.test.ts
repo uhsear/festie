@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { io } from 'socket.io-client';
-import { createSocket } from './socket';
+import { createSocket, createAuthErrorHandler } from './socket';
 
 vi.mock('socket.io-client', () => ({ io: vi.fn() }));
 
@@ -37,5 +37,28 @@ describe('createSocket auth recovery', () => {
 
     expect(socket.disconnect).not.toHaveBeenCalled();
     expect(onAuthError).not.toHaveBeenCalled();
+  });
+});
+
+describe('createAuthErrorHandler', () => {
+  const setup = (refreshToken: () => Promise<void>, userToken: string | null) => {
+    const socket = { auth: {}, connect: vi.fn() };
+    return { socket, handler: createAuthErrorHandler(() => socket as never, () => ({ refreshToken, userToken })) };
+  };
+
+  it('reconnects with the refreshed token', async () => {
+    const { socket, handler } = setup(async () => {}, 'fresh');
+    handler();
+    await vi.waitFor(() => expect(socket.connect).toHaveBeenCalledTimes(1));
+    expect(socket.auth).toEqual({ token: 'fresh' });
+  });
+
+  it('stays disconnected when the refresh fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { socket, handler } = setup(() => Promise.reject(new Error('nope')), 'old');
+    handler();
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(socket.connect).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 });
