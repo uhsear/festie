@@ -292,16 +292,13 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     adminAuth,
     adminWriteLimit,
     requireRecentAuth,
-    validateParams(schemas.genericIdParams),
+    validateParams(schemas.idRoleParams),
     async (req: any, res: any) => {
       try {
         const targetUserId = deps.sanitizeIdentifier(req.validatedParams.id, 100);
         if (!targetUserId) return sendError(res, 400, 'Invalid user ID', ErrorCodes.INVALID_INPUT);
 
-        const roleName = (req.params.role || '').trim().toLowerCase();
-        if (!['admin', 'user'].includes(roleName)) {
-          return sendError(res, 400, 'Invalid role name', ErrorCodes.INVALID_INPUT);
-        }
+        const roleName = req.validatedParams.role;
 
         const user = await getUserById(targetUserId);
         if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);

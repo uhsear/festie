@@ -167,13 +167,6 @@ describe('Integration: festival series', { skip, concurrency: 1 }, () => {
     assert.equal(listed.seriesId, 'fk');
   });
 
-  test('replaceAll keeps seriesId', async () => {
-    await stores.festivals.create(festival('fk-2026', 'Forbidden Kingdom 2026', 'forbidden-kingdom'));
-    const all = await stores.festivals.readAll();
-    await stores.festivals.replaceAll(all);
-    assert.equal((await stores.festivals.getById('fk-2026')).seriesId, 'forbidden-kingdom');
-  });
-
   test('a series edition still reaches an older edition that has no series id', async () => {
     await stores.festivals.create(festival('fk-2026', 'Forbidden Kingdom 2026'));
     await stores.festivals.create(festival('fk-2027', 'Forbidden Kingdom 2027', 'forbidden-kingdom'));

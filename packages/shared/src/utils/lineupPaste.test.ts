@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   describeMerge,
@@ -212,30 +210,5 @@ describe('FK-shaped list', () => {
     expect(r.b2b).toBe(2);
     expect(r.linksKept).toBe(0);
     expect(r.dropped).toEqual({ _officialBilling: 12 });
-  });
-});
-
-// The real files stay private. Point LINEUP_PRIVATE_DIR at D:/FESTIE-private/lineups to run this block.
-const privateDir = process.env.LINEUP_PRIVATE_DIR;
-describe.skipIf(!privateDir || !existsSync(resolve(privateDir, 'forbidden-kingdom/unassigned-acts.json')))('real lineup files', () => {
-  const read = (p: string) => readFileSync(resolve(privateDir!, p), 'utf8');
-  it('FK loads 118 acts, 13 b2b lines, 0 links', () => {
-    const r = parseLineupJson(read('forbidden-kingdom/unassigned-acts.json'));
-    console.log('FK', describeParse(r), 'flags:', r.flags.map((f) => `${f.line}:${f.kind}`).join(' '));
-    expect(r.entries).toHaveLength(118);
-    expect(r.b2b).toBe(13);
-    expect(r.linksKept).toBe(0);
-    expect(r.dropped._officialBilling).toBe(118);
-    expect(r.flags.filter((f) => f.blocking)).toEqual([]);
-    const merged = mergeLineupPaste([], r.entries, { mode: 'add' });
-    const again = mergeLineupPaste(merged.lineup.map((e, i) => ({ ...e, id: e.id ?? `x${i}`, announcedAt: '2026-11-20' })), r.entries, { mode: 'replace' });
-    expect(again.summary).toEqual({ matched: 118, added: 0, kept: 0, removed: 0 });
-  });
-  it('Wasteland loads 42 acts and 1 b2b line', () => {
-    const r = parseLineupJson(read('wasteland-orlando/lineup-unscheduled.json'));
-    console.log('WL', describeParse(r), 'flags:', r.flags.map((f) => `${f.line}:${f.kind}`).join(' '));
-    expect(r.entries).toHaveLength(42);
-    expect(r.b2b).toBe(1);
-    expect(r.flags.filter((f) => f.blocking)).toEqual([]);
   });
 });

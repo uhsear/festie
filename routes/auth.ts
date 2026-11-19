@@ -323,14 +323,13 @@ export default function createAuthRoutes(deps: any): Router {
   router.post('/refresh', userAuth, rateLimit(20, 'session-refresh'), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      // Invalidate the old session, issue a new one
-      const { stores: storesRef, hashSessionToken: hashToken, disconnectSessionTokens } = deps;
+      // Issue the new session first so a DB failure cannot leave the client with none
+      const { disconnectSessionTokens } = deps;
+      const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req), req.userToken ?? null);
       if (req.userToken) {
-        await storesRef.sessions.deleteUserSession(hashToken(req.userToken));
         // Disconnect sockets still using the old token to prevent stale connections
         disconnectSessionTokens([req.userToken], io);
       }
-      const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req));
       setUserSessionCookie(res, token);
       const { serializePublicUser } = deps;
       const user = await getUserById(req.user.userId);
