@@ -92,6 +92,12 @@ describe('config: loadConfig basics', () => {
     const config = loadConfig({ PUBLIC_ORIGIN: '' });
     assert.equal(config.NODE_ENV, 'development');
   });
+
+  it('defaults APNS_TEAM_ID to empty so APNs stays disabled until configured', () => {
+    saveEnv('APNS_TEAM_ID');
+    const config = loadConfig({ PUBLIC_ORIGIN: '' });
+    assert.equal(config.APNS_TEAM_ID, '');
+  });
 });
 
 describe('config: PUBLIC_ORIGIN and COOKIE_SECURE', () => {

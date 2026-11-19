@@ -4,6 +4,7 @@
  * regression project loads this storageState so every test runs authed
  * without hammering /auth/register.
  */
+import { randomBytes } from 'node:crypto';
 import { test as setup, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,12 +14,12 @@ const __dirname = path.dirname(__filename);
 
 const BASE_URL = process.env.FESTIE_BASE_URL || 'http://localhost:4000';
 const STATE_FILE = path.join(__dirname, '.auth', 'state.json');
-const PASSWORD = 'visual-regression-pass-12345';
+const PASSWORD = process.env.VISREG_PASSWORD || `Vr-${randomBytes(12).toString('hex')}`;
 
-setup('register shared visreg user', async ({ request }: any) => {
+setup('register shared visreg user', async ({ request }) => {
   const username = 'pwvisreg_shared_' + Date.now();
   const res = await request.post(`${BASE_URL}/api/v1/auth/register`, {
-    headers: { 'content-type': 'application/json', 'x-trusted-mutation': '1' },
+    headers: { 'content-type': 'application/json', 'x-festie-request': '1' },
     data: { username, password: PASSWORD, confirmPassword: PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` },
   });
   expect(res.ok(), 'register failed: ' + res.status() + ' ' + (res.ok() ? '' : await res.text())).toBeTruthy();

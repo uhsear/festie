@@ -82,15 +82,6 @@ async function closeDetailPanel(page: Page) {
 
 // ── Guest (unauthenticated) journeys ────────────────────────────────────────
 
-// NOTE (2026-07-01): the 4 guest/auth-surface tests below are CI-verified green
-// against the e2e-web.yml harness (Postgres+Redis+chromium). The 7 authed
-// cases are re-ported + structurally correct but need a local-browser session to
-// finish: the authed flows time out at the post-register profile badge (the
-// controlled `<input type=date>` DOB fill needs a browser to confirm it sets
-// React state before submit), and `openSet` finds the card click-target but it
-// isn't interaction-stable headless. The Postgres-seeded fixture (the real
-// reason the old suite never passed) is fixed, so finishing these is a small
-// browser-in-hand follow-up — see PROCEED.md.
 test.describe('festival planner browser regression', () => {
   test('guest can browse the schedule and switch festivals', async ({ app, page }) => {
     await gotoApp(page, app);
@@ -253,7 +244,7 @@ test.describe('festival planner browser regression', () => {
     // Saturday; Delta lives on Saturday only.
     const dayTabs = page.locator('.day-tab-underline');
     await expect(dayTabs).toHaveCount(2);
-    await dayTabs.nth(1).click(); // Saturday
+    await dayTabs.filter({ hasText: /Sat/ }).click();
 
     await expect(page.locator('[data-testid="set-card"][data-artist="Delta"]')).toBeVisible();
     await expect(page.locator('[data-testid="set-card"][data-artist="Alpha"]')).toHaveCount(0);
@@ -287,21 +278,11 @@ test.describe('festival planner browser regression', () => {
 
 // The desktop Header nav uses plain text links ("Picks", "Crew"); the
 // mobile BottomNav uses links with aria-label "View Picks" / "View Crew".
-// Click whichever exists for the current viewport.
+// Only one nav is visible per viewport, so one locator matches either.
 async function openMyPicks(page: Page) {
-  const desktop = page.getByRole('link', { name: 'Picks' });
-  if (await desktop.count()) {
-    await desktop.first().click();
-    return;
-  }
-  await page.getByRole('link', { name: 'View Picks' }).click();
+  await page.getByRole('link', { name: /^(View )?Picks$/ }).click();
 }
 
 async function openCrew(page: Page) {
-  const desktop = page.getByRole('link', { name: 'Crew', exact: true });
-  if (await desktop.count()) {
-    await desktop.first().click();
-    return;
-  }
-  await page.getByRole('link', { name: 'View Crew' }).click();
+  await page.getByRole('link', { name: /^(View )?Crew$/ }).click();
 }

@@ -19,7 +19,7 @@ describe('mobile misc sweep', () => {
     expect(src).toContain('meetingTimeDisplay(');
     expect(src).toContain('resolveFestivalTimeZone(currentFestival)');
     expect(src).not.toContain('toLocaleString');
-    expect(src).toMatch(/HHMM\.test\(crew\.homeBaseTime\) \? formatTime\(crew\.homeBaseTime\)/);
+    expect(src).toContain('formatTimeOrRaw(crew.homeBaseTime)');
   });
   it('timeline auto-scroll respects user scroll and NOW visibility', () => {
     const src = read('components/TimelineView.tsx');

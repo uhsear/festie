@@ -2831,6 +2831,12 @@ export type components = {
             error?: {
                 /** @description Machine-readable error code */
                 code?: string;
+                /** @description Per-field validation failures, present on input validation errors */
+                fields?: {
+                    message?: string;
+                    /** @description Dotted path of the invalid field */
+                    path?: string;
+                }[];
                 message?: string;
                 /** @description Whether the client should retry this request */
                 retryable?: boolean;

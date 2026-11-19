@@ -26,7 +26,6 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 // ── Paths ────────────────────────────────────────────────────────────────────
 const mobileRoot = resolve(__dirname, '..');
-const repoRoot   = resolve(mobileRoot, '..', '..');
 
 const distDir = resolve(
   process.env.EXPO_WEB_DIST || resolve(mobileRoot, 'dist'),
@@ -54,10 +53,10 @@ const iconTargets = [
   { file: 'icon-512-maskable.png',  size: 512,  purpose: 'maskable' },
 ];
 
-// Try to load sharp from the repo root node_modules.
+// Load sharp from the mobile package (declared in devDependencies).
 let sharp = null;
 try {
-  const require = createRequire(resolve(repoRoot, 'package.json'));
+  const require = createRequire(resolve(mobileRoot, 'package.json'));
   sharp = require('sharp');
 } catch {
   // sharp not available — fall through to copyFile fallback.
@@ -75,8 +74,8 @@ for (const { file, size } of iconTargets) {
   } else {
     copyFileSync(sourceIcon, dest);
     console.log(
-      `[build-manifest] NOTE: sharp not found at repo root — copied source PNG as dist/icons/${file}.` +
-      ` Install sharp in the repo root for correctly-sized icons.`,
+      `[build-manifest] NOTE: sharp not found — copied source PNG as dist/icons/${file}.` +
+      ` Install sharp in packages/mobile for correctly-sized icons.`,
     );
   }
 }

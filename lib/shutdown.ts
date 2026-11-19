@@ -65,8 +65,28 @@ function createBackgroundTasks(ctx: any, { io }: any) {
   }
   if (config.RESEND_API_KEY && !config.EMAIL_POSTAL_ADDRESS) log.warn('email:postal-address-unset', { setting: 'EMAIL_POSTAL_ADDRESS' });
 
+  // Overlap guard: skip a tick while the previous run of the same sweep is still going.
+  // Running sweeps are tracked in state.sweepsInFlight so shutdown can drain them
+  // before the pg pool ends.
+  const sweepsInFlight: Set<Promise<void>> = (state.sweepsInFlight ??= new Set());
+  const guard = (run: () => Promise<void>) => {
+    let running = false;
+    return async () => {
+      if (running) return;
+      running = true;
+      const pending = run();
+      sweepsInFlight.add(pending);
+      try {
+        await pending;
+      } finally {
+        running = false;
+        sweepsInFlight.delete(pending);
+      }
+    };
+  };
+
   // Session cleanup — evict expired sessions and disconnect their sockets
-  const _sessionCleanupTimer = setInterval(async () => {
+  const _sessionCleanupTimer = setInterval(guard(async () => {
     try {
       await stores.sessions.deleteExpiredUserSessions(config.SESSION_TTL);
       const presenceTargets = new Set<string>();
@@ -82,7 +102,7 @@ function createBackgroundTasks(ctx: any, { io }: any) {
       recordJobRun('session_cleanup', false);
       log.error('session cleanup failed', { error: err.message });
     }
-  }, config.SESSION_CLEANUP_INTERVAL_MS);
+  }), config.SESSION_CLEANUP_INTERVAL_MS);
   _sessionCleanupTimer.unref();
   state.timers.push(_sessionCleanupTimer);
 
@@ -193,12 +213,12 @@ function createBackgroundTasks(ctx: any, { io }: any) {
       log.warn('retention cleanup failed', { error: err.message });
     }
   };
-  const _retentionTimer = setInterval(runRetention, 24 * 60 * 60 * 1000);
+  const _retentionTimer = setInterval(guard(runRetention), 24 * 60 * 60 * 1000);
   _retentionTimer.unref();
   state.timers.push(_retentionTimer);
   // Every deploy restarts the process, and deploys come less than a day apart, so a
   // 24-hour interval alone never fires. Also run once shortly after boot.
-  const _retentionFirstRun = setTimeout(runRetention, 10 * 60 * 1000);
+  const _retentionFirstRun = setTimeout(guard(runRetention), 10 * 60 * 1000);
   _retentionFirstRun.unref();
   state.timers.push(_retentionFirstRun);
 
@@ -252,7 +272,7 @@ function createBackgroundTasks(ctx: any, { io }: any) {
   // Poll expiry sweep: end polls whose closes_at has passed (announce + push, like a manual end).
   // 5 s keeps the crew:poll-closed announcement close to closes_at; the UPDATE only scans open polls.
   if (ctx.pollCloser) {
-    const _pollExpiryTimer = setInterval(async () => {
+    const _pollExpiryTimer = setInterval(guard(async () => {
       try {
         const count = await ctx.pollCloser.sweepExpired();
         if (count > 0) log.debug('ended expired polls', { count });
@@ -261,14 +281,14 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         recordJobRun('poll_expiry', false);
         log.warn('poll expiry sweep failed', { error: err.message });
       }
-    }, 5 * 1000);
+    }), 5 * 1000);
     _pollExpiryTimer.unref();
     state.timers.push(_pollExpiryTimer);
   }
 
   // Festival announcements: send scheduled rows when due (lib/announcements.ts).
   if (ctx.announcer) {
-    const _announcementTimer = setInterval(async () => {
+    const _announcementTimer = setInterval(guard(async () => {
       try {
         const count = await ctx.announcer.deliverDue();
         if (count > 0) log.debug('delivered festival announcements', { count });
@@ -277,7 +297,7 @@ function createBackgroundTasks(ctx: any, { io }: any) {
         recordJobRun('announcements', false);
         log.warn('announcement sweep failed', { error: err.message });
       }
-    }, 60 * 1000);
+    }), 60 * 1000);
     _announcementTimer.unref();
     state.timers.push(_announcementTimer);
   }
@@ -305,21 +325,23 @@ function createBackgroundTasks(ctx: any, { io }: any) {
             AND (SELECT MAX(d.date) FROM festival_days d WHERE d.festival_id = f.id)
                 BETWEEN (CURRENT_DATE - INTERVAL '3 days')::text AND CURRENT_DATE::text
         `);
+        let failed = 0;
         for (const r of rows) {
           try {
             await ctx.reengagement.sendWrapReady(r.id);
           } catch (err: any) {
-            log.debug('wrap_ready sweep: per-festival send failed', { festivalId: r.id, error: err.message });
+            failed++;
+            log.warn('wrap_ready sweep: per-festival send failed', { festivalId: r.id, error: err.message });
           }
         }
         if (rows.length > 0) log.debug('wrap_ready sweep complete', { festivals: rows.length });
-        recordJobRun('wrap_ready', true);
+        recordJobRun('wrap_ready', failed === 0);
       } catch (err: any) {
         recordJobRun('wrap_ready', false);
         log.warn('wrap_ready sweep failed', { error: err.message });
       }
     };
-    const _wrapReadyTimer = setInterval(runWrapSweep, WRAP_SWEEP_INTERVAL_MS);
+    const _wrapReadyTimer = setInterval(guard(runWrapSweep), WRAP_SWEEP_INTERVAL_MS);
     _wrapReadyTimer.unref();
     state.timers.push(_wrapReadyTimer);
     log.info('wrap_ready sweep registered (hourly, leader-only)');
@@ -343,21 +365,23 @@ function createBackgroundTasks(ctx: any, { io }: any) {
                 AND d.date BETWEEN (CURRENT_DATE - 2)::text AND CURRENT_DATE::text
             )
         `);
+        let failed = 0;
         for (const r of rows) {
           try {
             await ctx.reengagement.sendRatePrompt(r.id);
           } catch (err: any) {
-            log.debug('rate_prompt sweep: per-festival send failed', { festivalId: r.id, error: err.message });
+            failed++;
+            log.warn('rate_prompt sweep: per-festival send failed', { festivalId: r.id, error: err.message });
           }
         }
         if (rows.length > 0) log.debug('rate_prompt sweep complete', { festivals: rows.length });
-        recordJobRun('rate_prompt', true);
+        recordJobRun('rate_prompt', failed === 0);
       } catch (err: any) {
         recordJobRun('rate_prompt', false);
         log.warn('rate_prompt sweep failed', { error: err.message });
       }
     };
-    const _ratePromptTimer = setInterval(runRatePromptSweep, RATE_PROMPT_SWEEP_INTERVAL_MS);
+    const _ratePromptTimer = setInterval(guard(runRatePromptSweep), RATE_PROMPT_SWEEP_INTERVAL_MS);
     _ratePromptTimer.unref();
     state.timers.push(_ratePromptTimer);
     log.info('rate_prompt sweep registered (hourly, leader-only)');
@@ -398,15 +422,15 @@ function createCloseHandler({
     if (state.reminderScheduler) {
       try {
         state.reminderScheduler.stop();
-      } catch {
-        /* ignore */
+      } catch (err: any) {
+        log.warn('shutdown: reminder scheduler stop failed', { error: err.message });
       }
     }
     if (state.checkinScheduler) {
       try {
         state.checkinScheduler.stop();
-      } catch {
-        /* ignore */
+      } catch (err: any) {
+        log.warn('shutdown: checkin scheduler stop failed', { error: err.message });
       }
     }
 
@@ -463,6 +487,19 @@ function createCloseHandler({
       });
     }
 
+    // Drain running sweeps before the pg pool ends, within the shared shutdown deadline.
+    if (state.sweepsInFlight?.size > 0) {
+      let drainTimer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        Promise.allSettled([...state.sweepsInFlight]),
+        new Promise((resolve) => {
+          drainTimer = setTimeout(resolve, Math.max(0, config.SHUTDOWN_TIMEOUT_MS - (Date.now() - shutdownStart)));
+        }),
+      ]);
+      clearTimeout(drainTimer);
+      if (state.sweepsInFlight.size > 0) log.warn('shutdown timeout reached, sweeps still running', { count: state.sweepsInFlight.size });
+    }
+
     if (sentry?.close) await sentry.close(2000);
     // Close the re-engagement worker/queue BEFORE the pg pool: the worker may
     // have an in-flight job whose executor still queries `pool`, so ending the
@@ -472,28 +509,28 @@ function createCloseHandler({
     if (reengagementQueue?.close) {
       try {
         await reengagementQueue.close();
-      } catch {
-        /* ignore */
+      } catch (err: any) {
+        log.warn('shutdown: reengagement queue close failed', { error: err.message });
       }
     }
     await pool.end();
     try {
       await avatarPool.terminate();
-    } catch {
-      /* ignore */
+    } catch (err: any) {
+      log.warn('shutdown: avatar pool terminate failed', { error: err.message });
     }
     if (cacheBus) {
       try {
         await cacheBus.close();
-      } catch {
-        /* ignore */
+      } catch (err: any) {
+        log.warn('shutdown: cache bus close failed', { error: err.message });
       }
     }
     if (redis) {
       try {
         redis.disconnect();
-      } catch {
-        /* ignore */
+      } catch (err: any) {
+        log.warn('shutdown: redis disconnect failed', { error: err.message });
       }
     }
     log.info('server closed', { durationMs: Date.now() - closeStart });

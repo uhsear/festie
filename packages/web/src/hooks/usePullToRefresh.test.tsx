@@ -1,18 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, renderHook } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { ReactNode } from 'react';
+import { createTestQueryClient, queryClientWrapper } from '../test-utils';
 import { usePullToRefresh } from './usePullToRefresh';
 
 const success = vi.fn();
 vi.mock('./useHaptics', () => ({ useHaptics: () => ({ success }) }));
 
 function setup() {
-  const queryClient = new QueryClient();
+  const queryClient = createTestQueryClient();
   const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
-  const wrapper = ({ children }: { children: ReactNode }) => (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
-  );
+  const wrapper = queryClientWrapper(queryClient);
   const { result } = renderHook(() => usePullToRefresh({ threshold: 80 }), { wrapper });
 
   const outer = document.createElement('div');

@@ -1,5 +1,7 @@
 // Read-only production smoke for scripts/e2e-nightly.sh. Copied next to the
 // provisioned Playwright so its ESM import of @playwright/test resolves.
+// Matched by testMatch in the config that script writes; list without running
+// via `scripts/e2e-nightly.sh --list`. Owner and rationale: see that script.
 import { test, expect } from '@playwright/test';
 
 test('health endpoint reports ok', async ({ request }) => {

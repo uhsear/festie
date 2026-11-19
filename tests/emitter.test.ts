@@ -7,6 +7,16 @@ import { createSocketEmitter, SILENT_SYNC_COALESCE_MS } from '../lib/emitter';
 // Helpers
 // ---------------------------------------------------------------------------
 
+async function flushMicrotasks() {
+  for (let i = 0; i < 20; i++) await Promise.resolve();
+}
+
+/** Moves mocked time forward, then lets the async crew lookups settle. */
+async function advance(t: { mock: { timers: { tick(ms: number): void } } }, ms: number) {
+  t.mock.timers.tick(ms);
+  await flushMicrotasks();
+}
+
 function makeIo() {
   const rooms: any = {};
   const globalEmits: any[] = [];
@@ -81,7 +91,8 @@ describe('emitter: profileCreated', () => {
 });
 
 describe('emitter: profileUpdated', () => {
-  it('batches updates and emits picks to the author crew rooms only', async () => {
+  it('batches updates and emits picks to the author crew rooms only', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
     const stores = crewStores({ c1: ['user-1', 'bob'], c2: ['user-1', 'cara'] });
     const emitter = createSocketEmitter(defaultDeps({ io, stores }));
@@ -91,8 +102,8 @@ describe('emitter: profileUpdated', () => {
       user: { avatarKey: 'abc' },
     });
 
-    // Wait for batch debounce (200ms)
-    await new Promise((r) => setTimeout(r, 300));
+    // Cross the batch debounce (200ms)
+    await advance(t, 300);
 
     assert.equal(io._rooms['fest-1'], undefined, 'never broadcast picks to the whole festival room');
     assert.deepEqual(io.to.mock.calls.at(-1)!.arguments[0], ['user:user-1', 'crew:c1', 'crew:c2']);
@@ -105,7 +116,8 @@ describe('emitter: profileUpdated', () => {
     emitter.flushAll();
   });
 
-  it('flags an interest change to the author only, and a later pick write does not hide it', async () => {
+  it('flags an interest change to the author only, and a later pick write does not hide it', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
     const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({ c1: ['user-1', 'bob'] }) }));
     const profile = {
@@ -120,7 +132,7 @@ describe('emitter: profileUpdated', () => {
     emitter.profileUpdated({ profile, user: {}, changedFields: { interests: true } });
     emitter.profileUpdated({ profile, user: {}, changedFields: { picks: true } });
 
-    await new Promise((r) => setTimeout(r, 300));
+    await advance(t, 300);
     const payload = io._rooms['user:user-1'][0][1];
     assert.equal(payload.interestsChanged, true);
     assert.equal(JSON.stringify(payload).includes('lu-1'), false, 'the payload also reaches crew rooms');
@@ -128,7 +140,8 @@ describe('emitter: profileUpdated', () => {
     emitter.flushAll();
   });
 
-  it('sends interestsChanged false for a plain pick write', async () => {
+  it('sends interestsChanged false for a plain pick write', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
     const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({}) }));
     emitter.profileUpdated({
@@ -136,25 +149,27 @@ describe('emitter: profileUpdated', () => {
       user: {},
       changedFields: { picks: true },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await advance(t, 300);
     assert.equal(io._rooms['user:user-1'][0][1].interestsChanged, false);
     emitter.flushAll();
   });
 
-  it('still emits to the author own devices when the author has no crew', async () => {
+  it('still emits to the author own devices when the author has no crew', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
     const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({}) }));
     emitter.profileUpdated({
       profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'user-1', name: 'Alice', picks: { s1: 'must' } },
       user: {},
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await advance(t, 300);
     assert.deepEqual(Object.keys(io._rooms), ['user:user-1']);
     assert.deepEqual(io._rooms['user:user-1'][0][1].picks, { s1: 'must' });
     emitter.flushAll();
   });
 
-  it('still emits to the author own devices when the crew lookup fails', async () => {
+  it('still emits to the author own devices when the crew lookup fails', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
     const log = makeLog();
     const stores = { crews: { listByUserAndFestival: async () => { throw new Error('db down'); } } };
@@ -163,13 +178,14 @@ describe('emitter: profileUpdated', () => {
       profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'user-1', name: 'Alice', picks: {} },
       user: {},
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await advance(t, 300);
     assert.deepEqual(Object.keys(io._rooms), ['user:user-1']);
     assert.equal(log.warn.mock.calls[0]!.arguments[0], 'profile:updated crew lookup failed');
     emitter.flushAll();
   });
 
-  it('coalesces multiple rapid updates into one broadcast', async () => {
+  it('coalesces multiple rapid updates into one broadcast', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
     const emitter = createSocketEmitter(defaultDeps({ io, stores: crewStores({ c1: ['user-1'] }) }));
 
@@ -180,7 +196,7 @@ describe('emitter: profileUpdated', () => {
       });
     }
 
-    await new Promise((r) => setTimeout(r, 300));
+    await advance(t, 300);
 
     const emitted = io._rooms['user:user-1,crew:c1'] || [];
     assert.equal(emitted.length, 1, 'should batch into one emission');
@@ -385,7 +401,8 @@ describe('emitter: profileUpdated', () => {
     emitter.flushAll();
   });
 
-  it('does not trigger push when picks did not change', async () => {
+  it('does not trigger push when picks did not change', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
     const sendToOfflineUsers = mock.fn(async () => {});
     const notificationService = { isConfigured: true, sendToOfflineUsers };
@@ -397,14 +414,15 @@ describe('emitter: profileUpdated', () => {
       changedFields: {},
     });
 
-    await new Promise((r) => setTimeout(r, 50));
+    await advance(t, 50);
     assert.equal(sendToOfflineUsers.mock.callCount(), 0);
     emitter.flushAll();
   });
 });
 
 describe('emitter: profileDeleted', () => {
-  it('emits profile:deleted and cancels pending batch', async () => {
+  it('emits profile:deleted and cancels pending batch', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const io = makeIo();
     const emitter = createSocketEmitter(defaultDeps({ io }));
 
@@ -423,8 +441,8 @@ describe('emitter: profileDeleted', () => {
     assert.ok(deleteEvent, 'should emit profile:deleted');
     assert.equal(deleteEvent[1].profileId, 'prof-1');
 
-    // Wait for debounce — batched update should NOT fire
-    await new Promise((r) => setTimeout(r, 300));
+    // Cross the debounce — batched update should NOT fire
+    await advance(t, 300);
     const updateEvents = (io._rooms['fest-1'] || []).filter((e: any) => e[0] === 'profile:updated');
     assert.equal(updateEvents.length, 0, 'batched update should have been cancelled');
     emitter.flushAll();
@@ -468,7 +486,7 @@ describe('emitter: festivalUpdated', () => {
 
     emitter.festivalUpdated({ festival: { id: 'fest-1', name: 'EDC' } });
 
-    await new Promise((r) => setTimeout(r, 10));
+    await flushMicrotasks();
     assert.equal(sendToOfflineUsers.mock.callCount(), 0);
     assert.equal(send.mock.callCount(), 0);
     assert.equal(sendSilentSync.mock.callCount(), 1);

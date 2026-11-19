@@ -26,6 +26,24 @@ describe('splitSqlStatements', () => {
     assert.deepEqual(splitSqlStatements("SELECT 'it''s; fine'; SELECT 2;"), ["SELECT 'it''s; fine'", 'SELECT 2']);
   });
 
+  test('does not split on a semicolon inside a double-quoted identifier', () => {
+    assert.deepEqual(splitSqlStatements('CREATE TABLE "a;b" (x int); SELECT 2;'), ['CREATE TABLE "a;b" (x int)', 'SELECT 2']);
+    assert.deepEqual(splitSqlStatements('SELECT "it""s;"; SELECT 2;'), ['SELECT "it""s;"', 'SELECT 2']);
+  });
+
+  test('handles backslash-escaped quotes in E strings', () => {
+    assert.deepEqual(splitSqlStatements("SELECT E'it\\'s; fine'; SELECT 2;"), ["SELECT E'it\\'s; fine'", 'SELECT 2']);
+    // A plain string ending in a backslash is not an escape.
+    assert.deepEqual(splitSqlStatements("SELECT 'a\\'; SELECT 2;"), ["SELECT 'a\\'", 'SELECT 2']);
+    // An identifier ending in e is not an E-string prefix.
+    assert.deepEqual(splitSqlStatements("SELECT name'a\\'; SELECT 2;"), ["SELECT name'a\\'", 'SELECT 2']);
+  });
+
+  test('stripSqlComments keeps comment markers inside quoted text', () => {
+    assert.equal(stripSqlComments(`SELECT '--x', "--y", E'\\'--z' -- gone`), `SELECT '--x', "--y", E'\\'--z' `);
+    assert.equal(usesConcurrently(`SELECT 'CONCURRENTLY' -- CONCURRENTLY`), true);
+  });
+
   test('does not split inside a $$ dollar-quoted DO block', () => {
     const sql = 'DO $$ BEGIN PERFORM 1; PERFORM 2; END $$;\nSELECT 9;';
     assert.deepEqual(splitSqlStatements(sql), ['DO $$ BEGIN PERFORM 1; PERFORM 2; END $$', 'SELECT 9']);

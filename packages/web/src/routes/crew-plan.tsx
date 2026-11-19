@@ -6,6 +6,7 @@ import { useActiveCrew, useCrewFestival, useCrewHub, usePicks } from '@festie/sh
 import {
   artistDisplayName,
   formatTime,
+  formatTimeOrRaw,
   formatSetTimeRange,
   memberSummary,
   meetingTimeDisplay,
@@ -34,8 +35,6 @@ const PRIORITY_BADGE: Record<Priority, string> = {
   'want-to-see': 'bg-priority-want/15 text-priority-want',
   maybe: 'bg-priority-maybe/15 text-priority-maybe',
 };
-
-const HHMM = /^\d{2}:\d{2}$/;
 
 const EMPTY_LINK =
   'inline-flex items-center min-h-11 text-sm font-medium text-accent-aqua underline underline-offset-2';
@@ -216,7 +215,7 @@ function CrewPlanContent() {
               {crew.homeBaseLocation && <p className="text-text-primary font-medium">{crew.homeBaseLocation}</p>}
               {crew.homeBaseTime && (
                 <p className="text-sm text-text-secondary">
-                  {HHMM.test(crew.homeBaseTime) ? formatTime(crew.homeBaseTime) : crew.homeBaseTime}
+                  {formatTimeOrRaw(crew.homeBaseTime)}
                 </p>
               )}
             </div>

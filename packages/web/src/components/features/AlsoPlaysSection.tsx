@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { useAlsoPlays, useCanPick, usePicks } from '@festie/shared/hooks';
+import { useAlsoPlays, useCanPick, useFestival, usePicks } from '@festie/shared/hooks';
 import { COPY } from '@festie/shared/constants';
 import { artistDisplayName } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
@@ -13,7 +13,7 @@ import { useToast } from '../../lib/toastContext';
 export default function AlsoPlaysSection({ set }: { set: FestivalSet }) {
   const nowMs = useNow();
   const slots = useAlsoPlays(set, nowMs);
-  const stages = useFestivalStore((s) => s.stages);
+  const { getStageName } = useFestival();
   const festival = useFestivalStore((s) => s.currentFestival);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const { getMyPick, savePick } = usePicks();
@@ -47,7 +47,7 @@ export default function AlsoPlaysSection({ set }: { set: FestivalSet }) {
       </h3>
       <ul className="space-y-1">
         {slots.map((slot) => {
-          const stage = stages.find((st) => st.id === slot.set.stageId)?.name ?? slot.set.stageName ?? '';
+          const stage = getStageName(slot.set.stageId) ?? slot.set.stageName ?? '';
           const slotPicked = !!getMyPick(slot.set.id);
           const line = COPY.alsoPlays.row(slot.when);
           return (

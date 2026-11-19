@@ -44,11 +44,15 @@ export function useNowIndicator(timeBounds: TimeBounds | null, selectedDay: numb
     target.scrollIntoView({ behavior: 'smooth', block: 'center' });
   }, [nowIndicator]);
 
+  // Read through a ref so the 30 s tick does not re-scroll; only a day switch does.
+  const scrollToNowRef = useRef(scrollToNow);
   useEffect(() => {
-    if (nowIndicator === null) return;
-    const id = window.requestAnimationFrame(() => scrollToNow());
+    scrollToNowRef.current = scrollToNow;
+  }, [scrollToNow]);
+
+  useEffect(() => {
+    const id = window.requestAnimationFrame(() => scrollToNowRef.current());
     return () => window.cancelAnimationFrame(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDay]);
 
   return { nowIndicator, gridRef, scrollToNow };

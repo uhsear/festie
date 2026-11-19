@@ -17,7 +17,10 @@ vi.mock('@festie/shared/stores', () => ({
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: (sel: (s: { setDetailSet: typeof setDetailSet }) => unknown) => sel({ setDetailSet }),
 }));
-vi.mock('@festie/shared/hooks', () => ({ useAlsoPicked: (f?: string, s?: string) => hook(f, s) }));
+vi.mock('@festie/shared/hooks', () => ({
+  useAlsoPicked: (f?: string, s?: string) => hook(f, s),
+  useFestival: () => ({ getStageName: (id: string) => ({ st1: 'Main', st2: 'Sahara' })[id] }),
+}));
 
 import AlsoPickedSection from './AlsoPickedSection';
 

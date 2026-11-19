@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, X } from 'lucide-react';
 import { raiseSos, sosErrorMessage, isApiClientError } from '@festie/shared';
@@ -9,6 +9,7 @@ import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { useReturnFocus } from '../../hooks/useReturnFocus';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { inputBase } from '../../lib/styles';
 
 interface Props {
@@ -60,15 +61,7 @@ export default function SosRaiseButton({ crewId, compact = false, alerting = fal
   const [busy, setBusy] = useState(false);
   // Reactively track prefers-reduced-motion so the ring class stays in sync
   // even if the OS setting changes while the button is mounted.
-  const reducedMotion = useSyncExternalStore(
-    (cb) => {
-      const mql = typeof window !== 'undefined' ? window.matchMedia('(prefers-reduced-motion: reduce)') : null;
-      mql?.addEventListener('change', cb);
-      return () => mql?.removeEventListener('change', cb);
-    },
-    () => typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches,
-    () => false,
-  );
+  const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   async function send() {
     if (busy) return;

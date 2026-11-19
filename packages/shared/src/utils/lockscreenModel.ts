@@ -1,6 +1,6 @@
 import type { FestivalSet, Priority, Stage } from '../types/domain';
 import { clashBadgeBySetId, detectConflicts } from './conflicts';
-import { parseHex, relativeLuminance, toHex } from './contrast';
+import { contrastRatioRgb, parseHex, toHex } from './contrast';
 import { artistDisplayName, formatTime } from './format';
 import {
   LOCKSCREEN_ZONES,
@@ -106,11 +106,9 @@ const NAME_FLOOR_U = 4.2;
 // ---- colour -------------------------------------------------------------
 
 const rgbOf = (hex: string): [number, number, number] => parseHex(hex) ?? parseHex(FALLBACK_STAGE)!;
-const lum = (hex: string) => relativeLuminance(...rgbOf(hex));
 
 export function contrastRatio(a: string, b: string): number {
-  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
-  return (hi! + 0.05) / (lo! + 0.05);
+  return contrastRatioRgb(rgbOf(a), rgbOf(b));
 }
 
 /** Mix `hex` toward white (dark theme) or black (light theme) until it reaches `target`:1 on `bg`. */

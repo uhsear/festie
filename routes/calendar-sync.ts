@@ -52,6 +52,7 @@ export function createCalendarFeedRoute(deps: any) {
   const noopLimit = (_req: any, _res: any, next: any) => next();
   const feedLimit = typeof rateLimit === 'function' ? rateLimit(30, 'calendar-feed') : noopLimit;
 
+  // Envelope exception (see lib/response.ts).
   // NOTE: This feed route intentionally does NOT use the sendError/sendSuccess
   // JSON-envelope helpers that the /api/v1 POST route above uses. It serves a
   // public ICS (text/calendar) feed consumed by calendar clients — Google

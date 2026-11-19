@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
+import { createTestQueryClient, renderWithQueryClient } from '../../test-utils';
 import PollsTab from './PollsTab';
 
 const { apiGet, closePoll } = vi.hoisted(() => ({ apiGet: vi.fn(), closePoll: vi.fn() }));
@@ -40,12 +40,7 @@ const poll = (id: string, extra: Record<string, unknown> = {}) => ({
 });
 
 function renderTab() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <PollsTab crewId="c1" currentUserId="u1" isOwner />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<PollsTab crewId="c1" currentUserId="u1" isOwner />);
 }
 
 describe('PollsTab cap', () => {
@@ -71,12 +66,8 @@ describe('PollsTab cap', () => {
 describe('PollsTab failed refetch', () => {
   it('keeps cached polls and shows a retry note instead of the error card', async () => {
     apiGet.mockResolvedValueOnce({ polls: [poll('1')] });
-    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    render(
-      <QueryClientProvider client={qc}>
-        <PollsTab crewId="c1" currentUserId="u1" isOwner />
-      </QueryClientProvider>,
-    );
+    const qc = createTestQueryClient();
+    renderWithQueryClient(<PollsTab crewId="c1" currentUserId="u1" isOwner />, qc);
     await screen.findByRole('button', { name: /Create Poll/ });
     apiGet.mockRejectedValueOnce(new Error('offline'));
     await act(() => qc.refetchQueries({ queryKey: ['polls', 'c1'] }));

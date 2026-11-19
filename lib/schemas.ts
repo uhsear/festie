@@ -1460,8 +1460,7 @@ export const liveLocationFixSchema = liveCoord
   .strip();
 export type LiveLocationFixInput = z.infer<typeof liveLocationFixSchema>;
 
-// OPTIONAL (Phase 1.5, Redis-backed late-joiner snapshot). Phase 1 omits the
-// server handler; the schema is registered so the type contract exists.
+// Late-joiner snapshot request (Redis-backed); handled by location:sync in routes/socket.ts.
 export const locationSyncSchema = z
   .object({
     _v: z.number().int().min(1).default(1),

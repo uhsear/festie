@@ -106,7 +106,6 @@ scripts/deploy/__pycache__/
 
 # Local instruction/config files — not for the public repo
 /CLAUDE.md
-/AGENTS.md
 /.cursorrules
 /.github/copilot-instructions.md
 
@@ -120,12 +119,9 @@ packages/mobile/assets/fonts/clash-display/
 packages/web/public/fonts/clash-display/
 
 # Internal docs: kept on the workstation and the server, never published.
-/GETTING_STARTED.md
-/ARCHITECTURE.md
-/CONTEXT.md
-/CONTRIBUTING.md
 /docs/*
 !/docs/brand/
+!/docs/REUSE.md
 packages/*/CLAUDE.md
 packages/*/DESIGN.md
 packages/*/PRODUCT.md

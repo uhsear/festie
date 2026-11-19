@@ -157,6 +157,15 @@ describe('pagination: parsePageParams', () => {
     assert.equal(result.cursor, 'xyz789');
   });
 
+  it('drops a cursor holding a NUL byte or given more than once', () => {
+    assert.equal(parsePageParams({ cursor: 'ab\u0000cd' }).cursor, null);
+    assert.equal(parsePageParams({ cursor: ['a', 'b'] }).cursor, null);
+  });
+
+  it('uses the default for a fractional limit', () => {
+    assert.equal(parsePageParams({ limit: '5.7' }).limit, DEFAULT_PAGE_SIZE);
+  });
+
   it('sets direction to prev when specified', () => {
     const result = parsePageParams({ direction: 'prev' });
     assert.equal(result.direction, 'prev');

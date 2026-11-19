@@ -45,3 +45,9 @@ describe('T3 local reminders report their festival (source-level guards)', () =>
     expect(unregister).toContain('multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
   });
 });
+
+describe('local reminder lead copy', () => {
+  it('keeps the remainder minutes instead of rounding to whole hours', () => {
+    expect(read('hooks/useLocalReminders.ts')).toContain("`${Math.floor(lead / 60)}h${lead % 60 ? ` ${lead % 60}m` : ''}`");
+  });
+});

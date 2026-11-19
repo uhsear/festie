@@ -202,7 +202,7 @@ describe('presence: removeSocketPresence', () => {
     pm.removeSocketPresence(socket);
 
     // setOffline is fire-and-forget, give it a tick
-    await new Promise((r) => setTimeout(r, 10));
+    await new Promise((r) => setImmediate(r));
     assert.equal(rp.setOffline.mock.callCount(), 1);
   });
 });
@@ -555,13 +555,17 @@ describe('presence: clearPresenceTimers', () => {
     pm.emitPresence('fest-1', io);
     pm.emitPresence('fest-2', io);
 
-    // Should clear without throwing
     pm.clearPresenceTimers();
+
+    // Cleared timers must never fire the debounced emit
+    await new Promise((r) => setTimeout(r, 300));
+    assert.equal(io.to.mock.callCount(), 0);
   });
 });
 
 describe('presence: emitPresence', () => {
-  it('emits presence:update to the festival room after debounce', async () => {
+  it('emits presence:update to the festival room after debounce', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const deps = defaultDeps();
     const pm = createPresenceManager(deps);
     const io = makeIo();
@@ -570,14 +574,16 @@ describe('presence: emitPresence', () => {
 
     pm.emitPresence('fest-1', io);
 
-    // Wait for debounce (200ms)
-    await new Promise((r) => setTimeout(r, 300));
+    // Cross the debounce (200ms)
+    t.mock.timers.tick(200);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
 
     assert.ok(io.to.mock.callCount() >= 1);
     pm.clearPresenceTimers();
   });
 
-  it('coalesces rapid calls via debounce', async () => {
+  it('coalesces rapid calls via debounce', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const deps = defaultDeps();
     const pm = createPresenceManager(deps);
     const io = makeIo();
@@ -586,11 +592,12 @@ describe('presence: emitPresence', () => {
     pm.emitPresence('fest-1', io);
     pm.emitPresence('fest-1', io);
 
-    // Wait for debounce
-    await new Promise((r) => setTimeout(r, 300));
+    // Cross the debounce
+    t.mock.timers.tick(200);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
 
     // Should only fire once despite three calls
-    assert.ok(io.to.mock.callCount() <= 2, 'debounce should coalesce multiple calls');
+    assert.equal(io.to.mock.callCount(), 1, 'debounce should coalesce multiple calls');
     pm.clearPresenceTimers();
   });
 });
@@ -619,5 +626,30 @@ describe('presence: emitProfileIdentity', () => {
       ['profile:identity', { festivalId: 'fest-2', profileId: 'prof-2', ...identity }],
     ]);
     pm.clearPresenceTimers();
+  });
+});
+
+describe('presence: heartbeat', () => {
+  it('re-stamps local sockets on an interval until timers are cleared', async () => {
+    mock.timers.enable({ apis: ['setInterval'] });
+    try {
+      const rp: any = makeRedisPresence({});
+      rp.heartbeat = mock.fn(async () => {});
+      const pm = createPresenceManager(defaultDeps({ redisPresence: rp }));
+      await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
+
+      mock.timers.tick(40_000);
+      assert.equal(rp.heartbeat.mock.callCount(), 1);
+      assert.deepEqual(rp.heartbeat.mock.calls[0].arguments, [
+        'fest-1',
+        [{ socketId: 'sock-1', userId: 'user-1', username: 'alice' }],
+      ]);
+
+      pm.clearPresenceTimers();
+      mock.timers.tick(40_000);
+      assert.equal(rp.heartbeat.mock.callCount(), 1);
+    } finally {
+      mock.timers.reset();
+    }
   });
 });

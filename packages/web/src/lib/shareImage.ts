@@ -1,3 +1,5 @@
+import { saveBlob } from './downloadExport';
+
 interface ShareImageOptions {
   width: number;
   height: number;
@@ -32,10 +34,7 @@ export async function captureAndShareImage(
       await navigator.share({ files: [file], title: opts.title });
       return 'shared';
     }
-    const url = URL.createObjectURL(blob);
-    const a = Object.assign(document.createElement('a'), { href: url, download: opts.filename });
-    a.click();
-    URL.revokeObjectURL(url);
+    saveBlob(blob, opts.filename);
     return 'downloaded';
   } catch (e: unknown) {
     if (e instanceof DOMException && e.name === 'AbortError') return 'cancelled';

@@ -35,6 +35,17 @@ export function formatTime(value: any) {
 }
 
 
+/** Decimal amount (string or number) to integer cents. 0 for a non-finite value, as in @festie/shared. */
+export function toCents(value: number | string) {
+  const cents = Math.round(Number(value) * 100);
+  return Number.isFinite(cents) ? cents : 0;
+}
+
+// "$12.40", "€12.40". Every crew currency has 2 decimal places, so cents / 100 is exact.
+export function formatMoney(cents: number, currency: string) {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
+}
+
 export function formatExportTimestamp(value: any) {
   if (!value) return '';
   const stamp = new Date(value);

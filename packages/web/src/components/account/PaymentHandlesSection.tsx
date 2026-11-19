@@ -8,6 +8,7 @@ import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { Wallet } from 'lucide-react';
+import { Card } from '../ui/Card';
 
 type Key = (typeof PAYMENT_FIELDS)[number]['key'];
 type Values = Record<Key, string>;
@@ -59,7 +60,7 @@ export default function PaymentHandlesSection() {
   };
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+    <Card className="space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
         <Wallet className="w-4 h-4" aria-hidden="true" />
         {PAYMENT_COPY.title}
@@ -111,6 +112,6 @@ export default function PaymentHandlesSection() {
           Save
         </Button>
       </form>
-    </section>
+    </Card>
   );
 }

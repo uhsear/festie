@@ -15,6 +15,8 @@
  *   6. No id, and no live artist has the key: create one.
  *   7. No id, and two or more live artists have the key: save the element without an id. The save
  *      does not fail. The publish checklist asks the editor to pick one.
+ * The key and a new artist's name come from the name without a trailing set tag, such as "(Live)".
+ * A set or lineup entry that loses a tag and has no displayName keeps the name it showed as one.
  * The flat `artist` and `link_url` of every set are rebuilt from the resolved elements.
  * With `fillEmptyLinks` (the import's Link column) a sent link for a platform the artist
  * has no link for is returned in `linkFills`; the caller writes it after commit through the artist
@@ -22,7 +24,7 @@
  */
 
 import { createOpaqueId } from './helpers';
-import { artistNameKey } from './artist-key';
+import { artistNameKey, shownSetName, stripSetTag } from './artist-key';
 import { detectPlatform, normalizeArtistLink } from './artist-links';
 import { ALLOWED_LINK_PLATFORMS } from './constants';
 import { createLogger } from './logger';
@@ -37,6 +39,8 @@ interface Slot {
   index: number;
   setId: string | null;
   element: any;
+  /** The element's name without a set tag. */
+  name: string;
   key: string;
   sentId: string | null;
   candidateId: string | null;
@@ -116,16 +120,24 @@ function checkSentLink(platform: string, raw: unknown): { platform: string; url:
   return result.ok ? { platform: target, url: result.url } : null;
 }
 
-function collectSlots(days: any[] | undefined, lineup: any[] | undefined): Slot[] {
+/**
+ * The named elements of the sets and lineup entries. A set tag is stripped from the name (stripSetTag),
+ * and an owner with no displayName keeps the name it showed as its displayName.
+ */
+function collectSlots(days: any[] | undefined, lineup: any[] | undefined, separator: string): Slot[] {
   const slots: Slot[] = [];
-  const take = (list: any[] | undefined, setId: string | null) => {
-    (list ?? []).forEach((element, index) => {
+  const take = (owner: any, setId: string | null) => {
+    const list: any[] = Array.isArray(owner.artists) ? owner.artists : [];
+    const shown = shownSetName(owner, separator);
+    list.forEach((element, index) => {
       if (!element || typeof element.name !== 'string' || !element.name.trim()) return;
-      slots.push({ list: list!, index, setId, element, key: artistNameKey(element.name), sentId: element.id ?? null, candidateId: null });
+      const name = stripSetTag(element.name.trim());
+      if (name !== element.name.trim() && !owner.displayName) owner.displayName = shown.slice(0, 300);
+      slots.push({ list, index, setId, element, name, key: artistNameKey(name), sentId: element.id ?? null, candidateId: null });
     });
   };
-  for (const day of days ?? []) for (const set of day.sets ?? []) take(set.artists, set.id ?? null);
-  for (const entry of lineup ?? []) take(entry.artists, null);
+  for (const day of days ?? []) for (const set of day.sets ?? []) take(set, set.id ?? null);
+  for (const entry of lineup ?? []) take(entry, null);
   return slots;
 }
 
@@ -174,7 +186,10 @@ async function insertNewArtists(client: any, fresh: NewArtist[], userId: string 
   );
   const inserted = new Map<string, ArtistRecord>(rows.map((row: ArtistRecord) => [row.id, row]));
   const lost = sorted.filter((artist) => !inserted.has(artist.id));
-  for (const artist of sorted) if (inserted.has(artist.id)) placed.set(artist, inserted.get(artist.id)!);
+  for (const artist of sorted) {
+    const row = inserted.get(artist.id);
+    if (row) placed.set(artist, row);
+  }
   if (lost.length === 0) return placed;
   // A name that returned nothing lost a race. Use the winner only when its Spotify id agrees.
   const winners = await liveArtistsByKey(client, lost.map((a) => a.key));
@@ -182,7 +197,7 @@ async function insertNewArtists(client: any, fresh: NewArtist[], userId: string 
   for (const artist of lost) {
     const winner = (artist.spotifyId ? winnersBySpotify.get(artist.spotifyId) : undefined) ?? winners.get(artist.key)?.find((row) => row.label === '');
     const agrees = winner && (winner.spotify_id === artist.spotifyId || (!winner.spotify_id && !artist.spotifyId));
-    placed.set(artist, agrees ? winner! : null);
+    placed.set(artist, agrees && winner ? winner : null);
   }
   return placed;
 }
@@ -192,7 +207,7 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
   const days = input.days ? structuredClone(input.days) : undefined;
   const lineup = input.lineup ? structuredClone(input.lineup) : undefined;
   const result: RefsResult = { droppedLinks: 0, ignoredLinkEdits: 0, ambiguous: [], linkFills: [] };
-  const slots = collectSlots(days, lineup);
+  const slots = collectSlots(days, lineup, input.separator);
   if (slots.length === 0) return { ...result, days, lineup };
 
   const stored = await loadStored(client, input.festivalId);
@@ -243,7 +258,8 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
     const spotifyHit = bySpotify.get(spotifyOf(slot) ?? '');
     const sameKey = byKey.get(slot.key) ?? [];
     if (spotifyHit || sameKey.length === 1) {
-      const row = spotifyHit ?? sameKey[0]!;
+      const row = spotifyHit ?? sameKey[0];
+      if (!row) continue;
       linked.set(slot, row);
       noteIgnoredLinks(slot, row);
     } else if (sameKey.length > 1) {
@@ -257,7 +273,7 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
         fresh.get(slot.key) ??
         ({
           id: createOpaqueId('art'),
-          name: String(slot.element.name).trim(),
+          name: slot.name,
           key: slot.key,
           links: {},
           spotifyId: null,
@@ -305,7 +321,10 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
   for (const row of linked.values()) {
     if (!current.has(row.id)) throw Object.assign(new Error(`artist ${row.id} was merged during the save`), { code: '40001' });
   }
-  for (const [slot, row] of linked) slot.list[slot.index] = canonicalElement(current.get(row.id)!);
+  for (const [slot, row] of linked) {
+    const locked = current.get(row.id);
+    if (locked) slot.list[slot.index] = canonicalElement(locked);
+  }
   rebuildFlatFields(days, input.separator, sentJoined);
   return { ...result, days, lineup };
 }
@@ -329,6 +348,8 @@ export interface SetValuesTarget {
   artists: any[];
   artist: string;
   linkUrl: string | null;
+  /** Undefined leaves the stored display name alone. A stripped set tag sets it when it is empty. */
+  displayName?: string | null;
 }
 
 /**
@@ -340,11 +361,13 @@ export async function resolveSetValues(
   input: { festivalId: string; separator: string; userId: string | null; fillEmptyLinks?: boolean },
   sets: Array<{ id: string; values: SetValuesTarget }>,
 ): Promise<RefsResult> {
-  const days = [{ sets: sets.map((s) => ({ id: s.id, artists: s.values.artists })) }];
+  const days = [{ sets: sets.map((s) => ({ id: s.id, artists: s.values.artists, displayName: s.values.displayName })) }];
   const result = await resolveArtistRefs(client, { ...input, days });
-  result.days![0].sets.forEach((resolved: any, index: number) => {
-    const target = sets[index]!.values;
+  (result.days?.[0]?.sets ?? []).forEach((resolved: any, index: number) => {
+    const target = sets[index]?.values;
+    if (!target) return;
     target.artists = resolved.artists;
+    if (resolved.displayName) target.displayName = resolved.displayName;
     if (resolved.artists.length === 0) return;
     target.artist = resolved.artist;
     target.linkUrl = resolved.linkUrl ?? null;

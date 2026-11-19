@@ -9,6 +9,7 @@ describe('ios round 2 shell source guards', () => {
     const src = read('app/_layout.tsx');
     expect(src).toContain("headerBackButtonDisplayMode: 'minimal'");
     expect(src).toContain('Appearance.setColorScheme');
+    expect(src).toContain('applySystemScheme(systemScheme)');
   });
   it('OfflineMap FABs clear the home indicator and meet 44pt', () => {
     const src = read('components/OfflineMap.tsx');
