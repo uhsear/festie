@@ -621,3 +621,28 @@ describe('presence: emitProfileIdentity', () => {
     pm.clearPresenceTimers();
   });
 });
+
+describe('presence: heartbeat', () => {
+  it('re-stamps local sockets on an interval until timers are cleared', async () => {
+    mock.timers.enable({ apis: ['setInterval'] });
+    try {
+      const rp: any = makeRedisPresence({});
+      rp.heartbeat = mock.fn(async () => {});
+      const pm = createPresenceManager(defaultDeps({ redisPresence: rp }));
+      await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
+
+      mock.timers.tick(40_000);
+      assert.equal(rp.heartbeat.mock.callCount(), 1);
+      assert.deepEqual(rp.heartbeat.mock.calls[0].arguments, [
+        'fest-1',
+        [{ socketId: 'sock-1', userId: 'user-1', username: 'alice' }],
+      ]);
+
+      pm.clearPresenceTimers();
+      mock.timers.tick(40_000);
+      assert.equal(rp.heartbeat.mock.callCount(), 1);
+    } finally {
+      mock.timers.reset();
+    }
+  });
+});
