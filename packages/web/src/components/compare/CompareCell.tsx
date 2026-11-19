@@ -1,11 +1,12 @@
 import React, { memo } from 'react';
 import type { Priority } from '@festie/shared/types';
+import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import PriorityIcon from '../ui/PriorityIcon';
 
-const PRIORITY_STYLE: Record<Priority, { label: string; bg: string; fg: string }> = {
-  must: { label: 'Must', bg: 'var(--color-accent-coral-strong)', fg: 'var(--color-text-on-accent)' },
-  'want-to-see': { label: 'Want', bg: 'var(--color-priority-want)', fg: 'var(--color-bg-primary)' },
-  maybe: { label: 'Maybe', bg: 'var(--color-priority-maybe)', fg: 'var(--color-bg-primary)' },
+const PRIORITY_STYLE: Record<Priority, { bg: string; fg: string }> = {
+  must: { bg: 'var(--color-accent-coral-strong)', fg: 'var(--color-text-on-accent)' },
+  'want-to-see': { bg: 'var(--color-priority-want)', fg: 'var(--color-bg-primary)' },
+  maybe: { bg: 'var(--color-priority-maybe)', fg: 'var(--color-bg-primary)' },
 };
 
 interface CompareCellProps {
@@ -25,7 +26,7 @@ export default memo(function CompareCell({ priority, onAdd, label }: CompareCell
           style={{ background: PRIORITY_STYLE[priority].bg, color: PRIORITY_STYLE[priority].fg }}
         >
           <PriorityIcon priority={priority} className="w-3 h-3" filled />
-          {PRIORITY_STYLE[priority].label}
+          {PRIORITY_SYMBOLS[priority].short}
         </span>
       ) : onAdd ? (
         <button

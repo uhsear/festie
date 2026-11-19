@@ -2,6 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 
@@ -36,6 +37,7 @@ export default function createCrewCheckinRoutes(deps: RouteDeps) {
     redis,
     emitter,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
   const UNAVAILABLE = 'Check-in timers are not available right now.';
@@ -56,6 +58,7 @@ export default function createCrewCheckinRoutes(deps: RouteDeps) {
     rateLimit(20, 'crew-checkin'),
     validateParams(schemas.crewIdParams),
     validate(schemas.checkinStart),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         if (config?.SOS_ENABLED === false || !redis) {
@@ -67,8 +70,6 @@ export default function createCrewCheckinRoutes(deps: RouteDeps) {
         const userId = req.user.userId;
         const username = req.user.username || 'A crew member';
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const position = body.position
           ? {
@@ -99,6 +100,7 @@ export default function createCrewCheckinRoutes(deps: RouteDeps) {
     userAuth,
     rateLimit(20, 'crew-checkin'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         // No SOS_ENABLED gate: cancelling a running timer must always work, or
@@ -107,8 +109,6 @@ export default function createCrewCheckinRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier(params.crewId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const cleared = await clearCheckin(redis, crewId, userId);
         if (cleared) await logActivity(crewId, userId, 'checkin-done', null);
@@ -128,6 +128,7 @@ export default function createCrewCheckinRoutes(deps: RouteDeps) {
     userAuth,
     rateLimit(60, 'crew-checkin-read'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         res.setHeader('Cache-Control', 'no-store');
@@ -138,8 +139,6 @@ export default function createCrewCheckinRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier(params.crewId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const timer = await getCheckin(redis, crewId, userId);
         return sendSuccess(res, {

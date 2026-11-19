@@ -8,6 +8,7 @@
  *   POST   /:crewId/polls/:pollId/nudge   one reminder to the members who have not voted
  */
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 import { MAX_OPEN_POLLS_PER_CREW } from '../lib/constants';
 import { createPollCloser } from '../lib/poll-close';
 
@@ -29,6 +30,7 @@ export default function createCrewPollRoutes(deps: any) {
     emitter,
     crewNotify,
   } = deps;
+  const crewMember = crewMembership(deps);
   const pollCloser = deps.pollCloser ?? createPollCloser({ stores, io, emitter, crewNotify, createOpaqueId, log });
 
   const isEnded = (poll: any) => poll.closed || (poll.closes_at && new Date(poll.closes_at) <= new Date());
@@ -41,12 +43,10 @@ export default function createCrewPollRoutes(deps: any) {
     userAuth,
     rateLimit(120, 'crew-poll-list'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const userId = req.user.userId;
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const polls = await stores.polls.listByCrew(crewId);
         return sendSuccess(res, { polls });
       } catch (err: any) {
@@ -63,6 +63,7 @@ export default function createCrewPollRoutes(deps: any) {
     rateLimit(10, 'crew-poll-create'),
     validateParams(schemas.crewIdParams),
     validate(schemas.pollCreate),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
@@ -71,8 +72,6 @@ export default function createCrewPollRoutes(deps: any) {
         if (closesAt && new Date(closesAt).getTime() <= Date.now())
           return sendError(res, 400, 'Pick an end time in the future.', ErrorCodes.INVALID_INPUT);
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const activePollCount = await stores.polls.countActiveByCrew(crewId);
         if (activePollCount >= MAX_OPEN_POLLS_PER_CREW) {
@@ -121,6 +120,7 @@ export default function createCrewPollRoutes(deps: any) {
     rateLimit(60, 'crew-poll-vote'),
     validateParams(schemas.crewIdPollIdParams),
     validate(schemas.pollVote),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
@@ -130,8 +130,6 @@ export default function createCrewPollRoutes(deps: any) {
         // Old clients send one optionIndex; an empty optionIndexes takes the vote back.
         const indexes: number[] = [...new Set<number>(optionIndexes ?? [optionIndex])].sort((a, b) => a - b);
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const poll = await stores.polls.getById(pollId);
         if (!poll || poll.crew_id !== crewId) return sendError(res, 404, 'Poll not found', ErrorCodes.NOT_FOUND);
@@ -163,18 +161,17 @@ export default function createCrewPollRoutes(deps: any) {
     userAuth,
     rateLimit(10, 'crew-poll-delete'),
     validateParams(schemas.crewIdPollIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const pollId = sanitizeIdentifier(req.validatedParams.pollId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const poll = await stores.polls.getById(pollId);
         if (!poll || poll.crew_id !== crewId) return sendError(res, 404, 'Poll not found', ErrorCodes.NOT_FOUND);
-        if (poll.created_by !== userId && membership.role !== 'owner') {
+        if (poll.created_by !== userId && req.membership.role !== 'owner') {
           return sendError(res, 403, 'Only creator or owner can close poll', ErrorCodes.FORBIDDEN);
         }
 
@@ -197,18 +194,17 @@ export default function createCrewPollRoutes(deps: any) {
     userAuth,
     rateLimit(10, 'crew-poll-nudge'),
     validateParams(schemas.crewIdPollIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const pollId = sanitizeIdentifier(req.validatedParams.pollId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const poll = await stores.polls.getById(pollId);
         if (!poll || poll.crew_id !== crewId) return sendError(res, 404, 'Poll not found', ErrorCodes.NOT_FOUND);
-        if (poll.created_by !== userId && membership.role !== 'owner')
+        if (poll.created_by !== userId && req.membership.role !== 'owner')
           return sendError(res, 403, 'Only the poll creator or crew owner can send a reminder.', ErrorCodes.FORBIDDEN);
         if (isEnded(poll)) return sendError(res, 409, 'This poll has ended.', ErrorCodes.CONFLICT);
 

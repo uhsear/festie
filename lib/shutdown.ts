@@ -2,7 +2,7 @@
  * Background periodic tasks (session/avatar/token cleanup, memory monitoring)
  * and graceful shutdown handler.
  */
-import fs from 'fs';
+import fsp from 'fs/promises';
 import path from 'path';
 
 import { recordJobRun } from './metrics.js';
@@ -116,27 +116,43 @@ function createBackgroundTasks(ctx: any, { io }: any) {
     async () => {
       try {
         const avatarDir = avatarDirPath();
-        if (!fs.existsSync(avatarDir)) {
+        let dir;
+        try {
+          dir = await fsp.opendir(avatarDir);
+        } catch (err: any) {
+          if (err.code !== 'ENOENT') throw err;
           recordJobRun('avatar_cleanup', true);
           return;
         }
-        const files = fs.readdirSync(avatarDir);
-        const { rows: keyRows } = await stores.pool.query(
-          'SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL',
-        );
-        const validAvatarKeys = new Set(keyRows.map((r: any) => r.avatar_key).filter(Boolean));
-        for (const file of files) {
-          if (!file.endsWith('.webp')) continue;
-          const avatarKey = file.replace(/\.webp$/, '');
-          if (!validAvatarKeys.has(avatarKey)) {
+        // Page the directory so memory and the users query stay bounded.
+        const removeOrphans = async (files: string[]) => {
+          const keys = files.map((file) => file.replace(/\.webp$/, ''));
+          const { rows } = await stores.pool.query(
+            'SELECT avatar_key FROM users WHERE avatar_key = ANY($1::text[])',
+            [keys],
+          );
+          const validAvatarKeys = new Set(rows.map((r: any) => r.avatar_key));
+          for (const [i, file] of files.entries()) {
+            const avatarKey = keys[i];
+            if (validAvatarKeys.has(avatarKey)) continue;
             try {
-              fs.unlinkSync(path.join(avatarDir, file));
+              await fsp.unlink(path.join(avatarDir, file));
               log.debug('orphan avatar removed', { avatarKey });
             } catch (err: any) {
               log.warn('failed to remove orphan avatar', { avatarKey, error: err.message });
             }
           }
+        };
+        let batch: string[] = [];
+        for await (const entry of dir) {
+          if (!entry.name.endsWith('.webp')) continue;
+          batch.push(entry.name);
+          if (batch.length >= 500) {
+            await removeOrphans(batch);
+            batch = [];
+          }
         }
+        if (batch.length > 0) await removeOrphans(batch);
         recordJobRun('avatar_cleanup', true);
       } catch (err: any) {
         recordJobRun('avatar_cleanup', false);
