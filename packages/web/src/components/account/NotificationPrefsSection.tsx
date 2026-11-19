@@ -119,7 +119,7 @@ function QuietHoursEditor({ start, end }: { start: string; end: string }) {
       return;
     }
     setInvalid(false);
-    if (nextFrom !== start || nextTo !== end) updatePrefs({ dndStart: nextFrom, dndEnd: nextTo }).catch(() => {});
+    if (nextFrom !== start || nextTo !== end) updatePrefs({ dndStart: nextFrom, dndEnd: nextTo }).catch((err) => console.warn('Notification quiet hours update failed', err));
   };
 
   return (
@@ -132,7 +132,7 @@ function QuietHoursEditor({ start, end }: { start: string; end: string }) {
               key={p.id}
               type="button"
               aria-pressed={active}
-              onClick={() => updatePrefs({ dndStart: p.start, dndEnd: p.end }).catch(() => {})}
+              onClick={() => updatePrefs({ dndStart: p.start, dndEnd: p.end }).catch((err) => console.warn('Notification quiet hours update failed', err))}
               className={cn(
                 'min-h-11 px-3 rounded-full border text-xs',
                 active ? 'border-accent-aqua text-text-primary' : 'border-border text-text-muted',
@@ -188,7 +188,7 @@ export default function NotificationPrefsSection() {
   const updatePrefs = useNotificationPrefsStore((s) => s.updatePrefs);
 
   useEffect(() => {
-    loadPrefs().catch(() => {});
+    loadPrefs().catch((err) => console.warn('Notification prefs load failed', err));
   }, [loadPrefs]);
 
   const quietOn = !!prefs.dndStart && !!prefs.dndEnd;
@@ -216,7 +216,7 @@ export default function NotificationPrefsSection() {
                 label={row.label}
                 hint={row.hint}
                 checked={prefs[row.key]}
-                onChange={(v) => updatePrefs({ [row.key]: v }).catch(() => {})}
+                onChange={(v) => updatePrefs({ [row.key]: v }).catch((err) => console.warn('Notification prefs update failed', err))}
               />
               {row.key === 'setReminders' ? (
                 <div className="flex items-center justify-between py-2">
@@ -230,7 +230,7 @@ export default function NotificationPrefsSection() {
                     onChange={(e) =>
                       updatePrefs({
                         mustSeeReminderMinutes: e.target.value === '' ? null : (Number(e.target.value) as MustSeeMinutes),
-                      }).catch(() => {})
+                      }).catch((err) => console.warn('Notification prefs update failed', err))
                     }
                     className="min-h-11 px-2 rounded border border-border bg-bg-card text-sm text-text-primary"
                   >
@@ -249,7 +249,7 @@ export default function NotificationPrefsSection() {
             hint={quietHint}
             checked={quietOn}
             onChange={(v) =>
-              updatePrefs(v ? { dndStart: win.start, dndEnd: win.end } : { dndStart: null, dndEnd: null }).catch(() => {})
+              updatePrefs(v ? { dndStart: win.start, dndEnd: win.end } : { dndStart: null, dndEnd: null }).catch((err) => console.warn('Notification quiet hours update failed', err))
             }
           />
           {quietOn ? <QuietHoursEditor start={win.start} end={win.end} /> : null}
