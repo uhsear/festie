@@ -16,6 +16,7 @@ import assert from 'node:assert/strict';
 import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
+import { schemas, validate, validateParams, validateQuery } from '../lib/schemas.js';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -134,15 +135,10 @@ function makeDeps(overrides: any = {}) {
       CONFLICT: 'CONFLICT',
     },
     rateLimit: overrides.rateLimit || ((_max: any, _key: any) => (_req: any, _res: any, next: any) => next()),
-    validate: overrides.validate || ((_schema: any) => (req: any, _res: any, next: any) => { req.validatedBody = req.body; next(); }),
-    validateQuery: overrides.validateQuery || ((_schema: any) => (req: any, _res: any, next: any) => { req.validatedQuery = req.query; next(); }),
-    validateParams: overrides.validateParams || ((_schema: any) => (req: any, _res: any, next: any) => { req.validatedParams = req.params; next(); }),
-    schemas: {
-      crewUserSearchQuery: {},
-      crewIdParams: {},
-      crewTransfer: {},
-      crewAddMember: {},
-    },
+    validate: overrides.validate || validate,
+    validateQuery: overrides.validateQuery || validateQuery,
+    validateParams: overrides.validateParams || validateParams,
+    schemas,
     io: overrides.io !== undefined ? overrides.io : ioObj,
     crewNotify: overrides.crewNotify,
     getRequestIp: () => '127.0.0.1',
@@ -767,7 +763,7 @@ describe('routes/crew-members.js — PUT /:crewId/transfer', () => {
       .send({});
 
     assert.equal(res.status, 400);
-    assert.equal(res.body.error.code, 'MISSING_FIELD');
+    assert.equal(res.body.error.code, 'VALIDATION_ERROR');
   });
 
   test('re-reads the crew so the response and broadcast carry the new owner', async () => {

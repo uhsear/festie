@@ -222,7 +222,7 @@ export interface LocationStopPayload extends VersionedPayload {
   crewId: string;
 }
 
-/** client→server (OPTIONAL, Phase 1.5): late-joiner snapshot request. */
+/** client→server: late-joiner snapshot request. */
 export interface LocationSyncPayload extends VersionedPayload {
   crewId: string;
 }
@@ -404,8 +404,7 @@ export interface ClientToServerEvents {
   'location:share': (data: LocationSharePayload, ack: (response: { ok: boolean; code?: string }) => void) => void;
   'location:update': (data: LocationUpdatePayload) => void;
   'location:stop': (data: LocationStopPayload, ack: (response: { ok: boolean }) => void) => void;
-  // OPTIONAL (Phase 1.5, Redis-backed). Phase 1 has no server handler; the type
-  // exists so the late-joiner snapshot contract is ready for the UI to adopt.
+  // Late-joiner snapshot request; handled by the server in routes/socket.ts.
   'location:sync': (
     data: LocationSyncPayload,
     ack: (response: { ok: boolean; peers: LocationPeerUpdatePayload[] }) => void,

@@ -240,7 +240,7 @@ export function createRatingsRoutes({
           ? {
               id: crewRow.id,
               name: crewRow.name,
-              memberCount: Number(await stores.crews.getMemberCount(crewRow.id)),
+              memberCount: await stores.crews.getMemberCount(crewRow.id),
               photoAlbumUrl: crewRow.photoAlbumUrl ?? null,
             }
           : null;

@@ -112,8 +112,7 @@ export function resolveTestDatabaseUrl(
 
 async function truncateAllTables(pool: InstanceType<typeof Pool>) {
   // CASCADE drops dependent rows (profiles/picks/crews/etc.) so each test run
-  // starts from a clean slate. Wrapped in a try so a missing table (older
-  // schema) doesn't abort the whole run.
+  // starts from a clean slate.
   await pool.query(`
     TRUNCATE TABLE
       festival_profile_notes, festival_profile_picks, festival_profiles,
@@ -321,4 +320,4 @@ export async function loginAdminUi(page: Page, app: AppRef) {
   return username;
 }
 
-export { expect, ADMIN_USER, ADMIN_PASSWORD, DEFAULT_PASSWORD };
+export { expect, DEFAULT_PASSWORD };

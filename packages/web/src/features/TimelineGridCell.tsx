@@ -34,6 +34,10 @@ export interface TimelineGridCellProps {
   clash?: ClashMark;
   compact: boolean;
   tabbable: boolean;
+  /** Arrow/Home/End key pressed on one of this cell's buttons. */
+  onNavKey: (e: React.KeyboardEvent<HTMLElement>, setId: string) => void;
+  /** The cell took focus or a click: it becomes the roving tab stop. */
+  onActivate: (setId: string) => void;
   canPick: boolean;
   festival: Festival | null;
   onSetClick: (set: FestivalSet) => void;
@@ -53,6 +57,8 @@ function TimelineGridCell({
   clash,
   compact,
   tabbable,
+  onNavKey,
+  onActivate,
   canPick,
   festival,
   onSetClick,
@@ -108,6 +114,7 @@ function TimelineGridCell({
         } as React.CSSProperties
       }
       data-set-id={set.id}
+      onFocus={() => onActivate(set.id)}
       data-short={isShort ? '1' : '0'}
     >
       {/* Clash hatching over each overlapping part of this set */}
@@ -147,7 +154,12 @@ function TimelineGridCell({
           'flex min-h-0 w-full flex-1 flex-col justify-center text-left cursor-pointer',
           'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
         )}
-        onClick={() => onSetClick(set)}
+        onClick={() => {
+          // Safari and Firefox on macOS do not focus a button on click, so onFocus alone misses it.
+          onActivate(set.id);
+          onSetClick(set);
+        }}
+        onKeyDown={(e) => onNavKey(e, set.id)}
         tabIndex={tabIndex}
         // The badge above is pointer-events-none, so hovering it lands here and shows this tooltip.
         title={clash?.text}
@@ -220,6 +232,7 @@ function TimelineGridCell({
                     'bg-[var(--color-priority-maybe)] text-[var(--text-on-light-accent)] border-[var(--color-priority-maybe)] opacity-100',
                 )}
                 type="button"
+                onKeyDown={(e) => onNavKey(e, set.id)}
                 tabIndex={tabIndex}
                 aria-pressed={active ? 'true' : 'false'}
                 aria-label={pickLabel(p)}
@@ -227,6 +240,7 @@ function TimelineGridCell({
                 onClick={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
+                  onActivate(set.id);
                   onSavePick(set.id, active ? null : p);
                 }}
               >

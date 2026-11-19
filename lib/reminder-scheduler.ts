@@ -101,8 +101,13 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
     // keep in sync with effectiveReminders in packages/shared/src/utils/reminderSchedule.ts
     const mustSeeMap: Record<string, number> = {};
     if (profile.mustSeeLead != null) {
-      const mustSetIds = typeof profile.mustSetIds === 'string' ? JSON.parse(profile.mustSetIds) : profile.mustSetIds || [];
-      for (const id of mustSetIds) mustSeeMap[id] = profile.mustSeeLead;
+      try {
+        const mustSetIds = typeof profile.mustSetIds === 'string' ? JSON.parse(profile.mustSetIds) : profile.mustSetIds || [];
+        for (const id of mustSetIds) mustSeeMap[id] = profile.mustSeeLead;
+      } catch (err: any) {
+        logger.warn('must set ids parse failed, skipping profile', { userId: profile.userId, error: err.message });
+        return;
+      }
     }
 
     for (const [setId, minutesBefore] of Object.entries({ ...mustSeeMap, ...reminders })) {

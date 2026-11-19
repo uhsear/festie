@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FestivalSet, Priority, Stage, Festival } from '@festie/shared/types';
 import {
   setMinuteRange,
@@ -200,32 +200,25 @@ export default function TimelineGrid({
       ?.focus();
   }, [tabStopId, gridRef]);
 
-  const onKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!NAV_KEYS.has(e.key)) return;
-    const from = (e.target as HTMLElement).closest<HTMLElement>('[data-set-id]')?.dataset.setId;
-    if (!from) return;
-    const next = gridNeighbour(navCells, from, e.key as GridNavKey);
-    if (!next) return;
-    e.preventDefault();
-    movedByKeyboard.current = true;
-    setActiveId(next);
-  };
-  const onClickCapture = (e: React.MouseEvent<HTMLDivElement>) => {
-    const id = (e.target as HTMLElement).closest<HTMLElement>('[data-set-id]')?.dataset.setId;
-    if (id) setActiveId(id);
-  };
+  const onNavKey = useCallback(
+    (e: React.KeyboardEvent<HTMLElement>, from: string) => {
+      if (!NAV_KEYS.has(e.key)) return;
+      const next = gridNeighbour(navCells, from, e.key as GridNavKey);
+      if (!next) return;
+      e.preventDefault();
+      movedByKeyboard.current = true;
+      setActiveId(next);
+    },
+    [navCells],
+  );
 
   return (
-    // Handlers are delegated from the focusable cell buttons inside; the group itself takes no focus.
-    // eslint-disable-next-line jsx-a11y/no-noninteractive-element-interactions
     <div
       ref={gridRef}
       className={cn('grid relative gap-0', !compact && 'min-w-[800px]')}
       role="group"
       aria-label={COPY.grid.gridLabel}
       data-day={selectedDay}
-      onKeyDown={onKeyDown}
-      onClickCapture={onClickCapture}
       style={{
         gridTemplateColumns: `${gutterW}px repeat(${visibleStages.length}, ${
           compact ? `${twoUpColumnWidth(vpW, gutterW)}px` : 'minmax(140px, 1fr)'
@@ -308,6 +301,8 @@ export default function TimelineGrid({
               clash={clashMarks.get(s.id)}
               compact={compact}
               tabbable={s.id === tabStopId}
+              onNavKey={onNavKey}
+              onActivate={setActiveId}
               canPick={canPick}
               festival={currentFestival}
               onSetClick={onSetClick}

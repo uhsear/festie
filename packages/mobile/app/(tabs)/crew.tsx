@@ -21,6 +21,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import * as Sentry from '@sentry/react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore, useUIStore } from '@festie/shared/stores';
@@ -336,9 +337,9 @@ export default function CrewScreen() {
   // Pull-to-refresh: re-fetch the crew list and the active crew (members,
   // polls, meeting points, expenses all reload off selectCrew + the effect).
   const handleRefresh = useCallback(() => {
-    loadCrews().catch(() => {});
+    loadCrews().catch((err) => Sentry.captureException(err));
     if (activeCrew) {
-      selectCrew(activeCrew.id).catch(() => {});
+      selectCrew(activeCrew.id).catch((err) => Sentry.captureException(err));
       reloadCrewSections();
     }
   }, [loadCrews, activeCrew, selectCrew, reloadCrewSections]);
@@ -386,7 +387,8 @@ export default function CrewScreen() {
         totemName: editTotemName.trim(),
       });
       setTotemEditOpen(false);
-    } catch {
+    } catch (err) {
+      Sentry.captureException(err);
       // Error is set in the store.
     } finally {
       setTotemBusy(false);
@@ -403,7 +405,8 @@ export default function CrewScreen() {
       await updateCrew(crewId, { name: trimmed });
       setRenameOpen(false);
       showNotice(crewCopy.renamed);
-    } catch {
+    } catch (err) {
+      Sentry.captureException(err);
       // Error is set in the store.
     } finally {
       setRenameBusy(false);
@@ -430,7 +433,7 @@ export default function CrewScreen() {
     Share.share({
       message: inviteShareMessage(crewName, url),
       url,
-    }).catch(() => {});
+    }).catch((err) => Sentry.captureException(err));
   }, []);
 
   const handleRegenerate = (crewId: string) => {
@@ -444,7 +447,8 @@ export default function CrewScreen() {
           try {
             await regenerateInvite(crewId);
             showNotice(crewCopy.inviteRegenerated);
-          } catch {
+          } catch (err) {
+            Sentry.captureException(err);
             // Error is set in the store.
           } finally {
             setRegenBusy(false);
@@ -539,7 +543,8 @@ export default function CrewScreen() {
           try {
             await kickMember(crewId, member.userId);
             showNotice(crewCopy.removed(member.name || 'member'));
-          } catch {
+          } catch (err) {
+            Sentry.captureException(err);
             // Error is set in the store.
           }
         },
@@ -560,7 +565,8 @@ export default function CrewScreen() {
             try {
               await transferOwnership(crewId, member.userId);
               showNotice(crewCopy.transferred(member.name || 'Member'));
-            } catch {
+            } catch (err) {
+              Sentry.captureException(err);
               // Error is set in the store.
             }
           },
@@ -579,7 +585,8 @@ export default function CrewScreen() {
       setForceAddName('');
       setForceAddOpen(false);
       showNotice(crewCopy.added(username));
-    } catch {
+    } catch (err) {
+      Sentry.captureException(err);
       // Error is set in the store.
     } finally {
       setForceAddBusy(false);
@@ -596,7 +603,7 @@ export default function CrewScreen() {
         onPress: () => {
           leaveCrew(crewId)
             .then(() => showNotice(crewCopy.left(crewName)))
-            .catch(() => {});
+            .catch((err) => Sentry.captureException(err));
         },
       },
     ]);
@@ -611,7 +618,7 @@ export default function CrewScreen() {
         onPress: () => {
           deleteCrew(crewId)
             .then(() => showNotice(crewCopy.deleted(crewName)))
-            .catch(() => {});
+            .catch((err) => Sentry.captureException(err));
         },
       },
     ]);
@@ -635,7 +642,8 @@ export default function CrewScreen() {
       setHandOverOpen(false);
       if (result === 'left') showNotice(crewCopy.handedOverAndLeft(crew.name, name));
       else setError(crewCopy.handOverPartial(crew.name, name));
-    } catch {
+    } catch (err) {
+      Sentry.captureException(err);
       // Error is set in the store.
       setHandOverOpen(false);
     } finally {
