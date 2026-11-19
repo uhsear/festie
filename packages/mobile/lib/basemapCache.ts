@@ -11,8 +11,9 @@
 // Phase 3A behaviour (pmtiles HTTP range + WebView/CDN cache). Nothing here can
 // regress the online path or the no-basemap path.
 //
-// Mobile import rule: imports ONLY this package's own dep `expo-file-system`. No
-// React, no WebView, no @festie/shared transitive deps — keep it unit-testable.
+// Mobile import rule: imports only this package's own dep `expo-file-system` and
+// `@festie/shared`. No React, no WebView, no shared transitive deps — keep it
+// unit-testable.
 
 import { File, Directory, Paths } from 'expo-file-system';
 import { createBasemapEnsurer, headContentLength } from '@festie/shared/utils';
