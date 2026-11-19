@@ -267,7 +267,7 @@ export function createBackgroundTasks(ctx: any, { io }: any) {
       recordJobRun('meeting_point_expiry', false);
       log.warn('meeting point expiry failed', { error: err.message });
     }
-  }, JOB_INTERVALS_MS.MEETING_POINT_EXPIRY);
+  }, config.TOKEN_CLEANUP_INTERVAL_MS);
   _meetingPointExpiryTimer.unref();
   state.timers.push(_meetingPointExpiryTimer);
 
