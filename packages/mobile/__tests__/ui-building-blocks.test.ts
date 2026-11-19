@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { read } from './read-source';
 
-const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 
 describe('mobile building blocks', () => {
   it('Button shows loadingLabel beside the spinner', () => {
