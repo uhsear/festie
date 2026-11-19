@@ -115,26 +115,16 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
     },
 
     async deleteUserSessions(userId: string, exceptToken: string | null = null) {
-      let result;
-      if (exceptToken) {
-        result = await pool.query(
-          'SELECT token FROM user_sessions WHERE user_id = $1 AND token <> $2 ORDER BY last_access ASC, token ASC',
-          [userId, exceptToken],
-        );
-      } else {
-        result = await pool.query(
-          'SELECT token FROM user_sessions WHERE user_id = $1 ORDER BY last_access ASC, token ASC',
-          [userId],
-        );
-      }
-      const current = result.rows.map((session: any) => session.token);
-
-      if (current.length > 0) {
-        const placeholders = current.map((_: any, i: number) => `$${i + 1}`).join(',');
-        await pool.query(`DELETE FROM user_sessions WHERE token IN (${placeholders})`, current);
-      }
-
-      return current;
+      // One DELETE ... RETURNING: a session created concurrently is either deleted here or after the revoke, never skipped
+      const result = exceptToken
+        ? await pool.query(
+            'DELETE FROM user_sessions WHERE user_id = $1 AND token <> $2 RETURNING token, last_access',
+            [userId, exceptToken],
+          )
+        : await pool.query('DELETE FROM user_sessions WHERE user_id = $1 RETURNING token, last_access', [userId]);
+      return result.rows
+        .sort((a: any, b: any) => +new Date(a.last_access) - +new Date(b.last_access) || (a.token < b.token ? -1 : 1))
+        .map((session: any) => session.token);
     },
 
     async deleteExpiredUserSessions(sessionTtlMs: number) {
