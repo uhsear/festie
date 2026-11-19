@@ -253,6 +253,14 @@ describe('GET /api/health /api/info /api/ready', () => {
     assert.equal(res.status, 503);
     assert.equal(res.body.data.status, 'not_ready');
   });
+
+  test('/api/ready returns 200 once the server is marked ready', async () => {
+    const server = await startServer(); servers.push(server);
+    server.planner.setHealthReady(true);
+    const res = await server.request.get('/api/ready');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.status, 'ready');
+  });
 });
 
 // ════════════════════════════════════════════════════════════════════════
@@ -736,7 +744,7 @@ describe('misc route edges', () => {
     }
   });
 
-  test('profile sync with stale If-Match ETag accepted or 409', async () => {
+  test('profile sync with stale If-Match ETag returns 409', async () => {
     const server = await startServer(); servers.push(server);
     const adminToken = await loginAdmin(server);
     const user = await registerUser(server, 'staleetag');
@@ -761,7 +769,7 @@ describe('misc route edges', () => {
       .set('x-user-token', user.token)
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ festivalId: 'stale-fest' });
-    assert.ok([200, 201].includes(join.status));
+    assert.equal(join.status, 200);
     const profileId = join.body.data && join.body.data.id;
     assert.ok(profileId);
 
