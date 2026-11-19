@@ -115,7 +115,7 @@ function makePackingDeps(overrides: any = {}) {
 async function buildPackingApp(overrides: any = {}) {
   const deps = makePackingDeps(overrides);
   const { default: createCrewPackingRoutes } = await import('../routes/crew-packing.js');
-  const router = createCrewPackingRoutes(deps);
+  const router = createCrewPackingRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/', router);

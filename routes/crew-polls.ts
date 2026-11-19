@@ -12,8 +12,12 @@ import { crewMembership } from '../lib/app-context/session';
 import { MAX_OPEN_POLLS_PER_CREW } from '../lib/constants';
 import { createPollCloser } from '../lib/poll-close';
 import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
+import type { Request, Response } from 'express';
+import type { z } from 'zod';
+import type { RouteDeps } from '../lib/types';
+import type { Params } from '../lib/types/app-context';
 
-export default function createCrewPollRoutes(deps: any) {
+export default function createCrewPollRoutes(deps: RouteDeps) {
   const {
     log,
     userAuth,
@@ -45,13 +49,13 @@ export default function createCrewPollRoutes(deps: any) {
     rateLimit(120, 'crew-poll-list'),
     validateParams(schemas.crewIdParams),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
         const polls = await stores.polls.listByCrew(crewId);
         return sendSuccess(res, { polls });
-      } catch (err: any) {
-        log.error('get polls error', { error: err.message, crewId: req.validatedParams?.crewId });
+      } catch (err) {
+        log.error('get polls error', { error: (err as NodeJS.ErrnoException).message, crewId: (req.validatedParams as Params)?.crewId });
         return sendError(res, 500, 'Failed to list polls', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -65,10 +69,10 @@ export default function createCrewPollRoutes(deps: any) {
     validateParams(schemas.crewIdParams),
     validate(schemas.pollCreate),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const { question, options, closesAt, setRefs, multiAnswer } = req.validatedBody;
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
+        const { question, options, closesAt, setRefs, multiAnswer } = req.validatedBody as z.infer<typeof schemas.pollCreate>;
         const userId = req.user.userId;
         if (closesAt && new Date(closesAt).getTime() <= Date.now())
           return sendError(res, 400, 'Pick an end time in the future.', ErrorCodes.INVALID_INPUT);
@@ -104,11 +108,11 @@ export default function createCrewPollRoutes(deps: any) {
         await stores.activity
           .log(activity)
           .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...activity } }))
-          .catch((err: any) => log.warn('poll-created activity log failed', { crewId, error: err.message }));
+          .catch((err: Error) => log.warn('poll-created activity log failed', { crewId, error: err.message }));
         crewNotify?.queue({ crewId, actorId: userId, kind: 'poll', text: 'New poll: ' + poll.question.slice(0, 80) });
         return sendSuccess(res, { poll });
-      } catch (err: any) {
-        log.error('create poll error', { error: err.message });
+      } catch (err) {
+        log.error('create poll error', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to create poll', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -122,14 +126,14 @@ export default function createCrewPollRoutes(deps: any) {
     validateParams(schemas.crewIdPollIdParams),
     validate(schemas.pollVote),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const pollId = sanitizeIdentifier(req.validatedParams.pollId);
-        const { optionIndex, optionIndexes } = req.validatedBody;
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
+        const pollId = sanitizeIdentifier((req.validatedParams as Params).pollId);
+        const { optionIndex, optionIndexes } = req.validatedBody as z.infer<typeof schemas.pollVote>;
         const userId = req.user.userId;
         // Old clients send one optionIndex; an empty optionIndexes takes the vote back.
-        const indexes: number[] = [...new Set<number>(optionIndexes ?? [optionIndex])].sort((a, b) => a - b);
+        const indexes: number[] = [...new Set<number>(optionIndexes ?? [optionIndex as number])].sort((a, b) => a - b);
 
 
         const poll = await stores.polls.getById(pollId);
@@ -149,8 +153,8 @@ export default function createCrewPollRoutes(deps: any) {
           optionIndexes: indexes,
         });
         return sendSuccess(res, { voted: true });
-      } catch (err: any) {
-        log.error('vote error', { error: err.message });
+      } catch (err) {
+        log.error('vote error', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to vote', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -163,10 +167,10 @@ export default function createCrewPollRoutes(deps: any) {
     rateLimit(10, 'crew-poll-delete'),
     validateParams(schemas.crewIdPollIdParams),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const pollId = sanitizeIdentifier(req.validatedParams.pollId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
+        const pollId = sanitizeIdentifier((req.validatedParams as Params).pollId);
         const userId = req.user.userId;
 
 
@@ -182,8 +186,8 @@ export default function createCrewPollRoutes(deps: any) {
           ? await pollCloser.announce(closed, userId)
           : { meetingPoint: null, winningSetId: null };
         return sendSuccess(res, { closed: closed ?? null, meetingPoint, winningSetId });
-      } catch (err: any) {
-        log.error('close poll error', { error: err.message });
+      } catch (err) {
+        log.error('close poll error', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to close poll', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -196,10 +200,10 @@ export default function createCrewPollRoutes(deps: any) {
     rateLimit(10, 'crew-poll-nudge'),
     validateParams(schemas.crewIdPollIdParams),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const pollId = sanitizeIdentifier(req.validatedParams.pollId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
+        const pollId = sanitizeIdentifier((req.validatedParams as Params).pollId);
         const userId = req.user.userId;
 
 
@@ -221,8 +225,8 @@ export default function createCrewPollRoutes(deps: any) {
           text: `${req.user.username} is waiting for your vote: ${poll.question.slice(0, 80)}`,
         });
         return sendSuccess(res, { nudged: userIds.length });
-      } catch (err: any) {
-        log.error('nudge poll error', { error: err.message });
+      } catch (err) {
+        log.error('nudge poll error', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to send reminder', ErrorCodes.INTERNAL_ERROR);
       }
     },
