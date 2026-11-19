@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto';
 import type { Pool } from 'pg';
 
+import { toCents } from '../../helpers/export-utils.js';
+
 /**
  * A single member's net position in a crew ledger, in integer cents.
  *   balanceCents > 0  → the crew owes them (creditor)
@@ -344,8 +346,7 @@ export function createExpensesStore(pool: Pool) {
 
       const isMember = (uid: string) => cents[uid] !== undefined;
       for (const exp of expenses) {
-        const amountCents = Math.round(Number(exp.amount) * 100);
-        if (!Number.isFinite(amountCents)) continue;
+        const amountCents = toCents(exp.amount);
         const owed = owedShares(
           amountCents,
           parseJson(exp.split_with, []),

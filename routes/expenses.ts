@@ -1,14 +1,8 @@
 import { Router } from 'express';
 
 import { simplifyDebts } from '../lib/db/stores/expenses.js';
+import { formatMoney, toCents } from '../lib/helpers/export-utils.js';
 import { appLink } from '../lib/notifications/links.js';
-
-// "$12.40", "€12.40". Every crew currency has 2 decimal places, so cents / 100 is exact.
-function formatMoney(cents: number, currency: string) {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
-}
-
-const toCents = (amount: number | string) => Math.round(Number(amount) * 100);
 
 // Display name, else username. Names only, never a user id.
 function nameOf(members: any[], userId: string | undefined) {
