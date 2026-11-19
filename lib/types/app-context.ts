@@ -93,7 +93,7 @@ export interface Stores {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any;
   };
-  activity: { log(entry: Record<string, unknown>): Promise<unknown> };
+  activity: { log(entry: Record<string, unknown>): Promise<string> };
   // Other stores (profiles, sessions, deviceTokens, notificationPrefs, …) are
   // accessed dynamically by not-yet-typed call sites. `any` (not `unknown`)
   // because those modules destructure deep methods off them; tighten as each is
@@ -237,3 +237,9 @@ export type RouteDeps = AppContext & {
   crewNotify?: CrewNotify;
   pollCloser?: PollCloser;
 };
+
+/** Shape of `req.validatedParams` after `validateParams`: path params are strings. */
+export type Params = Record<string, string>;
+
+/** Shape of `req.validatedQuery` after `validateQuery`; Zod coerces some values (for example numbers). */
+export type Query = Record<string, unknown>;
