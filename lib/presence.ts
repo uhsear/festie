@@ -64,6 +64,20 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
   }
 
   const _presenceDebounce = new Map();
+
+  // Well inside the 120s Redis TTL so a connected socket never ages out.
+  const HEARTBEAT_MS = 40_000;
+  const _heartbeat = redisPresence?.heartbeat
+    ? setInterval(() => {
+        for (const [festivalId, room] of state.onlineUsers) {
+          const sockets = [...room].map(([socketId, { userId, username }]: any) => ({ socketId, userId, username }));
+          redisPresence.heartbeat(festivalId, sockets).catch((err: any) => {
+            log.debug('redis presence heartbeat failed', { error: err.message });
+          });
+        }
+      }, HEARTBEAT_MS)
+    : null;
+  _heartbeat?.unref();
   function emitPresence(festivalId: any, io: any) {
     if (_presenceDebounce.has(festivalId)) clearTimeout(_presenceDebounce.get(festivalId));
     _presenceDebounce.set(
@@ -86,6 +100,7 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
   function clearPresenceTimers() {
     for (const timer of _presenceDebounce.values()) clearTimeout(timer);
     _presenceDebounce.clear();
+    if (_heartbeat) clearInterval(_heartbeat);
   }
 
   async function emitProfileIdentity(user: any, io: any) {
