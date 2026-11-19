@@ -1,5 +1,9 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
+import type { Request, Response } from 'express';
+import type { z } from 'zod';
+import type { RouteDeps } from '../lib/types';
+import type { Params } from '../lib/types/app-context';
 
 import { simplifyDebts } from '../lib/db/stores/expenses.js';
 import { formatMoney, toCents } from '../lib/helpers/export-utils.js';
@@ -16,7 +20,7 @@ function splitAmountsOf(shares?: { userId: string; cents: number }[]) {
   return shares ? Object.fromEntries(shares.map((s) => [s.userId, s.cents])) : null;
 }
 
-export default function createExpenseRoutes(deps: any) {
+export default function createExpenseRoutes(deps: RouteDeps) {
   const router = Router();
   const {
     stores,
@@ -50,14 +54,14 @@ export default function createExpenseRoutes(deps: any) {
           threadId: `crew-money-${crewId}`,
         }),
       )
-      .catch((err: any) => log.warn('money push failed', { error: err?.message, crewId }));
+      .catch((err: Error) => log.warn('money push failed', { error: err?.message, crewId }));
   }
 
   // Every split target and the payer must be current crew members, with no
   // duplicates — otherwise a non-member's share is counted but never owed,
   // leaving the ledger non-zero-sum. Returns the members, or null after
   // sending the 400.
-  async function checkPeople(crewId: string, body: any, res: any) {
+  async function checkPeople(crewId: string, body: any, res: Response) {
     const members = await stores.crews.getMembers(crewId);
     const memberIds = new Set(members.map((m: any) => m.userId));
     const { splitWith, paidBy } = body;
@@ -83,13 +87,13 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(120, 'expense-list'),
     validateParams(schemas.crewIdParams),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
         const expenses = await stores.expenses.getByCrew(crewId);
         return sendSuccess(res, expenses);
-      } catch (err: any) {
-        log.error('get expenses failed', { error: err.message });
+      } catch (err) {
+        log.error('get expenses failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to load expenses', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -103,14 +107,15 @@ export default function createExpenseRoutes(deps: any) {
     validateParams(schemas.crewIdParams),
     validate(schemas.expenseCreate),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
 
-        const members = await checkPeople(crewId, req.validatedBody, res);
+        const body = req.validatedBody as z.infer<typeof schemas.expenseCreate>;
+        const members = await checkPeople(crewId, body, res);
         if (!members) return;
-        const { description, amount, splitWith, category, planned, shares } = req.validatedBody;
-        const paidBy = req.validatedBody.paidBy ?? req.user.userId;
+        const { description, amount, splitWith, category, planned, shares } = body;
+        const paidBy = body.paidBy ?? req.user.userId;
         const currency = await stores.expenses.getCurrency(crewId);
 
         const expense = await stores.expenses.create({
@@ -135,11 +140,11 @@ export default function createExpenseRoutes(deps: any) {
             type: 'expense-added',
             detail: `${expense.description} ${formatMoney(toCents(amount), currency)}${paidByNote}`,
           })
-          .catch((err: any) => log.warn('expense-added activity log failed', { crewId, error: err.message }));
+          .catch((err: Error) => log.warn('expense-added activity log failed', { crewId, error: err.message }));
         res.status(201);
         return sendSuccess(res, expense);
-      } catch (err: any) {
-        log.error('create expense failed', { error: err.message });
+      } catch (err) {
+        log.error('create expense failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to create expense', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -154,21 +159,21 @@ export default function createExpenseRoutes(deps: any) {
     validateParams(schemas.crewIdParams),
     validate(schemas.expenseCurrency),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
         if (req.membership.role !== 'owner') {
           return sendError(res, 403, 'Only the crew owner can change the currency.', ErrorCodes.FORBIDDEN);
         }
-        const { currency } = req.validatedBody;
+        const { currency } = req.validatedBody as z.infer<typeof schemas.expenseCurrency>;
         await stores.expenses.setCurrency(crewId, currency);
         emitter.crewExpenseUpdated({ crewId });
         await stores.activity
           .log({ crewId, userId: req.user.userId, type: 'currency-changed', detail: `Currency set to ${currency}` })
-          .catch((err: any) => log.warn('currency activity log failed', { error: err.message }));
+          .catch((err: Error) => log.warn('currency activity log failed', { error: err.message }));
         return sendSuccess(res, { currency });
-      } catch (err: any) {
-        log.error('set expense currency failed', { error: err.message });
+      } catch (err) {
+        log.error('set expense currency failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to change the currency', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -182,10 +187,10 @@ export default function createExpenseRoutes(deps: any) {
     validateParams(schemas.crewIdExpenseIdParams),
     validate(schemas.expenseUpdate),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const expenseId = sanitizeIdentifier(req.validatedParams.expenseId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
+        const expenseId = sanitizeIdentifier((req.validatedParams as Params).expenseId);
 
         const existing = await stores.expenses.getById(expenseId);
         if (!existing || existing.crew_id !== crewId)
@@ -198,10 +203,11 @@ export default function createExpenseRoutes(deps: any) {
             ErrorCodes.INVALID_INPUT,
           );
         }
-        const members = await checkPeople(crewId, req.validatedBody, res);
+        const body = req.validatedBody as z.infer<typeof schemas.expenseUpdate>;
+        const members = await checkPeople(crewId, body, res);
         if (!members) return;
 
-        const { description, amount, splitWith, category, planned, paidBy, shares } = req.validatedBody;
+        const { description, amount, splitWith, category, planned, paidBy, shares } = body;
         // Any member may edit, but moving the debt onto someone else needs the payer, the adder or the owner.
         const changesPayer = paidBy !== undefined && paidBy !== existing.paid_by;
         if (
@@ -238,10 +244,10 @@ export default function createExpenseRoutes(deps: any) {
             : `${expense.description}: ${formatMoney(oldCents, currency)} → ${formatMoney(newCents, currency)}`;
         await stores.activity
           .log({ crewId, userId: req.user.userId, type: 'expense-edited', detail })
-          .catch((err: any) => log.warn('expense edit activity log failed', { error: err.message }));
+          .catch((err: Error) => log.warn('expense edit activity log failed', { error: err.message }));
         return sendSuccess(res, expense);
-      } catch (err: any) {
-        log.error('update expense failed', { error: err.message });
+      } catch (err) {
+        log.error('update expense failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to update expense', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -254,10 +260,10 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(30, 'expense-delete'),
     validateParams(schemas.crewIdExpenseIdParams),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const expenseId = sanitizeIdentifier(req.validatedParams.expenseId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
+        const expenseId = sanitizeIdentifier((req.validatedParams as Params).expenseId);
 
         const expense = await stores.expenses.getById(expenseId);
         if (!expense || expense.crew_id !== crewId)
@@ -287,11 +293,11 @@ export default function createExpenseRoutes(deps: any) {
                 detail: `${formatMoney(toCents(expense.amount), currency)} to ${nameOf(members, expense.split_with?.[0])}`,
               }),
             )
-            .catch((err: any) => log.warn('settlement undo activity log failed', { error: err.message }));
+            .catch((err: Error) => log.warn('settlement undo activity log failed', { error: err.message }));
         }
         return sendSuccess(res, { deleted: true });
-      } catch (err: any) {
-        log.error('delete expense failed', { error: err.message });
+      } catch (err) {
+        log.error('delete expense failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to delete expense', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -304,13 +310,13 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(60, 'expense-balances'),
     validateParams(schemas.crewIdParams),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
         const balances = await stores.expenses.getBalances(crewId);
         return sendSuccess(res, balances);
-      } catch (err: any) {
-        log.error('get balances failed', { error: err.message });
+      } catch (err) {
+        log.error('get balances failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to load balances', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -328,9 +334,9 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(60, 'expense-settlement-plan'),
     validateParams(schemas.crewIdParams),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
 
         const balancesCents = await stores.expenses.getBalancesCents(crewId);
         const settlements = simplifyDebts(balancesCents);
@@ -368,8 +374,8 @@ export default function createExpenseRoutes(deps: any) {
 
         const currency = await stores.expenses.getCurrency(crewId);
         return sendSuccess(res, { balances, settlements: settlementsWithHandles, currency });
-      } catch (err: any) {
-        log.error('get settlement plan failed', { error: err.message });
+      } catch (err) {
+        log.error('get settlement plan failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to load settlement plan', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -382,10 +388,10 @@ export default function createExpenseRoutes(deps: any) {
     validateParams(schemas.crewIdParams),
     validate(schemas.expenseSettleFull),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const { toUserId, amount } = req.validatedBody;
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
+        const { toUserId, amount } = req.validatedBody as z.infer<typeof schemas.expenseSettleFull>;
         // The settlement target must be a different current crew member.
         if (toUserId === req.user.userId) {
           return sendError(res, 400, 'Cannot settle with yourself', ErrorCodes.INVALID_INPUT);
@@ -415,7 +421,7 @@ export default function createExpenseRoutes(deps: any) {
         stores.activity
           .log(settled)
           .then((id: string) => emitter.crewActivityLogged({ crewId, item: { id, ...settled } }))
-          .catch((err: any) => log.warn('settlement activity log failed', { error: err.message }));
+          .catch((err: Error) => log.warn('settlement activity log failed', { error: err.message }));
         emitter.crewExpenseAdded({ crewId, expense: settlement });
         pushMoney(
           toUserId,
@@ -426,8 +432,8 @@ export default function createExpenseRoutes(deps: any) {
         );
         res.status(201);
         return sendSuccess(res, settlement);
-      } catch (err: any) {
-        log.error('settle expense failed', { error: err.message });
+      } catch (err) {
+        log.error('settle expense failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to record settlement', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -442,10 +448,10 @@ export default function createExpenseRoutes(deps: any) {
     validateParams(schemas.crewIdExpenseIdParams),
     validate(schemas.expenseConfirm),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const expenseId = sanitizeIdentifier(req.validatedParams.expenseId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
+        const expenseId = sanitizeIdentifier((req.validatedParams as Params).expenseId);
 
         const existing = await stores.expenses.getById(expenseId);
         if (!existing || existing.crew_id !== crewId)
@@ -455,7 +461,7 @@ export default function createExpenseRoutes(deps: any) {
         if (existing.split_with?.[0] !== req.user.userId)
           return sendError(res, 403, 'Only the person who was paid can confirm this.', ErrorCodes.FORBIDDEN);
 
-        const { received } = req.validatedBody;
+        const { received } = req.validatedBody as z.infer<typeof schemas.expenseConfirm>;
         const expense = await stores.expenses.setConfirmation(expenseId, received);
         if (!expense) return sendError(res, 404, 'Expense not found', ErrorCodes.NOT_FOUND);
         emitter.crewExpenseUpdated({ crewId, expense });
@@ -472,7 +478,7 @@ export default function createExpenseRoutes(deps: any) {
             type: received ? 'payment-confirmed' : 'payment-disputed',
             detail: `${money} from ${nameOf(members, existing.paid_by)}`,
           })
-          .catch((err: any) => log.warn('payment confirm activity log failed', { error: err.message }));
+          .catch((err: Error) => log.warn('payment confirm activity log failed', { error: err.message }));
         if (!received) {
           pushMoney(
             existing.paid_by,
@@ -483,8 +489,8 @@ export default function createExpenseRoutes(deps: any) {
           );
         }
         return sendSuccess(res, expense);
-      } catch (err: any) {
-        log.error('confirm payment failed', { error: err.message });
+      } catch (err) {
+        log.error('confirm payment failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to confirm payment', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -499,11 +505,11 @@ export default function createExpenseRoutes(deps: any) {
     validateParams(schemas.crewIdParams),
     validate(schemas.expenseRemind),
     crewMember,
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
 
-        const { userId } = req.validatedBody;
+        const { userId } = req.validatedBody as z.infer<typeof schemas.expenseRemind>;
         const [balancesCents, members, currency] = await Promise.all([
           stores.expenses.getBalancesCents(crewId),
           stores.crews.getMembers(crewId),
@@ -526,8 +532,8 @@ export default function createExpenseRoutes(deps: any) {
           `${req.user.username || 'A crewmate'} sent a reminder: you owe them ${formatMoney(transfer.amountCents, currency)}.`,
         );
         return sendSuccess(res, { reminded: true });
-      } catch (err: any) {
-        log.error('remind payment failed', { error: err.message });
+      } catch (err) {
+        log.error('remind payment failed', { error: (err as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to send the reminder', ErrorCodes.INTERNAL_ERROR);
       }
     },

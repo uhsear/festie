@@ -551,25 +551,28 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       const owned = await pool.query("SELECT crew_id FROM crew_members WHERE user_id = $1 AND role = 'owner'", [
         userId,
       ]);
-      for (const { crew_id: crewId } of owned.rows) {
-        const result = await pool.query(
-          `
+      const ownedIds: string[] = owned.rows.map((r: any) => r.crew_id);
+      if (ownedIds.length === 0) return handedOver;
+      const members = await pool.query(
+        `
           SELECT
+            cm.crew_id,
             cm.user_id
           FROM
             crew_members cm
             JOIN users u ON u.id = cm.user_id
             AND u.deleted_at IS NULL
           WHERE
-            cm.crew_id = $1
+            cm.crew_id = ANY ($1::text[])
             AND cm.user_id <> $2
           ORDER BY
             cm.joined_at ASC,
             cm.user_id ASC
         `,
-          [crewId, userId],
-        );
-        const candidates: string[] = result.rows.map((r: any) => r.user_id);
+        [ownedIds, userId],
+      );
+      for (const crewId of ownedIds) {
+        const candidates: string[] = members.rows.filter((r: any) => r.crew_id === crewId).map((r: any) => r.user_id);
         const choice = choices.find((c) => c.crewId === crewId)?.newOwnerId;
         if (choice && candidates.includes(choice)) {
           candidates.splice(candidates.indexOf(choice), 1);

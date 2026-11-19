@@ -133,7 +133,7 @@ function makeCrewDeps(overrides: Record<string, unknown> = {}) {
 async function buildCrewApp(overrides: Record<string, unknown> = {}) {
   const deps = makeCrewDeps(overrides);
   const { default: createCrewRoutes } = await import('../routes/crews.js');
-  const router = createCrewRoutes(deps);
+  const router = createCrewRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/crews', router);
@@ -2044,7 +2044,7 @@ function makeShareDeps(overrides: Record<string, unknown> = {}) {
 async function buildShareApp(overrides: Record<string, unknown> = {}) {
   const deps = makeShareDeps(overrides);
   const { default: createShareRoutes } = await import('../routes/share.js');
-  const router = createShareRoutes(deps);
+  const router = createShareRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/s', router);
