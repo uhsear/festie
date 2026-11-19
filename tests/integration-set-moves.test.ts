@@ -16,16 +16,12 @@ import path from 'path';
 import { after, afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
-import { createFestivalPlanner } from '../server';
+import { bootServer } from './_boot-server';
 import { createLineupImportsStore } from '../lib/db/stores/lineup-imports';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const ADMIN_PASSWORD = 'test-admin-password-move';
 
@@ -109,16 +105,8 @@ async function cleanupById(pool: any) {
 }
 
 async function startServer(published = true) {
-  await withPool((pool) => seed(pool, published));
-  const planner = await (createFestivalPlanner as any)({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR: fs.existsSync(PUBLIC_DIR) ? PUBLIC_DIR : path.join(__dirname, '..'),
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-  });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  const server: any = { request: request(planner.app), close: () => planner.close() };
+  const booted = await bootServer(TEST_DATABASE_URL!, {}, () => withPool((pool) => seed(pool, published)));
+  const server: any = { request: booted.request, close: () => booted.close() };
   servers.push(server);
   server.token = await loginAdmin(server);
   return server;

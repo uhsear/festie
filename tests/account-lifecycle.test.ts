@@ -13,13 +13,8 @@ import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
-import { createFestivalPlanner } from '../server';
-import { ensureTestSchema } from './_test-schema';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { bootServer } from './_boot-server';
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const PASSWORD = 'Str0ngLife!Cycle9';
 const NEW_PASSWORD = 'N3wer!Cycle#Pass';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
@@ -77,30 +72,22 @@ async function resetData() {
 }
 
 async function startServer() {
-  await ensureTestSchema(TEST_DATABASE_URL!);
-  await resetData();
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR,
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-    AUTH_RATE_LIMIT_MAX: 1000,
-    // Empty key keeps every email send on the skip path (no network).
-    RESEND_API_KEY: '',
-    EMAIL_FROM: 'test@example.com',
-  });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  const { port } = planner.server.address() as { port: number };
+  const server = await bootServer(
+    TEST_DATABASE_URL!,
+    {
+      AUTH_RATE_LIMIT_MAX: 1000,
+      // Empty key keeps every email send on the skip path (no network).
+      RESEND_API_KEY: '',
+      EMAIL_FROM: 'test@example.com',
+    },
+    resetData,
+  );
   return {
-    planner,
+    ...server,
     // Requests go to the listening server so the Host header is known and a
     // same-host Origin passes the CSRF origin check.
-    request: request(planner.server),
-    origin: `http://127.0.0.1:${port}`,
-    async close() {
-      await planner.close();
-    },
+    request: request(server.planner.server),
+    origin: server.baseUrl,
   };
 }
 

@@ -21,12 +21,11 @@ import request from 'supertest';
 
 import { revokeAppleForUser, revokeAppleToken } from '../lib/oauth/revoke-user';
 import { seal } from '../lib/oauth/secretbox';
-import { createFestivalPlanner } from '../server';
+import { bootServer } from './_boot-server';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
-const PUBLIC_DIR = path.join(import.meta.dirname, '..', 'public');
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const PASSWORD = 'identity-test-password-pass';
 const GOOGLE_AUD = 'identity-test-web.apps.googleusercontent.com';
@@ -102,12 +101,7 @@ async function startServer({ configured = true } = {}) {
         OAUTH_TOKEN_KEY: TOKEN_KEY,
       }
     : { GOOGLE_WEB_CLIENT_ID: '', APPLE_SIGNIN_KEY_ID: '', APPLE_SIGNIN_KEY_PATH: '', OAUTH_TOKEN_KEY: '' };
-  const planner = await (createFestivalPlanner as any)({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR: fs.existsSync(PUBLIC_DIR) ? PUBLIC_DIR : path.join(import.meta.dirname, '..'),
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
+  const server = await bootServer(TEST_DATABASE_URL!, {
     MAX_USERS: 1_000_000,
     AUTH_RATE_LIMIT_MAX: 1000,
     RESEND_API_KEY: '',
@@ -119,8 +113,7 @@ async function startServer({ configured = true } = {}) {
     oauthJwks: jwks,
     oauthApple,
   });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  return { api: request(planner.server), revokeCalls, close: () => planner.close() };
+  return { api: request(server.planner.server), revokeCalls, close: server.close };
 }
 
 type Server = Awaited<ReturnType<typeof startServer>>;

@@ -19,12 +19,11 @@ import request from 'supertest';
 
 import { open } from '../lib/oauth/secretbox';
 import { sha256hex } from '../lib/oauth/verify';
-import { createFestivalPlanner } from '../server';
+import { bootServer } from './_boot-server';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
-const PUBLIC_DIR = path.join(import.meta.dirname, '..', 'public');
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const PASSWORD = 'oauth-test-password-pass';
 const GOOGLE_AUD = 'oauth-test-web.apps.googleusercontent.com';
@@ -112,12 +111,7 @@ async function startServer({ configured = true } = {}) {
         APPLE_SERVICES_ID: '',
         OAUTH_TOKEN_KEY: '',
       };
-  const planner = await (createFestivalPlanner as any)({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR: fs.existsSync(PUBLIC_DIR) ? PUBLIC_DIR : path.join(import.meta.dirname, '..'),
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
+  const server = await bootServer(TEST_DATABASE_URL!, {
     MAX_USERS: 1_000_000,
     AUTH_RATE_LIMIT_MAX: 1000,
     RESEND_API_KEY: '',
@@ -126,14 +120,12 @@ async function startServer({ configured = true } = {}) {
     oauthJwks: jwks,
     oauthApple,
   });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  const { port } = planner.server.address() as { port: number };
   return {
-    api: request(planner.server),
+    api: request(server.planner.server),
     // A same-host Origin passes the CSRF check and marks a web (cookie) client.
-    origin: `http://127.0.0.1:${port}`,
+    origin: server.baseUrl,
     appleCalls,
-    close: () => planner.close(),
+    close: server.close,
   };
 }
 

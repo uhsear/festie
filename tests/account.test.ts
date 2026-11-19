@@ -13,14 +13,9 @@ import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import express from 'express';
 import { Pool } from 'pg';
-import { createFestivalPlanner } from '../server';
-import { ensureTestSchema } from './_test-schema';
+import { bootServer } from './_boot-server';
 import createAccountRoutes from '../routes/account';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
@@ -68,27 +63,10 @@ async function seedTestData() {
 }
 
 async function startServer(overrides: any = {}) {
-  await ensureTestSchema(TEST_DATABASE_URL!);
-  await truncateAllTables();
-  await seedTestData();
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR,
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-    AUTH_RATE_LIMIT_MAX: 1000,
-    ...overrides,
-  });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  return {
-    planner,
-    databaseUrl: TEST_DATABASE_URL,
-    request: request(planner.app),
-    async close() {
-      await planner.close();
-    },
-  };
+  return bootServer(TEST_DATABASE_URL!, { AUTH_RATE_LIMIT_MAX: 1000, ...overrides }, async () => {
+      await truncateAllTables();
+      await seedTestData();
+    });
 }
 
 let userCounter = 0;

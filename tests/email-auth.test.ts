@@ -12,13 +12,8 @@ import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
-import { createFestivalPlanner } from '../server';
-import { ensureTestSchema } from './_test-schema';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import { bootServer } from './_boot-server';
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
@@ -53,13 +48,7 @@ async function cleanupCreatedUsers() {
 }
 
 async function startServer(overrides: any = {}) {
-  await ensureTestSchema(TEST_DATABASE_URL!);
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR,
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
+  return bootServer(TEST_DATABASE_URL!, {
     AUTH_RATE_LIMIT_MAX: 1000,
     // MUST stay empty. Without it the key falls through to the process
     // environment — a developer machine has a live provider key there — and
@@ -67,14 +56,6 @@ async function startServer(overrides: any = {}) {
     RESEND_API_KEY: '',
     ...overrides,
   });
-  return {
-    planner,
-    request: request(planner.app),
-    async close() {
-      if (typeof planner.close === 'function') await planner.close();
-      else if (planner.server) await new Promise<void>((r) => planner.server.close(() => r()));
-    },
-  };
 }
 
 async function registerUser(server: any, username: any, password = DEFAULT_PASSWORD, email?: any) {
