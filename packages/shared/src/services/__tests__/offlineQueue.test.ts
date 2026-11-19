@@ -25,6 +25,7 @@ import {
   refreshPendingCount,
   retryFailed,
   clearQueue,
+  registerCreateReconciler,
   dismissFailed,
   hydrateFailedSync,
   surfaceFailedSync,
@@ -132,6 +133,24 @@ describe('offlineQueue', () => {
     it('publishes the pending count to uiStore', async () => {
       await enqueueMutation({ clientId: 'a', url: '/profiles/p1', method: 'PUT' });
       expect(useUIStore.getState().pendingSync).toBe(1);
+    });
+  });
+
+  describe('create reconcilers', () => {
+    it('runs every registered reconciler for a replayed POST, even when one throws', async () => {
+      const crew = vi.fn(() => {
+        throw new Error('boom');
+      });
+      const profile = vi.fn();
+      vi.spyOn(console, 'warn').mockImplementation(() => {});
+      registerCreateReconciler(crew);
+      registerCreateReconciler(profile);
+      seed([makeMutation({ clientId: 'POST:/profiles:join-f1', method: 'POST', url: '/profiles', body: {} })]);
+      vi.mocked(api.post).mockResolvedValue({ id: 'real' });
+      await drainQueue();
+      registerCreateReconciler(null);
+      expect(crew).toHaveBeenCalledWith('POST:/profiles:join-f1', { id: 'real' });
+      expect(profile).toHaveBeenCalledWith('POST:/profiles:join-f1', { id: 'real' });
     });
   });
 

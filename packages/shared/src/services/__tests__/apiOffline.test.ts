@@ -158,6 +158,13 @@ describe('api offline interception', () => {
       expect(enqueueMutation).not.toHaveBeenCalled();
     });
 
+    it('offline POST /profiles with _bypassOfflineQueue fetches (guest merges must not get a queued stub)', async () => {
+      useUIStore.setState({ offlineMode: true });
+      await api.post('/profiles', { festivalId: 'f1' }, { _bypassOfflineQueue: true });
+      expect(fetchSpy).toHaveBeenCalledTimes(1);
+      expect(enqueueMutation).not.toHaveBeenCalled();
+    });
+
     it('offline + eligible GET is not queued (GET is not a mutation)', async () => {
       useUIStore.setState({ offlineMode: true });
       await api.get('/profiles/p1');

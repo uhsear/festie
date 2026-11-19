@@ -177,7 +177,7 @@ describe('mergeGuestInterests', () => {
     vi.mocked(api.put).mockResolvedValue({});
     vi.mocked(api.get).mockResolvedValue([]);
     await store().mergeGuestInterests();
-    expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'f1' });
+    expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'f1' }, { _bypassOfflineQueue: true });
     expect(api.put).toHaveBeenCalledTimes(1);
     expect(api.put).toHaveBeenCalledWith(
       '/profiles/prof-1',

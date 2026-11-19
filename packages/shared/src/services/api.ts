@@ -98,6 +98,8 @@ function isMutatingMethod(method: string = 'GET'): boolean {
 const OFFLINE_ELIGIBLE_PATTERNS: RegExp[] = [
   // Profile picks / notes / reminders: PUT /profiles/:id
   /^\/profiles\//,
+  // First pick offline: POST /profiles (join) with clientId POST:/profiles:join-<festivalId>. A replay is idempotent.
+  /^\/profiles$/,
   // Join-by-code: POST /crews/join. Crew formation is a first-class offline op
   // (festivals = no signal); queue + replay it instead of dropping it. Distinct
   // from the /crews/:id/* sub-resource patterns below, which require a crew id
