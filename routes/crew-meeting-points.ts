@@ -61,9 +61,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
 
         const { location, time, planB } = body;
         // planB undefined keeps the stored Plan B; the store clears it when location is empty.
-        // shortcut: the Stores type in lib/types/app-context.ts lacks planB, so pass a variable; add it there.
-        const homeBase = { location, time, planB };
-        const updated = (await stores.crews.updateHomeBase(crewId, homeBase)) as {
+        const updated = (await stores.crews.updateHomeBase(crewId, { location, time, planB })) as {
           homeBasePlanB?: string | null;
         } | null;
         io.to('crew:' + crewId).emit('crew:home-base-updated', {
