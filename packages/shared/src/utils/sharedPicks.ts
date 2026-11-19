@@ -1,5 +1,6 @@
 import type { FestivalSet, Priority } from '../types/domain';
 import type { SharedPicksPayload } from '../services/sharing';
+import { PRIORITY_WEIGHT } from './crewNudges';
 import { artistDisplayName, formatTime } from './format';
 import { byStartTime, formatDayChip } from './scheduleFormat';
 import { FESTIE_ORIGIN } from './links';
@@ -7,7 +8,6 @@ import { FESTIE_ORIGIN } from './links';
 const TOKEN = /^[A-Za-z0-9_-]{1,100}$/;
 const VANITY = /^u\/[A-Za-z0-9_-]{1,30}$/;
 const COLOR = /^#[0-9a-fA-F]{3,8}$/;
-const RANK: Record<Priority, number> = { must: 3, 'want-to-see': 2, maybe: 1 };
 
 /** Validates the `from` value of a friend-picks link: a share token, or `u/<username>`. */
 export function parseSharedPicksRef(raw: unknown): string | null {
@@ -82,7 +82,7 @@ export function compareSharedPicks(
           theirs: t,
           mine: m,
           bucket,
-          addable: !!t && (!m || RANK[m] < RANK[t]),
+          addable: !!t && (!m || PRIORITY_WEIGHT[m] < PRIORITY_WEIGHT[t]),
         },
       });
     }

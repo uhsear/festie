@@ -12,7 +12,7 @@
  */
 
 import type { Pool } from 'pg';
-import { withTransactionRetry } from '../connection';
+import { isoOrNull, withTransactionRetry } from '../connection';
 import { createOpaqueId } from '../../helpers';
 import { sanitizeString } from '../../helpers/sanitize';
 import { artistNameKey } from '../../artist-key';
@@ -109,8 +109,6 @@ async function insertArtistAudit(
   );
 }
 
-const iso = (value: unknown) => (value ? new Date(value as any).toISOString() : null);
-
 export function publicArtist(row: ArtistRecord) {
   return {
     id: row.id,
@@ -120,7 +118,7 @@ export function publicArtist(row: ArtistRecord) {
     photo: row.photo,
     genres: row.genres ?? [],
     spotifyId: row.spotify_id,
-    updatedAt: iso(row.updated_at) as string,
+    updatedAt: isoOrNull(row.updated_at) as string,
   };
 }
 

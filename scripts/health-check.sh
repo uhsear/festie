@@ -4,6 +4,10 @@ set -euo pipefail
 # ──────────────────────────────────────────────────────────────────────────────
 # Health check alerting for Festie
 #
+# Role: liveness plus auto-restart. This is the only monitor that polls
+# /api/health. uptime.yml checks reachability from outside the host;
+# error-rate-alert.cjs covers error rate, memory, disk and /api/ready.
+#
 # Curls /api/health, validates a 200 with valid JSON, tracks consecutive
 # failures, sends a webhook notification (or logs) on threshold breach,
 # and optionally auto-restarts PM2 after MAX_FAILS.
