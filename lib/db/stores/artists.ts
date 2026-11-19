@@ -22,9 +22,8 @@ import { todayInZone } from '../../lineup';
 import { AUDIT_ACTIONS } from '../../audit-actions';
 import { lockFestivalAny } from './festival-lock';
 
-export const MAX_ARTIST_NAME = 300;
-export const MAX_ARTIST_LABEL = 40;
-export const MAX_MATCH_ITEMS = 500;
+const MAX_ARTIST_NAME = 300;
+const MAX_ARTIST_LABEL = 40;
 const MAX_CANDIDATES = 10;
 
 type Links = Record<string, string>;
@@ -126,12 +125,12 @@ export function publicArtist(row: ArtistRecord) {
 }
 
 /** The note: Unicode NFKC, trimmed, runs of spaces collapsed. Null when it is over the limit. */
-export function cleanLabel(raw: unknown): string | null {
+function cleanLabel(raw: unknown): string | null {
   const label = sanitizeString(typeof raw === 'string' ? raw.normalize('NFKC') : '', 200).replace(/\s+/g, ' ').trim();
   return label.length > MAX_ARTIST_LABEL ? null : label;
 }
 
-export const cleanArtistName = (raw: unknown) => sanitizeString(raw, MAX_ARTIST_NAME);
+const cleanArtistName = (raw: unknown) => sanitizeString(raw, MAX_ARTIST_NAME);
 
 const shownName = (artist: { name: string; label: string }) => (artist.label ? `${artist.name} (${artist.label})` : artist.name);
 
@@ -237,7 +236,7 @@ export interface ArtistUse {
 }
 
 /** Every festival that lists each artist on a set or in its announced lineup, archived ones included. */
-export async function artistUses(db: { query: Pool['query'] }, artistIds: string[]): Promise<Map<string, ArtistUse[]>> {
+async function artistUses(db: { query: Pool['query'] }, artistIds: string[]): Promise<Map<string, ArtistUse[]>> {
   const out = new Map<string, ArtistUse[]>();
   if (artistIds.length === 0) return out;
   const { rows } = await db.query(
@@ -479,7 +478,7 @@ async function assertNoClash(
 }
 
 /** Maps a unique-index race (23505) on an artist index to the same 409 the checks give. */
-export function artistConflict(error: any): ArtistError | null {
+function artistConflict(error: any): ArtistError | null {
   if (error?.code !== '23505') return null;
   const spotify = String(error.constraint ?? '').includes('spotify');
   return new ArtistError(
@@ -491,7 +490,7 @@ export function artistConflict(error: any): ArtistError | null {
   );
 }
 
-export type MergeSide = 'survivor' | 'loser';
+type MergeSide = 'survivor' | 'loser';
 
 /** Per field, which artist's value the merged artist keeps. A field that is not listed keeps the survivor's. */
 export interface MergePick {
@@ -598,7 +597,7 @@ export interface MatchItem {
   spotify?: string | null;
 }
 
-export type MatchOutcome = 'linked' | 'pick' | 'new';
+type MatchOutcome = 'linked' | 'pick' | 'new';
 
 export function createArtistsStore(pool: Pool) {
   const candidatesOf = (rows: ArtistRecord[], uses: Map<string, ArtistUse[]>) => {
@@ -1157,5 +1156,4 @@ export function createArtistsStore(pool: Pool) {
   };
 }
 
-export type ArtistsStore = ReturnType<typeof createArtistsStore>;
-export { rewriteCopies, festivalIdsUsing };
+export { rewriteCopies };

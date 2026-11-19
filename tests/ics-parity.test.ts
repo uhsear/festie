@@ -10,8 +10,8 @@ import { describe, it } from 'node:test';
 import 'tsx/cjs';
 
 import { buildIcsEventsFromPicks, buildVCalendar } from '../lib/helpers/ics-builder.js';
-// The backend does not depend on @festie/shared, so the calendar rules are
-// mirrored in both builders. This test is the drift guard, imported by relative path.
+// The calendar rules are still mirrored in both builders (the shared builder
+// pulls in more than the backend bundle should). This test is the drift guard, imported by relative path.
 import { buildPicksIcsExport } from '../packages/shared/src/utils/ics.js';
 
 const stages = [{ id: 'main', name: 'Main Stage' }];

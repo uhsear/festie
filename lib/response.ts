@@ -15,6 +15,8 @@ export const ErrorCodes = {
   NOT_FOUND: 'NOT_FOUND',
   FORBIDDEN: 'FORBIDDEN',
   ALREADY_EXISTS: 'ALREADY_EXISTS',
+  // A 409 where the request is valid but clashes with current state (a full list, a closed poll, a taken seat).
+  CONFLICT: 'CONFLICT',
   MAX_LIMIT_REACHED: 'MAX_LIMIT_REACHED',
   VERSION_MISMATCH: 'VERSION_MISMATCH',
   RATE_LIMITED: 'RATE_LIMITED',

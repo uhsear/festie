@@ -195,7 +195,7 @@ def main():
         # (login shell so npm/pnpm are on PATH).
         code, out, err = run(
             client,
-            f"bash -lc 'set -o pipefail; cd {APP} && npm install --omit=dev --no-audit --no-fund "
+            f"bash -lc 'set -o pipefail; cd {APP} && npm ci --omit=dev --no-audit --no-fund "
             f"&& cd {APP}/packages && pnpm install --frozen-lockfile 2>&1 | tail -10'",
             timeout=600,
         )

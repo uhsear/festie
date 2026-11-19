@@ -2,7 +2,7 @@ import { useMemo, useState, useCallback } from 'react';
 import { X } from 'lucide-react';
 import { usePicks, useCrewNudges, useFestival } from '@festie/shared/hooks';
 import { useFestivalStore } from '@festie/shared/stores';
-import { artistDisplayName, buildOverlapBreakdown, resolveStageColor } from '@festie/shared/utils';
+import { addLabel, artistDisplayName, buildOverlapBreakdown, goingLabel, resolveStageColor } from '@festie/shared/utils';
 import StageBadge from '../ui/StageBadge';
 import CrewOverlapAvatars, { OverlapFriend } from './CrewOverlapAvatars';
 import { cn } from '@/lib/utils';
@@ -85,14 +85,12 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
           const stageName = getStageName(set.stageId) || set.stageName || 'Stage';
           // Going-count phrasing, e.g. "3 going — 2 must, 1 want".
           const breakdown = buildOverlapBreakdown(nudge.backers);
-          const goingLabel = `${nudge.count} going${breakdown ? ` — ${breakdown}` : ''}`;
           // Feed the avatar cluster the same priority-grouped shape SetCard uses.
           const friends: OverlapFriend[] = nudge.backers.map((b) => ({
             profileId: b.userId,
             name: b.name,
             priority: b.priority,
           }));
-          const addLabel = `Add ${dn} to my picks` + (breakdown ? ` — ${nudge.count} crew going: ${breakdown}` : '');
 
           return (
             <li key={set.id} className="flex items-center gap-3 rounded-lg border border-border bg-bg-card px-3 py-2">
@@ -103,7 +101,7 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
                 </div>
                 <div className="mt-1 flex items-center gap-2">
                   <CrewOverlapAvatars friends={friends} artistName={dn} />
-                  <span className="text-xs text-text-muted">{goingLabel}</span>
+                  <span className="text-xs text-text-muted">{goingLabel(nudge.count, breakdown)}</span>
                 </div>
               </div>
 
@@ -115,7 +113,7 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
                   'transition-[transform,box-shadow] duration-150 active:scale-[0.96] motion-reduce:transform-none',
                   'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                 )}
-                aria-label={addLabel}
+                aria-label={addLabel(dn, nudge.count, breakdown)}
                 onClick={() => handleAdd(set.id, nudge.topPriority)}
               >
                 Add

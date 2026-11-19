@@ -23,6 +23,7 @@ export * from './mapAuthoring';
 export * from './mapPlace';
 export * from './ongoingNotification';
 export * from './crewNudges';
+export * from './crewSuggestions';
 export * from './pickConflicts';
 export * from './clashPlan';
 export * from './myDay';

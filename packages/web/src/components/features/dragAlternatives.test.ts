@@ -7,7 +7,7 @@ const components = join(__dirname, '..');
 const srcRoot = join(__dirname, '..', '..');
 const read = (rel: string) => readFileSync(join(components, rel), 'utf8');
 
-// Files that own a Drawer.Root. IOSInstallSheet reaches vaul through ui/Sheet, whose header holds the Close button.
+// Files that own a Drawer.Root. IOSInstallDrawer reaches vaul through ui/Sheet, whose header holds the Close button.
 const CHECKED_DRAWERS = ['features/DetailPanel.tsx', 'ui/Sheet.tsx'];
 
 function tsxFiles(dir: string): string[] {
