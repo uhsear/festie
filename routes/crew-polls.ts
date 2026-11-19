@@ -11,6 +11,7 @@ import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
 import { MAX_OPEN_POLLS_PER_CREW } from '../lib/constants';
 import { createPollCloser } from '../lib/poll-close';
+import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
 
 export default function createCrewPollRoutes(deps: any) {
   const {
@@ -171,7 +172,7 @@ export default function createCrewPollRoutes(deps: any) {
 
         const poll = await stores.polls.getById(pollId);
         if (!poll || poll.crew_id !== crewId) return sendError(res, 404, 'Poll not found', ErrorCodes.NOT_FOUND);
-        if (poll.created_by !== userId && req.membership.role !== 'owner') {
+        if (!isCreatorOrOwner(poll, userId, req.membership.role)) {
           return sendError(res, 403, 'Only creator or owner can close poll', ErrorCodes.FORBIDDEN);
         }
 
@@ -204,7 +205,7 @@ export default function createCrewPollRoutes(deps: any) {
 
         const poll = await stores.polls.getById(pollId);
         if (!poll || poll.crew_id !== crewId) return sendError(res, 404, 'Poll not found', ErrorCodes.NOT_FOUND);
-        if (poll.created_by !== userId && req.membership.role !== 'owner')
+        if (!isCreatorOrOwner(poll, userId, req.membership.role))
           return sendError(res, 403, 'Only the poll creator or crew owner can send a reminder.', ErrorCodes.FORBIDDEN);
         if (isEnded(poll)) return sendError(res, 409, 'This poll has ended.', ErrorCodes.CONFLICT);
 

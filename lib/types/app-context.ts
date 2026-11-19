@@ -24,27 +24,9 @@ import type { FestivalAction } from '../app-context/session';
 import type { ErrorCodes } from '../response';
 import type { schemas } from '../schemas';
 import type { Crew, Profile, User } from './contracts';
+import type { PublicUser } from '../helpers';
 
-/**
- * The public-safe projection of a user emitted by `serializePublicUser`. It is a
- * *subset* of the shared `User` contract — the public API intentionally omits
- * `createdAt`/`updatedAt`/`isAdmin`. Kept assignable to `Partial<User>` so the
- * compile-time contract test can assert structural compatibility.
- */
-export interface PublicUser {
-  id: string;
-  username: string;
-  name: string | null;
-  avatarUrl: string | null;
-  email: string | null;
-  emailVerified: boolean;
-  // Payment handles for settle-up deep links (null when unset).
-  venmoHandle: string | null;
-  cashappCashtag: string | null;
-  paypalHandle: string | null;
-  // Opt-in flag for the public /u/:username share page (false = private).
-  publicSchedule: boolean;
-}
+export type { PublicUser };
 
 /** A Zod-validation middleware factory (validate / validateParams / validateQuery). */
 // `ZodType<any>` is Zod's own variance-correct way to accept any schema; the

@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user.js';
 
 /**
@@ -43,24 +44,10 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
   } = deps;
   const { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray, enrichAuditEntries } = ctx;
 
-  async function writeAudit(req: any, res: any, action: string, targetId: string, details: Record<string, unknown>) {
-    if (!stores.auditLog) return;
-    // The action already took effect, so a failed audit insert must not turn it into a 500.
-    // auditWritten stays unset then, so the generic middleware still records the request.
-    try {
-      await stores.auditLog.insert({
-        actorType: 'admin',
-        actorId: req.user?.userId,
-        action,
-        targetType: 'user',
-        targetId,
-        detailsJson: JSON.stringify(details),
-        ip: getRequestIp(req),
-      });
-      res.locals.auditWritten = true;
-    } catch (err: any) {
-      log.warn('admin user audit write failed', { action, targetId, error: err?.message });
-    }
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
+
+  function writeAudit(req: any, res: any, action: string, targetId: string, details: Record<string, unknown>) {
+    return writeAdminAudit(req, res, { action, targetType: 'user', targetId, details });
   }
 
   // ── GET /users — list users with roles and optional search ────────────
@@ -127,15 +114,12 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
       if (!user) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
 
       try {
-        await stores.auditLog.insert({
-          actorType: 'admin',
-          actorId: req.user?.userId || req.userId,
+        await writeAdminAudit(req, res, {
           action: AUDIT_ACTIONS.USER_PRIVATE_DATA_VIEWED,
           targetType: 'user',
           targetId: targetUserId,
-          detailsJson: JSON.stringify({ targetUsername: user.username }),
-          ip: getRequestIp(req),
-          requestId: req.id,
+          details: { targetUsername: user.username },
+          failClosed: true,
         });
       } catch (err: any) {
         log.error('admin user detail audit write failed', { targetUserId, error: err?.message });
@@ -260,22 +244,11 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         await stores.roles.grantRole(targetUserId, roleName, actorId);
         const updatedRoles = await stores.roles.getUserRoles(targetUserId);
 
-        if (stores.auditLog) {
-          await stores.auditLog.insert({
-            actorType: 'admin',
-            actorId,
-            action: AUDIT_ACTIONS.USER_ROLE_GRANTED,
-            targetType: 'user',
-            targetId: targetUserId,
-            detailsJson: JSON.stringify({
-              role: roleName,
-              targetUsername: user.username,
-              changes: { roles: [rolesBefore, [...updatedRoles].sort()] },
-            }),
-            ip: getRequestIp(req),
-          });
-          res.locals.auditWritten = true;
-        }
+        await writeAudit(req, res, AUDIT_ACTIONS.USER_ROLE_GRANTED, targetUserId, {
+          role: roleName,
+          targetUsername: user.username,
+          changes: { roles: [rolesBefore, [...updatedRoles].sort()] },
+        });
 
         log.warn('admin:role-grant', { targetUserId, targetUsername: user.username, role: roleName, actorId });
         return sendSuccess(res, { userId: targetUserId, username: user.username, roles: updatedRoles });
@@ -314,22 +287,11 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         await stores.roles.revokeRole(targetUserId, roleName);
         const updatedRoles = await stores.roles.getUserRoles(targetUserId);
 
-        if (stores.auditLog) {
-          await stores.auditLog.insert({
-            actorType: 'admin',
-            actorId,
-            action: AUDIT_ACTIONS.USER_ROLE_REVOKED,
-            targetType: 'user',
-            targetId: targetUserId,
-            detailsJson: JSON.stringify({
-              role: roleName,
-              targetUsername: user.username,
-              changes: { roles: [rolesBefore, [...updatedRoles].sort()] },
-            }),
-            ip: getRequestIp(req),
-          });
-          res.locals.auditWritten = true;
-        }
+        await writeAudit(req, res, AUDIT_ACTIONS.USER_ROLE_REVOKED, targetUserId, {
+          role: roleName,
+          targetUsername: user.username,
+          changes: { roles: [rolesBefore, [...updatedRoles].sort()] },
+        });
 
         log.warn('admin:role-revoke', { targetUserId, targetUsername: user.username, role: roleName, actorId });
         return sendSuccess(res, { userId: targetUserId, username: user.username, roles: updatedRoles });

@@ -1374,6 +1374,30 @@ describe('routes/admin-bulk.js', () => {
     );
   });
 
+  test('POST /bulk/archive-festivals still succeeds when the audit insert fails, and the generic row is written', async () => {
+    const deps = makeDeps();
+    const inserts: any[] = [];
+    deps.stores.auditLog.insert = mock.fn(async (entry: any) => {
+      inserts.push(entry);
+      if (entry.actorType === 'admin') throw new Error('audit down');
+    });
+    const { default: createAuditMiddleware } = await import('../lib/audit-middleware.js');
+    const { default: mountAdminBulkRoutes } = await import('../routes/admin-bulk.js');
+    const router = express.Router();
+    mountAdminBulkRoutes({ router, deps, ctx: { adminWriteLimit: (req: any, res: any, next: any) => next() } });
+    const app = express();
+    app.use(express.json());
+    app.use(createAuditMiddleware(deps));
+    app.use(router);
+
+    const res = await request(app).post('/bulk/archive-festivals').send({ festivalIds: ['f1'] }).expect(200);
+    assert.equal(res.body.data.results[0].status, 'archived');
+    await new Promise((r) => setTimeout(r, 50));
+    // The explicit insert threw; the generic middleware row (snake_case shape) is the only record.
+    assert.equal(inserts.filter((e) => e.actorType === 'admin').length, 1);
+    assert.equal(inserts.filter((e) => e.actor_type !== undefined).length, 1);
+  });
+
   test('POST /bulk/archive-festivals rejects >50 festival IDs', async () => {
     const { app } = await buildBulkRouter();
     const festivalIds = Array.from({ length: 51 }, (_, i) => `f-${i}`);
