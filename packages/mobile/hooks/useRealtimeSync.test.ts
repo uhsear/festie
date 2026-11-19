@@ -32,6 +32,10 @@ const h = vi.hoisted(() => {
     replace: vi.fn(),
     useCrewRealtime: vi.fn(),
     useRevocationRealtime: vi.fn(),
+    useRealtimeStoreSync: vi.fn(),
+    backfill: vi.fn(),
+    onAuthError: vi.fn(),
+    getSocket: null as null | (() => unknown),
   };
 });
 
@@ -56,11 +60,18 @@ vi.mock('react-native', () => ({
 vi.mock('expo-router', () => ({ useRouter: () => ({ replace: h.replace }) }));
 vi.mock('../lib/apiOrigin', () => ({ API_ORIGIN: 'https://api.test' }));
 vi.mock('../lib/liveSocket', () => ({ setLiveSocket: h.setLiveSocket, useLiveSocket: () => 'live-socket' }));
-vi.mock('@festie/shared/services', () => ({ createSocket: h.createSocket }));
+vi.mock('@festie/shared/services', () => ({
+  createSocket: h.createSocket,
+  createAuthErrorHandler: (getSocket: () => unknown) => {
+    h.getSocket = getSocket;
+    return h.onAuthError;
+  },
+}));
 vi.mock('@festie/shared', () => ({ createStoreSink: () => 'sink' }));
 vi.mock('@festie/shared/hooks', () => ({
   useCrewRealtime: h.useCrewRealtime,
   useRevocationRealtime: h.useRevocationRealtime,
+  useRealtimeStoreSync: h.useRealtimeStoreSync,
 }));
 vi.mock('@festie/shared/stores', () => {
   const store = <S extends object>(state: S) =>
@@ -92,7 +103,6 @@ class FakeSocket {
 }
 
 let socket: FakeSocket;
-let authFailed: () => void;
 
 /** Renders the hook and returns the teardown that React would run on unmount. */
 function mount(): () => void {
@@ -112,15 +122,9 @@ beforeEach(() => {
   h.festival.currentFestivalId = 'f1';
   h.crew.activeCrew = { id: 'c1' };
   h.live.sharingCrewId = null;
-  h.festival.applyProfilePatch.mockReturnValue(true);
-  for (const fn of [h.festival.loadProfiles, h.festival.selectFestival, h.crew.loadCrews, h.crew.selectCrew]) {
-    fn.mockResolvedValue(undefined);
-  }
   socket = new FakeSocket();
-  h.createSocket.mockImplementation((_token: string, _origin: string, onAuthFail: () => void) => {
-    authFailed = onAuthFail;
-    return socket;
-  });
+  h.createSocket.mockImplementation(() => socket);
+  h.useRealtimeStoreSync.mockReturnValue({ backfill: h.backfill });
 });
 
 afterEach(() => vi.useRealTimers());
@@ -157,151 +161,16 @@ describe('useRealtimeSync: connection gating', () => {
     expect(h.replace).toHaveBeenCalledWith('/(auth)/login');
   });
 
-  it('reconnects with the refreshed token after a socket auth failure', async () => {
-    h.auth.refreshToken.mockImplementation(async () => {
-      h.auth.userToken = 'fresh';
-    });
+  it('hands createSocket the shared auth-error handler bound to the live socket', () => {
     mount();
-    authFailed();
-    await vi.waitFor(() => expect(socket.connect).toHaveBeenCalledTimes(1));
-    expect(socket.auth).toEqual({ token: 'fresh' });
+    expect(h.createSocket).toHaveBeenCalledWith('tok', 'https://api.test', h.onAuthError);
+    expect(h.getSocket!()).toBe(socket);
   });
 
-  it('stays disconnected when the token refresh fails', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    h.auth.refreshToken.mockRejectedValue(new Error('nope'));
+  it('delegates festival, profile, crew and presence events to the shared hook and owns join:festival there', () => {
     mount();
-    authFailed();
-    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
-    expect(socket.connect).not.toHaveBeenCalled();
-    warn.mockRestore();
-  });
-});
-
-describe('useRealtimeSync: connect and reconnect', () => {
-  it('joins the festival room on connect and flips the connected flag', () => {
-    mount();
-    socket.fire('connect');
-    expect(h.ui.setConnected).toHaveBeenCalledWith(true);
-    expect(socket.emit).toHaveBeenCalledWith('join:festival', 'f1', { _v: 1 }, expect.any(Function));
-    socket.fire('disconnect');
-    expect(h.ui.setConnected).toHaveBeenLastCalledWith(false);
-  });
-
-  it('does not reload on the first connect', () => {
-    mount();
-    socket.fire('connect');
-    vi.advanceTimersByTime(1000);
-    expect(h.festival.loadProfiles).not.toHaveBeenCalled();
-    expect(h.crew.loadCrews).not.toHaveBeenCalled();
-  });
-
-  it('reloads picks and crews, not the festival, after a short outage', () => {
-    mount();
-    socket.fire('connect');
-    socket.fire('disconnect');
-    vi.advanceTimersByTime(10_000);
-    socket.fire('connect');
-    vi.advanceTimersByTime(300);
-    expect(h.festival.loadProfiles).toHaveBeenCalledWith('f1');
-    expect(h.crew.loadCrews).toHaveBeenCalledTimes(1);
-    expect(h.festival.selectFestival).not.toHaveBeenCalled();
-  });
-
-  it('also reloads the festival after an outage of 60 seconds or more', () => {
-    mount();
-    socket.fire('connect');
-    socket.fire('disconnect');
-    vi.advanceTimersByTime(60_000);
-    socket.fire('connect');
-    vi.advanceTimersByTime(300);
-    expect(h.festival.selectFestival).toHaveBeenCalledWith('f1');
-  });
-
-  it('reloads on the first connect when the socket was already connected', () => {
-    socket.connected = true;
-    mount();
-    socket.fire('connect');
-    vi.advanceTimersByTime(300);
-    expect(h.festival.loadProfiles).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('useRealtimeSync: event handlers', () => {
-  it('patches picks in place and does not reload when the profile is loaded', () => {
-    mount();
-    socket.fire('pick:updated', { profileId: 'p1', picks: { s1: 'must' }, interestsChanged: false });
-    expect(h.festival.applyProfilePatch).toHaveBeenCalledWith({
-      profileId: 'p1',
-      picks: { s1: 'must' },
-      interestsChanged: false,
-    });
-    vi.advanceTimersByTime(300);
-    expect(h.festival.loadProfiles).not.toHaveBeenCalled();
-  });
-
-  it('falls back to one debounced profile reload when the patch cannot apply', () => {
-    h.festival.applyProfilePatch.mockReturnValue(false);
-    mount();
-    socket.fire('profile:updated', { profileId: 'new' });
-    socket.fire('picks:updated', { profileId: 'new' });
-    vi.advanceTimersByTime(300);
-    expect(h.festival.loadProfiles).toHaveBeenCalledTimes(1);
-    expect(h.festival.loadProfiles).toHaveBeenCalledWith('f1');
-  });
-
-  it('coalesces a burst of events into one reload', () => {
-    mount();
-    for (const e of ['pick:removed', 'note:saved', 'profile:joined', 'profile:left']) socket.fire(e, {});
-    vi.advanceTimersByTime(300);
-    expect(h.festival.loadProfiles).toHaveBeenCalledTimes(1);
-  });
-
-  it('reloads the festival only when festival:updated names the current festival', () => {
-    mount();
-    socket.fire('festival:updated', { id: 'other' });
-    vi.advanceTimersByTime(300);
-    expect(h.festival.selectFestival).not.toHaveBeenCalled();
-    socket.fire('festival:updated', { id: 'f1' });
-    vi.advanceTimersByTime(300);
-    expect(h.festival.selectFestival).toHaveBeenCalledWith('f1');
-  });
-
-  it('reloads the festival on set-added and set-updated', () => {
-    mount();
-    socket.fire('festival:set-added', {});
-    socket.fire('festival:set-updated', {});
-    vi.advanceTimersByTime(300);
-    expect(h.festival.selectFestival).toHaveBeenCalledTimes(1);
-  });
-
-  it('reloads crews and re-selects the crew only when it is the active one', () => {
-    mount();
-    socket.fire('crew:updated', { crewId: 'other' });
-    vi.advanceTimersByTime(300);
-    expect(h.crew.loadCrews).toHaveBeenCalledTimes(1);
-    expect(h.crew.selectCrew).not.toHaveBeenCalled();
-    socket.fire('crew:member-joined', { crewId: 'c1' });
-    vi.advanceTimersByTime(300);
-    expect(h.crew.selectCrew).toHaveBeenCalledWith('c1');
-  });
-
-  it('applies a crew status only for the open crew', () => {
-    mount();
-    socket.fire('crew:status-updated', { status: { crew_id: 'other' } });
-    socket.fire('crew:status-updated', {});
-    expect(h.crew.applyStatusUpdate).not.toHaveBeenCalled();
-    const row = { crew_id: 'c1' };
-    socket.fire('crew:status-updated', { status: row });
-    expect(h.crew.applyStatusUpdate).toHaveBeenCalledWith(row);
-  });
-
-  it('maps presence to online users and ignores a payload without online', () => {
-    mount();
-    socket.fire('presence:update', {});
-    expect(h.ui.setOnlineUsers).not.toHaveBeenCalled();
-    socket.fire('presence:update', { online: [{ userId: 'u1', username: 'Ann', avatarUrl: 'a.png' }] });
-    expect(h.ui.setOnlineUsers).toHaveBeenCalledWith([{ id: 'u1', name: 'Ann', avatar: 'a.png', status: 'online' }]);
+    expect(h.useRealtimeStoreSync).toHaveBeenCalledWith({ socket: 'live-socket', joinFestival: true });
+    expect(socket.emit).not.toHaveBeenCalledWith('join:festival', expect.anything(), expect.anything(), expect.anything());
   });
 });
 
@@ -329,15 +198,12 @@ describe('useRealtimeSync: AppState lifecycle', () => {
     expect(socket.disconnect).toHaveBeenCalledTimes(1);
   });
 
-  it('reconnects and backfills all three stores when returning to the foreground', () => {
+  it('reconnects and backfills when returning to the foreground', () => {
     mount();
     h.appStateHandlers[0]!('background');
     h.appStateHandlers[0]!('active');
     expect(socket.connect).toHaveBeenCalledTimes(1);
-    vi.advanceTimersByTime(300);
-    expect(h.festival.selectFestival).toHaveBeenCalledWith('f1');
-    expect(h.festival.loadProfiles).toHaveBeenCalledWith('f1');
-    expect(h.crew.loadCrews).toHaveBeenCalledTimes(1);
+    expect(h.backfill).toHaveBeenCalledTimes(1);
   });
 
   it('does not reconnect an already-active socket on foreground', () => {
@@ -353,35 +219,26 @@ describe('useRealtimeSync: AppState lifecycle', () => {
     h.appStateHandlers[0]!('active');
     vi.advanceTimersByTime(300);
     expect(socket.connect).not.toHaveBeenCalled();
-    expect(h.festival.selectFestival).not.toHaveBeenCalled();
+    expect(h.backfill).not.toHaveBeenCalled();
   });
 });
 
 describe('useRealtimeSync: teardown', () => {
-  it('removes every listener, the AppState subscription, and the live socket', () => {
+  it('removes the AppState subscription and the live socket', () => {
     const cleanup = mount();
     cleanup();
     expect(h.appStateRemove).toHaveBeenCalledTimes(1);
-    expect(socket.off).toHaveBeenCalledTimes(socket.on.mock.calls.length);
     expect(socket.disconnect).toHaveBeenCalledTimes(1);
     expect(h.setLiveSocket).toHaveBeenLastCalledWith(null);
   });
 
-  it('cancels pending debounced reloads', () => {
-    const cleanup = mount();
-    socket.fire('pick:removed', {});
-    cleanup();
-    vi.advanceTimersByTime(1000);
-    expect(h.festival.loadProfiles).not.toHaveBeenCalled();
-  });
-
-  it('stops sharing and leaves the crew room before disconnecting a connected socket', () => {
+  it('stops sharing before disconnecting a connected socket and leaves leave:crew to useCrewRealtime', () => {
     socket.connected = true;
     h.live.sharingCrewId = 'c1';
     const cleanup = mount();
     cleanup();
     expect(socket.emit).toHaveBeenCalledWith('location:stop', { _v: 1, crewId: 'c1' });
-    expect(socket.emit).toHaveBeenCalledWith('leave:crew', { _v: 1, crewId: 'c1' });
+    expect(socket.emit).not.toHaveBeenCalledWith('leave:crew', expect.anything());
     expect(h.live.stopSharing).toHaveBeenCalledTimes(1);
   });
 

@@ -11,7 +11,7 @@ const between = (src: string, from: string, to: string) => {
 };
 
 describe('t56 mobile reconnect resync', () => {
-  const src = read('hooks/useRealtimeSync.ts');
+  const src = read('../shared/src/hooks/useRealtimeSync.ts');
 
   it('a reconnect re-reads picks and crews inside handleConnect', () => {
     const body = between(src, 'const handleConnect = () => {', 'const handleDisconnect = () => {');
@@ -22,7 +22,7 @@ describe('t56 mobile reconnect resync', () => {
   });
 
   it('a failed socket token refresh is logged, not swallowed', () => {
-    const refresh = between(src, 'createSocket(userToken', 'socketRef.current = socket;');
+    const refresh = read('../shared/src/services/socket.ts');
     expect(refresh).toContain('refreshToken()');
     expect(refresh).not.toContain('.catch(() => {})');
     expect(refresh).toContain("console.warn('socket token refresh failed; realtime paused until the next request'");
