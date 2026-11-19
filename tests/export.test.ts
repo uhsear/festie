@@ -29,8 +29,6 @@ const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const helpers = skip ? null : await import('./_integration-helpers');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
-const TRUSTED_MUTATION_HEADER = 'x-festie-request';
-const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 
 // Unique timestamped IDs — prevents collision across parallel test runs.
 const RUN_ID = `ex${Date.now().toString(36)}`;

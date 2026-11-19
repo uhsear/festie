@@ -20,7 +20,6 @@ const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const helpers = skip ? null : await import('./_integration-helpers');
 
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
-const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 
 const RUN_ID = `sl${Date.now().toString(36)}`;
 const FEST_ID = `fest-${RUN_ID}`;

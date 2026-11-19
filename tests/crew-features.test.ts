@@ -15,7 +15,6 @@ import request from 'supertest';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
 
-const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
 // DB skip-gate: these integration tests require a live Postgres database.
