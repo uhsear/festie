@@ -1,8 +1,9 @@
 import 'dotenv/config';
 import assert from 'node:assert/strict';
-import { after, describe, test } from 'node:test';
+import { after, before, describe, test } from 'node:test';
 import request from 'supertest';
 import { createFestivalPlanner } from '../server';
+import { ensureTestSchema } from './_test-schema';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 if (!TEST_DATABASE_URL) { console.error('ERROR: TEST_DATABASE_URL required'); process.exit(1); }
@@ -30,7 +31,8 @@ describe('API response shape contracts', () => {
   let app: any;
   let planner: any;
 
-  test('setup', async () => {
+  before(async () => {
+    await ensureTestSchema(TEST_DATABASE_URL);
     planner = await createFestivalPlanner({
       DATABASE_URL: TEST_DATABASE_URL,
       NODE_ENV: 'test',
