@@ -1,25 +1,18 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { useAuthStore } from '@festie/shared/stores';
 import { BEACON_COPY } from '@festie/shared/constants';
 import { BEACON_FLASH_MS, beaconColors, displayInitials, identityLabel } from '@festie/shared/utils';
 import Button from '../ui/Button';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
 function useReducedMotion() {
-  return useSyncExternalStore(
-    (cb) => {
-      const mql = typeof window !== 'undefined' ? window.matchMedia(REDUCED_MOTION) : null;
-      mql?.addEventListener('change', cb);
-      return () => mql?.removeEventListener('change', cb);
-    },
-    () => typeof window !== 'undefined' && window.matchMedia(REDUCED_MOTION).matches,
-    () => false,
-  );
+  return useMediaQuery(REDUCED_MOTION);
 }
 
 // Fullscreen and wake lock are best effort: either may be missing or refused.

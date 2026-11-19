@@ -33,6 +33,7 @@ import PollItem from './PollItem';
 import SchedulePollComposer from './SchedulePollComposer';
 import { BarChart3, CalendarClock, MapPin, Plus, X } from 'lucide-react';
 import { inputBase } from '../../lib/styles';
+import { meetingPointsQuery } from '../../lib/queryPersist';
 
 // Lead time (minutes) for the reminder seeded when a schedule poll closes —
 // mirrors the festival reminder defaults.
@@ -169,15 +170,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
 
   async function startMeetWhere() {
     const points = await qc
-      .fetchQuery({
-        queryKey: ['meeting-points', crewId],
-        queryFn: async () => {
-          const res = await api.get<CrewMeetingPoint[] | { meetingPoints: CrewMeetingPoint[] }>(
-            `/crews/${crewId}/meeting-points`,
-          );
-          return Array.isArray(res) ? res : res?.meetingPoints || [];
-        },
-      })
+      .fetchQuery(meetingPointsQuery(crewId))
       .catch(() => [] as CrewMeetingPoint[]);
     const picked = meetWherePollOptions({
       homeBase: activeCrew?.homeBaseLocation,

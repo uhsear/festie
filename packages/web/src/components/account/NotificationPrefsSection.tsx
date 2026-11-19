@@ -16,6 +16,7 @@ import { useToast } from '../../lib/toastContext';
 import { cn } from '../../lib/utils';
 import Skeleton from '../ui/Skeleton';
 import Switch from '../ui/Switch';
+import { Card } from '../ui/Card';
 
 function Toggle({
   label,
@@ -200,7 +201,7 @@ export default function NotificationPrefsSection() {
   const quietHint = `Mute ${windowLabel(win.start, win.end)}${zone}`;
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border">
+    <Card>
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2 mb-1">
         <SlidersHorizontal className="w-4 h-4" aria-hidden="true" />
         Notification types
@@ -260,6 +261,6 @@ export default function NotificationPrefsSection() {
         </p>
       ) : null}
       <FestivalTopicsSubsection />
-    </section>
+    </Card>
   );
 }

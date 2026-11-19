@@ -2,7 +2,7 @@
 // (and thus before zustand-persist hydrates). See bootstrap.ts.
 import '../bootstrap';
 import { useEffect, useRef, useState } from 'react';
-import { View, ActivityIndicator, StyleSheet, Appearance } from 'react-native';
+import { View, ActivityIndicator, StyleSheet, Appearance, useColorScheme } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import { Stack, useRouter, useSegments, usePathname, type Href, useRootNavigationState, router as globalRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -130,6 +130,9 @@ configureApi({
 function AuthGate() {
   const { colors } = useTokens();
   const theme = useUIStore((s) => s.theme);
+  const followSystemTheme = useUIStore((s) => s.followSystemTheme);
+  const applySystemScheme = useUIStore((s) => s.applySystemScheme);
+  const systemScheme = useColorScheme();
   const user = useAuthStore((s) => s.user);
   const isAdmin = useAuthStore((s) => s.isAdmin);
   const sessionChecked = useAuthStore((s) => s.sessionChecked);
@@ -385,11 +388,15 @@ function AuthGate() {
     SystemUI.setBackgroundColorAsync(rootBackground).catch(() => {});
   }, [rootBackground]);
 
-  // OTA-safe: makes iOS-drawn alerts, sheets and the keyboard follow Daylight;
-  // app.json userInterfaceStyle stays dark.
+  // Makes iOS-drawn alerts, sheets and the keyboard follow the painted theme. In Match system
+  // mode the override is cleared ('unspecified') so useColorScheme reports the real OS scheme, which
+  // is then applied to the theme. Needs app.json userInterfaceStyle 'automatic'.
   useEffect(() => {
-    Appearance.setColorScheme(theme === 'daylight' ? 'light' : 'dark');
-  }, [theme]);
+    Appearance.setColorScheme(followSystemTheme ? 'unspecified' : theme === 'daylight' ? 'light' : 'dark');
+  }, [theme, followSystemTheme]);
+  useEffect(() => {
+    applySystemScheme(systemScheme);
+  }, [applySystemScheme, followSystemTheme, systemScheme]);
 
   return (
     <View style={styles.appShell}>

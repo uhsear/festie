@@ -39,6 +39,7 @@ Festie — a real-time festival crew-coordination app. Live at [festie.us](https
 - **Mobile may only import from its own declared deps or `@festie/shared`** — never from shared's
   transitive deps (e.g. `socket.io-client`); import shared types via `@festie/shared/...` instead,
   or CI mobile-typecheck fails with `TS2307`.
+- Before you write a new helper, component or query, check `docs/REUSE.md`.
 - **Business logic lives in `@festie/shared`** so web and mobile stay in parity; prefer adding to
   shared over duplicating per-app.
 - **Never commit secrets.** `tests/e2e/.auth/` holds a live session cookie and is gitignored —

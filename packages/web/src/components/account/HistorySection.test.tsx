@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent } from '@testing-library/react';
+import { renderWithQueryClient } from '../../test-utils';
 import HistorySection from './HistorySection';
 
 const mocks = vi.hoisted(() => ({
@@ -46,12 +46,7 @@ vi.mock('../ui/EmptyState', () => ({
 }));
 
 function renderSection() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <HistorySection />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<HistorySection />);
 }
 
 const totals = { totalRated: 3, avgRating: 4, festivalsAttended: 1, stagesVisited: 2, daysAttended: 2, totalHours: 5 };

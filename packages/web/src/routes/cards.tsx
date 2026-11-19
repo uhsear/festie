@@ -1,4 +1,4 @@
-import React, { Fragment, useCallback, useMemo, useState, useSyncExternalStore } from 'react';
+import React, { Fragment, useCallback, useMemo, useState } from 'react';
 import { useFestivalStore, useAuthStore, useCrewStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { usePicks, useFestival, useCanPick, useFestivalReady } from '@festie/shared/hooks';
@@ -18,6 +18,7 @@ import {
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
 import { useAnnouncedLineup } from '../hooks/useAnnouncedLineup';
+import { useMediaQuery } from '../hooks/useMediaQuery';
 import SetCard from '../components/features/SetCard';
 import PhaseHomeActions from '../components/features/PhaseHomeActions';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
@@ -49,19 +50,7 @@ export default function CardsView() {
  * query in animations.css) rather than just shortened.
  */
 function usePrefersReducedMotion(): boolean {
-  return useSyncExternalStore(
-    (onChange) => {
-      if (typeof window === 'undefined' || !window.matchMedia) return () => {};
-      const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
-      mq.addEventListener('change', onChange);
-      return () => mq.removeEventListener('change', onChange);
-    },
-    () =>
-      typeof window !== 'undefined' && !!window.matchMedia
-        ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-        : false,
-    () => false,
-  );
+  return useMediaQuery('(prefers-reduced-motion: reduce)');
 }
 
 function CardsViewInner() {

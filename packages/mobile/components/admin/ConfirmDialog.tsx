@@ -1,4 +1,5 @@
-import { Modal, View, Text, TouchableOpacity, Pressable, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
+import DialogShell from '../DialogShell';
 import { makeStyles, typeStyle } from '../../hooks/useTokens';
 
 /**
@@ -38,73 +39,46 @@ export default function ConfirmDialog({
   const styles = useStyles();
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="fade"
-      onRequestClose={onCancel}
-      statusBarTranslucent
-    >
-      <View style={styles.scrim}>
-        {/* A sibling backdrop avoids Pressable grouping the entire dialog into
-            one screen-reader target. The visible Cancel action stays explicit. */}
-        <Pressable style={styles.backdrop} onPress={onCancel} accessible={false} />
-        <View style={styles.card} accessibilityViewIsModal>
-          <ScrollView
-            contentContainerStyle={styles.cardContent}
-            showsVerticalScrollIndicator={false}
-            bounces={false}
+    <DialogShell visible={visible} onClose={onCancel} cardStyle={styles.card}>
+      <ScrollView
+        contentContainerStyle={styles.cardContent}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        <Text style={styles.title} accessibilityRole="header">
+          {title}
+        </Text>
+        <Text style={styles.message}>{message}</Text>
+
+        <View style={styles.actions}>
+          <TouchableOpacity
+            style={[styles.button, styles.cancelButton]}
+            onPress={onCancel}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel="Cancel"
           >
-            <Text style={styles.title} accessibilityRole="header">
-              {title}
+            <Text style={styles.cancelLabel}>Cancel</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.button, destructive ? styles.confirmDanger : styles.confirmPrimary]}
+            onPress={onConfirm}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={confirmLabel}
+          >
+            <Text style={destructive ? styles.confirmDangerLabel : styles.confirmPrimaryLabel}>
+              {confirmLabel}
             </Text>
-            <Text style={styles.message}>{message}</Text>
-
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={onCancel}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Cancel"
-              >
-                <Text style={styles.cancelLabel}>Cancel</Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[styles.button, destructive ? styles.confirmDanger : styles.confirmPrimary]}
-                onPress={onConfirm}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={confirmLabel}
-              >
-                <Text style={destructive ? styles.confirmDangerLabel : styles.confirmPrimaryLabel}>
-                  {confirmLabel}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </ScrollView>
+          </TouchableOpacity>
         </View>
-      </View>
-    </Modal>
+      </ScrollView>
+    </DialogShell>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  scrim: {
-    flex: 1,
-    backgroundColor: t.colors.shade[10],
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: t.spacing[5],
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
   card: {
     width: '100%',
     maxWidth: 400,

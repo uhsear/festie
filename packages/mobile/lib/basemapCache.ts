@@ -11,10 +11,12 @@
 // Phase 3A behaviour (pmtiles HTTP range + WebView/CDN cache). Nothing here can
 // regress the online path or the no-basemap path.
 //
-// Mobile import rule: imports ONLY this package's own dep `expo-file-system`. No
-// React, no WebView, no @festie/shared transitive deps — keep it unit-testable.
+// Mobile import rule: imports only this package's own dep `expo-file-system` and
+// `@festie/shared`. No React, no WebView, no shared transitive deps — keep it
+// unit-testable.
 
 import { File, Directory, Paths } from 'expo-file-system';
+import { createBasemapEnsurer, headContentLength } from '@festie/shared/utils';
 
 // All cached basemaps live under a single subdir of the OS cache directory so
 // (a) they're co-located + easy to scope `allowingReadAccessToURL` to, and (b)
@@ -98,43 +100,18 @@ export function basemapCacheInfo(pmtilesUrl: string | null | undefined): {
   }
 }
 
-/**
- * Expected byte length from a HEAD, or null when the server does not say.
- * Truncation is the failure this guards: expo-file-system documents that a
- * stream dying mid-transfer can leave a short file behind, and a short .pmtiles
- * cached forever silently breaks the map. Reading the archive back to inspect it
- * would pull the whole thing into memory, so compare lengths instead.
- */
-async function expectedBytes(pmtilesUrl: string): Promise<number | null> {
-  try {
-    const res = await fetch(pmtilesUrl, { method: 'HEAD' });
-    if (!res.ok) return null;
-    const len = Number(res.headers.get('content-length'));
-    return Number.isFinite(len) && len > 0 ? len : null;
-  } catch {
-    // Offline or a server that refuses HEAD — fall back to the size>0 gate.
-    return null;
-  }
-}
+// Truncation is the failure the HEAD length guards: expo-file-system documents that a
+// stream dying mid-transfer can leave a short file behind, and a short .pmtiles
+// cached forever silently breaks the map. Reading the archive back to inspect it
+// would pull the whole thing into memory, so compare lengths instead. A server
+// that refuses HEAD or omits the length falls back to the size>0 gate.
+const expectedBytes = headContentLength;
 
 // Unique per attempt so two concurrent transfers never share a staging path.
 let attemptCounter = 0;
 function attemptToken(): string {
   attemptCounter += 1;
   return `${attemptCounter}`;
-}
-
-// One in-flight download per URL. Both callers (map open, Download button) await
-// the same promise instead of racing two transfers for the same archive.
-const inFlight = new Map<string, Promise<string | null>>();
-const listeners = new Set<() => void>();
-
-/** Runs after any archive attempt settles, so every mounted download hook re-reads the disk. */
-export function subscribeBasemapCache(cb: () => void): () => void {
-  listeners.add(cb);
-  return () => {
-    listeners.delete(cb);
-  };
 }
 
 /**
@@ -167,15 +144,15 @@ export function subscribeBasemapCache(cb: () => void): () => void {
  */
 export function ensureBasemapCached(pmtilesUrl: string): Promise<string | null> {
   if (typeof pmtilesUrl !== 'string' || !/^https:\/\//i.test(pmtilesUrl)) return Promise.resolve(null);
-  const existing = inFlight.get(pmtilesUrl);
-  if (existing) return existing;
-  const run = downloadOnce(pmtilesUrl).finally(() => {
-    inFlight.delete(pmtilesUrl);
-    listeners.forEach((cb) => cb());
-  });
-  inFlight.set(pmtilesUrl, run);
-  return run;
+  return ensurer.ensure(pmtilesUrl);
 }
+
+// One in-flight download per URL. Both callers (map open, Download button) await
+// the same promise instead of racing two transfers for the same archive.
+const ensurer = createBasemapEnsurer(downloadOnce);
+
+/** Runs after any archive attempt settles, so every mounted download hook re-reads the disk. */
+export const subscribeBasemapCache = ensurer.subscribe;
 
 async function downloadOnce(pmtilesUrl: string): Promise<string | null> {
   try {

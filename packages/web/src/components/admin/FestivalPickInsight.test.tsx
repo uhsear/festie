@@ -1,8 +1,8 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderWithQueryClient } from '../../test-utils';
 import { picksPerSetCsv } from '@festie/shared/utils';
 import { pickInsightFixture as insight } from '@festie/shared/utils/pickInsight.fixture';
 import FestivalPickInsight from './FestivalPickInsight';
@@ -13,12 +13,7 @@ vi.mock('@festie/shared/services/admin', () => ({
 }));
 
 function renderInsight() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <FestivalPickInsight festivalId="f1" />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<FestivalPickInsight festivalId="f1" />);
 }
 
 beforeEach(() => {

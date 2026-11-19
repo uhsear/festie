@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent } from '@testing-library/react';
+import { renderWithQueryClient } from '../../test-utils';
 
 const { apiGet } = vi.hoisted(() => ({ apiGet: vi.fn() }));
 
@@ -14,12 +14,7 @@ vi.mock('@tanstack/react-router', () => ({ useNavigate: () => vi.fn() }));
 import ActivityTab from './ActivityTab';
 
 function renderTab() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <ActivityTab crewId="c1" />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<ActivityTab crewId="c1" />);
 }
 
 const row = (id: string, type: string, detail: string | null = null) => ({
