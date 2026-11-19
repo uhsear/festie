@@ -237,6 +237,7 @@ describe('Notification routes — web push', () => {
       express,
       config,
       log: silentLog,
+      rateLimit: () => (_req: any, _res: any, next: any) => next(),
       stores: {
         deviceTokens: {
           getTokenOwner: async () => null,

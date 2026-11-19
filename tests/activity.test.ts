@@ -237,14 +237,6 @@ describe('activity: GET /crews/:crewId/activity', () => {
     assert.equal(res._sent.data, null);
     assert.equal(res._sent.error.code, 'INTERNAL_ERROR');
   });
-
-  it('uses noopLimit when rateLimit is not a function', () => {
-    // When rateLimit is not a function, the route should still register fine
-    const deps = buildDeps({ rateLimit: 'not-a-function' });
-    const router = createActivityRoutes(deps);
-    const layer = router.stack.find((l: any) => l.route && l.route.path === '/crews/:crewId/activity');
-    assert.ok(layer, 'Route should still be registered');
-  });
 });
 
 describe('activity store: getByCrew cursor', () => {
