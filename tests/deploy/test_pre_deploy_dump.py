@@ -8,6 +8,7 @@ Run: python -m unittest discover -s tests/deploy -p "test_*.py"
 
 import importlib.util
 import io
+import os
 import socket
 import sys
 import types
@@ -24,7 +25,10 @@ def load_deploy():
     module = importlib.util.module_from_spec(spec)
     # The stub lives only while deploy.py imports, so a real paramiko used by
     # another test in the same process is not shadowed.
-    with mock.patch.dict(sys.modules, {"paramiko": types.ModuleType("paramiko")}):
+    placeholders = {"FESTIE_SSH_HOST": "host.invalid", "FESTIE_SSH_USER": "user", "FESTIE_APP_DIR": "/app"}
+    with mock.patch.dict(os.environ, placeholders), mock.patch.dict(
+        sys.modules, {"paramiko": types.ModuleType("paramiko")}
+    ):
         spec.loader.exec_module(module)
     return module
 
