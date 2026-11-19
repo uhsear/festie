@@ -842,6 +842,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const { ids, users } = await emailPlan(userIds, type, eventKey, { noPushFirst });
     const emailEventKey = `${eventKey}#email`;
     let sent = 0;
+    let failed = 0;
     for (const uid of ids) {
       if (sent >= limit) break;
       if (budgetLeft && (await budgetLeft()) <= 0) break;
@@ -850,10 +851,14 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       try {
         ok = await sendFn(user);
       } catch (err: any) {
-        log?.debug?.('reengagement: email send failed', { userId: uid, type, error: err?.message });
+        failed += 1;
+        log?.warn?.('reengagement: email send failed', { userId: uid, type, error: err?.message });
         continue;
       }
-      if (!ok) continue;
+      if (!ok) {
+        failed += 1;
+        continue;
+      }
       sent += 1;
       // Record an email-channel log row for dedup on re-runs. A failed insert
       // here means the NEXT run will re-send this email (no dedup row), so it
@@ -879,6 +884,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
         });
       }
     }
+    // sendEmail logs each provider error; this line makes a failed run visible at prod's log level.
+    if (failed > 0) log?.warn?.('reengagement: email fanout had failures', { type, failed, sent });
     return sent;
   }
 
