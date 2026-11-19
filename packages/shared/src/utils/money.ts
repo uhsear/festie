@@ -8,7 +8,7 @@
  */
 
 /** Below this magnitude a balance is treated as exactly zero (rounding noise). */
-const ZERO_EPSILON = 0.01;
+export const ZERO_EPSILON = 0.01;
 
 const formatters = new Map<string, Intl.NumberFormat>();
 
@@ -64,6 +64,11 @@ export function formatCents(cents: number, currency = 'USD'): string {
 export function toCents(value: string | number): number {
   const cents = Math.round(Number(value) * 100);
   return Number.isFinite(cents) ? cents : 0;
+}
+
+/** Integer cents to the text of an amount input, e.g. 1240 → "12.40". */
+export function centsToInputText(cents: number): string {
+  return (cents / 100).toFixed(2);
 }
 
 export function isSettlement(e: { category?: string | null }): boolean {
