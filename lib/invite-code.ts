@@ -3,7 +3,7 @@ import crypto from 'crypto';
 // Invite code generation. This lives in lib/, not in routes/crew-invites.ts,
 // because routes/crews.ts needs it too: a helper shared by two route modules is
 // exactly the "extract shared logic to lib/" case the no-routes-importing-routes
-// rule in .dependency-cruiser.cjs exists to catch. It went unnoticed for as long
+// rule in config/dependency-cruiser.cjs exists to catch. It went unnoticed for as long
 // as that gate was resolving nothing.
 
 const INVITE_CODE_LENGTH = 6;

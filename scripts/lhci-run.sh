@@ -28,9 +28,9 @@ else
   echo "[lhci] WARN: no Playwright chromium found; lhci will try to download its own"
 fi
 
-CONFIG="${REPO_ROOT}/lighthouserc.json"
+CONFIG="${REPO_ROOT}/config/lighthouserc.json"
 if [ "${1:-}" = "localhost" ]; then
-  CONFIG="${REPO_ROOT}/lighthouserc.localhost.json"
+  CONFIG="${REPO_ROOT}/config/lighthouserc.localhost.json"
 fi
 
 if ! [ -f "$CONFIG" ]; then

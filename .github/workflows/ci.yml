@@ -210,7 +210,7 @@ jobs:
 
   # Keeps the required check name "test (22)". Passes only when every shard,
   # the web build, the web/shared vitest run and the mobile typecheck and tests
-  # passed (a path-filtered "skipped" job passes), then enforces the .c8rc.json
+  # passed (a path-filtered "skipped" job passes), then enforces the config/c8rc.json
   # floors on the merged coverage.
   test:
     if: always()
@@ -243,7 +243,7 @@ jobs:
           path: coverage/tmp
           merge-multiple: true
       - name: Check merged coverage against the floors
-        run: npx c8 report
+        run: npx c8 report --config config/c8rc.json
       - name: Upload coverage
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
