@@ -55,9 +55,6 @@ import {
   createStores,
   createDbLatencyTracker,
   openPlannerDatabase as openPlannerDatabaseRaw,
-  parseJsonObject,
-  serializeJson,
-  withTransaction,
 } from './db/index.js';
 
 // ── Migration runner ─────────────────────────────────────────────────────
@@ -549,9 +546,6 @@ export {
   createStores,
   createDbLatencyTracker,
   openPlannerDatabase,
-  parseJsonObject,
-  serializeJson,
-  withTransaction,
   // Newly exposed for tests / ops tooling (non-breaking additions):
   runPostgresMigrations,
   runPostgresMigrationsWithConnectRetry,
