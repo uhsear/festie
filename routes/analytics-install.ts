@@ -18,8 +18,7 @@ export default function createAnalyticsInstallRoutes(deps: any) {
   const { log, stores, rateLimit, sendError, ErrorCodes } = deps;
   const router = Router();
 
-  const noop = (_req: any, _res: any, next: any) => next();
-  const limiter = typeof rateLimit === 'function' ? rateLimit(60, 'install-analytics') : noop;
+  const limiter = rateLimit(60, 'install-analytics');
 
   router.post('/install', limiter, async (req: any, res: any) => {
     try {

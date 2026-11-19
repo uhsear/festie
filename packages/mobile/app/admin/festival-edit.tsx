@@ -206,7 +206,7 @@ export default function FestivalEditScreen() {
   const [artistDrafts, setArtistDrafts] = useState<Record<string, string[]>>({});
   // Names a loaded set holds with no artist id. After the backfill that means the name fits two artists:
   // only the web editor has a picker, so mobile says so and the set still saves.
-  const unresolvedNames = useRef(new Set<string>());
+  const [unresolvedNames, setUnresolvedNames] = useState(() => new Set<string>());
 
   const artistOrigins = useRef<Record<string, Artist[]>>({});
   const [notifyPickers, setNotifyPickers] = useState(true);
@@ -292,13 +292,13 @@ export default function FestivalEditScreen() {
         })),
       }));
       const everyArtist = (full.days || []).flatMap((d) => (d.sets || []).flatMap((s) => s.artists ?? []));
-      unresolvedNames.current = new Set(
+      setUnresolvedNames(new Set(
         everyArtist.some((a) => a.id)
           ? (full.days || []).flatMap((d) =>
               (d.sets || []).flatMap((s) => (s.artists ?? []).filter((a) => a.name && !a.id).map((a) => `${s.id}:${a.name}`)),
             )
           : [],
-      );
+      ));
       const loaded = sortFormSets({
         name: full.name || '',
         location: full.location || '',
@@ -449,7 +449,7 @@ export default function FestivalEditScreen() {
               autoCapitalize="words"
               error={i === 0 ? artistError : null}
             />
-            {unresolvedNames.current.has(`${s.id}:${name.trim()}`) && !s.artists.some((a) => a.id && a.name === name.trim()) ? (
+            {unresolvedNames.has(`${s.id}:${name.trim()}`) && !s.artists.some((a) => a.id && a.name === name.trim()) ? (
               <Text style={styles.pickOnWeb}>Pick the artist on the web.</Text>
             ) : null}
             {i > 0 ? (

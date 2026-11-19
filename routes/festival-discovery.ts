@@ -15,10 +15,9 @@ export function createFestivalDiscoveryRoutes({
   validateParams,
 }: any) {
   const router = Router();
-  const noopLimit = (_req: any, _res: any, next: any) => next();
-  const followWriteLimit = typeof rateLimit === 'function' ? rateLimit(30, 'festival-follow') : noopLimit;
-  const followReadLimit = typeof rateLimit === 'function' ? rateLimit(120, 'festival-follow-read') : noopLimit;
-  const alsoPickedLimit = typeof rateLimit === 'function' ? rateLimit(120, 'festival-also-picked') : noopLimit;
+  const followWriteLimit = rateLimit(30, 'festival-follow');
+  const followReadLimit = rateLimit(120, 'festival-follow-read');
+  const alsoPickedLimit = rateLimit(120, 'festival-also-picked');
 
   router.get('/follows', userAuth, followReadLimit, async (req: any, res: any) => {
     try {

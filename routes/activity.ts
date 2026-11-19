@@ -3,8 +3,7 @@ import { Router } from 'express';
 export default function createActivityRoutes(deps: any) {
   const router = Router();
   const { stores, userAuth, sendSuccess, sendError, ErrorCodes, log, sanitizeIdentifier, rateLimit, schemas, validateQuery, validateParams } = deps;
-  const noopLimit = (_req: any, _res: any, next: any) => next();
-  const readLimit = (typeof rateLimit === 'function') ? rateLimit(120, 'activity-read') : noopLimit;
+  const readLimit = rateLimit(120, 'activity-read');
 
   // GET /crew/:crewId/activity
   router.get('/crews/:crewId/activity', userAuth, readLimit, validateParams(schemas.crewIdParams), validateQuery(schemas.paginationQuery), async (req: any, res: any) => {
