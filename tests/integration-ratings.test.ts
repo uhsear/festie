@@ -575,6 +575,7 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       // fest2: Alpha twice (solo rated + B2B caught), Gamma, Beta, Delta, Omega.
       await rate(id('alpha'), 3);
       await markCaught(server, user.token, id('b2b'), true);
+      await rate(id('b2b'), 5);
       await markCaught(server, user.token, id('gamma'), true);
       await rate(id('beta'), 2);
       await markCaught(server, user.token, id('delta'), true);
@@ -597,6 +598,15 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
         ['alpha', 'gamma', 'omega', 'zed'],
       );
       assert.ok(!seenMost.some((row: any) => row.artist === 'Alpha b2b Zed'));
+
+      // topArtists splits the b2b set per performer, like seenMost.
+      const lifetime = await server.request.get('/api/v1/ratings/lifetime').set('x-user-token', user.token).expect(200);
+      const top = lifetime.body.data.topArtists;
+      assert.ok(!top.some((row: any) => row.artist === 'Alpha b2b Zed'));
+      const zed = top.find((row: any) => row.artist === 'Zed');
+      assert.equal(zed.timesRated, 2);
+      assert.equal(zed.bestRating, 5);
+      assert.equal(top.find((row: any) => row.artist === 'Alpha').timesRated, 3);
 
       await pool.query('UPDATE festivals SET deleted_at = NOW() WHERE id = $1', [fest2]);
       const afterDelete = await getSeenMost();

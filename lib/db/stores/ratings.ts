@@ -213,6 +213,23 @@ export function aggregateCrewWrap(
 
 // Hours of one set (alias s). Wraps past midnight, so 23:00 to 01:00 is 2, not -22.
 // getWrapStats and getLifetimeStats both use it so their totals agree.
+// One row per performer of the set `s` (key = artist id, else lower-cased name).
+// jsonb_typeof guards a null or scalar `artists`: jsonb_array_elements raises on
+// a scalar. array_agg over zero names is NULL, so COALESCE falls back to the
+// headline artist.
+const PERFORMERS_LATERAL = `
+  CROSS JOIN LATERAL (
+    SELECT COALESCE(NULLIF(btrim(p->>'id'), ''), lower(btrim(p->>'name'))) AS key,
+           btrim(p->>'name') AS name
+    FROM unnest(COALESCE(
+      (SELECT array_agg(e)
+         FROM jsonb_array_elements(CASE WHEN jsonb_typeof(s.artists) = 'array' THEN s.artists ELSE '[]'::jsonb END) e
+        WHERE jsonb_typeof(e) = 'object' AND btrim(COALESCE(e->>'name', '')) <> ''),
+      ARRAY[jsonb_build_object('name', s.artist)]
+    )) AS p
+    WHERE btrim(COALESCE(p->>'name', '')) <> ''
+  ) n`;
+
 const SET_HOURS_EXPR = `
   CASE WHEN s.start_time IS NOT NULL AND s.end_time IS NOT NULL
   THEN MOD((EXTRACT(EPOCH FROM (s.end_time::time - s.start_time::time)) / 3600.0 + 24)::numeric, 24)
@@ -490,28 +507,31 @@ export function createRatingsStore(pool: Pool) {
           [userId],
         ),
         // Top artists across ALL festivals — by best rating, then how many times
-        // loved. Capped for display.
+        // loved. Capped for display. A b2b set counts once per performer, and
+        // performers group by id (name when no id), matching seenMost.
         pool.query(
           `
+          WITH rated AS (
+            SELECT n.key, n.name, r.rating
+            FROM set_ratings r
+            JOIN festival_sets s ON s.id = r.set_id
+            JOIN festivals f ON f.id = s.festival_id AND f.deleted_at IS NULL
+            ${PERFORMERS_LATERAL}
+            WHERE r.user_id = $1
+          )
           SELECT
-            s.artist AS "artist",
+            MIN(name) AS "artist",
             COUNT(*)::int AS "timesRated",
-            MAX(r.rating)::int AS "bestRating",
-            ROUND(AVG(r.rating), 1)::float AS "avgRating"
-          FROM set_ratings r
-          JOIN festival_sets s ON s.id = r.set_id
-          JOIN festivals f ON f.id = s.festival_id AND f.deleted_at IS NULL
-          WHERE r.user_id = $1 AND s.artist IS NOT NULL AND s.artist <> ''
-          GROUP BY s.artist
-          ORDER BY "bestRating" DESC, "timesRated" DESC, s.artist ASC
+            MAX(rating)::int AS "bestRating",
+            ROUND(AVG(rating), 1)::float AS "avgRating"
+          FROM rated
+          GROUP BY key
+          ORDER BY "bestRating" DESC, "timesRated" DESC, MIN(name) ASC
           LIMIT 10
         `,
           [userId],
         ),
-        // Artists seen at 2+ festivals. jsonb_typeof guards a null or scalar
-        // `artists`: jsonb_array_length raises on a scalar and OR does not
-        // short-circuit. array_agg over zero names is NULL, so COALESCE falls
-        // back to the headline artist.
+        // Artists seen at 2+ festivals, grouped like topArtists.
         pool.query(
           `
           WITH seen AS (
@@ -522,24 +542,15 @@ export function createRatingsStore(pool: Pool) {
               AND NOT EXISTS (SELECT 1 FROM set_caught c2 WHERE c2.user_id = $1 AND c2.set_id = r.set_id AND NOT c2.caught)
           ),
           names AS (
-            SELECT s.festival_id, btrim(n.name) AS name
+            SELECT s.festival_id, n.key, n.name
             FROM seen
             JOIN festival_sets s ON s.id = seen.set_id
             JOIN festivals f ON f.id = s.festival_id AND f.deleted_at IS NULL
-            CROSS JOIN LATERAL (
-              SELECT COALESCE(
-                (SELECT array_agg(e->>'name')
-                   FROM jsonb_array_elements(CASE WHEN jsonb_typeof(s.artists) = 'array' THEN s.artists ELSE '[]'::jsonb END) e
-                  WHERE jsonb_typeof(e) = 'object' AND btrim(COALESCE(e->>'name', '')) <> ''),
-                ARRAY[s.artist]
-              ) AS list
-            ) a
-            CROSS JOIN LATERAL unnest(a.list) AS n(name)
-            WHERE n.name IS NOT NULL AND btrim(n.name) <> ''
+            ${PERFORMERS_LATERAL}
           )
           SELECT MIN(name) AS "artist", COUNT(DISTINCT festival_id)::int AS "festivals"
           FROM names
-          GROUP BY lower(name)
+          GROUP BY key
           HAVING COUNT(DISTINCT festival_id) >= 2
           ORDER BY "festivals" DESC, MIN(name) ASC
           LIMIT 10
