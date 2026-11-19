@@ -7,6 +7,10 @@ packages:
 # its postinstall, which downloads the sentry-cli binary that the
 # @sentry/react-native Gradle integration shells out to for release source-map
 # upload. Minimal allowlist — everything else stays blocked.
+# The install therefore prints "Ignored build scripts: @swc/core, unrs-resolver".
+# That is expected: both ship prebuilt platform binaries as optional packages, and
+# lint, typecheck and tests pass without their install scripts. Leave
+# approve-builds alone to silence it.
 onlyBuiltDependencies:
   - "@sentry/cli"
   - "esbuild"
@@ -28,22 +32,6 @@ minimumReleaseAgeExclude:
   - "@expo/*"
   - babel-preset-expo
   - jest-expo
-  # noxcturnal is a first-party Expo dependency (github.com/expo/noxcturnal) of
-  # @expo/metro-config 58; its ^0.1.10 range has no release older than 7 days.
-  # Exact versions only, so any later release still waits out the floor.
-  # Drop these entries once 0.1.11 passes the floor (2026-11-03).
-  - noxcturnal@0.1.11
-  - "@noxcturnal/noxcturnal-darwin-arm64@0.1.11"
-  - "@noxcturnal/noxcturnal-darwin-x64@0.1.11"
-  - "@noxcturnal/noxcturnal-linux-arm64-gnu@0.1.11"
-  - "@noxcturnal/noxcturnal-linux-arm64-musl@0.1.11"
-  - "@noxcturnal/noxcturnal-linux-x64-gnu@0.1.11"
-  - "@noxcturnal/noxcturnal-linux-x64-musl@0.1.11"
-  - "@noxcturnal/noxcturnal-win32-arm64-msvc@0.1.11"
-  - "@noxcturnal/noxcturnal-win32-x64-msvc@0.1.11"
-  # body-parser 1.20.9 patches a high-severity advisory (published 2026-10-22).
-  # Drop this entry once 1.20.9 is older than the 7-day floor (2026-10-29).
-  - body-parser@1.20.9
 # semver@5.7.2 (transitive via @lhci/cli>lighthouse) predates npm provenance;
 # a later semver version has attestation, so no-downgrade false-positives on
 # the old-but-locked pin. Trusted legacy dev-tool dep — excluded.
