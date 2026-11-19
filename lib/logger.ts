@@ -34,8 +34,6 @@ const REDACT_KEYS = new Set([
   'tokenhash', 'token_hash', 'resettoken', 'reset_token',
   'verifytoken', 'verify_token', 'clientsecret', 'client_secret',
   'credentials', 'ssn', 'creditcard',
-  // outbound email recipient and subject (subjects can embed usernames)
-  'to', 'subject',
 ]);
 
 function sanitizeLogMeta(meta: any): any {
@@ -68,7 +66,7 @@ try {
     'password', 'pass', 'pwd', 'secret', 'token', 'apiKey', 'api_key',
     'accessToken', 'access_token', 'refreshToken', 'refresh_token',
     'privateKey', 'private_key', 'dsn',
-    'email', 'to', 'subject', 'newPassword', 'currentPassword', 'confirmPassword',
+    'email', 'newPassword', 'currentPassword', 'confirmPassword',
     'passwordHash', 'password_hash', 'sessionToken', 'userToken',
     'adminToken', 'tokenHash', 'resetToken', 'verifyToken',
     '*.password', '*.secret', '*.token', '*.apiKey', '*.email',

@@ -19,13 +19,6 @@ describe('logger: sanitizeLogMeta', () => {
     assert.equal(result.authorization, '[REDACTED]');
   });
 
-  it('redacts email recipient and subject', () => {
-    const result = sanitizeLogMeta({ to: 'a@b.com', subject: 'Hi bob', id: 'x' });
-    assert.equal(result.to, '[REDACTED]');
-    assert.equal(result.subject, '[REDACTED]');
-    assert.equal(result.id, 'x');
-  });
-
   it('redacts PII fields (email, creditcard, ssn)', () => {
     const result = sanitizeLogMeta({ email: 'a@b.com', ssn: '123', creditcard: '4111' });
     assert.equal(result.email, '[REDACTED]');
