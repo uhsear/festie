@@ -16,6 +16,7 @@ import {
   type ScrollViewInstance,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as Sentry from '@sentry/react-native';
 import * as Notifications from 'expo-notifications';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -219,7 +220,7 @@ export default function TimelineScreen() {
 
   useEffect(() => {
     if (festivals.length === 0) {
-      loadFestivals().catch(() => {});
+      loadFestivals().catch((err) => Sentry.captureException(err));
     }
   }, [festivals.length, loadFestivals]);
 
@@ -233,7 +234,7 @@ export default function TimelineScreen() {
     reloadTriedRef.current = currentFestivalId;
     // This load is already fresh, so the cold-start revalidate below must not repeat it.
     revalidatedRef.current = true;
-    selectFestival(currentFestivalId).catch(() => {});
+    selectFestival(currentFestivalId).catch((err) => Sentry.captureException(err));
   }, [currentFestivalId, currentFestival, isLoading, selectFestival]);
 
   // A cached festival shows at once, but a cold start must still revalidate it in
@@ -243,7 +244,7 @@ export default function TimelineScreen() {
     if (isLoading) revalidatedRef.current = true;
     if (revalidatedRef.current || !currentFestivalId || !currentFestival || isLoading) return;
     revalidatedRef.current = true;
-    selectFestival(currentFestivalId).catch(() => {});
+    selectFestival(currentFestivalId).catch((err) => Sentry.captureException(err));
   }, [currentFestivalId, currentFestival, isLoading, selectFestival]);
 
   useEffect(() => {
@@ -258,7 +259,7 @@ export default function TimelineScreen() {
   // picks/notes light up without forcing a manual festival re-select.
   useEffect(() => {
     if (user && currentFestivalId && !currentProfile) {
-      loadProfiles(currentFestivalId).catch(() => {});
+      loadProfiles(currentFestivalId).catch((err) => Sentry.captureException(err));
     }
   }, [user, currentFestivalId, currentProfile, loadProfiles]);
 
@@ -266,9 +267,9 @@ export default function TimelineScreen() {
   // the festival list when sitting on the picker. Mirrors FestivalList.
   const handleRefresh = useCallback(() => {
     if (currentFestival) {
-      selectFestival(currentFestival.id).catch(() => {});
+      selectFestival(currentFestival.id).catch((err) => Sentry.captureException(err));
     } else {
-      loadFestivals().catch(() => {});
+      loadFestivals().catch((err) => Sentry.captureException(err));
     }
   }, [currentFestival, selectFestival, loadFestivals]);
 
@@ -505,7 +506,10 @@ export default function TimelineScreen() {
         return;
       }
       // The card shows the Retry chip on failure.
-      savePick(currentFestival.id, setId, priority).catch(() => haptics.warning());
+      savePick(currentFestival.id, setId, priority).catch((err) => {
+        Sentry.captureException(err);
+        haptics.warning();
+      });
     },
     [currentFestival, savePick, clearPick, haptics],
   );
@@ -677,7 +681,7 @@ export default function TimelineScreen() {
       action={{
         label: 'Try again',
         onPress: () => {
-          if (currentFestival) selectFestival(currentFestival.id).catch(() => {});
+          if (currentFestival) selectFestival(currentFestival.id).catch((err) => Sentry.captureException(err));
         },
       }}
     />
