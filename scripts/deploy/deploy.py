@@ -30,7 +30,7 @@
 #                                                        the agent / ~/.ssh keys)
 #   FESTIE_SSH_KNOWN_HOSTS  extra known_hosts file     (optional; ~/.ssh/known_hosts is
 #                                                        always loaded. An unknown or changed
-#                                                        host key aborts — add it with ssh-keyscan
+#                                                        host key aborts â€” add it with ssh-keyscan
 #                                                        after checking it out of band)
 #   FESTIE_APP_DIR        app dir on the server        (default /home/asir/festival-planner)
 #   FESTIE_PM2_NAME       PM2 process name             (default festie)
