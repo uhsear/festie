@@ -288,107 +288,116 @@ describe('request-helpers: auth detection helpers', () => {
 // ─── enforceAllowedOrigin middleware ─────────────────────────────────────────
 
 describe('request-helpers: enforceAllowedOrigin', () => {
-  it('passes through GET requests without checking origin', (t, done) => {
-    const helpers = makeHelpers();
-    const req = mockReq({ method: 'GET' });
-    helpers.enforceAllowedOrigin(req, {}, () => {
-      done();
-    });
-  });
-
-  it('passes through POST with Bearer token', (t, done) => {
-    const helpers = makeHelpers();
-    const req = mockReq({ method: 'POST', headers: { authorization: 'Bearer tok123' } });
-    helpers.enforceAllowedOrigin(req, {}, () => {
-      done();
-    });
-  });
-
-  it('passes through POST with valid origin', (t, done) => {
-    const helpers = makeHelpers();
-    const req = mockReq({ method: 'POST', headers: { origin: 'https://festie.us', host: 'festie.us' } });
-    helpers.enforceAllowedOrigin(req, {}, () => {
-      done();
-    });
-  });
-
-  it('blocks POST with invalid origin', () => {
-    let errorCode: string | null = null;
-    const helpers = createRequestHelpers({
-      config: baseConfig,
-      log: noopLog,
-      sendError: (res: any, status: any, msg: any, code: any) => {
-        errorCode = code;
-      },
-      ErrorCodes,
-    });
-    const req = mockReq({ method: 'POST', headers: { origin: 'https://evil.com', host: 'festie.us' } });
-    helpers.enforceAllowedOrigin(req, {}, () => {});
-    assert.equal(errorCode, 'FORBIDDEN');
-  });
-
-  it('passes through POST with trusted mutation header and no origin', (t, done) => {
-    const helpers = makeHelpers();
-    const req = mockReq({ method: 'POST', headers: { 'x-festie-request': '1' } });
-    helpers.enforceAllowedOrigin(req, {}, () => {
-      done();
-    });
-  });
-
-  it('passes through POST with no session cookie and no origin', (t, done) => {
-    const helpers = makeHelpers();
-    const req = mockReq({ method: 'POST', headers: {} });
-    helpers.enforceAllowedOrigin(req, {}, () => {
-      done();
-    });
-  });
-
-  it('blocks POST with session cookie + Bearer header but no origin (L8/H4 hardening)', () => {
-    let errorCode: string | null = null;
+  // Runs the middleware and records every next() call's arguments and every sendError code.
+  function run(reqOverrides: any) {
+    const nextArgs: any[][] = [];
+    const errorCodes: string[] = [];
     const helpers = createRequestHelpers({
       config: baseConfig,
       log: noopLog,
       sendError: (_res: any, _status: any, _msg: any, code: any) => {
-        errorCode = code;
+        errorCodes.push(code);
       },
       ErrorCodes,
     });
-    const req = mockReq({
-      method: 'POST',
-      headers: { cookie: 'festie_session=abc', authorization: 'Bearer tok123' },
+    helpers.enforceAllowedOrigin(mockReq(reqOverrides), {}, (...args: any[]) => {
+      nextArgs.push(args);
     });
-    helpers.enforceAllowedOrigin(req, {}, () => {});
-    assert.equal(errorCode, 'FORBIDDEN');
+    return { nextArgs, errorCodes };
+  }
+
+  function assertPassed(result: ReturnType<typeof run>) {
+    assert.deepEqual(result.nextArgs, [[]]);
+    assert.deepEqual(result.errorCodes, []);
+  }
+
+  function assertBlocked(result: ReturnType<typeof run>) {
+    assert.deepEqual(result.nextArgs, []);
+    assert.deepEqual(result.errorCodes, ['FORBIDDEN']);
+  }
+
+  it('passes through GET requests without checking origin', () => {
+    assertPassed(run({ method: 'GET', headers: { origin: 'https://evil.com', cookie: 'festie_session=abc' } }));
   });
 
-  it('passes through POST with session cookie + Bearer header + valid origin', (t, done) => {
-    const helpers = makeHelpers();
-    const req = mockReq({
-      method: 'POST',
-      headers: {
-        cookie: 'festie_session=abc',
-        authorization: 'Bearer tok123',
-        origin: 'https://festie.us',
-        host: 'festie.us',
-      },
-    });
-    helpers.enforceAllowedOrigin(req, {}, () => {
-      done();
-    });
+  it('passes through the exempt web-vitals path even with a bad origin and a cookie', () => {
+    assertPassed(
+      run({
+        method: 'POST',
+        path: '/api/v1/metrics/web-vitals',
+        headers: { origin: 'null', cookie: 'festie_session=abc' },
+      }),
+    );
+  });
+
+  it('passes through POST with Bearer token', () => {
+    assertPassed(run({ method: 'POST', headers: { authorization: 'Bearer tok123' } }));
+  });
+
+  it('passes through POST with valid origin', () => {
+    assertPassed(run({ method: 'POST', headers: { origin: 'https://festie.us', host: 'festie.us' } }));
+  });
+
+  it('blocks POST with invalid origin', () => {
+    assertBlocked(run({ method: 'POST', headers: { origin: 'https://evil.com', host: 'festie.us' } }));
+  });
+
+  it('blocks POST with invalid origin even when a trusted mutation header is present', () => {
+    assertBlocked(
+      run({
+        method: 'POST',
+        headers: { origin: 'https://evil.com', host: 'festie.us', 'x-festie-request': '1' },
+      }),
+    );
+  });
+
+  it('passes through POST with trusted mutation header and no origin', () => {
+    assertPassed(run({ method: 'POST', headers: { 'x-festie-request': '1' } }));
+  });
+
+  it('passes through POST with a direct auth header, no cookie and no origin', () => {
+    assertPassed(run({ method: 'POST', headers: { 'x-user-token': 'tok' } }));
+  });
+
+  it('passes through POST with no session cookie and no origin', () => {
+    assertPassed(run({ method: 'POST', headers: {} }));
+  });
+
+  it('passes through POST with an unrelated cookie and no origin', () => {
+    assertPassed(run({ method: 'POST', headers: { cookie: 'other=val' } }));
+  });
+
+  it('blocks POST with session cookie + Bearer header but no origin (L8/H4 hardening)', () => {
+    assertBlocked(run({ method: 'POST', headers: { cookie: 'festie_session=abc', authorization: 'Bearer tok123' } }));
+  });
+
+  it('blocks POST with session cookie + x-user-token but no origin (L8/H4 hardening)', () => {
+    assertBlocked(run({ method: 'POST', headers: { cookie: 'festie_session=abc', 'x-user-token': 'tok' } }));
+  });
+
+  it('passes through POST with session cookie + Bearer header + valid origin', () => {
+    assertPassed(
+      run({
+        method: 'POST',
+        headers: {
+          cookie: 'festie_session=abc',
+          authorization: 'Bearer tok123',
+          origin: 'https://festie.us',
+          host: 'festie.us',
+        },
+      }),
+    );
   });
 
   it('blocks POST with session cookie but no origin or auth header', () => {
-    let errorCode: string | null = null;
-    const helpers = createRequestHelpers({
-      config: baseConfig,
-      log: noopLog,
-      sendError: (res: any, status: any, msg: any, code: any) => {
-        errorCode = code;
-      },
-      ErrorCodes,
-    });
-    const req = mockReq({ method: 'POST', headers: { cookie: 'festie_session=abc' } });
-    helpers.enforceAllowedOrigin(req, {}, () => {});
-    assert.equal(errorCode, 'FORBIDDEN');
+    assertBlocked(run({ method: 'POST', headers: { cookie: 'festie_session=abc' } }));
+  });
+
+  it('blocks POST with admin session cookie but no origin or auth header', () => {
+    assertBlocked(run({ method: 'POST', headers: { cookie: 'festie_admin=abc' } }));
+  });
+
+  it('passes through POST with session cookie, trusted mutation header and no origin', () => {
+    assertPassed(run({ method: 'POST', headers: { cookie: 'festie_session=abc', 'x-festie-request': '1' } }));
   });
 });
