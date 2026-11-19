@@ -184,13 +184,20 @@ describe('aggregateCrewWrap — graceful degradation', () => {
 function mockPool(queryResults: any[] = []): any {
   let callIndex = 0;
   const queries: any[] = [];
+  const query = async (sql: any, params: any) => {
+    queries.push({ sql, params });
+    const result = queryResults[callIndex] || { rows: [], rowCount: 0 };
+    callIndex++;
+    return result;
+  };
+  const state = { connects: 0, releases: 0 };
   return {
     queries,
-    query: async (sql: any, params: any) => {
-      queries.push({ sql, params });
-      const result = queryResults[callIndex] || { rows: [], rowCount: 0 };
-      callIndex++;
-      return result;
+    state,
+    query,
+    connect: async () => {
+      state.connects++;
+      return { query, release: () => state.releases++ };
     },
   };
 }
@@ -304,6 +311,7 @@ describe('createRatingsStore.getLifetimeStats — SQL wiring', () => {
     assert.deepStrictEqual(result.seenMost, [{ artist: 'Bonobo', festivals: 3 }]);
 
     // Every query is scoped to the user id only — no festival param.
+    assert.deepStrictEqual(pool.state, { connects: 1, releases: 1 });
     assert.deepStrictEqual(pool.queries[0].params, ['user-1']);
     assert.deepStrictEqual(pool.queries[1].params, ['user-1']);
     assert.deepStrictEqual(pool.queries[2].params, ['user-1']);
