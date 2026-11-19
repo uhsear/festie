@@ -11,7 +11,7 @@ import { initWebVitals } from './lib/web-vitals';
 import { ToastProvider } from './lib/toastContext';
 import Toast from './components/layout/Toast';
 import Button from './components/ui/Button';
-import { scrubToken } from './lib/scrubUrl';
+import { scrubSensitiveUrl } from '@festie/shared/utils';
 import './styles/globals.css';
 
 // ── Sentry initialization ───────────────────────────────────────────────
@@ -28,20 +28,20 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     integrations: [Sentry.tanstackRouterBrowserTracingIntegration(router)],
     // The password-reset token travels in the URL: keep it out of Sentry.
     beforeSend(event) {
-      if (event.request) event.request.url = scrubToken(event.request.url);
+      if (event.request) event.request.url = scrubSensitiveUrl(event.request.url);
       return event;
     },
     beforeSendTransaction(event) {
-      if (event.request) event.request.url = scrubToken(event.request.url);
+      if (event.request) event.request.url = scrubSensitiveUrl(event.request.url);
       return event;
     },
     beforeBreadcrumb(breadcrumb) {
       if (breadcrumb.category === 'navigation' && breadcrumb.data) {
-        breadcrumb.data.from = scrubToken(breadcrumb.data.from);
-        breadcrumb.data.to = scrubToken(breadcrumb.data.to);
+        breadcrumb.data.from = scrubSensitiveUrl(breadcrumb.data.from);
+        breadcrumb.data.to = scrubSensitiveUrl(breadcrumb.data.to);
       }
       if ((breadcrumb.category === 'fetch' || breadcrumb.category === 'xhr') && breadcrumb.data) {
-        breadcrumb.data.url = scrubToken(breadcrumb.data.url);
+        breadcrumb.data.url = scrubSensitiveUrl(breadcrumb.data.url);
       }
       return breadcrumb;
     },
