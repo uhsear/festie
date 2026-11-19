@@ -81,6 +81,16 @@ describe('offlineQueue', () => {
     });
   });
 
+  describe('corrupt stored queue', () => {
+    it.each(['{not json', '{"a":1}'])('keeps %s in a backup key before the next write replaces it', async (raw) => {
+      getStorage().setItem(QUEUE_KEY, raw);
+      await enqueueMutation({ clientId: 'k', url: '/profiles/p1', method: 'PUT', body: {} });
+      expect(getStorage().getItem('festie-offline-queue-corrupt')).toBe(raw);
+      expect(readPersisted()).toHaveLength(1);
+      getStorage().removeItem('festie-offline-queue-corrupt');
+    });
+  });
+
   describe('idempotency on replay', () => {
     it('sends the clientId as an Idempotency-Key header so duplicate replays dedup server-side', async () => {
       vi.mocked(api.post).mockResolvedValue({ id: 'srv1' });
