@@ -401,6 +401,26 @@ describe('presence: disconnectSocket', () => {
     assert.equal(socket.disconnect.mock.callCount(), 1);
     assert.deepEqual(socket.disconnect.mock.calls[0].arguments, [true]);
   });
+
+  it('keeps the sharer id for the disconnect handler while a live share is active', () => {
+    const pm = createPresenceManager(defaultDeps());
+    const socket = makeSocket({ id: 'sock-1', userId: 'user-1' });
+    socket.data.sharingCrewId = 'crew-1';
+
+    pm.disconnectSocket(socket, makeIo());
+
+    assert.equal(socket.data.userId, null);
+    assert.equal(socket.data.sharingUserId, 'user-1');
+  });
+
+  it('sets no sharer id when the socket is not sharing', () => {
+    const pm = createPresenceManager(defaultDeps());
+    const socket = makeSocket({ id: 'sock-1', userId: 'user-1' });
+
+    pm.disconnectSocket(socket, makeIo());
+
+    assert.equal(socket.data.sharingUserId, undefined);
+  });
 });
 
 describe('presence: disconnectUserSockets', () => {
