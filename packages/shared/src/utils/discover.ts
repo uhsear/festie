@@ -1,11 +1,11 @@
 import type { FestivalDay, FestivalSet, Priority } from '../types/domain';
+import { PRIORITY_WEIGHT } from './crewNudges';
 import { artistDisplayName } from './format';
 import { byStartTime } from './scheduleFormat';
 import { getSetTimeBounds } from './setStatus';
 
 type Picks = Record<string, Priority | null | undefined> | null | undefined;
 
-const PRIORITY_WEIGHT: Record<Priority, number> = { must: 3, 'want-to-see': 2, maybe: 1 };
 const norm = (g: string): string => g.toLocaleLowerCase();
 
 /** Distinct genres across a set's artists: case-insensitive, first spelling kept, stored order. */
