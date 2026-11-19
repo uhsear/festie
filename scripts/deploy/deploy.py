@@ -112,6 +112,38 @@ def pre_deploy_dump(client, runner=run):
         )
 
 
+def wait_ready(client, runner=run, attempts=20, delay=3):
+    """Poll /api/ready until it returns 200; boot applies migrations, so it can be slow."""
+    ready_code = ""
+    for attempt in range(attempts):
+        code, out, err = runner(client, f"curl -s -o /dev/null -w '%{{http_code}}' {READY_URL}")
+        ready_code = out.strip()
+        if ready_code == "200":
+            break
+        if attempt < attempts - 1:
+            time.sleep(delay)
+    return ready_code
+
+
+def smoke_login(client, runner=run):
+    """Log in with the test credentials and return the HTTP status.
+
+    One command, so one remote shell: $$ is the same in the write, the curl and
+    the rm. The trap removes the password file even if curl fails.
+    """
+    payload = json.dumps({"username": TEST_USER, "password": TEST_PASSWORD})
+    tmp = "/tmp/festie-login.$$.json"
+    code, out, err = runner(
+        client,
+        f"umask 077 && trap 'rm -f {tmp}' EXIT && cat > {tmp} <<'EOF'\n{payload}\nEOF\n"
+        f"curl -s -o /dev/null -w '%{{http_code}}' -X POST {LOGIN_URL} "
+        "-H 'Content-Type: application/json' -H 'X-Festie-Request: 1' "
+        f"-d @{tmp}",
+        timeout=60,
+    )
+    return out.strip()
+
+
 def rollback_hint(tag=None):
     target = tag or "deploy-<previous-timestamp>"
     print("")
@@ -213,16 +245,15 @@ def main():
             # apply a runtime change. Only `pm2 delete` + `pm2 start <config>` does
             # that, and that is a deliberate step for the cutover, not something a
             # routine deploy should do.
-            f"pm2 restart {PM2_NAME} && sleep 5 && pm2 ls | grep {PM2_NAME}",
+            f"pm2 restart {PM2_NAME} && pm2 ls | grep {PM2_NAME}",
         )
         print(f"[pm2] exit={code}\n{out}{err}")
+        if code != 0:
+            rollback_hint()
+            raise SystemExit("pm2 restart failed; the old process may still be serving")
 
         # 7. Readiness gate (db + redis) — abort + rollback hint on non-200 (P16)
-        code, out, err = run(
-            client,
-            f"curl -s -o /dev/null -w '%{{http_code}}' {READY_URL}",
-        )
-        ready_code = out.strip()
+        ready_code = wait_ready(client)
         print(f"[ready] http={ready_code}")
         if ready_code != "200":
             rollback_hint()
@@ -232,17 +263,7 @@ def main():
         # a temp file on the server and curl it with -d @file so the password
         # never appears in the server process list or shell history.
         if TEST_USER and TEST_PASSWORD:
-            payload = json.dumps({"username": TEST_USER, "password": TEST_PASSWORD})
-            tmp = "/tmp/festie-login.$$.json"
-            run(client, f"umask 077 && cat > {tmp} <<'EOF'\n{payload}\nEOF")
-            code, out, err = run(
-                client,
-                f"curl -s -o /dev/null -w '%{{http_code}}' -X POST {LOGIN_URL} "
-                "-H 'Content-Type: application/json' -H 'X-Festie-Request: 1' "
-                f"-d @{tmp}; rm -f {tmp}",
-                timeout=60,
-            )
-            login_code = out.strip()
+            login_code = smoke_login(client)
             print(f"[login] http={login_code}")
             if login_code != "200":
                 rollback_hint()
