@@ -217,7 +217,6 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     socketRateLimits: new Map(),
     userAuthRateLimits: new Map(),
     onlineUsers: new Map(),
-    _adminResetTokens: new Map(),
     sseConnections: new Map(),
     timers: [],
     stores: stores as unknown as Stores,

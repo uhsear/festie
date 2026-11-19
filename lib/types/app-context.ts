@@ -139,7 +139,6 @@ export interface AppState {
   socketRateLimits: Map<string, RateLimitEntry>;
   userAuthRateLimits: Map<string, RateLimitEntry>;
   onlineUsers: Map<string, Map<string, { userId: string; username: string }>>;
-  _adminResetTokens: Map<string, { expiresAt: number; [k: string]: unknown }>;
   sseConnections: Map<string, unknown>;
   timers: NodeJS.Timeout[];
   stores: Stores;
@@ -215,7 +214,7 @@ export interface AppContext {
 }
 
 /** Crew push notifier (lib/notifications/crew-notify.ts). Never throws into a route. */
-export interface CrewNotify {
+interface CrewNotify {
   queue(item: { crewId: string; actorId: string | null; kind: 'member' | 'poll'; text: string }): void;
   now(item: {
     crewId: string;
@@ -238,7 +237,7 @@ export interface CrewNotify {
 }
 
 /** Poll closer (lib/poll-close.ts): shared by the manual end route and the expiry sweep. */
-export interface PollCloser {
+interface PollCloser {
   announce(
     poll: Record<string, unknown>,
     actorId: string | null,
