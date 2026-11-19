@@ -77,6 +77,14 @@ describe('CalendarDialog', () => {
     expect(mockFetchCalendarLinks).toHaveBeenCalledWith('f1');
   });
 
+  it('keeps its title and closes on Escape', async () => {
+    render(<CalendarDialog />);
+    open();
+    expect(screen.getByRole('dialog', { name: 'Add to calendar' })).toBeInTheDocument();
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
   it('Cancel closes the chooser', () => {
     render(<CalendarDialog />);
     open();
