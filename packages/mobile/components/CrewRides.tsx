@@ -26,6 +26,7 @@ import Button from './Button';
 import EmptyState from './EmptyState';
 import CrewSyncMarker from './CrewSyncMarker';
 import { festivalForCrew } from '../lib/crewFestival';
+import { formatClockTime } from '../lib/accountFormat';
 
 type Direction = 'to_festival' | 'home';
 const DIRECTIONS: { value: Direction; label: string }[] = [
@@ -42,11 +43,6 @@ function timeToDate(time: string): Date {
 /** A picked Date as `HH:MM` (24h). */
 function dateToTime(d: Date): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-/** `HH:MM` (24h) to "2:00 PM", for the time button. */
-function timeText(time: string): string {
-  return timeToDate(time).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 interface CrewRidesProps {
@@ -309,9 +305,9 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
                 onPress={pickTime}
                 activeOpacity={0.8}
                 accessibilityRole="button"
-                accessibilityLabel={time ? `Time ${timeText(time)}` : 'Pick a time'}
+                accessibilityLabel={time ? `Time ${formatClockTime(time)}` : 'Pick a time'}
               >
-                <Text style={time ? styles.timeText : styles.timePlaceholder}>{time ? timeText(time) : 'Time'}</Text>
+                <Text style={time ? styles.timeText : styles.timePlaceholder}>{time ? formatClockTime(time) : 'Time'}</Text>
               </TouchableOpacity>
               {Platform.OS === 'ios' && showIosTime ? (
                 <DateTimePicker
