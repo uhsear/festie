@@ -93,7 +93,7 @@ describe('mergeGuestPicks', () => {
     vi.mocked(api.put).mockResolvedValueOnce({});
     vi.mocked(api.get).mockResolvedValueOnce([]);
     await store().mergeGuestPicks();
-    expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'f1' });
+    expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'f1' }, { _bypassOfflineQueue: true });
     expect(api.put).toHaveBeenCalledWith(
       '/profiles/prof-1',
       { pickDeltas: { s1: 'must' }, legacyPicks: { s1: 'must', s2: 'want-to-see' } },

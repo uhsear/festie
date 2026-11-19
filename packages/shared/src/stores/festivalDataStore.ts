@@ -1091,7 +1091,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
           set({ guestInterests: rest });
         };
         try {
-          const profile = await api.post<Profile>('/profiles', { festivalId });
+          const profile = await api.post<Profile>('/profiles', { festivalId }, { _bypassOfflineQueue: true });
           const state = get();
           const lineup =
             festivalId === state.currentFestivalId && state.currentFestival?.lineup
@@ -1180,7 +1180,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
           set({ guestPicks: rest });
         };
         try {
-          const profile = await api.post<Profile>('/profiles', { festivalId });
+          const profile = await api.post<Profile>('/profiles', { festivalId }, { _bypassOfflineQueue: true });
           const state = get();
           const setIds =
             festivalId === state.currentFestivalId && state.sets.length > 0
