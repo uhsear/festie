@@ -654,6 +654,84 @@ describe('middleware: idempotency key logic', () => {
     assert.deepEqual(res2.body, { id: 'e1' });
   });
 
+  it('passes through HEAD and OPTIONS, and a key that is not a string', () => {
+    const { middleware, cache } = makeIdem();
+    for (const req of [
+      { method: 'HEAD', headers: { 'idempotency-key': 'k-head' } },
+      { method: 'OPTIONS', headers: { 'idempotency-key': 'k-opt' } },
+      { method: 'POST', headers: { 'idempotency-key': ['a', 'b'] }, ip: '1.2.3.4' },
+      { method: 'POST', headers: { 'idempotency-key': '' }, ip: '1.2.3.4' },
+    ]) {
+      let nextCalled = false;
+      middleware(req, {}, () => { nextCalled = true; });
+      assert.ok(nextCalled);
+    }
+    assert.equal(cache.size, 0);
+  });
+
+  it('accepts a key of exactly 128 chars', () => {
+    const { middleware, cache } = makeIdem();
+    const res = mkIdemRes();
+    middleware({ method: 'POST', headers: { 'idempotency-key': 'a'.repeat(128) }, ip: '1.2.3.4' }, res, () => { res.json({ ok: true }); });
+    assert.deepEqual([...cache.keys()], [`1.2.3.4:${'a'.repeat(128)}`]);
+  });
+
+  it('a 4xx is cached and replays with its original status', () => {
+    const { middleware } = makeIdem();
+    const req = { method: 'POST', headers: { 'idempotency-key': 'k-422' }, ip: '1.2.3.4' };
+    let executions = 0;
+    const res1 = mkIdemRes();
+    res1.statusCode = 422;
+    middleware(req, res1, () => { executions += 1; res1.json({ error: 'invalid' }); });
+    const res2 = mkIdemRes();
+    middleware(req, res2, () => { executions += 1; });
+    assert.equal(executions, 1);
+    assert.equal(res2.statusCode, 422);
+    assert.equal(res2.replayed, 'true');
+    assert.deepEqual(res2.body, { error: 'invalid' });
+  });
+
+  it('the same key on a different principal or key value does not replay', () => {
+    const { middleware } = makeIdem();
+    let executions = 0;
+    for (const [ip, key] of [['1.2.3.4', 'k-a'], ['5.6.7.8', 'k-a'], ['1.2.3.4', 'k-b']]) {
+      const res = mkIdemRes();
+      middleware({ method: 'POST', headers: { 'idempotency-key': key }, ip }, res, () => { executions += 1; res.json({ ok: true }); });
+    }
+    assert.equal(executions, 3);
+  });
+
+  it('a finished request with no JSON body drops its reservation so a retry executes', () => {
+    const { middleware, cache } = makeIdem();
+    const req = { method: 'POST', headers: { 'idempotency-key': 'k-nobody' }, ip: '1.2.3.4' };
+    const listeners: Record<string, any> = {};
+    const resA = mkIdemRes();
+    resA.on = (ev: string, fn: any) => { listeners[ev] = fn; };
+    middleware(req, resA, () => {});
+    assert.equal(cache.size, 1);
+    listeners['finish']();
+    assert.equal(cache.size, 0);
+    let executions = 0;
+    middleware(req, mkIdemRes(), () => { executions += 1; });
+    assert.equal(executions, 1);
+  });
+
+  it('evicts the oldest entry once maxEntries is reached', () => {
+    const { middleware, cache } = createIdempotencyMiddleware({ ttl: 5 * 60 * 1000, maxEntries: 2 });
+    const send = (key: string) => {
+      const res = mkIdemRes();
+      middleware({ method: 'POST', headers: { 'idempotency-key': key }, ip: '1.2.3.4' }, res, () => { res.json({ key }); });
+    };
+    send('k1');
+    send('k2');
+    send('k3');
+    // The in-flight reservation counts toward the cap, so a cap of 2 keeps one finished entry.
+    assert.deepEqual([...cache.keys()], ['1.2.3.4:k3']);
+    let executions = 0;
+    middleware({ method: 'POST', headers: { 'idempotency-key': 'k1' }, ip: '1.2.3.4' }, mkIdemRes(), () => { executions += 1; });
+    assert.equal(executions, 1, 'the evicted key executes again');
+  });
+
   it('the mount uses getRequestIp', async () => {
     // T57 F1: under TRUST_PROXY, req.ip follows a forgeable X-Forwarded-For.
     const config = { TRUST_PROXY: true, IDEMPOTENCY_TTL: 300_000, IDEMPOTENCY_MAX_ENTRIES: 5000 };
