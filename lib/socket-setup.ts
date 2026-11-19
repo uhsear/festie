@@ -19,7 +19,7 @@ function configureSocketIO(app: Application, ctx: any) {
     getSocketRequestIp, isAllowedOrigin,
     consumeSocketConnectRateLimitAsync,
     buildAvatarUrl,
-    hashSessionToken,
+    validateUserSession,
     promMetrics,
   } = ctx;
 
@@ -56,30 +56,13 @@ function configureSocketIO(app: Application, ctx: any) {
       }
       const queryToken = url.searchParams.get('token');
       const authHeader = req.headers.authorization;
-      const isValidQueryToken = queryToken && /^[a-f0-9]{32,128}$/i.test(queryToken);
-      const isValidBearerAuth = typeof authHeader === 'string'
-        && /^Bearer [a-f0-9]{32,128}$/i.test(authHeader);
-      const hasMobileAuth = isValidQueryToken || isValidBearerAuth;
+      // A token in the URL or header skips the Origin check (native clients). The
+      // token itself is validated in the io.use middleware below, because a
+      // websocket-transport rejection here reaches the client as a bare
+      // "websocket error" with no status it can act on.
+      const hasMobileAuth = (queryToken && /^[a-f0-9]{32,128}$/i.test(queryToken))
+        || (typeof authHeader === 'string' && /^Bearer [a-f0-9]{32,128}$/i.test(authHeader));
       if (hasMobileAuth) {
-        // Validate token against session store if available
-        const rawToken = isValidQueryToken
-          ? queryToken
-          : (authHeader as string).slice(7); // strip 'Bearer '
-        if (stores?.sessions && hashSessionToken) {
-          try {
-            const tokenHash = hashSessionToken(rawToken);
-            const session = await stores.sessions.getByTokenHash(tokenHash);
-            if (!session) {
-              callback('Invalid session token', false);
-              return;
-            }
-          } catch (err: any) {
-            // If session lookup fails, allow connection but log the error.
-            // The post-connection auth timeout will disconnect if they can't
-            // authenticate within the window.
-            log.warn('socket:session-check-failed', { error: err.message });
-          }
-        }
         callback(null, true);
         return;
       }
@@ -90,6 +73,29 @@ function configureSocketIO(app: Application, ctx: any) {
       }
       callback(null, true);
     },
+  });
+
+  // Handshake token check. Runs after the upgrade so a rejection carries
+  // data.status (401 = bad token, client refreshes once; 503 = lookup failed,
+  // client keeps its normal reconnect backoff). Fails closed on lookup errors.
+  io.use(async (socket: any, next: any) => {
+    const { auth, query, headers } = socket.handshake;
+    const bearer = typeof headers?.authorization === 'string' && headers.authorization.startsWith('Bearer ')
+      ? headers.authorization.slice(7).trim()
+      : undefined;
+    const rawToken = [auth?.token, query?.token, bearer].find((t) => typeof t === 'string' && t.trim());
+    if (!rawToken) return next();
+    const reject = (message: string, status: number) =>
+      next(Object.assign(new Error(message), { data: { status } }));
+    if (!/^[a-f0-9]{32,128}$/i.test(rawToken.trim())) return reject('Invalid session token', 401);
+    try {
+      const session = await validateUserSession(rawToken.trim());
+      if (!session) return reject('Invalid session token', 401);
+    } catch (err: any) {
+      log.warn('socket:session-check-failed', { error: err.message });
+      return reject('Session check unavailable', 503);
+    }
+    next();
   });
 
   // Attach Redis adapter for multi-instance Socket.IO broadcasting

@@ -454,6 +454,32 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     await disconnected;
   });
 
+  test('rejects a bad handshake auth.token with a 401 status the client can act on', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const badSocket = connectSocket(server.baseUrl, { auth: { token: 'a'.repeat(64) } });
+    const error: any = await waitForEvent(badSocket, 'connect_error', () => true);
+    assert.equal(error.message, 'Invalid session token');
+    assert.equal(error.data?.status, 401);
+    badSocket.close();
+
+    const malformed = connectSocket(server.baseUrl, { auth: { token: 'not-hex' } });
+    const malformedError: any = await waitForEvent(malformed, 'connect_error', () => true);
+    assert.equal(malformedError.data?.status, 401);
+    malformed.close();
+  });
+
+  test('accepts a valid handshake auth.token', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const alice = await registerUser(server, 'socket-auth-ok');
+
+    const socket = connectSocket(server.baseUrl, { auth: { token: alice.token } });
+    await waitForEvent(socket, 'connect');
+    socket.close();
+  });
+
   test('acks Authentication required before disconnecting on join:festival with an invalid token', async () => {
     const server = await startServer();
     servers.push(server);
