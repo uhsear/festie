@@ -15,7 +15,7 @@ import { createHash } from 'node:crypto';
 import { Client, type Pool } from 'pg';
 import { createOpaqueId } from './helpers';
 import { sanitizeString, sanitizeLinkRecord } from './helpers/sanitize';
-import { artistNameKey, shownSetName } from './artist-key';
+import { artistNameKey, shownSetName, stripSetTag } from './artist-key';
 import { ALLOWED_LINK_PLATFORMS, MAX_ARTISTS_PER_SET } from './constants';
 import { normalizeSetArtists } from './schemas';
 import { detectPlatform, normalizeArtistLink, type ArtistLinkPlatform } from './artist-links';
@@ -34,6 +34,7 @@ export interface ArtistRow {
   photo: string | null;
   genres: string[] | null;
   merged_into: string | null;
+  updated_at_text: string;
 }
 
 interface FestivalInfo {
@@ -56,6 +57,8 @@ interface Group {
   photo: string | null;
   genres: string[];
   actualId?: string | null;
+  /** An existing row with no Spotify id that takes one Spotify cluster: what it gains. */
+  fill?: { spotifyId: string; links: Links };
 }
 
 interface Elem {
@@ -64,13 +67,18 @@ interface Elem {
   original: any;
   name: string;
   key: string;
+  /** The key of the name as stored, before stripSetTag. */
+  rawKey: string;
   links: Links;
   photo: string | null;
   genres: string[];
   spotifyId: string | null;
   fromId: string | null;
   group: Group | null;
+  /** Holds its live artist's id: only the copy is brought in line with the row. */
   leftAlone: boolean;
+  /** Tied to its artist by a stored id (its own or a merged one), not by name or Spotify id. */
+  byId: boolean;
 }
 
 type Item = { keep: any } | Elem;
@@ -103,6 +111,9 @@ export interface BackfillReport {
   splitLinksToPlace: Array<{ festivalId: string; ownerId: string; name: string; links: Links }>;
   photosNotCopied: Array<{ festivalId: string; ownerId: string; name: string; photo: string }>;
   linksNotCopied: Array<{ festivalId: string; ownerId: string; name: string; links: Links }>;
+  rowFills: Array<{ artistId: string; artist: string; spotifyId: string; links: Links }>;
+  /** Elements that already hold an artist's id but whose copy differs from the row (after any fill). */
+  copyRefreshes: Array<{ festivalId: string; kind: string; ownerId: string; artistId: string; name: string }>;
 }
 
 export interface BackfillPlan {
@@ -166,6 +177,8 @@ const emptyReport = (): BackfillReport => ({
   splitLinksToPlace: [],
   photosNotCopied: [],
   linksNotCopied: [],
+  rowFills: [],
+  copyRefreshes: [],
 });
 
 // ── Reading ────────────────────────────────────────────────────────────────────────────────────
@@ -243,7 +256,7 @@ async function loadOwners(pool: Pool, festivals: FestivalInfo[]): Promise<Owner[
       owners.push({
         festival, kind: 'lineup', ownerId: String(entry?.id ?? `#${index}`),
         original: Array.isArray(entry?.artists) ? entry.artists : [], legacy: false, items: [],
-        flat: '', linkUrl: null, displayName: null, entry,
+        flat: '', linkUrl: null, displayName: entry?.displayName || null, entry,
       });
     });
   }
@@ -252,7 +265,7 @@ async function loadOwners(pool: Pool, festivals: FestivalInfo[]): Promise<Owner[
 
 async function loadArtists(pool: Pool): Promise<ArtistRow[]> {
   const { rows } = await pool.query(
-    'SELECT id, name, name_key, label, spotify_id, links, photo, genres, merged_into FROM artists ORDER BY id',
+    'SELECT id, name, name_key, label, spotify_id, links, photo, genres, merged_into, updated_at::text AS updated_at_text FROM artists ORDER BY id',
   );
   return rows;
 }
@@ -310,18 +323,19 @@ function spotifyIdOf(links: Links): string | null {
   return result.ok ? (result.spotifyId ?? null) : null;
 }
 
-function makeElem(owner: Owner, ordinal: number, original: any, name: string, links: Links, split: boolean): Elem {
+function makeElem(owner: Owner, ordinal: number, original: any, rawName: string, links: Links, split: boolean): Elem {
   const photo = !split && typeof original?.photo === 'string' && original.photo ? original.photo : null;
+  const name = stripSetTag(rawName);
   return {
-    owner, ordinal, original, name: name.slice(0, MAX_NAME), key: artistNameKey(name), links, photo,
+    owner, ordinal, original, name: name.slice(0, MAX_NAME), key: artistNameKey(name), rawKey: artistNameKey(rawName), links, photo,
     genres: split ? [] : cleanGenres(original?.genres), spotifyId: spotifyIdOf(links),
     fromId: !split && typeof original?.id === 'string' && original.id ? original.id : null,
-    group: null, leftAlone: false,
+    group: null, leftAlone: false, byId: false,
   };
 }
 
 /**
- * Step 1 to 3: the elements of one owner, B2B names split and links cleaned. A split that would
+ * Step 1 to 3: the elements of one owner, B2B names split, set tags stripped and links cleaned. A split that would
  * push the owner past MAX_ARTISTS_PER_SET is left undone and reported, so the form can still save.
  */
 function buildItems(owner: Owner, report: BackfillReport): void {
@@ -426,27 +440,55 @@ function groupElements(owners: Owner[], artists: ArtistRow[], report: BackfillRe
     if (live) {
       // An id that names a tombstone is rewritten with the survivor's id.
       const group = byArtistId.get(live.id)!;
+      elem.byId = true;
       if (elem.fromId === live.id) {
         elem.group = group;
         elem.leftAlone = true;
       } else addToGroup(group, elem, report);
     } else if (!elem.spotifyId) unplaced.push(elem);
   }
+  const unmatched = new Map<string, Elem[]>();
   for (const elem of elems.filter((e) => !e.group && e.spotifyId)) {
-    let group = bySpotify.get(elem.spotifyId!);
-    if (!group) {
-      group = newGroup(elem.spotifyId);
-      bySpotify.set(elem.spotifyId!, group);
-      groups.push(group);
-    }
-    addToGroup(group, elem, report);
+    const group = bySpotify.get(elem.spotifyId!);
+    if (group) addToGroup(group, elem, report);
+    else unmatched.set(elem.spotifyId!, [...(unmatched.get(elem.spotifyId!) ?? []), elem]);
   }
-  for (const group of groups.filter((g) => !g.existing)) {
-    group.name = mostFrequentName(group.elems);
-    group.key = artistNameKey(group.name);
-  }
+  placeSpotifyClusters(groups, unmatched, report);
   groupByKey(groups, unplaced, report);
   return groups;
+}
+
+/**
+ * Step 4.1 for Spotify ids no artist holds yet. A cluster joins the one existing artist with its key,
+ * as a save does (lib/artist-refs.ts rules 4 and 5), when that artist has no Spotify id, its links
+ * agree and no other new Spotify id shares the key. The artist then gains the Spotify id and the
+ * links for its empty platforms. Two new Spotify ids on one key stay two artists.
+ */
+function placeSpotifyClusters(groups: Group[], unmatched: Map<string, Elem[]>, report: BackfillReport): void {
+  const keyOf = new Map([...unmatched].map(([spotifyId, cluster]) => [spotifyId, artistNameKey(mostFrequentName(cluster))]));
+  const clustersPerKey = new Map<string, number>();
+  for (const key of keyOf.values()) clustersPerKey.set(key, (clustersPerKey.get(key) ?? 0) + 1);
+  const existing = groups.filter((g) => g.existing);
+  for (const [spotifyId, cluster] of unmatched) {
+    const key = keyOf.get(spotifyId)!;
+    const sameKey = existing.filter((g) => g.key === key);
+    const links = mergedLinks(cluster);
+    const target =
+      clustersPerKey.get(key) === 1 && sameKey.length === 1 && !sameKey[0]!.spotifyId && !linksConflict(sameKey[0]!.links, links) ? sameKey[0]! : null;
+    if (target) {
+      const stored = target.existing!.links ?? {};
+      target.spotifyId = spotifyId;
+      target.fill = { spotifyId, links: Object.fromEntries(Object.entries(links).filter(([platform]) => !stored[platform])) };
+      report.rowFills.push({ artistId: target.id, artist: target.name, ...target.fill });
+    }
+    const group = target ?? newGroup(spotifyId);
+    if (!target) groups.push(group);
+    for (const elem of cluster) addToGroup(group, elem, report);
+    if (!target) {
+      group.name = mostFrequentName(group.elems);
+      group.key = key;
+    }
+  }
 }
 
 /** Steps 4.2 to 4.4: elements with no Spotify id, key by key. */
@@ -520,14 +562,31 @@ function pickFields(group: Group, report: BackfillReport): void {
 
 // ── Output ─────────────────────────────────────────────────────────────────────────────────────
 
-// An existing artist is copied as its row says: group.links also holds the links of joined elements.
+// An existing artist is copied as its row says after its fill: group.links also holds the links of joined elements.
+const rowLinks = (group: Group): Links => ({ ...(group.existing!.links ?? {}), ...(group.fill?.links ?? {}) });
+
 const copyOf = (group: Group, id: string) => ({
   id,
   name: group.name,
-  links: group.existing ? (group.existing.links ?? {}) : group.links,
+  links: group.existing ? rowLinks(group) : group.links,
   ...(group.photo ? { photo: group.photo } : {}),
   ...(group.genres.length > 0 ? { genres: group.genres } : {}),
 });
+
+/**
+ * The element as the artist-update path (rewriteCopies) leaves it: the row's name, links, photo and
+ * genres, other keys kept. It equals the element unless the copy drifted from its row, or a fill changed the row.
+ */
+function syncedCopy(element: any, group: Group) {
+  const { photo: _photo, genres: _genres, ...rest } = element;
+  return {
+    ...rest,
+    name: group.name,
+    links: rowLinks(group),
+    ...(group.photo ? { photo: group.photo } : {}),
+    ...(group.genres.length > 0 ? { genres: group.genres } : {}),
+  };
+}
 
 /** An element with no usable group keeps its cleaned data and no id. */
 const plainCopy = (elem: Elem) => ({
@@ -540,7 +599,7 @@ const plainCopy = (elem: Elem) => ({
 function outputArtists(owner: Owner, idOf: (group: Group) => string | null): any[] {
   return owner.items.map((item) => {
     if ('keep' in item) return item.keep;
-    if (item.leftAlone) return item.original;
+    if (item.leftAlone) return syncedCopy(item.original, item.group!);
     const id = item.group ? idOf(item.group) : null;
     return item.group && id ? copyOf(item.group, id) : plainCopy(item);
   });
@@ -550,6 +609,7 @@ interface OwnerWrite {
   artists: any[];
   artist: string;
   linkUrl: string | null;
+  displayName: string | null;
 }
 
 function ownerWrite(owner: Owner, idOf: (group: Group) => string | null): OwnerWrite {
@@ -559,15 +619,21 @@ function ownerWrite(owner: Owner, idOf: (group: Group) => string | null): OwnerW
   const rebuild = owner.flat === oldNames.join(` ${sep} `);
   const names = artists.map((a: any) => a?.name).filter((n: any) => typeof n === 'string' && n.trim());
   const firstSpotify = artists.find((a: any) => typeof a?.name === 'string' && a.name.trim())?.links?.spotify;
+  // A name that changes beyond case and marks (a stripped set tag, a Spotify join) keeps the poster text.
+  const renamed = owner.items.some((item, i) => !('keep' in item) && !item.byId && item.rawKey !== artistNameKey(String(artists[i]?.name ?? '')));
   return {
     artists,
     artist: rebuild ? names.join(` ${sep} `) : owner.flat,
     linkUrl: firstSpotify || null,
+    displayName: !owner.displayName && renamed ? shownName(owner) : owner.displayName,
   };
 }
 
+const shownName = (owner: Owner) =>
+  shownSetName({ displayName: owner.displayName, artist: owner.flat, artists: owner.original }, owner.festival.separator).slice(0, MAX_NAME);
+
 function ownerChanged(owner: Owner, write: OwnerWrite): boolean {
-  if (stable(write.artists) !== stable(owner.original)) return true;
+  if (stable(write.artists) !== stable(owner.original) || write.displayName !== owner.displayName) return true;
   return owner.kind === 'set' && (write.artist !== owner.flat || (write.linkUrl ?? null) !== (owner.linkUrl ?? null));
 }
 
@@ -592,9 +658,13 @@ export async function planBackfill(pool: Pool): Promise<BackfillPlan> {
     const write = ownerWrite(owner, placeholderId);
     if (!ownerChanged(owner, write)) continue;
     changedOwners.push(owner);
+    owner.items.forEach((item, i) => {
+      if ('keep' in item || !item.leftAlone || stable(write.artists[i]) === stable(item.original)) return;
+      report.copyRefreshes.push({ festivalId: owner.festival.id, kind: owner.kind, ownerId: owner.ownerId, artistId: item.group!.id, name: item.group!.name });
+    });
     if (owner.kind !== 'set') continue;
     const before = shownSetName({ displayName: owner.displayName, artist: owner.flat, artists: owner.original }, owner.festival.separator);
-    const after = shownSetName({ displayName: owner.displayName, artist: write.artist, artists: write.artists }, owner.festival.separator);
+    const after = shownSetName({ displayName: write.displayName, artist: write.artist, artists: write.artists }, owner.festival.separator);
     if (before !== after) report.renames.push({ festivalId: owner.festival.id, setId: owner.ownerId, before, after });
   }
   noteJoins(groups, report);
@@ -607,7 +677,7 @@ function noteJoins(groups: Group[], report: BackfillReport): void {
   for (const group of groups) {
     if (group.existing) {
       for (const elem of group.elems.filter((e) => !e.leftAlone)) {
-        const extra = Object.fromEntries(Object.entries(elem.links).filter(([p, url]) => group.existing!.links?.[p] !== url));
+        const extra = Object.fromEntries(Object.entries(elem.links).filter(([p, url]) => rowLinks(group)[p] !== url));
         if (Object.keys(extra).length > 0) {
           report.linksNotCopied.push({ festivalId: elem.owner.festival.id, ownerId: elem.owner.ownerId, name: elem.name, links: extra });
         }
@@ -696,6 +766,7 @@ async function setsUnchanged(client: any, festival: FestivalInfo, owners: Owner[
     id,
     artist,
     link_url,
+    display_name,
     CASE
       WHEN jsonb_typeof(artists) = 'array' THEN artists
       ELSE '[]'::jsonb
@@ -711,7 +782,13 @@ async function setsUnchanged(client: any, festival: FestivalInfo, owners: Owner[
   const current = new Map(rows.map((r: any) => [r.id, r]));
   return owners.filter((o) => o.kind === 'set').every((o) => {
     const row: any = current.get(o.ownerId);
-    return !!row && stable(row.artists) === stable(o.original) && String(row.artist ?? '') === o.flat && (row.link_url ?? null) === o.linkUrl;
+    return (
+      !!row &&
+      stable(row.artists) === stable(o.original) &&
+      String(row.artist ?? '') === o.flat &&
+      (row.link_url ?? null) === o.linkUrl &&
+      (row.display_name ?? null) === o.displayName
+    );
   });
 }
 
@@ -722,27 +799,30 @@ async function writeFestival(client: any, plan: BackfillPlan, festival: Festival
 
   const owners = plan.changedOwners.filter((o) => o.festival === festival);
   if (!(await setsUnchanged(client, festival, owners))) return { skipped: 'changed during the run; run again' as const };
-  const needed = [...new Set(owners.flatMap((o) => o.items.filter((i): i is Elem => !('keep' in i) && !i.leftAlone).map((e) => e.group!)))];
+  // Festival lock first, then the artist rows: the lock order of the artist-update path.
+  const needed = [...new Set(owners.flatMap((o) => o.items.filter((i): i is Elem => !('keep' in i) && !!i.group).map((e) => e.group!)))];
+  const fills = await lockRowFills(client, needed.filter((g) => g.fill));
+  if (!fills || !(await writeRowFills(client, fills))) return { skipped: 'changed during the run; run again' as const };
   const { ids, created } = await materializeGroups(client, needed.filter((g) => !g.existing));
   const idOf = (group: Group) => (ids.has(group) ? ids.get(group)! : (group.actualId ?? null));
   const writes = owners.map((owner) => ({ owner, write: ownerWrite(owner, idOf) })).filter(({ owner, write }) => ownerChanged(owner, write));
   // An inserted group always puts its new id into an element, so created > 0 implies a write here.
-  if (writes.length === 0) return { written: false as const, ids, created };
+  if (writes.length === 0 && fills.length === 0) return { written: false as const, ids, created };
 
   const sets = writes.filter((w) => w.owner.kind === 'set');
   const lineupChanged = writes.some((w) => w.owner.kind === 'lineup');
   await client.query(
     'INSERT INTO artist_backfill_runs (run_id, festival_id, before) VALUES ($1, $2, $3::jsonb)',
-    [runId, festival.id, JSON.stringify(await beforeValues(client, plan, festival, sets.map((w) => w.owner), lineupChanged))],
+    [runId, festival.id, JSON.stringify(await beforeValues(client, plan, festival, sets.map((w) => w.owner), lineupChanged, fills))],
   );
   for (const { owner, write } of sets) {
-    await client.query('UPDATE festival_sets SET artists = $1::jsonb, artist = $2, link_url = $3 WHERE id = $4', [
-      JSON.stringify(write.artists), write.artist, write.linkUrl, owner.ownerId,
+    await client.query('UPDATE festival_sets SET artists = $1::jsonb, artist = $2, link_url = $3, display_name = $4 WHERE id = $5', [
+      JSON.stringify(write.artists), write.artist, write.linkUrl, write.displayName, owner.ownerId,
     ]);
   }
   const lineup = festival.lineup.map((entry: any) => {
     const hit = writes.find((w) => w.owner.kind === 'lineup' && w.owner.entry === entry);
-    return hit ? { ...entry, artists: hit.write.artists } : entry;
+    return hit ? { ...entry, artists: hit.write.artists, ...(hit.write.displayName ? { displayName: hit.write.displayName } : {}) } : entry;
   });
   await client.query(
     'UPDATE festivals SET lineup = CASE WHEN $2::boolean THEN $3::jsonb ELSE lineup END, updated_at = now(), edited_at = now() WHERE id = $1',
@@ -751,13 +831,64 @@ async function writeFestival(client: any, plan: BackfillPlan, festival: Festival
   return { written: true as const, ids, created };
 }
 
-async function beforeValues(client: any, plan: BackfillPlan, festival: FestivalInfo, sets: Owner[], lineupChanged: boolean) {
+interface RowFill {
+  artistId: string;
+  spotifyId: string;
+  links: Links;
+}
+
+/**
+ * Locks the existing rows this festival fills, in id order, and checks them against the plan. A row
+ * as the plan read it (name, links, updated_at, no Spotify id) gets its fill. A row an earlier
+ * festival of this run filled needs nothing. Any other state returns null: the festival is skipped.
+ */
+async function lockRowFills(client: any, groups: Group[]): Promise<RowFill[] | null> {
+  const fills: RowFill[] = [];
+  for (const group of [...groups].sort((a, b) => (a.id < b.id ? -1 : 1))) {
+    const { rows } = await client.query(
+      'SELECT name, spotify_id, links, updated_at::text AS updated_at_text FROM artists WHERE id = $1 AND merged_into IS NULL FOR UPDATE',
+      [group.id],
+    );
+    const row = rows[0];
+    const planned = group.existing!;
+    const fill = group.fill!;
+    if (!row || row.name !== planned.name) return null;
+    if (row.spotify_id === fill.spotifyId && stable(row.links ?? {}) === stable(rowLinks(group))) continue;
+    if (row.spotify_id !== null || row.updated_at_text !== planned.updated_at_text || stable(row.links ?? {}) !== stable(planned.links ?? {})) return null;
+    fills.push({ artistId: group.id, spotifyId: fill.spotifyId, links: fill.links });
+  }
+  return fills;
+}
+
+/** Writes the fills. A save that took one of the Spotify ids meanwhile (23505) skips the festival: false. */
+async function writeRowFills(client: any, fills: RowFill[]): Promise<boolean> {
+  if (fills.length === 0) return true;
+  await client.query('SAVEPOINT artist_row_fills');
+  try {
+    for (const fill of fills) {
+      await client.query(
+        `UPDATE artists SET spotify_id = $2, links = COALESCE(links, '{}'::jsonb) || $3::jsonb, updated_at = now() WHERE id = $1 AND spotify_id IS NULL`,
+        [fill.artistId, fill.spotifyId, JSON.stringify(fill.links)],
+      );
+    }
+  } catch (error: any) {
+    if (error?.code !== '23505') throw error;
+    await client.query('ROLLBACK TO SAVEPOINT artist_row_fills');
+    return false;
+  }
+  await client.query('RELEASE SAVEPOINT artist_row_fills');
+  return true;
+}
+
+async function beforeValues(client: any, plan: BackfillPlan, festival: FestivalInfo, sets: Owner[], lineupChanged: boolean, rowFills: RowFill[]) {
   const festivalOwners = plan.owners.filter((o) => o.festival === festival);
   const elemsOf = (kind: string) => festivalOwners.filter((o) => o.kind === kind);
   const { rows } = await client.query('SELECT count(*)::int AS n FROM festival_sets WHERE festival_id = $1', [festival.id]);
   return {
-    sets: Object.fromEntries(sets.map((o) => [o.ownerId, { artists: o.original, artist: o.flat, link_url: o.linkUrl }])),
+    sets: Object.fromEntries(sets.map((o) => [o.ownerId, { artists: o.original, artist: o.flat, link_url: o.linkUrl, display_name: o.displayName }])),
     lineup: lineupChanged ? festival.lineup : undefined,
+    // Each row this run filled: the Spotify id and links it gained, so a targeted restore can remove them.
+    rowFills,
     counts: {
       sets: rows[0].n,
       lineupEntries: elemsOf('lineup').length,

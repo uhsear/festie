@@ -71,21 +71,25 @@ describe('Phase 1A: Reminder Scheduler', () => {
     assert.equal(isInDndWindow({ dndStart: null as any, dndEnd: null as any }), false);
   });
 
-  it('isInDndWindow handles same-day window', () => {
-    const now = new Date();
-    const hh = String(now.getHours()).padStart(2, '0');
-    const mm = String(now.getMinutes()).padStart(2, '0');
-    const current = `${hh}:${mm}`;
+  it('isInDndWindow handles same-day window in a pinned zone', () => {
+    const prefs = { dndStart: '09:00', dndEnd: '17:00', dndTimeZone: 'UTC' };
+    assert.equal(isInDndWindow(prefs, new Date('2026-01-15T12:00:00Z')), true);
+    assert.equal(isInDndWindow(prefs, new Date('2026-01-15T08:59:00Z')), false);
+    assert.equal(isInDndWindow(prefs, new Date('2026-01-15T17:01:00Z')), false);
+  });
 
-    // Window that includes current time
-    const startH = (now.getHours() - 1 + 24) % 24;
-    const endH = (now.getHours() + 1) % 24;
-    const result = isInDndWindow({
-      dndStart: String(startH).padStart(2, '0') + ':00',
-      dndEnd: String(endH).padStart(2, '0') + ':00',
-    });
-    // If start < end and current is between them, should be true
-    if (startH < endH) assert.equal(result, true);
+  it('isInDndWindow handles a midnight-wrapping window in a pinned zone', () => {
+    const prefs = { dndStart: '22:00', dndEnd: '08:00', dndTimeZone: 'UTC' };
+    assert.equal(isInDndWindow(prefs, new Date('2026-01-15T23:30:00Z')), true);
+    assert.equal(isInDndWindow(prefs, new Date('2026-01-15T07:59:00Z')), true);
+    assert.equal(isInDndWindow(prefs, new Date('2026-01-15T12:00:00Z')), false);
+  });
+
+  it('isInDndWindow reads the window in the user zone, not the server zone', () => {
+    const prefs = { dndStart: '09:00', dndEnd: '17:00', dndTimeZone: 'Asia/Tokyo' };
+    // 00:00Z is 09:00 in Tokyo; 12:00Z is 21:00 there.
+    assert.equal(isInDndWindow(prefs, new Date('2026-01-15T00:00:00Z')), true);
+    assert.equal(isInDndWindow(prefs, new Date('2026-01-15T12:00:00Z')), false);
   });
 });
 

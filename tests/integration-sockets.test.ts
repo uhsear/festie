@@ -162,7 +162,7 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     socket.close();
   });
 
-  test('covers presence and realtime profile events', async () => {
+  test('covers presence, crew join and picks, admin eviction, and profile events', async () => {
     const server = await startServer();
     servers.push(server);
 
@@ -454,7 +454,7 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     await disconnected;
   });
 
-  test('rejects socket events from unauthenticated or unauthorized sockets', async () => {
+  test('disconnects a socket that joins with an invalid token', async () => {
     const server = await startServer();
     servers.push(server);
 
