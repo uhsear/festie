@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
+import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
 import { randomUUID } from 'crypto';
 
 /**
@@ -227,7 +228,7 @@ export default function createCrewPackingRoutes(deps: any) {
         if (!existing || existing.crew_id !== crewId) {
           return sendError(res, 404, 'Packing item not found', ErrorCodes.NOT_FOUND);
         }
-        if (existing.created_by !== userId && req.membership.role !== 'owner') {
+        if (!isCreatorOrOwner(existing, userId, req.membership.role)) {
           return sendError(res, 403, 'Only creator or owner can remove item', ErrorCodes.FORBIDDEN);
         }
 
