@@ -10,6 +10,9 @@ import {
   parsePageParams,
   paginateArray,
   buildPaginatedResponse,
+  takePage,
+  encodeTimeIdCursor,
+  decodeTimeIdCursor,
 } from '../lib/pagination';
 import { paginationQuery, adminAuditQuery } from '../lib/schemas';
 
@@ -285,5 +288,32 @@ describe('pagination: buildPaginatedResponse', () => {
   it('preserves empty data array', () => {
     const result = buildPaginatedResponse([], { hasMore: false });
     assert.deepEqual(result.data, []);
+  });
+});
+
+describe('takePage', () => {
+  it('trims the extra row and returns a cursor from the last kept row', () => {
+    const page = takePage([{ id: 'a' }, { id: 'b' }, { id: 'c' }], 2, (r) => r.id);
+    assert.deepEqual(page, { items: [{ id: 'a' }, { id: 'b' }], nextCursor: 'b' });
+  });
+
+  it('returns a null cursor on an exactly-full last page', () => {
+    const page = takePage([{ id: 'a' }, { id: 'b' }], 2, (r) => r.id);
+    assert.equal(page.items.length, 2);
+    assert.equal(page.nextCursor, null);
+  });
+});
+
+describe('time|id cursor', () => {
+  it('round-trips an ISO timestamp and id', () => {
+    const cursor = encodeTimeIdCursor(new Date('2026-01-02T03:04:05.000Z'), 'id-1');
+    assert.equal(cursor, '2026-01-02T03:04:05.000Z|id-1');
+    assert.deepEqual(decodeTimeIdCursor(cursor), { createdAt: '2026-01-02T03:04:05.000Z', id: 'id-1' });
+  });
+
+  it('treats a cursor without a usable | as page 1', () => {
+    assert.equal(decodeTimeIdCursor('bare-id'), null);
+    assert.equal(decodeTimeIdCursor('|id'), null);
+    assert.equal(decodeTimeIdCursor(undefined), null);
   });
 });

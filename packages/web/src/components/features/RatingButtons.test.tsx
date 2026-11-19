@@ -45,15 +45,23 @@ describe('RatingButtons', () => {
       target: { value: '  the drop  ' },
     });
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/ratings/s1', { rating: 5, note: 'the drop' }));
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/ratings/s1', { rating: 5, note: 'the drop' }, { clientId: 'rate-s1' }));
   });
 
   it('posts no note when only the rating changes', async () => {
     const onRated = vi.fn();
     renderButtons({ onRated });
     fireEvent.click(await screen.findByRole('radio', { name: 'Good (4 of 5)' }));
-    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/ratings/s1', { rating: 4 }));
+    await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/ratings/s1', { rating: 4 }, { clientId: 'rate-s1' }));
     await vi.waitFor(() => expect(onRated).toHaveBeenCalledWith(4));
+  });
+
+  it('removes the current rating with the deterministic clientId', async () => {
+    renderButtons();
+    const fire = await screen.findByRole('radio', { name: 'Fire (5 of 5)' });
+    await vi.waitFor(() => expect(fire).toHaveAttribute('aria-checked', 'true'));
+    fireEvent.click(fire);
+    await vi.waitFor(() => expect(api.delete).toHaveBeenCalledWith('/ratings/s1', { clientId: 'rate-s1' }));
   });
 
   it('hides the memory field when showMemory is false', async () => {

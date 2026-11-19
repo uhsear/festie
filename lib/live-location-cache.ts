@@ -37,7 +37,7 @@ import type { LocationPeerUpdatePayload } from './types/contracts.js';
  * peer from the map. The backend can't import the shared constant (different
  * package manager), so it is mirrored here; keep the two in sync.
  */
-const POSITION_TTL_MS = 120_000;
+export const POSITION_TTL_MS = 120_000;
 
 /** Default freshness window for what a snapshot returns (mirrors STALE_MS). */
 const SNAPSHOT_FRESH_MS = POSITION_TTL_MS;
