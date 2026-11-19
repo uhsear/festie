@@ -6,12 +6,15 @@ const { selectPrune } = createRequire(import.meta.url)('../scripts/lib/backup-re
   selectPrune: (names: string[], now: number) => string[];
 };
 
-const NOW = new Date(2026, 10, 17, 12, 0, 0).getTime(); // local time, like the dump names
+// The script reads dump-name stamps as local wall-clock time, so NOW is local. The names come from
+// UTC arithmetic on the same wall-clock fields, which keeps them independent of DST and the test host's zone.
+const NOW = new Date(2026, 10, 17, 12, 0, 0).getTime();
+const WALL_NOW = Date.UTC(2026, 10, 17, 12, 0, 0);
 const p = (n: number) => String(n).padStart(2, '0');
 
 function dumpName(hoursAgo: number, ext = '.dump.gpg'): string {
-  const d = new Date(NOW - hoursAgo * 3600e3);
-  return `fp_${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}${ext}`;
+  const d = new Date(WALL_NOW - hoursAgo * 3600e3);
+  return `fp_${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}_${p(d.getUTCHours())}${p(d.getUTCMinutes())}${p(d.getUTCSeconds())}${ext}`;
 }
 
 // A pair (dump + sidecar) per dump, like the off-site repo holds.
