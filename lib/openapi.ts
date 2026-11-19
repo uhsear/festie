@@ -188,6 +188,17 @@ export function generateOpenAPISpec(config: any) {
                 status: { type: 'integer' },
                 code: { type: 'string', description: 'Machine-readable error code' },
                 retryable: { type: 'boolean', description: 'Whether the client should retry this request' },
+                fields: {
+                  type: 'array',
+                  description: 'Per-field validation failures, present on input validation errors',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      path: { type: 'string', description: 'Dotted path of the invalid field' },
+                      message: { type: 'string' },
+                    },
+                  },
+                },
               },
             },
           },

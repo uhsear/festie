@@ -13,6 +13,7 @@ import {
   type AuditQueryFilters,
 } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
+import { saveBlob } from '../../lib/downloadExport';
 import EmptyState from '../ui/EmptyState';
 import { SearchX } from 'lucide-react';
 import { ADMIN_QUERY_OPTIONS, adminKeys } from './adminQueries';
@@ -31,12 +32,7 @@ const SCOPE_OPTIONS: { value: Scope; label: string }[] = [
 const EXAMPLE_LINE = 'Try: actor:asir · user:sam · action:festival.* · after:2026-10-01';
 
 function downloadCsv(csv: string) {
-  const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = `festie-audit-${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `festie-audit-${new Date().toISOString().slice(0, 10)}.csv`);
 }
 
 /**

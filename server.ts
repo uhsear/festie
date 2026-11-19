@@ -158,7 +158,6 @@ const workerId =
     : process.env.PM_ID !== undefined
       ? Number(process.env.PM_ID)
       : 0;
-startMetricsListener(metrics, { basePort: 9400, workerId });
 
 const log = createLogger();
 
@@ -616,6 +615,8 @@ if (isMainModule) {
   // adapter rejected during construction. Registering first means the next one
   // is reported through the same path as any other crash.
   planner = await createFestieApp();
+  // Only the real entry point binds the scrape port; importing server.ts (tests) must not.
+  startMetricsListener(metrics, { basePort: 9400, workerId });
 
   async function listenWithRetry(server: any, port: number, host: string, maxRetries = 5, initialDelay = 1000) {
     const isCluster = typeof process.send === 'function';

@@ -1,19 +1,14 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen } from '@testing-library/react';
+import { renderWithQueryClient } from '../../test-utils';
 import AdminGrowth from './AdminGrowth';
 
 const mockFetch = vi.fn();
 vi.mock('@festie/shared/services/admin', () => ({ fetchAdminGrowth: (...a: unknown[]) => mockFetch(...a) }));
 
 function renderGrowth() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <AdminGrowth />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<AdminGrowth />);
 }
 
 beforeEach(() => vi.clearAllMocks());

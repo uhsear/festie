@@ -12,12 +12,12 @@ module.exports = [
 
   // Ignore patterns (replaces .eslintignore)
   {
-    ignores: ['node_modules/**', 'public/**', 'tests/**', 'scripts/**', 'ecosystem.config.cjs', 'playwright.config.cjs'],
+    ignores: ['node_modules/**', 'public/**', 'tests/*.ts', 'tests/__snapshots__/**', 'tests/deploy/**', 'tests/e2e/**', 'tests/fixtures/**', 'scripts/**/*.js', 'scripts/**/*.cjs', 'scripts/**/*.mjs', 'ecosystem.config.cjs', 'playwright.config.cjs'],
   },
 
   // Server-side TypeScript (lib/, routes/, server.ts)
   {
-    files: ['lib/**/*.ts', 'routes/**/*.ts', 'server.ts'],
+    files: ['lib/**/*.ts', 'routes/**/*.ts', 'server.ts', 'tests/types/**/*.ts', 'scripts/**/*.ts'],
     plugins: {
       sql: sqlPlugin,
       '@typescript-eslint': tseslint.plugin,

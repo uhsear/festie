@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { api, formatTime, writeOutcomeOf, writeOutcomeMessage } from '@festie/shared';
+import { api, formatTimeOrRaw, writeOutcomeOf, writeOutcomeMessage } from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import { X, Clock } from 'lucide-react';
@@ -151,7 +151,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
               {currentTime && (
                 <span className="text-xs text-accent-aqua flex-shrink-0 inline-flex items-center gap-1">
                   <Clock className="w-3 h-3" aria-hidden="true" />
-                  {HHMM.test(currentTime) ? formatTime(currentTime) : currentTime}
+                  {formatTimeOrRaw(currentTime)}
                 </span>
               )}
             </div>

@@ -10,6 +10,7 @@ import { useIdentities } from '../../lib/useIdentities';
 import { useReauthPrompt } from '../../lib/useReauthPrompt';
 import Button from '../ui/Button';
 import ChangeEmailModal from '../layout/ChangeEmailModal';
+import { Card } from '../ui/Card';
 
 export default function EmailSection() {
   const { toast } = useToast();
@@ -52,7 +53,7 @@ export default function EmailSection() {
   };
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+    <Card className="space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
         <Mail className="w-4 h-4" aria-hidden="true" />
         {ACCOUNT_COPY.emailLabel}
@@ -82,6 +83,6 @@ export default function EmailSection() {
         />
       )}
       {reauthDialog}
-    </section>
+    </Card>
   );
 }

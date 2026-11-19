@@ -4,6 +4,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { invalidateCrewMoney } from '../lib/queryPersist';
 import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink';
 
 /**
@@ -53,9 +54,7 @@ export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
     onPollVoted: reloadPolls,
     onPollClosed: reloadPolls,
     onExpensesChanged: (crewId) => {
-      void queryClient.invalidateQueries({ queryKey: ['expenses', crewId] });
-      void queryClient.invalidateQueries({ queryKey: ['expense-balances', crewId] });
-      void queryClient.invalidateQueries({ queryKey: ['settlement-plan', crewId] });
+      invalidateCrewMoney(queryClient, crewId);
     },
     onPackingChanged: (crewId) => {
       if (useCrewStore.getState().activeCrew?.id !== crewId) return;

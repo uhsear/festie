@@ -6,10 +6,10 @@ import { useCrewStore } from '@festie/shared/stores';
 const { putMock } = vi.hoisted(() => ({ putMock: vi.fn() }));
 
 vi.mock('@festie/shared', async () => {
-  const { formatTime } = await vi.importActual<typeof import('@festie/shared/utils')>('@festie/shared/utils');
+  const { formatTimeOrRaw } = await vi.importActual<typeof import('@festie/shared/utils')>('@festie/shared/utils');
   return {
     api: { put: putMock },
-    formatTime,
+    formatTimeOrRaw,
     writeOutcomeOf: () => 'sent',
     writeOutcomeMessage: (_o: string, m: string) => m,
   };

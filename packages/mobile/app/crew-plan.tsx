@@ -4,7 +4,7 @@ import { Stack, router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewFestival, useCrewHub, useFestival, usePicks } from '@festie/shared/hooks';
-import { artistDisplayName, formatTime, memberCountLabel, formatSetTimeRange, memberSummary, meetingTimeDisplay, resolveFestivalTimeZone, timeAgo } from '@festie/shared/utils';
+import { artistDisplayName, formatTime, formatTimeOrRaw, memberCountLabel, formatSetTimeRange, memberSummary, meetingTimeDisplay, resolveFestivalTimeZone, timeAgo } from '@festie/shared/utils';
 import { COPY, GUEST_PROMPT_COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -17,8 +17,6 @@ import FreshnessChip from '../components/FreshnessChip';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import Button from '../components/Button';
-
-const HHMM = /^\d{2}:\d{2}$/;
 
 // The plan renders from the persisted stores first (useCrewHub), then refreshes
 // statuses, meeting points and polls. Pure assembly lives in @festie/shared.
@@ -184,7 +182,7 @@ export default function CrewPlanScreen() {
           {crew.homeBaseLocation || crew.homeBaseTime ? (
             <View style={styles.cardBody}>
               {crew.homeBaseLocation ? <Text style={styles.primaryLine}>{crew.homeBaseLocation}</Text> : null}
-              {crew.homeBaseTime ? <Text style={styles.secondaryLine}>{HHMM.test(crew.homeBaseTime) ? formatTime(crew.homeBaseTime) : crew.homeBaseTime}</Text> : null}
+              {crew.homeBaseTime ? <Text style={styles.secondaryLine}>{formatTimeOrRaw(crew.homeBaseTime)}</Text> : null}
             </View>
           ) : hub.isOwner ? (
             <>

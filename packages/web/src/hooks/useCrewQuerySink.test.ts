@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
-import { QueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
+import { createTestQueryClient } from '../test-utils';
 import type { Socket } from 'socket.io-client';
 import { useCrewRealtime } from '@festie/shared/hooks/useCrewRealtime';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
@@ -67,7 +68,7 @@ describe('web crew-realtime query sink', () => {
   }
 
   it('invalidates ["meeting-points", crewId] on crew:meeting-point-created (snake_case crew_id)', () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const fakeSocket = makeFakeSocket();
     renderWired(queryClient, fakeSocket);
@@ -86,7 +87,7 @@ describe('web crew-realtime query sink', () => {
   });
 
   it('invalidates ["polls", crewId] on crew:poll-voted', () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const fakeSocket = makeFakeSocket();
     renderWired(queryClient, fakeSocket);
@@ -99,7 +100,7 @@ describe('web crew-realtime query sink', () => {
   });
 
   it('invalidates expenses + expense-balances on crew:expense-added (after debounce)', () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const fakeSocket = makeFakeSocket();
     renderWired(queryClient, fakeSocket);
@@ -113,7 +114,7 @@ describe('web crew-realtime query sink', () => {
   });
 
   it('invalidates ["crew-activity", crewId] on crew:activity (after debounce)', () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const fakeSocket = makeFakeSocket();
     renderWired(queryClient, fakeSocket);
@@ -126,7 +127,7 @@ describe('web crew-realtime query sink', () => {
   });
 
   it('ignores events scoped to a different crew', () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const fakeSocket = makeFakeSocket();
     renderWired(queryClient, fakeSocket);
@@ -137,7 +138,7 @@ describe('web crew-realtime query sink', () => {
   });
 
   it('routes crew:home-base-updated to crewStore.applyHomeBaseUpdate (not a query invalidation)', () => {
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const fakeSocket = makeFakeSocket();
     renderWired(queryClient, fakeSocket);
@@ -163,7 +164,7 @@ describe('buildCrewQuerySink (direct mapping)', () => {
   let invalidate: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    queryClient = new QueryClient();
+    queryClient = createTestQueryClient();
     invalidate = vi.spyOn(queryClient, 'invalidateQueries');
   });
 
@@ -221,7 +222,7 @@ describe('buildCrewQuerySink packing and rides', () => {
     const loadPacking = vi.fn().mockResolvedValue(undefined);
     const loadRides = vi.fn().mockResolvedValue(undefined);
     useCrewStore.setState({ activeCrew: { id: 'c1' } as never, loadPacking, loadRides });
-    const sink = buildCrewQuerySink(new QueryClient());
+    const sink = buildCrewQuerySink(createTestQueryClient());
 
     sink.onPackingChanged('c1');
     sink.onRidesChanged('c1');
@@ -243,7 +244,7 @@ describe('buildCrewQuerySink crew days', () => {
   it('applies a days event to the crew store', () => {
     useCrewStore.setState({ activeCrew: { id: 'c1' } as never, crewDays: [] });
     const days = [{ userId: 'u2', dayIndex: 0, answer: 'no' as const }];
-    buildCrewQuerySink(new QueryClient()).onDaysUpdated('c1', { crewId: 'c1', userId: 'u2', days });
+    buildCrewQuerySink(createTestQueryClient()).onDaysUpdated('c1', { crewId: 'c1', userId: 'u2', days });
     expect(useCrewStore.getState().crewDays).toEqual(days);
   });
 });
@@ -270,7 +271,7 @@ describe('buildCrewQuerySink reconnect resync', () => {
   it('invalidates every crew list key and reloads packing and rides', () => {
     const l = loaders();
     useCrewStore.setState({ activeCrew: { id: 'c1' } as never, ...l });
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
 
     buildCrewQuerySink(queryClient).onReconnectResync?.('c1');
@@ -289,7 +290,7 @@ describe('buildCrewQuerySink reconnect resync', () => {
     const l = loaders();
     useCrewStore.setState({ activeCrew: { id: 'c1' } as never, ...l });
     useUIStore.setState({ pendingSync: 2 });
-    const queryClient = new QueryClient();
+    const queryClient = createTestQueryClient();
     const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
 
     buildCrewQuerySink(queryClient).onReconnectResync?.('c1');

@@ -1,5 +1,6 @@
 import { FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import { buildFestivalPageUrl } from '@festie/shared/utils';
+import { saveBlob } from './downloadExport';
 
 /**
  * Captures a fixed 1080x1920 poster node to a PNG and hands it to the Web Share API, or
@@ -32,9 +33,7 @@ export async function sharePoster(
     await navigator.share({ files: [file], title, ...link });
     return;
   }
-  const url = URL.createObjectURL(blob);
-  Object.assign(document.createElement('a'), { href: url, download: file.name }).click();
-  URL.revokeObjectURL(url);
+  saveBlob(blob, file.name);
   toast('Saved to downloads', 'success');
 }
 

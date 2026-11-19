@@ -13,7 +13,7 @@ import {
 import type { LockscreenMode, ScheduleImageFormat } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import Dialog from '../ui/Dialog';
-import LockscreenPanel from './LockscreenPanel';
+import LockscreenPanel, { optionClass } from './LockscreenPanel';
 import ScheduleImagePoster from './ScheduleImagePoster';
 import { captureAndShareImage } from '../../lib/shareImage';
 import { useToast } from '../../lib/toastContext';
@@ -31,11 +31,6 @@ const PRINT_CSS = `.festie-print-poster{display:none}
 body>*:not(.festie-print-poster){display:none!important}
 .festie-print-poster{display:block;width:210mm;height:297mm;overflow:hidden;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .festie-print-poster>div{transform:scale(0.64);transform-origin:top left}}`;
-
-const optionClass = (active: boolean) =>
-  `rounded-full border px-3 min-h-9 text-xs font-semibold cursor-pointer transition-colors ${
-    active ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover' : 'border-border text-text-secondary'
-  }`;
 
 /**
  * "Save image" chooser: story or lock-screen poster for one day, plus the printable HTML page.

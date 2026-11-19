@@ -11,6 +11,9 @@
 import http from 'http';
 
 import { timingSafeEqualString } from './crypto-auth.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('metrics');
 
 let client: any = null;
 let available = false;
@@ -321,7 +324,10 @@ function startMetricsListener(metrics: any, { basePort = 9400, workerId = 0 }: a
   const srv = http.createServer(handler);
   srv.listen({ port, host: '127.0.0.1', exclusive: true });
   srv.on('error', (err: any) => {
-    if (err && err.code === 'EADDRINUSE') return;
+    if (err && err.code === 'EADDRINUSE') {
+      log.error('metrics listener port in use; this worker serves no scrapes', { port, workerId });
+      return;
+    }
     throw err;
   });
   srv.unref();
@@ -361,6 +367,5 @@ export {
   startMetricsSampler,
   startReengagementQueueSampler,
   recordJobRun,
-  available,
   startMetricsListener,
 };
