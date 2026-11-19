@@ -306,7 +306,8 @@ function cleanLinks(rawLinks: unknown, owner: Owner, name: string, report: Backf
   for (const refile of refiles) {
     const taken = out[refile.to];
     if (taken && taken !== refile.url) {
-      out[refile.from] = raw[refile.from]!;
+      const original = raw[refile.from];
+      if (original !== undefined) out[refile.from] = original;
       report.linkFailures.push({ ...base, platform: refile.from, url: refile.url, message: `The ${refile.to} link is already set to a different address.` });
       continue;
     }
@@ -379,7 +380,7 @@ function mostFrequentName(elems: Elem[]): string {
   const ranked = [...stats.entries()].sort(
     ([nameA, a], [nameB, b]) => b.count - a.count || (a.recency < b.recency ? 1 : a.recency > b.recency ? -1 : 0) || (nameA < nameB ? -1 : 1),
   );
-  return ranked[0]![0];
+  return ranked[0]?.[0] ?? '';
 }
 
 function addToGroup(group: Group, elem: Elem, report: BackfillReport): void {
@@ -431,15 +432,15 @@ function groupElements(owners: Owner[], artists: ArtistRow[], report: BackfillRe
   };
   const groups = artists.filter((a) => !a.merged_into).map(existingGroup);
   const byArtistId = new Map(groups.map((g) => [g.id, g]));
-  const bySpotify = new Map(groups.filter((g) => g.spotifyId).map((g) => [g.spotifyId!, g]));
+  const bySpotify = new Map(groups.flatMap((g) => (g.spotifyId ? [[g.spotifyId, g] as const] : [])));
   const elems = allElems(owners);
 
   const unplaced: Elem[] = [];
   for (const elem of elems) {
     const live = elem.fromId ? liveOf(elem.fromId) : null;
-    if (live) {
+    const group = live ? byArtistId.get(live.id) : undefined;
+    if (live && group) {
       // An id that names a tombstone is rewritten with the survivor's id.
-      const group = byArtistId.get(live.id)!;
       elem.byId = true;
       if (elem.fromId === live.id) {
         elem.group = group;
@@ -449,9 +450,11 @@ function groupElements(owners: Owner[], artists: ArtistRow[], report: BackfillRe
   }
   const unmatched = new Map<string, Elem[]>();
   for (const elem of elems.filter((e) => !e.group && e.spotifyId)) {
-    const group = bySpotify.get(elem.spotifyId!);
+    const { spotifyId } = elem;
+    if (!spotifyId) continue;
+    const group = bySpotify.get(spotifyId);
     if (group) addToGroup(group, elem, report);
-    else unmatched.set(elem.spotifyId!, [...(unmatched.get(elem.spotifyId!) ?? []), elem]);
+    else unmatched.set(spotifyId, [...(unmatched.get(spotifyId) ?? []), elem]);
   }
   placeSpotifyClusters(groups, unmatched, report);
   groupByKey(groups, unplaced, report);
@@ -470,13 +473,14 @@ function placeSpotifyClusters(groups: Group[], unmatched: Map<string, Elem[]>, r
   for (const key of keyOf.values()) clustersPerKey.set(key, (clustersPerKey.get(key) ?? 0) + 1);
   const existing = groups.filter((g) => g.existing);
   for (const [spotifyId, cluster] of unmatched) {
-    const key = keyOf.get(spotifyId)!;
+    const key = keyOf.get(spotifyId);
+    if (key === undefined) continue;
     const sameKey = existing.filter((g) => g.key === key);
     const links = mergedLinks(cluster);
-    const target =
-      clustersPerKey.get(key) === 1 && sameKey.length === 1 && !sameKey[0]!.spotifyId && !linksConflict(sameKey[0]!.links, links) ? sameKey[0]! : null;
+    const [only] = sameKey;
+    const target = clustersPerKey.get(key) === 1 && only && sameKey.length === 1 && !only.spotifyId && !linksConflict(only.links, links) ? only : null;
     if (target) {
-      const stored = target.existing!.links ?? {};
+      const stored = target.existing?.links ?? {};
       target.spotifyId = spotifyId;
       target.fill = { spotifyId, links: Object.fromEntries(Object.entries(links).filter(([platform]) => !stored[platform])) };
       report.rowFills.push({ artistId: target.id, artist: target.name, ...target.fill });
@@ -500,7 +504,8 @@ function groupByKey(groups: Group[], unplaced: Elem[], report: BackfillReport): 
   for (const [key, elems] of elemsByKey) {
     const base = baseByKey.get(key) ?? [];
     for (const cluster of clusterByLinks(elems)) {
-      const target = base.length === 1 && !linksConflict(base[0]!.links, mergedLinks(cluster)) ? base[0]! : null;
+      const [only] = base;
+      const target = base.length === 1 && only && !linksConflict(only.links, mergedLinks(cluster)) ? only : null;
       if (base.length >= 2) {
         for (const elem of cluster) {
           report.needsPick.push({ festivalId: elem.owner.festival.id, kind: elem.owner.kind, ownerId: elem.owner.ownerId, ordinal: elem.ordinal, name: elem.name });
@@ -550,10 +555,12 @@ function pickFields(group: Group, report: BackfillReport): void {
   const newestFirst = [...group.elems].sort((a, b) => (a.owner.festival.recency < b.owner.festival.recency ? 1 : a.owner.festival.recency > b.owner.festival.recency ? -1 : 0));
   const withPhoto = [...newestFirst.filter((e) => e.spotifyId), ...newestFirst.filter((e) => !e.spotifyId)].filter((e) => e.photo);
   for (const elem of withPhoto) {
-    if (allowedPhoto(elem.photo!)) {
-      group.photo ??= elem.photo;
+    const { photo } = elem;
+    if (!photo) continue;
+    if (allowedPhoto(photo)) {
+      group.photo ??= photo;
     } else {
-      report.photosNotCopied.push({ festivalId: elem.owner.festival.id, ownerId: elem.owner.ownerId, name: elem.name, photo: elem.photo! });
+      report.photosNotCopied.push({ festivalId: elem.owner.festival.id, ownerId: elem.owner.ownerId, name: elem.name, photo });
     }
   }
   const genreSource = newestFirst.find((e) => e.spotifyId && e.genres.length > 0) ?? newestFirst.find((e) => e.genres.length > 0);
@@ -563,7 +570,7 @@ function pickFields(group: Group, report: BackfillReport): void {
 // ── Output ─────────────────────────────────────────────────────────────────────────────────────
 
 // An existing artist is copied as its row says after its fill: group.links also holds the links of joined elements.
-const rowLinks = (group: Group): Links => ({ ...(group.existing!.links ?? {}), ...(group.fill?.links ?? {}) });
+const rowLinks = (group: Group): Links => ({ ...(group.existing?.links ?? {}), ...(group.fill?.links ?? {}) });
 
 const copyOf = (group: Group, id: string) => ({
   id,
@@ -599,7 +606,7 @@ const plainCopy = (elem: Elem) => ({
 function outputArtists(owner: Owner, idOf: (group: Group) => string | null): any[] {
   return owner.items.map((item) => {
     if ('keep' in item) return item.keep;
-    if (item.leftAlone) return syncedCopy(item.original, item.group!);
+    if (item.leftAlone && item.group) return syncedCopy(item.original, item.group);
     const id = item.group ? idOf(item.group) : null;
     return item.group && id ? copyOf(item.group, id) : plainCopy(item);
   });
@@ -659,8 +666,8 @@ export async function planBackfill(pool: Pool): Promise<BackfillPlan> {
     if (!ownerChanged(owner, write)) continue;
     changedOwners.push(owner);
     owner.items.forEach((item, i) => {
-      if ('keep' in item || !item.leftAlone || stable(write.artists[i]) === stable(item.original)) return;
-      report.copyRefreshes.push({ festivalId: owner.festival.id, kind: owner.kind, ownerId: owner.ownerId, artistId: item.group!.id, name: item.group!.name });
+      if ('keep' in item || !item.leftAlone || !item.group || stable(write.artists[i]) === stable(item.original)) return;
+      report.copyRefreshes.push({ festivalId: owner.festival.id, kind: owner.kind, ownerId: owner.ownerId, artistId: item.group.id, name: item.group.name });
     });
     if (owner.kind !== 'set') continue;
     const before = shownSetName({ displayName: owner.displayName, artist: owner.flat, artists: owner.original }, owner.festival.separator);
@@ -800,11 +807,11 @@ async function writeFestival(client: any, plan: BackfillPlan, festival: Festival
   const owners = plan.changedOwners.filter((o) => o.festival === festival);
   if (!(await setsUnchanged(client, festival, owners))) return { skipped: 'changed during the run; run again' as const };
   // Festival lock first, then the artist rows: the lock order of the artist-update path.
-  const needed = [...new Set(owners.flatMap((o) => o.items.filter((i): i is Elem => !('keep' in i) && !!i.group).map((e) => e.group!)))];
+  const needed = [...new Set(owners.flatMap((o) => o.items.flatMap((i) => ('keep' in i || !i.group ? [] : [i.group]))))];
   const fills = await lockRowFills(client, needed.filter((g) => g.fill));
   if (!fills || !(await writeRowFills(client, fills))) return { skipped: 'changed during the run; run again' as const };
   const { ids, created } = await materializeGroups(client, needed.filter((g) => !g.existing));
-  const idOf = (group: Group) => (ids.has(group) ? ids.get(group)! : (group.actualId ?? null));
+  const idOf = (group: Group) => (ids.get(group) ?? group.actualId ?? null);
   const writes = owners.map((owner) => ({ owner, write: ownerWrite(owner, idOf) })).filter(({ owner, write }) => ownerChanged(owner, write));
   // An inserted group always puts its new id into an element, so created > 0 implies a write here.
   if (writes.length === 0 && fills.length === 0) return { written: false as const, ids, created };
@@ -850,9 +857,9 @@ async function lockRowFills(client: any, groups: Group[]): Promise<RowFill[] | n
       [group.id],
     );
     const row = rows[0];
-    const planned = group.existing!;
-    const fill = group.fill!;
-    if (!row || row.name !== planned.name) return null;
+    const planned = group.existing;
+    const fill = group.fill;
+    if (!row || !planned || !fill || row.name !== planned.name) return null;
     if (row.spotify_id === fill.spotifyId && stable(row.links ?? {}) === stable(rowLinks(group))) continue;
     if (row.spotify_id !== null || row.updated_at_text !== planned.updated_at_text || stable(row.links ?? {}) !== stable(planned.links ?? {})) return null;
     fills.push({ artistId: group.id, spotifyId: fill.spotifyId, links: fill.links });
@@ -1017,7 +1024,7 @@ export async function verifyBackfill(pool: Pool): Promise<{ ok: boolean; checks:
   const fresh = rows.filter((r: any) => !r.updated_at || r.updated_at <= r.created_at);
   const skipped = rows.filter((r: any) => !fresh.includes(r)).map((r: any) => r.festival_id);
   const plan = await planBackfill(pool);
-  const changes = plan.report.counts.artistsToCreate! + plan.report.counts.ownersToWrite!;
+  const changes = (plan.report.counts.artistsToCreate ?? 0) + (plan.report.counts.ownersToWrite ?? 0);
   const checks = [
     await verifyCounts(pool, fresh),
     await verifyIds(pool, fresh, plan),

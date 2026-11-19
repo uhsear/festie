@@ -88,7 +88,8 @@ const PROFILE_HINT = 'Copy the profile link.';
 
 function normalizeSpotify(parsed: URL | null, raw: string): ArtistLinkResult {
   const uri = SPOTIFY_URI.exec(raw);
-  if (uri) return { ok: true, url: `https://open.spotify.com/artist/${uri[1]}`, spotifyId: uri[1]! };
+  const spotifyId = uri?.[1];
+  if (spotifyId) return { ok: true, url: `https://open.spotify.com/artist/${spotifyId}`, spotifyId };
   if (!parsed || canonicalHost(parsed.hostname) !== 'open.spotify.com') return fail('This is not a Spotify link. Open the artist page on open.spotify.com and copy that link.');
   const segments = segmentsOf(parsed);
   if (segments[0] && /^intl-[a-z]{2}(?:-[a-z]+)?$/i.test(segments[0])) segments.shift();
@@ -127,7 +128,7 @@ function normalizeTwitter(parsed: URL): ArtistLinkResult {
   const segments = segmentsOf(parsed);
   if (host !== 'twitter.com' && host !== 'x.com') return fail('This is not an X link.');
   if (segments[1] === 'status') return fail(`This is a post. ${PROFILE_HINT}`);
-  if (segments.length !== 1 || ['i', 'home', 'search', 'explore', 'intent', 'share'].includes(segments[0]!)) {
+  if (segments.length !== 1 || ['i', 'home', 'search', 'explore', 'intent', 'share'].includes(segments[0] ?? '')) {
     return fail(`This is not a profile link. ${PROFILE_HINT}`);
   }
   return { ok: true, url: `https://x.com/${segments[0]}` };
@@ -137,7 +138,7 @@ function normalizeTiktok(parsed: URL): ArtistLinkResult {
   const segments = segmentsOf(parsed);
   if (canonicalHost(parsed.hostname) !== 'tiktok.com') return fail('This is not a TikTok link.');
   if (segments[1] === 'video') return fail(`This is a video. ${PROFILE_HINT}`);
-  if (segments.length !== 1 || !segments[0]!.startsWith('@')) return fail(`This is not a profile link. ${PROFILE_HINT}`);
+  if (segments.length !== 1 || !segments[0]?.startsWith('@')) return fail(`This is not a profile link. ${PROFILE_HINT}`);
   return { ok: true, url: `https://www.tiktok.com/${segments[0]}` };
 }
 
@@ -173,10 +174,10 @@ function normalizeAppleMusic(parsed: URL): ArtistLinkResult {
   const segments = segmentsOf(parsed);
   // /<country>/artist/<slug>/<id>
   const [country, kind, slug, id] = segments;
-  if (segments.length !== 4 || kind !== 'artist' || !/^[a-z]{2}$/i.test(country!) || !/^\d+$/.test(id!)) {
+  if (segments.length !== 4 || kind !== 'artist' || !country || !id || !/^[a-z]{2}$/i.test(country) || !/^\d+$/.test(id)) {
     return fail('Open the artist page in Apple Music and copy that link.');
   }
-  return { ok: true, url: `https://music.apple.com/${country!.toLowerCase()}/artist/${slug}/${id}` };
+  return { ok: true, url: `https://music.apple.com/${country.toLowerCase()}/artist/${slug}/${id}` };
 }
 
 function normalizeWebsite(parsed: URL): ArtistLinkResult {
