@@ -3,6 +3,7 @@ import {
   formatFestivalDate,
   formatDateSpan,
   formatTime,
+  formatTimeOrRaw,
   timeToMinutes,
   minutesToTime,
   artistDisplayName,
@@ -86,6 +87,17 @@ describe('formatTime', () => {
 
   it('converts 23:59 to 11:59 PM', () => {
     expect(formatTime('23:59')).toBe('11:59 PM');
+  });
+});
+
+describe('formatTimeOrRaw', () => {
+  it('formats HH:MM values', () => {
+    expect(formatTimeOrRaw('14:30')).toBe('2:30 PM');
+  });
+
+  it('passes free text through unchanged', () => {
+    expect(formatTimeOrRaw('after sunset')).toBe('after sunset');
+    expect(formatTimeOrRaw('9:30')).toBe('9:30');
   });
 });
 
