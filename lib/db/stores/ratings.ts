@@ -29,13 +29,13 @@ export interface CrewWrapExpense {
   category?: string | null;
 }
 
-export interface CrewWrapTopSet {
+interface CrewWrapTopSet {
   setId: string;
   artist: string | null;
   rating: number;
 }
 
-export interface CrewWrapOverlapPair {
+interface CrewWrapOverlapPair {
   aUserId: string;
   aName: string;
   bUserId: string;
@@ -46,14 +46,14 @@ export interface CrewWrapOverlapPair {
   sharedSets: string[];
 }
 
-export interface CrewWrapSeenTogether {
+interface CrewWrapSeenTogether {
   setId: string;
   artist: string | null;
   /** How many members rated this set ≥4★. */
   count: number;
 }
 
-export interface CrewWrapMemberSummary {
+interface CrewWrapMemberSummary {
   userId: string;
   name: string;
   topSets: CrewWrapTopSet[];
