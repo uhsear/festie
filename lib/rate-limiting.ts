@@ -28,6 +28,8 @@ import { redisRateCheck as redisRateCheckFn } from './redis.js';
 const FALLBACK_WARN_INTERVAL_MS = 30_000;
 // Guests behind one festival IP keep their own token buckets; one caller cycling tokens is capped per IP.
 const ANON_TOKEN_IP_MULTIPLIER = 10;
+// Unresolved IPs all share the key 'unknown'; skip the IP-wide ceiling for them so unrelated users are not locked out together.
+const UNRESOLVED_IP = 'unknown';
 
 function resolveClusterSize(config: any) {
   if (config && Number.isFinite(config.CLUSTER_SIZE)) {
@@ -111,7 +113,7 @@ function createRateLimiters({
    */
   async function tryRedisRateCheck({ redisClient, redisKey, max, windowMs, fallbackMap, fallbackKey, tier }: any) {
     // Try Redis first (shared across PM2 cluster)
-    if (tier === 'scoped' && redisClient && redisRateCheck) {
+    if (redisClient && redisRateCheck) {
       try {
         const result = await redisRateCheck(redisClient, redisKey, max, windowMs);
         if (!result.fallback) {
@@ -209,7 +211,7 @@ function createRateLimiters({
           });
         let result = await checkScoped(rateLimitKey, max);
         // An unvalidated token is caller-chosen, so also cap the real client IP.
-        if (anonToken) {
+        if (anonToken && ip !== UNRESOLVED_IP) {
           const ipKey = `ip:${ip}`;
           const ipResult = await checkScoped(ipKey, max * ANON_TOKEN_IP_MULTIPLIER);
           const ipCloser =
@@ -243,15 +245,31 @@ function createRateLimiters({
       }
 
       // Global API rate limit
-      const result = await tryRedisRateCheck({
-        redisClient: null,
-        redisKey: rateLimitKey,
-        max,
-        windowMs: config.RATE_LIMIT_WINDOW,
-        fallbackMap: state.rateLimits,
-        fallbackKey: rateLimitKey,
-        tier: 'global',
-      });
+      const checkGlobal = (key: string, limit: number) =>
+        tryRedisRateCheck({
+          redisClient: redis,
+          // Same 'api' prefix as the fixed-max redisRateLimiter, so both paths share counters; redisRateCheck honours the per-call max.
+          redisKey: `api:${key}`,
+          max: limit,
+          windowMs: config.RATE_LIMIT_WINDOW,
+          fallbackMap: state.rateLimits,
+          fallbackKey: key,
+          tier: 'global',
+        });
+      let result = await checkGlobal(rateLimitKey, max);
+      // An unvalidated token is caller-chosen, so also cap the real client IP (a rotated token gets a fresh bucket).
+      if (anonToken && ip !== UNRESOLVED_IP) {
+        const ipKey = `ip:${ip}`;
+        const ipResult = await checkGlobal(ipKey, max * ANON_TOKEN_IP_MULTIPLIER);
+        const ipCloser =
+          ipResult.limited !== result.limited
+            ? ipResult.limited
+            : ipResult.remaining / ipResult.limit < result.remaining / result.limit;
+        if (ipCloser) {
+          result = ipResult;
+          rateLimitKey = ipKey;
+        }
+      }
       res.setHeader('X-RateLimit-Limit', String(result.limit));
       res.setHeader('X-RateLimit-Remaining', String(result.remaining));
       res.setHeader('X-RateLimit-Reset', String(result.resetHeader));

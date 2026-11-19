@@ -193,6 +193,44 @@ describe('request-helpers: getRequestIp', () => {
 
 // ─── getRawRequestIp ─────────────────────────────────────────────────────────
 
+describe('request-helpers: unresolved IP warning', () => {
+  it('warns when getRequestIp and getRawRequestIp fall back to unknown', () => {
+    const warns: any[] = [];
+    const helpers = createRequestHelpers({
+      config: { ...baseConfig, TRUST_PROXY: false },
+      log: { ...noopLog, warn: (...a: any[]) => warns.push(a) },
+      sendError: noopSendError,
+      ErrorCodes,
+    });
+    const req = mockReq({ ip: undefined, connection: {}, socket: {} });
+    helpers.getRequestIp(req);
+    helpers.getRawRequestIp(req);
+    assert.equal(warns.length, 2);
+  });
+});
+
+describe('request-helpers: unresolved IP warning throttle', () => {
+  it('warns at most once per minute per function', (t) => {
+    let now = 1_000_000;
+    t.mock.method(Date, 'now', () => now);
+    const warns: any[] = [];
+    const helpers = createRequestHelpers({
+      config: { ...baseConfig, TRUST_PROXY: false },
+      log: { ...noopLog, warn: (...a: any[]) => warns.push(a) },
+      sendError: noopSendError,
+      ErrorCodes,
+    });
+    const req = mockReq({ ip: undefined, connection: {}, socket: {} });
+    for (let i = 0; i < 100; i++) helpers.getRequestIp(req);
+    assert.equal(warns.length, 1);
+    helpers.getRawRequestIp(req);
+    assert.equal(warns.length, 2);
+    now += 60_000;
+    helpers.getRequestIp(req);
+    assert.equal(warns.length, 3);
+  });
+});
+
 describe('request-helpers: getRawRequestIp', () => {
   it('returns socket.remoteAddress', () => {
     const helpers = makeHelpers();
