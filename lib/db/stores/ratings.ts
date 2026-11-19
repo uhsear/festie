@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { takePage } from '../../pagination';
 
 // ---------------------------------------------------------------------------
 // Crew wrap — superlative aggregation (M3)
@@ -310,12 +311,7 @@ export function createRatingsStore(pool: Pool) {
       `,
         params,
       );
-      const hasMore = result.rows.length > limit;
-      if (hasMore) result.rows.pop();
-      return {
-        items: result.rows,
-        nextCursor: hasMore ? result.rows[result.rows.length - 1].setId : null,
-      };
+      return takePage(result.rows, limit, (r) => r.setId);
     },
 
     async getCrewRatings(crewId: string, festivalId: string, { cursor, limit = 50 }: any = {}) {
@@ -340,12 +336,7 @@ export function createRatingsStore(pool: Pool) {
       `,
         params,
       );
-      const hasMore = result.rows.length > limit;
-      if (hasMore) result.rows.pop();
-      return {
-        items: result.rows,
-        nextCursor: hasMore ? result.rows[result.rows.length - 1].id : null,
-      };
+      return takePage(result.rows, limit, (r) => r.id);
     },
 
     /**
