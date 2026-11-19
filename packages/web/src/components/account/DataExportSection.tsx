@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toastContext';
 import { downloadExport } from '../../lib/downloadExport';
 import Button from '../ui/Button';
 import { Download } from 'lucide-react';
+import { Card } from '../ui/Card';
 
 export default function DataExportSection() {
   const { toast } = useToast();
@@ -25,7 +26,7 @@ export default function DataExportSection() {
   };
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+    <Card className="space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
         <Download className="w-4 h-4" aria-hidden="true" />
         {DATA_COPY.title}
@@ -43,6 +44,6 @@ export default function DataExportSection() {
       >
         {DATA_COPY.button}
       </Button>
-    </section>
+    </Card>
   );
 }

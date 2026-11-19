@@ -6,6 +6,7 @@ import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { AtSign, User } from 'lucide-react';
+import { Card } from '../ui/Card';
 
 interface ProfileSectionProps {
   user: {
@@ -41,7 +42,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
   return (
     <>
       {/* Display name section */}
-      <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+      <Card className="space-y-3">
         <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
           <User className="w-4 h-4" aria-hidden="true" />
           Display name
@@ -79,7 +80,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
             </span>
           </div>
         ) : null}
-      </section>
+      </Card>
     </>
   );
 }

@@ -9,6 +9,7 @@ import { useIdentities } from '../../lib/useIdentities';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import { Lock } from 'lucide-react';
+import { Card } from '../ui/Card';
 
 export default function PasswordSection() {
   const { toast } = useToast();
@@ -60,7 +61,7 @@ export default function PasswordSection() {
   if (identities?.hasPassword === false) return null;
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+    <Card className="space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
         <Lock className="w-4 h-4" aria-hidden="true" />
         Change Password
@@ -129,6 +130,6 @@ export default function PasswordSection() {
           Update Password
         </Button>
       </form>
-    </section>
+    </Card>
   );
 }
