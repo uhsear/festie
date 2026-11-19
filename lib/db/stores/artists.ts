@@ -210,17 +210,22 @@ export async function lockArtistRows(client: any, ids: string[]): Promise<Map<st
   return out;
 }
 
+// Containment probes let the jsonb_path_ops GIN indexes of migration 118 narrow the rows before
+// the per-element id match below, which still decides the result.
+const ID_REF_PROBES = `ARRAY(SELECT jsonb_build_array(jsonb_build_object('id', i)) FROM unnest($1::text[]) i)`;
+const LINEUP_REF_PROBES = `ARRAY(SELECT jsonb_build_array(jsonb_build_object('artists', jsonb_build_array(jsonb_build_object('id', i)))) FROM unnest($1::text[]) i)`;
+
 const ELEMENT_IDS_OF_SETS = `
   SELECT s.festival_id, a->>'id' AS artist_id
   FROM festival_sets s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.artists) = 'array' THEN s.artists ELSE '[]'::jsonb END) a
-  WHERE a->>'id' = ANY($1::text[])`;
+  WHERE s.artists @> ANY(${ID_REF_PROBES}) AND a->>'id' = ANY($1::text[])`;
 
 const ELEMENT_IDS_OF_LINEUPS = `
   SELECT f.id AS festival_id, a->>'id' AS artist_id
   FROM festivals f,
     jsonb_array_elements(CASE WHEN jsonb_typeof(f.lineup) = 'array' THEN f.lineup ELSE '[]'::jsonb END) e,
     jsonb_array_elements(CASE WHEN jsonb_typeof(e->'artists') = 'array' THEN e->'artists' ELSE '[]'::jsonb END) a
-  WHERE a->>'id' = ANY($1::text[])`;
+  WHERE f.lineup @> ANY(${LINEUP_REF_PROBES}) AND a->>'id' = ANY($1::text[])`;
 
 export interface ArtistUse {
   artistId: string;
@@ -989,8 +994,8 @@ export function createArtistsStore(pool: Pool) {
            (SELECT count(*) FROM festival_sets WHERE jsonb_typeof(artists) = 'array' AND artists @> $1::jsonb)::int AS sets,
            (SELECT count(*) FROM festivals f,
               jsonb_array_elements(CASE WHEN jsonb_typeof(f.lineup) = 'array' THEN f.lineup ELSE '[]'::jsonb END) e
-              WHERE jsonb_typeof(e->'artists') = 'array' AND e->'artists' @> $1::jsonb)::int AS "lineupEntries"`,
-        [JSON.stringify([{ id }])],
+              WHERE f.lineup @> $2::jsonb AND jsonb_typeof(e->'artists') = 'array' AND e->'artists' @> $1::jsonb)::int AS "lineupEntries"`,
+        [JSON.stringify([{ id }]), JSON.stringify([{ artists: [{ id }] }])],
       );
       counts.sets = rows[0].sets;
       counts.lineupEntries = rows[0].lineupEntries;
