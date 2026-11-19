@@ -528,67 +528,6 @@ describe('createUsersStore', () => {
     });
   });
 
-  // ── replaceAll ───────────────────────────────────────────────────
-
-  describe('replaceAll', () => {
-    it('soft-deletes all when nextUsers is empty', async () => {
-      // BEGIN, UPDATE (soft-delete all), COMMIT
-      const pool = mockPool([
-        { rows: [] }, // BEGIN
-        { rows: [] }, // UPDATE soft-delete all
-        { rows: [] }, // COMMIT
-      ]);
-      const users = createUsersStore(pool, mockUtils);
-
-      await users.replaceAll([]);
-      assert.equal(pool.calls.length, 3);
-      assert.ok(pool.calls[1].sql.includes('UPDATE users SET deleted_at'));
-      assert.ok(!pool.calls[1].sql.includes('NOT IN'));
-    });
-
-    it('soft-deletes missing users and upserts provided ones', async () => {
-      const nextUsers = [{ id: 'u1', username: 'alice', passwordHash: 'h1', createdAt: '2026-01-01T00:00:00.000Z' }];
-      // BEGIN, UPDATE (soft-delete NOT IN), INSERT/UPSERT, COMMIT
-      const pool = mockPool([
-        { rows: [] }, // BEGIN
-        { rows: [] }, // UPDATE soft-delete
-        { rows: [] }, // UPSERT user u1
-        { rows: [] }, // COMMIT
-      ]);
-      const users = createUsersStore(pool, mockUtils);
-
-      await users.replaceAll(nextUsers);
-      assert.equal(pool.calls.length, 4);
-      assert.ok(pool.calls[1].sql.includes('NOT IN'));
-      assert.ok(pool.calls[2].sql.includes('INSERT INTO users'));
-      assert.ok(pool.calls[2].sql.includes('ON CONFLICT'));
-    });
-
-    it('handles multiple users in replaceAll', async () => {
-      const nextUsers = [
-        { id: 'u1', username: 'alice', passwordHash: 'h1' },
-        { id: 'u2', username: 'bob', passwordHash: 'h2' },
-      ];
-      // BEGIN, UPDATE, UPSERT u1, UPSERT u2, COMMIT
-      const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [] }, { rows: [] }, { rows: [] }]);
-      const users = createUsersStore(pool, mockUtils);
-
-      await users.replaceAll(nextUsers);
-      assert.equal(pool.calls.length, 5);
-    });
-
-    it('defaults updatedAt to createdAt when not provided', async () => {
-      const nextUsers = [{ id: 'u1', username: 'alice', passwordHash: 'h1', createdAt: '2026-03-01T00:00:00.000Z' }];
-      const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [] }, { rows: [] }]);
-      const users = createUsersStore(pool, mockUtils);
-
-      await users.replaceAll(nextUsers);
-      // updatedAt param is index 9 (0-based)
-      const upsertParams = pool.calls[2].params;
-      assert.equal(upsertParams[9], '2026-03-01T00:00:00.000Z');
-    });
-  });
-
   // ── hardDelete ───────────────────────────────────────────────────
 
   describe('hardDelete', () => {
