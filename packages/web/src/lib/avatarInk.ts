@@ -1,3 +1,5 @@
+import { relativeLuminance } from '@festie/shared/utils';
+
 /**
  * Guarantee WCAG AA (4.5:1) for an avatar's initials on its generated colour.
  *
@@ -8,15 +10,6 @@
  * hues, none for the already-dark ones. Non-hsl input (e.g. a mocked colour)
  * passes through unchanged with white text.
  */
-function srgb(c: number): number {
-  const s = c / 255;
-  return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-}
-
-function relLuminance(r: number, g: number, b: number): number {
-  return 0.2126 * srgb(r) + 0.7152 * srgb(g) + 0.0722 * srgb(b);
-}
-
 function hslToRgb(h: number, s: number, l: number): [number, number, number] {
   const sat = s / 100;
   const lig = l / 100;
@@ -36,7 +29,7 @@ export function avatarInk(background: string): { background: string; color: stri
   let l = parseFloat(m[3]!);
   const whiteClears = (L: number) => {
     const [r, g, b] = hslToRgb(h, s, L);
-    return 1.05 / (relLuminance(r, g, b) + 0.05) >= 4.5;
+    return 1.05 / (relativeLuminance(r, g, b) + 0.05) >= 4.5;
   };
   // Drop lightness until white text clears AA. The floor (~L=6) is dark enough
   // that white clears for every hue, so the loop always resolves.
