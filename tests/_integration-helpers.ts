@@ -5,6 +5,7 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
+import { mock } from 'node:test';
 import path from 'path';
 import request from 'supertest';
 import { io as createSocketClient, type Socket } from 'socket.io-client';
@@ -241,6 +242,15 @@ async function uploadAvatar(server: any, token: string) {
   return res.body.data;
 }
 
+// Fake Socket.IO server for route tests: io.to(room).emit(...) is recorded on _emit.
+function makeIo() {
+  const emitFn = mock.fn(() => {});
+  return {
+    to: mock.fn(() => ({ emit: emitFn })),
+    _emit: emitFn,
+  };
+}
+
 export {
   // constants
   PUBLIC_DIR,
@@ -270,4 +280,5 @@ export {
   waitForEvent,
   connectSocket,
   markTrustedMutation,
+  makeIo,
 };

@@ -16,19 +16,12 @@ import express from 'express';
 import request from 'supertest';
 
 import { createCrewNotifier } from '../lib/notifications/crew-notify.js';
+import { makeIo } from './_integration-helpers';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
 function noop() {}
 const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
-
-function makeIo() {
-  const emitFn = mock.fn(() => {});
-  return {
-    to: mock.fn(() => ({ emit: emitFn })),
-    _emit: emitFn,
-  };
-}
 
 // getById results are read by the route in snake_case (crew_id, created_by, …).
 const DEFAULT_MEETING_POINT = {
