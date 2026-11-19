@@ -1,26 +1,31 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { useLastKnownFix } from './useLastKnownFix';
 
 const getCurrentPosition = vi.fn();
 
+const permissionQuery = vi.fn();
+
 function stubNav(state: PermissionState | 'none') {
+  permissionQuery.mockResolvedValue({ state });
   vi.stubGlobal('navigator', {
     geolocation: { getCurrentPosition },
-    ...(state === 'none' ? {} : { permissions: { query: vi.fn().mockResolvedValue({ state }) } }),
+    ...(state === 'none' ? {} : { permissions: { query: permissionQuery } }),
   });
 }
 
 afterEach(() => {
   vi.unstubAllGlobals();
   getCurrentPosition.mockReset();
+  permissionQuery.mockReset();
 });
 
 describe('useLastKnownFix', () => {
   it('never reads a position when permission is prompt', async () => {
     stubNav('prompt');
     renderHook(() => useLastKnownFix());
-    await new Promise((r) => setTimeout(r, 10));
+    await waitFor(() => expect(permissionQuery).toHaveBeenCalled());
+    await act(async () => {});
     expect(getCurrentPosition).not.toHaveBeenCalled();
   });
 
@@ -66,7 +71,7 @@ describe('useLastKnownFix', () => {
   it('does nothing without the Permissions API', async () => {
     stubNav('none');
     const { result } = renderHook(() => useLastKnownFix());
-    await new Promise((r) => setTimeout(r, 10));
+    await act(async () => {});
     expect(getCurrentPosition).not.toHaveBeenCalled();
     expect(result.current).toEqual({ coord: null, at: null });
   });

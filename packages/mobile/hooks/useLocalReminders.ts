@@ -224,12 +224,7 @@ async function scheduleReminder(entry: ReminderPlanEntry, b2bSeparator?: string,
   if (timeZone) fmtOpts.timeZone = timeZone;
   const startLabel = new Date(entry.startMs).toLocaleTimeString([], fmtOpts);
   const lead = entry.leadMinutes;
-  // TODO(a11y/copy): this rounds e.g. 90m → "2h" instead of "1h 30m". The ideal
-  // fix is to reuse a shared compact-countdown helper, but `fmtCountdown` is only
-  // defined privately in shared/utils/ongoingNotification.ts (and again locally in
-  // NowNextStrip) — it is NOT exported from @festie/shared/utils. Skipped per spec
-  // until a shared helper is exported; do not duplicate it here.
-  const leadText = lead >= 60 ? `${Math.round(lead / 60)}h` : `${lead}m`;
+  const leadText = lead >= 60 ? `${Math.floor(lead / 60)}h${lead % 60 ? ` ${lead % 60}m` : ''}` : `${lead}m`;
 
   try {
     await Notifications.scheduleNotificationAsync({

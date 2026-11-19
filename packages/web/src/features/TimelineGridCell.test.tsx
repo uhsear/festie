@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import type { FestivalSet } from '@festie/shared/types';
 import type { ClashMark, GridCrewAvatars } from '@festie/shared/utils';
 import TimelineGridCell from './TimelineGridCell';
@@ -26,6 +26,7 @@ function renderCell(
   myPick: 'want-to-see' | null = null,
   extra: { clash?: ClashMark; compact?: boolean; tabbable?: boolean; canPick?: boolean; crew?: GridCrewAvatars } = {},
 ) {
+  const onNavKey = vi.fn();
   const { container } = render(
     <TimelineGridCell
       set={makeSet(id)}
@@ -42,6 +43,8 @@ function renderCell(
       clash={extra.clash}
       canPick={extra.canPick ?? true}
       festival={null}
+      onNavKey={onNavKey}
+      onActivate={vi.fn()}
       onSetClick={vi.fn()}
       onSavePick={vi.fn()}
     />,
@@ -131,5 +134,73 @@ describe('TimelineGridCell block placement', () => {
     expect(el.textContent).toContain('4');
     expect(el.textContent).toContain('4 others picked this');
     expect(el.textContent).not.toContain('others picked this:');
+  });
+});
+
+describe('TimelineGridCell keyboard', () => {
+  it('reports key presses from the open and pick buttons with its set id, and focus as activation', () => {
+    const onNavKey = vi.fn();
+    const onActivate = vi.fn();
+    const { container } = render(
+      <TimelineGridCell
+        set={makeSet('a')}
+        stageName="Main"
+        stageColor="#ff3366"
+        columnIndex={0}
+        topSlot={0}
+        spanSlots={4}
+        rowHeight={ROW_HEIGHT}
+        myPick={null}
+        crew={undefined}
+        compact={false}
+        tabbable
+        canPick
+        festival={null}
+        onNavKey={onNavKey}
+        onActivate={onActivate}
+        onSetClick={vi.fn()}
+        onSavePick={vi.fn()}
+      />,
+    );
+    const open = container.querySelector<HTMLElement>('[data-open]')!;
+    const pick = container.querySelector<HTMLElement>('button[aria-pressed]')!;
+    fireEvent.keyDown(open, { key: 'ArrowRight' });
+    fireEvent.keyDown(pick, { key: 'ArrowDown' });
+    expect(onNavKey.mock.calls.map(([e, id]) => [e.key, id])).toEqual([
+      ['ArrowRight', 'a'],
+      ['ArrowDown', 'a'],
+    ]);
+    fireEvent.focus(pick);
+    expect(onActivate).toHaveBeenCalledWith('a');
+  });
+
+  it('activates on click with no focus event (Safari does not focus buttons on click)', () => {
+    const onActivate = vi.fn();
+    const { container } = render(
+      <TimelineGridCell
+        set={makeSet('a')}
+        stageName="Main"
+        stageColor="#ff3366"
+        columnIndex={0}
+        topSlot={0}
+        spanSlots={4}
+        rowHeight={ROW_HEIGHT}
+        myPick={null}
+        crew={undefined}
+        compact={false}
+        tabbable
+        canPick
+        festival={null}
+        onNavKey={vi.fn()}
+        onActivate={onActivate}
+        onSetClick={vi.fn()}
+        onSavePick={vi.fn()}
+      />,
+    );
+    fireEvent.click(container.querySelector<HTMLElement>('[data-open]')!);
+    expect(onActivate).toHaveBeenCalledTimes(1);
+    fireEvent.click(container.querySelector<HTMLElement>('button[aria-pressed]')!);
+    expect(onActivate).toHaveBeenCalledTimes(2);
+    expect(onActivate).toHaveBeenLastCalledWith('a');
   });
 });

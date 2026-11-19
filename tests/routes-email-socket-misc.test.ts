@@ -1516,7 +1516,7 @@ describe('routes/ratings', () => {
         crews: {
           getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
           listByUserAndFestival: mock.fn(async () => []),
-          getMemberCount: mock.fn(async () => '3'),
+          getMemberCount: mock.fn(async () => 3),
         },
       },
       ...overrides,

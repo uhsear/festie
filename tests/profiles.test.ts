@@ -634,3 +634,54 @@ describe('profiles: festival list reads picks only', () => {
     assert.deepEqual(res.body.data.map((p: any) => p.id), ['p-other']);
   });
 });
+
+describe('profiles: festival list pages in SQL', { concurrency: 1 }, () => {
+  test('walks every profile once by cursor and counts picks of other users', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const tag = Date.now();
+    const setId = `set-a-${RUN_ID}`;
+    const tokens: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const user = await registerUser(server, `pg-${tag}-${i}`);
+      const profile = await joinFestival(server, user.token, server.festival.id);
+      await server.request
+        .put(`/api/v1/profiles/${profile.id}`)
+        .set('x-user-token', user.token)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .send({ picks: { [setId]: 'must' } })
+        .expect(200);
+      tokens.push(user.token);
+    }
+    const url = `/api/v1/profiles/${server.festival.id}`;
+    const seen: string[] = [];
+    let cursor: string | null = null;
+    for (let guard = 0; guard < 5; guard++) {
+      const res: any = await server.request
+        .get(cursor ? `${url}?limit=2&cursor=${cursor}` : `${url}?limit=2`)
+        .set('x-user-token', tokens[0]!)
+        .expect(200);
+      assert.ok(res.body.data.length <= 2);
+      assert.equal(res.body.meta.pagination.total, 3);
+      assert.deepEqual(res.body.meta.pickCounts, { [setId]: 2 });
+      seen.push(...res.body.data.map((p: any) => p.id));
+      cursor = res.body.meta.pagination.nextCursor;
+      if (!cursor) break;
+    }
+    assert.equal(seen.length, 3);
+    assert.equal(new Set(seen).size, 3);
+  });
+
+  test('an unusable cursor starts at the first page', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const user = await registerUser(server, `pg-bad-${Date.now()}`);
+    await joinFestival(server, user.token, server.festival.id);
+    const bad = Buffer.from(JSON.stringify({ value: 'not-a-date', id: 'x' })).toString('base64url');
+    const res = await server.request
+      .get(`/api/v1/profiles/${server.festival.id}?limit=2&cursor=${bad}`)
+      .set('x-user-token', user.token)
+      .expect(200);
+    assert.equal(res.body.data.length, 1);
+  });
+});

@@ -253,7 +253,7 @@ function createRedisPresenceStore(redis: Redis | null) {
   return {
     async setOnline(festivalId: any, userId: any, username: any, socketId: any) {
       const key = `presence:${festivalId}`;
-      const value = JSON.stringify({ userId, username, socketId });
+      const value = JSON.stringify({ userId, username, socketId, ts: Date.now() });
       await redis.hset(key, socketId, value);
       await redis.expire(key, PRESENCE_TTL);
     },
@@ -267,9 +267,12 @@ function createRedisPresenceStore(redis: Redis | null) {
       const key = `presence:${festivalId}`;
       const entries = await redis.hgetall(key);
       const users = new Map();
+      const cutoff = Date.now() - PRESENCE_TTL * 1000;
       for (const [, val] of Object.entries(entries)) {
         try {
-          const { userId, username, socketId } = JSON.parse(val);
+          const { userId, username, socketId, ts } = JSON.parse(val);
+          // Entries a live worker stopped heartbeating (crashed worker) age out individually.
+          if (typeof ts === 'number' && ts < cutoff) continue;
           if (!users.has(userId)) {
             users.set(userId, { userId, username, socketId });
           }
@@ -290,6 +293,18 @@ function createRedisPresenceStore(redis: Redis | null) {
 
     async refresh(festivalId: any) {
       await redis.expire(`presence:${festivalId}`, PRESENCE_TTL);
+    },
+
+    // Re-stamp this worker's own live sockets so they outlive the TTL while still connected.
+    async heartbeat(festivalId: any, sockets: { socketId: any; userId: any; username: any }[]) {
+      if (sockets.length === 0) return;
+      const key = `presence:${festivalId}`;
+      const pipeline = redis.pipeline();
+      for (const { socketId, userId, username } of sockets) {
+        pipeline.hset(key, socketId, JSON.stringify({ userId, username, socketId, ts: Date.now() }));
+      }
+      pipeline.expire(key, PRESENCE_TTL);
+      await pipeline.exec();
     },
   };
 }

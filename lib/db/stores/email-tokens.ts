@@ -31,7 +31,7 @@ export function createEmailTokensStore(pool: Pool) {
     // "This wasn't me" link lives as long as the pending change link instead.
     async createResetToken(userId: string, tokenHash: string, ttlHours = 1) {
       await pool.query(
-        'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + ($3 || \' hours\')::INTERVAL)',
+        'INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES ($1, $2, NOW() + make_interval(hours => $3))',
         [userId, tokenHash, ttlHours],
       );
     },
@@ -67,9 +67,9 @@ export function createEmailTokensStore(pool: Pool) {
       return rows.length > 0;
     },
 
-    async createVerificationToken(userId: string, tokenHash: string, email: string, ttlHours: any) {
+    async createVerificationToken(userId: string, tokenHash: string, email: string, ttlHours: number) {
       await pool.query(
-        'INSERT INTO email_verification_tokens (user_id, token_hash, email, expires_at) VALUES ($1, $2, $3, NOW() + ($4 || \' hours\')::INTERVAL)',
+        'INSERT INTO email_verification_tokens (user_id, token_hash, email, expires_at) VALUES ($1, $2, $3, NOW() + make_interval(hours => $4))',
         [userId, tokenHash, email, ttlHours],
       );
     },
@@ -117,14 +117,14 @@ export function createEmailTokensStore(pool: Pool) {
       userId: string,
       tokenHash: string,
       email: string,
-      ttlHours: any,
+      ttlHours: number,
       keepEmail: string | null,
     ) {
       await withTransaction(pool, async (client) => {
         await client.query('SELECT id FROM users WHERE id = $1 FOR UPDATE', [userId]);
         await client.query(SUPERSEDE_PENDING_CHANGES, [userId, keepEmail]);
         await client.query(
-          'INSERT INTO email_verification_tokens (user_id, token_hash, email, expires_at) VALUES ($1, $2, $3, NOW() + ($4 || \' hours\')::INTERVAL)',
+          'INSERT INTO email_verification_tokens (user_id, token_hash, email, expires_at) VALUES ($1, $2, $3, NOW() + make_interval(hours => $4))',
           [userId, tokenHash, email, ttlHours],
         );
       });

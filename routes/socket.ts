@@ -4,7 +4,8 @@
 /**
  * Real-time Socket.IO handlers for presence and live updates
  * Inbound events handled here: join:festival, leave:festival, join:crew,
- * leave:crew, reconnect:restore, disconnect.
+ * leave:crew, reconnect:restore, disconnect, location:share, location:update,
+ * location:stop, location:sync.
  *
  * AUDIT FINDING (2026-04-14, DEFERRED FIX AGENT 1):
  *   lib/rate-limiting.js exports per-event socket limiters:
@@ -19,7 +20,7 @@
  *   If a future refactor moves these mutations to inbound Socket.IO events,
  *   wire the limiters like so inside the corresponding socket.on handler:
  *
- *     const { PICK_SET_LIMIT } = require('../lib/rate-limiting');
+ *     import { PICK_SET_LIMIT } from '../lib/rate-limiting.js';
  *     const userId = socket.data.userId;
  *     if (userId) {
  *       const check = PICK_SET_LIMIT.consume(userId);
@@ -51,11 +52,6 @@ import type { LocationPeerStoppedReason } from '../packages/shared/src/types/soc
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket Event Validation Schemas
 // ════════════════════════════════════════════════════════════════════════════════
-
-/** Base schema for all socket events with version support */
-const _socketEventBase = z.object({
-  _v: z.number().int().min(1).default(1),
-});
 
 /** Join a festival room to participate in real-time features */
 const joinFestivalEventSchema = z
@@ -157,14 +153,10 @@ export default function setupSocketHandlers(deps: any) {
     log,
     state,
     io,
-    _sanitizeString,
-    _createOpaqueId,
     resolveSocketToken,
     validateUserSession,
     getFestivalById,
     getUserFestivalProfile,
-    _getUserById,
-    _buildAvatarUrl,
     emitter,
     stores,
     removeSocketPresence,

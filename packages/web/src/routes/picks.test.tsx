@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within, waitFor } from '@testing-library/react';
+import { act, render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
@@ -311,16 +311,23 @@ describe('PicksView', () => {
 
   it('does not retry selecting the first crew when the select fails', async () => {
     // The real store flips crewLoading around a select; a failed select must not re-trigger the effect.
+    let finishSelect!: () => void;
+    const selectGate = new Promise<void>((r) => (finishSelect = r));
     const selectCrew = vi.fn().mockImplementation(async () => {
       useCrewStore.setState({ crewLoading: true });
-      await new Promise((r) => setTimeout(r, 5));
+      await selectGate;
       useCrewStore.setState({ crewLoading: false });
       throw new Error('boom');
     });
     useCrewStore.setState({ activeCrew: null, crews: [{ id: 'c1' } as never], crewLoading: false, selectCrew });
     setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
     render(<PicksView />);
-    await new Promise((r) => setTimeout(r, 60));
+    expect(selectCrew).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      finishSelect();
+      await selectGate;
+    });
+    expect(useCrewStore.getState().crewLoading).toBe(false);
     expect(selectCrew).toHaveBeenCalledTimes(1);
     useCrewStore.setState(useCrewStore.getInitialState(), true);
   });

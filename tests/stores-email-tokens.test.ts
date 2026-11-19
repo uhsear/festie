@@ -93,7 +93,7 @@ describe('lib/db/stores/email-tokens.js', () => {
       assert.ok(call.arguments[0].includes('user_id'));
       assert.ok(call.arguments[0].includes('token_hash'));
       assert.ok(call.arguments[0].includes('expires_at'));
-      assert.ok(call.arguments[0].includes("($3 || ' hours')::INTERVAL"));
+      assert.ok(call.arguments[0].includes("make_interval(hours => $3)"));
       assert.deepStrictEqual(call.arguments[1], ['user-1', 'abc123hash', 1]);
     });
 
@@ -292,7 +292,7 @@ describe('lib/db/stores/email-tokens.js', () => {
       assert.ok(call.arguments[0].includes('token_hash'));
       assert.ok(call.arguments[0].includes('email'));
       assert.ok(call.arguments[0].includes('expires_at'));
-      assert.ok(call.arguments[0].includes('INTERVAL'));
+      assert.ok(call.arguments[0].includes('make_interval(hours => $4)'));
       assert.deepStrictEqual(call.arguments[1], ['user-1', 'hash-xyz', 'alice@example.com', 24]);
     });
 
