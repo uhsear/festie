@@ -43,7 +43,7 @@ function _recordSend(to: any, subject: any) {
 
 /**
  * Send a transactional email via Resend.
- * Gracefully degrades if RESEND_API_KEY is not set (logs warning, returns false).
+ * Gracefully degrades if RESEND_API_KEY is not set (logs a warning, or an error in production, and returns false).
  * Idempotent: suppresses duplicate sends to the same address+subject within 5
  * minutes. Pass `dedupe: false` for mail that must never be silently dropped —
  * a security alert has a constant subject and a constant recipient, so the
@@ -54,7 +54,9 @@ function _recordSend(to: any, subject: any) {
 export async function sendEmail({ to, subject, html, text, headers, config, log, _client, dedupe = true }: any) {
   const apiKey = config.RESEND_API_KEY;
   if (!apiKey) {
-    log.warn('email:skip', { to, subject, reason: 'RESEND_API_KEY not configured' });
+    // A missing key in production means every user email is silently lost; surface it as an error.
+    const level = config.NODE_ENV === 'production' ? 'error' : 'warn';
+    log[level]('email:skip', { to, subject, reason: 'RESEND_API_KEY not configured' });
     return false;
   }
 
