@@ -306,7 +306,7 @@ Where to start reading when one of these features misbehaves.
 ### Announcement delivery
 
 - An admin creates an announcement through `routes/festival-announcements.ts`. The row waits in `festival_announcements` until its `sendAt`.
-- `deliverDue()` in `lib/announcements.ts` expires late rows, claims due rows and pushes each one to everyone who joined the festival. `claimDue` uses SKIP LOCKED, so a row goes out once. Drafts get a recipient count of 0.
+- `deliverDue()` in `lib/announcements.ts` expires late rows, claims due rows and pushes each one to everyone who joined the festival. `claimDue` uses SKIP LOCKED, so a row goes out once. An announcement for a deleted or unpublished (draft) festival is claimed but sent to nobody, and gets recipient count 0.
 - Two callers run it: the 60-second sweep in `lib/shutdown.ts` and the create route, for a send-now announcement.
 - If a push never arrives, check the `announcements` job run metric, then the delivery log lines.
 
