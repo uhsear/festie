@@ -18,6 +18,8 @@ function buildId(): string {
   }
 }
 
+const ADMIN_ONLY_SHARED = /[\\/]shared[\\/]src[\\/](utils[\\/]lineup(Import|Paste)|services[\\/](lineupImport|adminArtists))\.ts$/;
+
 export default defineConfig({
   define: {
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(buildId()),
@@ -32,25 +34,34 @@ export default defineConfig({
         // becomes a small shell + cacheable vendor groups. Parallel HTTP/2 load
         // plus cache longevity (react-core rarely changes; export-tools only
         // loads on Share/Export tap). Matches the bundle-viz treemap groupings.
-        manualChunks(id) {
-          // One chunk for @festie/shared instead of ~15 tiny shared chunks: the
-          // entry needs nearly all of it, and each chunk was its own
-          // modulepreload request (37 -> 12 on first load, FCP -0.5s in Lighthouse).
-          if (/[\\/]packages[\\/]shared[\\/]src[\\/]/.test(id)) return 'festie-shared';
-          if (!id.includes('node_modules')) return;
-          if (id.match(/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/)) return 'react-core';
-          if (id.includes('@tanstack')) return 'router';
-          if (id.includes('zustand') || id.includes('socket.io-client') || id.includes('/zod/')) return 'data';
-          if (id.includes('vaul') || id.includes('@radix-ui') || id.includes('/motion/') || id.includes('@use-gesture'))
-            return 'ui-motion';
-          if (id.includes('lucide-react')) return 'icons';
-          if (id.includes('html-to-image')) return 'export-tools';
-          if (id.includes('@sentry')) return 'telemetry';
-          if (id.includes('web-vitals') || id.includes('workbox')) return 'telemetry';
-          // maplibre-gl.mjs and maplibre-gl-shared.mjs are separate ES modules; one
-          // merged chunk was 263 KB gzip, over the 250 KB per-file budget. Split, they
-          // download in parallel, and only when a map mounts (CrewMap imports lazily).
-          if (id.includes('maplibre-gl-shared')) return 'maplibre-shared';
+        // Rolldown's legacy manualChunks always pulls a captured module's whole
+        // dependency tree into its chunk, which dragged the admin-only lineup tools
+        // into festie-shared. codeSplitting groups can turn that off.
+        codeSplitting: {
+          includeDependenciesRecursively: false,
+          groups: [
+            // One chunk for @festie/shared instead of ~15 tiny shared chunks: the
+            // entry needs nearly all of it, and each chunk was its own
+            // modulepreload request (37 -> 12 on first load, FCP -0.5s in Lighthouse).
+            // The admin-only lineup tools stay out so only the lazy admin routes load them.
+            {
+              name: 'festie-shared',
+              test: /[\\/]packages[\\/]shared[\\/]src[\\/]/,
+              exclude: ADMIN_ONLY_SHARED,
+              priority: 10,
+            },
+            { name: 'react-core', test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 9 },
+            { name: 'router', test: /@tanstack/, priority: 8 },
+            { name: 'data', test: /zustand|socket\.io-client|[\\/]zod[\\/]/, priority: 7 },
+            { name: 'ui-motion', test: /vaul|@radix-ui|[\\/]motion[\\/]|@use-gesture/, priority: 6 },
+            { name: 'icons', test: /lucide-react/, priority: 5 },
+            { name: 'export-tools', test: /html-to-image/, priority: 4 },
+            { name: 'telemetry', test: /@sentry|web-vitals|workbox/, priority: 3 },
+            // maplibre-gl.mjs and maplibre-gl-shared.mjs are separate ES modules; one
+            // merged chunk was 263 KB gzip, over the 250 KB per-file budget. Split, they
+            // download in parallel, and only when a map mounts (CrewMap imports lazily).
+            { name: 'maplibre-shared', test: /maplibre-gl-shared/, priority: 2 },
+          ],
         },
       },
     },
