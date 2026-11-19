@@ -54,13 +54,13 @@ updates:
       # react and react-dom must equal the renderer bundled in react-native
       # (react-native 0.88.0 ships react-native-renderer 19.3.0). A mismatch
       # throws "Incompatible React versions" at launch and crash-loops the app;
-      # android-e2e run 40590090622 caught 19.2.8 against 19.2.3 on SDK 56. Web and shared
+      # an android-e2e run once caught a renderer mismatch (19.2.8 against 19.2.3). Web and shared
       # stay on the same version so the workspace moves together. Bump all three
       # with the Expo SDK upgrade, to the version `expo install --check` reports.
       - dependency-name: "react"
       - dependency-name: "react-dom"
       # typescript 7 is a hard block, not a preference: `npm run lint` fails with
-      # "typescript-eslint does not support TS 7.0" (typescript-eslint 8.70.0
+      # "typescript-eslint does not support TS 7.0" (typescript-eslint 8.x
       # still peers on typescript >=4.8.4 <6.1.0, and no release widens it yet),
       # and the `gen:api-types` CI gate throws
       # "Cannot read properties of undefined (reading 'createKeywordTypeNode')"
