@@ -11,6 +11,7 @@
  * calls these and refuses any database whose name does not end in _test or _staging.
  */
 
+import { createHash } from 'node:crypto';
 import { Client, type Pool } from 'pg';
 import { createOpaqueId } from './helpers';
 import { sanitizeString, sanitizeLinkRecord } from './helpers/sanitize';
@@ -125,6 +126,11 @@ function stable(value: unknown): string {
   return JSON.stringify(value, (_key, val) =>
     isObject(val) ? Object.fromEntries(Object.entries(val).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) : val,
   );
+}
+
+/** Identifies a dry-run report. A run that is given this hash refuses to write when the plan it computes differs. */
+export function planHash(report: BackfillReport): string {
+  return createHash('sha256').update(stable(report)).digest('hex');
 }
 
 function allowedPhoto(photo: string): boolean {
