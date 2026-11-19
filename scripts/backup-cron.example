@@ -14,12 +14,22 @@ APP_DIR=/opt/festie
 
 # ── Database backups ─────────────────────────────────────────────────────────
 
-# Daily backup at 2:00 AM (pg_dump custom format, 30-day daily + 12 weekly)
-0 2 * * * cd $APP_DIR && bash scripts/backup-pg.sh >> logs/backup.log 2>&1
+# On-host dump every 6 hours (pg_dump custom format, 30-day daily + 12 weekly)
+0 */6 * * * cd $APP_DIR && bash scripts/backup-pg.sh >> logs/backup.log 2>&1
 
-# Off-site sync at 3:00 AM (after local backup completes)
-# Requires OFFSITE_TARGET in .env (rsync path, rclone remote, or scp target)
-0 3 * * * cd $APP_DIR && bash scripts/backup-offsite.sh >> logs/backup-offsite.log 2>&1
+# Off-site encrypted push to the private backups repo, after each dump
+# Needs BACKUP_GPG_PASSPHRASE in .env. backup-offsite.sh (rsync) is unused.
+30 */6 * * * cd $APP_DIR && bash scripts/backup-offsite-git.sh >> logs/backup-offsite.log 2>&1
+
+# Weekly restore check of the newest dump into a temp database, Sunday 4:00 AM
+0 4 * * 0 cd $APP_DIR && bash scripts/backup-verify.sh >> logs/backup-verify.log 2>&1
+
+# Weekly restore drill from the off-site repo, Sunday 5:30 AM
+# Needs ~/.config/festie-drill-db.env (see the script header)
+30 5 * * 0 cd $APP_DIR && bash scripts/backup-restore-drill.sh >> logs/backup-restore-drill.log 2>&1
+
+# Festival weekends only: hourly dump plus off-site push
+# 20 * * * * cd $APP_DIR && bash scripts/backup-festival-hourly.sh >> logs/backup-festival.log 2>&1
 
 # ── Health monitoring ────────────────────────────────────────────────────────
 
@@ -29,9 +39,8 @@ APP_DIR=/opt/festie
 # Error rate alerting every 5 minutes (checks PM2 error logs + /api/health)
 */5 * * * * cd $APP_DIR && node scripts/error-rate-alert.cjs >> logs/alert.log 2>&1
 
-# Health monitor (Node.js version, more comprehensive) every 5 minutes
-# Use EITHER health-check.sh OR health-monitor.js, not both
-# */5 * * * * cd $APP_DIR && node scripts/health-monitor.js >> logs/cron-health.log 2>&1
+# Metrics rollup hourly (persists in-memory metrics to PostgreSQL)
+0 * * * * cd $APP_DIR && node scripts/metrics-rollup.js >> logs/metrics-rollup.log 2>&1
 
 # ── Maintenance ──────────────────────────────────────────────────────────────
 

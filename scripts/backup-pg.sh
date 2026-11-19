@@ -9,7 +9,7 @@ set -euo pipefail
 # verifies the dump is restorable.
 #
 # Run manually:    bash scripts/backup-pg.sh
-# Run via cron:    0 2 * * * cd /opt/festie && bash scripts/backup-pg.sh \
+# Run via cron:    0 */6 * * * cd /opt/festie && bash scripts/backup-pg.sh \
 #                      >> logs/backup.log 2>&1
 # npm alias:       npm run db:backup
 # ──────────────────────────────────────────────────────────────────────────────
