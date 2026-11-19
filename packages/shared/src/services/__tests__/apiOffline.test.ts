@@ -51,6 +51,7 @@ describe('api offline interception', () => {
       expect(isOfflineEligible('/crews/c1/home-base')).toBe(true);
       expect(isOfflineEligible('/crews/c1/reminders')).toBe(true);
       expect(isOfflineEligible('/ratings/s1/caught')).toBe(true);
+      expect(isOfflineEligible('/ratings/s1')).toBe(true);
     });
 
     it('rejects auth/account/admin/session and unknown crew sub-resources', () => {
@@ -61,7 +62,7 @@ describe('api offline interception', () => {
       expect(isOfflineEligible('/sessions')).toBe(false);
       expect(isOfflineEligible('/crews/c1/members')).toBe(false);
       expect(isOfflineEligible('/crews')).toBe(false);
-      expect(isOfflineEligible('/ratings/s1')).toBe(false);
+      expect(isOfflineEligible('/ratings/festival/f1/extra')).toBe(false);
     });
   });
 
