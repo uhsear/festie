@@ -6,16 +6,16 @@
  * Festie Server — v3.0.0
  *
  * Orchestrator: creates app context, wires middleware, routes, sockets, and shutdown.
- * See lib/app-context.js for infrastructure setup and utility functions.
+ * See lib/app-context/index.ts for infrastructure setup and utility functions.
  *
  * ARCHITECTURE:
  *   server.ts ─── orchestrator (this file)
- *   lib/app-context.js ─── config, DB, Redis, caches, auth, sessions, utilities
- *   lib/middleware.js ──── Express middleware (security, CORS, parsing, metrics, rate limits)
- *   lib/socket-setup.js ─ Socket.IO server, Redis adapter, push notifications
- *   lib/shutdown.js ───── background tasks (cleanup timers) + graceful shutdown
- *   routes/pages.js ───── static pages, password reset forms, SPA catch-all
- *   routes/*.js ────────── API route modules (auth, profiles, crews, etc.)
+ *   lib/app-context/index.ts ─── config, DB, Redis, caches, auth, sessions, utilities
+ *   lib/middleware.ts ──── Express middleware (security, CORS, parsing, metrics, rate limits)
+ *   lib/socket-setup.ts ─ Socket.IO server, Redis adapter, push notifications
+ *   lib/shutdown.ts ───── background tasks (cleanup timers) + graceful shutdown
+ *   routes/pages.ts ───── static pages, password reset forms, SPA catch-all
+ *   routes/*.ts ────────── API route modules (auth, profiles, crews, etc.)
  */
 
 import 'dotenv/config';
