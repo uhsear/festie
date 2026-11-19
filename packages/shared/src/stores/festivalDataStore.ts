@@ -1243,7 +1243,7 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
     // persisted snapshot (null for a first-time guest) — bouncing the user
     // back to the picker. When the live state already has a selection that
     // the persisted blob doesn't match, keep the live selection.
-    // shortcut: merges per festival, not per set; a same-festival pick made before hydration replaces the persisted map for that festival
+    // shortcut: an unpick made before hydration is not carried over and the persisted entry returns, upgrade when picks track removals
     merge: (persisted, current) => {
       const p = (persisted ?? {}) as Partial<FestivalDataState>;
       if (current.currentFestivalId && p.currentFestivalId !== current.currentFestivalId) {
