@@ -1,9 +1,7 @@
 // Source-level guards for the iOS round-2 schedule/sheet fixes. Mobile vitest
 // runs in plain node with no RN renderer, so these read the files directly.
-import fs from 'node:fs';
-import path from 'node:path';
+import { read } from './read-source';
 
-const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 describe('iOS round 2 — schedule and set sheet (source-level guards)', () => {
   it('Schedule tab: guest pick saves locally without a sign-in redirect, TBA empty state offers Cards, Cards header cancels hPad', () => {

@@ -1,8 +1,6 @@
 // Source-level guards: sign-out must drop the push token before the session is revoked.
-import fs from 'node:fs';
-import path from 'node:path';
+import { read } from './read-source';
 
-const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 describe('sign-out push cleanup (source-level guards)', () => {
   it('unregisterPushOnSignOut deletes the token, clears keys and cancels reminders', () => {
