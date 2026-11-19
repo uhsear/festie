@@ -24,6 +24,7 @@ import {
   drainQueue,
   refreshPendingCount,
   retryFailed,
+  registerCreateReconciler,
   clearQueue,
   dismissFailed,
   hydrateFailedSync,
@@ -98,6 +99,29 @@ describe('offlineQueue', () => {
   });
 
   describe('idempotency on replay', () => {
+    it('rewrites a temp id in every URL occurrence and in request bodies after its POST syncs', async () => {
+      const t = Date.now();
+      seed([
+        makeMutation({ clientId: 'tmp1', method: 'POST', url: '/crews/c1/polls', body: {}, createdAt: t }),
+        makeMutation({
+          clientId: 'next',
+          method: 'PUT',
+          url: '/polls/tmp1/options/tmp1',
+          body: { pollId: 'tmp1', nested: { ids: ['tmp1', 'x'] } },
+          createdAt: t + 1,
+        }),
+      ]);
+      vi.mocked(api.post).mockResolvedValue({ id: 'real1' });
+      vi.mocked(api.put).mockRejectedValue(new ApiClientError('boom', 500));
+      registerCreateReconciler(() => {});
+      await drainQueue();
+      registerCreateReconciler(null);
+      expect(vi.mocked(api.put).mock.calls[0]![0]).toBe('/polls/real1/options/real1');
+      const next = readPersisted().find((q) => q.clientId === 'next')!;
+      expect(next.url).toBe('/polls/real1/options/real1');
+      expect(next.body).toEqual({ pollId: 'real1', nested: { ids: ['real1', 'x'] } });
+    });
+
     it('sends the clientId as an Idempotency-Key header so duplicate replays dedup server-side', async () => {
       vi.mocked(api.post).mockResolvedValue({ id: 'srv1' });
       await enqueueMutation({ clientId: 'POST:/crews/c1/expenses:k', url: '/crews/c1/expenses', method: 'POST', body: { amount: 5 } });
