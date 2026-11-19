@@ -93,6 +93,10 @@ jobs:
         env:
           BRANCH: ${{ inputs.branch }}
           MSG: ${{ inputs.message }}
+          # app.config.js bakes extra.appleSignIn/googleSignIn from these into the update manifest;
+          # unset, an OTA would turn provider sign-in off on builds that have it.
+          FESTIE_APPLE_SIGNIN: '1'
+          GOOGLE_IOS_URL_SCHEME: ${{ secrets.GOOGLE_IOS_URL_SCHEME }}
         run: |
           eas update \
             --branch "$BRANCH" \
