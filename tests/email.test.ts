@@ -134,13 +134,20 @@ describe('email: sendEmail', () => {
     assert.equal(await sendEmail({ ...base, redis }), true);
     assert.equal(await sendEmail({ ...base, redis }), true);
     assert.equal(sendMock.mock.callCount(), 1, 'second send suppressed via Redis');
+    assert.equal(store.size, 1, 'the dedupe key was written to Redis');
     assert.ok([...store.keys()].every((k) => !k.includes('redis-dup')), 'recipient must not appear in the Redis key');
 
-    const broken = { exists: async () => { throw new Error('down'); }, set: async () => { throw new Error('down'); } };
+    const brokenCalls = { exists: 0, set: 0 };
+    const broken = {
+      exists: async () => { brokenCalls.exists++; throw new Error('down'); },
+      set: async () => { brokenCalls.set++; throw new Error('down'); },
+    };
     const fb = { ...base, to: 'fallback-dup@example.com', redis: broken };
     assert.equal(await sendEmail(fb), true);
     assert.equal(await sendEmail(fb), true);
     assert.equal(sendMock.mock.callCount(), 2, 'memory fallback suppresses the repeat');
+    assert.equal(brokenCalls.exists, 2, 'Redis was consulted before falling back');
+    assert.equal(brokenCalls.set, 1, 'Redis write was attempted before falling back');
   });
 
   it('never suppresses a message sent with dedupe:false', async () => {
