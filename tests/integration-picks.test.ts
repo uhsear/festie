@@ -522,11 +522,6 @@ describe('Malformed Input Handling', { concurrency: 1 }, () => {
     assert.ok(res.status >= 400);
   });
 
-  test('reminder validation removed (migration 013)', async () => {
-    server = null;
-    // Reminders feature removed — validation test no longer applicable
-  });
-
   test('rejects note longer than max length', async () => {
     server = await startServer();
     const user = await registerUser(server, 'long-note-user');
@@ -596,8 +591,8 @@ describe('profile soft-delete filtering', { concurrency: 1 }, () => {
         .set('x-user-token', bob.token)
         .set(TRUSTED_MUTATION_HEADER, '1')
         .send({ picks: { 'set-a': 'must' } });
-      // Should get 404 or 403 — the profile is soft-deleted
-      assert.ok([403, 404].includes(res.status), `Expected 403 or 404 but got ${res.status}`);
+      // The route looks up the live profile first, so a soft-deleted one is 404, not 403
+      assert.equal(res.status, 404);
     } finally {
       await pool.end();
     }

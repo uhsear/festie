@@ -239,6 +239,7 @@ test('artist routes stay admin only, validated and rate limited', () => {
       'artists.ts PATCH /:id',
       'artists.ts POST /',
       'artists.ts POST /:id/merge',
+      'artists.ts POST /backfill',
       'artists.ts POST /match',
       'artists.ts POST /spotify-candidates',
       'artists.ts POST /spotify-picks',
@@ -252,6 +253,9 @@ test('artist routes stay admin only, validated and rate limited', () => {
   const mergeRoute = artistRoutes.find((r) => r.key === 'artists.ts POST /:id/merge')!;
   assert.ok(has(mergeRoute, /rateLimit\(10, 'artist-merge'\)/));
   assert.ok(has(mergeRoute, /\brequireRecentAuth\b/), 'a merge needs a recent re-auth, as a festival delete does');
+  const backfillRoute = artistRoutes.find((r) => r.key === 'artists.ts POST /backfill')!;
+  assert.ok(has(backfillRoute, /rateLimit\(10, 'artist-backfill'\)/));
+  assert.ok(has(backfillRoute, /\brequireRecentAuth\b/), 'a backfill run needs a recent re-auth');
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /match')!, /rateLimit\(60, 'artist-match'\)/));
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-candidates')!, /rateLimit\(6, 'artist-spotify-search'\)/));
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-picks')!, /rateLimit\(20, 'artist-spotify-pick'\)/));
