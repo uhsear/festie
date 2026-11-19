@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
+import { sanitizeIdentifier } from '../lib/helpers/sanitize';
 
 export function createRatingsRoutes({
   stores,
@@ -160,7 +161,8 @@ export function createRatingsRoutes({
     async (req: any, res: any) => {
       try {
         const { cursor, limit } = req.validatedQuery;
-        const result = await stores.ratings.getCrewRatings(req.validatedParams.crewId, req.validatedParams.festivalId, {
+        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const result = await stores.ratings.getCrewRatings(crewId, req.validatedParams.festivalId, {
           cursor,
           limit,
         });
@@ -182,7 +184,8 @@ export function createRatingsRoutes({
     crewMember,
     async (req: any, res: any) => {
       try {
-        const { crewId, festivalId } = req.validatedParams;
+        const { festivalId } = req.validatedParams;
+        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         // The wrap derives totalSplit/biggestSpender from the expense rows, not
         // balances: settling up zeroes every balance.
         const expenses = await stores.expenses.getByCrew(crewId);

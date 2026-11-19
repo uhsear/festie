@@ -144,8 +144,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier(params.crewId);
         const userId = req.user.userId;
 
-        // Membership first, so a client cannot spray peer-stopped into other crews.
-
+        // crewMember already ran, so a client cannot spray peer-stopped into other crews.
         void dropLivePosition(redis, crewId, userId);
         if (io) io.to('crew:' + crewId).emit('location:peer-stopped', { _v: 1, crewId, userId, reason: 'stop' });
         return sendSuccess(res, { stopped: true });
