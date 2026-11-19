@@ -153,4 +153,23 @@ describe('push budget', () => {
       ],
     );
   });
+
+  it('concurrent sends to one user cannot pass the cap', async () => {
+    const stores = makeStores();
+    let logged = 0;
+    stores.notificationLog.insert = mock.fn(async (row: any) => {
+      await new Promise((r) => setImmediate(r));
+      if (row.platform === 'inbox' && row.status === 'inbox') logged++;
+      return null;
+    });
+    stores.notificationLog.countRecentPushes = mock.fn(async (ids: string[]) => {
+      const seen = logged;
+      await new Promise((r) => setImmediate(r));
+      return new Map(ids.map((id) => [id, seen]));
+    });
+    const { svc, messaging } = build(stores);
+    const results = await Promise.all(Array.from({ length: PUSH_BUDGET_PER_HOUR + 4 }, () => svc.send(change)));
+    assert.equal(results.filter((r: any) => r.reason === 'budget').length, 4);
+    assert.equal(messaging.send.mock.calls.length, PUSH_BUDGET_PER_HOUR);
+  });
 });
