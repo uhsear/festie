@@ -606,13 +606,33 @@ describe('emitter: flushAll', () => {
     });
 
     // Flush immediately (before debounce); the crew lookup resolves on the next ticks.
-    emitter.flushAll();
-    for (let i = 0; i < 5; i++) await Promise.resolve();
+    await emitter.flushAll();
 
     const fest1 = io._rooms['user:u1,crew:c-fest-1'] || [];
     const fest2 = io._rooms['user:u2,crew:c-fest-2'] || [];
     assert.equal(fest1.length, 1, 'fest-1 should have been flushed');
     assert.equal(fest2.length, 1, 'fest-2 should have been flushed');
+  });
+});
+
+describe('emitter: flushAll awaits the crew lookup', () => {
+  it('resolves only after a slow lookup has emitted', async () => {
+    const io = makeIo();
+    const stores = {
+      crews: {
+        listByUserAndFestival: async () => {
+          await new Promise((r) => setTimeout(r, 30));
+          return [{ id: 'c1' }];
+        },
+      },
+    };
+    const emitter = createSocketEmitter(defaultDeps({ io, stores }));
+    emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', userId: 'u1', name: 'Alice', picks: {} },
+      user: {},
+    });
+    await emitter.flushAll();
+    assert.equal((io._rooms['user:u1,crew:c1'] || []).length, 1);
   });
 });
 
