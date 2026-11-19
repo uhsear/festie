@@ -32,6 +32,9 @@ const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 // Set TEST_DATABASE_URL to run them (always set in CI). See tests/README.md.
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
+// The shared helpers exit the process without a test database, so load them only when it exists.
+const helpers = skip ? null : await import('./_integration-helpers');
+const { registerFlatUser: registerUser } = (helpers ?? {}) as NonNullable<typeof helpers>;
 
 const RUN_TAG = `crews-${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
 
@@ -116,17 +119,6 @@ let userCounter = 0;
 function uniqueUsername(prefix: string) {
   userCounter += 1;
   return `${prefix}-${RUN_TAG}-${userCounter}`.slice(0, 30);
-}
-
-async function registerUser(server: any, username: any) {
-  const res = await server.request
-    .post('/api/v1/auth/register')
-    .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` })
-    .expect(201);
-  // Response shape: { user: { id, username, ... }, token, refreshToken }
-  // Flatten so callers can use user.id + user.token uniformly.
-  return { ...res.body.data.user, token: res.body.data.token, refreshToken: res.body.data.refreshToken };
 }
 
 async function joinFestival(server: any, userToken: any, festivalId = server.festivalId) {

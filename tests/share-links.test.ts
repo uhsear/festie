@@ -16,6 +16,8 @@ import { bootServer } from './_boot-server';
 
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
+// The shared helpers exit the process without a test database, so load them only when it exists.
+const helpers = skip ? null : await import('./_integration-helpers');
 
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
@@ -76,12 +78,7 @@ type Server = Awaited<ReturnType<typeof startServer>>;
 
 async function registerUser(server: Server, suffix: string) {
   const username = `share-${RUN_ID}-${suffix}`;
-  const res = await server.request
-    .post('/api/v1/auth/register')
-    .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password: DEFAULT_PASSWORD, confirmPassword: DEFAULT_PASSWORD, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` })
-    .expect(201);
-  return { ...res.body.data, username };
+  return { ...(await helpers!.registerUser(server, username)), username };
 }
 
 async function joinWithPick(server: Server, token: string) {

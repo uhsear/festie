@@ -28,6 +28,7 @@ import {
   assert,
   DEFAULT_PASSWORD,
   Pool,
+  registerUser as registerSharedUser,
   TEST_DATABASE_URL,
   TRUSTED_MUTATION_HEADER,
 } from './_integration-helpers';
@@ -78,24 +79,12 @@ function unique(prefix: string) {
   return `${prefix}${uniqueCounter}${Math.random().toString(36).slice(2, 8)}`;
 }
 
-// Local, not the helper's: that one takes no email and returns the raw body.
+// Wraps the shared helper to track created ids for teardown and flatten the result.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function registerUser(server: any, username: string, email?: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const body: any = {
-    username,
-    password: DEFAULT_PASSWORD,
-    confirmPassword: DEFAULT_PASSWORD,
-    dateOfBirth: '1995-01-01',
-    tosAccepted: true, email: `${username}@example.com`,
-  };
-  if (email) body.email = email;
-  const res = await server.request.post('/api/v1/auth/register').set(TRUSTED_MUTATION_HEADER, '1').send(body);
-  assert.ok(res.status === 201 || res.status === 200, `register failed: ${res.status} ${JSON.stringify(res.body)}`);
-  const id = res.body.data.user.id as string;
-  assert.ok(id, 'registered user id not found');
-  createdUserIds.push(id);
-  return { id, token: res.body.data.token as string, username, email };
+  const data = await registerSharedUser(server, username, DEFAULT_PASSWORD, email ? { email } : {});
+  createdUserIds.push(data.user.id as string);
+  return { id: data.user.id as string, token: data.token as string, username, email };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
