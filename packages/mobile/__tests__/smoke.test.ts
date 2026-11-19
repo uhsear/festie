@@ -1,12 +1,3 @@
-// Harness smoke test: proves the vitest bring-up runs green. Real mobile-local
-// tests live alongside their targets; this only verifies that the test runner
-// loads and executes without error.
-describe('vitest harness', () => {
-  it('runs', () => {
-    expect(1 + 1).toBe(2);
-  });
-});
-
 // useMobilePush.ts calls Notifications.setNotificationHandler(...) at module
 // scope, so importing it at all requires mocking react-native/expo-notifications
 // /expo-device/async-storage/@sentry/react-native first — a pattern with zero
