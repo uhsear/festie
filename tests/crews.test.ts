@@ -19,7 +19,6 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import path from 'path';
 import { afterEach, describe, mock, test } from 'node:test';
 import express from 'express';
 import request from 'supertest';

@@ -8,7 +8,6 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import path from 'path';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import express from 'express';
