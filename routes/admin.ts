@@ -30,6 +30,7 @@ import { parsePageParams, paginateArray } from '../lib/pagination.js';
 import mountAdminUserRoutes from './admin-users.js';
 import mountAdminAuditRoutes from './admin-audit.js';
 import mountAdminBulkRoutes from './admin-bulk.js';
+import mountAdminPolicyNoticeRoutes from './admin-policy-notice.js';
 import * as spotify from '../lib/spotify.js';
 import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
@@ -210,6 +211,7 @@ export default function createAdminRoutes(deps: any): Router {
   mountAdminUserRoutes({ router, deps, ctx }); // /users, /users/:id/*
   mountAdminAuditRoutes({ router, deps, ctx }); // /audit
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*
+  mountAdminPolicyNoticeRoutes({ router, deps, ctx }); // /policy-notice
 
   const REF_COUNTS_SQL = `
   SELECT

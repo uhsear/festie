@@ -1,4 +1,5 @@
 import type { Priority } from '../types/domain';
+import { PRIORITY_WEIGHT } from './crewNudges';
 import { fromPickPriority, type PlanSnapshot } from './planSnapshot';
 
 /** What scanning a friend's plan would change, computed before anything is written. */
@@ -17,7 +18,6 @@ export interface PlanImportPreview {
 }
 
 // Same "never downgrade" order as bulkSavePicks: must > want-to-see > maybe.
-const RANK: Record<Priority, number> = { maybe: 1, 'want-to-see': 2, must: 3 };
 
 /**
  * Preview a scanned plan against mine. Pure: writes nothing. Returns
@@ -55,12 +55,12 @@ export function previewPlanImport(
     }
     const priority = fromPickPriority(pick.priority);
     const best = wanted.get(pick.setId);
-    if (!best || RANK[priority] > RANK[best]) wanted.set(pick.setId, priority);
+    if (!best || PRIORITY_WEIGHT[priority] > PRIORITY_WEIGHT[best]) wanted.set(pick.setId, priority);
   }
 
   for (const [setId, priority] of wanted) {
     const existing = myPicks[setId];
-    if (existing && RANK[existing] >= RANK[priority]) {
+    if (existing && PRIORITY_WEIGHT[existing] >= PRIORITY_WEIGHT[priority]) {
       preview.alreadyHave += 1;
       continue;
     }

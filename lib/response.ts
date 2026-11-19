@@ -90,6 +90,7 @@ export function sendError(
   message: string,
   code: string | null = null,
   details: Record<string, any> | null = null,
+  data: unknown = null,
 ) {
   const error: Record<string, any> = { message, status };
   if (code) {
@@ -102,5 +103,5 @@ export function sendError(
   // Read by the request log line, which otherwise records a bare status.
   if (res.locals) res.locals.errorInfo = { code: code ?? undefined, message };
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  return res.status(status).json({ data: null, error });
+  return res.status(status).json({ data, error });
 }
