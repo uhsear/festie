@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from 'pg';
+import { isoOrNull } from '../connection';
 
 export type IdentityProvider = 'google' | 'apple';
 export type OAuthStateKind = 'nonce' | 'signup' | 'token';
@@ -20,8 +21,6 @@ type Db = Pick<Pool | PoolClient, 'query'>;
 
 const PUBLIC_COLUMNS = `id, user_id, provider, subject, email, email_verified, is_private_email, created_at, last_used_at`;
 
-const iso = (v: Date | string | null) => (v ? new Date(v).toISOString() : null);
-
 function toIdentity(row: any): Identity {
   return {
     id: String(row.id),
@@ -31,8 +30,8 @@ function toIdentity(row: any): Identity {
     email: row.email,
     emailVerified: row.email_verified,
     isPrivateEmail: row.is_private_email,
-    createdAt: iso(row.created_at) as string,
-    lastUsedAt: iso(row.last_used_at),
+    createdAt: isoOrNull(row.created_at) as string,
+    lastUsedAt: isoOrNull(row.last_used_at),
   };
 }
 

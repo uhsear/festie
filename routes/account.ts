@@ -18,7 +18,8 @@ import type {
 import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from '../lib/email';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user';
 import type { Identity } from '../lib/db/stores/identities';
-import { collectAuthoredRecords, isoOrNull } from '../lib/account-export-records';
+import { collectAuthoredRecords } from '../lib/account-export-records';
+import { isoOrNull } from '../lib/db/connection';
 
 /**
  * Collect all user data for GDPR export (exportVersion 1.2). Gathers the
