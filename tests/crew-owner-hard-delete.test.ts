@@ -67,6 +67,23 @@ describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
     assert.equal(gone.length, 0, 'the user row is actually deleted (no FK abort)');
   });
 
+  test('hardDelete skips soft-deleted members when choosing the heir', async () => {
+    await mkFestival('gdpr-test-f5');
+    await mkUser('gdpr-test-sd-owner');
+    await mkUser('gdpr-test-sd-gone');
+    await mkUser('gdpr-test-sd-live');
+    await mkCrew('gdpr-test-crew5', 'gdpr-test-f5', 'gdpr-test-sd-owner');
+    await addMember('gdpr-test-crew5', 'gdpr-test-sd-owner', 'owner', '2020-01-01T00:00:00Z');
+    await addMember('gdpr-test-crew5', 'gdpr-test-sd-gone', 'member', '2020-02-01T00:00:00Z'); // earliest, soft-deleted
+    await addMember('gdpr-test-crew5', 'gdpr-test-sd-live', 'member', '2020-03-01T00:00:00Z');
+    await pool.query("UPDATE users SET deleted_at = NOW() WHERE id = 'gdpr-test-sd-gone'");
+
+    await stores.users.hardDelete('gdpr-test-sd-owner');
+
+    const { rows } = await pool.query("SELECT created_by FROM crews WHERE id = 'gdpr-test-crew5'");
+    assert.equal(rows[0].created_by, 'gdpr-test-sd-live', 'a soft-deleted member never inherits the crew');
+  });
+
   test('hardDelete deletes a crew whose creator was its sole member', async () => {
     await mkFestival('gdpr-test-f2');
     await mkUser('gdpr-test-solo');

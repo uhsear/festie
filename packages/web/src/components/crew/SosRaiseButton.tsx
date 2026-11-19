@@ -2,15 +2,14 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { AlertCircle, X } from 'lucide-react';
+import * as RadixDialog from '@radix-ui/react-dialog';
+import { AlertCircle } from 'lucide-react';
 import { raiseSos, sosErrorMessage, isApiClientError } from '@festie/shared';
 import { toSosPosition } from '@festie/shared/services';
 import type { SosPosition } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
-import IconButton from '../ui/IconButton';
-import { useReturnFocus } from '../../hooks/useReturnFocus';
+import Dialog from '../ui/Dialog';
 import { useMediaQuery } from '../../hooks/useMediaQuery';
 import { inputBase } from '../../lib/styles';
 
@@ -53,7 +52,6 @@ function oneShotPosition(): Promise<SosPosition | undefined> {
 export default function SosRaiseButton({ crewId, compact = false, alerting = false }: Props) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const returnFocus = useReturnFocus();
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   // Reactively track prefers-reduced-motion so the ring class stays in sync
@@ -106,49 +104,36 @@ export default function SosRaiseButton({ crewId, compact = false, alerting = fal
         </Button>
       )}
 
-      <Dialog.Root open={open} onOpenChange={(o: boolean) => !busy && setOpen(o)}>
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
-          <Dialog.Content {...returnFocus} className="fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2 space-y-4 rounded-2xl border border-border-light bg-bg-card p-5 shadow-2xl data-[state=open]:animate-in data-[state=open]:zoom-in-95">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <Dialog.Title className="flex items-center gap-2 text-base font-bold text-text-primary">
-                  <AlertCircle className="w-5 h-5 text-accent-coral" aria-hidden="true" /> Send an SOS to your crew?
-                </Dialog.Title>
-                <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                  Everyone in this crew gets an alert with your last location so they can find you. Use this for
-                  emergencies.
-                </Dialog.Description>
-              </div>
-              <Dialog.Close asChild>
-                <IconButton label="Close" icon={<X className="w-5 h-5" />} disabled={busy} />
-              </Dialog.Close>
-            </div>
+      <Dialog
+        open={open}
+        onOpenChange={(o) => !busy && setOpen(o)}
+        icon={<AlertCircle className="w-5 h-5 text-accent-coral" aria-hidden="true" />}
+        title="Send an SOS to your crew?"
+        description="Everyone in this crew gets an alert with your last location so they can find you. Use this for emergencies."
+        closeDisabled={busy}
+      >
+        <textarea
+          value={message}
+          onChange={(e) => setMessage(e.target.value)}
+          placeholder="Optional: what's happening? (e.g. 'Lost near Main Stage')"
+          maxLength={280}
+          rows={3}
+          aria-label="Optional SOS message"
+          disabled={busy}
+          className={`${inputBase} resize-none`}
+        />
 
-            <textarea
-              value={message}
-              onChange={(e) => setMessage(e.target.value)}
-              placeholder="Optional: what's happening? (e.g. 'Lost near Main Stage')"
-              maxLength={280}
-              rows={3}
-              aria-label="Optional SOS message"
-              disabled={busy}
-              className={`${inputBase} resize-none`}
-            />
-
-            <div className="flex gap-2">
-              <Dialog.Close asChild>
-                <Button variant="outline" type="button" className="flex-1 min-h-11" disabled={busy}>
-                  Cancel
-                </Button>
-              </Dialog.Close>
-              <Button type="button" variant="danger" onClick={send} isLoading={busy} className="flex-1 min-h-11">
-                {busy ? 'Sending…' : 'Send SOS'}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+        <div className="flex gap-2">
+          <RadixDialog.Close asChild>
+            <Button variant="outline" type="button" className="flex-1 min-h-11" disabled={busy}>
+              Cancel
+            </Button>
+          </RadixDialog.Close>
+          <Button type="button" variant="danger" onClick={send} isLoading={busy} className="flex-1 min-h-11">
+            {busy ? 'Sending…' : 'Send SOS'}
+          </Button>
+        </div>
+      </Dialog>
     </>
   );
 }

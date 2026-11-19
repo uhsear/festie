@@ -16,6 +16,7 @@
 
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { isFestivalOver, timeReleaseCopy } from '../lib/notifications/reengagement.js';
 
 type DayCount = { date: string; label: string; timed: number; total: number };
@@ -53,26 +54,12 @@ export default function createTimeReleasesRoute(deps: any) {
     validate,
     setNoStore,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const router = express.Router();
 
-  async function recordRelease(req: any, res: any, festivalId: string, details: any) {
-    try {
-      await stores.auditLog.insert({
-        id: crypto.randomUUID(),
-        actorType: 'admin',
-        actorId: req.user?.userId,
-        action: AUDIT_ACTIONS.TIMES_RELEASED,
-        targetType: 'festival',
-        targetId: festivalId,
-        detailsJson: JSON.stringify(details),
-        ip: getRequestIp(req),
-      });
-    } catch (err: any) {
-      log.warn('time release audit write failed', { festivalId, error: err?.message });
-    }
-    // Tells the generic audit middleware this request already has its row.
-    res.locals.auditWritten = true;
+  function recordRelease(req: any, res: any, festivalId: string, details: any) {
+    return writeAdminAudit(req, res, { action: AUDIT_ACTIONS.TIMES_RELEASED, targetType: 'festival', targetId: festivalId, details });
   }
 
   router.get('/:id/time-releases', festivalAccess({ action: 'lineup.drop' }), async (req: any, res: any) => {

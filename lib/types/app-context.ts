@@ -24,36 +24,18 @@ import type { FestivalAction } from '../app-context/session';
 import type { ErrorCodes } from '../response';
 import type { schemas } from '../schemas';
 import type { Crew, Profile, User } from './contracts';
+import type { PublicUser } from '../helpers';
 
-/**
- * The public-safe projection of a user emitted by `serializePublicUser`. It is a
- * *subset* of the shared `User` contract — the public API intentionally omits
- * `createdAt`/`updatedAt`/`isAdmin`. Kept assignable to `Partial<User>` so the
- * compile-time contract test can assert structural compatibility.
- */
-export interface PublicUser {
-  id: string;
-  username: string;
-  name: string | null;
-  avatarUrl: string | null;
-  email: string | null;
-  emailVerified: boolean;
-  // Payment handles for settle-up deep links (null when unset).
-  venmoHandle: string | null;
-  cashappCashtag: string | null;
-  paypalHandle: string | null;
-  // Opt-in flag for the public /u/:username share page (false = private).
-  publicSchedule: boolean;
-}
+export type { PublicUser };
 
 /** A Zod-validation middleware factory (validate / validateParams / validateQuery). */
 // `ZodType<any>` is Zod's own variance-correct way to accept any schema; the
 // `any` is the output-type parameter, not a real `any` value.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ValidateFactory = (schema: z.ZodType<any>) => RequestHandler;
+type ValidateFactory = (schema: z.ZodType<any>) => RequestHandler;
 
 /** Response helpers (re-exported from lib/response). */
-export type SendSuccess = <T = unknown>(
+type SendSuccess = <T = unknown>(
   res: Response,
   data: T,
   // `meta` mirrors the runtime `sendSuccess` signature (lib/response.ts), an
@@ -63,7 +45,7 @@ export type SendSuccess = <T = unknown>(
   config?: AppConfig | null,
 ) => Response;
 
-export type SendError = (
+type SendError = (
   res: Response,
   status: number,
   message: string,
@@ -111,7 +93,7 @@ export interface Stores {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any;
   };
-  activity: { log(entry: Record<string, unknown>): Promise<unknown> };
+  activity: { log(entry: Record<string, unknown>): Promise<string> };
   // Other stores (profiles, sessions, deviceTokens, notificationPrefs, …) are
   // accessed dynamically by not-yet-typed call sites. `any` (not `unknown`)
   // because those modules destructure deep methods off them; tighten as each is
@@ -120,13 +102,51 @@ export interface Stores {
   [store: string]: any;
 }
 
+/** Fixed-window counter entry; `start` or `windowStart` holds the window's epoch ms. */
+interface RateLimitEntry {
+  count: number;
+  start?: number;
+  windowStart?: number;
+  [k: string]: unknown;
+}
+
+/** In-process state bag shared through the context (lost on restart, per process). */
+export interface AppState {
+  userTaskQueues: Map<string, Promise<unknown>>;
+  rateLimits: Map<string, RateLimitEntry>;
+  routeRateLimits: Map<string, RateLimitEntry>;
+  authRateLimits: Map<string, RateLimitEntry>;
+  adminAuthRateLimits: Map<string, RateLimitEntry>;
+  socketConnectRateLimits: Map<string, RateLimitEntry>;
+  socketRateLimits: Map<string, RateLimitEntry>;
+  userAuthRateLimits: Map<string, RateLimitEntry>;
+  onlineUsers: Map<string, Map<string, { userId: string; username: string }>>;
+  sseConnections: Map<string, unknown>;
+  timers: NodeJS.Timeout[];
+  stores: Stores;
+  metrics: {
+    totalRequests: number;
+    totalErrors: number;
+    totalDuration: number;
+    requestCount: number;
+    statusCodes: Record<string, number>;
+    socketConnections: number;
+    socketDisconnections: number;
+    socketErrors: number;
+    peakConnections: number;
+    startedAt: string;
+  };
+  // Other modules attach fields lazily (sweepsInFlight, schedulers); they narrow on use.
+  [extra: string]: unknown;
+}
+
 /**
  * An Express-style auth/rate-limit middleware. Aliased to Express's own
  * `RequestHandler` so these can be passed straight to `router.get(...)` etc.
  * without the augmented-Request fields making the handler signature
  * structurally incompatible with Express's overloads.
  */
-export type Middleware = RequestHandler;
+type Middleware = RequestHandler;
 
 /**
  * The application context — dependency-injection surface for every route module
@@ -176,7 +196,7 @@ export interface AppContext {
 }
 
 /** Crew push notifier (lib/notifications/crew-notify.ts). Never throws into a route. */
-export interface CrewNotify {
+interface CrewNotify {
   queue(item: { crewId: string; actorId: string | null; kind: 'member' | 'poll'; text: string }): void;
   now(item: {
     crewId: string;
@@ -199,7 +219,7 @@ export interface CrewNotify {
 }
 
 /** Poll closer (lib/poll-close.ts): shared by the manual end route and the expiry sweep. */
-export interface PollCloser {
+interface PollCloser {
   announce(
     poll: Record<string, unknown>,
     actorId: string | null,
@@ -217,3 +237,9 @@ export type RouteDeps = AppContext & {
   crewNotify?: CrewNotify;
   pollCloser?: PollCloser;
 };
+
+/** Shape of `req.validatedParams` after `validateParams`: path params are strings. */
+export type Params = Record<string, string>;
+
+/** Shape of `req.validatedQuery` after `validateQuery`; Zod coerces some values (for example numbers). */
+export type Query = Record<string, unknown>;

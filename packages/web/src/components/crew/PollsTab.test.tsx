@@ -5,11 +5,14 @@ import PollsTab from './PollsTab';
 
 const { apiGet, closePoll } = vi.hoisted(() => ({ apiGet: vi.fn(), closePoll: vi.fn() }));
 
+vi.mock('@festie/shared/services/api', async (orig) => ({
+  ...(await orig<typeof import('@festie/shared/services/api')>()),
+  api: { get: apiGet, post: vi.fn() },
+}));
 vi.mock('@festie/shared', async (orig) => {
   const actual = await orig<typeof import('@festie/shared')>();
   return {
     ...actual,
-    api: { get: apiGet, post: vi.fn() },
     useCrewStore: Object.assign(
       (sel: (s: Record<string, unknown>) => unknown) => sel({ closePoll, activeCrew: { id: 'c1', festivalId: 'f-crew', members: [] } }),
       { getState: () => ({ meetingPoints: [] }) },

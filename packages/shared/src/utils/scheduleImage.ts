@@ -1,4 +1,5 @@
 import type { FestivalDay, FestivalSet, Priority, Stage } from '../types/domain';
+import { PRIORITY_WEIGHT } from './crewNudges';
 import { artistDisplayName, formatTime } from './format';
 import type { LockscreenMode } from './lockscreen';
 import { byStartTime, formatDayChip } from './scheduleFormat';
@@ -70,7 +71,6 @@ export interface ScheduleImageModel {
 
 const HHMM = /^\d{1,2}:\d{2}$/;
 const COLOR = /^#[0-9a-fA-F]{3,8}$/;
-const RANK: Record<Priority, number> = { must: 3, 'want-to-see': 2, maybe: 1 };
 
 const hasStart = (set: FestivalSet) => HHMM.test(set.startTime ?? '');
 
@@ -97,7 +97,7 @@ export function buildScheduleImageModel(args: {
   const tbaCount = picked.length - timed.length;
   const { maxRows } = SCHEDULE_IMAGE_LAYOUT[format];
   const kept = [...timed]
-    .sort((a, b) => RANK[picks![b.id]!] - RANK[picks![a.id]!] || byStartTime(a, b))
+    .sort((a, b) => PRIORITY_WEIGHT[picks![b.id]!] - PRIORITY_WEIGHT[picks![a.id]!] || byStartTime(a, b))
     .slice(0, maxRows)
     .sort(byStartTime);
   const hiddenCount = timed.length - kept.length;

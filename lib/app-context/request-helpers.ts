@@ -1,7 +1,7 @@
 /**
  * Request helpers — IP resolution, origin allow-listing, CSRF guard.
  *
- * Extracted from `lib/app-context/index.js` during sprint-6. All the
+ * Extracted from `lib/app-context/index.ts` during sprint-6. All the
  * functions in this module are pure-ish: they read the current request
  * and config, and either return a value or call `next()` / `sendError()`.
  * They share NO closures with the rest of the composer, which is why
@@ -9,7 +9,7 @@
  *
  * Notes on behaviour preservation:
  *   - `MUTATING_METHODS`, `TRUSTED_MUTATION_HEADER`, `TRUSTED_MUTATION_VALUE`
- *     are declared here (previously at module top of index.js). They
+ *     are declared here (previously at module top of index.ts). They
  *     remain re-exported on the context object for byte-identical
  *     downstream consumption.
  *   - `getRequestIp` IP-resolution contract (TRUST_PROXY hardening, 2026-06-02):

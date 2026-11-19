@@ -5,13 +5,12 @@ import { Ionicons } from '@expo/vector-icons';
 import { useCrewNudges, usePicks, useFestival } from '@festie/shared/hooks';
 import { useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { artistDisplayName, ensureWhiteContrast } from '@festie/shared/utils';
+import { artistDisplayName, ensureWhiteContrast, goingLabel, addLabel, clusterLabel } from '@festie/shared/utils';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
 import { safeStageColor } from '../lib/stageColor';
-import { goingLabel, addLabel, clusterLabel } from '../lib/crewSuggestion';
 import Avatar from './Avatar';
 import Button from './Button';
 

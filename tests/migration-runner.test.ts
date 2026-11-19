@@ -147,6 +147,17 @@ describe('runPostgresMigrations against Postgres', { skip }, () => {
     assert.equal(after.rowCount, 1);
   });
 
+  test('rebuilds an INVALID index left by a cancelled CREATE INDEX CONCURRENTLY', async () => {
+    const m = (discoverMigrationsOnDisk() as any[]).find((x) => x.version === 33);
+    const valid = "SELECT indisvalid FROM pg_index WHERE indexrelid = 'idx_nts_festival_topic'::regclass";
+    await pool.query("UPDATE pg_index SET indisvalid = false WHERE indexrelid = 'idx_nts_festival_topic'::regclass");
+    await pool.query('DELETE FROM schema_migrations WHERE version = $1', [m.version]);
+    __resetMigrationCacheForTests();
+    const result = await runPostgresMigrations(pool);
+    assert.deepEqual(result.applied, [m.version]);
+    assert.equal((await pool.query(valid)).rows[0].indisvalid, true);
+  });
+
   test('the process-wide flag short-circuits later calls', async () => {
     const result = await runPostgresMigrations(pool);
     assert.deepEqual(result, { applied: [], current: 0, gap: [] });

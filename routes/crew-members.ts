@@ -3,6 +3,7 @@ import { parseJsonObject } from '../lib/db/connection';
 import { logCrewActivity } from '../lib/db/stores/activity';
 import { dropLivePosition } from '../lib/live-location-cache.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 
 export default function createCrewMemberRoutes(deps: any) {
   const {
@@ -25,6 +26,7 @@ export default function createCrewMemberRoutes(deps: any) {
     crewNotify,
     getRequestIp,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const { resolveCrewOwnership, serializeCrewWithMembers } = deps._crewHelpers;
 
@@ -404,32 +406,12 @@ export default function createCrewMemberRoutes(deps: any) {
           return sendError(res, 400, 'Crew is full', ErrorCodes.MAX_LIMIT_REACHED);
         }
 
-        // The member is already added, so a failed audit write is logged, not returned.
-        // auditWritten then stays unset and the generic middleware still records the request.
-        if (stores.auditLog) {
-          try {
-            await stores.auditLog.insert({
-              actorType: 'admin',
-              actorId: req.user.userId,
-              action: AUDIT_ACTIONS.CREW_MEMBER_ADDED,
-              targetType: 'user',
-              targetId: targetUserId,
-              detailsJson: JSON.stringify({
-                crewId: crew.id,
-                crewName: crew.name,
-                targetUsername: targetUser.username,
-              }),
-              ip: getRequestIp(req),
-            });
-            res.locals.auditWritten = true;
-          } catch (err: any) {
-            log.warn('crew admin add member audit write failed', {
-              crewId: crew.id,
-              targetUserId,
-              error: err?.message,
-            });
-          }
-        }
+        await writeAdminAudit(req, res, {
+          action: AUDIT_ACTIONS.CREW_MEMBER_ADDED,
+          targetType: 'user',
+          targetId: targetUserId,
+          details: { crewId: crew.id, crewName: crew.name, targetUsername: targetUser.username },
+        });
 
         const members = await stores.crews.getMembers(crew.id);
 

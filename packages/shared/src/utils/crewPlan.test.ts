@@ -12,6 +12,8 @@ import {
   assignCrewColors,
   formatGapLength,
   crewOwnerInfo,
+  isCrewOwner,
+  memberIsOwner,
   crewFestivalName,
   memberSummary,
 } from './crewPlan';
@@ -252,6 +254,22 @@ describe('formatGapLength and assignCrewColors', () => {
     const c = assignCrewColors(ids);
     expect(new Set(Object.values(c)).size).toBe(9);
     expect(assignCrewColors(ids)).toEqual(c);
+  });
+});
+
+describe('isCrewOwner and memberIsOwner', () => {
+  const crew = { owner: 'u1' };
+  it('owns by crew owner id or by role row', () => {
+    expect(isCrewOwner(crew, [], 'u1')).toBe(true);
+    expect(isCrewOwner({ owner: 'u9' }, [{ userId: 'u2', role: 'owner' }], 'u2')).toBe(true);
+    expect(isCrewOwner(crew, [{ userId: 'u2', role: 'member' }], 'u2')).toBe(false);
+    expect(isCrewOwner(null, [], 'u2')).toBe(false);
+  });
+  it('flags owner rows by role or owner id', () => {
+    expect(memberIsOwner({ userId: 'u2', role: 'owner' }, undefined)).toBe(true);
+    expect(memberIsOwner({ userId: 'u1', role: 'member' }, 'u1')).toBe(true);
+    expect(memberIsOwner({ userId: 'u2', role: 'member' }, 'u1')).toBe(false);
+    expect(memberIsOwner({ userId: 'u2', role: 'member' }, undefined)).toBe(false);
   });
 });
 

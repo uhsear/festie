@@ -31,7 +31,10 @@ function handoverPool({
     committed,
     query: async (sql: string, params: any[]) => {
       if (sql.includes("role = 'owner'")) return { rows: owned.map((crew_id) => ({ crew_id })) };
-      return { rows: (candidates[params[0]] ?? []).map((user_id) => ({ user_id })) };
+      const crewIds: string[] = params[0];
+      return {
+        rows: crewIds.flatMap((crew_id) => (candidates[crew_id] ?? []).map((user_id) => ({ crew_id, user_id }))),
+      };
     },
     connect: async () => {
       let pending: { crewId: string; to: string } | null = null;

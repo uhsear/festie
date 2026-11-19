@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { createContext, useContext, useEffect, useMemo } from 'react';
 import { useQueryClient, type QueryKey } from '@tanstack/react-query';
-import { api } from '@festie/shared/services';
+import { api, registerOfflineQueue, type OfflineQueueBridge } from '@festie/shared/services';
 import { useOfflineQueue } from './useOfflineQueue';
 
 const CREW_LIST_KEYS: Record<string, string[]> = {
@@ -16,16 +16,23 @@ export function queryKeysForSentUrl(url: string): QueryKey[] {
   return (CREW_LIST_KEYS[m[2]!] ?? []).map((key) => [key, m[1]!]);
 }
 
+/** Null until `useOfflineQueueBridge` is mounted above the consumer. */
+export const OfflineQueueContext = createContext<OfflineQueueBridge | null>(null);
+
+export function useOfflineQueueContext(): OfflineQueueBridge | null {
+  return useContext(OfflineQueueContext);
+}
+
 /**
- * Sets up the global `window.__festieQueue` bridge so any component
- * (savePick, RatingButtons, etc.) can queue offline mutations.
+ * Builds the offline-queue bridge: registers it for `api` and returns it for
+ * `OfflineQueueContext.Provider`, so components can queue and drain offline mutations.
  * Also auto-drains the queue on `online` events and on mount.
  */
-export function useOfflineQueueBridge() {
+export function useOfflineQueueBridge(): OfflineQueueBridge {
   const { queueMutation, processQueue } = useOfflineQueue();
   const queryClient = useQueryClient();
 
-  useEffect(() => {
+  const bridge = useMemo(() => {
     // Adapter: api.* helpers take (path, body) not (path, {method, body}).
     const adapter = async (
       url: string,
@@ -48,14 +55,23 @@ export function useOfflineQueueBridge() {
     const onSent = ({ url }: { url: string; method: string }) => {
       for (const queryKey of queryKeysForSentUrl(url)) void queryClient.invalidateQueries({ queryKey });
     };
-    window.__festieQueue = {
+    return {
       queueMutation: queueMutation as (args: unknown) => Promise<unknown>,
       processQueue: () => processQueue(adapter, undefined, onSent),
     };
-    const onOnline = () => { processQueue(adapter, undefined, onSent).catch(() => {}); };
+  }, [queueMutation, processQueue, queryClient]);
+
+  useEffect(() => {
+    const unregister = registerOfflineQueue(bridge);
+    const onOnline = () => { bridge.processQueue().catch(() => {}); };
     window.addEventListener('online', onOnline);
     // Also drain on mount (covers the case where we boot online with queued items)
-    if (navigator.onLine) processQueue(adapter, undefined, onSent).catch(() => {});
-    return () => { window.removeEventListener('online', onOnline); };
-  }, [queueMutation, processQueue, queryClient]);
+    if (navigator.onLine) bridge.processQueue().catch(() => {});
+    return () => {
+      window.removeEventListener('online', onOnline);
+      unregister();
+    };
+  }, [bridge]);
+
+  return bridge;
 }

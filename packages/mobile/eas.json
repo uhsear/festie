@@ -27,6 +27,15 @@
         "simulator": false
       }
     },
+    "staging": {
+      "channel": "staging",
+      "environment": "preview",
+      "autoIncrement": true,
+      "env": {
+        "EAS_USE_CACHE": "1",
+        "EXPO_USE_PRECOMPILED_MODULES": "1"
+      }
+    },
     "production": {
       "channel": "production",
       "environment": "production",
