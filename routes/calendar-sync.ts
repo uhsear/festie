@@ -11,8 +11,7 @@ import { buildVCalendar, buildIcsEventsFromPicks } from '../lib/helpers/ics-buil
 export default function createCalendarSyncRoutes(deps: any) {
   const router = Router();
   const { stores, userAuth, sendSuccess, sendError, ErrorCodes, log, sanitizeIdentifier, config, rateLimit } = deps;
-  const noopLimit = (_req: any, _res: any, next: any) => next();
-  const writeLimit = typeof rateLimit === 'function' ? rateLimit(10, 'calendar-sync') : noopLimit;
+  const writeLimit = rateLimit(10, 'calendar-sync');
 
   // Generate or retrieve calendar sync token
   router.post('/calendar-sync/:festivalId', userAuth, writeLimit, async (req: any, res: any) => {
@@ -49,8 +48,7 @@ export default function createCalendarSyncRoutes(deps: any) {
 export function createCalendarFeedRoute(deps: any) {
   const { stores, log, config, rateLimit } = deps;
   const feedRouter = Router();
-  const noopLimit = (_req: any, _res: any, next: any) => next();
-  const feedLimit = typeof rateLimit === 'function' ? rateLimit(30, 'calendar-feed') : noopLimit;
+  const feedLimit = rateLimit(30, 'calendar-feed');
 
   // Envelope exception (see lib/response.ts).
   // NOTE: This feed route intentionally does NOT use the sendError/sendSuccess

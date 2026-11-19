@@ -38,8 +38,7 @@ export default function createClientMetricsRoutes(deps: any) {
   const { log, rateLimit, promMetrics } = deps;
   const router = Router();
 
-  const noop = (_req: any, _res: any, next: any) => next();
-  const limiter = typeof rateLimit === 'function' ? rateLimit(120, 'web-vitals') : noop;
+  const limiter = rateLimit(120, 'web-vitals');
 
   // Lazily register the web-vitals histogram on the shared registry the first
   // time this route loads. `promMetrics` is the object returned by

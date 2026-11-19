@@ -191,12 +191,12 @@ export default function createCrewMemberRoutes(deps: any) {
     '/:crewId/members/:userId',
     userAuth,
     rateLimit(10, 'crew-kick'),
-    validateParams(schemas.crewIdParams),
+    validateParams(schemas.crewIdUserIdParams),
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId, 100);
-        const targetUserId = sanitizeIdentifier(req.params.userId, 100);
-        if (!crewId || !targetUserId) return sendError(res, 400, 'Invalid IDs', ErrorCodes.INVALID_INPUT);
+        const targetUserId = req.validatedParams.userId;
+        if (!crewId) return sendError(res, 400, 'Invalid IDs', ErrorCodes.INVALID_INPUT);
 
         const resolved = await resolveCrewOwnership(res, crewId, req.user.userId, 'kick members');
         if (!resolved) return;

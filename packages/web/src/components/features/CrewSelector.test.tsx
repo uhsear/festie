@@ -132,9 +132,8 @@ describe('CrewSelector', () => {
     await user.click(screen.getByLabelText('Select crew'));
     const alpha = screen.getByRole('option', { name: /Alpha Crew/ });
     const beta = screen.getByRole('option', { name: /Beta Squad/ });
-    // Opening focuses the first focusable element in the panel.
-    await waitFor(() => expect(document.activeElement).not.toBe(document.body));
-    alpha.focus();
+    // Opening focuses the first option in a requestAnimationFrame. Wait for it, or it can land after the first arrow key and steal focus back.
+    await waitFor(() => expect(alpha).toHaveFocus());
     await user.keyboard('{ArrowDown}');
     expect(beta).toHaveFocus();
     await user.keyboard('{ArrowDown}');

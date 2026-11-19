@@ -160,6 +160,7 @@ export default function LineupImportScreen() {
   }, [festivalId, say]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- loads history once the admin check passes
     if (isAdmin) void loadSide();
   }, [isAdmin, loadSide]);
 

@@ -451,6 +451,30 @@ describe('offlineQueue', () => {
       expect(readPersisted()).toHaveLength(0);
     });
 
+    it('keeps the idempotency key and maybeSent flag across a retry', async () => {
+      seed([makeMutation({ clientId: 'a', idempotencyKey: 'key-1', maybeSent: true })]);
+      vi.mocked(api.put).mockRejectedValueOnce(new ApiClientError('Bad request', 400));
+      await drainQueue();
+      await flush();
+      useUIStore.setState({ offlineMode: true });
+
+      await retryFailed(useUIStore.getState().failedSync[0]!);
+
+      expect(readPersisted()[0]).toMatchObject({ idempotencyKey: 'key-1', maybeSent: true });
+    });
+
+    it('caps persisted failed items and serializes concurrent writes', async () => {
+      for (let i = 0; i < 60; i++) {
+        surfaceFailedSync({ clientId: `c${i}`, label: 'l', method: 'POST', url: '/x', error: 'e', at: i });
+      }
+      await flush();
+      await flush();
+      const list: { clientId: string }[] = JSON.parse(getStorage().getItem(FAILED_KEY) as string);
+      expect(list).toHaveLength(50);
+      expect(list[0]!.clientId).toBe('c10');
+      expect(list[49]!.clientId).toBe('c59');
+    });
+
     it('re-enqueues but does not drain while offline', async () => {
       useUIStore.setState({
         offlineMode: true,
