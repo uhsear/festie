@@ -161,6 +161,57 @@ describe('artist backfill on lineup entries', { skip }, () => {
     assert.equal((await entryOf('fest-wl', 'wl-angerfist')).artists[0].id, anger.id);
   });
 
+  test('a lineup artist saved with no Spotify id takes the Spotify link of an older set with its name', async () => {
+    const spotify = spotifyUrl('F'.repeat(22));
+    await pool.query(`INSERT INTO artists (id, name, name_key, label, spotify_id, links) VALUES ('art-marlo', 'Marlo Vex', 'marlo vex', '', NULL, '{}'::jsonb)`);
+    await pool.query(`UPDATE festivals SET lineup = lineup || $2::jsonb WHERE id = $1`, [
+      'fest-fk',
+      JSON.stringify([{ id: 'fk-marlo', artists: [{ id: 'art-marlo', name: 'Marlo Vex', links: {} }] }]),
+    ]);
+    await set('a-marlo-spotify', 'fest-a', 'Marlo Vex', [{ name: 'Marlo Vex', links: { spotify } }], 2);
+    await set('a-marlo-plain', 'fest-a', 'MARLO VEX', [{ name: 'MARLO VEX', links: {} }], 3);
+
+    const { plan, apply } = await runBackfill(pool, { runId: 'marlo-1' });
+    assert.deepEqual(apply.conflicts, []);
+    assert.deepEqual(plan.report.separateArtists, []);
+    assert.deepEqual(plan.report.needsPick, []);
+    assert.deepEqual(plan.report.rowFills, [{ artistId: 'art-marlo', artist: 'Marlo Vex', spotifyId: 'F'.repeat(22), links: { spotify } }]);
+    const marlo = (await artistRows()).filter((a) => a.name_key === 'marlo vex');
+    assert.equal(marlo.length, 1);
+    assert.equal(marlo[0].spotify_id, 'F'.repeat(22));
+    assert.deepEqual(marlo[0].links, { spotify });
+    for (const id of ['a-marlo-spotify', 'a-marlo-plain']) {
+      const row = (await pool.query('SELECT artists FROM festival_sets WHERE id = $1', [id])).rows[0];
+      assert.deepEqual(row.artists, [{ id: 'art-marlo', name: 'Marlo Vex', links: { spotify } }], id);
+    }
+    const run = (await pool.query(`SELECT before FROM artist_backfill_runs WHERE run_id = 'marlo-1' AND festival_id = 'fest-a'`)).rows[0];
+    assert.deepEqual(run.before.rowFills, [{ artistId: 'art-marlo', spotifyId: 'F'.repeat(22), links: { spotify } }]);
+    // fk-marlo lives in another festival and already held the row's id: its copy follows the filled row.
+    assert.deepEqual((await entryOf('fest-fk', 'fk-marlo')).artists, [{ id: 'art-marlo', name: 'Marlo Vex', links: { spotify } }]);
+    assert.ok(plan.report.copyRefreshes.some((c) => c.festivalId === 'fest-fk' && c.ownerId === 'fk-marlo'));
+    const fkRun = (await pool.query(`SELECT before FROM artist_backfill_runs WHERE run_id = 'marlo-1' AND festival_id = 'fest-fk'`)).rows[0];
+    assert.deepEqual(fkRun.before.lineup.find((e: any) => e.id === 'fk-marlo').artists, [{ id: 'art-marlo', name: 'Marlo Vex', links: {} }]);
+    const verify = await verifyBackfill(pool);
+    assert.equal(verify.ok, true, JSON.stringify(verify.checks));
+    const again = await planBackfill(pool);
+    assert.equal(again.report.counts.artistsToCreate, 0);
+    assert.equal(again.report.counts.ownersToWrite, 0);
+    assert.deepEqual(again.report.rowFills, []);
+  });
+
+  test('two different Spotify ids on the key of a lineup artist stay separate artists', async () => {
+    await pool.query(`INSERT INTO artists (id, name, name_key, label, spotify_id, links) VALUES ('art-marlo', 'Marlo Vex', 'marlo vex', '', NULL, '{}'::jsonb)`);
+    await pool.query(`UPDATE festivals SET lineup = lineup || $2::jsonb WHERE id = $1`, [
+      'fest-fk',
+      JSON.stringify([{ id: 'fk-marlo', artists: [{ id: 'art-marlo', name: 'Marlo Vex', links: {} }] }]),
+    ]);
+    await set('a-marlo-1', 'fest-a', 'Marlo Vex', [{ name: 'Marlo Vex', links: { spotify: spotifyUrl('F'.repeat(22)) } }], 2);
+    await set('a-marlo-2', 'fest-a', 'Marlo Vex', [{ name: 'Marlo Vex', links: { spotify: spotifyUrl('G'.repeat(22)) } }], 3);
+    const { report } = await planBackfill(pool);
+    assert.deepEqual(report.rowFills, []);
+    assert.deepEqual(report.separateArtists.map((s) => [s.key, s.names.length]), [['marlo vex', 3]]);
+  });
+
   test('verify passes and a second dry run reports zero changes', async () => {
     await runBackfill(pool);
     const verify = await verifyBackfill(pool);
