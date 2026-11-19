@@ -56,7 +56,12 @@ describe('main.tsx wiring', { timeout: 30000 }, () => {
 
   it('signs out and notices when refresh fails for a signed-in user', async () => {
     const { useAuthStore, handler } = await loadMain();
-    useAuthStore.setState({ user: user('u1'), refreshToken: vi.fn().mockRejectedValue(new Error('no')) });
+    // The real refreshToken clears the user before rethrowing, so wasSignedIn must be read first.
+    const refreshToken = vi.fn(async () => {
+      useAuthStore.setState({ user: null });
+      throw new Error('no');
+    });
+    useAuthStore.setState({ user: user('u1'), refreshToken });
     await expect(handler()).resolves.toBe(false);
     expect(useAuthStore.getState().user).toBeNull();
     expect(m.noticeSignedOut).toHaveBeenCalledWith(true);
@@ -91,7 +96,14 @@ describe('main.tsx wiring', { timeout: 30000 }, () => {
     const { useAuthStore } = await loadMain();
     useAuthStore.setState({ user: user('u1') });
     useAuthStore.setState({ user: user('u2') });
-    await Promise.resolve();
-    expect(m.clear).toHaveBeenCalled();
+    const unhandled = vi.fn();
+    process.on('unhandledRejection', unhandled);
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    } finally {
+      process.off('unhandledRejection', unhandled);
+    }
+    expect(m.clearOfflineQueue).toHaveBeenCalledTimes(1);
+    expect(unhandled).not.toHaveBeenCalled();
   });
 });
