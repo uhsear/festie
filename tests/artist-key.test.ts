@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
-import { artistNameKey, shownSetName } from '../lib/artist-key';
+import { artistNameKey, shownSetName, stripSetTag } from '../lib/artist-key';
 import { lineupNameKey } from '../lib/lineup';
 
 // The key depends on the Node ICU and Unicode version, so this table pins it: a drift fails CI.
@@ -59,6 +59,23 @@ describe('artistNameKey', () => {
     assert.equal(artistNameKey('The Chainsmokers'), 'the chainsmokers');
     assert.equal(lineupNameKey('The Chainsmokers'), 'chainsmokers');
     assert.notEqual(artistNameKey('The Chainsmokers'), artistNameKey('Chainsmokers'));
+  });
+});
+
+describe('stripSetTag', () => {
+  test('removes one trailing set tag', () => {
+    assert.equal(stripSetTag('Quill Harbor (Sunset Set)'), 'Quill Harbor');
+    assert.equal(stripSetTag('Quill Harbor (DJ Set)'), 'Quill Harbor');
+    assert.equal(stripSetTag('Quill Harbor (live)'), 'Quill Harbor');
+    assert.equal(stripSetTag('Quill Harbor (Closing Set)  '), 'Quill Harbor');
+    assert.equal(stripSetTag('Quill Harbor (UK) (Live)'), 'Quill Harbor (UK)');
+    assert.equal(stripSetTag('Quill Harbor (Live) (Live)'), 'Quill Harbor (Live)');
+  });
+
+  test('keeps other parentheses, a tag that is not trailing, and a name that is only a tag', () => {
+    for (const name of ['Quill Harbor (UK)', 'Quill Harbor (BR)', 'Night Shift (MARLO b2b TESSEN)', 'Quill Harbor (Sunset)', 'Quill (Live) Harbor', 'Quill Harbor (Offset)', '(Live)']) {
+      assert.equal(stripSetTag(name), name);
+    }
   });
 });
 
