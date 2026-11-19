@@ -73,14 +73,7 @@ export function sendSuccess<T = unknown>(
 ) {
   const body: Record<string, any> = { data, error: null };
   if (meta && Object.keys(meta).length > 0) {
-    const keys = Object.keys(meta);
-    if (keys.length > 10) {
-      const trimmed: Record<string, any> = {};
-      for (let i = 0; i < 10; i++) trimmed[keys[i]!] = meta[keys[i]!];
-      body.meta = trimmed;
-    } else {
-      body.meta = meta;
-    }
+    body.meta = meta;
   }
   if (config?.API_VERSION) {
     res.setHeader('X-API-Version', config.API_VERSION);

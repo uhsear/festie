@@ -174,9 +174,10 @@ async function startServer() {
     DATABASE_URL: databaseUrl,
     PUBLIC_DIR,
     NODE_ENV: 'test',
-    // Redis is optional for the functional suite; disable so a missing/locked
-    // Redis can't fail server boot (presence/rate-limit fall back to memory).
-    REDIS_ENABLED: 'false',
+    // Redis runs only when REDIS_URL is set (CI provides a service), so the Redis
+    // paths get end-to-end coverage. Without it, a missing/locked local Redis
+    // can't fail server boot (presence/rate-limit fall back to memory).
+    REDIS_ENABLED: process.env.REDIS_URL ? 'true' : 'false',
     PUBLIC_ORIGIN: '',
   });
 

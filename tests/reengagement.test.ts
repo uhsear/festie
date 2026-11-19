@@ -267,11 +267,15 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
   });
 
   describe('email', () => {
-    // RESEND_API_KEY is unset, so sendEmail logs 'email:skip' (and sends nothing).
-    // That log line shows which addresses the fan-out reached.
+    // sendEmail does not log recipients (PII), so a dummy API key plus a stubbed fetch
+    // records which addresses the fan-out reached. Nothing leaves the process.
+    let runs = 0;
     async function run(prefs: any, { postal = '1 Main St, Town', followers = ['p1'], prior = [] as string[], unverified = [] as string[] } = {}) {
       const skips: any[] = [];
-      const emailLog = { ...log, warn: (msg: string, meta: any) => { if (msg === 'email:skip') skips.push(meta); } };
+      const fetchMock = mock.method(globalThis, 'fetch', async (_url: any, init: any) => {
+        skips.push({ to: JSON.parse(init.body).to[0] });
+        return new Response(JSON.stringify({ id: 'e1' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+      });
       const users = new Map(
         [...followers, ...prior].map((id) => [id, { email: `${id}@example.com`, emailVerifiedAt: unverified.includes(id) ? null : '2026-01-01T00:00:00.000Z', username: id }] as const),
       );
@@ -280,11 +284,16 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
         notificationPrefs: { get: async () => prefs },
         notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {} },
       };
-      const pool = mockPool('North Coast', { followers, prior });
-      const cfg = { ...config, RESEND_API_KEY: '', EMAIL_POSTAL_ADDRESS: postal };
-      const triggers = createReengagementTriggers({ stores, config: cfg, log: emailLog, pool });
-      await triggers.sendLineupDrop('fest-2027');
-      return { skips, dry: await triggers.countLineupDrop('fest-2027') };
+      // A fresh festival name per run: sendEmail's 5-minute dedupe is module state, and real sends now record into it.
+      const pool = mockPool(`North Coast ${++runs}`, { followers, prior });
+      const cfg = { ...config, RESEND_API_KEY: 're_test', EMAIL_POSTAL_ADDRESS: postal };
+      try {
+        const triggers = createReengagementTriggers({ stores, config: cfg, log, pool });
+        await triggers.sendLineupDrop('fest-2027');
+        return { skips, dry: await triggers.countLineupDrop('fest-2027') };
+      } finally {
+        fetchMock.mock.restore();
+      }
     }
 
     it('sends no email when lineupDrops is off', async () => {

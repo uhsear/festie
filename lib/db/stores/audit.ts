@@ -1,5 +1,6 @@
 import { randomUUID } from 'crypto';
 import type { Pool } from 'pg';
+import { decodeTimeIdCursor, encodeTimeIdCursor } from '../../pagination';
 
 const ROW_COLUMNS = `
   id,
@@ -93,13 +94,9 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       // single-column id sort/cursor scrambled history. A stale pre-fix cursor
       // (bare id, no '|') has no createdAt half and is dropped, so callers
       // holding one just restart from page 1 instead of crashing the cast.
-      let cursorCreatedAt: string | null = null;
-      let cursorId: string | null = null;
-      if (typeof cursor === 'string' && cursor.includes('|')) {
-        const sep = cursor.indexOf('|');
-        cursorCreatedAt = cursor.slice(0, sep) || null;
-        cursorId = cursor.slice(sep + 1) || null;
-      }
+      const decoded = decodeTimeIdCursor(cursor);
+      const cursorCreatedAt = decoded?.createdAt ?? null;
+      const cursorId = decoded?.id ?? null;
 
       const params: any[] = [
         actorId || null,
@@ -137,7 +134,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       const rows = result.rows.map(withDetails);
 
       const nextCursor = rows.length === finalLimit
-        ? `${new Date(rows[rows.length - 1].createdAt).toISOString()}|${rows[rows.length - 1].id}`
+        ? encodeTimeIdCursor(rows[rows.length - 1].createdAt, rows[rows.length - 1].id)
         : null;
 
       return { rows, nextCursor };

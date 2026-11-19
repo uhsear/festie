@@ -23,9 +23,7 @@ set -euo pipefail
 #   5. Takes the shared $BACKUP_DIR/.backup.lock (same as backup-pg.sh). Waits
 #      BACKUP_LOCK_WAIT seconds (default 120; 0 = do not wait), then exits 75.
 #
-# This is a SUPPLEMENT to the on-host 6-hourly pg backups (backup-pg.sh). The
-# rsync-based scripts/backup-offsite.sh is unused (exits 3 without OFFSITE_TARGET).
-# This git path is the working off-site copy.
+# This is a SUPPLEMENT to the on-host 6-hourly pg backups (backup-pg.sh). This git path is the working off-site copy.
 #
 # CONFIG (in ../.env):
 #   BACKUP_GPG_PASSPHRASE   strong random passphrase (generated, stored once)

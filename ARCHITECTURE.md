@@ -231,7 +231,7 @@ React 19 SPA with file-based routing via TanStack Router. Built with Vite 8 and 
 
 ### PWA
 
-Workbox service worker for offline support. localStorage snapshots of festival and profile data are updated on every state change. The app has no chat, so no messages are cached. An offline queue replays eligible writes when connectivity is restored: join-by-code, crew meeting points, polls, packing, rides, expenses, home base, reminders, status, days, and caught marks. The full list is `OFFLINE_ELIGIBLE_PATTERNS` in `packages/shared/src/services/api.ts`.
+Workbox service worker for offline support. localStorage snapshots of festival and profile data are updated on every state change. The app has no chat, so no messages are cached. An offline queue replays eligible writes when connectivity is restored: join-by-code, crew meeting points, polls, packing, rides, expenses, home base, reminders, status, days, and caught marks. The full list is `OFFLINE_ELIGIBLE_PATTERNS` in `packages/shared/src/services/api.ts`. The queue is not web-only: see [Offline queue replay](#offline-queue-replay).
 
 ---
 
@@ -279,6 +279,49 @@ About 48 React hooks in `packages/shared/src/hooks/` bridge Zustand stores and s
 PostgreSQL 16 with connection pooling (pg, min 2 / max 20). 94 SQL files in `migrations/`, numbered from `004_postgresql_baseline.sql` through `112_artists_merge_refs.sql` with gaps. The app applies them at boot and they follow an additive, idempotent convention.
 
 Key tables: `users`, `user_sessions`, `festivals`, `festival_stages`, `festival_days`, `festival_sets`, `festival_profiles`, `crews`, `crew_members`, `crew_activity`, `crew_polls`, `crew_expenses`, `device_tokens`, `audit_log`, `user_roles`.
+
+---
+
+## Subsystem Map
+
+Where to start reading when one of these features misbehaves.
+
+### Expense settle-up
+
+- `GET /crews/:crewId/expenses/settlement-plan` in `routes/expenses.ts` reads each member's balance in integer cents from `getBalancesCents` in `lib/db/stores/expenses.ts`.
+- `simplifyDebts` in the same store is a pure greedy function. It matches the largest creditor with the largest debtor, so N members need at most N-1 transfers. It ignores any transfer of 1 cent or less.
+- The route adds only the payee's payment handles to each transfer.
+- A recorded payment is an expense with category `settlement`. `packages/shared/src/utils/money.ts` (`isSettlement`, `spendingExpenses`) keeps it out of spending totals.
+- `packages/shared/src/utils/expenseSplit.ts` builds shares on the client in cents, with the same rounding as the server ledger.
+
+### Lineup import
+
+- Clients parse CSV, TSV or pasted names (`packages/shared/src/utils/lineupPaste.ts` and the lineup import utils) and post JSON rows. The server never sees the file.
+- `routes/lineup-import.ts` has a preview route and a commit route. Both call `planLineupImport` in `lib/lineup-import-plan.ts`, a pure planner. Commit runs it again inside the write transaction (`lib/db/stores/lineup-imports.ts`), so the write matches the locked festival.
+- Imports never delete. A field a row leaves out is untouched, and an empty string in a mapped field clears the value.
+- A row with names but no day, stage or time is an announced row. It goes into `festivals.lineup`, whose key and cover rules live in `lib/lineup.ts`.
+- Each commit is recorded, and the history route can undo it.
+- Admin screens: `packages/web/src/components/admin/LineupImport.tsx` and `packages/mobile/app/admin/lineup-import.tsx`, both calling `lineupImportApi` from `@festie/shared`.
+
+### Announcement delivery
+
+- An admin creates an announcement through `routes/festival-announcements.ts`. The row waits in `festival_announcements` until its `sendAt`.
+- `deliverDue()` in `lib/announcements.ts` expires late rows, claims due rows and pushes each one to everyone who joined the festival. `claimDue` uses SKIP LOCKED, so a row goes out once. An announcement for a deleted or unpublished (draft) festival is claimed but sent to nobody, and gets recipient count 0.
+- Two callers run it: the 60-second sweep in `lib/shutdown.ts` and the create route, for a send-now announcement.
+- If a push never arrives, check the `announcements` job run metric, then the delivery log lines.
+
+### Offline queue replay
+
+- Web queues writes in `window.__festieQueue`. Mobile and any host without it use `packages/shared/src/services/offlineQueue.ts`, which persists to the storage adapter that `packages/mobile/bootstrap.ts` configures (AsyncStorage).
+- Replay is oldest-first. `drainQueue` runs from `packages/mobile/components/OfflineBanner.tsx` on a NetInfo change, on app foreground, and on a backoff timer while writes stay pending. `markOnlineAndDrain` in `packages/shared/src/services/api.ts` also drains it when a successful request shows the app is back online.
+- Entries older than 24 hours are dropped. A transient failure retries up to 5 times. A permanent 4xx moves the entry to `uiStore.failedSync` for the user to retry or dismiss.
+- SOS routes are never queued. They are online-only (see the comment in `api.ts`).
+
+### Set status
+
+- `getSetStatus` in `packages/shared/src/utils/setStatus.ts` returns `tba`, `live`, `soon` (30 minutes or less), `upcoming` (up to 2 hours), `later` or `past`. It is pure: the caller passes `now`.
+- A start before 06:00 belongs to the previous festival day, and `getSetTimeBounds` handles the rollover. With a festival time zone, bounds are absolute epoch milliseconds, so `now` must be a real `Date`.
+- Web and mobile consume it through `useSetStatus` (`packages/web/src/hooks/useSetStatus.ts`, `packages/mobile/hooks/useSetStatus.ts`). Fix wrong live or past badges in the shared function, not in the hooks.
 
 ---
 

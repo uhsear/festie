@@ -43,6 +43,7 @@ export default function CrewSwitcherSheet({ visible, onClose, initialMode = 'lis
   // Every open starts fresh in the requested mode.
   useEffect(() => {
     if (!visible) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- every open resets the form
     setMode(initialMode);
     setCode('');
     setCodeError(null);

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { describe, it, afterEach } from 'node:test';
 
 import { ANDROID_APP_SIGNING_CERTS, DEFAULTS, loadConfig } from '../lib/config.js';
@@ -273,6 +275,15 @@ describe('config: string fields', () => {
   it('has an APP_VERSION field', () => {
     const config = loadConfig({ PUBLIC_ORIGIN: '' });
     assert.equal(typeof config.APP_VERSION, 'string');
+  });
+
+  // tsx never sees the esbuild define, so only the built bundle proves APP_VERSION is baked in.
+  it('bakes the package.json version into dist/server.js at build time', () => {
+    const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+    execFileSync(process.execPath, ['scripts/build.mjs'], { stdio: 'pipe' });
+    const bundle = readFileSync('dist/server.js', 'utf8');
+    assert.ok(!bundle.includes('__APP_VERSION__'), 'define did not replace __APP_VERSION__');
+    assert.match(bundle, new RegExp(`const APP_VERSION = true [?] ${JSON.stringify(version)}`));
   });
 });
 

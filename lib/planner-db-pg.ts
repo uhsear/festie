@@ -47,15 +47,12 @@
  * from this Postgres runner and why the two must not be confused.
  */
 
+import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
 import { splitSqlStatements, usesConcurrently } from './db/sql-split.js';
-import {
-  createStores,
-  createDbLatencyTracker,
-  openPlannerDatabase as openPlannerDatabaseRaw,
-} from './db/index.js';
+import { createStores, createDbLatencyTracker, openPlannerDatabase as openPlannerDatabaseRaw } from './db/index.js';
 
 // ── Migration runner ─────────────────────────────────────────────────────
 
@@ -124,6 +121,16 @@ function discoverMigrationsOnDisk() {
     });
   }
   entries.sort((a: any, b: any) => (a.sortKey < b.sortKey ? -1 : a.sortKey > b.sortKey ? 1 : 0));
+  // The ledger's primary key is the integer version, so two files sharing one
+  // version (NNN_ and NNNb_) cannot both be recorded; the second would be
+  // skipped as already applied. Refuse them at boot instead.
+  for (let i = 1; i < entries.length; i++) {
+    if (entries[i].version === entries[i - 1].version) {
+      throw new Error(
+        `migrations ${entries[i - 1].file} and ${entries[i].file} share version ${entries[i].version}; the ledger keys on the integer version, so give each file a unique number`,
+      );
+    }
+  }
   return entries;
 }
 
@@ -149,6 +156,49 @@ async function ensureSchemaMigrationsTable(client: any) {
   await client.query(
     'ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS applied_at TIMESTAMPTZ NOT NULL DEFAULT now()',
   );
+  // sha256 of the file body at apply time. NULL on rows recorded before this
+  // column existed; those are backfilled on the next boot.
+  await client.query('ALTER TABLE schema_migrations ADD COLUMN IF NOT EXISTS checksum TEXT');
+}
+
+function checksumOf(fullPath: string) {
+  return createHash('sha256').update(fs.readFileSync(fullPath)).digest('hex');
+}
+
+/**
+ * Refuse to boot when an applied migration's file body changed. Backfills the
+ * checksum of legacy rows that have none. An unapplied migration numbered below
+ * the newest applied one only WARNs: databases whose ledger has gaps (self-
+ * recording migrations, or files applied outside the runner, as in CI's psql
+ * loop) always look like this, and a throw would crash-loop the boot. The
+ * runner still applies it, forward, in order; migrations are idempotent.
+ */
+async function verifyLedger(client: any, onDisk: any[], applied: Set<number>, log: any) {
+  const res = await client.query('SELECT version, checksum FROM schema_migrations');
+  const recorded = new Map<number, string | null>(res.rows.map((r: any) => [Number(r.version), r.checksum]));
+  for (const m of onDisk) {
+    if (!recorded.has(m.version)) continue;
+    const sum = checksumOf(m.fullPath);
+    const stored = recorded.get(m.version);
+    if (stored == null) {
+      await client.query('UPDATE schema_migrations SET checksum = $1 WHERE version = $2 AND checksum IS NULL', [
+        sum,
+        m.version,
+      ]);
+    } else if (stored !== sum) {
+      throw new Error(
+        `migration ${m.file} was edited after it was applied (recorded checksum ${stored}, file ${sum}); never edit an applied migration, add a new one`,
+      );
+    }
+  }
+  const newest = applied.size ? Math.max(...applied) : 0;
+  const late = onDisk.filter((m: any) => !applied.has(m.version) && m.version < newest);
+  if (late.length > 0) {
+    log('warn', 'unapplied migration(s) are numbered below the newest applied version; applying them now', {
+      newestApplied: newest,
+      files: late.map((m: any) => m.file),
+    });
+  }
 }
 
 /**
@@ -166,6 +216,17 @@ async function loadAppliedVersions(client: any) {
   }
   return out;
 }
+
+// A migration that self-records its row leaves checksum NULL; fill it in.
+const RECORD_MIGRATION_SQL = `
+  INSERT INTO
+    schema_migrations (version, name, applied_at, checksum)
+  VALUES
+    ($1, $2, now(), $3)
+  ON CONFLICT (version) DO UPDATE
+  SET
+    checksum = COALESCE(schema_migrations.checksum, EXCLUDED.checksum)
+`;
 
 /**
  * Apply one migration + record it in a SINGLE transaction. Any error
@@ -203,10 +264,7 @@ async function applyOneMigration(client: any, migration: any, log: any) {
       }
       // Some CONCURRENTLY migrations self-record their row; ON CONFLICT keeps
       // this bookkeeping INSERT a harmless no-op in that case.
-      await client.query(
-        'INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, now()) ON CONFLICT (version) DO NOTHING',
-        [version, file],
-      );
+      await client.query(RECORD_MIGRATION_SQL, [version, file, checksumOf(fullPath)]);
       const durationConc = Date.now() - started;
       log('info', 'migration applied (non-transactional / CONCURRENTLY)', { version, file, durationMs: durationConc });
       return true;
@@ -234,10 +292,7 @@ async function applyOneMigration(client: any, migration: any, log: any) {
     // Record the row in the SAME transaction. ON CONFLICT DO NOTHING so a
     // migration that self-records its own row (some do) doesn't cause a PK
     // collision that rolls the whole apply back.
-    await client.query(
-      'INSERT INTO schema_migrations (version, name, applied_at) VALUES ($1, $2, now()) ON CONFLICT (version) DO NOTHING',
-      [version, file],
-    );
+    await client.query(RECORD_MIGRATION_SQL, [version, file, checksumOf(fullPath)]);
 
     await client.query('COMMIT');
     const durationMs = Date.now() - started;
@@ -339,6 +394,7 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
         return { applied: [], current, gap: [] };
       }
 
+      await verifyLedger(client, onDisk, applied, log);
       const pending = onDisk.filter((m: any) => !applied.has(m.version));
       const appliedVersions: number[] = [];
 
@@ -396,7 +452,9 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
     const resetFailure = await client.query('RESET statement_timeout').then(
       () => undefined,
       (resetErr: any) => {
-        log('warn', 'failed to restore statement_timeout; discarding connection', { error: resetErr && resetErr.message });
+        log('warn', 'failed to restore statement_timeout; discarding connection', {
+          error: resetErr && resetErr.message,
+        });
         return resetErr;
       },
     );
