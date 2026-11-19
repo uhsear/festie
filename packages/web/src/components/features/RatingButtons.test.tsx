@@ -2,10 +2,10 @@ import { describe, it, expect, vi } from 'vitest';
 import type { ComponentProps } from 'react';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithQueryClient } from '../../test-utils';
-import { api } from '@festie/shared/services';
+import { api } from '@festie/shared/services/api';
 import RatingButtons from './RatingButtons';
 
-vi.mock('@festie/shared/services', () => ({
+vi.mock('@festie/shared/services/api', () => ({
   api: {
     get: vi.fn(async () => ({ ratings: [{ setId: 's1', rating: 5 }] })),
     post: vi.fn(),

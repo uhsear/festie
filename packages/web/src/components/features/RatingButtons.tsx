@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@festie/shared/services';
+import { fetchFestivalRatings, rateSet, clearSetRating } from '@festie/shared/services';
 import { ratingCaption } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import { useHaptics } from '../../hooks/useHaptics';
@@ -39,10 +39,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
 
   const { data: ratings = [] } = useQuery<Rating[]>({
     queryKey: ['ratings', festivalId],
-    queryFn: async () => {
-      const res = await api.get<{ ratings: Rating[] }>(`/ratings/festival/${festivalId}`);
-      return Array.isArray(res) ? res : res?.ratings || [];
-    },
+    queryFn: () => fetchFestivalRatings(festivalId),
     enabled: !!festivalId,
     staleTime: 60_000,
   });
@@ -56,7 +53,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
   // TanStack Query's optimistic cache update applies instantly either way.
   const rate = useMutation({
     mutationFn: ({ rating, note }: { rating: number; note?: string }) =>
-      api.post(`/ratings/${setId}`, { rating, ...(note !== undefined ? { note } : {}) }, { clientId: `rate-${setId}` }),
+      rateSet(setId, rating, note),
     onMutate: async ({ rating, note }) => {
       // Optimistic: update the ratings query cache so the UI responds instantly.
       await qc.cancelQueries({ queryKey: ['ratings', festivalId] });
@@ -74,7 +71,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
   });
 
   const remove = useMutation({
-    mutationFn: () => api.delete(`/ratings/${setId}`, { clientId: `rate-${setId}` }),
+    mutationFn: () => clearSetRating(setId),
     onMutate: async () => {
       await qc.cancelQueries({ queryKey: ['ratings', festivalId] });
       const prev = qc.getQueryData<Rating[]>(['ratings', festivalId]) || [];

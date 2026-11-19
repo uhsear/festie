@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, ApiClientError, mapErrorToUserMessage } from '@festie/shared/services/api';
+import { ApiClientError, mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   bulkArchiveFestivals,
   describeRemovals,
@@ -15,7 +15,13 @@ import {
   restoreFestival,
 } from '@festie/shared/services/festivalAdmin';
 import { getLineupInterest, getSetEngagement, type LineupInterestCounts, type SetEngagementMap } from '@festie/shared/services';
-import type { AdminFestivalDetail, ArchivedFestival } from '@festie/shared/services/festivalAdmin';
+import {
+  updateAdminFestival,
+  createAdminFestival,
+  deleteAdminFestival,
+  type AdminFestivalDetail,
+  type ArchivedFestival,
+} from '@festie/shared/services/festivalAdmin';
 import type { EditableFestival, FestivalIssue } from '@festie/shared/utils';
 import {
   bulkConfirmCopy,
@@ -247,14 +253,15 @@ export default function AdminFestivals() {
     setSaving(true);
     try {
       if (festivalId) {
-        const res = await api.put<{ scheduleNotice?: ScheduleNotice; venueGuessed?: boolean } | undefined>(
-          `/admin/festivals/${festivalId}`,
-          { ...festivalBody(), expectedUpdatedAt: formData.updatedAt, notify: notifyPickers },
-        );
+        const res = await updateAdminFestival(festivalId, {
+          ...festivalBody(),
+          expectedUpdatedAt: formData.updatedAt,
+          notify: notifyPickers,
+        });
         setVenueGuessedFor(res?.venueGuessed ? festivalId : null);
         await afterEditSave(res?.scheduleNotice);
       } else {
-        const created = await api.post<{ id?: string; venueGuessed?: boolean }>('/admin/festivals', formData);
+        const created = await createAdminFestival(formData);
         setVenueGuessedFor(created?.venueGuessed && created.id ? created.id : null);
         toast('Festival created as a draft. Only admins can see it.', 'success');
         await refreshAdmin();
@@ -280,7 +287,7 @@ export default function AdminFestivals() {
     setRemovalBusy(true);
     try {
       const done = await withReauth(async () => {
-        const res = await api.put<{ scheduleNotice?: ScheduleNotice } | undefined>(`/admin/festivals/${festivalId}`, {
+        const res = await updateAdminFestival(festivalId, {
           ...festivalBody(),
           expectedUpdatedAt: formData.updatedAt,
           confirmRemovals: true,
@@ -317,7 +324,7 @@ export default function AdminFestivals() {
     setDeleteBusy(true);
     try {
       const done = await withReauth(async () => {
-        await api.delete<void>(`/admin/festivals/${id}`);
+        await deleteAdminFestival(id);
         return true;
       }, askPassword, { retryWrongPassword: true });
       if (done === null) return;

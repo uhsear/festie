@@ -4,6 +4,8 @@ export * from './offlineQueue';
 export * from './admin';
 export * from './sos';
 export * from './meetingPoints';
+export * from './crewPolls';
+export * from './crewExpenses';
 export * from './sharing';
 export * from './lineupImport';
 export * from './timeReleases';

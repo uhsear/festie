@@ -1,7 +1,9 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  api,
+  createMeetingPoint,
+  updateMeetingPoint,
+  deleteMeetingPoint,
   meetAtFromWallInput,
   meetAtToWallInput,
   resolveFestivalTimeZone,
@@ -12,6 +14,7 @@ import {
   meetingPointDirectionsUrl,
 } from '@festie/shared';
 import type { CrewMeetingPoint } from '@festie/shared/types';
+import type { MeetingPointPayload } from '@festie/shared/services';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { meetingPointPrefill, type MapPlace } from '@festie/shared/utils';
@@ -48,17 +51,6 @@ const CrewMap = lazy(() => import('./CrewMap'));
 // How often we sweep stale peers off the map while it's mounted (defense in
 // depth alongside the server's 120s Redis TTL + peer-stopped broadcasts).
 const SWEEP_INTERVAL_MS = 15_000;
-
-interface MeetingPointPayload {
-  label: string;
-  location: string;
-  type: string;
-  meetAt?: string | null;
-  stageReference?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  recursDaily?: boolean;
-}
 
 interface Props {
   crewId: string;
@@ -162,7 +154,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   const { current, past } = splitMeetingPoints(points, pastPoints, nowMs);
 
   const createPoint = useMutation({
-    mutationFn: (payload: MeetingPointPayload) => api.post(`/crews/${crewId}/meeting-points`, payload),
+    mutationFn: (payload: MeetingPointPayload) => createMeetingPoint(crewId, payload),
     onSuccess: (result, payload) => {
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {
@@ -195,7 +187,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
   const updatePoint = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: Partial<MeetingPointPayload> }) =>
-      api.put(`/crews/${crewId}/meeting-points/${id}`, payload),
+      updateMeetingPoint(crewId, id, payload),
     onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ['meeting-points', crewId] });
       const outcome = writeOutcomeOf(result);
@@ -206,7 +198,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   });
 
   const { hiddenIds, remove: removePoint } = useUndoableRemove(async (id) => {
-    const result = await api.delete(`/crews/${crewId}/meeting-points/${id}`);
+    const result = await deleteMeetingPoint(crewId, id);
     const outcome = writeOutcomeOf(result);
     if (outcome === 'queued') {
       qc.setQueryData<CrewMeetingPoint[]>(['meeting-points', crewId], (old = []) => old.filter((p) => p.id !== id));
