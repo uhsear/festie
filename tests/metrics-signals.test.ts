@@ -3,12 +3,17 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, mock, after } from 'node:test';
+import net from 'node:net';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import express from 'express';
 import request from 'supertest';
 
-import { createMetrics, metricsHandler, recordJobRun } from '../lib/metrics.js';
+import { createMetrics, metricsHandler, recordJobRun, startMetricsListener } from '../lib/metrics.js';
 import { createRateLimiters } from '../lib/rate-limiting.js';
 import { createBackgroundTasks } from '../lib/shutdown.js';
+
+const execFileAsync = promisify(execFile);
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -125,5 +130,33 @@ describe('metrics: no dead metric', () => {
       (n) => !ALLOWED_UNUSED.has(n) && !new RegExp(`\\b${n}\\??\\.(?:inc|observe|set|startTimer)\\(`).test(code),
     );
     assert.deepEqual(dead, [], `registered metrics with no .inc/.observe/.set/.startTimer call site: ${dead.join(', ')}`);
+  });
+});
+
+describe('metrics: startMetricsListener port clash', () => {
+  it('logs the clash with port and workerId and leaves the other holder in place', async () => {
+    const holder = net.createServer();
+    await new Promise<void>((resolve) => holder.listen(0, '127.0.0.1', resolve));
+    const { port } = holder.address() as net.AddressInfo;
+    // Child process in production mode: pino then writes plain JSON lines to stdout, which the parent can read.
+    const script = `
+      const { createMetrics, startMetricsListener } = await import('./lib/metrics.ts');
+      const stop = startMetricsListener(createMetrics(), { basePort: ${port - 3}, workerId: 3 });
+      await new Promise((r) => setTimeout(r, 300));
+      await stop();`;
+    try {
+      const { stdout } = await execFileAsync(
+        process.execPath,
+        ['--import', 'tsx/esm', '--input-type=module', '-e', script],
+        { cwd: ROOT, env: { ...process.env, NODE_ENV: 'production' } },
+      );
+      const entry = stdout.split(/\r?\n/).filter(Boolean).map((l) => JSON.parse(l)).find((o) => o.scope === 'metrics' && o.level === 'error');
+      assert.ok(entry, `no metrics error line in: ${stdout}`);
+      assert.match(entry.msg, /port in use/);
+      assert.equal(entry.port, port);
+      assert.equal(entry.workerId, 3);
+    } finally {
+      await new Promise((resolve) => holder.close(resolve));
+    }
   });
 });

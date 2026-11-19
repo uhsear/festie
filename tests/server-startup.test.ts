@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import net from 'node:net';
 import { describe, it } from 'node:test';
 
 import { isMissingTableError, validateStartupConfig } from '../server.js';
@@ -225,5 +226,16 @@ describe('isMissingTableError', () => {
     assert.equal(isMissingTableError(null), false);
     assert.equal(isMissingTableError(undefined), false);
     assert.equal(isMissingTableError({}), false);
+  });
+});
+
+describe('importing server.ts', () => {
+  it('does not bind the metrics scrape port', async () => {
+    const probe = net.createServer();
+    await new Promise<void>((resolve, reject) => {
+      probe.once('error', reject);
+      probe.listen({ port: 9400, host: '127.0.0.1', exclusive: true }, resolve);
+    });
+    await new Promise((resolve) => probe.close(resolve));
   });
 });
