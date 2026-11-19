@@ -5,6 +5,19 @@ import type { SosEntry } from '../types';
 
 export type SosPosition = NonNullable<SosEntry['position']>;
 
+/** Maps a browser geolocation fix to the SOS wire position. */
+export function toSosPosition(pos: {
+  coords: { latitude: number; longitude: number; accuracy?: number | null };
+  timestamp: number;
+}): SosPosition {
+  return {
+    lat: pos.coords.latitude,
+    lng: pos.coords.longitude,
+    accuracy: pos.coords.accuracy ?? undefined,
+    capturedAt: new Date(pos.timestamp).toISOString(),
+  };
+}
+
 /** Raise an SOS for the crew. Online-only: never queued offline. */
 export function raiseSos(crewId: string, body: { message?: string; position?: SosPosition }): Promise<unknown> {
   return api.post(`/crews/${crewId}/sos`, body);
