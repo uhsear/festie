@@ -10,25 +10,21 @@
  */
 
 import { Router } from 'express';
-
-const ALLOWED_EVENTS = new Set(['shown', 'accepted', 'dismissed', 'native_fired', 'inapp_blocked']);
-const ALLOWED_PLATFORMS = new Set(['ios', 'android', 'desktop']);
+import { installEventSchema, validate } from '../lib/schemas.js';
 
 export default function createAnalyticsInstallRoutes(deps: any) {
-  const { log, stores, rateLimit, sendError, ErrorCodes } = deps;
+  const { log, stores, rateLimit } = deps;
   const router = Router();
 
   const limiter = rateLimit(60, 'install-analytics');
 
-  router.post('/install', limiter, async (req: any, res: any) => {
+  router.post('/install', limiter, validate(installEventSchema), async (req: any, res: any) => {
     try {
-      const { platform, event, reason, engagement_ms } = req.body || {};
-      if (!ALLOWED_PLATFORMS.has(platform)) return sendError(res, 400, 'Invalid platform', ErrorCodes.INVALID_INPUT);
-      if (!ALLOWED_EVENTS.has(event)) return sendError(res, 400, 'Invalid event', ErrorCodes.INVALID_INPUT);
+      const { platform, event, reason, engagement_ms } = req.validatedBody;
 
       const ua = (req.get('user-agent') || '').slice(0, 500);
-      const reasonClean = typeof reason === 'string' ? reason.trim().slice(0, 64) : null;
-      const engagementMs = Number.isFinite(engagement_ms)
+      const reasonClean = reason === undefined ? null : reason.trim().slice(0, 64);
+      const engagementMs = engagement_ms !== undefined && Number.isFinite(engagement_ms)
         ? Math.min(Math.max(0, engagement_ms | 0), 86_400_000)
         : null;
 

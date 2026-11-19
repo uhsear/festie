@@ -86,9 +86,10 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
     },
 
     async deleteExpired() {
-      await pool.query(
+      const result = await pool.query(
         `DELETE FROM device_tokens WHERE expires_at < NOW() OR last_used_at < NOW() - INTERVAL '60 days'`,
       );
+      return result.rowCount ?? 0;
     },
   };
 
