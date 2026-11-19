@@ -5,13 +5,12 @@ import { afterEach, after as afterAll, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { io as createSocketClient } from 'socket.io-client';
 import { bootServer } from './_boot-server';
+import { requireTestDatabaseUrl } from './_test-schema';
 
 export const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 export const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
-export const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-if (!TEST_DATABASE_URL) { console.error('ERROR: TEST_DATABASE_URL env var required.'); process.exit(1); }
-if (!TEST_DATABASE_URL.includes('_test')) { console.error('SAFETY: TEST_DATABASE_URL must contain "_test".'); process.exit(1); }
+export const TEST_DATABASE_URL = requireTestDatabaseUrl();
 
 // ── fixtures ─────────────────────────────────────────────────────
 

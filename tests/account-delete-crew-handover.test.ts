@@ -7,7 +7,7 @@ import { Pool } from 'pg';
 import createAccountRoutes from '../routes/account.js';
 import { createStores } from '../lib/db/index.js';
 import { accountDeleteSchema } from '../lib/schemas.js';
-import { ensureTestSchema } from './_test-schema';
+import { ensureTestSchema, TEST_DATABASE_URL, skip } from './_test-schema';
 
 // DELETE /account hands every crew the account owns to another member before it
 // soft-deletes the user, so a crew never sits without a visible owner for the
@@ -107,8 +107,6 @@ describe('DELETE /account — crew handover (no database)', () => {
   });
 });
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('crews.handOverOwnedCrews (database)', { skip }, () => {
   let pool: Pool;

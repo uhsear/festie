@@ -9,14 +9,13 @@ import {
   stripOuterTxBoundaries,
 } from '../lib/planner-db-pg';
 import { splitSqlStatements, usesConcurrently } from '../lib/db/sql-split';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Characterizes the migration runner: ordering, ledger, idempotence, the
 // advisory lock and failure rollback. The database tests create and drop a
 // scratch database, so they never touch the schema other tests use.
 // Run them only on a private Postgres (port 5434 or higher), never 5432 or 5433.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SCRATCH_DB = 'festie_migration_runner_scratch';
 
 describe('discoverMigrationsOnDisk', () => {

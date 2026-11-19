@@ -4,6 +4,7 @@ import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import createCrewsStore from '../lib/db/stores/crews.js';
 import { createStores } from '../lib/db/index.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Crew ownership in the store: transferOwnership moves crews.created_by with the
 // role rows, and handOverOwnedCrews (DELETE /account) picks a new owner per crew.
@@ -92,8 +93,6 @@ describe('crews.handOverOwnedCrews (no database)', () => {
   });
 });
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('crews.transferOwnership (database)', { skip }, () => {
   let pool: Pool;

@@ -13,9 +13,8 @@ import { after, afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 // The shared helpers exit the process without a test database, so load them only when it exists.
 const helpers = skip ? null : await import('./_integration-helpers');
 
