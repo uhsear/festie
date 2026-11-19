@@ -58,7 +58,7 @@ describe('t41 native config source guards', () => {
     expect(src).toContain('TaskManager.defineTask');
     const pkg = JSON.parse(read('package.json'));
     const declared = new Set(Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }));
-    const specs = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
+    const specs = [...src.matchAll(/from '([^']+)'/g)].map((m) => m[1]!);
     expect(specs.length).toBeGreaterThan(0);
     for (const s of specs) {
       expect(s === 'react-native' || s.startsWith('@festie/shared') || declared.has(s), s).toBe(true);

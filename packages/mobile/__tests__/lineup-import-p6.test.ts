@@ -33,7 +33,7 @@ describe('lineup import logic the screen uses', () => {
 
   it('keeps one id per B2B name and blocks a plan with errors', () => {
     expect(withArtistChoice([{ row: 4, artist: 'A b2b B' }], 4, 1, 'ar-b')[0]!.artistId).toBe('|ar-b');
-    expect(importBlocked({ counts: { new: 0, changed: 0, unchanged: 0, error: 1, newStages: 0, newDays: 0, missingFromFile: 0 }, problems: [] })).toBe(true);
+    expect(importBlocked({ counts: { new: 0, changed: 0, unchanged: 0, error: 1, newStages: 0, newDays: 0, missingFromFile: 0, skipped: 0 }, problems: [] })).toBe(true);
   });
 
   it('groups a Needs choice row apart from other errors', () => {
