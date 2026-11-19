@@ -13,6 +13,7 @@
  */
 
 import { Router } from 'express';
+import { webVitalsBeaconSchema } from '../lib/schemas.js';
 
 // Sane upper bounds (seconds for timing metrics, unitless for CLS).
 // web-vitals ships LCP/FCP/INP/TTFB in milliseconds; we convert to seconds
@@ -65,21 +66,17 @@ export default function createClientMetricsRoutes(deps: any) {
     if (typeof payload === 'string') {
       try { payload = JSON.parse(payload); } catch { payload = null; }
     }
-    if (!payload || typeof payload !== 'object') {
-      return res.status(204).end();
-    }
+    const parsed = webVitalsBeaconSchema.safeParse(payload);
+    if (!parsed.success) return res.status(204).end();
 
-    const { name, value, rating, delta, id, url, navigationType } = payload;
-    if (typeof name !== 'string' || typeof value !== 'number' || !Number.isFinite(value)) {
-      return res.status(204).end();
-    }
+    const { name, value, rating, delta, id, url, navigationType } = parsed.data;
 
     const spec = VALID_METRICS[name];
     if (!spec) return res.status(204).end();
     if (value < spec.min || value > spec.max) return res.status(204).end();
 
     const recorded = value / spec.unitDivisor;
-    const nav = typeof navigationType === 'string' && VALID_NAV_TYPES.has(navigationType)
+    const nav = navigationType !== undefined && VALID_NAV_TYPES.has(navigationType)
       ? navigationType
       : 'unknown';
 
@@ -91,10 +88,10 @@ export default function createClientMetricsRoutes(deps: any) {
       metric: name,
       value,
       rating: rating || null,
-      delta: typeof delta === 'number' ? delta : null,
-      id: typeof id === 'string' ? id.slice(0, 64) : null,
+      delta: delta ?? null,
+      id: id?.slice(0, 64) ?? null,
       nav,
-      url: typeof url === 'string' ? url.slice(0, 128) : null,
+      url: url?.slice(0, 128) ?? null,
     });
 
     return res.status(204).end();

@@ -20,7 +20,8 @@ import crypto from 'crypto';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
-import { DEFAULT_PASSWORD, TRUSTED_MUTATION_HEADER, TEST_DATABASE_URL, startServer, registerUser, servers } from './_coverage-auth-helpers';
+import { DEFAULT_PASSWORD, TRUSTED_MUTATION_HEADER, TEST_DATABASE_URL, startServer, servers } from './_coverage-auth-helpers';
+import { registerUser } from './_integration-helpers';
 
 afterEach(async () => {
   while (servers.length > 0) {

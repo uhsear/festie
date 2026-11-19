@@ -346,23 +346,19 @@ describe('createUsersStore', () => {
   describe('update', () => {
     it('sets fields and returns updated user', async () => {
       const updatedRow = fakeUserRow({ username: 'alice2' });
-      const pool = mockPool([
-        { rows: [], rowCount: 1 }, // UPDATE
-        { rows: [updatedRow], rowCount: 1 }, // SELECT
-      ]);
+      const pool = mockPool([{ rows: [updatedRow], rowCount: 1 }]); // UPDATE ... RETURNING
       const users = createUsersStore(pool, mockUtils);
 
       const result = await users.update('u1', { username: 'alice2' });
       assert.equal(result.username, 'alice2');
       assert.equal(pool.calls[0].params[0], 'alice2');
       assert.equal(pool.calls[0].params[2], 'u1');
+      assert.equal(pool.calls.length, 1);
+      assert.ok(norm(pool.calls[0].sql).includes('RETURNING'));
     });
 
     it('maps camelCase keys to snake_case columns', async () => {
-      const pool = mockPool([
-        { rows: [], rowCount: 1 },
-        { rows: [fakeUserRow()], rowCount: 1 },
-      ]);
+      const pool = mockPool([{ rows: [fakeUserRow()], rowCount: 1 }]);
       const users = createUsersStore(pool, mockUtils);
 
       await users.update('u1', { avatarKey: 'new-key' });
@@ -379,10 +375,7 @@ describe('createUsersStore', () => {
     });
 
     it('returns null when user not found after update', async () => {
-      const pool = mockPool([
-        { rows: [], rowCount: 0 },
-        { rows: [], rowCount: 0 },
-      ]);
+      const pool = mockPool([{ rows: [], rowCount: 0 }]);
       const users = createUsersStore(pool, mockUtils);
 
       const result = await users.update('missing', { username: 'x' });
@@ -826,21 +819,24 @@ describe('createSessionsStore', () => {
   describe('deleteUserSessions', () => {
     it('deletes all sessions for user and returns tokens', async () => {
       const pool = mockPool([
-        { rows: [{ token: 'tok1' }, { token: 'tok2' }], rowCount: 2 }, // SELECT
-        { rows: [], rowCount: 2 }, // DELETE
+        {
+          rows: [
+            { token: 'tok2', last_access: '2026-01-02T00:00:00.000Z' },
+            { token: 'tok1', last_access: '2026-01-01T00:00:00.000Z' },
+          ],
+          rowCount: 2,
+        }, // DELETE ... RETURNING, unordered
       ]);
       const sessions = createSessionsStore(pool, mockUtils);
 
       const result = await sessions.deleteUserSessions('u1');
       assert.deepEqual(result, ['tok1', 'tok2']);
-      assert.equal(pool.calls.length, 2);
+      assert.equal(pool.calls.length, 1);
+      assert.ok(norm(pool.calls[0].sql).startsWith('DELETE FROM user_sessions'));
     });
 
     it('excludes specified token from deletion', async () => {
-      const pool = mockPool([
-        { rows: [{ token: 'tok1' }], rowCount: 1 }, // SELECT with exceptToken
-        { rows: [], rowCount: 1 }, // DELETE
-      ]);
+      const pool = mockPool([{ rows: [{ token: 'tok1', last_access: '2026-01-01T00:00:00.000Z' }], rowCount: 1 }]);
       const sessions = createSessionsStore(pool, mockUtils);
 
       const result = await sessions.deleteUserSessions('u1', 'tok2');
@@ -848,13 +844,13 @@ describe('createSessionsStore', () => {
       assert.equal(pool.calls[0].params[1], 'tok2');
     });
 
-    it('returns empty array and skips DELETE when no sessions found', async () => {
+    it('returns empty array when no sessions found', async () => {
       const pool = mockPool([{ rows: [], rowCount: 0 }]);
       const sessions = createSessionsStore(pool, mockUtils);
 
       const result = await sessions.deleteUserSessions('u1');
       assert.deepEqual(result, []);
-      assert.equal(pool.calls.length, 1); // Only the SELECT
+      assert.equal(pool.calls.length, 1);
     });
   });
 

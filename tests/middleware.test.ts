@@ -589,6 +589,42 @@ describe('middleware: idempotency key logic', () => {
     assert.deepEqual(res2.body, { id: 'e1' });
   });
 
+  it('the same key on a different route executes instead of replaying', () => {
+    const { middleware } = makeIdem();
+    const headers = { 'idempotency-key': 'k-route' };
+    let executions = 0;
+    const res1 = mkIdemRes();
+    middleware({ method: 'POST', path: '/expenses', headers, ip: '1.2.3.4' }, res1, () => { executions += 1; res1.json({ route: 'expenses' }); });
+    const res2 = mkIdemRes();
+    middleware({ method: 'POST', path: '/picks', headers, ip: '1.2.3.4' }, res2, () => { executions += 1; res2.json({ route: 'picks' }); });
+    assert.equal(executions, 2);
+    assert.equal(res2.replayed, null);
+    assert.deepEqual(res2.body, { route: 'picks' });
+  });
+
+  it('a response stored in Redis replays in a fresh process without executing', async () => {
+    const store = new Map<string, string>();
+    const redis: any = {
+      get: async (k: string) => store.get(k) ?? null,
+      set: async (k: string, v: string) => { store.set(k, v); return 'OK'; },
+    };
+    const req = { method: 'POST', path: '/expenses', headers: { 'idempotency-key': 'k-redis' }, ip: '1.2.3.4' };
+    const first = createIdempotencyMiddleware({ ttl: 5 * 60 * 1000, maxEntries: 5000, redis });
+    const res1 = mkIdemRes();
+    first.middleware(req, res1, () => res1.json({ id: 'e1' }));
+    await new Promise((r) => setImmediate(r));
+    assert.equal(store.size, 1);
+    // A restart empties the in-process cache; Redis keeps the record.
+    const second = createIdempotencyMiddleware({ ttl: 5 * 60 * 1000, maxEntries: 5000, redis });
+    const res2 = mkIdemRes();
+    let executions = 0;
+    second.middleware(req, res2, () => { executions += 1; res2.json({ id: 'e2' }); });
+    await new Promise((r) => setImmediate(r));
+    assert.equal(executions, 0);
+    assert.equal(res2.replayed, 'true');
+    assert.deepEqual(res2.body, { id: 'e1' });
+  });
+
   it('a 500 is not cached', () => {
     const { middleware } = makeIdem();
     const req = { method: 'POST', headers: { 'idempotency-key': 'k-500' }, ip: '1.2.3.4' };
@@ -674,7 +710,7 @@ describe('middleware: idempotency key logic', () => {
     const { middleware, cache } = makeIdem();
     const res = mkIdemRes();
     middleware({ method: 'POST', headers: { 'idempotency-key': 'a'.repeat(128) }, ip: '1.2.3.4' }, res, () => { res.json({ ok: true }); });
-    assert.deepEqual([...cache.keys()], [`1.2.3.4:${'a'.repeat(128)}`]);
+    assert.deepEqual([...cache.keys()], [`1.2.3.4:POST::${'a'.repeat(128)}`]);
   });
 
   it('a 4xx is cached and replays with its original status', () => {
@@ -727,7 +763,7 @@ describe('middleware: idempotency key logic', () => {
     send('k2');
     send('k3');
     // The in-flight reservation counts toward the cap, so a cap of 2 keeps one finished entry.
-    assert.deepEqual([...cache.keys()], ['1.2.3.4:k3']);
+    assert.deepEqual([...cache.keys()], ['1.2.3.4:POST::k3']);
     let executions = 0;
     middleware({ method: 'POST', headers: { 'idempotency-key': 'k1' }, ip: '1.2.3.4' }, mkIdemRes(), () => { executions += 1; });
     assert.equal(executions, 1, 'the evicted key executes again');

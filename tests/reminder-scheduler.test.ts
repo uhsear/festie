@@ -441,6 +441,55 @@ describe('reminder-scheduler: processProfileReminders (via tick)', () => {
     assert.equal(notifyFn.mock.calls.length, 2, 'a zero-sent notify() must not be treated as delivered/deduped');
   });
 
+  describe('dedup survives a restart', () => {
+    function setup(logQuery: () => Promise<any>) {
+      const setStartMs = Date.now() + 16 * 60000;
+      const startClock = new Date(setStartMs);
+      const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
+      const dateStr = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
+      const startTime = `${String(startClock.getHours()).padStart(2, '0')}:${String(startClock.getMinutes()).padStart(2, '0')}`;
+      const queryFn = mock.fn(async (sql: string) => {
+        if (sql.includes('notification_log')) return logQuery();
+        if (sql.includes('festival_days')) return { rows: [{ day_index: 0, label: 'Day 1', date: dateStr }] };
+        if (sql.includes('festival_stages')) return { rows: [] };
+        if (sql.includes('festival_sets')) {
+          return { rows: [{ id: 'set-1', day_index: 0, artist: 'DJ Alpha', artists: null, stage_id: null, startTime, endTime: '23:59' }] };
+        }
+        if (sql.includes('festival_profiles')) {
+          return { rows: [{ id: 'fp-1', userId: 'user-1', remindersJson: JSON.stringify({ 'set-1': 15 }), picksJson: '{}' }] };
+        }
+        if (sql.includes('festivals')) return { rows: [{ id: 'fest-1', name: 'Test Fest' }] };
+        return { rows: [] };
+      });
+      const notifyFn = mock.fn(async () => ({ sent: 1 }));
+      const scheduler = createReminderScheduler(
+        makeDeps({ pool: { query: queryFn }, notificationService: { send: notifyFn } }),
+      );
+      return { scheduler, notifyFn };
+    }
+
+    it('does not re-send a reminder already logged by a previous process', async () => {
+      const { scheduler, notifyFn } = setup(async () => ({
+        rows: [{ userId: 'user-1', setId: 'set-1', firedAt: new Date() }],
+      }));
+      await scheduler.tick();
+      assert.equal(notifyFn.mock.calls.length, 0);
+    });
+
+    it('sends nothing while the log read fails, then sends once it recovers', async () => {
+      let fail = true;
+      const { scheduler, notifyFn } = setup(async () => {
+        if (fail) throw new Error('db down');
+        return { rows: [] };
+      });
+      await scheduler.tick();
+      assert.equal(notifyFn.mock.calls.length, 0);
+      fail = false;
+      await scheduler.tick();
+      assert.equal(notifyFn.mock.calls.length, 1);
+    });
+  });
+
   it('skips profiles with setReminders disabled', async () => {
     const now = Date.now();
     const setStartMs = now + 15 * 60000;

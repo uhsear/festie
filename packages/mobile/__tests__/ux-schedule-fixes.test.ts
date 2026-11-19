@@ -1,9 +1,7 @@
 // Source-level guards for the schedule/lineup consistency fixes. Mobile vitest
 // runs in plain node with no RN renderer, so these read the files directly.
-import fs from 'node:fs';
-import path from 'node:path';
+import { read } from './read-source';
 
-const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 
 describe('Grid', () => {
   const src = read('app/grid.tsx');
