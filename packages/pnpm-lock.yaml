@@ -4845,8 +4845,8 @@ packages:
     resolution: {integrity: sha512-NF+epuEdnUYVlGuhaxbbq+dvJttwLnGY+YixlXlME5KpQ5W3CnXA5cVTneY3SPbPDRkcjMbifrwmFYcClgOZeg==}
     engines: {node: '>= 0.8'}
 
-  basic-ftp@6.2.3:
-    resolution: {integrity: sha512-T7GYtQ2eKJUN5YORG7A8u2WfB9JMN0a4/wl3MI64qq2qTRfa3FXzoNq0DDojZDkDyStcL+TkfKsz4JHEZx5kGQ==}
+  basic-ftp@6.2.6:
+    resolution: {integrity: sha512-0EjZCaodOz6yiokv2JA1VyKGNdGxULZ+GGlPgG9tm4d+T/bHtX1hUch8CumDneBfpIbiSdn7TaCGwpM+gwsOlw==}
     engines: {node: '>=10.0.0'}
 
   bidi-js@1.0.3:
@@ -7751,8 +7751,8 @@ packages:
       encoding:
         optional: true
 
-  node-forge@1.4.2:
-    resolution: {integrity: sha512-rRtAR5XLJ8gCKd9du4qrKAsgCG1ObGP4gLeNJMa4vYSeq4bmBMOJk5IHkrviBV0q7uoAJlVd8HEQYQSVUb4FGQ==}
+  node-forge@1.4.3:
+    resolution: {integrity: sha512-P6wzfh6t70avmV8FrVEAd/36sOPJQ+hkaJVX1Laap9J/77m7M0eyozDvc8SwnDf4P7MP94gwbAAo0rg3YVXT+g==}
     engines: {node: '>= 6.13.0'}
 
   node-int64@0.4.0:
@@ -8586,8 +8586,8 @@ packages:
     resolution: {integrity: sha512-ghgmKt5o4Tly5yEG/UJp8qTd0AN7Xalw4XBtDEKP655B699qMEtra1WlXeE6WIvdEG481JvRxULKsInq/iNysw==}
     engines: {node: '>=0.10.0'}
 
-  serialize-javascript@7.0.5:
-    resolution: {integrity: sha512-F4LcB0UqUl1zErq+1nYEEzSHJnIwb3AF2XWB94b+afhrekOUijwooAYqFyRbjYkm2PAKBabx6oYv/xDxNi8IBw==}
+  serialize-javascript@7.1.4:
+    resolution: {integrity: sha512-FqlEuoTq/zRmA4Lg6aOqyH3lCHbUtCB0bmHCeFniX2GBdDqMJM3FwdvEhlE5Pim1dlt2FfBdVPmUNNiGhhKqpw==}
     engines: {node: '>=20.0.0'}
 
   seroval-plugins@1.6.12:
@@ -10978,7 +10978,7 @@ snapshots:
       glob: 13.0.6
       lan-network: 0.2.1
       multitars: 1.0.2
-      node-forge: 1.4.2
+      node-forge: 1.4.3
       npm-package-arg: 11.0.3
       ora: 3.4.0
       picomatch: 4.0.7
@@ -11015,7 +11015,7 @@ snapshots:
 
   '@expo/code-signing-certificates@0.0.7':
     dependencies:
-      node-forge: 1.4.2
+      node-forge: 1.4.3
 
   '@expo/config-plugins@58.0.10(typescript@6.0.3)':
     dependencies:
@@ -12615,7 +12615,7 @@ snapshots:
 
   '@rollup/plugin-terser@1.0.0(rollup@4.62.2)':
     dependencies:
-      serialize-javascript: 7.0.5
+      serialize-javascript: 7.1.4
       smob: 1.6.2
       terser: 5.48.0
     optionalDependencies:
@@ -14396,7 +14396,7 @@ snapshots:
     dependencies:
       safe-buffer: 5.1.2
 
-  basic-ftp@6.2.3: {}
+  basic-ftp@6.2.6: {}
 
   bidi-js@1.0.3:
     dependencies:
@@ -16264,7 +16264,7 @@ snapshots:
 
   get-uri@6.0.5:
     dependencies:
-      basic-ftp: 6.2.3
+      basic-ftp: 6.2.6
       data-uri-to-buffer: 6.0.2
       debug: 4.4.3
     transitivePeerDependencies:
@@ -17949,7 +17949,7 @@ snapshots:
     dependencies:
       whatwg-url: 5.0.0
 
-  node-forge@1.4.2: {}
+  node-forge@1.4.3: {}
 
   node-int64@0.4.0: {}
 
@@ -18991,7 +18991,7 @@ snapshots:
 
   serialize-error@2.1.0: {}
 
-  serialize-javascript@7.0.5: {}
+  serialize-javascript@7.1.4: {}
 
   seroval-plugins@1.6.12(seroval@1.6.12):
     dependencies:
