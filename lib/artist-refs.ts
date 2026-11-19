@@ -186,7 +186,10 @@ async function insertNewArtists(client: any, fresh: NewArtist[], userId: string 
   );
   const inserted = new Map<string, ArtistRecord>(rows.map((row: ArtistRecord) => [row.id, row]));
   const lost = sorted.filter((artist) => !inserted.has(artist.id));
-  for (const artist of sorted) if (inserted.has(artist.id)) placed.set(artist, inserted.get(artist.id)!);
+  for (const artist of sorted) {
+    const row = inserted.get(artist.id);
+    if (row) placed.set(artist, row);
+  }
   if (lost.length === 0) return placed;
   // A name that returned nothing lost a race. Use the winner only when its Spotify id agrees.
   const winners = await liveArtistsByKey(client, lost.map((a) => a.key));
@@ -194,7 +197,7 @@ async function insertNewArtists(client: any, fresh: NewArtist[], userId: string 
   for (const artist of lost) {
     const winner = (artist.spotifyId ? winnersBySpotify.get(artist.spotifyId) : undefined) ?? winners.get(artist.key)?.find((row) => row.label === '');
     const agrees = winner && (winner.spotify_id === artist.spotifyId || (!winner.spotify_id && !artist.spotifyId));
-    placed.set(artist, agrees ? winner! : null);
+    placed.set(artist, agrees && winner ? winner : null);
   }
   return placed;
 }
@@ -255,7 +258,8 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
     const spotifyHit = bySpotify.get(spotifyOf(slot) ?? '');
     const sameKey = byKey.get(slot.key) ?? [];
     if (spotifyHit || sameKey.length === 1) {
-      const row = spotifyHit ?? sameKey[0]!;
+      const row = spotifyHit ?? sameKey[0];
+      if (!row) continue;
       linked.set(slot, row);
       noteIgnoredLinks(slot, row);
     } else if (sameKey.length > 1) {
@@ -317,7 +321,10 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
   for (const row of linked.values()) {
     if (!current.has(row.id)) throw Object.assign(new Error(`artist ${row.id} was merged during the save`), { code: '40001' });
   }
-  for (const [slot, row] of linked) slot.list[slot.index] = canonicalElement(current.get(row.id)!);
+  for (const [slot, row] of linked) {
+    const locked = current.get(row.id);
+    if (locked) slot.list[slot.index] = canonicalElement(locked);
+  }
   rebuildFlatFields(days, input.separator, sentJoined);
   return { ...result, days, lineup };
 }
@@ -356,8 +363,9 @@ export async function resolveSetValues(
 ): Promise<RefsResult> {
   const days = [{ sets: sets.map((s) => ({ id: s.id, artists: s.values.artists, displayName: s.values.displayName })) }];
   const result = await resolveArtistRefs(client, { ...input, days });
-  result.days![0].sets.forEach((resolved: any, index: number) => {
-    const target = sets[index]!.values;
+  (result.days?.[0]?.sets ?? []).forEach((resolved: any, index: number) => {
+    const target = sets[index]?.values;
+    if (!target) return;
     target.artists = resolved.artists;
     if (resolved.displayName) target.displayName = resolved.displayName;
     if (resolved.artists.length === 0) return;
