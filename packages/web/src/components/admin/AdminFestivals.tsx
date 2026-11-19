@@ -1,5 +1,4 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, ApiClientError, mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
@@ -26,7 +25,6 @@ import {
   SELECTION_LIMIT_MESSAGE,
   sortLineup,
   summarizeBulkResults,
-  timeAgo,
   toggleSelection,
   type ScheduleNotice,
 } from '@festie/shared/utils';
@@ -39,6 +37,9 @@ import FestivalMapEditor from './FestivalMapEditor';
 import FestivalStatusPanel, { FestivalMeta } from './FestivalStatusPanel';
 import AdminFestivalPreview from './AdminFestivalPreview';
 import SelectionBar from './SelectionBar';
+import AdminFestivalSubTabs, { type OpenView } from './AdminFestivalSubTabs';
+import ArchivedFestivalRow from './ArchivedFestivalRow';
+import FestivalListRow from './FestivalListRow';
 import FestivalArtists from './FestivalArtists';
 import FestivalAnnouncements from './FestivalAnnouncements';
 import { cn } from '../../lib/utils';
@@ -50,18 +51,9 @@ import { ADMIN_QUERY_OPTIONS, adminKeys, useAdminFestivals } from './adminQuerie
 import type { Day } from './DayEditor';
 
 type ListView = 'live' | 'archived';
-type OpenView = 'edit' | 'map' | 'import';
 
 const SEARCH_URL_DELAY_MS = 300;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
-const rowButton =
-  'px-3 py-1.5 min-h-11 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium';
-const SUB_TABS: ReadonlyArray<{ view: OpenView; label: string }> = [
-  { view: 'edit', label: 'Details' },
-  { view: 'map', label: 'Map' },
-  { view: 'import', label: 'Import lineup' },
-];
-
 /**
  * Festival management: CRUD, CSV import/export, lineup management.
  *
@@ -465,24 +457,10 @@ export default function AdminFestivals() {
         {backButton}
         <h2 className="type-heading text-text-primary">{festivalId ? savedName : 'New festival'}</h2>
         {festivalId && !detail.isError && (
-          <div className="flex gap-2 overflow-x-auto border-b border-glass-border">
-            {SUB_TABS.map(({ view: v, label }) => (
-              <button
-                key={v}
-                type="button"
-                aria-current={openView === v ? 'page' : undefined}
-                onClick={() => openView !== v && leave({ tab: 'festivals', festival: festivalId, view: v })}
-                className={cn(
-                  'px-4 py-2 min-h-11 whitespace-nowrap font-medium text-sm transition-colors border-b-2',
-                  openView === v
-                    ? 'border-accent-aqua text-text-primary'
-                    : 'border-transparent text-text-secondary hover:text-text-primary',
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <AdminFestivalSubTabs
+            current={openView}
+            onSelect={(v) => leave({ tab: 'festivals', festival: festivalId, view: v })}
+          />
         )}
         {festivalId && detail.isError ? (
           missing ? (
@@ -578,20 +556,7 @@ export default function AdminFestivals() {
           ) : (
             <div className="space-y-3">
               {archived.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex items-center justify-between"
-                >
-                  <div className="flex-1">
-                    <h2 className="text-base font-semibold text-text-primary">{item.name}</h2>
-                    <p className="text-sm text-text-muted">
-                      {item.location} · Deleted {timeAgo(Date.parse(item.deletedAt))}
-                    </p>
-                  </div>
-                  <button onClick={() => handleRestore(item)} className={rowButton}>
-                    Restore
-                  </button>
-                </div>
+                <ArchivedFestivalRow key={item.id} item={item} onRestore={() => handleRestore(item)} />
               ))}
             </div>
           ))}
@@ -613,78 +578,15 @@ export default function AdminFestivals() {
           ) : (
             <div className="space-y-3">
               {filteredFestivals.map((festival) => (
-                <div
+                <FestivalListRow
                   key={festival.id}
-                  className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between hover:bg-bg-card/80 transition-colors"
-                >
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${festival.name}`}
-                    checked={selected.has(festival.id)}
-                    onChange={() => toggleSelected(festival.id)}
-                    className="mr-3 h-5 w-5 shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <h2 className="text-base font-semibold text-text-primary">
-                      {festival.name}
-                      {!festival.published && (
-                        <span className="ml-2 px-2 py-0.5 rounded-full bg-accent-amber/20 text-accent-amber text-xs font-semibold">
-                          Draft
-                        </span>
-                      )}
-                    </h2>
-                    <p className="text-sm text-text-muted">
-                      {festival.location} · {festival.stageCount ?? 0} stages · {festival.dayCount ?? 0} days
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      onClick={() => setAdminSearch({ tab: 'festivals', festival: festival.id, view: 'edit' })}
-                      aria-label={`Edit ${festival.name}`}
-                      className={rowButton}
-                    >
-                      Edit
-                    </button>
-                    <Link
-                      to="/admin"
-                      search={{ tab: 'festivals', preview: festival.id }}
-                      target="_blank"
-                      rel="noopener"
-                      aria-label={`Preview ${festival.name}`}
-                      className={`inline-flex items-center ${rowButton}`}
-                    >
-                      Preview
-                    </Link>
-                    <button
-                      onClick={() => setAdminSearch({ tab: 'festivals', festival: festival.id, view: 'import' })}
-                      aria-label={`Import lineup for ${festival.name}`}
-                      className={rowButton}
-                    >
-                      Import
-                    </button>
-                    <button
-                      onClick={() => setAdminSearch({ tab: 'festivals', festival: festival.id, view: 'map' })}
-                      aria-label={`Edit map for ${festival.name}`}
-                      className={rowButton}
-                    >
-                      Map
-                    </button>
-                    <button
-                      onClick={() => setArtistsTarget({ id: festival.id, name: festival.name })}
-                      aria-label={`Artists for ${festival.name}`}
-                      className={rowButton}
-                    >
-                      Artists
-                    </button>
-                    <button
-                      onClick={() => handleDelete(festival.id)}
-                      aria-label={`Delete ${festival.name}`}
-                      className="px-3 py-1.5 min-h-11 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm font-medium"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                </div>
+                  festival={festival}
+                  selected={selected.has(festival.id)}
+                  onToggleSelected={() => toggleSelected(festival.id)}
+                  onOpen={(view) => setAdminSearch({ tab: 'festivals', festival: festival.id, view })}
+                  onArtists={() => setArtistsTarget({ id: festival.id, name: festival.name })}
+                  onDelete={() => handleDelete(festival.id)}
+                />
               ))}
             </div>
           ))}
