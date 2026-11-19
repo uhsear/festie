@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Merged to `main` but not yet deployed to production.
+
+### Added
+- **Mobile**: the theme follows the OS when Match system is chosen.
+
+### Changed
+- Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.
+- Festival profiles are paged in SQL, and page parameters are parsed with Zod.
+
+### Fixed
+- The push budget check is atomic per user, and Redis presence entries stay alive while a user is online.
+- Role grants and revokes reach every worker through the cache bus.
+- A bulk add undo keeps picks that were changed by hand, and guest picks merge per set on rehydrate.
+- Local reminder titles show `1h 30m` instead of `2h`.
+
+## [2026-11-19]
+
 This entry summarises the work shipped to production between 2026-11-17 and 2026-11-19. The mobile app is at 1.5.0 (the `packages/mobile/package.json` version now matches `app.json`).
 
 ### Added
@@ -16,19 +33,12 @@ This entry summarises the work shipped to production between 2026-11-17 and 2026
 - **Series**: a festival series id and series picker.
 - **Offline**: pick writes are sent as deltas, and edge 5xx responses queue the write.
 - **Operations**: hardened backups with a weekly restore drill, per-kind alerts, and a festival hourly backup.
-- **Mobile**: the theme follows the OS when Match system is chosen.
 
 ### Changed
 - Boot migrations retry on refused connections, and a dump is taken before each deploy.
-- Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.
-- Festival profiles are paged in SQL, and page parameters are parsed with Zod.
 
 ### Fixed
 - Draft festivals no longer leak through weather, crews, invite preview or locate-set.
-- The push budget check is atomic per user, and Redis presence entries stay alive while a user is online.
-- Role grants and revokes reach every worker through the cache bus.
-- A bulk add undo keeps picks that were changed by hand, and guest picks merge per set on rehydrate.
-- Local reminder titles show `1h 30m` instead of `2h`.
 
 ## [3.0.0] - 2026-11-10
 
