@@ -100,7 +100,7 @@ export function checkPasswordPolicy(
   return null;
 }
 
-export interface FestivalIssueTarget {
+interface FestivalIssueTarget {
   kind: 'festival' | 'stage' | 'day' | 'set';
   field?: 'name' | 'color' | 'id' | 'label' | 'date' | 'artist' | 'stageId' | 'startTime' | 'endTime' | 'sets' | 'lineup';
   stageId?: string;
@@ -344,7 +344,7 @@ const firstAndCount = (list: string[]) =>
   list.length === 1 ? list[0]! : `${list[0]!.slice(0, -1)} (and ${list.length - 1} more).`;
 
 /** Odd set lengths and unusual start hours, one line each. Warnings only: they never block a save. */
-export function setTimeWarnings(festival: any): { odd: string[]; unusual: string[] } {
+function setTimeWarnings(festival: any): { odd: string[]; unusual: string[] } {
   const out = { odd: [] as string[], unusual: [] as string[] };
   (Array.isArray(festival?.days) ? festival.days : []).forEach((day: any, dayIndex: number) => {
     const daySets: any[] = Array.isArray(day?.sets) ? day.sets : [];
@@ -379,7 +379,7 @@ function dayOffsets(days: any[]): number[] {
  * different stages at overlapping absolute minutes. Each B2B member is checked alone.
  * Name match only: two artists who share a name show here too.
  */
-export function artistDoubleBookedWarnings(festival: any): string[] {
+function artistDoubleBookedWarnings(festival: any): string[] {
   const days: any[] = Array.isArray(festival?.days) ? festival.days : [];
   const stageNames = new Map<string, string>(
     (Array.isArray(festival?.stages) ? festival.stages : []).map((s: any) => [s?.id, s?.name || s?.id]),
