@@ -27,7 +27,7 @@ describe('response: ErrorCodes', () => {
       'TOKEN_EXPIRED', 'VALIDATION_ERROR', 'INVALID_INPUT',
       'MISSING_FIELD', 'NOT_FOUND', 'FORBIDDEN', 'ALREADY_EXISTS',
       'MAX_LIMIT_REACHED', 'VERSION_MISMATCH', 'RATE_LIMITED',
-      'INTERNAL_ERROR', 'SERVICE_UNAVAILABLE', 'ACCOUNT_LOCKED',
+      'INTERNAL_ERROR', 'SERVICE_UNAVAILABLE', 'ACCOUNT_LOCKED', 'CONFLICT',
     ];
     for (const code of expected) {
       assert.ok(code in ErrorCodes, `Missing error code: ${code}`);

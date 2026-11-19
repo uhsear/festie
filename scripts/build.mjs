@@ -12,6 +12,9 @@
  * bundled output `import.meta.url` ends in `.js`, so the workers must exist as
  * dist/avatar-worker.js and dist/export-worker.js next to dist/server.js.
  *
+ * Relative imports of packages/shared/src sources are bundled too (esbuild keeps only bare
+ * package imports external), so shared leaf modules can replace backend mirrors.
+ *
  * All four entrypoints use identical esbuild flags:
  *   --bundle --platform=node --format=esm --target=node22 --packages=external --sourcemap
  */

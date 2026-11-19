@@ -231,6 +231,8 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
           )
         VALUES
           ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+        -- A repeat inbox or email row for the same event hits uq_notification_log_event_key.
+        ON CONFLICT DO NOTHING
       `,
         [
           entry.id,

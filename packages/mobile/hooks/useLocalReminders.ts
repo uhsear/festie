@@ -175,7 +175,7 @@ const SNOOZE_MS = 5 * 60_000;
 
 /** Register the "Snooze 5 min" button for reminder notifications. */
 export function ensureReminderCategory(): Promise<unknown> {
-  // shortcut: snooze opens the app, because a background action needs expo-task-manager (a native build); upgrade with the tranche 41 native build.
+  // shortcut: snooze opens the app, because a background action needs a task registered with expo-task-manager, which this file does not use yet; upgrade by registering one.
   return Notifications.setNotificationCategoryAsync(REMINDER_CATEGORY, [
     { identifier: SNOOZE_ACTION, buttonTitle: 'Snooze 5 min', options: { opensAppToForeground: true } },
   ]);

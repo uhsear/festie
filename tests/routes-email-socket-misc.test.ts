@@ -231,6 +231,25 @@ describe('routes/email-auth', () => {
     assert.ok(deps.stores.emailTokens.invalidateResetTokens.mock.calls.length >= 1);
   });
 
+  test('POST /forgot-password — a failed send logs at warn with a reason and answers exactly like a success', async () => {
+    const warn = mock.fn();
+    const known = buildEmailAuthDeps({ log: { ...makeLog(), warn } });
+    known.stores.emailTokens.findUserByEmail = mock.fn(async () => ({ id: 'user-1', username: 'alice', email: 'alice@test.com' }));
+    const unknown = buildEmailAuthDeps();
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+
+    // No RESEND_API_KEY in this config, so the send fails.
+    const failed = await request(mountApp(createEmailAuthRoutes(known))).post('/forgot-password').send({ email: 'alice@test.com' });
+    const noAccount = await request(mountApp(createEmailAuthRoutes(unknown))).post('/forgot-password').send({ email: 'nobody@test.com' });
+
+    assert.equal(failed.status, noAccount.status);
+    assert.deepEqual(failed.body, noAccount.body);
+    const call = warn.mock.calls.find((c: any) => c.arguments[0] === 'forgot-password:email-failed');
+    assert.ok(call, 'expected a warn-level forgot-password:email-failed');
+    assert.deepEqual(call.arguments[1], { userId: 'user-1', reason: 'RESEND_API_KEY not configured' });
+    assert.ok(!JSON.stringify(warn.mock.calls).includes('alice@test.com'), 'the address must not be logged at warn');
+  });
+
   test('POST /forgot-password — per-email rate limit kicks in after 3 attempts', async () => {
     const deps = buildEmailAuthDeps();
     deps.stores.emailTokens.findUserByEmail = mock.fn(async () => ({
