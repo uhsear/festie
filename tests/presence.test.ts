@@ -202,7 +202,7 @@ describe('presence: removeSocketPresence', () => {
     pm.removeSocketPresence(socket);
 
     // setOffline is fire-and-forget, give it a tick
-    await new Promise((r) => setTimeout(r, 10));
+    await new Promise((r) => setImmediate(r));
     assert.equal(rp.setOffline.mock.callCount(), 1);
   });
 });
@@ -564,7 +564,8 @@ describe('presence: clearPresenceTimers', () => {
 });
 
 describe('presence: emitPresence', () => {
-  it('emits presence:update to the festival room after debounce', async () => {
+  it('emits presence:update to the festival room after debounce', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const deps = defaultDeps();
     const pm = createPresenceManager(deps);
     const io = makeIo();
@@ -573,14 +574,16 @@ describe('presence: emitPresence', () => {
 
     pm.emitPresence('fest-1', io);
 
-    // Wait for debounce (200ms)
-    await new Promise((r) => setTimeout(r, 300));
+    // Cross the debounce (200ms)
+    t.mock.timers.tick(200);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
 
     assert.ok(io.to.mock.callCount() >= 1);
     pm.clearPresenceTimers();
   });
 
-  it('coalesces rapid calls via debounce', async () => {
+  it('coalesces rapid calls via debounce', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
     const deps = defaultDeps();
     const pm = createPresenceManager(deps);
     const io = makeIo();
@@ -589,11 +592,12 @@ describe('presence: emitPresence', () => {
     pm.emitPresence('fest-1', io);
     pm.emitPresence('fest-1', io);
 
-    // Wait for debounce
-    await new Promise((r) => setTimeout(r, 300));
+    // Cross the debounce
+    t.mock.timers.tick(200);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
 
     // Should only fire once despite three calls
-    assert.ok(io.to.mock.callCount() <= 2, 'debounce should coalesce multiple calls');
+    assert.equal(io.to.mock.callCount(), 1, 'debounce should coalesce multiple calls');
     pm.clearPresenceTimers();
   });
 });
