@@ -260,4 +260,24 @@ describe('Integration — Admin', { concurrency: 1 }, () => {
     await server.request.post('/api/v1/auth/refresh-token').send({ refreshToken: bob.refreshToken }).expect(401);
     bobSocket.close();
   });
+
+  test('bulk archive returns generic per-festival errors without internal text', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const adminToken = await loginAdmin(server);
+    await reauth(server, adminToken);
+
+    const res = await server.request
+      .post('/api/v1/admin/bulk/archive-festivals')
+      .set('x-user-token', adminToken)
+      .send({ festivalIds: ['no-such-festival', 'x'.repeat(200)] })
+      .expect(200);
+
+    const results = res.body.data.results;
+    assert.equal(results.length, 2);
+    for (const r of results) {
+      assert.equal(r.status, 'error');
+      assert.ok(['Festival not found', 'Archive failed'].includes(r.message), `unexpected message: ${r.message}`);
+    }
+  });
 });
