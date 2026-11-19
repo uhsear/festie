@@ -51,6 +51,26 @@ describe('Integration — sign in by email', { concurrency: 1 }, () => {
     assert.deepEqual(unknownEmail.body.error, unknownName.body.error);
   });
 
+  test('a user with no password hash cannot sign in with the dummy password', async () => {
+    const server = await startServer();
+    servers.push(server);
+    await registerWithEmail(server, 'carol', 'carol@example.com');
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      await pool.query("UPDATE users SET password_hash = NULL WHERE username = 'carol'");
+    } finally {
+      await pool.end();
+    }
+
+    for (const username of ['carol', 'carol@example.com']) {
+      const res = await server.request
+        .post('/api/v1/auth/login')
+        .send({ username, password: 'festie-dummy-password' })
+        .expect(401);
+      assert.equal(res.body.error.code, 'INVALID_CREDENTIALS');
+    }
+  });
+
   test('wrong passwords by email lock the account for username sign-in too', async () => {
     const server = await startServer({ MAX_LOGIN_FAILURES: 5 });
     servers.push(server);
