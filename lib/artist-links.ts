@@ -15,7 +15,7 @@ export type ArtistLinkPlatform = (typeof ALLOWED_LINK_PLATFORMS)[number];
 
 export type ArtistLinkResult = { ok: true; url: string; spotifyId?: string } | { ok: false; message: string };
 
-export const MAX_ARTIST_LINK_LENGTH = 500;
+const MAX_ARTIST_LINK_LENGTH = 500;
 
 export const ARTIST_LINK_LABELS: Record<ArtistLinkPlatform, string> = {
   spotify: 'Spotify',

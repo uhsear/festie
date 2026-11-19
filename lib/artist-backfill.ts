@@ -24,7 +24,7 @@ import { lockFestivalAny } from './db/stores/lineup-imports';
 
 type Links = Record<string, string>;
 
-export interface ArtistRow {
+interface ArtistRow {
   id: string;
   name: string;
   name_key: string;
@@ -1036,7 +1036,7 @@ export async function verifyBackfill(pool: Pool): Promise<{ ok: boolean; checks:
 // ── Safety and report text ─────────────────────────────────────────────────────────────────────
 
 /** The database name the way pg reads it, so the guard and the connection cannot disagree. */
-export function backfillDatabaseName(databaseUrl: string): string {
+function backfillDatabaseName(databaseUrl: string): string {
   try {
     const { protocol } = new URL(databaseUrl);
     if (protocol !== 'postgres:' && protocol !== 'postgresql:') return '';
