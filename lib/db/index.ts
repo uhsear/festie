@@ -25,24 +25,7 @@ import { createAnnouncementsStore } from './stores/announcements.js';
 import { createIdentitiesStore } from './stores/identities.js';
 import { createArtistsStore } from './stores/artists.js';
 import { createDbLatencyTracker } from './latency.js';
-import { createLogger } from '../logger.js';
 import type { Pool } from 'pg';
-
-const log = createLogger('db:cleanup');
-
-/**
- * Returns true if THIS process should run singleton background jobs
- * (expired-token cleanup, etc.). In PM2 cluster mode, instance 0 is the
- * leader. In single-process / dev, NODE_APP_INSTANCE is unset — treat as
- * leader so cleanup still runs.
- *
- * Matches the pattern used by the reminder scheduler (Agent 2 fix).
- */
-function isCleanupLeader() {
-  const instance = process.env.NODE_APP_INSTANCE;
-  if (instance === undefined || instance === null || instance === '') return true;
-  return instance === '0';
-}
 
 /**
  * Create data access stores for all database entities
@@ -137,56 +120,6 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
       return {
         festivals: festivalCount,
         ...sessionCounts,
-      };
-    },
-
-    createCleanupTimer(sessionTtlMs = 24 * 60 * 60 * 1000) {
-      /**
-       * Returns a cleanup function that can be called on a timer.
-       * Removes expired device tokens and stale sessions.
-       *
-       * Leader election (2026-04-14 audit fix): in PM2 cluster mode we have
-       * 4 workers. Previously each worker ran this on an interval, producing
-       * 4x DB load and write contention. Now only NODE_APP_INSTANCE='0'
-       * actually performs the deletes; other workers return a no-op and log
-       * once at startup.
-       *
-       * Interval behaviour (1h sessions etc.) is unchanged — the CALLER
-       * wraps this in setInterval. This function just returns the worker.
-       */
-      const leader = isCleanupLeader();
-      if (!leader) {
-        log.info('cleanup skipped on this instance (not leader)', {
-          nodeAppInstance: process.env.NODE_APP_INSTANCE,
-        });
-        // No-op cleanup for follower workers. Preserves the async contract
-        // so callers can still `await` it without branching.
-        return async () => {
-          /* not leader — cleanup runs on instance 0 */
-        };
-      }
-
-      log.info('cleanup enabled on this instance (leader)', {
-        nodeAppInstance: process.env.NODE_APP_INSTANCE ?? '(unset)',
-      });
-
-      return async () => {
-        try {
-          await deviceTokens.deleteExpired();
-        } catch {
-          /* ignore cleanup errors */
-        }
-        try {
-          await sessions.deleteExpiredUserSessions(sessionTtlMs);
-        } catch {
-          /* ignore cleanup errors */
-        }
-        // admin_sessions table removed in migration 011 (roles-based auth)
-        try {
-          if (refreshTokens) await refreshTokens.deleteExpired();
-        } catch {
-          /* ignore cleanup errors */
-        }
       };
     },
   };

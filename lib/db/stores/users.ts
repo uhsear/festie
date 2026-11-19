@@ -194,10 +194,10 @@ export default function createUsersStore(pool: Pool, utils: any) {
       idx++;
       values.push(userId);
 
-      await pool.query(`UPDATE users SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL`, values);
-      const result = await pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1 AND deleted_at IS NULL`, [
-        userId,
-      ]);
+      const result = await pool.query(
+        `UPDATE users SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL RETURNING ${USER_COLUMNS}`,
+        values,
+      );
       return normalizeRow(result.rows[0]);
     },
 

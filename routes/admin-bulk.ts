@@ -7,6 +7,7 @@
  *         /crews, /crews/:id/members, /crews/:id/members/:userId, /crews/:id
  */
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { dropLivePosition } from '../lib/live-location-cache.js';
 
 export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
   const {
@@ -22,6 +23,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     validate,
     validateParams,
     io,
+    redis,
     invalidateUserSessions,
     requireRecentAuth,
     getUserById,
@@ -39,20 +41,27 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
    * (the DB row is already gone); io may be absent in some test/CLI contexts.
    */
   async function evictUserFromCrewRoom(crewId: string, removedUserId: string) {
+    // A background (HTTP) sharer has no sharing socket, so evict the cached fix
+    // and tell peers to drop the marker once, whatever sockets the user holds.
+    void dropLivePosition(redis, crewId, removedUserId);
     if (!io || typeof io.in !== 'function') return;
     const room = `crew:${crewId}`;
     try {
-      const sockets = await io.in(room).fetchSockets();
+      io.to(room).emit('location:peer-stopped', {
+        _v: 1,
+        crewId,
+        userId: removedUserId,
+        reason: 'kicked',
+      });
+      // Bounded: fetchSockets() can hang for a Redis outage; mirrors crew-members.ts.
+      const sockets: any[] = await Promise.race([
+        io.in(room).fetchSockets(),
+        new Promise((_resolve, reject) =>
+          setTimeout(() => reject(new Error('fetchSockets timed out')), 3_000).unref?.(),
+        ),
+      ]);
       for (const s of sockets) {
         if (s.data?.userId !== removedUserId) continue;
-        if (s.data?.sharingCrewId === crewId) {
-          s.to(room).emit('location:peer-stopped', {
-            _v: 1,
-            crewId,
-            userId: removedUserId,
-            reason: 'kicked',
-          });
-        }
         s.emit('crew:access-revoked', { crewId });
         delete s.data.sharingCrewId;
         delete s.data.crewMembershipCheckedAt;
