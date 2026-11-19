@@ -13,6 +13,8 @@ module.exports = {
       from: {},
       to: {
         couldNotResolve: true,
+        // Ambient type packages (tsconfig "types") and font binaries are not modules to follow.
+        pathNot: ['^(vite/client|vitest/globals)$', '\\.(otf|ttf)$'],
       },
     },
     {
@@ -24,7 +26,7 @@ module.exports = {
         'that can actually deadlock a module at require time. Cycles that contain an ' +
         '`import type` edge are erased by the transpiler and are reported by ' +
         'no-circular-type-only below instead of failing the build.',
-      from: {},
+      from: { pathNot: '^packages/' },
       to: {
         circular: true,
         viaOnly: {
@@ -40,7 +42,7 @@ module.exports = {
         'hazard (TypeScript erases those imports), but still a design smell worth seeing on ' +
         'every run. Known instance: lib/helpers.ts -> lib/types/app-context.ts -> lib/schemas.ts ' +
         '-> lib/helpers.ts, where the first two edges are type-only.',
-      from: {},
+      from: { pathNot: '^packages/' },
       to: {
         circular: true,
       },
@@ -69,6 +71,37 @@ module.exports = {
       to: {
         path: '^routes/',
       },
+    },
+    {
+      name: 'shared-not-to-apps',
+      severity: 'error',
+      comment: '@festie/shared is consumed by web and mobile and must not import either of them.',
+      from: { path: '^packages/shared/' },
+      to: { path: '^packages/(web|mobile)/' },
+    },
+    {
+      name: 'web-mobile-isolated',
+      severity: 'error',
+      comment: 'Web and mobile share code only through @festie/shared, never by importing each other.',
+      from: { path: '^packages/web/' },
+      to: { path: '^packages/mobile/' },
+    },
+    {
+      name: 'mobile-not-to-web',
+      severity: 'error',
+      comment: 'Web and mobile share code only through @festie/shared, never by importing each other.',
+      from: { path: '^packages/mobile/' },
+      to: { path: '^packages/web/' },
+    },
+    {
+      name: 'mobile-declared-deps-only',
+      severity: 'error',
+      comment:
+        'mobile-import-guard: mobile may import only deps declared in its own package.json or ' +
+        '@festie/shared. A shared transitive dep (e.g. socket.io-client) fails CI mobile typecheck ' +
+        'with TS2307.',
+      from: { path: '^packages/mobile/', pathNot: '/node_modules/' },
+      to: { dependencyTypes: ['npm-no-pkg', 'npm-unknown'] },
     },
     {
       name: 'no-stores-importing-routes',
