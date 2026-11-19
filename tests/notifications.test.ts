@@ -1,9 +1,10 @@
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
-import { describe, test, beforeEach } from 'node:test';
+import { describe, test, beforeEach, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { createNotificationService } from '../lib/notifications';
+import { createBackgroundTasks } from '../lib/shutdown';
 import createNotificationRoutes from '../routes/notifications';
 import { schemas, validate } from '../lib/schemas';
 
@@ -334,5 +335,49 @@ describe('Notification Service — DND and preferences', () => {
       festivalId: 'f1', type: 'crew_update', title: 'T', body: 'B',
     });
     assert.equal(result.sent, 0);
+  });
+});
+
+describe('Device token purge', () => {
+  test('sweep scheduler purges expired device tokens every 6 hours', async () => {
+    mock.timers.enable({ apis: ['setInterval'] });
+    const deleteExpired = mock.fn(async () => 2);
+    const log = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
+    const ctx: any = {
+      config: { SESSION_TTL: 86400000, AUDIT_LOG_RETENTION_DAYS: 90 },
+      state: {
+        timers: [],
+        rateLimits: new Map(),
+        routeRateLimits: new Map(),
+        authRateLimits: new Map(),
+        socketRateLimits: new Map(),
+        onlineUsers: new Map(),
+      },
+      stores: {
+        sessions: { deleteExpiredUserSessions: mock.fn(async () => {}) },
+        pool: { query: mock.fn(async () => ({ rows: [], rowCount: 0 })) },
+        auditLog: { cleanup: mock.fn(async () => 0) },
+        crews: { meetingPoints: { expireStale: mock.fn(async () => ({ rowCount: 0 })) } },
+        deviceTokens: { deleteExpired },
+      },
+      log,
+      pool: {},
+      validateUserSession: mock.fn(async () => true),
+      disconnectSocket: mock.fn(),
+      emitPresence: mock.fn(),
+      getUsers: mock.fn(async () => []),
+      avatarDirPath: mock.fn(() => '/tmp/nonexistent-avatar-dir'),
+    };
+    try {
+      createBackgroundTasks(ctx, { io: {} });
+      mock.timers.tick(6 * 60 * 60 * 1000);
+      await new Promise((r) => setImmediate(r));
+      assert.equal(deleteExpired.mock.callCount(), 1);
+      const logged = log.info.mock.calls.find((c: any) => c.arguments[0] === 'token cleanup');
+      assert.equal((logged as any).arguments[1].deviceTokensPurged, 2);
+    } finally {
+      for (const t of ctx.state.timers) clearInterval(t);
+      mock.timers.reset();
+    }
   });
 });
