@@ -1,15 +1,18 @@
 import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import type { Pool } from 'pg';
 import { createExpensesStore, simplifyDebts } from '../lib/db/stores/expenses.js';
 import type { BalanceCents } from '../lib/db/stores/expenses.js';
 
 // ---------------------------------------------------------------------------
 // Helper: mock pool factory
 // ---------------------------------------------------------------------------
-function makePool(queryResults: any[] = []) {
+const asPool = (pool: unknown) => pool as Pool;
+
+function makePool(queryResults: Record<string, unknown>[] = []) {
   let callIdx = 0;
   return {
-    query: mock.fn(async () => {
+    query: mock.fn(async (_sql: string, _params: unknown[]) => {
       const result = queryResults[callIdx] || { rows: [] };
       callIdx++;
       return result;
@@ -17,7 +20,7 @@ function makePool(queryResults: any[] = []) {
   };
 }
 
-function makeErrorPool(error: any) {
+function makeErrorPool(error: Error) {
   return {
     query: mock.fn(async () => {
       throw error;
@@ -45,7 +48,7 @@ describe('expenses store — create()', () => {
       created_at: '2026-05-01T12:00:00Z',
     };
     const pool = makePool([{ rows: [createdRow] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.create({
       crewId: 'crew-1',
@@ -59,7 +62,7 @@ describe('expenses store — create()', () => {
     assert.deepStrictEqual(result, createdRow);
     assert.strictEqual(pool.query.mock.calls.length, 1);
 
-    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const [sql, params] = pool.query.mock.calls[0]!.arguments;
     assert.ok(sql.includes('INSERT INTO crew_expenses'));
     assert.ok(sql.includes('RETURNING'));
     // params: [id, crewId, paidBy, description, amount, splitJson, category]
@@ -76,7 +79,7 @@ describe('expenses store — create()', () => {
 
   it('passes planned=true through to the insert when marked as a budget row', async () => {
     const pool = makePool([{ rows: [{ id: 'exp-planned' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.create({
       crewId: 'crew-1',
@@ -88,13 +91,13 @@ describe('expenses store — create()', () => {
       planned: true,
     });
 
-    const params = (pool.query.mock.calls[0]!.arguments as any[])[1];
+    const params = pool.query.mock.calls[0]!.arguments[1];
     assert.strictEqual(params[7], true);
   });
 
   it('defaults category to "other" when not provided', async () => {
     const pool = makePool([{ rows: [{ id: 'exp-2' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.create({
       crewId: 'crew-1',
@@ -104,13 +107,13 @@ describe('expenses store — create()', () => {
       splitWith: [],
     });
 
-    const params = (pool.query.mock.calls[0]!.arguments as any[])[1];
+    const params = pool.query.mock.calls[0]!.arguments[1];
     assert.strictEqual(params[6], 'other');
   });
 
   it('serializes null splitWith as empty array JSON', async () => {
     const pool = makePool([{ rows: [{ id: 'exp-3' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.create({
       crewId: 'crew-1',
@@ -120,13 +123,13 @@ describe('expenses store — create()', () => {
       splitWith: null,
     });
 
-    const params = (pool.query.mock.calls[0]!.arguments as any[])[1];
+    const params = pool.query.mock.calls[0]!.arguments[1];
     assert.strictEqual(params[5], '[]');
   });
 
   it('generates a UUID for the expense id', async () => {
     const pool = makePool([{ rows: [{ id: 'will-be-overridden' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.create({
       crewId: 'crew-1',
@@ -136,14 +139,14 @@ describe('expenses store — create()', () => {
       splitWith: [],
     });
 
-    const params = (pool.query.mock.calls[0]!.arguments as any[])[1];
+    const params = pool.query.mock.calls[0]!.arguments[1];
     // UUID v4 format: 8-4-4-4-12 hex characters
-    assert.match(params[0], /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
+    assert.match(String(params[0]), /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
   });
 
   it('propagates database errors', async () => {
     const pool = makeErrorPool(new Error('connection refused'));
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await assert.rejects(
       () =>
@@ -189,7 +192,7 @@ describe('expenses store — getByCrew()', () => {
       },
     ];
     const pool = makePool([{ rows }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getByCrew('crew-1');
 
@@ -198,15 +201,15 @@ describe('expenses store — getByCrew()', () => {
     assert.deepStrictEqual(result[0].split_with, ['user-1', 'user-2']);
     assert.deepStrictEqual(result[1].split_with, ['user-1', 'user-2', 'user-3']);
 
-    const sql = norm((pool.query.mock.calls[0]!.arguments as any[])[0]);
+    const sql = norm(pool.query.mock.calls[0]!.arguments[0]);
     assert.ok(sql.includes('ORDER BY e.created_at DESC'));
     assert.ok(sql.includes('JOIN users u'));
-    assert.deepStrictEqual((pool.query.mock.calls[0]!.arguments as any[])[1], ['crew-1']);
+    assert.deepStrictEqual(pool.query.mock.calls[0]!.arguments[1], ['crew-1']);
   });
 
   it('returns empty array when crew has no expenses', async () => {
     const pool = makePool([{ rows: [] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getByCrew('crew-empty');
     assert.deepStrictEqual(result, []);
@@ -227,7 +230,7 @@ describe('expenses store — getByCrew()', () => {
       },
     ];
     const pool = makePool([{ rows }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getByCrew('crew-1');
     assert.deepStrictEqual(result[0].split_with, ['user-1', 'user-2']);
@@ -248,7 +251,7 @@ describe('expenses store — getByCrew()', () => {
       },
     ];
     const pool = makePool([{ rows }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getByCrew('crew-1');
     assert.deepStrictEqual(result[0].split_with, []);
@@ -269,7 +272,7 @@ describe('expenses store — getByCrew()', () => {
       },
     ];
     const pool = makePool([{ rows }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getByCrew('crew-1');
     assert.deepStrictEqual(result[0].split_with, []);
@@ -277,7 +280,7 @@ describe('expenses store — getByCrew()', () => {
 
   it('propagates database errors', async () => {
     const pool = makeErrorPool(new Error('timeout'));
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await assert.rejects(() => store.getByCrew('crew-1'), { message: 'timeout' });
   });
@@ -299,16 +302,16 @@ describe('expenses store — getById()', () => {
       created_at: '2026-05-01T00:00:00Z',
     };
     const pool = makePool([{ rows: [row] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getById('exp-1');
     assert.deepStrictEqual(result, row);
-    assert.deepStrictEqual((pool.query.mock.calls[0]!.arguments as any[])[1], ['exp-1']);
+    assert.deepStrictEqual(pool.query.mock.calls[0]!.arguments[1], ['exp-1']);
   });
 
   it('returns null when expense not found', async () => {
     const pool = makePool([{ rows: [] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getById('nonexistent');
     assert.strictEqual(result, null);
@@ -316,7 +319,7 @@ describe('expenses store — getById()', () => {
 
   it('propagates database errors', async () => {
     const pool = makeErrorPool(new Error('relation does not exist'));
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await assert.rejects(() => store.getById('exp-1'), { message: 'relation does not exist' });
   });
@@ -328,12 +331,12 @@ describe('expenses store — getById()', () => {
 describe('expenses store — delete()', () => {
   it('executes DELETE with the correct expense id', async () => {
     const pool = makePool([{ rows: [] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.delete('exp-to-delete');
 
     assert.strictEqual(pool.query.mock.calls.length, 1);
-    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const [sql, params] = pool.query.mock.calls[0]!.arguments;
     assert.ok(sql.includes('DELETE FROM crew_expenses'));
     assert.ok(sql.includes('WHERE id = $1'));
     assert.deepStrictEqual(params, ['exp-to-delete']);
@@ -341,14 +344,14 @@ describe('expenses store — delete()', () => {
 
   it('does not throw when expense does not exist (no-op)', async () => {
     const pool = makePool([{ rows: [] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await assert.doesNotReject(() => store.delete('nonexistent'));
   });
 
   it('returns undefined (no return value)', async () => {
     const pool = makePool([{ rows: [] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.delete('exp-1');
     assert.strictEqual(result, undefined);
@@ -356,7 +359,7 @@ describe('expenses store — delete()', () => {
 
   it('propagates database errors', async () => {
     const pool = makeErrorPool(new Error('permission denied'));
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await assert.rejects(() => store.delete('exp-1'), { message: 'permission denied' });
   });
@@ -385,17 +388,17 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     assert.strictEqual(result.length, 2);
     // user-1 paid 100, owes 50 => balance = +50
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, 50);
     assert.strictEqual(alice!.username, 'alice');
     // user-2 paid 0, owes 50 => balance = -50
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, -50);
     assert.strictEqual(bob!.username, 'bob');
   });
@@ -420,18 +423,18 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-3', username: 'charlie' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     // user-1: paid 90, share 30 => +60
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, 60);
     // user-2: paid 0, share 30 => -30
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, -30);
     // user-3: paid 0, share 30 => -30
-    const charlie = result.find((r: any) => r.userId === 'user-3');
+    const charlie = result.find((r) => r.userId === 'user-3');
     assert.strictEqual(charlie!.balance, -30);
   });
 
@@ -463,15 +466,15 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     // user-1: paid 40, share (20 + 30) = 50 => balance = 40 - 50 = -10
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, -10);
     // user-2: paid 60, share (20 + 30) = 50 => balance = 60 - 50 = +10
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, 10);
   });
 
@@ -494,15 +497,15 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-3', username: 'charlie' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
     // 1000c / 3 = 334 + 333 + 333. Payer: +1000 - 334 = +6.66; others -3.33.
-    const total = result.reduce((s: number, r: any) => s + r.balance, 0);
+    const total = result.reduce((s: number, r) => s + r.balance, 0);
     assert.ok(Math.abs(total) < 1e-9, `balances must be zero-sum, got ${total}`);
-    assert.strictEqual(result.find((r: any) => r.userId === 'user-1')!.balance, 6.66);
-    assert.strictEqual(result.find((r: any) => r.userId === 'user-2')!.balance, -3.33);
-    assert.strictEqual(result.find((r: any) => r.userId === 'user-3')!.balance, -3.33);
+    assert.strictEqual(result.find((r) => r.userId === 'user-1')!.balance, 6.66);
+    assert.strictEqual(result.find((r) => r.userId === 'user-2')!.balance, -3.33);
+    assert.strictEqual(result.find((r) => r.userId === 'user-3')!.balance, -3.33);
   });
 
   it('returns all zero balances when no expenses exist', async () => {
@@ -511,7 +514,7 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: [] }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
@@ -522,7 +525,7 @@ describe('expenses store — getBalances()', () => {
 
   it('returns empty array when crew has no members', async () => {
     const pool = makePool([{ rows: [] }, { rows: [] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-empty');
     assert.deepStrictEqual(result, []);
@@ -546,7 +549,7 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
@@ -570,7 +573,7 @@ describe('expenses store — getBalances()', () => {
     ];
     const members = [{ user_id: 'user-1', username: 'alice' }];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
@@ -601,18 +604,18 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-3', username: 'charlie' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     // 10000c/3 = 3334 + 3333 + 3333. user-1: +10000 - 3334 = +66.66; others -33.33.
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, 66.66);
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, -33.33);
-    const charlie = result.find((r: any) => r.userId === 'user-3');
+    const charlie = result.find((r) => r.userId === 'user-3');
     assert.strictEqual(charlie!.balance, -33.33);
-    const total = result.reduce((s: number, r: any) => s + r.balance, 0);
+    const total = result.reduce((s: number, r) => s + r.balance, 0);
     assert.ok(Math.abs(total) < 1e-9, `balances must be zero-sum, got ${total}`);
   });
 
@@ -634,15 +637,15 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     // user-1: 80 - 40 = 40
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, 40);
     // user-2: 0 - 40 = -40
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, -40);
   });
 
@@ -665,16 +668,16 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     // Malformed => splitWith=[] => splits among all members (2)
     // user-1: paid 60, share 30 => +30
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, 30);
     // user-2: paid 0, share 30 => -30
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, -30);
   });
 
@@ -697,15 +700,15 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     // user-99 has no balance row to credit, so the expense is skipped: nobody
     // is left owing a payer who is gone (crediting no one left the ledger at -100).
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, 0);
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, 0);
   });
 
@@ -730,16 +733,16 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     // user-99 dropped; 9000c/2 = 4500 each. user-1: +9000 - 4500 = +45; user-2: -45.
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, 45);
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, -45);
-    const total = result.reduce((s: number, r: any) => s + r.balance, 0);
+    const total = result.reduce((s: number, r) => s + r.balance, 0);
     assert.ok(Math.abs(total) < 1e-9, `balances must be zero-sum, got ${total}`);
   });
 
@@ -770,7 +773,7 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-1', username: 'alice' },
       { user_id: 'user-2', username: 'bob' },
     ];
-    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: members }]) as any);
+    const store = createExpensesStore(asPool(makePool([{ rows: expenses }, { rows: members }])));
 
     const result = await store.getBalancesCents('crew-1');
 
@@ -806,40 +809,40 @@ describe('expenses store — getBalances()', () => {
       { user_id: 'user-2', username: 'bob' },
     ];
     const pool = makePool([{ rows: expenses }, { rows: members }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const result = await store.getBalances('crew-1');
 
     // The expenses query must filter out planned rows at the DB level.
-    const expSql = norm((pool.query.mock.calls[0]!.arguments as any[])[0]);
+    const expSql = norm(pool.query.mock.calls[0]!.arguments[0]);
     assert.ok(expSql.includes('planned IS NOT TRUE'), `expected planned filter in: ${expSql}`);
 
     // Only the $100 actual expense counts: alice +50, bob -50. A leaked $1000
     // planned row would have made these ±550.
-    const alice = result.find((r: any) => r.userId === 'user-1');
+    const alice = result.find((r) => r.userId === 'user-1');
     assert.strictEqual(alice!.balance, 50);
-    const bob = result.find((r: any) => r.userId === 'user-2');
+    const bob = result.find((r) => r.userId === 'user-2');
     assert.strictEqual(bob!.balance, -50);
   });
 
   it('makes two SQL queries: expenses then members', async () => {
     const pool = makePool([{ rows: [] }, { rows: [] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.getBalances('crew-1');
 
     assert.strictEqual(pool.query.mock.calls.length, 2);
-    const [expSql, expParams] = pool.query.mock.calls[0]!.arguments as any[];
+    const [expSql, expParams] = pool.query.mock.calls[0]!.arguments;
     assert.ok(norm(expSql).includes('FROM crew_expenses'));
     assert.deepStrictEqual(expParams, ['crew-1']);
-    const [memSql, memParams] = pool.query.mock.calls[1]!.arguments as any[];
+    const [memSql, memParams] = pool.query.mock.calls[1]!.arguments;
     assert.ok(norm(memSql).includes('FROM crew_members'));
     assert.deepStrictEqual(memParams, ['crew-1']);
   });
 
   it('propagates database errors', async () => {
     const pool = makeErrorPool(new Error('deadlock detected'));
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await assert.rejects(() => store.getBalances('crew-1'), { message: 'deadlock detected' });
   });
@@ -935,7 +938,7 @@ describe('expenses store — uneven shares (split_amounts)', () => {
     const expenses = [
       { id: 'e1', paid_by: 'a', amount: '100.00', split_with: ['a', 'b'], split_amounts: { a: 4000, b: 6000 } },
     ];
-    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b', 'c']) }]) as any);
+    const store = createExpensesStore(asPool(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b', 'c']) }])));
 
     assert.deepStrictEqual(byId(await store.getBalancesCents('crew-1')), { a: 6000, b: -6000, c: 0 });
   });
@@ -958,7 +961,7 @@ describe('expenses store — uneven shares (split_amounts)', () => {
         split_amounts: { a: 100, b: 100, gone: 101 },
       },
     ];
-    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b']) }]) as any);
+    const store = createExpensesStore(asPool(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b']) }])));
 
     const rows = await store.getBalancesCents('crew-1');
     // e1: a +1000 - 600, b -400. e2: b +301 - 150, a -151.
@@ -968,7 +971,7 @@ describe('expenses store — uneven shares (split_amounts)', () => {
 
   it('skips an uneven expense when nobody in the map is still a member', async () => {
     const expenses = [{ id: 'e1', paid_by: 'a', amount: '10.00', split_with: ['x'], split_amounts: { x: 1000 } }];
-    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b']) }]) as any);
+    const store = createExpensesStore(asPool(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b']) }])));
 
     assert.deepStrictEqual(byId(await store.getBalancesCents('crew-1')), { a: 0, b: 0 });
   });
@@ -977,7 +980,7 @@ describe('expenses store — uneven shares (split_amounts)', () => {
     const expenses = [
       { id: 'e1', paid_by: 'a', amount: '10.00', split_with: ['a', 'b'], split_amounts: '{"a":100,"b":100}' },
     ];
-    const store = createExpensesStore(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b', 'c']) }]) as any);
+    const store = createExpensesStore(asPool(makePool([{ rows: expenses }, { rows: memberRows(['a', 'b', 'c']) }])));
 
     const rows = await store.getBalancesCents('crew-1');
     assert.deepStrictEqual(byId(rows), { a: 500, b: -500, c: 0 });
@@ -986,11 +989,11 @@ describe('expenses store — uneven shares (split_amounts)', () => {
 
   it('getByCrew selects the new columns and parses split_amounts sent as a string', async () => {
     const pool = makePool([{ rows: [{ id: 'e1', split_with: '["a"]', split_amounts: '{"a":1000}' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const [row] = await store.getByCrew('crew-1');
     assert.deepStrictEqual(row.split_amounts, { a: 1000 });
-    const sql = norm((pool.query.mock.calls[0]!.arguments as any[])[0]);
+    const sql = norm(pool.query.mock.calls[0]!.arguments[0]);
     assert.ok(sql.includes('e.split_amounts, e.created_by, e.updated_by, e.updated_at, e.confirmed_at, e.disputed_at'));
   });
 });
@@ -998,7 +1001,7 @@ describe('expenses store — uneven shares (split_amounts)', () => {
 describe('expenses store — T30 writes', () => {
   it('create stores created_by and the uneven shares as JSON', async () => {
     const pool = makePool([{ rows: [{ id: 'e1' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.create({
       crewId: 'crew-1',
@@ -1010,7 +1013,7 @@ describe('expenses store — T30 writes', () => {
       splitAmounts: { a: 4000, b: 6000 },
     });
 
-    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const [sql, params] = pool.query.mock.calls[0]!.arguments;
     assert.ok(sql.includes('created_by, split_amounts'));
     assert.ok(norm(sql).includes('RETURNING id, crew_id, paid_by'));
     assert.ok(sql.includes('disputed_at'));
@@ -1020,18 +1023,18 @@ describe('expenses store — T30 writes', () => {
 
   it('create stores null shares and null created_by by default', async () => {
     const pool = makePool([{ rows: [{ id: 'e1' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.create({ crewId: 'crew-1', paidBy: 'a', description: 'x', amount: 1, splitWith: ['a'] });
 
-    const params = (pool.query.mock.calls[0]!.arguments as any[])[1];
+    const params = pool.query.mock.calls[0]!.arguments[1];
     assert.strictEqual(params[8], null);
     assert.strictEqual(params[9], null);
   });
 
   it('update replaces the fields and sets updated_by and updated_at', async () => {
     const pool = makePool([{ rows: [{ id: 'e1', updated_by: 'b' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     const row = await store.update('e1', {
       paidBy: 'a',
@@ -1045,7 +1048,7 @@ describe('expenses store — T30 writes', () => {
     });
 
     assert.deepStrictEqual(row, { id: 'e1', updated_by: 'b' });
-    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const [sql, params] = pool.query.mock.calls[0]!.arguments;
     const s = norm(sql);
     assert.ok(s.startsWith('UPDATE crew_expenses'));
     assert.ok(s.includes('updated_by = $9'));
@@ -1055,17 +1058,17 @@ describe('expenses store — T30 writes', () => {
   });
 
   it('update returns null when the row is gone', async () => {
-    const store = createExpensesStore(makePool([{ rows: [] }]) as any);
+    const store = createExpensesStore(asPool(makePool([{ rows: [] }])));
     assert.strictEqual(await store.update('e1', { splitWith: [] }), null);
   });
 
   it('setConfirmation sets one timestamp and clears the other', async () => {
     const pool = makePool([{ rows: [{ id: 'e1' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     await store.setConfirmation('e1', false);
 
-    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const [sql, params] = pool.query.mock.calls[0]!.arguments;
     const s = norm(sql);
     assert.ok(s.includes('confirmed_at = CASE WHEN $2::boolean THEN NOW() ELSE NULL END'));
     assert.ok(s.includes('disputed_at = CASE WHEN $2::boolean THEN NULL ELSE NOW() END'));
@@ -1073,20 +1076,20 @@ describe('expenses store — T30 writes', () => {
   });
 
   it('getCurrency defaults to USD and returns the stored code', async () => {
-    const missing = createExpensesStore(makePool([{ rows: [] }]) as any);
+    const missing = createExpensesStore(asPool(makePool([{ rows: [] }])));
     assert.strictEqual(await missing.getCurrency('crew-1'), 'USD');
 
     const pool = makePool([{ rows: [{ currency: 'EUR' }] }]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
     assert.strictEqual(await store.getCurrency('crew-1'), 'EUR');
-    assert.deepStrictEqual((pool.query.mock.calls[0]!.arguments as any[])[1], ['crew-1']);
+    assert.deepStrictEqual(pool.query.mock.calls[0]!.arguments[1], ['crew-1']);
   });
 
   it('setCurrency updates the crew row with parameters', async () => {
     const pool = makePool([{ rows: [] }]);
-    await createExpensesStore(pool as any).setCurrency('crew-1', 'GBP');
+    await createExpensesStore(asPool(pool)).setCurrency('crew-1', 'GBP');
 
-    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const [sql, params] = pool.query.mock.calls[0]!.arguments;
     assert.ok(sql.includes('UPDATE crews SET currency = $2 WHERE id = $1'));
     assert.deepStrictEqual(params, ['crew-1', 'GBP']);
   });
@@ -1096,11 +1099,11 @@ describe('expenses store — T30 writes', () => {
       { rows: [], rowCount: 1 },
       { rows: [], rowCount: 0 },
     ]);
-    const store = createExpensesStore(pool as any);
+    const store = createExpensesStore(asPool(pool));
 
     assert.strictEqual(await store.recordReminder('crew-1', 'a', 'b'), true);
     assert.strictEqual(await store.recordReminder('crew-1', 'a', 'b'), false);
-    const [sql, params] = pool.query.mock.calls[0]!.arguments as any[];
+    const [sql, params] = pool.query.mock.calls[0]!.arguments;
     assert.ok(norm(sql).includes('ON CONFLICT DO NOTHING'));
     assert.ok(sql.includes("AT TIME ZONE 'UTC'"));
     assert.deepStrictEqual(params, ['crew-1', 'a', 'b']);
