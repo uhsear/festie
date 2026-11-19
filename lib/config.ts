@@ -671,7 +671,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     // All empty/unset = APNs disabled (iOS tokens are skipped, never deleted).
     APNS_KEY_PATH: overrides.APNS_KEY_PATH || process.env.APNS_KEY_PATH || '',
     APNS_KEY_ID: overrides.APNS_KEY_ID || process.env.APNS_KEY_ID || '',
-    APNS_TEAM_ID: overrides.APNS_TEAM_ID || process.env.APNS_TEAM_ID || 'J63QL8R63J',
+    APNS_TEAM_ID: overrides.APNS_TEAM_ID || process.env.APNS_TEAM_ID || '',
     APNS_BUNDLE_ID: overrides.APNS_BUNDLE_ID || process.env.APNS_BUNDLE_ID || 'us.festie.app',
     APNS_PRODUCTION: readBool(overrides.APNS_PRODUCTION ?? process.env.APNS_PRODUCTION, true),
 
