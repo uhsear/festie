@@ -19,7 +19,7 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
  * browser sheet.
  */
 
-const EFFECTIVE_DATE = 'November 3, 2026';
+const EFFECTIVE_DATE = 'November 18, 2026';
 const OPERATOR_NAME = 'Asir Khan';
 const CONTACT_EMAIL = 'privacy@festie.us';
 const SERVICE_URL = 'https://festie.us';
@@ -491,6 +491,15 @@ const SECTIONS: PolicySection[] = [
     title: 'Changes to this policy',
     body: [
       'The effective date at the top shows when this policy last changed. Before a change that affects how we use your data takes effect, we tell you in the app or by email. If a change needs your consent, we ask for it first.',
+    ],
+    subsections: [
+      {
+        heading: 'Version history',
+        paragraphs: [
+          'November 18, 2026: clarified the examples of sign-up source tags. No change in how we collect, use or share data.',
+          'November 3, 2026: full rewrite of this policy.',
+        ],
+      },
     ],
   },
   {
