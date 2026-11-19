@@ -56,7 +56,10 @@ vi.mock('../crew/LiveLocationSharing', () => ({ default: () => null }));
 vi.mock('../../hooks/useRealtimeSync', () => ({ useRealtimeSync: vi.fn() }));
 vi.mock('../../hooks/usePushNotifications', () => ({ usePushNotifications: vi.fn() }));
 vi.mock('../../hooks/useScrollReset', () => ({ useScrollReset: vi.fn() }));
-vi.mock('../../hooks/useOfflineQueueBridge', () => ({ useOfflineQueueBridge: vi.fn() }));
+vi.mock('../../hooks/useOfflineQueueBridge', async () => {
+  const { createContext } = await import('react');
+  return { useOfflineQueueBridge: vi.fn(), OfflineQueueContext: createContext(null) };
+});
 // Must return the real hook's shape: AppShell destructures it to render the
 // ?joinCrew= consent sheet, so a bare vi.fn() (undefined) would throw.
 let mockJoinLoader: { pendingJoinCode: string | null; clearPendingJoin: () => void } = {

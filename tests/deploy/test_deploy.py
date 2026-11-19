@@ -39,7 +39,10 @@ class FakeClient:
         self.closed = True
 
 
-def run_main(fail_on=None, ready="200", creds=("user", "pw")):
+SHA = "a" * 40
+
+
+def run_main(fail_on=None, ready="200", creds=("user", "pw"), ci=True):
     """Run deploy.main() with every SSH command recorded. Returns (commands, exit, client)."""
     commands = []
 
@@ -47,6 +50,8 @@ def run_main(fail_on=None, ready="200", creds=("user", "pw")):
         commands.append(cmd)
         if fail_on and fail_on in cmd:
             return 1, "", "boom"
+        if "rev-parse" in cmd:
+            return 0, SHA, ""
         if "%{http_code}" in cmd and "/api/ready" in cmd:
             return 0, ready, ""
         if "%{http_code}" in cmd:
@@ -57,7 +62,7 @@ def run_main(fail_on=None, ready="200", creds=("user", "pw")):
     exit_value = None
     # wait_ready and smoke_login bind run() as a default argument, so the fake
     # sits at the client layer (exec_command) rather than patching deploy.run.
-    with mock.patch.object(deploy, "connect", return_value=client),             mock.patch.object(deploy, "pre_deploy_dump", lambda c: commands.append("DUMP")),             mock.patch.object(deploy.time, "sleep"),             mock.patch.object(deploy, "TEST_USER", creds[0]),             mock.patch.object(deploy, "TEST_PASSWORD", creds[1]),             redirect_stdout(io.StringIO()):
+    with mock.patch.object(deploy, "connect", return_value=client),             mock.patch.object(deploy, "pre_deploy_dump", lambda c: commands.append("DUMP")),             mock.patch.object(deploy, "ci_green", return_value=ci),             mock.patch.object(deploy.time, "sleep"),             mock.patch.object(deploy, "TEST_USER", creds[0]),             mock.patch.object(deploy, "TEST_PASSWORD", creds[1]),             redirect_stdout(io.StringIO()):
         try:
             deploy.main()
         except SystemExit as exc:
@@ -70,15 +75,31 @@ class DeployMainTest(unittest.TestCase):
         commands, exit_value, client = run_main()
         self.assertIsNone(exit_value)
         self.assertTrue(client.closed)
-        markers = ["DUMP", "git reset --hard origin/main", "npm ci", "npm run build",
+        markers = ["mkdir /tmp/festie-deploy.lock", "rev-parse", "DUMP", f"git reset --hard {SHA}", "npm ci", "npm run build",
                    "@festie/web build", "pm2 restart festie", "/api/ready", "/auth/login",
-                   "git tag deploy-"]
+                   "git tag deploy-", "rmdir /tmp/festie-deploy.lock"]
         positions = [next(i for i, c in enumerate(commands) if m in c) for m in markers]
         self.assertEqual(positions, sorted(positions))
 
-    def test_dump_runs_before_any_other_command(self):
+    def test_dump_runs_before_any_change_to_the_host(self):
         commands, _, _ = run_main()
-        self.assertEqual(commands[0], "DUMP")
+        self.assertLess(commands.index("DUMP"), next(i for i, c in enumerate(commands) if "git reset" in c))
+
+    def test_held_lock_aborts_without_touching_the_host(self):
+        commands, exit_value, client = run_main(fail_on="mkdir")
+        self.assertIn("deploy lock", exit_value)
+        self.assertEqual(len(commands), 1)
+        self.assertTrue(client.closed)
+
+    def test_red_ci_aborts_before_dump_and_releases_lock(self):
+        commands, exit_value, _ = run_main(ci=False)
+        self.assertIn("CI is not green", exit_value)
+        self.assertNotIn("DUMP", commands)
+        self.assertTrue(any("rmdir" in c for c in commands))
+
+    def test_failed_step_releases_lock(self):
+        commands, _, _ = run_main(fail_on="npm ci")
+        self.assertTrue(any("rmdir" in c for c in commands))
 
     def test_each_failing_step_aborts_before_restart(self):
         for marker, message in [
