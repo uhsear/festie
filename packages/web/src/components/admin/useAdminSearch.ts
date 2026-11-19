@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 
-export const ADMIN_TABS = ['dashboard', 'festivals', 'users', 'crews', 'audit', 'analytics'] as const;
+export const ADMIN_TABS = ['dashboard', 'festivals', 'users', 'crews', 'audit', 'analytics', 'backfill'] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 const ADMIN_VIEWS = ['edit', 'map', 'import'] as const;
