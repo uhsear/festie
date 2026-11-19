@@ -122,6 +122,27 @@ describe('email: sendEmail', () => {
     assert.equal(sendMock.mock.callCount(), 1, 'Resend.send called only once');
   });
 
+  it('shares the idempotency guard through Redis and falls back to memory when Redis errors', async () => {
+    const store = new Map<string, string>();
+    const redis = {
+      exists: async (k: string) => (store.has(k) ? 1 : 0),
+      set: async (k: string, v: string) => { store.set(k, v); return 'OK'; },
+    };
+    const sendMock = mock.fn(async () => ({ data: { id: 'msg-1' }, error: null }));
+    const base = { to: 'redis-dup@example.com', subject: 'Redis Dup', html: '<p>x</p>', text: 'x', config: createMockConfig(), log: createMockLog(), _client: createMockClient(sendMock) };
+
+    assert.equal(await sendEmail({ ...base, redis }), true);
+    assert.equal(await sendEmail({ ...base, redis }), true);
+    assert.equal(sendMock.mock.callCount(), 1, 'second send suppressed via Redis');
+    assert.ok([...store.keys()].every((k) => !k.includes('redis-dup')), 'recipient must not appear in the Redis key');
+
+    const broken = { exists: async () => { throw new Error('down'); }, set: async () => { throw new Error('down'); } };
+    const fb = { ...base, to: 'fallback-dup@example.com', redis: broken };
+    assert.equal(await sendEmail(fb), true);
+    assert.equal(await sendEmail(fb), true);
+    assert.equal(sendMock.mock.callCount(), 2, 'memory fallback suppresses the repeat');
+  });
+
   it('never suppresses a message sent with dedupe:false', async () => {
     // The email-change security alert has a constant recipient AND a constant
     // subject, so the (to + subject) idempotency guard let an attacker mint
