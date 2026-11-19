@@ -211,8 +211,6 @@ export function aggregateCrewWrap(
   };
 }
 
-// Hours of one set (alias s). Wraps past midnight, so 23:00 to 01:00 is 2, not -22.
-// getWrapStats and getLifetimeStats both use it so their totals agree.
 // One row per performer of the set `s` (key = artist id, else lower-cased name).
 // jsonb_typeof guards a null or scalar `artists`: jsonb_array_elements raises on
 // a scalar. array_agg over zero names is NULL, so COALESCE falls back to the
@@ -230,6 +228,8 @@ const PERFORMERS_LATERAL = `
     WHERE btrim(COALESCE(p->>'name', '')) <> ''
   ) n`;
 
+// Hours of one set (alias s). Wraps past midnight, so 23:00 to 01:00 is 2, not -22.
+// getWrapStats and getLifetimeStats both use it so their totals agree.
 const SET_HOURS_EXPR = `
   CASE WHEN s.start_time IS NOT NULL AND s.end_time IS NOT NULL
   THEN MOD((EXTRACT(EPOCH FROM (s.end_time::time - s.start_time::time)) / 3600.0 + 24)::numeric, 24)
@@ -508,7 +508,7 @@ export function createRatingsStore(pool: Pool) {
         ),
         // Top artists across ALL festivals — by best rating, then how many times
         // loved. Capped for display. A b2b set counts once per performer, and
-        // performers group by id (name when no id), matching seenMost.
+        // performers group by id (name when no id).
         pool.query(
           `
           WITH rated AS (
@@ -531,7 +531,9 @@ export function createRatingsStore(pool: Pool) {
         `,
           [userId],
         ),
-        // Artists seen at 2+ festivals, grouped like topArtists.
+        // Artists seen at 2+ festivals. Groups by lower-cased name, not id: the
+        // artist-id backfill is incomplete, so one performer can have an id at
+        // one festival and none at another, and an id/name split would drop them.
         pool.query(
           `
           WITH seen AS (
@@ -550,7 +552,7 @@ export function createRatingsStore(pool: Pool) {
           )
           SELECT MIN(name) AS "artist", COUNT(DISTINCT festival_id)::int AS "festivals"
           FROM names
-          GROUP BY key
+          GROUP BY lower(name)
           HAVING COUNT(DISTINCT festival_id) >= 2
           ORDER BY "festivals" DESC, MIN(name) ASC
           LIMIT 10
