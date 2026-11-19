@@ -864,7 +864,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     // SESSION_SECRET: reserved for future HMAC-signed session tokens.
     // Currently NOT used cryptographically — session tokens are random opaque
     // strings stored server-side (SHA-256 hashed). The production startup
-    // check in server.js ensures this is set to a strong value so the key is
+    // check in server.ts ensures this is set to a strong value so the key is
     // available when session signing is introduced without a redeployment.
     // See ADR-004 for the CSRF/session security design rationale.
     SESSION_SECRET: overrides.SESSION_SECRET || process.env.SESSION_SECRET || '',

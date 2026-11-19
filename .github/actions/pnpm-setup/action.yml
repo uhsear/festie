@@ -38,9 +38,9 @@ runs:
     - name: Get pnpm store directory
       shell: bash
       run: |
-        # Query from packages/ (the real workspace); the root pnpm-workspace.yaml
-        # has no `packages:` field, so `pnpm store path` errors there. Swallow any
-        # error and fall back to the default store dir so the cache always has a path.
+        # Query from packages/, the only pnpm workspace (the repo root has no
+        # pnpm-workspace.yaml). Swallow any error and fall back to the default
+        # store dir so the cache always has a path.
         STORE_PATH="$(cd packages && pnpm store path --silent 2>/dev/null || true)"
         if [ -z "$STORE_PATH" ]; then STORE_PATH="$HOME/.local/share/pnpm/store"; fi
         echo "STORE_PATH=$STORE_PATH" >> "$GITHUB_ENV"

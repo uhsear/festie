@@ -67,7 +67,7 @@ permissions:
 
 jobs:
   ota:
-    runs-on: ubuntu-latest   # MUST be Linux to match the EAS build fingerprint env
+    runs-on: ubuntu-latest   # clean LF checkout; runtimeVersion uses the appVersion policy, not a fingerprint
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -100,6 +100,8 @@ jobs:
           # unset, an OTA would turn provider sign-in off on builds that have it.
           FESTIE_APPLE_SIGNIN: '1'
           GOOGLE_IOS_URL_SCHEME: ${{ secrets.GOOGLE_IOS_URL_SCHEME }}
+          # Inlined into the JS bundle at export; unset, the update ships with Sentry off.
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
         run: |
           eas update \
             --branch "$BRANCH" \
