@@ -85,4 +85,16 @@ describe('routes/client-metrics.ts — POST /web-vitals', () => {
       assert.ok(text.includes(`nav="${navigationType}"`), `expected label nav="${navigationType}" to be recorded`);
     }
   });
+
+  test('drops a malformed beacon with 204 and records nothing', async () => {
+    const deps = makeDeps();
+    const app = buildApp(deps);
+
+    for (const body of ['not json', '{"name":"LCP","value":"1000"}', '{"name":"LCP","value":1e999}']) {
+      await request(app).post('/web-vitals').set('Content-Type', 'text/plain').send(body).expect(204);
+    }
+
+    const text = await deps.promMetrics.registry.metrics();
+    assert.ok(!text.includes('nav="'), 'malformed beacons must not be observed');
+  });
 });
