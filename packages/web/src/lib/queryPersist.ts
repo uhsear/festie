@@ -1,6 +1,7 @@
 import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister';
 import type { PersistQueryClientOptions } from '@tanstack/react-query-persist-client';
-import { useAuthStore } from '@festie/shared';
+import type { QueryClient } from '@tanstack/react-query';
+import { api, useAuthStore, type CrewMeetingPoint } from '@festie/shared';
 
 /**
  * Offline-survival persistence for the TanStack Query cache (web).
@@ -44,6 +45,23 @@ const PERSISTED_KEY_ROOTS = new Set<string>([
   'settlement-plan',
   'crew-activity',
 ]);
+
+export const meetingPointsQuery = (crewId: string) => ({
+  queryKey: ['meeting-points', crewId] as const,
+  queryFn: async (): Promise<CrewMeetingPoint[]> => {
+    const res = await api.get<CrewMeetingPoint[] | { meetingPoints: CrewMeetingPoint[] }>(`/crews/${crewId}/meeting-points`);
+    return Array.isArray(res) ? res : res?.meetingPoints || [];
+  },
+});
+
+export const expensesKey = (crewId: string) => ['expenses', crewId] as const;
+
+/** Everything an expense write changes: the list, the settle-up plan and the balances. */
+export function invalidateCrewMoney(qc: QueryClient, crewId: string): void {
+  for (const root of ['expenses', 'settlement-plan', 'expense-balances']) {
+    void qc.invalidateQueries({ queryKey: [root, crewId] });
+  }
+}
 
 export const queryPersister = createSyncStoragePersister({
   storage: typeof window !== 'undefined' ? window.localStorage : undefined,
