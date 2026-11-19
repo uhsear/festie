@@ -1,5 +1,5 @@
 import { after, afterEach, describe, test } from 'node:test';
-import { assert, Pool, request, TEST_DATABASE_URL, startServer, registerUser } from './_integration-helpers';
+import { assert, Pool, request, TEST_DATABASE_URL, startServer, registerUser, loginUser } from './_integration-helpers';
 import createSessionsStore from '../lib/db/stores/sessions';
 
 const servers: any[] = [];
@@ -107,5 +107,23 @@ describe('Refresh-token rotation (DB)', { concurrency: 1 }, () => {
     }
 
     await server.request.get('/api/v1/auth/me').set('x-user-token', dave.token).expect(200);
+  });
+
+  test('refresh at USER_SESSION_MAX keeps every other session valid', async () => {
+    const server = await startServer({ USER_SESSION_MAX: 3 });
+    servers.push(server);
+    const erin = await registerUser(server, 'erin');
+    const second = await loginUser(server, 'erin');
+    const third = await loginUser(server, 'erin');
+    const others = [erin.token, second.token];
+
+    // The refreshing session is the newest, so the oldest one is another device's.
+    const res = await server.request.post('/api/v1/auth/refresh').set('x-user-token', third.token).expect(200);
+
+    for (const token of [...others, res.body.data.token]) {
+      await server.request.get('/api/v1/auth/me').set('x-user-token', token).expect(200);
+    }
+    await server.request.get('/api/v1/auth/me').set('x-user-token', third.token).expect(401);
+    assert.equal(await countRows('SELECT COUNT(*) AS count FROM user_sessions WHERE user_id = $1', erin.user.id), 3);
   });
 });

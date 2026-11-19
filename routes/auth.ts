@@ -324,10 +324,9 @@ export default function createAuthRoutes(deps: any): Router {
     try {
       setNoStore(res);
       // Issue the new session first so a DB failure cannot leave the client with none
-      const { stores: storesRef, hashSessionToken: hashToken, disconnectSessionTokens } = deps;
-      const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req));
+      const { disconnectSessionTokens } = deps;
+      const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req), req.userToken ?? null);
       if (req.userToken) {
-        await storesRef.sessions.deleteUserSession(hashToken(req.userToken));
         // Disconnect sockets still using the old token to prevent stale connections
         disconnectSessionTokens([req.userToken], io);
       }
