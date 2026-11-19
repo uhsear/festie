@@ -26,15 +26,15 @@
 #   9. Tags the deploy `deploy-<UTC timestamp>` and pushes the tag (P14).
 #
 # Configuration (all via environment — nothing secret is committed):
-#   FESTIE_SSH_HOST       prod host/IP                 (default 192.168.0.150)
-#   FESTIE_SSH_USER       prod SSH user                (default asir)
+#   FESTIE_SSH_HOST       prod host/IP                 (required)
+#   FESTIE_SSH_USER       prod SSH user                (required)
 #   FESTIE_SSH_KEY        path to a private key file   (optional; falls back to
 #                                                        the agent / ~/.ssh keys)
 #   FESTIE_SSH_KNOWN_HOSTS  extra known_hosts file     (optional; ~/.ssh/known_hosts is
 #                                                        always loaded. An unknown or changed
 #                                                        host key aborts — add it with ssh-keyscan
 #                                                        after checking it out of band)
-#   FESTIE_APP_DIR        app dir on the server        (default /home/asir/festival-planner)
+#   FESTIE_APP_DIR        app dir on the server        (required)
 #   FESTIE_PM2_NAME       PM2 process name             (default festie)
 #   FESTIE_READY_URL      readiness URL on the server  (default http://localhost:4000/api/ready)
 #   FESTIE_LOGIN_URL      login URL on the server      (default http://localhost:4000/api/v1/auth/login)
@@ -65,11 +65,18 @@ except ImportError:
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-HOST = os.environ.get("FESTIE_SSH_HOST", "192.168.0.150")
-USER = os.environ.get("FESTIE_SSH_USER", "asir")
+def _required(name):
+    value = os.environ.get(name)
+    if not value:
+        sys.exit(f"{name} is required: set it in the environment (see scripts/deploy/deploy.py).")
+    return value
+
+
+HOST = _required("FESTIE_SSH_HOST")
+USER = _required("FESTIE_SSH_USER")
 KEY = os.environ.get("FESTIE_SSH_KEY")  # optional explicit key file
 KNOWN_HOSTS = os.environ.get("FESTIE_SSH_KNOWN_HOSTS")  # optional extra known_hosts file
-APP = os.environ.get("FESTIE_APP_DIR", "/home/asir/festival-planner")
+APP = _required("FESTIE_APP_DIR")
 PM2_NAME = os.environ.get("FESTIE_PM2_NAME", "festie")
 READY_URL = os.environ.get("FESTIE_READY_URL", "http://localhost:4000/api/ready")
 LOGIN_URL = os.environ.get("FESTIE_LOGIN_URL", "http://localhost:4000/api/v1/auth/login")
