@@ -3,6 +3,7 @@ import { useToast } from '../../lib/toastContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import Button from '../ui/Button';
 import { Bell, BellOff } from 'lucide-react';
+import { Card } from '../ui/Card';
 
 export default function NotificationSection() {
   const { toast, toastError } = useToast();
@@ -64,7 +65,7 @@ export default function NotificationSection() {
   };
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+    <Card className="space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
         {push.permission === 'granted' ? (
           <Bell className="w-4 h-4" aria-hidden="true" />
@@ -126,6 +127,6 @@ export default function NotificationSection() {
           </Button>
         </>
       )}
-    </section>
+    </Card>
   );
 }
