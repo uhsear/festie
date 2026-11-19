@@ -7,7 +7,7 @@ import MemberDayChips from './MemberDayChips';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { Users, UserPlus, Crown, ChevronDown, Trash2, LogOut } from 'lucide-react';
-import { memberAvatarUrl, memberCountLabel } from '@festie/shared/utils';
+import { memberAvatarUrl, memberCountLabel, memberIsOwner } from '@festie/shared/utils';
 import type { CrewMember, FestivalDay } from '@festie/shared/types';
 
 export interface MembersTabProps {
@@ -70,8 +70,8 @@ export default function MembersTab({
         <MyDaysCard currentUserId={currentUserId} />
         <div className="space-y-0.5">
           {members.map((m, index) => {
-            const memberIsOwner = m.role === 'owner' || ownerId === m.userId;
-            const canManage = isOwner && !memberIsOwner && m.userId !== currentUserId;
+            const rowIsOwner = memberIsOwner(m, ownerId);
+            const canManage = isOwner && !rowIsOwner && m.userId !== currentUserId;
             const canKick = canManage && !!onKick;
             const displayName = m.name || m.username || 'User';
             const open = managingId === m.userId;
@@ -88,7 +88,7 @@ export default function MembersTab({
                       {m.userId === currentUserId ? `${displayName} (you)` : displayName}
                     </div>
                     <MemberDayChips userId={m.userId} name={displayName} days={festivalDays} />
-                    {memberIsOwner && (
+                    {rowIsOwner && (
                       <div className="text-xs text-text-secondary inline-flex items-center gap-1">
                         <Crown className="w-3 h-3" aria-hidden="true" /> Owner
                       </div>
