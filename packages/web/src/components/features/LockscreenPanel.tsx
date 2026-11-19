@@ -79,7 +79,7 @@ function spanLabel(pageSets: FestivalSet[]): string {
   return `${short(pageSets[0]!.startTime)} – ${short(last.endTime || last.startTime)}`;
 }
 
-const optionClass = (active: boolean) =>
+export const optionClass = (active: boolean) =>
   `rounded-full border px-3 min-h-9 text-xs font-semibold cursor-pointer transition-colors ${
     active ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover' : 'border-border text-text-secondary'
   }`;
