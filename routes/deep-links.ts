@@ -27,6 +27,7 @@ export default function createDeepLinkRoutes(deps: any) {
       // retryable-classified, matching every other route (see lib/response.ts).
       return sendError(res, 503, 'Apple Team ID not configured', ErrorCodes.SERVICE_UNAVAILABLE);
     }
+    // Envelope exception (see lib/response.ts): Apple fixes this file's bare JSON shape.
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.json({
@@ -55,6 +56,7 @@ export default function createDeepLinkRoutes(deps: any) {
     if (!config.ANDROID_CERT_FINGERPRINTS || config.ANDROID_CERT_FINGERPRINTS.trim() === '') {
       return sendError(res, 503, 'Android certificate fingerprints not configured', ErrorCodes.SERVICE_UNAVAILABLE);
     }
+    // Envelope exception (see lib/response.ts): Android fixes this file's bare JSON shape.
     res.setHeader('Content-Type', 'application/json');
     res.setHeader('Cache-Control', 'public, max-age=86400');
     return res.json([
