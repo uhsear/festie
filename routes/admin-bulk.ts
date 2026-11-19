@@ -7,6 +7,7 @@
  *         /crews, /crews/:id/members, /crews/:id/members/:userId, /crews/:id
  */
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { dropLivePosition } from '../lib/live-location-cache.js';
 
 export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
@@ -29,6 +30,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     getUserById,
   } = deps;
   const { adminWriteLimit } = ctx;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   /**
    * H1 (admin path): evict an admin-removed user's live socket(s) from the crew
@@ -166,22 +168,16 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
             log.info('admin:force-logout', { userId: r.userId, actor: 'admin' });
           }
         }
-        if (stores.auditLog) {
-          // One row per user, so the audit `user:` filter finds it by target_id.
-          for (const r of results) {
-            const target = await getUserById(r.userId);
-            await stores.auditLog.insert({
-              actorType: 'admin',
-              actorId: req.user?.userId || 'admin',
-              action: AUDIT_ACTIONS.USER_SESSIONS_REVOKED,
-              targetType: 'user',
-              targetId: r.userId,
-              detailsJson: JSON.stringify({ targetUsername: target?.username ?? null, status: r.status }),
-              ip: getRequestIp(req),
-              status: r.status === 'logged_out' ? 'success' : 'failure',
-            });
-          }
-          res.locals.auditWritten = true;
+        // One row per user, so the audit `user:` filter finds it by target_id.
+        for (const r of results) {
+          const target = await getUserById(r.userId);
+          await writeAdminAudit(req, res, {
+            action: AUDIT_ACTIONS.USER_SESSIONS_REVOKED,
+            targetType: 'user',
+            targetId: r.userId,
+            details: { targetUsername: target?.username ?? null, status: r.status },
+            status: r.status === 'logged_out' ? 'success' : 'failure',
+          });
         }
         return sendSuccess(res, { results });
       } catch (error: any) {
@@ -227,20 +223,14 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
         }
         if (deps.invalidateFestivalListCache) deps.invalidateFestivalListCache();
         deps.invalidateFestivalCache?.();
-        if (stores.auditLog) {
-          for (const r of results) {
-            await stores.auditLog.insert({
-              actorType: 'admin',
-              actorId: req.user?.userId || 'admin',
-              action: AUDIT_ACTIONS.FESTIVAL_ARCHIVED,
-              targetType: 'festival',
-              targetId: r.festivalId,
-              detailsJson: JSON.stringify({ name: names.get(r.festivalId) ?? null, status: r.status }),
-              ip: getRequestIp(req),
-              status: r.status === 'archived' ? 'success' : 'failure',
-            });
-          }
-          res.locals.auditWritten = true;
+        for (const r of results) {
+          await writeAdminAudit(req, res, {
+            action: AUDIT_ACTIONS.FESTIVAL_ARCHIVED,
+            targetType: 'festival',
+            targetId: r.festivalId,
+            details: { name: names.get(r.festivalId) ?? null, status: r.status },
+            status: r.status === 'archived' ? 'success' : 'failure',
+          });
         }
         return sendSuccess(res, { results });
       } catch (error: any) {
@@ -357,22 +347,12 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
         // can't keep injecting. Mirrors the owner-kick path in crew-members.ts.
         await evictUserFromCrewRoom(crewId, targetUserId);
 
-        if (stores.auditLog) {
-          await stores.auditLog.insert({
-            actorType: 'admin',
-            actorId: req.user?.userId || 'admin',
-            action: AUDIT_ACTIONS.CREW_MEMBER_REMOVED,
-            targetType: 'user',
-            targetId: targetUserId,
-            detailsJson: JSON.stringify({
-              crewId,
-              crewName: crew?.name ?? null,
-              targetUsername: targetUser?.username ?? null,
-            }),
-            ip: getRequestIp(req),
-          });
-          res.locals.auditWritten = true;
-        }
+        await writeAdminAudit(req, res, {
+          action: AUDIT_ACTIONS.CREW_MEMBER_REMOVED,
+          targetType: 'user',
+          targetId: targetUserId,
+          details: { crewId, crewName: crew?.name ?? null, targetUsername: targetUser?.username ?? null },
+        });
 
         log.info('admin:crew-remove-member', { crewId, userId: targetUserId });
         return sendSuccess(res, { success: true });
@@ -405,18 +385,12 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
 
         await stores.crews.delete(crewId);
 
-        if (stores.auditLog) {
-          await stores.auditLog.insert({
-            actorType: 'admin',
-            actorId: req.user?.userId || 'admin',
-            action: AUDIT_ACTIONS.CREW_DELETED,
-            targetType: 'crew',
-            targetId: crewId,
-            detailsJson: JSON.stringify({ crewName: crew.name, festivalId: crew.festivalId }),
-            ip: getRequestIp(req),
-          });
-          res.locals.auditWritten = true;
-        }
+        await writeAdminAudit(req, res, {
+          action: AUDIT_ACTIONS.CREW_DELETED,
+          targetType: 'crew',
+          targetId: crewId,
+          details: { crewName: crew.name, festivalId: crew.festivalId },
+        });
 
         log.warn('admin:crew-delete', { crewId, crewName: crew.name });
         return sendSuccess(res, { success: true });

@@ -13,8 +13,8 @@
  * No save, import or publish sends either alert; an admin sends it once the data is final.
  */
 
-import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 
 // Why "Announce days" refuses, as the message the admin sees and the status it carries.
 const DAYS_REFUSALS: Record<string, [number, string]> = {
@@ -41,6 +41,7 @@ export default function createLineupAnnounceRoute(deps: any) {
     reengagement,
     reengagementExecutor,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const router = express.Router();
 
@@ -78,24 +79,12 @@ export default function createLineupAnnounceRoute(deps: any) {
         );
       }
       await reengagement.sendLineupDrop(festivalId);
-      if (stores.auditLog) {
-        try {
-          await stores.auditLog.insert({
-            id: crypto.randomUUID(),
-            actorType: 'admin',
-            actorId: req.user?.userId,
-            action: AUDIT_ACTIONS.LINEUP_ANNOUNCED,
-            targetType: 'festival',
-            targetId: festivalId,
-            detailsJson: JSON.stringify({ recipients }),
-            ip: getRequestIp(req),
-          });
-        } catch (err: any) {
-          log.warn('lineup announce audit write failed', { festivalId, error: err?.message });
-        }
-      }
-      // Tells the generic audit middleware this request already has its row.
-      res.locals.auditWritten = true;
+      await writeAdminAudit(req, res, {
+        action: AUDIT_ACTIONS.LINEUP_ANNOUNCED,
+        targetType: 'festival',
+        targetId: festivalId,
+        details: { recipients },
+      });
       return sendSuccess(res, { queued: true, recipients });
     } catch (err: any) {
       log.error('lineup announcement error', { error: err?.message });
@@ -129,29 +118,17 @@ export default function createLineupAnnounceRoute(deps: any) {
       const refusal = count.reason ? DAYS_REFUSALS[count.reason] : undefined;
       if (refusal) return sendError(res, refusal[0], refusal[1], ErrorCodes.INVALID_INPUT);
       await reengagement.sendDaysOut(festivalId);
-      if (stores.auditLog) {
-        try {
-          await stores.auditLog.insert({
-            id: crypto.randomUUID(),
-            actorType: 'admin',
-            actorId: req.user?.userId,
-            action: AUDIT_ACTIONS.DAYS_ANNOUNCED,
-            targetType: 'festival',
-            targetId: festivalId,
-            detailsJson: JSON.stringify({
-              recipients: count.recipients,
-              emailRecipients: count.emailRecipients,
-              actsWithDay: count.actsWithDay,
-              actsTotal: count.actsTotal,
-            }),
-            ip: getRequestIp(req),
-          });
-        } catch (err: any) {
-          log.warn('days announce audit write failed', { festivalId, error: err?.message });
-        }
-      }
-      // Tells the generic audit middleware this request already has its row.
-      res.locals.auditWritten = true;
+      await writeAdminAudit(req, res, {
+        action: AUDIT_ACTIONS.DAYS_ANNOUNCED,
+        targetType: 'festival',
+        targetId: festivalId,
+        details: {
+          recipients: count.recipients,
+          emailRecipients: count.emailRecipients,
+          actsWithDay: count.actsWithDay,
+          actsTotal: count.actsTotal,
+        },
+      });
       return sendSuccess(res, { queued: true, recipients: count.recipients, emailRecipients: count.emailRecipients });
     } catch (err: any) {
       log.error('days announcement error', { error: err?.message });

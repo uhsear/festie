@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import {
   ArtistError,
   artistTitle,
@@ -46,6 +46,7 @@ export default function createArtistsRoutes(deps: any) {
     setNoStore,
     config,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
   // deps.artistBackfill lets a route test swap the three backfill steps.
   const backfill = deps.artistBackfill ?? { planBackfill, applyBackfillPlan, verifyBackfill };
 
@@ -66,26 +67,11 @@ export default function createArtistsRoutes(deps: any) {
     return sendError(res, 500, `Failed to ${what}`, ErrorCodes.INTERNAL_ERROR);
   }
 
-  // Same shape as the festival routes' audit helper: after the response, and a failure only logs.
+  // After the response, and a failure only logs: claim the generic middleware's slot first.
   function audit(action: string, artistId: string, req: any, details: Record<string, unknown>, targetType = 'artist') {
     if (!stores.auditLog) return;
     if (req.res?.locals) req.res.locals.auditWritten = true;
-    Promise.resolve().then(async () => {
-      try {
-        await stores.auditLog.insert({
-          id: crypto.randomUUID(),
-          actorType: 'admin',
-          actorId: req.user?.userId,
-          action,
-          targetType,
-          targetId: artistId,
-          detailsJson: JSON.stringify(details),
-          ip: getRequestIp(req),
-        });
-      } catch (e: any) {
-        log.warn('audit log write failed', { error: e.message });
-      }
-    });
+    void writeAdminAudit(req, req.res, { action, targetType, targetId: artistId, details });
   }
 
   /**

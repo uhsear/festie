@@ -16,7 +16,6 @@ import fs from 'fs';
 import path from 'path';
 
 import * as exportUtils from './helpers/export-utils.js';
-import type { PublicUser } from './types/app-context';
 
 const { buildAvatarUrl } = exportUtils;
 
@@ -44,6 +43,27 @@ export function createOpaqueId(prefix: any) {
 
 export function createVersionToken() {
   return crypto.randomUUID();
+}
+
+/**
+ * The public-safe projection of a user emitted by `serializePublicUser`. It is a
+ * *subset* of the shared `User` contract — the public API intentionally omits
+ * `createdAt`/`updatedAt`/`isAdmin`. Kept assignable to `Partial<User>` so the
+ * compile-time contract test can assert structural compatibility.
+ */
+export interface PublicUser {
+  id: string;
+  username: string;
+  name: string | null;
+  avatarUrl: string | null;
+  email: string | null;
+  emailVerified: boolean;
+  // Payment handles for settle-up deep links (null when unset).
+  venmoHandle: string | null;
+  cashappCashtag: string | null;
+  paypalHandle: string | null;
+  // Opt-in flag for the public /u/:username share page (false = private).
+  publicSchedule: boolean;
 }
 
 // ════════════════════════════════════════════════════════════════════════════════
