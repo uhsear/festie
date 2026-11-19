@@ -434,19 +434,6 @@ function createCloseHandler({
       }
     }
 
-    // Drain running sweeps before anything below ends the pg pool.
-    if (state.sweepsInFlight?.size > 0) {
-      let drainTimer: NodeJS.Timeout | undefined;
-      await Promise.race([
-        Promise.allSettled([...state.sweepsInFlight]),
-        new Promise((resolve) => {
-          drainTimer = setTimeout(resolve, config.SHUTDOWN_TIMEOUT_MS);
-        }),
-      ]);
-      clearTimeout(drainTimer);
-      if (state.sweepsInFlight.size > 0) log.warn('shutdown timeout reached, sweeps still running', { count: state.sweepsInFlight.size });
-    }
-
     // Flush any pending batched events before disconnecting sockets
     if (emitter?.flushAll) emitter.flushAll();
     try {
@@ -498,6 +485,19 @@ function createCloseHandler({
       log.warn('shutdown timeout reached, closing with in-flight requests', {
         inFlightCount: inFlightRequests.count,
       });
+    }
+
+    // Drain running sweeps before the pg pool ends, within the shared shutdown deadline.
+    if (state.sweepsInFlight?.size > 0) {
+      let drainTimer: NodeJS.Timeout | undefined;
+      await Promise.race([
+        Promise.allSettled([...state.sweepsInFlight]),
+        new Promise((resolve) => {
+          drainTimer = setTimeout(resolve, Math.max(0, config.SHUTDOWN_TIMEOUT_MS - (Date.now() - shutdownStart)));
+        }),
+      ]);
+      clearTimeout(drainTimer);
+      if (state.sweepsInFlight.size > 0) log.warn('shutdown timeout reached, sweeps still running', { count: state.sweepsInFlight.size });
     }
 
     if (sentry?.close) await sentry.close(2000);
