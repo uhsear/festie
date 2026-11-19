@@ -10,6 +10,7 @@ import sharp from 'sharp';
 import createAdminSiteplanRoutes from '../routes/admin-siteplan.js';
 import { configureMiddleware } from '../lib/middleware.js';
 import { AvatarPool } from '../lib/avatar-pool.js';
+import { createSiteplanUpload } from '../lib/siteplan-upload.js';
 import { sendError, sendSuccess, ErrorCodes } from '../lib/response.js';
 
 const PUBLIC_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'festie-siteplan-'));
@@ -69,7 +70,7 @@ function makeApp(publicOrigin: string) {
     festivalAccess: () => adminAuth,
     avatarPool,
     pool: {
-      query: async (_sql: string, params: any[]) => ({ rows: params[0] === 'fest-1' ? [{ id: 'fest-1' }] : [] }),
+      query: async (_sql: string, params: any[]) => ({ rows: !params ? [] : params[0] === 'fest-1' ? [{ id: 'fest-1' }] : [] }),
     },
     adminAuth,
     validateParams: passthrough,
@@ -173,5 +174,31 @@ describe('POST /api/v1/admin/festivals/:id/siteplan-image', () => {
   it('returns 404 for an unknown festival even when PUBLIC_ORIGIN is not https', async () => {
     const res = await upload(makeApp('http://localhost:4000'), 'nope', { buffer: await png(10, 10), filename: 'a.png', contentType: 'image/png' });
     assert.equal(res.status, 404);
+  });
+});
+
+describe('sweepOrphanSiteplans', () => {
+  it('removes an old unreferenced file, keeps an old referenced file and a young unreferenced file', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'festie-siteplan-sweep-'));
+    try {
+      const dir = path.join(root, 'uploads', 'siteplans');
+      fs.mkdirSync(dir, { recursive: true });
+      const referenced = 'a'.repeat(32);
+      const orphan = 'b'.repeat(32);
+      const young = 'c'.repeat(32);
+      for (const key of [referenced, orphan, young]) fs.writeFileSync(path.join(dir, `${key}.webp`), 'x');
+      const old = new Date(Date.now() - 48 * 60 * 60 * 1000);
+      for (const key of [referenced, orphan]) fs.utimesSync(path.join(dir, `${key}.webp`), old, old);
+
+      const { sweepOrphanSiteplans } = createSiteplanUpload({ config: { PUBLIC_DIR: root }, sendError, ErrorCodes });
+      const removed = await sweepOrphanSiteplans(new Set([referenced]));
+
+      assert.equal(removed, 1);
+      assert.ok(fs.existsSync(path.join(dir, `${referenced}.webp`)), 'referenced old file survives');
+      assert.ok(!fs.existsSync(path.join(dir, `${orphan}.webp`)), 'unreferenced old file is removed');
+      assert.ok(fs.existsSync(path.join(dir, `${young}.webp`)), 'young unsaved upload survives');
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
