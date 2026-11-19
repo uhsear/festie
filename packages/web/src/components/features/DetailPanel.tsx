@@ -231,7 +231,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
         <Drawer.Content
           aria-label="Set detail panel"
           className="fixed bottom-0 inset-x-0 z-[var(--z-modal)] h-[96dvh] flex flex-col
-                     rounded-tl-[24px] rounded-tr-[24px] detail-glass outline-none
+                     rounded-tl-[24px] rounded-tr-[24px] detail-glass outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-aqua
                      lg:inset-y-0 lg:right-0 lg:left-auto lg:bottom-auto lg:h-dvh
                      lg:w-[420px] lg:max-w-full
                      lg:rounded-none lg:rounded-l-[16px]"

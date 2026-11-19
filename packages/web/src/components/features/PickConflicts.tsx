@@ -120,7 +120,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
   };
 
   return (
-    <section id="clashes" tabIndex={-1} className="mb-3 flex flex-col gap-3 outline-none" aria-label="Schedule clashes">
+    <section id="clashes" tabIndex={-1} className="mb-3 flex flex-col gap-3 outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-aqua" aria-label="Schedule clashes">
       {groups.map((group, gi) => {
         const plan = splitPlan(group);
         const catchOpt = catchFor.get(group) ?? null;
