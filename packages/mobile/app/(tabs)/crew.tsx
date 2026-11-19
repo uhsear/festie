@@ -303,6 +303,7 @@ export default function CrewScreen() {
   const [pendingStart, setPendingStart] = useState<'create' | 'join' | null>(null);
   useEffect(() => {
     if (!user || (startParam !== 'create' && startParam !== 'join')) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- latches the route param once, then clears it
     setPendingStart(startParam);
     router.setParams({ start: undefined });
   }, [user, startParam, router]);
@@ -310,6 +311,7 @@ export default function CrewScreen() {
     if (!pendingStart || status === 'loading' || status === 'error' || status === 'joining') return;
     // Create focuses via CreateCrewForm's autoFocus prop, which reads pendingStart.
     if (pendingStart === 'join' && status === 'none') inviteInputRef.current?.focus();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clears the latched param after the crew status settles
     setPendingStart(null);
   }, [pendingStart, status]);
 
@@ -653,6 +655,7 @@ export default function CrewScreen() {
         balanceCents: balanceCents(expenseBalances.find((b) => b.userId === user.id)?.balance),
       });
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the ids, not the whole objects
   }, [crewTab, activeCrew?.id, polls, expenseBalances, user?.id, markCrewBadgeSeen]);
 
   if (!user) {

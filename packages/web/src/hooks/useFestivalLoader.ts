@@ -117,7 +117,7 @@ export function useFestivalLoader() {
         }
       })
       .catch(() => {});
-  }, [loadFestivals, selectFestival, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- refetch after sign-in/out: logout resets the stores
+  }, [loadFestivals, selectFestival, user?.id]); // refetch after sign-in/out: logout resets the stores
 
   // Tab back to the app on a later day: move the day tab to today (no fetch).
   useEffect(() => {

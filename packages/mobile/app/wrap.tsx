@@ -73,6 +73,7 @@ export default function WrapScreen() {
       return () => {
         cancelled = true;
       };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reloadKey is the retry trigger: bumping it refetches
     }, [festivalId, user, crewParam, reloadKey]),
   );
 

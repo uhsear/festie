@@ -455,6 +455,7 @@ export default function TimelineView({
   const columnRefs = useRef<Map<number, ScrollViewInstance | null>>(new Map());
   const activePageRef = useRef(activePage);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/immutability -- ref mirrors the page for scroll callbacks
     activePageRef.current = activePage;
     scrollRef.current = columnRefs.current.get(activePage) ?? null;
   }, [activePage, scrollRef]);
@@ -462,6 +463,7 @@ export default function TimelineView({
   // clamps its offset without a guaranteed onScroll, so clamp the page here and
   // the effect above re-aims scrollRef at the column that is now registered.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- clamps the page when a stage filter shrinks the carousel
     if (activePage >= visibleStages.length) setActivePage(Math.max(0, visibleStages.length - 1));
   }, [visibleStages.length, activePage]);
   const registerColumnRef = useCallback(

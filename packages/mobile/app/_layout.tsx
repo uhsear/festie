@@ -284,6 +284,7 @@ function AuthGate() {
   // A user who opened an invite link came to join a crew: skip the intro for good.
   const skipIntro = introSeen === false && shouldSkipIntro(segments[0]);
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- dismisses the intro once when an invite link opens
     if (skipIntro) dismissIntro();
   }, [skipIntro]);
 
