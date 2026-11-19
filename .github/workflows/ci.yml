@@ -12,11 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Opt every JS action into the Node 24 runtime ahead of GitHub's 2026-06-16
-# forced migration. This silences the Node 20 deprecation across all actions
-# (including pnpm/action-setup@v4, whose `version:` input we keep — the root
-# must not carry a packageManager field). checkout/setup-node are also bumped
-# to their Node 24 majors below.
+# Opt every JS action into the Node 24 runtime (GitHub's forced migration date,
+# 2026-06-16, has passed, so this is now belt and braces). pnpm/action-setup
+# keeps its `version:` input — the root must not carry a packageManager field.
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -66,7 +64,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: zricethezav/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_ENABLE_COMMENTS: false
@@ -436,7 +434,7 @@ jobs:
         # is a nice-to-have warn gate, so a flaky `go install` must never fail CI
         # (the diff step below already guards a missing binary).
         continue-on-error: true
-        run: go install github.com/tufin/oasdiff@latest
+        run: go install github.com/tufin/oasdiff@v1.39.0
 
       - name: oasdiff — detect breaking API changes (non-blocking warn)
         # Compares the base-branch committed spec (origin/main) versus the spec
