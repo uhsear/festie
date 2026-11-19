@@ -65,25 +65,35 @@ describe('Integration — Weather', { concurrency: 1 }, () => {
       await pool.end();
     }
 
-    const res = await server.request
-      .get('/api/v1/weather/fest-1')
-      .set('x-user-token', charlie.token)
-      .expect(200);
+    // Stub Open-Meteo so the test never depends on the network.
+    const realFetch = globalThis.fetch;
+    const urls: string[] = [];
+    globalThis.fetch = (async (input: any) => {
+      urls.push(String(input));
+      return new Response(
+        JSON.stringify({
+          timezone: 'America/New_York',
+          daily: { time: ['2026-06-05'], temperature_2m_max: [30] },
+          hourly: { time: ['2026-06-05T10:00'], temperature_2m: [25] },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }) as typeof fetch;
+    try {
+      const res = await server.request
+        .get('/api/v1/weather/fest-1')
+        .set('x-user-token', charlie.token)
+        .expect(200);
 
-    assert.equal(res.body.error, null);
-
-    // The external API may succeed or fail depending on network availability.
-    // In either case, available should be a boolean.
-    assert.equal(typeof res.body.data.available, 'boolean');
-
-    if (res.body.data.available) {
-      assert.ok(res.body.data.daily, 'Weather data should include daily forecasts');
-      assert.ok(res.body.data.hourly, 'Weather data should include hourly forecasts');
-      assert.ok(Array.isArray(res.body.data.daily.dates));
-      assert.ok(Array.isArray(res.body.data.hourly.times));
-    } else {
-      // External API may be unavailable in CI — that is acceptable
-      assert.ok(res.body.data.reason, 'Should have a reason when unavailable');
+      assert.equal(res.body.error, null);
+      assert.equal(urls.length, 1);
+      assert.ok(urls[0]?.startsWith('https://api.open-meteo.com/'));
+      assert.equal(res.body.data.available, true);
+      assert.deepEqual(res.body.data.daily.dates, ['2026-06-05']);
+      assert.deepEqual(res.body.data.daily.maxTemp, [30]);
+      assert.deepEqual(res.body.data.hourly.times, ['2026-06-05T10:00']);
+    } finally {
+      globalThis.fetch = realFetch;
     }
   });
 
