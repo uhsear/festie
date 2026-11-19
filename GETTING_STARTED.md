@@ -198,7 +198,7 @@ npm test
 # Unit tests only — no database required
 npm run test:unit
 
-# Coverage report (c8) — enforces 80% lines/statements, 60% branches/functions
+# Coverage report (c8) — enforces 87% lines/statements, 80% branches, 89% functions
 npm run test:coverage
 ```
 
@@ -238,14 +238,15 @@ pnpm --filter @festie/web test
 pnpm --filter @festie/web test:coverage
 ```
 
-### Mobile typecheck and lint
+### Mobile typecheck, lint and tests
 
 ```bash
 pnpm --filter @festie/mobile typecheck
 pnpm --filter @festie/mobile lint
+pnpm --filter @festie/mobile test
 ```
 
-There is no mobile vitest suite — correctness is validated through shared tests, the type system, and E2E smoke tests.
+The mobile vitest suite covers the mobile-only code. Shared logic is tested in `@festie/shared`.
 
 ### Backend typecheck and lint
 
@@ -351,7 +352,7 @@ All workflows in `.github/workflows/`:
 | `android-e2e.yml` | manual dispatch | Android emulator + Maestro smoke tests (~25 min) |
 | `ios-e2e.yml` | manual dispatch | iOS simulator + Maestro smoke tests, macOS 15 runner (~20 min) |
 
-**CI coverage gate** (`ci.yml` `test` job): `--lines 80 --branches 60 --functions 60 --statements 80`. The `c8` config is in `.c8rc.json` at the repo root.
+**CI coverage gate** (`ci.yml` `test` job): `--lines 87 --branches 80 --functions 89 --statements 87`. The `c8` config is in `.c8rc.json` at the repo root.
 
 **Secrets required by CI:**
 - `TEST_USERNAME` / `TEST_PASSWORD` — used by E2E and Maestro flows
