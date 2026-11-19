@@ -7,6 +7,7 @@
 // only the festival record, never user, pick or crew data. Every database value
 // is escaped here, inside the renderer, so no caller can forget.
 
+import { shownSetName } from './artist-key.js';
 import { festivalTint } from './festival-tint.js';
 import {
   buildEventJsonLd,
@@ -48,10 +49,8 @@ export function dayHeadingDate(date: unknown): string {
 }
 
 function setArtistName(set: any, separator: string | undefined): string {
-  // The billed name wins, as in the app's artistDisplayName.
-  if (set.displayName) return set.displayName;
-  if (Array.isArray(set.artists) && set.artists.length > 0) return artistDisplayName(set.artists, separator);
-  return set.artist || 'Artist TBA';
+  if (!set.displayName && !set.artist && !set.artists?.length) return 'Artist TBA';
+  return shownSetName(set, separator);
 }
 
 /** One entry per day in record order; sets in festival time (06:00 day start), TBA last. All text is escaped. */
