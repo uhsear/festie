@@ -415,7 +415,7 @@ describe('createCrewsStore — crews', () => {
   });
 
   it('getMemberCount returns the count value', async () => {
-    const pool = mockPool([{ rows: [{ count: 5 }] }]);
+    const pool = mockPool([{ rows: [{ count: '5' }] }]);
     const { crews } = createCrewsStore(pool, mockUtils);
 
     assert.strictEqual(await crews.getMemberCount('c1'), 5);
