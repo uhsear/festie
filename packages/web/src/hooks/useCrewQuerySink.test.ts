@@ -1,12 +1,16 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook } from '@testing-library/react';
+import { QueryObserver } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { createTestQueryClient } from '../test-utils';
 import type { Socket } from 'socket.io-client';
 import { useCrewRealtime } from '@festie/shared/hooks/useCrewRealtime';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { api } from '@festie/shared';
 import { buildCrewQuerySink } from './useCrewQuerySink';
+import { meetingPointsQuery } from '../lib/queryPersist';
+import { pollsQueryOptions } from './useCrewAttention';
 
 /**
  * These tests exercise the WEB crew-realtime wiring end to end:
@@ -17,6 +21,14 @@ import { buildCrewQuerySink } from './useCrewQuerySink';
  */
 
 const ACTIVE_CREW = 'crew-active-123';
+
+// The sink fetches polls and meeting points through the query client; keep tests off the network.
+beforeEach(() => {
+  vi.spyOn(api, 'get').mockResolvedValue([]);
+});
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 // A minimal socket double: records handlers registered via `.on`, lets the test
 // emit events, and reports `connected` so the join:crew lifecycle is exercised.
@@ -191,24 +203,45 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     expect(invalidate).toHaveBeenCalledTimes(9);
   });
 
-  it('reloads crewStore meeting points and polls on their events', () => {
-    const loadMeetingPoints = vi.fn().mockResolvedValue(undefined);
-    const loadPolls = vi.fn().mockRejectedValue(new Error('offline'));
-    const state = useCrewStore.getState();
-    const spy = vi.spyOn(useCrewStore, 'getState').mockReturnValue({ ...state, loadMeetingPoints, loadPolls });
+  it('fills the crewStore from the query result with one request per event', async () => {
+    const get = vi.mocked(api.get).mockImplementation(async (url: string) =>
+      url.endsWith('/polls')
+        ? { polls: [{ id: 'p1', votes: [{ user_id: 'u1', option: 0 }, { user_id: null, option: 1 }] }] }
+        : { meetingPoints: [{ id: 'mp1' }] },
+    );
+    // Active observers are what make invalidateQueries refetch, so mount both first.
+    const observers = [
+      new QueryObserver(queryClient, pollsQueryOptions('c1')),
+      new QueryObserver(queryClient, meetingPointsQuery('c1')),
+    ];
+    const unsubscribe = observers.map((o) => o.subscribe(() => {}));
+    await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(observers.every((o) => !o.getCurrentResult().isFetching)).toBe(true));
+    get.mockClear();
     const sink = buildCrewQuerySink(queryClient);
 
     sink.onMeetingPointUpsert('c1', {} as never);
-    sink.onMeetingPointRemoved('c1', 'mp1');
-    expect(loadMeetingPoints).toHaveBeenCalledTimes(2);
-    expect(loadMeetingPoints).toHaveBeenCalledWith('c1');
-
-    sink.onPollCreated('c1', { pollId: 'p', question: 'q', options: [], createdBy: 'u' });
     sink.onPollVoted('c1', 'p', 'u', 0);
-    sink.onPollClosed('c1', 'p');
-    expect(loadPolls).toHaveBeenCalledTimes(3);
-    expect(loadPolls).toHaveBeenCalledWith('c1');
-    spy.mockRestore();
+    await vi.waitFor(() => expect(useCrewStore.getState().polls).toHaveLength(1));
+    await vi.waitFor(() => expect(useCrewStore.getState().meetingPoints).toHaveLength(1));
+
+    expect(useCrewStore.getState().polls[0].votes).toEqual([{ user_id: 'u1', option: 0 }]);
+    expect(get).toHaveBeenCalledTimes(2);
+    expect(get).toHaveBeenCalledWith('/crews/c1/polls');
+    expect(get).toHaveBeenCalledWith('/crews/c1/meeting-points');
+    unsubscribe.forEach((u) => u());
+    useCrewStore.setState({ polls: [], meetingPoints: [] });
+  });
+
+  it('warns and keeps the store when the fetch fails', async () => {
+    vi.mocked(api.get).mockRejectedValue(new Error('offline'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    useCrewStore.setState({ polls: [{ id: 'keep' } as never] });
+    buildCrewQuerySink(queryClient).onPollClosed('c1', 'p');
+    await vi.waitFor(() => expect(warn).toHaveBeenCalled());
+    expect(useCrewStore.getState().polls).toHaveLength(1);
+    warn.mockRestore();
+    useCrewStore.setState({ polls: [] });
   });
 });
 
@@ -252,8 +285,6 @@ describe('buildCrewQuerySink crew days', () => {
 describe('buildCrewQuerySink reconnect resync', () => {
   const real = useCrewStore.getState();
   const loaders = () => ({
-    loadMeetingPoints: vi.fn().mockResolvedValue(undefined),
-    loadPolls: vi.fn().mockResolvedValue(undefined),
     loadPacking: vi.fn().mockResolvedValue(undefined),
     loadRides: vi.fn().mockResolvedValue(undefined),
   });
@@ -261,8 +292,6 @@ describe('buildCrewQuerySink reconnect resync', () => {
     useUIStore.setState({ pendingSync: 0 });
     useCrewStore.setState({
       activeCrew: null,
-      loadMeetingPoints: real.loadMeetingPoints,
-      loadPolls: real.loadPolls,
       loadPacking: real.loadPacking,
       loadRides: real.loadRides,
     });
@@ -280,8 +309,6 @@ describe('buildCrewQuerySink reconnect resync', () => {
       expect(invalidate).toHaveBeenCalledWith({ queryKey: [key, 'c1'] });
     }
     expect(invalidate).toHaveBeenCalledTimes(6);
-    expect(l.loadMeetingPoints).toHaveBeenCalledWith('c1');
-    expect(l.loadPolls).toHaveBeenCalledWith('c1');
     expect(l.loadPacking).toHaveBeenCalledWith('c1');
     expect(l.loadRides).toHaveBeenCalledWith('c1');
   });
