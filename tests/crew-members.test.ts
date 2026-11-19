@@ -593,8 +593,8 @@ describe('routes/crew-members.js — DELETE /:crewId/members/:userId', () => {
       .delete('/%20/members/%20');
 
     assert.equal(res.status, 400);
-    assert.equal(res.body.error.code, 'INVALID_INPUT');
-    assert.match(res.body.error.message, /Invalid IDs/i);
+    assert.equal(res.body.error.code, 'VALIDATION_ERROR');
+    assert.match(res.body.error.message, /Invalid user ID/i);
   });
 
   // ── Internal error ────────────────────────────────────────────────

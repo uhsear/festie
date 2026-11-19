@@ -63,7 +63,7 @@ export function createSessionHelpers({
   sendError: any;
   ErrorCodes: any;
 }) {
-  async function createUserSession(userId: any, username: any, deviceLabel: string | null = null) {
+  async function createUserSession(userId: any, username: any, deviceLabel: string | null = null, replaceToken: string | null = null) {
     const token = crypto.randomBytes(32).toString('hex');
     const evictedHashes = await stores.sessions.createUserSession({
       token: hashSessionToken(token),
@@ -73,6 +73,7 @@ export function createSessionHelpers({
       lastAccess: new Date(),
       maxPerUser: config.USER_SESSION_MAX,
       deviceLabel,
+      replaceToken: replaceToken ? hashSessionToken(replaceToken) : null,
     });
     const io = getIO();
     if (evictedHashes && evictedHashes.length > 0 && io) {

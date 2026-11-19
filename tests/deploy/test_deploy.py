@@ -14,8 +14,26 @@ from unittest import mock
 from test_pre_deploy_dump import deploy
 
 
+class FakeStream:
+    def __init__(self, text, exit_code=0):
+        self._text = text
+        self.channel = mock.Mock(recv_exit_status=lambda: exit_code)
+
+    def read(self):
+        return self._text.encode()
+
+
 class FakeClient:
+    """Stands in for paramiko.SSHClient; answers each command via `respond`."""
+
     closed = False
+
+    def __init__(self, respond):
+        self.respond = respond
+
+    def exec_command(self, cmd, timeout=None):
+        code, out, err = self.respond(cmd)
+        return None, FakeStream(out, code), FakeStream(err)
 
     def close(self):
         self.closed = True
@@ -25,7 +43,7 @@ def run_main(fail_on=None, ready="200", creds=("user", "pw")):
     """Run deploy.main() with every SSH command recorded. Returns (commands, exit, client)."""
     commands = []
 
-    def fake_run(client, cmd, timeout=300):
+    def respond(cmd):
         commands.append(cmd)
         if fail_on and fail_on in cmd:
             return 1, "", "boom"
@@ -35,14 +53,11 @@ def run_main(fail_on=None, ready="200", creds=("user", "pw")):
             return 0, "200", ""
         return 0, "ok", ""
 
-    client = FakeClient()
+    client = FakeClient(respond)
     exit_value = None
-    with mock.patch.object(deploy, "connect", return_value=client), \
-            mock.patch.object(deploy, "run", fake_run), \
-            mock.patch.object(deploy, "pre_deploy_dump", lambda c: commands.append("DUMP")), \
-            mock.patch.object(deploy, "TEST_USER", creds[0]), \
-            mock.patch.object(deploy, "TEST_PASSWORD", creds[1]), \
-            redirect_stdout(io.StringIO()):
+    # wait_ready and smoke_login bind run() as a default argument, so the fake
+    # sits at the client layer (exec_command) rather than patching deploy.run.
+    with mock.patch.object(deploy, "connect", return_value=client),             mock.patch.object(deploy, "pre_deploy_dump", lambda c: commands.append("DUMP")),             mock.patch.object(deploy.time, "sleep"),             mock.patch.object(deploy, "TEST_USER", creds[0]),             mock.patch.object(deploy, "TEST_PASSWORD", creds[1]),             redirect_stdout(io.StringIO()):
         try:
             deploy.main()
         except SystemExit as exc:
@@ -88,22 +103,25 @@ class DeployMainTest(unittest.TestCase):
         self.assertIsNone(exit_value)
         self.assertFalse(any("/auth/login" in c for c in commands))
 
-    def test_pm2_restart_exit_is_not_checked(self):
-        # Characterizes a known gap: a failed pm2 restart does not abort; only
-        # the readiness gate catches it.
-        commands, exit_value, _ = run_main(fail_on="pm2 restart")
-        self.assertIsNone(exit_value)
-        self.assertTrue(any("git tag" in c for c in commands))
+    def test_failed_pm2_restart_aborts_before_readiness_and_tag(self):
+        commands, exit_value, client = run_main(fail_on="pm2 restart")
+        self.assertEqual(exit_value, "pm2 restart failed; the old process may still be serving")
+        self.assertFalse(any("/api/ready" in c for c in commands))
+        self.assertFalse(any("git tag" in c for c in commands))
+        self.assertTrue(client.closed)
 
-    def test_login_temp_file_uses_unescaped_shell_pid(self):
-        # Characterizes a known bug: "$$" is expanded by each separate remote
-        # shell, so the write and the curl use different file names.
+    def test_login_write_curl_and_cleanup_share_one_remote_shell(self):
+        # "$$" is only stable within one remote shell, so the write, the curl
+        # and the trap cleanup must be a single command.
         commands, _, _ = run_main()
-        write = next(c for c in commands if "cat >" in c)
-        self.assertIn("/tmp/festie-login.$$.json", write)
-        curl = next(c for c in commands if "-X POST" in c)
-        self.assertIn("-d @/tmp/festie-login.$$.json", curl)
-        self.assertNotIn("pw", curl)
+        logins = [c for c in commands if "-X POST" in c]
+        self.assertEqual(len(logins), 1)
+        cmd = logins[0]
+        self.assertIn("cat > /tmp/festie-login.$$.json", cmd)
+        self.assertIn("-d @/tmp/festie-login.$$.json", cmd)
+        self.assertIn("trap 'rm -f /tmp/festie-login.$$.json' EXIT", cmd)
+        curl_line = next(line for line in cmd.splitlines() if line.startswith("curl"))
+        self.assertNotIn("pw", curl_line)
 
     def test_failed_tag_push_does_not_raise(self):
         _, exit_value, _ = run_main(fail_on="git tag")

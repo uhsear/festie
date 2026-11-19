@@ -39,8 +39,7 @@ export default function createNotificationRoutes(deps: any) {
     rateLimit,
   } = deps;
   const router = express.Router();
-  const noopLimit = (_req: any, _res: any, next: any) => next();
-  const rl = (max: any, name: any) => (typeof rateLimit === 'function' ? rateLimit(max, name) : noopLimit);
+  const rl = (max: any, name: any) => rateLimit(max, name);
 
   // ── Validation helpers ──────────────────────────────────────────────
   const ALLOWED_PLATFORMS = new Set(['web', 'ios', 'android']);

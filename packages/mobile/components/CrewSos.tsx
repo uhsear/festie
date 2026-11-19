@@ -88,6 +88,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
   const navEntry = navUserId ? sosList.find((s) => s.userId === navUserId) : undefined;
   const navTarget = navEntry ? sosTargetFor(navEntry) : null;
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- closes the compass when its SOS target ends
     if (navUserId && !navTarget) setNavUserId(null);
   }, [navUserId, navTarget]);
 

@@ -84,54 +84,6 @@ export default function createUsersStore(pool: Pool, utils: any) {
       return result.rows.map(normalizeRow);
     },
 
-    async replaceAll(nextUsers: any[]) {
-      return withTransaction(pool, async (client) => {
-        if (nextUsers.length === 0) {
-          await client.query('UPDATE users SET deleted_at = NOW(), updated_at = NOW() WHERE deleted_at IS NULL');
-          return;
-        }
-
-        const userIds = nextUsers.map((user: any) => user.id);
-        await client.query(
-          `UPDATE users SET deleted_at = NOW(), updated_at = NOW() WHERE deleted_at IS NULL AND id NOT IN (${userIds.map((_: any, i: number) => `$${i + 1}`).join(',')})`,
-          userIds,
-        );
-
-        for (const user of nextUsers) {
-          const createdAt = user.createdAt || new Date().toISOString();
-          await client.query(
-            `
-            INSERT INTO users (id, username, password_hash, avatar_key, avatar_version, avatar_updated_at, tos_accepted_at, tos_version, created_at, updated_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ON CONFLICT(id) DO UPDATE SET
-              username = EXCLUDED.username,
-              password_hash = EXCLUDED.password_hash,
-              avatar_key = EXCLUDED.avatar_key,
-              avatar_version = EXCLUDED.avatar_version,
-              avatar_updated_at = EXCLUDED.avatar_updated_at,
-              tos_accepted_at = EXCLUDED.tos_accepted_at,
-              tos_version = EXCLUDED.tos_version,
-              created_at = EXCLUDED.created_at,
-              updated_at = EXCLUDED.updated_at,
-              deleted_at = NULL
-          `,
-            [
-              user.id,
-              user.username,
-              user.passwordHash,
-              user.avatarKey || null,
-              user.avatarVersion || null,
-              user.avatarUpdatedAt || null,
-              user.tosAcceptedAt || null,
-              user.tosVersion || null,
-              createdAt,
-              user.updatedAt || createdAt,
-            ],
-          );
-        }
-      });
-    },
-
     async getById(userId: string) {
       const result = await pool.query(`SELECT ${USER_COLUMNS} FROM users WHERE id = $1 AND deleted_at IS NULL`, [
         userId,

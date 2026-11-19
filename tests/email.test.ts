@@ -168,6 +168,25 @@ describe('email: sendEmail', () => {
     assert.equal(result, false);
     assert.equal(log.error.mock.callCount(), 1);
   });
+
+  it('never passes the recipient or subject to the logger', async () => {
+    const log = createMockLog();
+    const base = { to: 'pii@example.com', subject: 'Hello PiiName', html: '<p>x</p>', text: 'x' };
+    const run = (config: any, send: any) =>
+      sendEmail({ ...base, config, log, _client: createMockClient(mock.fn(send)) });
+
+    await run(createMockConfig({ RESEND_API_KEY: '' }), async () => ({}));
+    await run(createMockConfig(), async () => ({ data: { id: 'm1' }, error: null }));
+    await run(createMockConfig(), async () => ({ data: { id: 'm1' }, error: null })); // duplicate
+    await run(createMockConfig(), async () => ({ data: null, error: { message: 'bad' } }));
+    await run(createMockConfig(), async () => { throw new Error('boom'); });
+
+    const calls = [log.warn, log.error, log.debug].flatMap((fn: any) => fn.mock.calls);
+    assert.ok(calls.length >= 4);
+    for (const call of calls) {
+      assert.doesNotMatch(JSON.stringify(call.arguments), /pii@example\.com|PiiName/);
+    }
+  });
 });
 
 // ---------------------------------------------------------------------------
