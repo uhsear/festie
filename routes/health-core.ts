@@ -43,7 +43,7 @@ export default function createHealthRoutes(deps: any) {
   const {
     log,
     stores, pool,
-    sendSuccess, rateLimit,
+    sendSuccess, sendError, ErrorCodes, rateLimit,
   } = deps;
 
   const router = Router();
@@ -82,8 +82,9 @@ export default function createHealthRoutes(deps: any) {
 
   router.get('/ready', rateLimit(60, 'ready'), async (req: any, res: any) => {
     if (!isReady) {
-      res.status(503);
-      return sendSuccess(res, { status: 'not_ready', message: 'Server is still initializing' });
+      // data.status stays 'not_ready': health probes read it, so error is added beside it.
+      const message = 'Server is still initializing';
+      return sendError(res, 503, message, ErrorCodes.SERVICE_UNAVAILABLE, null, { status: 'not_ready', message });
     }
 
     // Perform dependency checks on ready probe
@@ -117,8 +118,8 @@ export default function createHealthRoutes(deps: any) {
 
     const hasFailures = Object.values(checks).some(v => v === 'failed');
     if (hasFailures) {
-      res.status(503);
-      return sendSuccess(res, { status: 'not_ready', message: 'Dependency check failed', checks });
+      const message = 'Dependency check failed';
+      return sendError(res, 503, message, ErrorCodes.SERVICE_UNAVAILABLE, null, { status: 'not_ready', message, checks });
     }
 
     res.setHeader('Cache-Control', 'public, max-age=5');

@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import PendingSyncSheet from './PendingSyncSheet';
+import type { OfflineQueueBridge } from '@festie/shared/services';
+import { OfflineQueueContext } from '../../hooks/useOfflineQueueBridge';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { FailedSyncItem } from '@festie/shared/stores/uiStore';
 
@@ -58,12 +60,15 @@ beforeAll(() => {
   HTMLElement.prototype.releasePointerCapture = vi.fn();
 });
 
+function renderWithQueue(ui: React.ReactElement, queue: OfflineQueueBridge) {
+  return render(<OfflineQueueContext.Provider value={queue}>{ui}</OfflineQueueContext.Provider>);
+}
+
 describe('PendingSyncSheet', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     dismissFailed.mockResolvedValue(undefined);
     clearPersistedFailed.mockResolvedValue(undefined);
-    (window as Record<string, unknown>).__festieQueue = undefined;
   });
 
   it('renders nothing and closes when there are no failed items', () => {
@@ -90,13 +95,12 @@ describe('PendingSyncSheet', () => {
     expect(dismissFailed).toHaveBeenCalledWith('abc');
   });
 
-  it('re-enqueues via window.__festieQueue on Retry', async () => {
+  it('re-enqueues via the offline queue context on Retry', async () => {
     const user = userEvent.setup();
     const queueMutation = vi.fn().mockResolvedValue('abc');
     const processQueue = vi.fn().mockResolvedValue(undefined);
-    (window as Record<string, unknown>).__festieQueue = { queueMutation, processQueue };
     setStoreState([item({ clientId: 'abc', url: '/crews/x/polls', method: 'POST' })]);
-    render(<PendingSyncSheet onClose={vi.fn()} />);
+    renderWithQueue(<PendingSyncSheet onClose={vi.fn()} />, { queueMutation, processQueue });
     await user.click(screen.getByText('Retry'));
     expect(queueMutation).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'api', clientId: 'abc', url: '/crews/x/polls', method: 'POST' }),
@@ -118,13 +122,13 @@ describe('PendingSyncSheet', () => {
     const user = userEvent.setup();
     const finishers: Array<() => void> = [];
     const processQueue = vi.fn(() => new Promise<void>((resolve) => finishers.push(resolve)));
-    (window as Record<string, unknown>).__festieQueue = { queueMutation: vi.fn().mockResolvedValue('a'), processQueue };
+    const queue = { queueMutation: vi.fn().mockResolvedValue('a'), processQueue };
     const onClose = vi.fn();
     setStoreState([item({ clientId: 'a' }), item({ clientId: 'b' })]);
-    const { rerender } = render(<PendingSyncSheet onClose={onClose} />);
+    const { rerender } = renderWithQueue(<PendingSyncSheet onClose={onClose} />, queue);
     await user.click(screen.getByText('Retry all'));
     setStoreState([]);
-    rerender(<PendingSyncSheet onClose={onClose} />);
+    rerender(<OfflineQueueContext.Provider value={queue}><PendingSyncSheet onClose={onClose} /></OfflineQueueContext.Provider>);
     expect(onClose).not.toHaveBeenCalled();
     await act(async () => finishers.forEach((f) => f()));
     expect(onClose).toHaveBeenCalled();
