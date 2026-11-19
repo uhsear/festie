@@ -12,7 +12,8 @@ import {
   type SyncedFestival,
 } from '../lib/db/stores/artists.js';
 import * as spotify from '../lib/spotify.js';
-import { applyBackfillPlan, planBackfill, verifyBackfill } from '../lib/artist-backfill.js';
+import { applyBackfillPlan, planBackfill, planHash, verifyBackfill } from '../lib/artist-backfill.js';
+import { createOpaqueId } from '../lib/helpers.js';
 
 /** Artists searched per "Find Spotify links" run. The rest wait for the next run, after the editor skips or links these. */
 const MAX_CANDIDATE_ARTISTS = 150;
@@ -66,7 +67,7 @@ export default function createArtistsRoutes(deps: any) {
   }
 
   // Same shape as the festival routes' audit helper: after the response, and a failure only logs.
-  function audit(action: string, artistId: string, req: any, details: Record<string, unknown>) {
+  function audit(action: string, artistId: string, req: any, details: Record<string, unknown>, targetType = 'artist') {
     if (!stores.auditLog) return;
     if (req.res?.locals) req.res.locals.auditWritten = true;
     Promise.resolve().then(async () => {
@@ -76,7 +77,7 @@ export default function createArtistsRoutes(deps: any) {
           actorType: 'admin',
           actorId: req.user?.userId,
           action,
-          targetType: 'artist',
+          targetType,
           targetId: artistId,
           detailsJson: JSON.stringify(details),
           ip: getRequestIp(req),
@@ -268,21 +269,76 @@ export default function createArtistsRoutes(deps: any) {
   );
 
   /**
+   * Applies the plan under the lock. Festivals commit one by one, so even a failed run may have changed
+   * data: the caches are cleared and one audit row is written whichever way it ends.
+   */
+  async function applyAndRecord(req: any, res: any, plan: any) {
+    const runId = createOpaqueId('abr');
+    let result: any = null;
+    let failure: any = null;
+    try {
+      result = await backfill.applyBackfillPlan(stores.pool, plan, { runId });
+    } catch (error: any) {
+      failure = error;
+    } finally {
+      try {
+        invalidateFestivalCache();
+        deps.invalidateFestivalListCache?.();
+      } catch (error: any) {
+        log.warn('artist backfill cache clear failed', { error: error?.message });
+      }
+    }
+    const counts = plan.report.counts;
+    if (failure) {
+      const busy = failure?.code === '40P01' || failure?.code === '40001';
+      log.error('artist backfill failed', { runId, error: failure?.message });
+      audit(AUDIT_ACTIONS.ARTIST_BACKFILL_RUN, runId, req, { runId, status: 'failed', error: String(failure?.code ?? 'INTERNAL_ERROR'), counts }, 'artist_backfill');
+      return sendError(
+        res,
+        busy ? 503 : 500,
+        'The artist backfill stopped part way. Run verify and a dry run to see what was written.',
+        busy ? ErrorCodes.SERVICE_UNAVAILABLE : ErrorCodes.INTERNAL_ERROR,
+        { runId },
+      );
+    }
+    audit(
+      AUDIT_ACTIONS.ARTIST_BACKFILL_RUN,
+      runId,
+      req,
+      {
+        runId,
+        status: 'completed',
+        counts,
+        festivalsWritten: result.festivalsWritten.length,
+        festivalsSkipped: result.festivalsSkipped.length,
+        artistsCreated: result.artistsCreated,
+        conflicts: result.conflicts.length,
+      },
+      'artist_backfill',
+    );
+    log.info('artist:backfilled', { runId, artistsCreated: result.artistsCreated });
+    return sendSuccess(res, { mode: 'run', report: plan.report, result });
+  }
+
+  /**
    * The artist id backfill, the sanctioned production path (scripts/artist-backfill.ts refuses
    * production by design). It runs on the app's own pool, so it skips assertSafeBackfillDatabase on purpose.
-   * dry-run and verify write nothing. run needs a recent re-auth, holds an advisory lock, writes one audit
-   * row and clears the festival caches, which the script cannot do.
+   * dry-run and verify write nothing. run needs a recent re-auth, holds an advisory lock, refuses a plan that
+   * differs from the reviewed planHash, writes one audit row and clears the festival caches, which the script cannot do.
    */
   const runOnlyReauth = (req: any, res: any, next: any) => (req.validatedBody.mode === 'run' ? requireRecentAuth(req, res, next) : next());
   router.post('/backfill', rateLimit(10, 'artist-backfill'), validate(schemas.artistBackfill), runOnlyReauth, async (req: any, res: any) => {
-    const { mode } = req.validatedBody;
+    const { mode, planHash: reviewedHash } = req.validatedBody;
     let lock: any = null;
     let held = false;
     try {
       setNoStore(res);
       const pool = stores.pool;
       if (mode === 'verify') return sendSuccess(res, { mode, result: await backfill.verifyBackfill(pool) });
-      if (mode === 'dry-run') return sendSuccess(res, { mode, report: (await backfill.planBackfill(pool)).report });
+      if (mode === 'dry-run') {
+        const { report } = await backfill.planBackfill(pool);
+        return sendSuccess(res, { mode, report, planHash: planHash(report) });
+      }
 
       lock = await pool.connect();
       const { rows } = await lock.query('SELECT pg_try_advisory_lock($1::bigint) AS locked', [BACKFILL_LOCK_KEY]);
@@ -291,24 +347,10 @@ export default function createArtistsRoutes(deps: any) {
         return sendError(res, 409, 'An artist backfill is already running. Wait for it to finish.', ErrorCodes.ALREADY_EXISTS);
       }
       const plan = await backfill.planBackfill(pool);
-      const result = await backfill.applyBackfillPlan(pool, plan);
-      // The data is committed: a failed cache or audit step must not turn into an error response.
-      try {
-        invalidateFestivalCache();
-        deps.invalidateFestivalListCache?.();
-      } catch (error: any) {
-        log.warn('artist backfill cache clear failed', { error: error?.message });
+      if (reviewedHash && reviewedHash !== planHash(plan.report)) {
+        return sendError(res, 409, 'The data changed since the reviewed dry run, so nothing was written. Run a new dry run and review it.', ErrorCodes.PLAN_CHANGED);
       }
-      audit(AUDIT_ACTIONS.ARTIST_BACKFILL_RUN, result.runId, req, {
-        runId: result.runId,
-        counts: plan.report.counts,
-        festivalsWritten: result.festivalsWritten.length,
-        festivalsSkipped: result.festivalsSkipped.length,
-        artistsCreated: result.artistsCreated,
-        conflicts: result.conflicts.length,
-      });
-      log.info('artist:backfilled', { runId: result.runId, artistsCreated: result.artistsCreated });
-      return sendSuccess(res, { mode, report: plan.report, result });
+      return await applyAndRecord(req, res, plan);
     } catch (error: any) {
       return sendArtistError(res, error, 'run the artist backfill');
     } finally {
