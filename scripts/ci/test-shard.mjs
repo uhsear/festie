@@ -57,6 +57,8 @@ function main() {
     'npx',
     [
       'c8',
+      '--config',
+      'config/c8rc.json',
       '--check-coverage=false',
       '--reporter=text-summary',
       'node',
