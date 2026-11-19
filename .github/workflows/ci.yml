@@ -9,7 +9,7 @@ on:
 # Cancel superseded runs on the same ref so only the latest push to a branch/PR
 # holds runners.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Opt every JS action into the Node 24 runtime ahead of GitHub's 2026-06-16
