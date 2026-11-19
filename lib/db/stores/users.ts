@@ -219,7 +219,8 @@ export default function createUsersStore(pool: Pool, utils: any) {
         // wouldn't even block this delete, the rows (incl. GPS/ETA breadcrumbs) would
         // just orphan silently, so purge explicitly.
         await client.query('DELETE FROM crew_member_status WHERE user_id = $1', [userId]);
-        await client.query('DELETE FROM crew_expenses WHERE paid_by = $1', [userId]);
+        // Keep the expenses so the other members' balances stay put; migration 116 seeds the placeholder.
+        await client.query("UPDATE crew_expenses SET paid_by = 'deleted-user' WHERE paid_by = $1", [userId]);
         await client.query('DELETE FROM crew_activity WHERE user_id = $1', [userId]);
         await client.query('DELETE FROM login_failures WHERE user_id = $1', [userId]);
         await client.query('DELETE FROM email_verification_tokens WHERE user_id = $1', [userId]);
