@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { read } from './read-source';
 
-const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8');
 
 describe('crew tabs share keys with @festie/shared', () => {
   it('CrewTabBar renders CREW_TABS', () => {

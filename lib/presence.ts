@@ -139,6 +139,8 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
 
   function disconnectSocket(socket: any, io: any, presenceTargets: any = null) {
     leaveFestivalRealtime(socket, io, presenceTargets);
+    // The disconnect handler needs the sharer's id after the session is cleared.
+    if (socket.data.sharingCrewId) socket.data.sharingUserId = socket.data.userId;
     clearSocketSession(socket);
     socket.disconnect(true);
   }

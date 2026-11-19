@@ -1,8 +1,8 @@
 // Source-level guards for the account/auth consistency fixes (web parity).
 import fs from 'node:fs';
 import path from 'node:path';
+import { read } from './read-source';
 
-const read = (rel: string) => fs.readFileSync(path.join(__dirname, '..', rel), 'utf8');
 const sharedRead = (rel: string) => fs.readFileSync(path.join(__dirname, '..', '..', 'shared', rel), 'utf8');
 
 describe('account email section', () => {

@@ -4,7 +4,9 @@ import type { QueryClient } from '@tanstack/react-query';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { invalidateCrewMoney } from '../lib/queryPersist';
+import type { CrewPoll } from '@festie/shared';
+import { invalidateCrewMoney, meetingPointsQuery } from '../lib/queryPersist';
+import { pollsQueryOptions } from './useCrewAttention';
 import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink';
 
 /**
@@ -14,7 +16,7 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
  * backed — they live in PollsTab / MeetingPointsTab / ExpensesTab. So the
  * sink's job is to invalidate the matching query keys and let TanStack Query
  * refetch. Meeting points and polls are also read from the crewStore by the
- * crew plan, so the store reloads on those events as well. Home base is the exception: the
+ * crew plan, so the sink copies the fetched query result into the store (no second request). Home base is the exception: the
  * web crew route reads activeCrew.homeBaseLocation/Time straight from the
  * crewStore, so that intent applies to the store instead.
  *
@@ -33,13 +35,28 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
  * invalidating ['<key>', crewId] always targets the open crew's data.
  */
 export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
+  // One fetch per event: invalidate (an active observer refetches), then fetchQuery
+  // joins that in-flight request or starts it. The result is written into the store.
   const reloadMeetingPoints = (crewId: string) => {
     void queryClient.invalidateQueries({ queryKey: ['meeting-points', crewId] });
-    useCrewStore.getState().loadMeetingPoints(crewId).catch((err) => console.warn('Crew meeting points reload failed', err));
+    queryClient
+      .fetchQuery({ ...meetingPointsQuery(crewId), staleTime: 0 })
+      .then((meetingPoints) => useCrewStore.setState({ meetingPoints }))
+      .catch((err) => console.warn('Crew meeting points reload failed', err));
   };
   const reloadPolls = (crewId: string) => {
     void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
-    useCrewStore.getState().loadPolls(crewId).catch((err) => console.warn('Crew polls reload failed', err));
+    queryClient
+      .fetchQuery({ ...pollsQueryOptions(crewId), staleTime: 0 })
+      .then((list) =>
+        useCrewStore.setState({
+          polls: (list as unknown as CrewPoll[]).map((p) => ({
+            ...p,
+            votes: (p.votes || []).filter((v) => v && v.user_id && typeof v.option === 'number'),
+          })),
+        }),
+      )
+      .catch((err) => console.warn('Crew polls reload failed', err));
   };
   const sink: CrewRealtimeSink = {
     onHomeBaseUpdated: (crewId, payload) => {

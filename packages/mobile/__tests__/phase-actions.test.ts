@@ -1,8 +1,6 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { read } from './read-source';
 
-const read = (p: string) => readFileSync(join(__dirname, '..', p), 'utf8');
 
 describe('P7b phase band and map shortcuts', () => {
   it('PhaseHomeActions renders the shared home actions and has no /find route', () => {

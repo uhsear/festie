@@ -8,7 +8,8 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
-import { DEFAULT_PASSWORD, TRUSTED_MUTATION_HEADER, AVATAR_FIXTURE, startServer, registerUser, joinFestival, loginAdmin, reauthAdmin, servers } from './_critical-paths-helpers';
+import { DEFAULT_PASSWORD, TRUSTED_MUTATION_HEADER, AVATAR_FIXTURE, startServer, joinFestival, loginAdmin, reauthAdmin, servers } from './_critical-paths-helpers';
+import { registerUser } from './_integration-helpers';
 
 afterEach(async () => {
   while (servers.length > 0) {

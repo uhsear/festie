@@ -13,6 +13,7 @@ import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
+import { registerUser as registerSharedUser } from './_integration-helpers';
 import createProfilesRoutes from '../routes/profiles.js';
 import { serializeProfileForViewer } from '../lib/helpers/export-utils.js';
 
@@ -149,19 +150,9 @@ async function startServer(overrides: any = {}) {
 }
 
 async function registerUser(server: any, username: any, password = DEFAULT_PASSWORD) {
-  const res = await server.request
-    .post('/api/v1/auth/register')
-    .set(TRUSTED_MUTATION_HEADER, '1')
-    .send({ username, password, confirmPassword: password, dateOfBirth: '1995-01-01', tosAccepted: true, email: `${username}@example.com` });
-  assert.ok(res.status === 201 || res.status === 200, `register failed: ${res.status}`);
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    const { rows } = await pool.query('SELECT id FROM users WHERE username = $1 LIMIT 1', [username]);
-    if (rows.length) createdUserIds.push(rows[0].id);
-  } finally {
-    await pool.end();
-  }
-  return res.body.data;
+  const data = await registerSharedUser(server, username, password);
+  createdUserIds.push(data.user.id);
+  return data;
 }
 
 async function joinFestival(server: any, token: any, festivalId: any) {
