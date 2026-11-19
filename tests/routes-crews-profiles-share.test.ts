@@ -10,7 +10,10 @@
 import assert from 'node:assert/strict';
 import { describe, test, mock, beforeEach } from 'node:test';
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import request from 'supertest';
+
+type TestReq = Request & Record<string, unknown>;
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -30,7 +33,7 @@ const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
 //  CREWS ROUTE TESTS
 // =====================================================================
 
-function makeCrewDeps(overrides: any = {}) {
+function makeCrewDeps(overrides: Record<string, unknown> = {}) {
   const ioObj = makeIo();
   return {
     express,
@@ -38,27 +41,27 @@ function makeCrewDeps(overrides: any = {}) {
     log: noopLog,
     // POST /crews/join creates the festival profile (lib/festival-profile.ts).
     getUserFestivalProfile: mock.fn(async () => ({ id: 'prof-1', userId: 'user-1' })),
-    getUserById: mock.fn(async (id: any) => ({ id, username: 'testuser' })),
+    getUserById: mock.fn(async (id: string) => ({ id, username: 'testuser' })),
     getProfiles: mock.fn(async () => []),
     emitter: { profileCreated: mock.fn() },
-    userAuth: (req: any, _res: any, next: any) => { req.user = { userId: 'user-1', username: 'testuser' }; next(); },
-    setNoStore: (_res: any) => {},
-    sanitizeString: (s: any, _max: any) => (typeof s === 'string' ? s.trim() : ''),
-    sanitizeIdentifier: (s: any, _max: any) => (typeof s === 'string' ? s.trim() : ''),
-    createOpaqueId: (prefix: any) => `${prefix}-mock-id`,
+    userAuth: (req: TestReq, _res: Response, next: NextFunction) => { req.user = { userId: 'user-1', username: 'testuser' }; next(); },
+    setNoStore: (_res: Response) => {},
+    sanitizeString: (s: unknown, _max?: number) => (typeof s === 'string' ? s.trim() : ''),
+    sanitizeIdentifier: (s: unknown, _max?: number) => (typeof s === 'string' ? s.trim() : ''),
+    createOpaqueId: (prefix: string) => `${prefix}-mock-id`,
     _getRequestIp: () => '127.0.0.1',
-    getFestivalById: mock.fn(async (id: any) => ({ id, name: 'Test Fest', festivalId: id })),
-    sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
-    sendError: (res: any, status: any, msg: any, code: any) => res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
+    getFestivalById: mock.fn(async (id: string) => ({ id, name: 'Test Fest', festivalId: id })),
+    sendSuccess: (res: Response, data: unknown) => res.json({ data, error: null }),
+    sendError: (res: Response, status: number, msg: string, code?: string) => res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
     ErrorCodes: {
       INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', FORBIDDEN: 'FORBIDDEN',
       MISSING_FIELD: 'MISSING_FIELD', INTERNAL_ERROR: 'INTERNAL_ERROR',
       ALREADY_EXISTS: 'ALREADY_EXISTS', MAX_LIMIT_REACHED: 'MAX_LIMIT_REACHED',
     },
-    rateLimit: () => (_req: any, _res: any, next: any) => next(),
-    validate: () => (req: any, _res: any, next: any) => { req.validatedBody = req.body; next(); },
-    validateQuery: () => (req: any, _res: any, next: any) => { req.validatedQuery = req.query; next(); },
-    validateParams: () => (req: any, _res: any, next: any) => { req.validatedParams = req.params; next(); },
+    rateLimit: () => (_req: Request, _res: Response, next: NextFunction) => next(),
+    validate: () => (req: TestReq, _res: Response, next: NextFunction) => { req.validatedBody = req.body; next(); },
+    validateQuery: () => (req: TestReq, _res: Response, next: NextFunction) => { req.validatedQuery = req.query; next(); },
+    validateParams: () => (req: TestReq, _res: Response, next: NextFunction) => { req.validatedParams = req.params; next(); },
     schemas: {
       crewCreate: {}, crewListQuery: {}, crewUpdate: {}, crewJoin: {},
       crewTransfer: {}, crewAddMember: {}, crewUserSearchQuery: {},
@@ -127,7 +130,7 @@ function makeCrewDeps(overrides: any = {}) {
   };
 }
 
-async function buildCrewApp(overrides: any = {}) {
+async function buildCrewApp(overrides: Record<string, unknown> = {}) {
   const deps = makeCrewDeps(overrides);
   const { default: createCrewRoutes } = await import('../routes/crews.js');
   const router = createCrewRoutes(deps);
@@ -159,7 +162,7 @@ describe('routes/crews.js', () => {
 
     test('returns 400 when festivalId is empty', async () => {
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s?.trim() || 'Crew Name',
+        sanitizeString: (s: string) => s?.trim() || 'Crew Name',
         sanitizeIdentifier: () => '',
       });
       const res = await request(app)
@@ -171,8 +174,8 @@ describe('routes/crews.js', () => {
 
     test('returns 404 when festival not found', async () => {
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         pool: { query: mock.fn(async () => ({ rows: [] })) },
       });
       const res = await request(app)
@@ -184,8 +187,8 @@ describe('routes/crews.js', () => {
 
     test('POST /crews maps festival-unavailable from ensureFestivalProfile to 404', async () => {
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, pool: { query: mock.fn(async () => ({ rows: [] })) } },
       });
       const res = await request(app).post('/crews').send({ name: 'Crew', festivalId: 'f1' });
@@ -216,10 +219,10 @@ describe('routes/crews.js', () => {
         createdBy: 'user-1', maxMembers: 30, inviteCode: 'ABC123',
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
-      const createProfile = mock.fn(async (p: any) => p);
+      const createProfile = mock.fn(async (p: Record<string, unknown>) => p);
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         getUserFestivalProfile: mock.fn(async () => null),
         stores: {
           ...makeCrewDeps().stores,
@@ -240,14 +243,14 @@ describe('routes/crews.js', () => {
         .send({ name: 'Crew', festivalId: 'f1' });
       assert.equal(res.status, 201);
       assert.equal(createProfile.mock.calls.length, 1);
-      assert.equal((createProfile.mock.calls as any[])[0].arguments[0].festivalId, 'f1');
+      assert.equal(createProfile.mock.calls[0]!.arguments[0].festivalId, 'f1');
     });
 
     test('returns 400 when the festival has reached its member limit', async () => {
-      const createCrew = mock.fn(async (d: any) => d);
+      const createCrew = mock.fn(async (d: Record<string, unknown>) => d);
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         getUserFestivalProfile: mock.fn(async () => null),
         stores: {
           ...makeCrewDeps().stores,
@@ -269,8 +272,8 @@ describe('routes/crews.js', () => {
 
     test('returns 400 when user already has max crews for festival', async () => {
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: {
           ...makeCrewDeps().stores,
           crews: {
@@ -292,8 +295,8 @@ describe('routes/crews.js', () => {
 
     test('returns 500 when listByUserAndFestival throws', async () => {
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: {
           ...makeCrewDeps().stores,
           crews: {
@@ -325,8 +328,8 @@ describe('routes/crews.js', () => {
       };
 
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
 
@@ -346,8 +349,8 @@ describe('routes/crews.js', () => {
         create: mock.fn(async () => { throw new Error('store error'); }),
       };
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app)
@@ -367,8 +370,8 @@ describe('routes/crews.js', () => {
         getMembers: mock.fn(async () => []),
       };
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app)
@@ -387,7 +390,7 @@ describe('routes/crews.js', () => {
         listByUserAndFestival: mock.fn(async () => crewData),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app)
@@ -402,7 +405,7 @@ describe('routes/crews.js', () => {
         listByUser: mock.fn(async () => []),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews');
@@ -416,7 +419,7 @@ describe('routes/crews.js', () => {
         listByUser: mock.fn(async () => { throw new Error('fail'); }),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews');
@@ -433,7 +436,7 @@ describe('routes/crews.js', () => {
     });
 
     test('returns 404 when crew not found', async () => {
-      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: any) => s });
+      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: string) => s });
       const res = await request(app).get('/crews/nonexistent');
       assert.equal(res.status, 404);
     });
@@ -445,7 +448,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => null),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews/c1');
@@ -465,7 +468,7 @@ describe('routes/crews.js', () => {
         getMembers: mock.fn(async () => members),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews/c1');
@@ -481,7 +484,7 @@ describe('routes/crews.js', () => {
         getById: mock.fn(async () => { throw new Error('db error'); }),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews/c1');
@@ -498,7 +501,7 @@ describe('routes/crews.js', () => {
     });
 
     test('returns 404 when crew not found (resolveCrewOwnership)', async () => {
-      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: any) => s });
+      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: string) => s });
       const res = await request(app).put('/crews/c1').send({ name: 'New' });
       assert.equal(res.status, 404);
     });
@@ -510,7 +513,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => ({ role: 'member' })),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).put('/crews/c1').send({ name: 'New' });
@@ -532,8 +535,8 @@ describe('routes/crews.js', () => {
         update: mock.fn(async () => {}),
       };
       const { app, deps } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).put('/crews/c1').send({ name: 'NewName', maxMembers: 50 });
@@ -558,8 +561,8 @@ describe('routes/crews.js', () => {
         update: mock.fn(async () => {}),
       };
       const { app } = await buildCrewApp({
-        sanitizeString: (s: any) => s,
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeString: (s: string) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).put('/crews/c1').send({});
@@ -576,7 +579,7 @@ describe('routes/crews.js', () => {
     });
 
     test('returns 404 when crew not found', async () => {
-      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: any) => s });
+      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: string) => s });
       const res = await request(app).delete('/crews/c1');
       assert.equal(res.status, 404);
     });
@@ -588,7 +591,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => ({ role: 'member' })),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1');
@@ -604,7 +607,7 @@ describe('routes/crews.js', () => {
         delete: mock.fn(async () => {}),
       };
       const { app, deps } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1');
@@ -625,18 +628,18 @@ describe('routes/crews.js', () => {
       // makeIo() has no .in(), which is exactly why this gap was never caught.
       // Build a local io mock that adds .in() plus one still-connected fake
       // socket standing in for a live sharer.
-      const fakeSocket: any = {
+      const fakeSocket = {
         data: { sharingCrewId: 'c1', crewMembershipCheckedAt: 111, crewMembershipUpdateCount: 5 },
-        leave: mock.fn(),
+        leave: mock.fn((_room: string) => {}),
       };
       const emitFn = mock.fn(() => {});
-      const io: any = {
+      const io = {
         to: mock.fn(() => ({ emit: emitFn })),
-        in: mock.fn(() => ({ fetchSockets: async () => [fakeSocket] })),
+        in: mock.fn((_room: string) => ({ fetchSockets: async () => [fakeSocket] })),
       };
 
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
         io,
       });
@@ -645,9 +648,9 @@ describe('routes/crews.js', () => {
 
       assert.equal(res.status, 200);
       assert.equal(io.in.mock.calls.length, 1);
-      assert.equal(io.in.mock.calls[0].arguments[0], 'crew:c1');
+      assert.equal(io.in.mock.calls[0]!.arguments[0], 'crew:c1');
       assert.equal(fakeSocket.leave.mock.calls.length, 1);
-      assert.equal(fakeSocket.leave.mock.calls[0].arguments[0], 'crew:c1');
+      assert.equal(fakeSocket.leave.mock.calls[0]!.arguments[0], 'crew:c1');
       assert.equal(fakeSocket.data.sharingCrewId, undefined);
     });
   });
@@ -682,7 +685,7 @@ describe('routes/crews.js', () => {
         ...makeCrewDeps().stores.crews,
         getByInviteCode: mock.fn(async () => ({ id: 'c1', festivalId: 'f1', maxMembers: 30 })),
       };
-      const create = mock.fn(async (p: any) => p);
+      const create = mock.fn(async (p: Record<string, unknown>) => p);
       const { app } = await buildCrewApp({
         getUserFestivalProfile: mock.fn(async () => null),
         stores: {
@@ -701,7 +704,7 @@ describe('routes/crews.js', () => {
         .send({ inviteCode: 'ABCDEF' });
       assert.equal(res.status, 200);
       assert.equal(create.mock.calls.length, 1);
-      assert.equal((create.mock.calls[0] as any).arguments[0].festivalId, 'f1');
+      assert.equal(create.mock.calls[0]!.arguments[0].festivalId, 'f1');
     });
 
     test('returns 200 with alreadyMember when already a member', async () => {
@@ -796,7 +799,7 @@ describe('routes/crews.js', () => {
     });
 
     test('returns 404 when crew not found', async () => {
-      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: any) => s });
+      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: string) => s });
       const res = await request(app).delete('/crews/c1/leave');
       assert.equal(res.status, 404);
     });
@@ -808,7 +811,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => null),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1/leave');
@@ -822,7 +825,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => ({ role: 'owner' })),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1/leave');
@@ -837,7 +840,7 @@ describe('routes/crews.js', () => {
         removeMember: mock.fn(async () => {}),
       };
       const { app, deps } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1/leave');
@@ -855,7 +858,7 @@ describe('routes/crews.js', () => {
     });
 
     test('returns 404 when crew not found', async () => {
-      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: any) => s });
+      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: string) => s });
       const res = await request(app).delete('/crews/c1/members/user-2');
       assert.equal(res.status, 404);
     });
@@ -867,7 +870,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => ({ role: 'owner', userId: 'user-1' })),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1/members/user-1');
@@ -885,7 +888,7 @@ describe('routes/crews.js', () => {
         }),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1/members/user-2');
@@ -903,7 +906,7 @@ describe('routes/crews.js', () => {
         removeMember: mock.fn(async () => {}),
       };
       const { app, deps } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).delete('/crews/c1/members/user-2');
@@ -929,7 +932,7 @@ describe('routes/crews.js', () => {
       // Return empty string for the userId in body but valid for crewId
       let callCount = 0;
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => {
+        sanitizeIdentifier: (s: string) => {
           callCount++;
           // First call is crewId, second call is userId from body
           return callCount <= 1 ? s : '';
@@ -947,7 +950,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => ({ role: 'owner', userId: 'user-1' })),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).put('/crews/c1/transfer').send({ userId: 'user-1' });
@@ -964,7 +967,7 @@ describe('routes/crews.js', () => {
         }),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).put('/crews/c1/transfer').send({ userId: 'user-2' });
@@ -992,7 +995,7 @@ describe('routes/crews.js', () => {
         getMembers: mock.fn(async () => members),
       };
       const { app, deps } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).put('/crews/c1/transfer').send({ userId: 'user-2' });
@@ -1018,7 +1021,7 @@ describe('routes/crews.js', () => {
         regenerateInviteCode: mock.fn(async () => {}),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).post('/crews/c1/invite');
@@ -1036,7 +1039,7 @@ describe('routes/crews.js', () => {
     });
 
     test('returns 404 when crew not found', async () => {
-      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: any) => s });
+      const { app } = await buildCrewApp({ sanitizeIdentifier: (s: string) => s });
       const res = await request(app).get('/crews/c1/overlap');
       assert.equal(res.status, 404);
     });
@@ -1048,7 +1051,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => null),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews/c1/overlap');
@@ -1066,7 +1069,7 @@ describe('routes/crews.js', () => {
         ]),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews/c1/overlap');
@@ -1086,7 +1089,7 @@ describe('routes/crews.js', () => {
         ]),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews/c1/overlap');
@@ -1104,7 +1107,7 @@ describe('routes/crews.js', () => {
         ]),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews/c1/overlap');
@@ -1126,7 +1129,7 @@ describe('routes/crews.js', () => {
         ]),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeCrewDeps().stores, crews: crewStore },
       });
       const res = await request(app).get('/crews/c1/overlap');
@@ -1194,7 +1197,7 @@ describe('routes/crews.js', () => {
   describe('POST /crews/:crewId/members — admin add', () => {
     test('returns 403 for non-admin', async () => {
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
       });
       const res = await request(app)
         .post('/crews/c1/members')
@@ -1204,7 +1207,7 @@ describe('routes/crews.js', () => {
 
     test('returns 404 when crew not found', async () => {
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: {
           ...makeCrewDeps().stores,
           roles: { hasRole: mock.fn(async () => true) },
@@ -1222,7 +1225,7 @@ describe('routes/crews.js', () => {
         getById: mock.fn(async () => ({ id: 'c1', maxMembers: 30 })),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: {
           ...makeCrewDeps().stores,
           crews: crewStore,
@@ -1243,7 +1246,7 @@ describe('routes/crews.js', () => {
         getMember: mock.fn(async () => ({ role: 'member' })),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: {
           ...makeCrewDeps().stores,
           crews: crewStore,
@@ -1264,7 +1267,7 @@ describe('routes/crews.js', () => {
         getMemberCount: mock.fn(async () => 2),
       };
       const { app } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: {
           ...makeCrewDeps().stores,
           crews: crewStore,
@@ -1296,7 +1299,7 @@ describe('routes/crews.js', () => {
         getMembers: mock.fn(async () => members),
       };
       const { app, deps } = await buildCrewApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: {
           ...makeCrewDeps().stores,
           crews: crewStore,
@@ -1317,7 +1320,7 @@ describe('routes/crews.js', () => {
 //  PROFILES ROUTE TESTS
 // =====================================================================
 
-function makeProfileDeps(overrides: any = {}) {
+function makeProfileDeps(overrides: Record<string, unknown> = {}) {
   const ioObj = makeIo();
   return {
     express,
@@ -1326,11 +1329,11 @@ function makeProfileDeps(overrides: any = {}) {
       MAX_PROFILES_PER_FESTIVAL: 500,
     },
     log: noopLog,
-    userAuth: (req: any, _res: any, next: any) => { req.user = { userId: 'user-1', username: 'testuser' }; next(); },
-    adminAuth: (req: any, _res: any, next: any) => { req.user = { userId: 'admin-1', username: 'admin' }; next(); },
-    setNoStore: (_res: any) => {},
-    sanitizeIdentifier: (s: any, _max: any) => (typeof s === 'string' ? s.trim() : ''),
-    getFestivalById: mock.fn(async (id: any) => ({
+    userAuth: (req: TestReq, _res: Response, next: NextFunction) => { req.user = { userId: 'user-1', username: 'testuser' }; next(); },
+    adminAuth: (req: TestReq, _res: Response, next: NextFunction) => { req.user = { userId: 'admin-1', username: 'admin' }; next(); },
+    setNoStore: (_res: Response) => {},
+    sanitizeIdentifier: (s: unknown, _max?: number) => (typeof s === 'string' ? s.trim() : ''),
+    getFestivalById: mock.fn(async (id: string) => ({
       id, name: 'Test Fest', publishedAt: '2026-01-01T00:00:00.000Z',
       stages: [{ id: 'stg-1', name: 'Main' }],
       days: [{ label: 'Friday', sets: [{ id: 'set-a' }, { id: 'set-b' }] }],
@@ -1338,25 +1341,25 @@ function makeProfileDeps(overrides: any = {}) {
     getUserFestivalProfile: mock.fn(async () => null),
     getProfiles: mock.fn(async () => []),
     getUserMap: mock.fn(async () => new Map()),
-    getUserById: mock.fn(async (id: any) => ({ id, username: 'testuser', avatarKey: null })),
-    normalizePickPayload: mock.fn((picks: any) => ({ value: picks })),
-    normalizeNotePayload: mock.fn((notes: any) => ({ value: notes })),
-    normalizeReminderPayload: mock.fn((reminders: any) => ({ value: reminders })),
-    serializeProfileForViewer: mock.fn((profile: any) => profile),
-    serializeOwnProfile: mock.fn((profile: any, user: any) => ({ ...profile, username: user?.username })),
+    getUserById: mock.fn(async (id: string) => ({ id, username: 'testuser', avatarKey: null })),
+    normalizePickPayload: mock.fn((picks: unknown) => ({ value: picks })),
+    normalizeNotePayload: mock.fn((notes: unknown) => ({ value: notes })),
+    normalizeReminderPayload: mock.fn((reminders: unknown) => ({ value: reminders })),
+    serializeProfileForViewer: mock.fn((profile: unknown) => profile),
+    serializeOwnProfile: mock.fn((profile: Record<string, unknown>, user?: { username?: string }) => ({ ...profile, username: user?.username })),
     _buildAvatarUrl: () => '',
-    createOpaqueId: (prefix: any) => `${prefix}-mock-id`,
-    sendSuccess: (res: any, data: any, meta: any) => { const body: any = { data, error: null }; if (meta) body.meta = meta; return res.json(body); },
-    sendError: (res: any, status: any, msg: any, code: any) => res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
+    createOpaqueId: (prefix: string) => `${prefix}-mock-id`,
+    sendSuccess: (res: Response, data: unknown, meta?: unknown) => { const body: Record<string, unknown> = { data, error: null }; if (meta) body.meta = meta; return res.json(body); },
+    sendError: (res: Response, status: number, msg: string, code?: string) => res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
     ErrorCodes: {
       INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', FORBIDDEN: 'FORBIDDEN',
       MISSING_FIELD: 'MISSING_FIELD', INTERNAL_ERROR: 'INTERNAL_ERROR',
       MAX_LIMIT_REACHED: 'MAX_LIMIT_REACHED', VERSION_MISMATCH: 'VERSION_MISMATCH',
     },
-    rateLimit: () => (_req: any, _res: any, next: any) => next(),
-    validate: () => (req: any, _res: any, next: any) => { req.validatedBody = req.body; next(); },
-    validateParams: () => (req: any, _res: any, next: any) => { req.validatedParams = req.params; next(); },
-    validateQuery: () => (req: any, _res: any, next: any) => { req.validatedQuery = req.query; next(); },
+    rateLimit: () => (_req: Request, _res: Response, next: NextFunction) => next(),
+    validate: () => (req: TestReq, _res: Response, next: NextFunction) => { req.validatedBody = req.body; next(); },
+    validateParams: () => (req: TestReq, _res: Response, next: NextFunction) => { req.validatedParams = req.params; next(); },
+    validateQuery: () => (req: TestReq, _res: Response, next: NextFunction) => { req.validatedQuery = req.query; next(); },
     schemas: {
       festivalIdParams: {}, profileIdParams: {}, joinFestival: {}, profileUpdate: {},
       paginationQuery: {},
@@ -1392,7 +1395,7 @@ function makeProfileDeps(overrides: any = {}) {
   };
 }
 
-async function buildProfileApp(overrides: any = {}) {
+async function buildProfileApp(overrides: Record<string, unknown> = {}) {
   const deps = makeProfileDeps(overrides);
   const { default: createProfilesRoutes } = await import('../routes/profiles.js');
   const router = createProfilesRoutes(deps);
@@ -1453,8 +1456,8 @@ describe('routes/profiles.js', () => {
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
       // user-2 shares no crew with the caller: picks hidden, counted anonymously.
-      assert.deepEqual(res.body.data.find((p: any) => p.userId === 'user-2').picks, {});
-      assert.deepEqual(res.body.data.find((p: any) => p.userId === 'user-1').picks, { s1: 'must' });
+      assert.deepEqual(res.body.data.find((p: { userId: string }) => p.userId === 'user-2').picks, {});
+      assert.deepEqual(res.body.data.find((p: { userId: string }) => p.userId === 'user-1').picks, { s1: 'must' });
       assert.deepEqual(res.body.meta.pickCounts, { s1: 1, s2: 1 });
     });
 
@@ -1519,7 +1522,7 @@ describe('routes/profiles.js', () => {
 
     test('returns 404 when festival not found', async () => {
       const { app } = await buildProfileApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         getFestivalById: mock.fn(async () => null),
       });
       const res = await request(app)
@@ -1531,7 +1534,7 @@ describe('routes/profiles.js', () => {
     test('returns existing profile if user already joined', async () => {
       const existingProfile = { id: 'p1', userId: 'user-1', festivalId: 'f1' };
       const { app } = await buildProfileApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         getUserFestivalProfile: mock.fn(async () => existingProfile),
       });
       const res = await request(app)
@@ -1544,7 +1547,7 @@ describe('routes/profiles.js', () => {
     test('returns 404 when user not found after existing profile', async () => {
       const existingProfile = { id: 'p1', userId: 'user-1', festivalId: 'f1' };
       const { app } = await buildProfileApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         getUserFestivalProfile: mock.fn(async () => existingProfile),
         getUserById: mock.fn(async () => null),
       });
@@ -1557,7 +1560,7 @@ describe('routes/profiles.js', () => {
     test('claims orphan profile if available', async () => {
       const orphan = { id: 'p-orphan', userId: 'user-1', festivalId: 'f1' };
       const { app } = await buildProfileApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         getUserFestivalProfile: mock.fn(async () => null),
         stores: {
           ...makeProfileDeps().stores,
@@ -1575,7 +1578,7 @@ describe('routes/profiles.js', () => {
 
     test('returns 400 when max profiles reached', async () => {
       const { app } = await buildProfileApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         getUserFestivalProfile: mock.fn(async () => null),
         config: { NODE_ENV: 'test', PUBLIC_ORIGIN: 'http://localhost:3000', MAX_PROFILES_PER_FESTIVAL: 1 },
         stores: {
@@ -1595,7 +1598,7 @@ describe('routes/profiles.js', () => {
 
     test('creates new profile successfully', async () => {
       const { app, deps } = await buildProfileApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         getUserFestivalProfile: mock.fn(async () => null),
       });
       const res = await request(app)
@@ -1608,7 +1611,7 @@ describe('routes/profiles.js', () => {
 
     test('maps festival-unavailable from ensureFestivalProfile to 404', async () => {
       const { app } = await buildProfileApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         stores: { ...makeProfileDeps().stores, pool: { query: mock.fn(async () => ({ rows: [] })) } },
       });
       const res = await request(app).post('/profiles').send({ festivalId: 'f1' });
@@ -1617,7 +1620,7 @@ describe('routes/profiles.js', () => {
 
     test('returns 500 on creation error', async () => {
       const { app } = await buildProfileApp({
-        sanitizeIdentifier: (s: any) => s,
+        sanitizeIdentifier: (s: string) => s,
         getUserFestivalProfile: mock.fn(async () => null),
         stores: {
           ...makeProfileDeps().stores,
@@ -1713,7 +1716,7 @@ describe('routes/profiles.js', () => {
 
     test('returns 400 when picks reference unknown set', async () => {
       const { app } = await buildProfileApp({
-        normalizePickPayload: mock.fn((p) => ({ value: p })),
+        normalizePickPayload: mock.fn((p: unknown) => ({ value: p })),
         stores: {
           ...makeProfileDeps().stores,
           profiles: {
@@ -1731,7 +1734,7 @@ describe('routes/profiles.js', () => {
 
     test('returns 400 when notes reference unknown set', async () => {
       const { app } = await buildProfileApp({
-        normalizeNotePayload: mock.fn((n) => ({ value: n })),
+        normalizeNotePayload: mock.fn((n: unknown) => ({ value: n })),
         stores: {
           ...makeProfileDeps().stores,
           profiles: {
@@ -1749,7 +1752,7 @@ describe('routes/profiles.js', () => {
     test('accepts a crew: note key for a known set (FND-003)', async () => {
       const update = mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' }));
       const { app } = await buildProfileApp({
-        normalizeNotePayload: mock.fn((n) => ({ value: n })),
+        normalizeNotePayload: mock.fn((n: unknown) => ({ value: n })),
         stores: {
           ...makeProfileDeps().stores,
           profiles: {
@@ -1768,9 +1771,9 @@ describe('routes/profiles.js', () => {
     });
 
     test('drops reminders that reference an unknown set', async () => {
-      const update = mock.fn(async () => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' }));
+      const update = mock.fn(async (_id: string, patch: { reminders: unknown }) => ({ id: 'p1', userId: 'user-1', festivalId: 'f1' }));
       const { app } = await buildProfileApp({
-        normalizeReminderPayload: mock.fn((r) => ({ value: r })),
+        normalizeReminderPayload: mock.fn((r: unknown) => ({ value: r })),
         stores: {
           ...makeProfileDeps().stores,
           profiles: {
@@ -1784,7 +1787,7 @@ describe('routes/profiles.js', () => {
         .put('/profiles/p1')
         .send({ reminders: { 'unknown-set': 5 } });
       assert.equal(res.status, 200);
-      assert.deepEqual(((update.mock.calls[0] as any).arguments as any[])[1].reminders, {});
+      assert.deepEqual(update.mock.calls[0]!.arguments[1].reminders, {});
     });
 
     test('returns 409 on version mismatch (If-Match)', async () => {
@@ -1809,7 +1812,7 @@ describe('routes/profiles.js', () => {
 
     test('updates profile successfully with picks', async () => {
       const { app, deps } = await buildProfileApp({
-        normalizePickPayload: mock.fn((p) => ({ value: p })),
+        normalizePickPayload: mock.fn((p: unknown) => ({ value: p })),
         stores: {
           ...makeProfileDeps().stores,
           profiles: {
@@ -1834,7 +1837,7 @@ describe('routes/profiles.js', () => {
 
     test('returns 500 when update returns null', async () => {
       const { app } = await buildProfileApp({
-        normalizePickPayload: mock.fn((p) => ({ value: p })),
+        normalizePickPayload: mock.fn((p: unknown) => ({ value: p })),
         stores: {
           ...makeProfileDeps().stores,
           profiles: {
@@ -1851,7 +1854,7 @@ describe('routes/profiles.js', () => {
     });
 
     test('returns 400 when notes exceed 200 count', async () => {
-      const bigNotes: any = {};
+      const bigNotes: Record<string, unknown> = {};
       for (let i = 0; i <= 200; i++) bigNotes[`set-${i}`] = 'note';
       const { app } = await buildProfileApp({
         normalizeNotePayload: mock.fn(() => ({ value: bigNotes })),
@@ -1890,7 +1893,7 @@ describe('routes/profiles.js', () => {
     });
 
     test('returns 400 when reminders exceed 200 count', async () => {
-      const bigReminders: any = {};
+      const bigReminders: Record<string, unknown> = {};
       for (let i = 0; i <= 200; i++) bigReminders[`set-${i}`] = 5;
       const { app } = await buildProfileApp({
         normalizeReminderPayload: mock.fn(() => ({ value: bigReminders })),
@@ -1931,7 +1934,7 @@ describe('routes/profiles.js', () => {
   describe('PATCH /profiles/:id — update (same handler)', () => {
     test('PATCH updates profile same as PUT', async () => {
       const { app } = await buildProfileApp({
-        normalizePickPayload: mock.fn((p) => ({ value: p })),
+        normalizePickPayload: mock.fn((p: unknown) => ({ value: p })),
         stores: {
           ...makeProfileDeps().stores,
           profiles: {
@@ -1998,7 +2001,7 @@ describe('routes/profiles.js', () => {
 //  SHARE ROUTE TESTS
 // =====================================================================
 
-function makeShareDeps(overrides: any = {}) {
+function makeShareDeps(overrides: Record<string, unknown> = {}) {
   return {
     express,
     config: { NODE_ENV: 'test', PUBLIC_ORIGIN: 'http://localhost:3000' },
@@ -2018,7 +2021,7 @@ function makeShareDeps(overrides: any = {}) {
         newestProfile: mock.fn(async () => null),
       },
     },
-    getFestivalById: mock.fn(async (id: any) => ({
+    getFestivalById: mock.fn(async (id: string) => ({
       id, name: 'Test Fest', location: 'Somewhere',
       stages: [{ id: 'stg-1', name: 'Main', color: '#ff3366' }],
       days: [{
@@ -2026,11 +2029,11 @@ function makeShareDeps(overrides: any = {}) {
         sets: [{ id: 'set-a', artist: 'Alpha', stageId: 'stg-1', startTime: '10:00', endTime: '11:00' }],
       }],
     })),
-    getUserById: mock.fn(async (id: any) => ({ id, username: 'testuser' })),
+    getUserById: mock.fn(async (id: string) => ({ id, username: 'testuser' })),
     buildAvatarUrl: mock.fn(() => ''),
-    rateLimit: () => (_req: any, _res: any, next: any) => next(),
-    sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
-    sendError: (res: any, status: any, msg: any, code: any) => res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
+    rateLimit: () => (_req: Request, _res: Response, next: NextFunction) => next(),
+    sendSuccess: (res: Response, data: unknown) => res.json({ data, error: null }),
+    sendError: (res: Response, status: number, msg: string, code?: string) => res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
     ErrorCodes: {
       INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR',
     },
@@ -2038,7 +2041,7 @@ function makeShareDeps(overrides: any = {}) {
   };
 }
 
-async function buildShareApp(overrides: any = {}) {
+async function buildShareApp(overrides: Record<string, unknown> = {}) {
   const deps = makeShareDeps(overrides);
   const { default: createShareRoutes } = await import('../routes/share.js');
   const router = createShareRoutes(deps);
@@ -2067,7 +2070,7 @@ describe('routes/share.js', () => {
     test('accepts a username with a space and shows a readable date, still noindex', async () => {
       const getByUsername = mock.fn(async (_name: string) => ({ id: 'u1', username: 'Jane Doe', publicSchedule: true }));
       const { app } = await buildShareApp({
-        getFestivalById: mock.fn(async (id: any) => ({
+        getFestivalById: mock.fn(async (id: string) => ({
           id, name: 'Test Fest', stages: [{ id: 'stg-1', name: 'Main' }],
           days: [{ label: 'Friday', date: '2026-07-10', sets: [{ id: 'set-a', artist: 'Alpha' }] }],
         })),
