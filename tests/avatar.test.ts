@@ -253,3 +253,51 @@ describe('avatar characterization: the stale .tmp sweep', () => {
 
 });
 
+
+describe('avatar: orphan cleanup timer', () => {
+  it('removes only files without a users row and queries by page', async () => {
+    const { createBackgroundTasks } = await import('../lib/shutdown.js');
+    fs.writeFileSync(path.join(tmpDir, 'keep.webp'), 'x');
+    fs.writeFileSync(path.join(tmpDir, 'orphan.webp'), 'x');
+    fs.writeFileSync(path.join(tmpDir, 'note.txt'), 'x');
+    const queries: any[] = [];
+    const log = { info() {}, warn() {}, error() {}, debug() {} };
+    const timers: any[] = [];
+    mock.timers.enable({ apis: ['setInterval'] });
+    createBackgroundTasks({
+      config: { SESSION_TTL: 1, SESSION_CLEANUP_INTERVAL_MS: 1e9, MEMORY_CHECK_INTERVAL_MS: 1e9 },
+      state: { timers, rateLimits: new Map(), routeRateLimits: new Map(), authRateLimits: new Map(), socketRateLimits: new Map(), onlineUsers: new Map() },
+      stores: {
+        sessions: { deleteExpiredUserSessions: async () => {} },
+        pool: {
+          query: async (sql: string, params?: any[]) => {
+            if (sql.includes('ANY')) {
+              queries.push(params);
+              return { rows: params![0].filter((k: string) => k === 'keep').map((k: string) => ({ avatar_key: k })) };
+            }
+            return { rows: [], rowCount: 0 };
+          },
+        },
+        auditLog: { cleanup: async () => 0 },
+        crews: { meetingPoints: { expireStale: async () => ({ rowCount: 0 }) } },
+      },
+      log,
+      pool: {},
+      validateUserSession: async () => true,
+      disconnectSocket() {},
+      emitPresence() {},
+      getUsers: async () => [],
+      avatarDirPath: () => tmpDir,
+    }, { io: { of: () => ({ sockets: new Map() }), engine: { clientsCount: 0 } } });
+    mock.timers.tick(6 * 60 * 60 * 1000);
+    // fs.promises work runs on the libuv threadpool and takes real time, so a
+    // fixed number of setImmediate spins can finish before the unlink does on a
+    // slow runner. Only setInterval is mocked, so setTimeout is real here.
+    for (let i = 0; i < 200 && fs.existsSync(path.join(tmpDir, 'orphan.webp')); i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    assert.deepEqual(fs.readdirSync(tmpDir).sort(), ['keep.webp', 'note.txt']);
+    assert.equal(queries.length, 1);
+    for (const t of timers) clearInterval(t);
+  });
+});

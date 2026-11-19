@@ -4,7 +4,7 @@ import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestival, useClashResolver } from '@festie/shared/hooks';
-import { COPY } from '@festie/shared/constants';
+import { COPY, PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { Priority } from '@festie/shared/types';
 import {
   buildPickConflicts,
@@ -23,10 +23,10 @@ import { cn } from '@/lib/utils';
 
 // Priority chip styling mirrors the Badge tint-ring roles (must=coral, want=aqua,
 // maybe=amber) but inline here so the chip can sit tight against the time row.
-const PRIORITY_CHIP: Record<Priority, { label: string; className: string }> = {
-  must: { label: 'Must', className: 'bg-accent-coral/20 text-accent-coral' },
-  'want-to-see': { label: 'Want', className: 'bg-accent-aqua/20 text-accent-aqua' },
-  maybe: { label: 'Maybe', className: 'bg-accent-amber/20 text-accent-amber' },
+const PRIORITY_CHIP: Record<Priority, { className: string }> = {
+  must: { className: 'bg-accent-coral/20 text-accent-coral' },
+  'want-to-see': { className: 'bg-accent-aqua/20 text-accent-aqua' },
+  maybe: { className: 'bg-accent-amber/20 text-accent-amber' },
 };
 
 /**
@@ -198,7 +198,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                         )}
                       >
                         <PriorityIcon priority={pick.priority} className="h-3 w-3" filled />
-                        {chip.label}
+                        {PRIORITY_SYMBOLS[pick.priority].short}
                       </span>
                       {isKeep && (
                         <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-accent-aqua">
