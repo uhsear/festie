@@ -22,7 +22,12 @@ const TABLES = [
   'festival_announcements',
 ];
 
-describe('scripts/sql/backup-counts.sql', { skip: !TEST_DATABASE_URL && 'TEST_DATABASE_URL not set' }, () => {
+const skip = !TEST_DATABASE_URL && 'TEST_DATABASE_URL not set';
+
+// A skipped suite is not counted in the summary, so report the skip as a skipped test too.
+if (skip) it('scripts/sql/backup-counts.sql suite', { skip }, () => {});
+
+describe('scripts/sql/backup-counts.sql', { skip }, () => {
   let pool: Pool;
 
   before(async () => {

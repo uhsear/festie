@@ -1027,26 +1027,42 @@ describe('metrics.js', () => {
       stop();
     });
 
+    // Fake gauges record set() calls so the sampler is asserted without prom-client.
+    function fakeMetrics() {
+      const sets: Record<string, number> = {};
+      const gauge = (name: string) => ({ set: (v: number) => { sets[name] = v; } });
+      const metrics: any = {
+        available: true,
+        pgPoolTotalGauge: gauge('total'),
+        pgPoolIdleGauge: gauge('idle'),
+        pgPoolWaitingGauge: gauge('waiting'),
+        socketGauge: gauge('sockets'),
+      };
+      return { metrics, sets };
+    }
+
     it('samples pool and io on creation', () => {
-      if (!sharedMetrics.available) return;
+      const { metrics, sets } = fakeMetrics();
       const pool = { totalCount: 10, idleCount: 5, waitingCount: 2 };
       const io = { engine: { clientsCount: 42 } };
-      const stop = startMetricsSampler(sharedMetrics, { pool, io }, 100000);
-      // Cleanup
+      const stop = startMetricsSampler(metrics, { pool, io }, 100000);
       stop();
+      assert.deepEqual(sets, { total: 10, idle: 5, waiting: 2, sockets: 42 });
     });
 
     it('handles missing pool and io gracefully', () => {
-      if (!sharedMetrics.available) return;
-      const stop = startMetricsSampler(sharedMetrics, {}, 100000);
+      const { metrics, sets } = fakeMetrics();
+      const stop = startMetricsSampler(metrics, {}, 100000);
       stop();
+      assert.deepEqual(sets, {});
     });
 
     it('handles pool without idleCount/waitingCount', () => {
-      if (!sharedMetrics.available) return;
+      const { metrics, sets } = fakeMetrics();
       const pool = { totalCount: 5 };
-      const stop = startMetricsSampler(sharedMetrics, { pool }, 100000);
+      const stop = startMetricsSampler(metrics, { pool }, 100000);
       stop();
+      assert.deepEqual(sets, { total: 5, idle: 0, waiting: 0 });
     });
 
     it('stop function clears interval', () => {
