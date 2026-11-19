@@ -186,6 +186,11 @@ describe('artist backfill on lineup entries', { skip }, () => {
     }
     const run = (await pool.query(`SELECT before FROM artist_backfill_runs WHERE run_id = 'marlo-1' AND festival_id = 'fest-a'`)).rows[0];
     assert.deepEqual(run.before.rowFills, [{ artistId: 'art-marlo', spotifyId: 'F'.repeat(22), links: { spotify } }]);
+    // fk-marlo lives in another festival and already held the row's id: its copy follows the filled row.
+    assert.deepEqual((await entryOf('fest-fk', 'fk-marlo')).artists, [{ id: 'art-marlo', name: 'Marlo Vex', links: { spotify } }]);
+    assert.ok(plan.report.copyRefreshes.some((c) => c.festivalId === 'fest-fk' && c.ownerId === 'fk-marlo'));
+    const fkRun = (await pool.query(`SELECT before FROM artist_backfill_runs WHERE run_id = 'marlo-1' AND festival_id = 'fest-fk'`)).rows[0];
+    assert.deepEqual(fkRun.before.lineup.find((e: any) => e.id === 'fk-marlo').artists, [{ id: 'art-marlo', name: 'Marlo Vex', links: {} }]);
     const verify = await verifyBackfill(pool);
     assert.equal(verify.ok, true, JSON.stringify(verify.checks));
     const again = await planBackfill(pool);
