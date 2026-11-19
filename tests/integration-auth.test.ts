@@ -1,4 +1,4 @@
-import { afterEach, describe, test } from 'node:test';
+import { afterEach, describe, mock, test } from 'node:test';
 import {
   assert,
   request,
@@ -382,10 +382,11 @@ describe('Password Boundary Validation', { concurrency: 1 }, () => {
 // ============================================================================
 describe('userAuthRateLimits stale entry cleanup', { concurrency: 1 }, () => {
   const servers: any[] = [];
-  afterEach(async () => { for (const s of servers) await s.close().catch(() => {}); servers.length = 0; });
+  afterEach(async () => { mock.timers.reset(); for (const s of servers) await s.close().catch(() => {}); servers.length = 0; });
 
   test('stale entries are purged after 2× the auth rate limit window', async () => {
     const AUTH_WINDOW = 200; // 200ms
+    mock.timers.enable({ apis: ['setInterval'] }); // app registers its cleanup interval at startServer
     const server = await startServer({
       AUTH_RATE_LIMIT_WINDOW: AUTH_WINDOW,
       AUTH_RATE_LIMIT_MAX: 100,
@@ -407,19 +408,15 @@ describe('userAuthRateLimits stale entry cleanup', { concurrency: 1 }, () => {
       entry.windowStart = Date.now() - (AUTH_WINDOW * 3);
     }
 
-    // Manually trigger cleanup logic (same as the 60s interval callback)
-    const now = Date.now();
-    for (const key of Array.from(authMap.keys())) {
-      const entry = authMap.get(key);
-      if (!entry) continue;
-      if (now - entry.windowStart > AUTH_WINDOW * 2) authMap.delete(key);
-    }
+    // Fire the real 60s cleanup interval registered by the app context
+    mock.timers.tick(60_000);
 
     assert.equal(authMap.size, 0, 'Stale auth rate limit entries should be purged');
   });
 
   test('non-stale entries survive cleanup', async () => {
     const AUTH_WINDOW = 300_000; // 5 minutes
+    mock.timers.enable({ apis: ['setInterval'] }); // app registers its cleanup interval at startServer
     const server = await startServer({
       AUTH_RATE_LIMIT_WINDOW: AUTH_WINDOW,
       AUTH_RATE_LIMIT_MAX: 100,
@@ -436,13 +433,8 @@ describe('userAuthRateLimits stale entry cleanup', { concurrency: 1 }, () => {
     const sizeBefore = authMap.size;
     assert.ok(sizeBefore > 0);
 
-    // Run cleanup — entries are fresh, should survive
-    const now = Date.now();
-    for (const key of Array.from(authMap.keys())) {
-      const entry = authMap.get(key);
-      if (!entry) continue;
-      if (now - entry.windowStart > AUTH_WINDOW * 2) authMap.delete(key);
-    }
+    // Fire the real 60s cleanup interval registered by the app context
+    mock.timers.tick(60_000);
 
     assert.equal(authMap.size, sizeBefore, 'Fresh entries should survive cleanup');
   });
