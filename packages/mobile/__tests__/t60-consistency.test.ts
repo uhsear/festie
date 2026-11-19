@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const root = join(__dirname, '..');
 const read = (p: string) => readFileSync(join(root, p), 'utf8');
+// A commented-out guard must not satisfy a guard assertion.
+const code = (p: string) => read(p).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 const walk = (dir: string): string[] =>
   readdirSync(join(root, dir)).flatMap((n) => {
     const rel = `${dir}/${n}`;
@@ -20,7 +22,7 @@ describe('T60 consistency', () => {
     expect(read('app/crew-plan.tsx')).toContain('COPY.wrap.open');
   });
   it('grid starts a festival load when a deep link lands before the catalogue', () => {
-    expect(read('app/grid.tsx')).toMatch(/!currentFestival && festivals\.length === 0 && !isLoading && !error\)\s*\{\s*loadFestivals\(\)/);
+    expect(code('app/grid.tsx')).toMatch(/!currentFestival && festivals\.length === 0 && !isLoading && !error\)\s*\{\s*loadFestivals\(\)/);
   });
   it('only AppSwitch imports Switch from react-native', () => {
     const offenders = [...walk('app'), ...walk('components')].filter((f) => {
