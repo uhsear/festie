@@ -1,4 +1,5 @@
 import type { FestivalSet, FestivalDay, Priority } from '../types/domain';
+import { PRIORITY_RANK } from './crewNudges';
 import { getSetTimeBounds } from './setStatus';
 
 /**
@@ -53,13 +54,8 @@ export function reminderIdentifier(setId: string): string {
   return `festie-reminder-${setId}`;
 }
 
-// must > want-to-see > maybe. Lower rank = higher priority (kept first when
-// the 64-notification cap forces us to drop the long tail).
-const PRIORITY_RANK: Record<Priority, number> = {
-  must: 0,
-  'want-to-see': 1,
-  maybe: 2,
-};
+// Lower PRIORITY_RANK = higher priority (kept first when the 64-notification
+// cap forces us to drop the long tail).
 
 export interface BuildReminderPlanArgs {
   /** `setId -> lead minutes` from `currentProfile.reminders`. */

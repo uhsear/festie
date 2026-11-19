@@ -30,9 +30,11 @@ import { parsePageParams, paginateArray } from '../lib/pagination.js';
 import mountAdminUserRoutes from './admin-users.js';
 import mountAdminAuditRoutes from './admin-audit.js';
 import mountAdminBulkRoutes from './admin-bulk.js';
+import mountAdminPolicyNoticeRoutes from './admin-policy-notice.js';
 import * as spotify from '../lib/spotify.js';
 import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { withTransactionRetry } from '../lib/db/connection.js';
 import { lockFestivalAny } from '../lib/db/stores/lineup-imports.js';
 import { rewriteCopies, type ArtistRecord } from '../lib/db/stores/artists.js';
@@ -63,6 +65,7 @@ export default function createAdminRoutes(deps: any): Router {
     schemas,
     validateQuery,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const router = express.Router();
   const adminWriteLimit = rateLimit(config.ADMIN_WRITE_RATE_LIMIT_MAX, 'admin-write');
@@ -210,6 +213,7 @@ export default function createAdminRoutes(deps: any): Router {
   mountAdminUserRoutes({ router, deps, ctx }); // /users, /users/:id/*
   mountAdminAuditRoutes({ router, deps, ctx }); // /audit
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*
+  mountAdminPolicyNoticeRoutes({ router, deps, ctx }); // /policy-notice
 
   const REF_COUNTS_SQL = `
   SELECT
@@ -527,25 +531,18 @@ export default function createAdminRoutes(deps: any): Router {
         skipped: sets.length - updated,
         ip: getRequestIp(req),
       });
-      if (stores.auditLog) {
-        await stores.auditLog.insert({
-          actorType: 'admin',
-          actorId: req.user?.userId,
-          action: AUDIT_ACTIONS.SPOTIFY_BACKFILLED,
-          targetType: 'festival',
-          targetId: festivalId,
-          detailsJson: JSON.stringify({
-            updated,
-            skipped: sets.length - updated,
-            total: sets.length,
-            setIds: setIds?.length ?? null,
-            unmatched: unmatchedList.length,
-          }),
-          ip: getRequestIp(req),
-        });
-        // eslint-disable-next-line require-atomic-updates -- res is request-scoped
-        res.locals.auditWritten = true;
-      }
+      await writeAdminAudit(req, res, {
+        action: AUDIT_ACTIONS.SPOTIFY_BACKFILLED,
+        targetType: 'festival',
+        targetId: festivalId,
+        details: {
+          updated,
+          skipped: sets.length - updated,
+          total: sets.length,
+          setIds: setIds?.length ?? null,
+          unmatched: unmatchedList.length,
+        },
+      });
       return sendSuccess(res, {
         updated,
         skipped: sets.length - updated,

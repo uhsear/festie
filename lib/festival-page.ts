@@ -7,6 +7,7 @@
 // only the festival record, never user, pick or crew data. Every database value
 // is escaped here, inside the renderer, so no caller can forget.
 
+import { shownSetName } from './artist-key.js';
 import { festivalTint } from './festival-tint.js';
 import {
   buildEventJsonLd,
@@ -48,10 +49,8 @@ export function dayHeadingDate(date: unknown): string {
 }
 
 function setArtistName(set: any, separator: string | undefined): string {
-  // The billed name wins, as in the app's artistDisplayName.
-  if (set.displayName) return set.displayName;
-  if (Array.isArray(set.artists) && set.artists.length > 0) return artistDisplayName(set.artists, separator);
-  return set.artist || 'Artist TBA';
+  if (!set.displayName && !set.artist && !set.artists?.length) return 'Artist TBA';
+  return shownSetName(set, separator);
 }
 
 /** One entry per day in record order; sets in festival time (06:00 day start), TBA last. All text is escaped. */
@@ -197,7 +196,7 @@ function renderDay(day: ReturnType<typeof buildFestivalPageDays>[number], acts: 
 const FESTIVAL_PAGE_REFS = new Set(['share-festival', 'share-wrap', 'share-picks', 'crew-invite']);
 
 /** The incoming ?ref= when it is allow-listed, else `fallback`. */
-export function festivalPageRef(ref: unknown, fallback = 'festival-page'): string {
+function festivalPageRef(ref: unknown, fallback = 'festival-page'): string {
   return typeof ref === 'string' && FESTIVAL_PAGE_REFS.has(ref) ? ref : fallback;
 }
 

@@ -3,6 +3,7 @@
 
 import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
+import { buildUpdate } from '../utils';
 
 export default function createUsersStore(pool: Pool, utils: any) {
   const { toISOString } = utils;
@@ -181,23 +182,10 @@ export default function createUsersStore(pool: Pool, utils: any) {
     },
 
     async update(userId: string, fields: Record<string, any>) {
-      const sets: string[] = [];
-      const values: any[] = [];
-      let idx = 1;
-      for (const [key, val] of Object.entries(fields)) {
-        sets.push(`${toColumn(key)} = $${idx}`);
-        values.push(val);
-        idx++;
-      }
-      sets.push(`updated_at = $${idx}`);
-      values.push(new Date().toISOString());
-      idx++;
-      values.push(userId);
-
-      const result = await pool.query(
-        `UPDATE users SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL RETURNING ${USER_COLUMNS}`,
-        values,
-      );
+      const sets: Array<[string, unknown]> = Object.entries(fields).map(([key, val]) => [toColumn(key), val]);
+      sets.push(['updated_at', new Date().toISOString()]);
+      const q = buildUpdate('users', sets, userId, { extraWhere: 'deleted_at IS NULL', returning: USER_COLUMNS });
+      const result = await pool.query(q.text, q.values);
       return normalizeRow(result.rows[0]);
     },
 

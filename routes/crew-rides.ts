@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
+import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
 import { randomUUID } from 'crypto';
 
 /**
@@ -22,6 +24,7 @@ export default function createCrewRidesRoutes(deps: any) {
     io,
     emitter,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
 
@@ -31,12 +34,10 @@ export default function createCrewRidesRoutes(deps: any) {
     userAuth,
     rateLimit(120, 'crew-rides-list'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const userId = req.user.userId;
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const offers = await stores.crewRides.listByCrew(crewId);
         return sendSuccess(res, { offers });
       } catch (err: any) {
@@ -53,14 +54,13 @@ export default function createCrewRidesRoutes(deps: any) {
     rateLimit(30, 'crew-rides-create'),
     validateParams(schemas.crewIdParams),
     validate(schemas.rideCreate),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const { driver, seats, departFrom, departAt, note, direction, departTime } = req.validatedBody;
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const count = await stores.crewRides.countByCrew(crewId);
         if (count >= 200) return sendError(res, 409, 'Max 200 ride offers per crew', ErrorCodes.CONFLICT);
@@ -104,20 +104,19 @@ export default function createCrewRidesRoutes(deps: any) {
     rateLimit(60, 'crew-rides-update'),
     validateParams(schemas.crewIdItemIdParams),
     validate(schemas.rideUpdate),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const itemId = sanitizeIdentifier(req.validatedParams.itemId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.crewRides.getById(itemId);
         if (!existing || existing.crew_id !== crewId) {
           return sendError(res, 404, 'Ride offer not found', ErrorCodes.NOT_FOUND);
         }
-        if (existing.created_by !== userId && membership.role !== 'owner') {
+        if (!isCreatorOrOwner(existing, userId, req.membership.role)) {
           return sendError(
             res,
             403,
@@ -151,20 +150,19 @@ export default function createCrewRidesRoutes(deps: any) {
     userAuth,
     rateLimit(30, 'crew-rides-delete'),
     validateParams(schemas.crewIdItemIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const itemId = sanitizeIdentifier(req.validatedParams.itemId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.crewRides.getById(itemId);
         if (!existing || existing.crew_id !== crewId) {
           return sendError(res, 404, 'Ride offer not found', ErrorCodes.NOT_FOUND);
         }
-        if (existing.created_by !== userId && membership.role !== 'owner') {
+        if (!isCreatorOrOwner(existing, userId, req.membership.role)) {
           return sendError(res, 403, 'Only creator or owner can remove offer', ErrorCodes.FORBIDDEN);
         }
 
@@ -187,8 +185,6 @@ export default function createCrewRidesRoutes(deps: any) {
       const itemId = sanitizeIdentifier(req.validatedParams.itemId);
       const userId = req.user.userId;
 
-      const membership = await stores.crews.getMember(crewId, userId);
-      if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
       const existing = await stores.crewRides.getById(itemId);
       if (!existing || existing.crew_id !== crewId) {
@@ -206,7 +202,7 @@ export default function createCrewRidesRoutes(deps: any) {
       return sendError(res, 500, 'Failed to update your seat', ErrorCodes.INTERNAL_ERROR);
     }
   };
-  const seatGuards = [userAuth, rateLimit(30, 'crew-rides-seat'), validateParams(schemas.crewIdItemIdParams)];
+  const seatGuards = [userAuth, rateLimit(30, 'crew-rides-seat'), validateParams(schemas.crewIdItemIdParams), crewMember];
   router.post('/:crewId/rides/:itemId/seat', ...seatGuards, seatHandler(true));
   router.delete('/:crewId/rides/:itemId/seat', ...seatGuards, seatHandler(false));
 

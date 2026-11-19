@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 
 import { simplifyDebts } from '../lib/db/stores/expenses.js';
 import { formatMoney, toCents } from '../lib/helpers/export-utils.js';
@@ -33,6 +34,7 @@ export default function createExpenseRoutes(deps: any) {
     notificationService,
     config,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   // Best-effort money push to one member. Never blocks or fails the response.
   function pushMoney(userId: string, crewId: string, title: string, body: string, expenseId?: string) {
@@ -80,11 +82,10 @@ export default function createExpenseRoutes(deps: any) {
     userAuth,
     rateLimit(120, 'expense-list'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const expenses = await stores.expenses.getByCrew(crewId);
         return sendSuccess(res, expenses);
       } catch (err: any) {
@@ -101,11 +102,10 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(30, 'expense-create'),
     validateParams(schemas.crewIdParams),
     validate(schemas.expenseCreate),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const members = await checkPeople(crewId, req.validatedBody, res);
         if (!members) return;
@@ -153,12 +153,11 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(10, 'expense-currency'),
     validateParams(schemas.crewIdParams),
     validate(schemas.expenseCurrency),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
-        if (member.role !== 'owner') {
+        if (req.membership.role !== 'owner') {
           return sendError(res, 403, 'Only the crew owner can change the currency.', ErrorCodes.FORBIDDEN);
         }
         const { currency } = req.validatedBody;
@@ -182,12 +181,11 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(30, 'expense-update'),
     validateParams(schemas.crewIdExpenseIdParams),
     validate(schemas.expenseUpdate),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const expenseId = sanitizeIdentifier(req.validatedParams.expenseId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.expenses.getById(expenseId);
         if (!existing || existing.crew_id !== crewId)
@@ -209,7 +207,7 @@ export default function createExpenseRoutes(deps: any) {
         if (
           changesPayer &&
           ![existing.paid_by, existing.created_by].includes(req.user.userId) &&
-          member.role !== 'owner'
+          req.membership.role !== 'owner'
         ) {
           return sendError(
             res,
@@ -255,12 +253,11 @@ export default function createExpenseRoutes(deps: any) {
     userAuth,
     rateLimit(30, 'expense-delete'),
     validateParams(schemas.crewIdExpenseIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const expenseId = sanitizeIdentifier(req.validatedParams.expenseId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const expense = await stores.expenses.getById(expenseId);
         if (!expense || expense.crew_id !== crewId)
@@ -269,7 +266,7 @@ export default function createExpenseRoutes(deps: any) {
         // Payments stay payer-only; other rows: the payer, whoever added it, or the owner.
         if (isPayment && expense.paid_by !== req.user.userId)
           return sendError(res, 403, 'Only the payer can delete', ErrorCodes.FORBIDDEN);
-        if (!isPayment && ![expense.paid_by, expense.created_by].includes(req.user.userId) && member.role !== 'owner') {
+        if (!isPayment && ![expense.paid_by, expense.created_by].includes(req.user.userId) && req.membership.role !== 'owner') {
           return sendError(
             res,
             403,
@@ -306,11 +303,10 @@ export default function createExpenseRoutes(deps: any) {
     userAuth,
     rateLimit(60, 'expense-balances'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const balances = await stores.expenses.getBalances(crewId);
         return sendSuccess(res, balances);
       } catch (err: any) {
@@ -331,11 +327,10 @@ export default function createExpenseRoutes(deps: any) {
     userAuth,
     rateLimit(60, 'expense-settlement-plan'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const balancesCents = await stores.expenses.getBalancesCents(crewId);
         const settlements = simplifyDebts(balancesCents);
@@ -386,11 +381,10 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(20, 'expense-settle'),
     validateParams(schemas.crewIdParams),
     validate(schemas.expenseSettleFull),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const { toUserId, amount } = req.validatedBody;
         // The settlement target must be a different current crew member.
         if (toUserId === req.user.userId) {
@@ -447,12 +441,11 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(30, 'expense-confirm'),
     validateParams(schemas.crewIdExpenseIdParams),
     validate(schemas.expenseConfirm),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const expenseId = sanitizeIdentifier(req.validatedParams.expenseId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.expenses.getById(expenseId);
         if (!existing || existing.crew_id !== crewId)
@@ -505,11 +498,10 @@ export default function createExpenseRoutes(deps: any) {
     rateLimit(20, 'expense-remind'),
     validateParams(schemas.crewIdParams),
     validate(schemas.expenseRemind),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const { userId } = req.validatedBody;
         const [balancesCents, members, currency] = await Promise.all([

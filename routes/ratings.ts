@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
+import { sanitizeIdentifier } from '../lib/helpers/sanitize';
 
 export function createRatingsRoutes({
   stores,
@@ -14,6 +16,7 @@ export function createRatingsRoutes({
   validateQuery,
 }: any) {
   const router = Router();
+  const crewMember = crewMembership({ stores, log, sendError, ErrorCodes });
   const writeLimit = rateLimit(60, 'rating-write');
   const readLimit = rateLimit(120, 'rating-read');
 
@@ -154,12 +157,12 @@ export function createRatingsRoutes({
     readLimit,
     validateParams(schemas.crewIdFestivalIdParams),
     validateQuery(schemas.paginationQuery),
+    crewMember,
     async (req: any, res: any) => {
       try {
-        const member = await stores.crews.getMember(req.validatedParams.crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const { cursor, limit } = req.validatedQuery;
-        const result = await stores.ratings.getCrewRatings(req.validatedParams.crewId, req.validatedParams.festivalId, {
+        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+        const result = await stores.ratings.getCrewRatings(crewId, req.validatedParams.festivalId, {
           cursor,
           limit,
         });
@@ -178,11 +181,11 @@ export function createRatingsRoutes({
     userAuth,
     readLimit,
     validateParams(schemas.crewIdFestivalIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
-        const { crewId, festivalId } = req.validatedParams;
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
+        const { festivalId } = req.validatedParams;
+        const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         // The wrap derives totalSplit/biggestSpender from the expense rows, not
         // balances: settling up zeroes every balance.
         const expenses = await stores.expenses.getByCrew(crewId);

@@ -538,3 +538,35 @@ describe('POST /crews/:crewId/expenses/remind', () => {
       .expect(400);
   });
 });
+
+describe('non-members are refused on every crew expense route', () => {
+  const edit = { description: 'Dinner', amount: 45, splitWith: ['user-a', 'user-b'], category: 'food' };
+  const routes: Array<[string, string, string, object?]> = [
+    ['get', 'list', '/crews/crew-1/expenses'],
+    ['post', 'create', '/crews/crew-1/expenses', { description: 'Tent', amount: 10, splitWith: ['user-a'] }],
+    ['put', 'currency', '/crews/crew-1/expenses/currency', { currency: 'USD' }],
+    ['put', 'update', '/crews/crew-1/expenses/exp-1', edit],
+    ['delete', 'delete', '/crews/crew-1/expenses/exp-1'],
+    ['get', 'balances', '/crews/crew-1/expenses/balances'],
+    ['get', 'settlement-plan', '/crews/crew-1/expenses/settlement-plan'],
+    ['post', 'settle', '/crews/crew-1/expenses/settle', { toUserId: 'user-b', amount: 20 }],
+    ['post', 'confirm', '/crews/crew-1/expenses/exp-9/confirm', { received: true }],
+    ['post', 'remind', '/crews/crew-1/expenses/remind', { userId: 'user-b' }],
+  ];
+
+  for (const [method, name, path, body] of routes) {
+    test(`${name} returns 403 for a non-member`, async () => {
+      const deps = buildDeps({ expense: FOOD });
+      const app = await mount(deps);
+
+      const res = await (request(app) as any)[method](path).set('x-user', 'outsider').send(body).expect(403);
+
+      assert.equal(res.body.error.message, 'Not a crew member');
+      assert.equal(deps.stores.expenses.create.mock.callCount(), 0);
+      assert.equal(deps.stores.expenses.update.mock.callCount(), 0);
+      assert.equal(deps.stores.expenses.delete.mock.callCount(), 0);
+      assert.equal(deps.stores.expenses.setCurrency.mock.callCount(), 0);
+      assert.equal(deps.stores.expenses.getByCrew.mock.callCount(), 0);
+    });
+  }
+});

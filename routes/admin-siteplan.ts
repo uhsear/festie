@@ -10,8 +10,8 @@
  * under public/uploads/siteplans/ and returns { imageUrl }. It does not change the
  * festival: the admin saves the URL into map_config with the map editor.
  */
-import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 
 import {
   createSiteplanUpload,
@@ -38,6 +38,7 @@ export default function createAdminSiteplanRoutes(deps: any) {
     ErrorCodes,
     getRequestIp,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const router = express.Router();
   const { handleSiteplanUpload, writeSiteplan, sweepOrphanSiteplans } = createSiteplanUpload({ config, sendError, ErrorCodes });
@@ -94,21 +95,14 @@ export default function createAdminSiteplanRoutes(deps: any) {
         const key = await writeSiteplan(webp);
         void sweepUnreferencedSiteplans();
         setNoStore(res);
-        if (stores.auditLog) {
-          res.locals.auditWritten = true;
-          stores.auditLog
-            .insert({
-              id: crypto.randomUUID(),
-              actorType: 'admin',
-              actorId: req.user?.userId,
-              action: AUDIT_ACTIONS.FESTIVAL_SITEPLAN_UPLOADED,
-              targetType: 'festival',
-              targetId: festivalId,
-              detailsJson: JSON.stringify({ key }),
-              ip: getRequestIp(req),
-            })
-            .catch((e: any) => log.warn('audit log write failed', { error: e.message }));
-        }
+        // The response must not wait on the row, so claim the generic middleware's slot before it finishes.
+        res.locals.auditWritten = true;
+        void writeAdminAudit(req, res, {
+          action: AUDIT_ACTIONS.FESTIVAL_SITEPLAN_UPLOADED,
+          targetType: 'festival',
+          targetId: festivalId,
+          details: { key },
+        });
         res.status(201);
         return sendSuccess(res, { imageUrl: `${config.PUBLIC_ORIGIN}/uploads/siteplans/${key}.webp` });
       } catch (error: any) {
