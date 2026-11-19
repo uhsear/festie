@@ -35,7 +35,7 @@ set -euo pipefail
 # is never logged or echoed.
 #
 # Deploy key:  $BACKUP_DEPLOY_KEY (default ~/.ssh/festie_backups_deploy; ed25519, no passphrase)
-# Local clone: $BACKUP_GIT_CLONE   (default ~/backups-git-clone; shallow)
+# Local clone: $BACKUP_GIT_CLONE   (default ~/festie-backups-git; shallow)
 # Repo:        $BACKUP_GIT_REPO    (required, set in ../.env or the environment)
 #
 # -----------------------------------------------------------------------------
@@ -78,7 +78,7 @@ BACKUP_DIR="${CALLER_BACKUP_DIR:-$HOME/backups/festie}"
 LOG_FILE="$BACKUP_DIR/offsite-git.log"
 DEPLOY_KEY="${BACKUP_DEPLOY_KEY:-$HOME/.ssh/festie_backups_deploy}"
 REPO_SSH="${BACKUP_GIT_REPO:?BACKUP_GIT_REPO is required: set it in .env or the environment to the private backups repo SSH address}"
-CLONE_DIR="${BACKUP_GIT_CLONE:-$HOME/backups-git-clone}"
+CLONE_DIR="${BACKUP_GIT_CLONE:-$HOME/festie-backups-git}"
 DUMPS_SUBDIR="dumps"
 LOCK_WAIT="${BACKUP_LOCK_WAIT:-120}"
 FESTIVAL_MODE_FLAG="${FESTIVAL_MODE_FLAG:-$HOME/.festie-festival-mode}"
