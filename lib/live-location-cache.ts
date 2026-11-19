@@ -30,6 +30,9 @@
  */
 
 import type { LocationPeerUpdatePayload } from './types/contracts.js';
+import { createLogger } from './logger.js';
+
+const log = createLogger('live-location-cache');
 
 /**
  * Whole-key TTL on the crew hash (PEXPIRE, refreshed on every write). Mirrors `LIVE_LOCATION.STALE_MS`
@@ -91,8 +94,9 @@ export async function writeLivePosition(
     pipeline.hset(key, payload.userId, JSON.stringify(payload));
     pipeline.pexpire(key, POSITION_TTL_MS);
     await pipeline.exec();
-  } catch {
-    /* ephemeral cache — never block the live path on a Redis hiccup */
+  } catch (err: any) {
+    // ephemeral cache — never block the live path on a Redis hiccup
+    log.warn('live position write failed', { crewId, error: err?.message });
   }
 }
 
@@ -105,8 +109,9 @@ export async function dropLivePosition(redis: any, crewId: string, userId: strin
   if (!redis || !crewId || !userId) return;
   try {
     await redis.hdel(positionsKey(crewId), userId);
-  } catch {
-    /* TTL will reap it */
+  } catch (err: any) {
+    // TTL will reap it
+    log.warn('live position drop failed', { crewId, error: err?.message });
   }
 }
 
@@ -258,7 +263,8 @@ export async function readLiveSnapshot(
       value: value as string,
     }));
     return assembleSnapshot(entries, opts);
-  } catch {
+  } catch (err: any) {
+    log.warn('live snapshot read failed', { crewId, error: err?.message });
     return [];
   }
 }
