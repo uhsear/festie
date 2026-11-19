@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@festie/shared';
 import { useCrewStore } from '@festie/shared/stores';
@@ -41,7 +41,7 @@ import ExpenseForm from './ExpenseForm';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { DollarSign, Plus, HandCoins } from 'lucide-react';
 import { useAnimatedNumber } from '../../hooks/useAnimatedNumber';
-import { useRovingTabs } from '@/hooks/useRovingTabs';
+import SegmentedTablist from '@/components/ui/SegmentedTablist';
 import { inputBase } from '../../lib/styles';
 import { invalidateCrewMoney } from '../../lib/queryPersist';
 
@@ -63,6 +63,12 @@ interface Props {
   members: CrewMemberLite[];
   currentUserId: string;
 }
+
+const EXPENSE_VIEWS = (['actual', 'planned', 'all'] as const).map((v) => ({ value: v, label: v }));
+const SETTLE_VIEWS = [
+  { value: 'fewest', label: 'Fewest payments' },
+  { value: 'everyone', label: "Everyone's balance" },
+] as const;
 
 function balanceColor(value: number): string {
   if (value > 0.01) return 'text-accent-aqua';
@@ -93,10 +99,6 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   // Settle-up view. 'fewest' = the netted greedy min-cash-flow plan (fewest
   // transfers, never a stranger-to-pay); 'everyone' = every member's gross net balance.
   const [settleView, setSettleView] = useState<'fewest' | 'everyone'>('fewest');
-  const filterTablistRef = useRef<HTMLDivElement>(null);
-  const settleTablistRef = useRef<HTMLDivElement>(null);
-  useRovingTabs(filterTablistRef);
-  useRovingTabs(settleTablistRef);
 
   const {
     data: expenses = [],
@@ -366,29 +368,15 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       {/* Planned-vs-actual filter. 'Actual' is the real ledger (settle-up); */}
       {/* 'Planned' is the budget/forecast view. */}
       {expenses.length > 0 && (
-        <div
-          ref={filterTablistRef}
-          role="tablist"
-          aria-label="Filter expenses"
-          className="flex gap-1 p-1 rounded-lg bg-bg-card border border-border"
-        >
-          {(['actual', 'planned', 'all'] as const).map((v) => (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={view === v}
-              aria-controls="expenses-list-panel"
-              onClick={() => setView(v)}
-              className={cn(
-                'flex-1 min-h-11 rounded-md text-xs font-medium capitalize',
-                view === v ? 'bg-accent-aqua/15 text-accent-aqua' : 'text-text-secondary hover:text-text-primary',
-              )}
-            >
-              {v}
-            </button>
-          ))}
-        </div>
+        <SegmentedTablist
+          label="Filter expenses"
+          panelId="expenses-list-panel"
+          options={EXPENSE_VIEWS}
+          value={view}
+          onChange={setView}
+          className="flex gap-1 rounded-lg bg-bg-card"
+          tabClassName="flex-1 rounded-md capitalize"
+        />
       )}
 
       {/* Payments the current user was paid, waiting on "Got it" / "Not received". */}
@@ -435,36 +423,15 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
           <div className="flex items-center justify-between gap-2">
             <div className="text-xs text-text-muted uppercase tracking-wide">Settle up</div>
-            <div
-              ref={settleTablistRef}
-              role="tablist"
-              aria-label="Settle-up view"
-              className="flex gap-1 p-1 rounded-lg bg-bg-secondary border border-border"
-            >
-              {(
-                [
-                  ['fewest', 'Fewest payments'],
-                  ['everyone', "Everyone's balance"],
-                ] as const
-              ).map(([v, label]) => (
-                <button
-                  key={v}
-                  type="button"
-                  role="tab"
-                  aria-selected={settleView === v}
-                  aria-controls="settle-view-panel"
-                  onClick={() => setSettleView(v)}
-                  className={cn(
-                    'min-h-11 px-2.5 py-1 rounded-md text-xs font-medium',
-                    settleView === v
-                      ? 'bg-accent-aqua/15 text-accent-aqua'
-                      : 'text-text-secondary hover:text-text-primary',
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
+            <SegmentedTablist
+              label="Settle-up view"
+              panelId="settle-view-panel"
+              options={SETTLE_VIEWS}
+              value={settleView}
+              onChange={setSettleView}
+              className="flex gap-1 rounded-lg bg-bg-secondary"
+              tabClassName="px-2.5 py-1 rounded-md"
+            />
           </div>
 
           <div id="settle-view-panel">

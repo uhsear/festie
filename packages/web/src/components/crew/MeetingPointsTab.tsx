@@ -50,7 +50,7 @@ import { inputBase } from '../../lib/styles';
 import { meetingPointsQuery } from '../../lib/queryPersist';
 import CrewStatus from './CrewStatus';
 import LiveLocationControls from './LiveLocationControls';
-import { useRovingTabs } from '@/hooks/useRovingTabs';
+import SegmentedTablist from '@/components/ui/SegmentedTablist';
 
 // Lazy: CrewMap pulls in maplibre-gl (~200 kB gzip) at runtime. Keeping it behind
 // lazy() puts it in its own chunk so it never lands in the main bundle (mirrors
@@ -132,8 +132,6 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
   useEffect(() => {
     if (focusSosUserId) setView('map');
   }, [focusSosUserId]);
-  const viewTablistRef = useRef<HTMLDivElement>(null);
-  useRovingTabs(viewTablistRef);
 
   // ── Live Location + SOS (ephemeral) ─────────────────────────────────────────
   // Scope the (non-persisted) liveLocationStore to this crew so peer markers and
@@ -406,37 +404,18 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
       {/* List/Map toggle. Map lazy-loads MapLibre only when selected. */}
       <div className="flex flex-wrap items-center gap-2">
-      <div
-        ref={viewTablistRef}
-        className="inline-flex gap-1 p-1 rounded-lg bg-bg-card border border-border"
-        role="tablist"
-        aria-label="Meeting points view"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === 'list'}
-          aria-controls="meeting-points-panel"
-          onClick={() => setView('list')}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 ${
-            view === 'list' ? 'bg-accent-aqua/15 text-accent-aqua' : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          <List className="w-4 h-4" aria-hidden="true" /> List
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={view === 'map'}
-          aria-controls="meeting-points-panel"
-          onClick={() => setView('map')}
-          className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 ${
-            view === 'map' ? 'bg-accent-aqua/15 text-accent-aqua' : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          <MapIcon className="w-4 h-4" aria-hidden="true" /> Map
-        </button>
-      </div>
+      <SegmentedTablist
+        label="Meeting points view"
+        panelId="meeting-points-panel"
+        options={[
+          { value: 'list', label: <><List className="w-4 h-4" aria-hidden="true" /> List</> },
+          { value: 'map', label: <><MapIcon className="w-4 h-4" aria-hidden="true" /> Map</> },
+        ]}
+        value={view}
+        onChange={setView}
+        className="inline-flex gap-1 rounded-lg bg-bg-card"
+        tabClassName="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md"
+      />
       <Link
         to="/map"
         className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium min-h-11 text-text-secondary hover:text-text-primary"
