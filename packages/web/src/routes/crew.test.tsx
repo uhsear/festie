@@ -1,14 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render as rtlRender, screen, fireEvent, within, act } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent, within, act } from '@testing-library/react';
+import { createTestQueryClient, renderWithQueryClient } from '../test-utils';
 
 // CrewView reads tab badge counts via react-query, so renders need a client.
-function render(ui: React.ReactElement) {
-  const queryClient = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
-  });
-  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
-}
+const render = (ui: React.ReactElement) => renderWithQueryClient(ui);
 
 // Mock dependencies
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
@@ -385,14 +380,10 @@ describe('CrewView', () => {
   it('marks open polls seen when the Plan tab shows loaded polls', () => {
     h.search = { tab: 'plan' };
     crewWithActive();
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+    const client = createTestQueryClient({ queries: { retry: false, staleTime: Infinity } });
     const crewId = (storeState.activeCrew as { id: string }).id;
     client.setQueryData(['polls', crewId], [{ id: 'p1', closed: false }, { id: 'p2', closed: true }]);
-    rtlRender(
-      <QueryClientProvider client={client}>
-        <CrewView />
-      </QueryClientProvider>,
-    );
+    renderWithQueryClient(<CrewView />, client);
     expect(storeState.markCrewBadgeSeen).toHaveBeenCalledWith(crewId, { pollIds: ['p1'] });
   });
 

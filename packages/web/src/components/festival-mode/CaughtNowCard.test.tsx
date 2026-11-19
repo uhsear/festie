@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderWithQueryClient } from '../../test-utils';
 
 const markCaught = vi.fn();
 const apiGet = vi.fn();
@@ -39,12 +39,7 @@ const wrap = (caught: boolean | null) => ({
 });
 
 function renderCard() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <CaughtNowCard festivalId="f1" nowMs={NOW} timeZone="UTC" getStageName={() => 'Main'} />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<CaughtNowCard festivalId="f1" nowMs={NOW} timeZone="UTC" getStageName={() => 'Main'} />);
 }
 
 describe('CaughtNowCard', () => {

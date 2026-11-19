@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { renderWithQueryClient } from '../../test-utils';
 
 const mockNavigate = vi.fn().mockResolvedValue(undefined);
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => mockNavigate }));
@@ -32,12 +32,7 @@ const apple = { servicesId: 'us.festie.web', redirectUri: 'https://festie.us/log
 const win = window as unknown as Record<string, unknown>;
 
 function renderButtons(props: Partial<React.ComponentProps<typeof ProviderButtons>> = {}) {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={client}>
-      <ProviderButtons mode="signin" {...props} />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<ProviderButtons mode="signin" {...props} />);
 }
 
 let googleCallback: ((r: { credential: string }) => void) | undefined;
