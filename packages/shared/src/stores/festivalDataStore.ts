@@ -2,7 +2,7 @@ import { create, StateCreator } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { api } from '../services/api';
 import { mapErrorToUserMessage } from '../services/errors';
-import { isOffline } from '../services/offlineQueue';
+import { extractRealId, isOffline, registerCreateReconciler } from '../services/offlineQueue';
 import { bulkPickClientId, changedPickDeltas, pickDeltaBody } from '../services/pickDeltas';
 import { getStorage } from '../platform/storage';
 import { useAuthStore } from './authStore';
@@ -328,7 +328,8 @@ const GUEST_MAX_PICKS = 500;
 // profile-join rate limit is 10 a minute).
 const _joinsInFlight = new Map<string, Promise<void>>();
 
-// shortcut: the first pick needs a connection to create the profile; queue POST /profiles if offline first-picks become common
+const profileJoinClientId = (festivalId: string): string => `POST:/profiles:join-${festivalId}`;
+
 /**
  * Create the missing profile before a profile write. A signed-in user on the
  * selected festival joins it; anyone else gets the usual error. Callers skip
@@ -622,7 +623,32 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
     const pending = _joinsInFlight.get(festivalId);
     if (pending) return pending;
     const join = (async () => {
-      await api.post('/profiles', { festivalId });
+      if (isOffline()) {
+        let queued = false;
+        // Queue the join and stand in a placeholder (id = clientId) so the first pick works offline.
+        // Picks PUT to the placeholder; drainQueue rewrites their URLs to the real id on replay.
+        await api.post('/profiles', { festivalId }, {
+          clientId: profileJoinClientId(festivalId),
+          offlineLabel: 'Join festival',
+          onOptimisticCreate: (result) => {
+            queued = true;
+            const userId = useAuthStore.getState().user?.id ?? '';
+            set({
+              currentProfile: {
+                id: (result as { id: string }).id,
+                userId,
+                festivalId,
+                picks: {},
+                notes: {},
+                updatedAt: new Date().toISOString(),
+              },
+            });
+          },
+        });
+        if (queued) return;
+      } else {
+        await api.post('/profiles', { festivalId });
+      }
       await get().loadProfiles(festivalId);
     })().finally(() => {
       _joinsInFlight.delete(festivalId);
@@ -1291,4 +1317,22 @@ useUIStore.subscribe((state, prev) => {
   const { pickSync } = useFestivalDataStore.getState();
   const next = Object.fromEntries(Object.entries(pickSync).filter(([, entry]) => entry.state !== 'queued'));
   useFestivalDataStore.setState({ pickSync: next, lastSavedAt: Date.now() });
+});
+
+// Swap the offline join's placeholder for the real profile when the queued POST /profiles replays.
+// Picks made meanwhile stay on top: their PUTs were rewritten to the real id and replay next.
+registerCreateReconciler((clientId, serverResponse) => {
+  if (!clientId.startsWith('POST:/profiles:')) return;
+  const realId = extractRealId(serverResponse);
+  const placeholder = useFestivalDataStore.getState().currentProfile;
+  if (!realId || placeholder?.id !== clientId) return;
+  const real = serverResponse as Profile;
+  useFestivalDataStore.setState({
+    currentProfile: {
+      ...real,
+      picks: { ...real.picks, ...placeholder.picks },
+      notes: { ...real.notes, ...placeholder.notes },
+      reminders: { ...real.reminders, ...placeholder.reminders },
+    },
+  });
 });

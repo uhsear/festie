@@ -4,6 +4,7 @@ import { useFestivalUIStore } from './festivalUIStore';
 import { useAuthStore } from './authStore';
 import { useUIStore } from './uiStore';
 import { api } from '../services/api';
+import { drainQueue, enqueueMutation } from '../services/offlineQueue';
 import type { Festival, Profile } from '../types/domain';
 
 vi.mock('../services/api', () => {
@@ -1324,6 +1325,30 @@ describe('festivalDataStore', () => {
       expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'fest-1' });
       expect(api.get).toHaveBeenCalledWith('/profiles/fest-1');
       expect(useFestivalDataStore.getState().currentProfile).toEqual(joinedProfile);
+    });
+
+    it('offline first pick queues the join, picks on a placeholder, and the replay swaps in the real profile', async () => {
+      const clientId = 'POST:/profiles:join-fest-1';
+      useUIStore.setState({ offlineMode: true });
+      vi.mocked(api.post).mockImplementation(async (_path, _body, opts) => {
+        const queued = { festivalId: 'fest-1', id: clientId, _optimistic: true };
+        opts?.onOptimisticCreate?.(queued);
+        return queued;
+      });
+      await useFestivalDataStore.getState().savePick({ festivalId: 'fest-1', setId: 'set-2', priority: 'must' });
+      expect(api.post).toHaveBeenCalledWith('/profiles', { festivalId: 'fest-1' }, expect.objectContaining({ clientId }));
+      expect(api.get).not.toHaveBeenCalled();
+      expect(api.put).toHaveBeenCalledWith(`/profiles/${clientId}`, expect.anything(), expect.anything());
+      expect(useFestivalDataStore.getState().currentProfile).toMatchObject({ id: clientId, picks: { 'set-2': 'must' } });
+
+      await enqueueMutation({ clientId, url: '/profiles', method: 'POST', body: { festivalId: 'fest-1' }, label: 'Join festival' });
+      useUIStore.setState({ offlineMode: false });
+      vi.mocked(api.post).mockReset().mockResolvedValue({ ...joinedProfile, picks: { 'set-1': 'maybe' } });
+      await drainQueue();
+      expect(useFestivalDataStore.getState().currentProfile).toMatchObject({
+        id: 'prof-new',
+        picks: { 'set-1': 'maybe', 'set-2': 'must' },
+      });
     });
 
     it('savePick with no profile joins once, then writes the pick to the new profile', async () => {

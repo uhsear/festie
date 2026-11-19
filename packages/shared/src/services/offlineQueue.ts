@@ -312,18 +312,19 @@ function shortError(err: unknown): string {
  * receives the temp clientId (which was used as the optimistic entity's id) and
  * the authoritative server response, so a store can REPLACE the optimistic
  * placeholder with the real entity instead of leaving a duplicate. Registered
- * by the crewStore at module load (so offlineQueue stays decoupled from any
+ * by the crewStore and festivalDataStore at module load (so offlineQueue stays decoupled from any
  * store — no import cycle). Only POST replays are reconciled; PUT/PATCH/DELETE
  * are unchanged. Errors in the reconciler are swallowed so they can never break
  * the drain/no-silent-drops contract — the reload-dedup safety net still runs.
  */
 export type CreateReconciler = (clientId: string, serverResponse: unknown) => void;
 
-let _createReconciler: CreateReconciler | null = null;
+const _createReconcilers = new Set<CreateReconciler>();
 
-/** Register the post-replay create reconciler (latest registration wins). */
+/** Register a post-replay create reconciler; every one runs per replay. Null clears them all. */
 export function registerCreateReconciler(fn: CreateReconciler | null): void {
-  _createReconciler = fn;
+  if (fn) _createReconcilers.add(fn);
+  else _createReconcilers.clear();
 }
 
 /**
@@ -402,15 +403,17 @@ export async function drainQueue(): Promise<void> {
           const queue = (await readQueue()).filter((q) => q.clientId !== m.clientId);
           await writeQueue(queue);
         });
-        if (m.method === 'POST' && _createReconciler) {
-          try {
-            _createReconciler(m.clientId, serverResponse);
-          } catch (reconErr) {
-            // Never let a reconciler error break the drain / no-silent-drops
-            // contract — the reload-dedup safety net still clears stale
-            // _optimistic entities. Warn so the ghost-entity case is observable
-            // instead of fully silent.
-            console.warn('offlineQueue: create reconciler failed', reconErr);
+        if (m.method === 'POST') {
+          for (const reconcile of _createReconcilers) {
+            try {
+              reconcile(m.clientId, serverResponse);
+            } catch (reconErr) {
+              // Never let a reconciler error break the drain / no-silent-drops
+              // contract — the reload-dedup safety net still clears stale
+              // _optimistic entities. Warn so the ghost-entity case is observable
+              // instead of fully silent.
+              console.warn('offlineQueue: create reconciler failed', reconErr);
+            }
           }
           const realId = extractRealId(serverResponse);
           if (realId && realId !== m.clientId) {
