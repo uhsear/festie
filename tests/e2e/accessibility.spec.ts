@@ -27,7 +27,7 @@ async function waitForShell(page: Page) {
   // '/' mounts #app; /login and /register mount .auth-screen. Wait for whichever
   // this route renders, then let async content settle before scanning.
   await page.locator('#app, .auth-screen').first().waitFor({ state: 'visible' });
-  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForLoadState('networkidle');
 }
 
 test.describe('accessibility (axe) — key routes', () => {

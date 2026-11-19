@@ -1,6 +1,7 @@
 // Source-level guards for the T49 mobile set sheet and Now & Next (no RN renderer in mobile vitest).
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { MAP_COPY } from '@festie/shared/utils';
 import { describe, expect, it } from 'vitest';
 
 const read = (rel: string) => readFileSync(join(__dirname, '..', rel), 'utf8');
@@ -12,8 +13,7 @@ describe('T49 mobile set sheet and Now & Next', () => {
       expect(src).toContain(needle);
     }
   });
-  it('the set sheet button copy is Show stage on map', async () => {
-    const { MAP_COPY } = await import('@festie/shared/utils');
+  it('the set sheet button copy is Show stage on map', () => {
     expect(MAP_COPY.showStageOnMap).toBe('Show stage on map');
   });
   it('useLastKnownFix never asks for permission', () => {
