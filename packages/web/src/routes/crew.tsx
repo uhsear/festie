@@ -103,18 +103,18 @@ function CrewViewInner() {
   const [transferTarget, setTransferTarget] = useState<CrewMember | null>(null);
 
   const { status, retry } = useActiveCrew();
+  const userId = user?.id;
 
   // Group labels in the crew picker need festival names; crews of every festival load at once.
   useEffect(() => {
-    if (user && crews.length > 0 && festivals.length === 0) loadFestivals().catch(() => {});
-  }, [user?.id, crews.length, festivals.length, loadFestivals]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (userId && crews.length > 0 && festivals.length === 0) loadFestivals().catch(() => {});
+  }, [userId, crews.length, festivals.length, loadFestivals]);
 
   // Tab badge counts. These reuse the exact query keys + endpoints the Polls
   // and Expenses tabs use, so the data is shared from the react-query cache
   // (no extra backend calls beyond what the crew detail view already makes).
   // Declared before the early return below to keep hook order stable.
   const activeCrewId = activeCrew?.id;
-  const userId = user?.id;
   const { data: openPollCount = 0 } = useQuery({
     ...pollsQueryOptions(activeCrewId),
     select: (list) => list.filter((p) => !p.closed).length,
@@ -138,11 +138,11 @@ function CrewViewInner() {
 
   // /crew?start=create|join (from the intro) opens that prompt once, then drops the param.
   useEffect(() => {
-    if (!user || !start) return;
+    if (!userId || !start) return;
     if (start === 'create') setCreateOpen(true);
     else setJoinOpen(true);
     navigate({ from: '/crew', to: '/crew', search: (prev) => ({ ...prev, start: undefined }), replace: true });
-  }, [user?.id, start]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [userId, start, navigate]);
 
   if (!user)
     return (

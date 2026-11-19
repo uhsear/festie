@@ -269,6 +269,45 @@ describe('redis: createRedisPresenceStore', () => {
     assert.equal(calls.length, 3);
   });
 
+  it('getOnline drops entries whose heartbeat is older than the TTL', async () => {
+    const redis = fakeRedis();
+    redis._store.set('presence:fest1', {
+      stale: JSON.stringify({ userId: 'u1', username: 'Ghost', socketId: 'stale', ts: Date.now() - 121_000 }),
+      fresh: JSON.stringify({ userId: 'u2', username: 'Bob', socketId: 'fresh', ts: Date.now() }),
+    });
+    const store = createRedisPresenceStore(redis)!;
+    const online = await store.getOnline('fest1');
+    assert.deepEqual(
+      online.map((u: any) => u.userId),
+      ['u2'],
+    );
+  });
+
+  it('heartbeat re-stamps sockets and extends TTL', async () => {
+    const calls: string[] = [];
+    const redis = fakeRedis({
+      pipeline() {
+        const p: any = {
+          hset(_k: string, f: string) {
+            calls.push(`hset:${f}`);
+            return p;
+          },
+          expire() {
+            calls.push('expire');
+            return p;
+          },
+          async exec() {
+            return [];
+          },
+        };
+        return p;
+      },
+    });
+    const store = createRedisPresenceStore(redis)!;
+    await store.heartbeat('fest1', [{ socketId: 's1', userId: 'u1', username: 'A' }]);
+    assert.deepEqual(calls, ['hset:s1', 'expire']);
+  });
+
   it('refresh extends TTL', async () => {
     let expireCalled = false;
     const redis = fakeRedis({

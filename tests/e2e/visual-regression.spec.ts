@@ -21,7 +21,7 @@ const viewports = [
 ];
 
 for (const vp of viewports) {
-  test(`login shell ${vp.name}`, async ({ page }: any) => {
+  test(`login shell ${vp.name}`, async ({ page }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
     await page.goto(`${BASE_URL}/login`, { waitUntil: 'networkidle' });
     await page.waitForTimeout(500);

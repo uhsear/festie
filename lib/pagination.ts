@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
+import { z } from 'zod';
+
 // Cursor-based pagination utilities for API endpoints
 // Cursors are opaque base64-encoded JSON: {field, value, id}
 
@@ -26,12 +28,17 @@ export function decodeCursor(cursor: any): Record<string, any> | null {
   }
 }
 
-export function parsePageParams(query: Record<string, any>, { defaultSize = DEFAULT_PAGE_SIZE, maxSize = MAX_PAGE_SIZE } = {}) {
-  let limit = parseInt(query.limit || query.pageSize, 10);
-  if (!Number.isFinite(limit) || limit < 1) limit = defaultSize;
-  if (limit > maxSize) limit = maxSize;
+const limitSchema = z.coerce.number().int().min(1);
+// Postgres rejects NUL in text parameters; an array from a repeated ?cursor= is not a cursor either.
+const cursorSchema = z.string().min(1).refine((v) => !v.includes('\u0000'));
 
-  const cursor = query.cursor || query.after || null;
+// Lenient on purpose: a bad limit or cursor falls back to the default instead of failing the request.
+export function parsePageParams(query: Record<string, any>, { defaultSize = DEFAULT_PAGE_SIZE, maxSize = MAX_PAGE_SIZE } = {}) {
+  const parsedLimit = limitSchema.safeParse(query.limit || query.pageSize);
+  const limit = parsedLimit.success ? Math.min(parsedLimit.data, maxSize) : defaultSize;
+
+  const parsedCursor = cursorSchema.safeParse(query.cursor || query.after);
+  const cursor = parsedCursor.success ? parsedCursor.data : null;
   const direction = query.direction === 'prev' ? 'prev' : 'next';
 
   return { limit, cursor, direction };

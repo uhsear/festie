@@ -1,9 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-// Mock the offlineQueue module that api.ts dynamically imports on the native
-// path, so we can assert what gets enqueued without touching storage.
-const enqueueMutation = vi.fn(async () => {});
-const drainQueue = vi.fn(async () => {});
+// Mock the offlineQueue module that api.ts uses on the native path, so we can
+// assert what gets enqueued without touching storage. Hoisted because api.ts
+// imports it statically.
+const { enqueueMutation, drainQueue } = vi.hoisted(() => ({
+  enqueueMutation: vi.fn(async () => {}),
+  drainQueue: vi.fn(async () => {}),
+}));
 vi.mock('../offlineQueue', () => ({ enqueueMutation, drainQueue }));
 
 import { api, isOfflineEligible, ApiClientError } from '../api';

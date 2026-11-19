@@ -22,7 +22,7 @@ const SCHEDULE_PUSH_CHUNK = 20;
 /** A pick change sends at most one silent sync per festival per window (per process). */
 export const SILENT_SYNC_COALESCE_MS = 60_000;
 
-export function createSocketEmitter({ io, log, notificationService, buildAvatarUrl, _getUserById, stores, config }: any) {
+export function createSocketEmitter({ io, log, notificationService, buildAvatarUrl, stores, config }: any) {
 
   // Crew pick push digest — one push per author per festival per window.
   // shortcut: digest timers are per process, so with N PM2 instances a busy picker can trigger up to N pushes per window; move the dedupe to Redis if users report doubles.

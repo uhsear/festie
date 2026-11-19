@@ -32,7 +32,7 @@
 import type { LocationPeerUpdatePayload } from './types/contracts.js';
 
 /**
- * Per-sharer field TTL on the crew hash. Mirrors `LIVE_LOCATION.STALE_MS`
+ * Whole-key TTL on the crew hash (PEXPIRE, refreshed on every write). Mirrors `LIVE_LOCATION.STALE_MS`
  * (120s) in @festie/shared — the same window after which the client sweeps a
  * peer from the map. The backend can't import the shared constant (different
  * package manager), so it is mirrored here; keep the two in sync.

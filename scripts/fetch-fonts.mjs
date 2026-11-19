@@ -4,7 +4,7 @@
 //
 // fetch-fonts.mjs — copy the licensed Clash Display files into this checkout.
 //
-// The ITF Free Font License (section 53) forbids distributing the font files through
+// The ITF Free Font License (section 02) forbids distributing the font files through
 // a public repository, so they live in the private repo uhsear/festie-fonts at the
 // same paths and are gitignored here. Run this before a web build or a mobile bundle:
 //

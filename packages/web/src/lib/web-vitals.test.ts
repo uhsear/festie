@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const handlers: Array<(m: unknown) => void> = [];
 vi.mock('web-vitals', () => {
@@ -6,10 +6,23 @@ vi.mock('web-vitals', () => {
   return { onCLS: reg, onLCP: reg, onINP: reg, onFCP: reg, onTTFB: reg };
 });
 
-import { initWebVitals } from './web-vitals';
 
 describe('initWebVitals', () => {
-  beforeEach(() => localStorage.clear());
+  let initWebVitals: () => void;
+
+  beforeEach(async () => {
+    localStorage.clear();
+    handlers.length = 0;
+    // Fresh module per test: web-vitals.ts keeps its pending metrics at module level.
+    vi.resetModules();
+    ({ initWebVitals } = await import('./web-vitals'));
+  });
+
+  afterEach(() => {
+    // Drop the overrides so they do not leak into other tests in this file's environment.
+    delete (document as { visibilityState?: unknown }).visibilityState;
+    delete (navigator as { sendBeacon?: unknown }).sendBeacon;
+  });
 
   it('sends each metric once, with its latest value, when the page is hidden', () => {
     const beacon = vi.fn(() => true);
