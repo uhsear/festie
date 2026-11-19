@@ -31,6 +31,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 HOST = os.environ.get("FESTIE_SSH_HOST", "192.168.0.150")
 USER = os.environ.get("FESTIE_SSH_USER", "asir")
 KEY = os.environ.get("FESTIE_SSH_KEY")
+KNOWN_HOSTS = os.environ.get("FESTIE_SSH_KNOWN_HOSTS")  # optional extra known_hosts file
 APP = os.environ.get("FESTIE_APP_DIR", "/home/asir/festival-planner")
 PM2_NAME = os.environ.get("FESTIE_PM2_NAME", "festie")
 READY_URL = os.environ.get("FESTIE_READY_URL", "http://localhost:4000/api/ready")
@@ -49,7 +50,10 @@ def run(client, cmd, timeout=120):
 
 def connect():
     client = paramiko.SSHClient()
-    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    client.load_system_host_keys()
+    if KNOWN_HOSTS:
+        client.load_host_keys(KNOWN_HOSTS)
+    client.set_missing_host_key_policy(paramiko.RejectPolicy())
     connect_kwargs = dict(
         hostname=HOST, username=USER, timeout=20, allow_agent=True, look_for_keys=True
     )

@@ -106,4 +106,15 @@ describe('scripts/backup-pg.sh', { skip }, () => {
     assert.equal(files('.counts.tmp').length, 0);
     assert.ok(existsSync(path.join(backupDir, '.backup.lock')));
   });
+
+  it('decodes a DATABASE_URL password that holds @, : and percent-escapes', () => {
+    setup();
+    const pwFile = path.join(path.dirname(backupDir), 'pw.txt');
+    writeStub(path.join(path.dirname(backupDir), 'bin'), 'pg_dump', `printf %s "$PGPASSWORD" > "${pwFile}"; while [ $# -gt 0 ]; do [ "$1" = "-f" ] && head -c 300 /dev/zero > "$2"; shift; done`);
+    delete env.PGPASSWORD;
+    env.DATABASE_URL = 'postgres://festival:p%40ss:w@rd@127.0.0.1:5432/festival_planner';
+    const r = runScript('scripts/backup-pg.sh', [], env);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.equal(readFileSync(pwFile, 'utf8'), 'p@ss:w@rd');
+  });
 });

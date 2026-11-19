@@ -19,6 +19,20 @@ import { FESTIVAL_DAY_START_HOUR, formatClock12, zonedWallTimeToMs } from './tim
 
 const REMINDER_SEND_CONCURRENCY = 10;
 
+// Must picks get the user's default lead; an explicit per-set reminder wins.
+// Mirrors effectiveReminders in packages/shared/src/utils/reminderSchedule.ts
+// (guarded by tests/constants-parity.test.ts); keep the two in sync.
+function mergeMustSeeLeads(
+  reminders: Record<string, number>,
+  mustSetIds: string[],
+  mustSeeLead: number | null | undefined,
+): Record<string, number> {
+  if (mustSeeLead == null) return reminders;
+  const mustSeeMap: Record<string, number> = {};
+  for (const id of mustSetIds) mustSeeMap[id] = mustSeeLead;
+  return { ...mustSeeMap, ...reminders };
+}
+
 function createReminderScheduler({ pool, stores, notificationService, log, config }: any) {
   // ── Leader election (PM2 cluster) ──────────────────────────────────────────
   // PM2 sets NODE_APP_INSTANCE to '0'..'3' in cluster mode. Only instance 0
@@ -97,20 +111,17 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
       return;
     }
 
-    // Must picks get the user's default lead; an explicit per-set reminder wins.
-    // keep in sync with effectiveReminders in packages/shared/src/utils/reminderSchedule.ts
-    const mustSeeMap: Record<string, number> = {};
+    let mustSetIds: string[] = [];
     if (profile.mustSeeLead != null) {
       try {
-        const mustSetIds = typeof profile.mustSetIds === 'string' ? JSON.parse(profile.mustSetIds) : profile.mustSetIds || [];
-        for (const id of mustSetIds) mustSeeMap[id] = profile.mustSeeLead;
+        mustSetIds = typeof profile.mustSetIds === 'string' ? JSON.parse(profile.mustSetIds) : profile.mustSetIds || [];
       } catch (err: any) {
         logger.warn('must set ids parse failed, skipping profile', { userId: profile.userId, error: err.message });
         return;
       }
     }
 
-    for (const [setId, minutesBefore] of Object.entries({ ...mustSeeMap, ...reminders })) {
+    for (const [setId, minutesBefore] of Object.entries(mergeMustSeeLeads(reminders, mustSetIds, profile.mustSeeLead))) {
       const setInfo = setLookup.get(setId);
       if (!setInfo) continue;
 
@@ -292,4 +303,4 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
   return { start, stop, tick, _timer: () => _timer };
 }
 
-export { createReminderScheduler };
+export { createReminderScheduler, mergeMustSeeLeads };

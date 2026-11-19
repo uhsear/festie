@@ -88,6 +88,10 @@ _Avoid_: pin, waypoint, marker
 A shared cost tracked within a crew. Records who paid, the amount, a description, a category, and which members to split with.
 _Avoid_: bill, payment, transaction
 
+**Settlement**:
+A transfer in the crew's settle-up plan, computed in integer cents so the ledger stays zero-sum. Paying one is recorded as an expense with category `settlement`. See Expense settle-up in `ARCHITECTURE.md`.
+_Avoid_: payout, reimbursement
+
 **Poll**:
 A crew-scoped question with multiple options that members vote on (e.g. "Which after-party?").
 _Avoid_: survey, vote
@@ -122,6 +126,10 @@ _Avoid_: diff, side-by-side
 A live-day UI mode that shows a Now/Next hero, an up-next list, a weather strip, and a caught-now card, with a low-power toggle.
 _Avoid_: live mode, day-of mode
 
+**Set status**:
+A set's state relative to now: `tba`, `live`, `soon`, `upcoming`, `later` or `past`. Computed by `getSetStatus` in `packages/shared/src/utils/setStatus.ts`.
+_Avoid_: set state, live flag
+
 **Wrap**:
 A post-festival summary view showing stats (sets rated, stages visited, days attended, total hours) and the user's top-rated sets. Only available after a festival ends.
 _Avoid_: recap, summary, review
@@ -137,17 +145,21 @@ A user's marker on a festival they want updates about. Stored in `festival_follo
 _Avoid_: subscription, bookmark
 
 **Announcement**:
-An admin notice to everyone who joined a festival. A worker sets `sent_at` when it claims a row, so each announcement goes out once. Stored in `festival_announcements`.
+An admin notice to everyone who joined a festival. A worker sets `sent_at` when it claims a row, so each announcement goes out once (`lib/announcements.ts`). Stored in `festival_announcements`.
 _Avoid_: broadcast, blast
 
 ### Import & display
+
+**Offline queue**:
+Writes made while offline, kept on the device and replayed oldest-first on reconnect. A permanent failure surfaces to the user. SOS is never queued.
+_Avoid_: outbox, sync queue
 
 **B2B Separator**:
 A per-festival string (default `"b2b"`) used to join multiple artist names in a set's display name (e.g. "DJ A b2b DJ B"). Configurable for festivals that use "vs", "&", etc.
 _Avoid_: delimiter, joiner
 
 **Lineup Import**:
-The process of ingesting a festival's schedule data (stages, days, sets, artists) from an external source into the database.
+The process of ingesting a festival's schedule data (stages, days, sets, artists) from an external source into the database. An admin previews the plan, then commits it. An import never deletes.
 _Avoid_: upload, sync
 
 ## Relationships

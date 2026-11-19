@@ -128,5 +128,19 @@ class DeployMainTest(unittest.TestCase):
         self.assertIsNone(exit_value)
 
 
+class ConnectHostKeyTest(unittest.TestCase):
+    def test_connect_rejects_unknown_host_keys(self):
+        client = mock.Mock()
+        fake_paramiko = mock.Mock(SSHClient=mock.Mock(return_value=client))
+        with mock.patch.object(deploy, "paramiko", fake_paramiko), mock.patch.object(
+            deploy, "KNOWN_HOSTS", "extra_known_hosts"
+        ):
+            deploy.connect()
+        client.load_system_host_keys.assert_called_once_with()
+        client.load_host_keys.assert_called_once_with("extra_known_hosts")
+        client.set_missing_host_key_policy.assert_called_once_with(fake_paramiko.RejectPolicy())
+        fake_paramiko.AutoAddPolicy.assert_not_called()
+
+
 if __name__ == "__main__":
     unittest.main()

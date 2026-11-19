@@ -31,9 +31,13 @@ import IconButton from '../ui/IconButton';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import PollItem from './PollItem';
 import SchedulePollComposer from './SchedulePollComposer';
+import PollEndPicker from './PollEndPicker';
 import { BarChart3, CalendarClock, MapPin, Plus, X } from 'lucide-react';
 import { inputBase } from '../../lib/styles';
 import { meetingPointsQuery } from '../../lib/queryPersist';
+
+// A plain poll has no set to anchor a set-start close to.
+const PLAIN_POLL_END_CHOICES = POLL_END_CHOICES.filter((c) => c.id !== 'setStart');
 
 // Lead time (minutes) for the reminder seeded when a schedule poll closes —
 // mirrors the festival reminder defaults.
@@ -340,27 +344,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
               <p className="mt-1 text-xs text-text-muted">Add a meeting point or home base to fill this in.</p>
             )}
           </div>
-          <div>
-            <span id="poll-ends-label" className="block text-sm font-medium text-text-primary mb-2">
-              Ends
-            </span>
-            <div className="flex flex-wrap gap-2" role="radiogroup" aria-labelledby="poll-ends-label">
-              {POLL_END_CHOICES.filter((c) => c.id !== 'setStart').map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  role="radio"
-                  aria-checked={endChoice === c.id}
-                  onClick={() => setEndChoice(c.id)}
-                  className={`min-h-11 px-3 rounded-full border text-sm ${
-                    endChoice === c.id ? 'border-accent-aqua text-accent-aqua' : 'border-glass-border text-text-secondary'
-                  }`}
-                >
-                  {c.label}
-                </button>
-              ))}
-            </div>
-          </div>
+          <PollEndPicker labelId="poll-ends-label" value={endChoice} onChange={setEndChoice} choices={PLAIN_POLL_END_CHOICES} />
           <label className="flex items-center gap-2 min-h-11 text-sm text-text-primary">
             <input type="checkbox" checked={multiAnswer} onChange={(e) => setMultiAnswer(e.target.checked)} />
             Allow more than one answer

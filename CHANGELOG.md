@@ -5,6 +5,41 @@ All notable changes to Festie are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Merged to `main` but not yet deployed to production.
+
+### Added
+- **Mobile**: the theme follows the OS when Match system is chosen.
+
+### Changed
+- Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.
+- Festival profiles are paged in SQL, and page parameters are parsed with Zod.
+
+### Fixed
+- The push budget check is atomic per user, and Redis presence entries stay alive while a user is online.
+- Role grants and revokes reach every worker through the cache bus.
+- A bulk add undo keeps picks that were changed by hand, and guest picks merge per set on rehydrate.
+- Local reminder titles show `1h 30m` instead of `2h`.
+
+## [2026-11-19]
+
+This entry summarises the work shipped to production between 2026-11-17 and 2026-11-19. The mobile app is at 1.5.0 (the `packages/mobile/package.json` version now matches `app.json`).
+
+### Added
+- **Announced lineups**: storage, web admin, public festival page and mobile home and grid, with interest marks, follow-loop alerts, data-quality warnings in the publish checklist, and per-date release of set times.
+- **Artist identity**: an artists table with a name key, one place to edit artists everywhere, Spotify candidate picking, duplicate merge, and an admin backfill endpoint and panel.
+- **Lineup tools**: CSV round trip, Copy to day, Matches set, a cancel alert, and lineup import upgrades for announced rows, artist matching and day moves.
+- **Series**: a festival series id and series picker.
+- **Offline**: pick writes are sent as deltas, and edge 5xx responses queue the write.
+- **Operations**: hardened backups with a weekly restore drill, per-kind alerts, and a festival hourly backup.
+
+### Changed
+- Boot migrations retry on refused connections, and a dump is taken before each deploy.
+
+### Fixed
+- Draft festivals no longer leak through weather, crews, invite preview or locate-set.
+
 ## [3.0.0] - 2026-11-10
 
 Entries below this one describe the earlier JavaScript layout (`server.js`, `lib/*.js`). The backend is now TypeScript, bundled with esbuild into `dist/server.js` for production, and the mobile app runs on Expo SDK 58. This entry summarises the work from 2026-10-29 to 2026-11-10.
