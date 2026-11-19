@@ -23,7 +23,7 @@ function _checkIdempotency(to: any, subject: any, log: any) {
   const key = _idempotencyKey(to, subject);
   const lastSent = _recentSends.get(key);
   if (lastSent && Date.now() - lastSent < IDEMPOTENCY_TTL_MS) {
-    log.warn('email:duplicate-suppressed', { to, subject, lastSentMs: Date.now() - lastSent });
+    log.warn('email:duplicate-suppressed', { lastSentMs: Date.now() - lastSent });
     return true; // duplicate
   }
   return false;
@@ -56,7 +56,7 @@ export async function sendEmail({ to, subject, html, text, headers, config, log,
   if (!apiKey) {
     // A missing key in production means every user email is silently lost; surface it as an error.
     const level = config.NODE_ENV === 'production' ? 'error' : 'warn';
-    log[level]('email:skip', { to, subject, reason: 'RESEND_API_KEY not configured' });
+    log[level]('email:skip', { reason: 'RESEND_API_KEY not configured' });
     return false;
   }
 
@@ -68,14 +68,14 @@ export async function sendEmail({ to, subject, html, text, headers, config, log,
   try {
     const result = await client.emails.send({ from, to: [to], subject, html, text, ...(headers ? { headers } : {}) });
     if (result.error) {
-      log.error('email:send-error', { to, subject, error: result.error.message });
+      log.error('email:send-error', { error: result.error.message });
       return false;
     }
     if (dedupe) _recordSend(to, subject);
-    log.debug('email:sent', { to, subject, id: result.data?.id });
+    log.debug('email:sent', { id: result.data?.id });
     return true;
   } catch (error: any) {
-    log.error('email:send-failed', { to, subject, error: error.message });
+    log.error('email:send-failed', { error: error.message });
     return false;
   }
 }

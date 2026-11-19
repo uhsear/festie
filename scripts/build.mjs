@@ -15,7 +15,10 @@
  * All four entrypoints use identical esbuild flags:
  *   --bundle --platform=node --format=esm --target=node22 --packages=external --sourcemap
  */
+import { readFileSync } from 'node:fs';
 import { build } from 'esbuild';
+
+const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
 const entryPoints = ['server.ts', 'lib/instrument.ts', 'lib/avatar-worker.ts', 'lib/export-worker.ts'];
 
@@ -27,6 +30,8 @@ await build({
   target: 'node22',
   packages: 'external',
   sourcemap: true,
+  // lib/config.ts reads this instead of requiring ../package.json, which is absent from a dist-only deploy.
+  define: { __APP_VERSION__: JSON.stringify(version) },
   outdir: 'dist',
   // Flatten lib/*-worker.ts -> dist/*-worker.js (sibling of dist/server.js)
   // instead of dist/lib/*-worker.js, so the runtime extension-swap resolves them.

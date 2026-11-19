@@ -31,6 +31,7 @@ sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 HOST = os.environ.get("FESTIE_SSH_HOST", "192.168.0.150")
 USER = os.environ.get("FESTIE_SSH_USER", "asir")
+KNOWN_HOSTS = os.environ.get("FESTIE_SSH_KNOWN_HOSTS")  # optional extra known_hosts file
 STAGE = os.environ.get("FESTIE_STAGE_DIR", "/home/asir/festie-staging")
 STAGE_PORT = int(os.environ.get("FESTIE_STAGE_PORT", "4001"))
 PROD_PORT = int(os.environ.get("FESTIE_PROD_PORT", "4000"))
@@ -109,7 +110,10 @@ def main():
     args = ap.parse_args()
 
     c = paramiko.SSHClient()
-    c.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    c.load_system_host_keys()
+    if KNOWN_HOSTS:
+        c.load_host_keys(KNOWN_HOSTS)
+    c.set_missing_host_key_policy(paramiko.RejectPolicy())
     c.connect(hostname=HOST, username=USER, timeout=20, allow_agent=True, look_for_keys=True)
     try:
         step(c, f"Sync staging to {args.ref}",

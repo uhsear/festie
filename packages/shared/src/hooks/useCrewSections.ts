@@ -69,6 +69,7 @@ export function useCrewSections(crewId: string | undefined): { error: string | n
   useEffect(() => {
     reload();
     return () => {
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- run is a counter, not a DOM ref; cleanup must bump the current value
       run.current++;
     };
   }, [reload]);

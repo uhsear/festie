@@ -180,6 +180,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
         const ms = r?.meetAt ? Date.parse(r.meetAt) : NaN;
         return Number.isNaN(ms) ? min : min === null ? ms : Math.min(min, ms);
       }, null);
+      // eslint-disable-next-line react-hooks/purity -- runs in a submit handler, not during render
       const closesAt = pollClosesAt(endChoice, Date.now(), setStartMs);
       const created = await createPoll(
         crewId,
