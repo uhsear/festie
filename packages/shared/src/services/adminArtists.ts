@@ -7,6 +7,7 @@
  */
 
 import { api, ApiClientError } from './api';
+import type { BackfillReportInput } from '../utils/artistBackfillReview';
 
 export interface AdminArtist {
   id: string;
@@ -261,4 +262,35 @@ export function changeEverywhereText(name: string, others: number): string {
 /** "Avello (NL)": the name with its note. */
 export function artistTitle(artist: { name: string; label?: string }): string {
   return artist.label ? `${artist.name} (${artist.label})` : artist.name;
+}
+
+export type ArtistBackfillMode = 'dry-run' | 'run' | 'verify';
+
+export interface ArtistBackfillVerify {
+  ok: boolean;
+  checks: Array<{ name: string; ok: boolean; details?: unknown }>;
+  skipped: unknown[];
+}
+
+export interface ArtistBackfillRunResult {
+  runId: string;
+  festivalsWritten: string[] | number;
+  festivalsSkipped: unknown[] | number;
+  artistsCreated: number;
+  conflicts: unknown[] | number;
+}
+
+export interface ArtistBackfillResponse {
+  mode: ArtistBackfillMode;
+  report?: BackfillReportInput;
+  planHash?: string;
+  result?: ArtistBackfillVerify | ArtistBackfillRunResult;
+}
+
+/**
+ * The artist id backfill (POST /admin/artists/backfill). `dry-run` and `verify` write nothing. `run` writes, needs a
+ * recent re-auth (run it through `withReauth`) and refuses with 409 PLAN_CHANGED when `planHash` no longer matches.
+ */
+export async function runArtistBackfill(mode: ArtistBackfillMode, planHash?: string): Promise<ArtistBackfillResponse> {
+  return api.post('/admin/artists/backfill', { mode, ...(planHash && { planHash }) });
 }
