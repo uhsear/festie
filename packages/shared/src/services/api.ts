@@ -121,6 +121,9 @@ const OFFLINE_ELIGIBLE_PATTERNS: RegExp[] = [
   /^\/crews\/[^/]+\/days(\/|$)/,
   // Saw it / Skipped marks: PUT /ratings/:setId/caught with clientId caught-<userId>-<setId>.
   /^\/ratings\/[^/]+\/caught$/,
+  // Rate / un-rate a set: POST (upsert, last write wins) and DELETE (no-op when absent)
+  // on /ratings/:setId. Both replay safely; the call site sets clientId rate-<setId>.
+  /^\/ratings\/[^/]+$/,
   // DELIBERATELY ABSENT: /crews/:id/sos, /sos/clear, /sos/seen and
   // /crews/:id/checkin (start and done), and /crews/:id/live-location (a queued
   // fix would replay a stale position hours later). An SOS must be ONLINE-ONLY, and so
