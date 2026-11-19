@@ -2,16 +2,33 @@ import { describe, it, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRequire } from 'module';
 import express from 'express';
+import type { Application } from 'express';
+import type { Socket } from 'socket.io';
 
 const require = createRequire(import.meta.url);
+
+type BgCtx = {
+  state: { timers: NodeJS.Timeout[]; [key: string]: unknown };
+  stores: Record<string, unknown>;
+  [key: string]: unknown;
+};
+
+type EngineOpts = {
+  allowRequest?: (req: unknown, cb: (err: unknown, allowed: unknown) => void) => void;
+};
+
+function engineOpts(io: unknown): EngineOpts | undefined {
+  const server = io as { _opts?: EngineOpts; opts?: EngineOpts };
+  return server._opts || server.opts;
+}
 
 // ---------------------------------------------------------------------------
 // Helper: mock pool factory
 // ---------------------------------------------------------------------------
-function makePool(queryResults: any[] = []) {
+function makePool(queryResults: Record<string, unknown>[] = []) {
   let callIdx = 0;
   return {
-    query: mock.fn(async (..._args: any[]) => {
+    query: mock.fn(async (..._args: [sql: string, params?: unknown[]]) => {
       const result = queryResults[callIdx] || { rows: [] };
       callIdx++;
       return result;
@@ -19,7 +36,7 @@ function makePool(queryResults: any[] = []) {
     connect: mock.fn(async () => {
       let clientIdx = 0;
       return {
-        query: mock.fn(async (..._args: any[]) => {
+        query: mock.fn(async (..._args: [sql: string, params?: unknown[]]) => {
           const result = queryResults[clientIdx] || { rows: [] };
           clientIdx++;
           return result;
@@ -38,14 +55,14 @@ describe('lib/db/stores/festivals.js', () => {
   // lib/db/connection which calls pool.connect() and manages BEGIN/COMMIT.
   // We mock pool so that connect() returns a mock client.
 
-  let createFestivalsStore: any;
+  let createFestivalsStore: (pool: unknown, utils: unknown) => ReturnType<typeof import('../lib/db/stores/festivals.js').default>;
 
   beforeEach(async () => {
     const mod = await import('../lib/db/stores/festivals.js');
-    createFestivalsStore = mod.default ?? mod;
+    createFestivalsStore = mod.default as typeof createFestivalsStore;
   });
 
-  function makeFestivalData(overrides: any = {}) {
+  function makeFestivalData(overrides: Record<string, unknown> = {}) {
     return {
       id: 'fest-1',
       name: 'Test Festival',
@@ -78,10 +95,10 @@ describe('lib/db/stores/festivals.js', () => {
   }
 
   // Helper: build a pool where connect() returns a controllable client
-  function makeTransactionPool(clientQueryResults: any[] = []) {
+  function makeTransactionPool(clientQueryResults: Record<string, unknown>[] = []) {
     let clientQueryIdx = 0;
     const client = {
-      query: mock.fn(async (..._args: any[]) => {
+      query: mock.fn(async (..._args: [sql: string, params?: unknown[]]) => {
         const result = clientQueryResults[clientQueryIdx] || { rows: [] };
         clientQueryIdx++;
         return result;
@@ -114,7 +131,7 @@ describe('lib/db/stores/festivals.js', () => {
       const store = createFestivalsStore(pool, utils);
       await store.softDelete('fest-1');
       assert.equal(pool.query.mock.calls.length, 1);
-      const call = pool.query.mock.calls[0]! as any;
+      const call = pool.query.mock.calls[0]!;
       assert.ok(call.arguments[0].includes('UPDATE festivals'));
       assert.ok(call.arguments[0].includes('deleted_at'));
       assert.deepEqual(call.arguments[1], ['fest-1']);
@@ -128,7 +145,7 @@ describe('lib/db/stores/festivals.js', () => {
       const store = createFestivalsStore(pool, utils);
       await store.restore('fest-99', 'u1');
       assert.equal(pool.query.mock.calls.length, 1);
-      const call = pool.query.mock.calls[0]! as any;
+      const call = pool.query.mock.calls[0]!;
       assert.ok(call.arguments[0].includes('deleted_at = NULL'));
       assert.deepEqual(call.arguments[1], ['fest-99', 'u1']);
     });
@@ -144,7 +161,7 @@ describe('lib/db/stores/festivals.js', () => {
       assert.deepEqual(result, { ...festivalData, lineup: [] });
       // Should use pool.query directly, not buildFestivalRecords
       assert.equal(pool.query.mock.calls.length, 1);
-      assert.ok((pool.query.mock.calls[0]! as any).arguments[0].includes('festivals'));
+      assert.ok(pool.query.mock.calls[0]!.arguments[0].includes('festivals'));
     });
 
     it('returns null when no festival matches', async () => {
@@ -217,8 +234,8 @@ describe('lib/db/stores/festivals.js', () => {
       const store = createFestivalsStore(pool, utils);
       await store.create({ id: 'f1', name: 'F', stages: [], days: [] });
       // The INSERT call (idx 1, after BEGIN at idx 0)
-      const insertCall = client.query.mock.calls[1]! as any;
-      const params = insertCall.arguments[1];
+      const insertCall = client.query.mock.calls[1]!;
+      const params = insertCall.arguments[1]!;
       // b2bSeparator defaults to 'b2b'
       assert.equal(params[5], 'b2b');
       // latitude/longitude default to null
@@ -235,7 +252,7 @@ describe('lib/db/stores/festivals.js', () => {
       ]);
       const store = createFestivalsStore(pool, { buildFestivalRecords: mock.fn() });
       await store.create({ id: 'f1', name: 'F', latitude: 0, longitude: 0, stages: [], days: [] });
-      const params = (client.query.mock.calls[1]! as any).arguments[1];
+      const params = client.query.mock.calls[1]!.arguments[1]!;
       assert.equal(params[6], 0);
       assert.equal(params[7], 0);
     });
@@ -283,7 +300,7 @@ describe('lib/db/stores/festivals.js', () => {
         latitude: 40.7,
         longitude: -74.0,
       });
-      const updateCall = client.query.mock.calls[1]! as any; // after BEGIN
+      const updateCall = client.query.mock.calls[1]!; // after BEGIN
       const sql = updateCall.arguments[0];
       assert.ok(sql.includes('b2b_separator'));
       assert.ok(sql.includes('latitude'));
@@ -304,7 +321,7 @@ describe('lib/db/stores/festivals.js', () => {
       await store.update('f1', {
         stages: [{ id: 's1', name: 'Stage A', color: '#000' }],
       });
-      const sqls = client.query.mock.calls.map((c: any) => String(c.arguments[0]));
+      const sqls = client.query.mock.calls.map((c) => String(c.arguments[0]));
       const upsertIdx = sqls.findIndex((s: string) => s.includes('ON CONFLICT (festival_id, id) DO UPDATE'));
       const deleteIdx = sqls.findIndex((s: string) => s.includes('DELETE FROM festival_stages'));
       assert.ok(upsertIdx > 0, 'should upsert stages');
@@ -365,7 +382,8 @@ describe('lib/shutdown.js — additional coverage', async () => {
   const { createBackgroundTasks, createCloseHandler } = await import('../lib/shutdown.js');
 
   describe('memory pressure monitoring (lines 107-119)', () => {
-    let ctx: any, ioStub: any;
+    let ctx: BgCtx;
+    let ioStub: Record<string, unknown>;
 
     beforeEach(() => {
       ctx = {
@@ -415,7 +433,8 @@ describe('lib/shutdown.js — additional coverage', async () => {
   });
 
   describe('meeting point expiry (lines 133-140)', () => {
-    let ctx: any, ioStub: any;
+    let ctx: BgCtx;
+    let ioStub: Record<string, unknown>;
 
     beforeEach(() => {
       ctx = {
@@ -480,7 +499,7 @@ describe('lib/shutdown.js — additional coverage', async () => {
       const deps = {
         server: { listening: false, close: mock.fn() },
         io: {
-          engine: { clientsCount: 0, close: mock.fn((cb: any) => cb()) },
+          engine: { clientsCount: 0, close: mock.fn((cb: () => void) => cb()) },
           emit: mock.fn(),
           of: () => ({ sockets: new Map() }),
         },
@@ -515,7 +534,7 @@ describe('lib/shutdown.js — additional coverage', async () => {
       // Should NOT have logged the timeout warning since requests drained
       const warnCalls = deps.log.warn.mock.calls;
       const hasInFlightWarn = warnCalls.some(
-        (c: any) => typeof c.arguments[0] === 'string' && c.arguments[0].includes('in-flight'),
+        (c) => typeof c.arguments[0] === 'string' && c.arguments[0].includes('in-flight'),
       );
       assert.ok(!hasInFlightWarn, 'should not warn about in-flight requests if they drained');
     });
@@ -528,7 +547,7 @@ describe('lib/shutdown.js — additional coverage', async () => {
 describe('lib/socket-setup.js — allowRequest coverage', async () => {
   const { configureSocketIO } = await import('../lib/socket-setup.js');
 
-  const toClose: any[] = [];
+  const toClose: { io: { close(): void }; server: { close(): void } }[] = [];
   afterEach(() => {
     for (const r of toClose) {
       try {
@@ -545,7 +564,7 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
     toClose.length = 0;
   });
 
-  function makeCtx(overrides: any = {}) {
+  function makeCtx(overrides: { config?: Record<string, unknown>; [key: string]: unknown } = {}) {
     return {
       config: { ALLOWED_ORIGINS: ['https://example.com'], ...overrides.config },
       log: { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() },
@@ -564,9 +583,9 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
     };
   }
 
-  function run(ctxOverrides: any = {}) {
+  function run(ctxOverrides: { config?: Record<string, unknown>; [key: string]: unknown } = {}) {
     const ctx = makeCtx(ctxOverrides);
-    const result = configureSocketIO({} as any, ctx);
+    const result = configureSocketIO({} as Application, ctx);
     toClose.push(result);
     return { ...result, ctx };
   }
@@ -575,17 +594,17 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
     const ctx = makeCtx({
       consumeSocketConnectRateLimitAsync: mock.fn(async () => false),
     });
-    const { io } = configureSocketIO({} as any, ctx);
+    const { io } = configureSocketIO({} as Application, ctx);
     toClose.push({ io, server: io.httpServer });
 
     // Access the allowRequest option
-    const opts = (io as any)._opts || (io as any).opts;
+    const opts = engineOpts(io);
     if (opts && opts.allowRequest) {
       const fakeReq = {
         url: '/',
         headers: { host: 'localhost' },
       };
-      opts.allowRequest(fakeReq, (errMsg: any, allowed: any) => {
+      opts.allowRequest(fakeReq, (errMsg: unknown, allowed: unknown) => {
         assert.equal(errMsg, 'Connection rate limit exceeded');
         assert.equal(allowed, false);
         done();
@@ -597,16 +616,16 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
 
   it('allowRequest accepts valid query token auth', (_, done) => {
     const ctx = makeCtx();
-    const { io } = configureSocketIO({} as any, ctx);
+    const { io } = configureSocketIO({} as Application, ctx);
     toClose.push({ io, server: io.httpServer });
 
-    const opts = (io as any)._opts || (io as any).opts;
+    const opts = engineOpts(io);
     if (opts && opts.allowRequest) {
       const fakeReq = {
         url: '/?token=abcdef1234567890abcdef1234567890',
         headers: { host: 'localhost' },
       };
-      opts.allowRequest(fakeReq, (err: any, allowed: any) => {
+      opts.allowRequest(fakeReq, (err: unknown, allowed: unknown) => {
         assert.equal(err, null);
         assert.equal(allowed, true);
         done();
@@ -618,10 +637,10 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
 
   it('allowRequest accepts valid Bearer authorization header', (_, done) => {
     const ctx = makeCtx();
-    const { io } = configureSocketIO({} as any, ctx);
+    const { io } = configureSocketIO({} as Application, ctx);
     toClose.push({ io, server: io.httpServer });
 
-    const opts = (io as any)._opts || (io as any).opts;
+    const opts = engineOpts(io);
     if (opts && opts.allowRequest) {
       const fakeReq = {
         url: '/',
@@ -630,7 +649,7 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
           authorization: 'Bearer abcdef1234567890abcdef1234567890',
         },
       };
-      opts.allowRequest(fakeReq, (err: any, allowed: any) => {
+      opts.allowRequest(fakeReq, (err: unknown, allowed: unknown) => {
         assert.equal(err, null);
         assert.equal(allowed, true);
         done();
@@ -644,16 +663,16 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
     const ctx = makeCtx({
       isAllowedOrigin: mock.fn(() => false),
     });
-    const { io } = configureSocketIO({} as any, ctx);
+    const { io } = configureSocketIO({} as Application, ctx);
     toClose.push({ io, server: io.httpServer });
 
-    const opts = (io as any)._opts || (io as any).opts;
+    const opts = engineOpts(io);
     if (opts && opts.allowRequest) {
       const fakeReq = {
         url: '/',
         headers: { host: 'localhost', origin: 'https://evil.com' },
       };
-      opts.allowRequest(fakeReq, (errMsg: any, allowed: any) => {
+      opts.allowRequest(fakeReq, (errMsg: unknown, allowed: unknown) => {
         assert.equal(errMsg, 'Origin not allowed');
         assert.equal(allowed, false);
         done();
@@ -667,16 +686,16 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
     const ctx = makeCtx({
       isAllowedOrigin: mock.fn(() => true),
     });
-    const { io } = configureSocketIO({} as any, ctx);
+    const { io } = configureSocketIO({} as Application, ctx);
     toClose.push({ io, server: io.httpServer });
 
-    const opts = (io as any)._opts || (io as any).opts;
+    const opts = engineOpts(io);
     if (opts && opts.allowRequest) {
       const fakeReq = {
         url: '/',
         headers: { host: 'localhost', origin: 'https://example.com' },
       };
-      opts.allowRequest(fakeReq, (err: any, allowed: any) => {
+      opts.allowRequest(fakeReq, (err: unknown, allowed: unknown) => {
         assert.equal(err, null);
         assert.equal(allowed, true);
         done();
@@ -698,12 +717,12 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
       once: mock.fn(),
     };
 
-    listeners[0]!(testSocket as any);
+    listeners[0]!(testSocket as unknown as Socket);
 
     // The auth timer fires after 10s. We cannot wait, but we can verify
     // the timeout and disconnect cleanup are registered.
     assert.equal(testSocket.once.mock.calls.length, 1);
-    assert.equal((testSocket.once.mock.calls[0]! as any).arguments[0], 'disconnect');
+    assert.equal(testSocket.once.mock.calls[0]!.arguments[0], 'disconnect');
   });
 
   it('auth timeout does not disconnect authenticated socket', async () => {
@@ -717,7 +736,7 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
       once: mock.fn(),
     };
 
-    listeners[0]!(testSocket as any);
+    listeners[0]!(testSocket as unknown as Socket);
 
     // The timeout callback checks socket.authenticated;
     // authenticated=true means no disconnect. Can't easily test the
@@ -730,7 +749,7 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
 // 4. lib/sentry.js — additional coverage for uncovered lines
 // ---------------------------------------------------------------------------
 describe('lib/sentry.js — additional coverage', () => {
-  let sentryModule: any;
+  let sentryModule: typeof import('../lib/sentry.js');
 
   let _sentryCtr = 0;
   async function freshSentryModule() {
@@ -864,7 +883,7 @@ describe('lib/helpers/sanitize.js', async () => {
 // 6. lib/swagger-ui-setup.js — mountSwaggerUI
 // ---------------------------------------------------------------------------
 describe('lib/swagger-ui-setup.js', () => {
-  let mountSwaggerUI: any;
+  let mountSwaggerUI: typeof import('../lib/swagger-ui-setup.js').mountSwaggerUI;
 
   beforeEach(async () => {
     const mod = await import('../lib/swagger-ui-setup.js');
@@ -872,11 +891,11 @@ describe('lib/swagger-ui-setup.js', () => {
   });
 
   it('returns early (no-op) when swagger-ui-dist is not installed', () => {
-    const useCalls: any[] = [];
-    const getCalls: any[] = [];
+    const useCalls: unknown[][] = [];
+    const getCalls: unknown[][] = [];
     const app = {
-      use: (...args: any[]) => useCalls.push(args),
-      get: (...args: any[]) => getCalls.push(args),
+      use: (...args: unknown[]) => useCalls.push(args),
+      get: (...args: unknown[]) => getCalls.push(args),
     };
 
     // If swagger-ui-dist IS installed, it will proceed. If not, it should
@@ -887,17 +906,17 @@ describe('lib/swagger-ui-setup.js', () => {
   });
 
   it('mounts static route and GET handler when swagger-ui-dist is available', () => {
-    const useCalls: any[] = [];
-    const getCalls: any[] = [];
+    const useCalls: unknown[][] = [];
+    const getCalls: unknown[][] = [];
     const app = {
-      use: (...args: any[]) => useCalls.push(args),
-      get: (...args: any[]) => getCalls.push(args),
+      use: (...args: unknown[]) => useCalls.push(args),
+      get: (...args: unknown[]) => getCalls.push(args),
     };
 
     mountSwaggerUI(app, { PUBLIC_ORIGIN: 'https://festie.us' });
 
     // If swagger-ui-dist is installed, we should see route registrations
-    let hasSwaggerDist: any;
+    let hasSwaggerDist: boolean;
     try {
       require.resolve('swagger-ui-dist/swagger-ui-bundle.js');
       hasSwaggerDist = true;
@@ -908,14 +927,14 @@ describe('lib/swagger-ui-setup.js', () => {
     if (hasSwaggerDist) {
       // Should have registered app.use('/api/docs', ...) and app.get('/api/docs', ...)
       assert.ok(useCalls.length >= 1, 'should register static middleware');
-      assert.equal(useCalls[0][0], '/api/docs');
+      assert.equal(useCalls[0]![0], '/api/docs');
       assert.ok(getCalls.length >= 1, 'should register GET handler');
-      assert.equal(getCalls[0][0], '/api/docs');
+      assert.equal(getCalls[0]![0], '/api/docs');
     }
   });
 
   it('GET /api/docs handler sends HTML with swagger UI', () => {
-    let hasSwaggerDist: any;
+    let hasSwaggerDist: boolean;
     try {
       require.resolve('swagger-ui-dist/swagger-ui-bundle.js');
       hasSwaggerDist = true;
@@ -925,24 +944,24 @@ describe('lib/swagger-ui-setup.js', () => {
 
     if (!hasSwaggerDist) return; // skip when dependency not installed
 
-    const getCalls: any[] = [];
+    const getCalls: unknown[][] = [];
     const app = {
       use: () => {},
-      get: (...args: any[]) => getCalls.push(args),
+      get: (...args: unknown[]) => getCalls.push(args),
     };
 
     mountSwaggerUI(app, { PUBLIC_ORIGIN: 'https://festie.us' });
 
     assert.ok(getCalls.length >= 1);
-    const handler = getCalls[0][1];
+    const handler = getCalls[0]![1] as (req: unknown, res: unknown) => void;
 
     // Simulate Express res
     let sentHtml = '';
     const res = {
-      type: mock.fn(function (this: any) {
+      type: mock.fn(function (this: unknown, _type: string) {
         return this;
       }),
-      send: mock.fn((html: any) => {
+      send: mock.fn((html: string) => {
         sentHtml = html;
       }),
     };
@@ -950,7 +969,7 @@ describe('lib/swagger-ui-setup.js', () => {
     handler({}, res);
 
     assert.equal(res.type.mock.calls.length, 1);
-    assert.equal((res.type.mock.calls[0]! as any).arguments[0], 'html');
+    assert.equal(res.type.mock.calls[0]!.arguments[0], 'html');
     assert.ok(sentHtml.includes('<!DOCTYPE html>'));
     assert.ok(sentHtml.includes('swagger-ui'));
     assert.ok(sentHtml.includes('SwaggerUIBundle'));
@@ -961,14 +980,30 @@ describe('lib/swagger-ui-setup.js', () => {
 // 7. routes/spotify.js — createSpotifyRoutes
 // ---------------------------------------------------------------------------
 describe('routes/spotify.js', () => {
-  let createSpotifyRoutes: any;
+  type PreviewData = {
+    embedType: string | null;
+    embedUrl: string;
+    artistId?: string;
+    trackId?: string;
+    trackName?: string;
+    albumArt?: string | null;
+  };
+
+  let createSpotifyRoutes: typeof import('../routes/spotify.js').default;
 
   beforeEach(async () => {
     const mod = await import('../routes/spotify.js');
-    createSpotifyRoutes = mod.default ?? mod;
+    createSpotifyRoutes = mod.default;
   });
 
-  function makeDeps(overrides: any = {}) {
+  function previewHandler(router: ReturnType<typeof createSpotifyRoutes>) {
+    const layer = router.stack.find((l) => l.route?.path === '/spotify/preview/:setId');
+    assert.ok(layer?.route, 'should have /spotify/preview/:setId route');
+    const { stack } = layer.route;
+    return stack[stack.length - 1]!.handle as (req: unknown, res: unknown) => Promise<void>;
+  }
+
+  function makeDeps(overrides: Record<string, unknown> = {}) {
     return {
       express,
       config: {
@@ -978,9 +1013,9 @@ describe('routes/spotify.js', () => {
         SPOTIFY_CACHE_MAX: 500,
       },
       log: { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() },
-      rateLimit: () => (req: any, res: any, next: any) => next(),
-      sendSuccess: mock.fn((res: any, data: any) => res.json({ data, error: null })),
-      sendError: mock.fn((res: any, status: any, message: any, code: any) =>
+      rateLimit: () => () => {},
+      sendSuccess: mock.fn((res: { json(body: unknown): unknown }, data: PreviewData) => res.json({ data, error: null })),
+      sendError: mock.fn((res: { status(code: number): { json(body: unknown): unknown } }, status: number, message: string, code?: string) =>
         res.status(status).json({ data: null, error: { message, status, code: code || 'ERROR' } }),
       ),
       ErrorCodes: { NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
@@ -1029,38 +1064,35 @@ describe('routes/spotify.js', () => {
             },
         ],
       }),
-    })) as any;
+    })) as unknown as typeof fetch;
 
     try {
       const router = createSpotifyRoutes(deps);
 
       // Simulate first request
       const req1 = { params: { setId: 'set-1' } };
-      let sentData1: any;
+      let sentData1: unknown;
       const res1 = {
-        json: mock.fn((d: any) => {
+        json: mock.fn((d: unknown) => {
           sentData1 = d;
         }),
-        status: mock.fn(function (this: any) {
+        status: mock.fn(function (this: unknown) {
           return this;
         }),
       };
       // Find the route handler
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      assert.ok(layer, 'should have /spotify/preview/:setId route');
-
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+      const handler = previewHandler(router);
       await handler(req1, res1);
 
       // Second request should use cache
       const deps2 = makeDeps();
       const req2 = { params: { setId: 'set-1' } };
-      let sentData2: any;
+      let sentData2: unknown;
       const res2 = {
-        json: mock.fn((d: any) => {
+        json: mock.fn((d: unknown) => {
           sentData2 = d;
         }),
-        status: mock.fn(function (this: any) {
+        status: mock.fn(function (this: unknown) {
           return this;
         }),
       };
@@ -1079,19 +1111,18 @@ describe('routes/spotify.js', () => {
     });
     const router = createSpotifyRoutes(deps);
 
-    const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-    const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+    const handler = previewHandler(router);
 
     const req = { params: { setId: 'nonexistent' } };
     const res = {
       json: mock.fn(),
-      status: mock.fn(function (this: any) {
+      status: mock.fn(function (this: unknown) {
         return this;
       }),
     };
     await handler(req, res);
     assert.equal(deps.sendError.mock.calls.length, 1);
-    assert.equal((deps.sendError.mock.calls[0]! as any).arguments[1], 404);
+    assert.equal(deps.sendError.mock.calls[0]!.arguments[1], 404);
   });
 
   it('returns embedType null when set has no artists', async () => {
@@ -1102,19 +1133,18 @@ describe('routes/spotify.js', () => {
     });
     const router = createSpotifyRoutes(deps);
 
-    const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-    const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+    const handler = previewHandler(router);
 
     const req = { params: { setId: 'set-no-artists' } };
     const res = {
       json: mock.fn(),
-      status: mock.fn(function (this: any) {
+      status: mock.fn(function (this: unknown) {
         return this;
       }),
     };
     await handler(req, res);
     assert.equal(deps.sendSuccess.mock.calls.length, 1);
-    const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+    const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
     assert.equal(data.embedType, null);
   });
 
@@ -1130,19 +1160,18 @@ describe('routes/spotify.js', () => {
     });
     const router = createSpotifyRoutes(deps);
 
-    const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-    const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+    const handler = previewHandler(router);
 
     const req = { params: { setId: 'set-no-spotify' } };
     const res = {
       json: mock.fn(),
-      status: mock.fn(function (this: any) {
+      status: mock.fn(function (this: unknown) {
         return this;
       }),
     };
     await handler(req, res);
     assert.equal(deps.sendSuccess.mock.calls.length, 1);
-    const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+    const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
     assert.equal(data.embedType, null);
   });
 
@@ -1166,23 +1195,22 @@ describe('routes/spotify.js', () => {
     global.fetch = mock.fn(async () => ({
       ok: true,
       json: async () => ({ tracks: [] }),
-    })) as any;
+    })) as unknown as typeof fetch;
 
     try {
       const router = createSpotifyRoutes(deps);
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+      const handler = previewHandler(router);
 
       const req = { params: { setId: 'set-fb' } };
       const res = {
         json: mock.fn(),
-        status: mock.fn(function (this: any) {
+        status: mock.fn(function (this: unknown) {
           return this;
         }),
       };
       await handler(req, res);
       assert.equal(deps.sendSuccess.mock.calls.length, 1);
-      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
       assert.equal(data.embedType, 'artist');
       assert.equal(data.artistId, 'xyz789');
     } finally {
@@ -1214,23 +1242,22 @@ describe('routes/spotify.js', () => {
         return { ok: true, status: 200, json: async () => ({ access_token: 'tok-fallback', expires_in: 3600 }) };
       }
       return { ok: false, status: 500, json: async () => ({}) };
-    }) as any;
+    }) as unknown as typeof fetch;
 
     try {
       const router = createSpotifyRoutes(deps);
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+      const handler = previewHandler(router);
 
       const req = { params: { setId: 'set-err' } };
       const res = {
         json: mock.fn(),
-        status: mock.fn(function (this: any) {
+        status: mock.fn(function (this: unknown) {
           return this;
         }),
       };
       await handler(req, res);
       assert.equal(deps.sendSuccess.mock.calls.length, 1);
-      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
       assert.equal(data.embedType, 'artist');
     } finally {
       global.fetch = origFetch;
@@ -1256,17 +1283,16 @@ describe('routes/spotify.js', () => {
 
     const origFetch = global.fetch;
     // getToken caches at module level, so fail every fetch: token or top-tracks, either throws.
-    global.fetch = mock.fn(async () => { throw new Error('fetch failed'); }) as any;
+    global.fetch = mock.fn(async () => { throw new Error('fetch failed'); }) as unknown as typeof fetch;
 
     try {
       const router = createSpotifyRoutes(deps);
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
-      const res = { json: mock.fn(), status: mock.fn(function (this: any) { return this; }) };
+      const handler = previewHandler(router);
+      const res = { json: mock.fn(), status: mock.fn(function (this: unknown) { return this; }) };
       await handler({ params: { setId: 'set-tokfail' } }, res);
       assert.equal(deps.sendError.mock.calls.length, 0);
       assert.equal(deps.sendSuccess.mock.calls.length, 1);
-      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
       assert.equal(data.embedType, 'artist');
       assert.equal(data.artistId, 'tok999');
       assert.equal(deps.log.warn.mock.calls.length, 1);
@@ -1287,19 +1313,18 @@ describe('routes/spotify.js', () => {
       },
     });
     const router = createSpotifyRoutes(deps);
-    const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-    const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+    const handler = previewHandler(router);
 
     const req = { params: { setId: 'set-fail' } };
     const res = {
       json: mock.fn(),
-      status: mock.fn(function (this: any) {
+      status: mock.fn(function (this: unknown) {
         return this;
       }),
     };
     await handler(req, res);
     assert.equal(deps.sendError.mock.calls.length, 1);
-    assert.equal((deps.sendError.mock.calls[0]! as any).arguments[1], 500);
+    assert.equal(deps.sendError.mock.calls[0]!.arguments[1], 500);
   });
 
   it('preview cache evicts oldest entry when at max size', async () => {
@@ -1313,13 +1338,12 @@ describe('routes/spotify.js', () => {
       },
     });
     const router = createSpotifyRoutes(deps);
-    const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-    const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+    const handler = previewHandler(router);
 
     const req = { params: { setId: 'set-evict' } };
     const res = {
       json: mock.fn(),
-      status: mock.fn(function (this: any) {
+      status: mock.fn(function (this: unknown) {
         return this;
       }),
     };
@@ -1357,23 +1381,22 @@ describe('routes/spotify.js', () => {
             },
         ],
       }),
-    })) as any;
+    })) as unknown as typeof fetch;
 
     try {
       const router = createSpotifyRoutes(deps);
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+      const handler = previewHandler(router);
 
       const req = { params: { setId: 'set-track' } };
       const res = {
         json: mock.fn(),
-        status: mock.fn(function (this: any) {
+        status: mock.fn(function (this: unknown) {
           return this;
         }),
       };
       await handler(req, res);
       assert.equal(deps.sendSuccess.mock.calls.length, 1);
-      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
       assert.equal(data.embedType, 'track');
       assert.equal(data.trackId, 'track-1');
       assert.equal(data.trackName, 'Great Track');
@@ -1414,23 +1437,22 @@ describe('routes/spotify.js', () => {
             },
         ],
       }),
-    })) as any;
+    })) as unknown as typeof fetch;
 
     try {
       const router = createSpotifyRoutes(deps);
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+      const handler = previewHandler(router);
 
       const req = { params: { setId: 'set-noart' } };
       const res = {
         json: mock.fn(),
-        status: mock.fn(function (this: any) {
+        status: mock.fn(function (this: unknown) {
           return this;
         }),
       };
       await handler(req, res);
       assert.equal(deps.sendSuccess.mock.calls.length, 1);
-      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
       assert.equal(data.embedType, 'track');
       assert.equal(data.albumArt, null);
     } finally {
@@ -1462,15 +1484,14 @@ describe('routes/spotify.js', () => {
           { id: 'wrong-artist-track', name: 'Wrong', album: { images: [] }, artists: [{ id: 'other', name: 'Correct Artist' }] },
         ],
       }),
-    })) as any;
+    })) as unknown as typeof fetch;
 
     try {
       const router = createSpotifyRoutes(deps);
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
-      const res = { json: mock.fn(), status: mock.fn(function (this: any) { return this; }) };
+      const handler = previewHandler(router);
+      const res = { json: mock.fn(), status: mock.fn(function (this: unknown) { return this; }) };
       await handler({ params: { setId: 'set-filter' } }, res);
-      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
       assert.equal(data.embedType, 'artist');
       assert.equal(data.artistId, 'ca1');
       assert.equal(data.trackId, undefined);
@@ -1496,7 +1517,7 @@ describe('routes/spotify.js', () => {
     });
 
     const origFetch = global.fetch;
-    const fetchMock = mock.fn(async () => ({
+    const fetchMock = mock.fn(async (_url: string) => ({
       ok: true,
       json: async () => ({
         tracks: [
@@ -1504,18 +1525,17 @@ describe('routes/spotify.js', () => {
         ],
       }),
     }));
-    global.fetch = fetchMock as any;
+    global.fetch = fetchMock as unknown as typeof fetch;
 
     try {
       const router = createSpotifyRoutes(deps);
-      const layer = router.stack.find((l: any) => l.route && l.route.path === '/spotify/preview/:setId');
-      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
-      const res = { json: mock.fn(), status: mock.fn(function (this: any) { return this; }) };
+      const handler = previewHandler(router);
+      const res = { json: mock.fn(), status: mock.fn(function (this: unknown) { return this; }) };
       await handler({ params: { setId: 'set-top' } }, res);
-      const urls = fetchMock.mock.calls.map((c: any) => String(c.arguments[0]));
+      const urls = fetchMock.mock.calls.map((c) => String(c.arguments[0]));
       assert.ok(urls.some((u: string) => u.includes('/artists/top1/top-tracks?market=US')));
       assert.ok(!urls.some((u: string) => u.includes('/v1/search')));
-      const data = (deps.sendSuccess.mock.calls[0]! as any).arguments[1];
+      const data = deps.sendSuccess.mock.calls[0]!.arguments[1];
       assert.equal(data.embedType, 'track');
       assert.equal(data.trackId, 'tt1');
       assert.ok(!('url' in data));
