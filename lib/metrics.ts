@@ -10,6 +10,7 @@
 
 import http from 'http';
 
+import { loadConfig } from './config.js';
 import { timingSafeEqualString } from './crypto-auth.js';
 import { createLogger } from './logger.js';
 
@@ -262,7 +263,7 @@ function metricsHandler(metrics: any) {
  * reachable through the tunnel.
  */
 function hasValidMetricsToken(req: any) {
-  const configured = process.env.METRICS_TOKEN;
+  const configured = loadConfig().METRICS_TOKEN;
   if (!configured) return false;
   const header = req?.headers?.authorization;
   if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false;

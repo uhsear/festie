@@ -154,6 +154,7 @@ export const DEFAULTS = {
   REDIS_PREFIX: 'fp:',
   LOG_LEVEL: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
   SENTRY_DSN: '',
+  METRICS_TOKEN: '',
   SENTRY_TRACES_RATE: 0.05,
   SENTRY_PROFILES_RATE: 0,
   FESTIE_ENV_LABEL: '',
@@ -414,6 +415,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   LINEUP_CANCEL_ALERTS_ENABLED: boolean;
   LOG_LEVEL: string;
   SENTRY_DSN: string;
+  METRICS_TOKEN: string;
   SENTRY_TRACES_RATE: number;
   SENTRY_PROFILES_RATE: number;
   FESTIE_ENV_LABEL: string;
@@ -850,6 +852,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     CLUSTER_SIZE: Number(readInt(overrides.CLUSTER_SIZE || process.env.CLUSTER_SIZE, DEFAULTS.CLUSTER_SIZE, 1, 64)),
     LOG_LEVEL: overrides.LOG_LEVEL || process.env.LOG_LEVEL || DEFAULTS.LOG_LEVEL,
     SENTRY_DSN: overrides.SENTRY_DSN || process.env.SENTRY_DSN || DEFAULTS.SENTRY_DSN,
+    METRICS_TOKEN: overrides.METRICS_TOKEN || process.env.METRICS_TOKEN || DEFAULTS.METRICS_TOKEN,
     SENTRY_TRACES_RATE: Number(
       overrides.SENTRY_TRACES_RATE ?? process.env.SENTRY_TRACES_RATE ?? DEFAULTS.SENTRY_TRACES_RATE,
     ),
