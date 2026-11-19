@@ -5,7 +5,7 @@ import AdminLayout from '../components/admin/AdminLayout';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import AdminCommandPalette, { openAdminPalette } from '../components/admin/AdminCommandPalette';
 import { ADMIN_TABS, useAdminSearch, type AdminTab } from '../components/admin/useAdminSearch';
-import { LayoutDashboard, Tent, Users, UsersRound, ClipboardList, TrendingUp, Search } from 'lucide-react';
+import { LayoutDashboard, Tent, Users, UsersRound, ClipboardList, TrendingUp, Search, DatabaseZap } from 'lucide-react';
 
 const AdminDashboard = lazy(() => import('../components/admin/AdminDashboard'));
 const AdminFestivals = lazy(() => import('../components/admin/AdminFestivals'));
@@ -13,6 +13,7 @@ const AdminUsers = lazy(() => import('../components/admin/AdminUsers'));
 const AdminCrews = lazy(() => import('../components/admin/AdminCrews'));
 const AdminAudit = lazy(() => import('../components/admin/AdminAudit'));
 const AdminAnalytics = lazy(() => import('../components/admin/AdminAnalytics'));
+const AdminArtistBackfill = lazy(() => import('../components/admin/AdminArtistBackfill'));
 
 const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
 
@@ -52,6 +53,7 @@ function AdminPanelInner() {
     { id: 'crews', label: 'Crews', icon: <UsersRound /> },
     { id: 'audit', label: 'Audit Log', icon: <ClipboardList /> },
     { id: 'analytics', label: 'Analytics', icon: <TrendingUp /> },
+    { id: 'backfill', label: 'Artist backfill', icon: <DatabaseZap /> },
   ] as Array<{ id: AdminTab; label: string; icon: React.ReactNode }>;
 
   const renderContent = () => {
@@ -66,6 +68,8 @@ function AdminPanelInner() {
         return <AdminCrews />;
       case 'audit':
         return <AdminAudit />;
+      case 'backfill':
+        return <AdminArtistBackfill />;
       case 'analytics':
         return <AdminAnalytics />;
       default:

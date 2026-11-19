@@ -30,6 +30,7 @@ export const AUDIT_ACTIONS = {
   ARTIST_CREATED: 'artist.created',
   ARTIST_UPDATED: 'artist.updated',
   ARTIST_MERGED: 'artist.merged',
+  ARTIST_BACKFILL_RUN: 'artist.backfill.run',
   USER_ROLE_GRANTED: 'user.role.granted',
   USER_ROLE_REVOKED: 'user.role.revoked',
   USER_RESET_LINK_CREATED: 'user.password_reset_link.created',

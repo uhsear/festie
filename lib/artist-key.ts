@@ -16,6 +16,17 @@ export function artistNameKey(name: string): string {
   return foldNameCore(name);
 }
 
+const SET_TAG = /\s*\((?:[^()]*\bset|live)\)\s*$/i;
+
+/**
+ * Removes one trailing set tag such as "(Sunset Set)", "(DJ Set)" or "(Live)": it names the
+ * appearance, not the artist. Other parentheses, such as "(UK)" or "(A b2b B)", stay.
+ * A name that is only a tag stays as it is.
+ */
+export function stripSetTag(name: string): string {
+  return name.replace(SET_TAG, '').trim() || name;
+}
+
 /**
  * The name a set shows, a backend copy of shared artistDisplayName (packages/shared/src/utils/format.ts).
  * It honours displayName and a flat artist that differs from the joined artist names. The backend
