@@ -41,8 +41,9 @@ export default function createShareRoutes(deps: any) {
 
   const router = express.Router();
 
-  // Envelope exception (see lib/response.ts): the routes below serve HTML and PNG pages
-  // to browsers and link-preview crawlers, so they send their own bodies, not sendSuccess.
+  // Envelope exception (see lib/response.ts): the HTML pages (/u/:username, /:profileId) and
+  // the og.png handlers serve browsers and link-preview crawlers, so they send their own bodies,
+  // not sendSuccess. The two /json routes are API routes and do use sendSuccess.
   function sendShareError(res: any, status: any, title: any, message: any) {
     res.status(status);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
