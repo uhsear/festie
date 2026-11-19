@@ -162,8 +162,7 @@ describe('ExpensesTab', () => {
     expect(screen.getByText('sam is owed $20.00')).toBeInTheDocument();
   });
 
-  // Known bug: useRovingTabs attaches on mount, before the tablist exists (loading early return), so arrow keys do nothing. Remove .fails when fixed.
-  it.fails('moves between filter tabs with ArrowRight', async () => {
+  it('moves between filter tabs with ArrowRight', async () => {
     mockApi([expense({})]);
     setup();
     const actual = await screen.findByRole('tab', { name: 'actual' });
@@ -173,7 +172,7 @@ describe('ExpensesTab', () => {
     expect(screen.getByRole('tab', { name: 'planned' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it.fails('moves between settle-up tabs with ArrowRight', async () => {
+  it('moves between settle-up tabs with ArrowRight', async () => {
     mockApi([expense({})]);
     setup();
     const fewest = await screen.findByRole('tab', { name: 'Fewest payments' });
