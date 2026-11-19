@@ -6,6 +6,9 @@ import { hasCommand, makeTempDir, runScript, startScript, stubEnv, writeStub } f
 
 const skip = hasCommand('flock') ? false : 'needs util-linux flock (Linux)';
 
+// A skipped suite is not counted in the summary, so report the skip as a skipped test too.
+if (skip) it('scripts/backup-pg.sh suite', { skip }, () => {});
+
 describe('scripts/backup-pg.sh', { skip }, () => {
   let backupDir: string;
   let env: NodeJS.ProcessEnv;
