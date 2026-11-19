@@ -11,6 +11,7 @@ import {
   artistDisplayName,
   formatTime,
   fmtDurationMinutes,
+  crewGoingLabel,
   resolveStageColor,
 } from '@festie/shared/utils';
 import type { ConflictGroup, ConflictPick } from '@festie/shared/utils';
@@ -216,7 +217,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
 
                     {typeof pick.crewCount === 'number' && pick.crewCount > 0 && (
                       <div className="mt-1 text-xs text-text-secondary">
-                        {pick.crewCount} crew going{pick.crewBreakdown ? ` — ${pick.crewBreakdown}` : ''}
+                        {crewGoingLabel(pick.crewCount, pick.crewBreakdown ?? '')}
                       </div>
                     )}
                   </li>

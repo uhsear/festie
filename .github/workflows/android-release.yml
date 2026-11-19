@@ -90,7 +90,7 @@ jobs:
 
       - name: Expo Doctor (fail-fast config check)
         working-directory: packages/mobile
-        run: npx expo-doctor@latest
+        run: npx expo-doctor@1.21.8
 
       # Generate the native android/ project (CNG; android/ is gitignored).
       # --no-install: pnpm already installed node_modules; don't let prebuild

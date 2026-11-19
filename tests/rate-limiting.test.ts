@@ -748,4 +748,11 @@ describe('rate-limiting: Redis failure paths (characterization)', () => {
     for (let i = 1; i <= 5; i++) await middleware(mockReq({ ip: `203.0.113.${i}` }), mockRes(), () => {});
     assert.deepEqual([...deps.state.rateLimits.keys()], ['203.0.113.3', '203.0.113.4', '203.0.113.5']);
   });
+
+  it('a hit refreshes the key, so the least recently used key is evicted', async () => {
+    const deps = makeDeps({ config: { MAX_RATE_LIMIT_ENTRIES: 3 } });
+    const middleware = createRateLimiters(deps).rateLimit();
+    for (const n of [1, 2, 3, 1, 4]) await middleware(mockReq({ ip: `203.0.113.${n}` }), mockRes(), () => {});
+    assert.deepEqual([...deps.state.rateLimits.keys()], ['203.0.113.3', '203.0.113.1', '203.0.113.4']);
+  });
 });

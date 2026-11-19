@@ -14,17 +14,10 @@ import assert from 'node:assert/strict';
 import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
+import { makeIo } from './_make-io';
 
 function noop() {}
 const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
-
-function makeIo() {
-  const emitFn = mock.fn(() => {});
-  return {
-    to: mock.fn(() => ({ emit: emitFn })),
-    _emit: emitFn,
-  };
-}
 
 function makeDeps(overrides: any = {}) {
   const ioObj = makeIo();
