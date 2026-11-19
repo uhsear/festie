@@ -80,7 +80,9 @@ test.describe('critical flows', () => {
       meetAt?: string | null;
     }[];
     const saved = points.find((p) => p.label === label);
-    expect(saved?.meet_at ?? saved?.meetAt).toBeTruthy();
+    const savedAt = saved?.meet_at ?? saved?.meetAt;
+    expect(savedAt).toBeTruthy();
+    expect(new Date(savedAt as string).getTime()).toBe(new Date(meetAt).getTime());
   });
 
   test('raising an SOS shows the alert and clearing it removes it', async ({ app, page }) => {
@@ -126,8 +128,10 @@ test.describe('critical flows', () => {
 
     const res = await page.context().request.get(`${app.baseUrl}/api/v1/crews/${crew.id}/expenses`);
     expect(res.ok()).toBe(true);
-    const { data } = (await res.json()) as { data: { description: string }[] };
-    expect(data.filter((e) => e.description === description)).toHaveLength(1);
+    const { data } = (await res.json()) as { data: { description: string; amount: string }[] };
+    const saved = data.filter((e) => e.description === description);
+    expect(saved).toHaveLength(1);
+    expect(Number(saved[0]?.amount)).toBe(42.5);
   });
 
   test('an admin imports a pasted lineup and the sets appear in the schedule', async ({ app, page }) => {
