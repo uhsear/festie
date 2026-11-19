@@ -14,7 +14,10 @@ import {
 // vs pnpm install trees), so the pick-priority enum is hand-mirrored in the
 // shared package's UI constants. This test is the drift guard for that mirror —
 // imported by relative path since tsx resolves workspace TS source directly.
+import { MAX_SHARE_WINDOW_MS, POSITION_TTL_MS } from '../lib/live-location-cache.js';
+import { mergeMustSeeLeads } from '../lib/reminder-scheduler.js';
 import * as shared from '../packages/shared/src/constants/config.js';
+import { effectiveReminders } from '../packages/shared/src/utils/reminderSchedule.js';
 import { toCents as sharedToCents } from '../packages/shared/src/utils/money.js';
 import { toCents } from '../lib/helpers/export-utils.js';
 
@@ -48,6 +51,29 @@ describe('root ↔ @festie/shared constant parity', () => {
   it('toCents matches the shared mirror', () => {
     for (const v of [12.4, '12.40', '0.1', 1.005, '-3.2', 'abc', '', NaN, Infinity]) {
       assert.equal(toCents(v), sharedToCents(v), `toCents(${String(v)})`);
+    }
+  });
+
+  it('live-location TTLs match the shared mirror', () => {
+    assert.equal(POSITION_TTL_MS, shared.LIVE_LOCATION.STALE_MS);
+    assert.equal(MAX_SHARE_WINDOW_MS, shared.LIVE_SHARE_MAX_MS);
+  });
+
+  it('reminder lead merge matches shared effectiveReminders', () => {
+    const cases: Array<[Record<string, number>, string[], number | null]> = [
+      [{}, ['a', 'b'], 15],
+      [{ a: 5 }, ['a', 'b'], 15],
+      [{ c: 45 }, ['a'], 0],
+      [{ a: 5 }, ['a'], null],
+      [{}, [], 30],
+    ];
+    for (const [reminders, mustIds, lead] of cases) {
+      const picks = Object.fromEntries(mustIds.map((id) => [id, 'must' as const]));
+      assert.deepStrictEqual(
+        mergeMustSeeLeads(reminders, mustIds, lead),
+        effectiveReminders(reminders, picks, lead),
+        JSON.stringify({ reminders, mustIds, lead }),
+      );
     }
   });
 });
