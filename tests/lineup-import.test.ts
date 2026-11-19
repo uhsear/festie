@@ -18,12 +18,14 @@ import 'dotenv/config';
 import assert from 'node:assert/strict';
 import { after, afterEach, describe, mock, test } from 'node:test';
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
 import { bootServer } from './_boot-server';
 import createLineupImportRoute from '../routes/lineup-import';
 import { createLineupImportsStore } from '../lib/db/stores/lineup-imports';
+import type { BuildPlan } from '../lib/db/stores/lineup-imports';
 import { planLineupImport, withLockedArtists } from '../lib/lineup-import-plan';
 import { artistNameKey } from '../lib/artist-key';
 
@@ -33,6 +35,12 @@ const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 // The shared helpers exit the process without a test database, so load them only when it exists.
 const helpers = skip ? null : await import('./_integration-helpers');
+
+type Server = Awaited<ReturnType<typeof bootServer>>;
+type TestReq = Request & Record<string, unknown>;
+type PlanConfig = Parameters<typeof planLineupImport>[0]['config'];
+type LineupEntry = { artists: { name: string; links?: unknown }[] };
+type SetStub = { id: string; artist: string; stageId: string; startTime: string | null; endTime: string | null };
 
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const ADMIN_PASSWORD = 'test-admin-password-pass';
@@ -59,7 +67,7 @@ function fixtureFestival() {
   };
 }
 
-async function seedFestival(pool: any) {
+async function seedFestival(pool: Pool) {
   const f = fixtureFestival();
   await pool.query(
     `INSERT INTO festivals (id, name, location, created_at, updated_at)
@@ -89,7 +97,7 @@ async function seedFestival(pool: any) {
   }
 }
 
-async function cleanupById(pool: any) {
+async function cleanupById(pool: Pool) {
   for (const id of [FEST_ID, EMPTY_FEST_ID]) {
     await pool.query(`DELETE FROM lineup_imports WHERE festival_id = $1`, [id]);
     await pool.query(`DELETE FROM festival_sets WHERE festival_id = $1`, [id]);
@@ -116,12 +124,12 @@ async function startServer() {
   });
 }
 
-async function registerUser(server: any, suffix: any) {
+async function registerUser(server: Server, suffix: string) {
   const username = `li-${RUN_ID}-${suffix}`;
   return { ...(await helpers!.registerUser(server, username)), username };
 }
 
-async function loginAdmin(server: any) {
+async function loginAdmin(server: Server) {
   const username = `li-${RUN_ID}-admin`;
   const regRes = await server.request
     .post('/api/v1/auth/register')
@@ -149,7 +157,7 @@ async function loginAdmin(server: any) {
   return loginRes.body.data.token;
 }
 
-function postImport(server: any, token: any, festivalId: any, body: any, suffix = '') {
+function postImport(server: Server, token: string, festivalId: string, body: object, suffix = '') {
   return server.request
     .post(`/api/v1/admin/festivals/${festivalId}/import-lineup${suffix}`)
     .set('x-user-token', token)
@@ -157,7 +165,7 @@ function postImport(server: any, token: any, festivalId: any, body: any, suffix 
     .send(body);
 }
 
-async function countSets(festivalId: any) {
+async function countSets(festivalId: string) {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
   try {
     const { rows } = await pool.query(
@@ -172,7 +180,7 @@ async function countSets(festivalId: any) {
 
 
 
-async function withPool(fn: (pool: any) => Promise<any>): Promise<any> {
+async function withPool<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });
   try {
     return await fn(pool);
@@ -181,11 +189,11 @@ async function withPool(fn: (pool: any) => Promise<any>): Promise<any> {
   }
 }
 
-const servers: any[] = [];
+const servers: Server[] = [];
 afterEach(async () => {
   while (servers.length > 0) {
     const s = servers.pop();
-    try { await s.close(); } catch (_) { /* best-effort */ }
+    try { await s!.close(); } catch (_) { /* best-effort */ }
   }
   if (skip) return;
   // Put both festivals back to their seeded state so tests stay independent.
@@ -228,7 +236,7 @@ const SAMPLE_ROWS = [
 
 describe('lineup-import commit: picker alerts, no festival-wide alert (mocked deps)', () => {
   const stages = [{ id: 'main', name: 'Main' }];
-  const festivalWith = (sets: any[]) => ({
+  const festivalWith = (sets: SetStub[]) => ({
     id: 'f-1',
     name: 'Fest',
     publishedAt: '2026-01-01T00:00:00.000Z',
@@ -236,33 +244,33 @@ describe('lineup-import commit: picker alerts, no festival-wide alert (mocked de
     days: [{ label: 'Fri', date: '2026-06-05', sets }],
     b2bSeparator: 'b2b',
   });
-  const tba: any[] = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: null, endTime: null }];
+  const tba: SetStub[] = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: null, endTime: null }];
   const timed = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: '20:00', endTime: '21:00' }];
   const timeShifted = [{ id: 's1', artist: 'Alpha', stageId: 'main', startTime: '21:00', endTime: '22:00' }];
 
   function build(committed: boolean, { before = tba, after = timed, released = [] as string[], published = true, pickersThrow = false } = {}) {
     const sendTimeRelease = mock.fn(async (_id: string, _key: string) => ({ queued: true }));
-    const scheduleChanged = mock.fn(async (_arg: any) => {});
+    const scheduleChanged = mock.fn(async (_arg: { changes: { setId: string }[]; pickersBySet: Map<string, string[]> }) => {});
     const pickersBySet = mock.fn(async (_id: string, setIds: string[]) => {
       if (pickersThrow) throw new Error('db blip');
       return new Map(setIds.map((id) => [id, ['picker-1']]));
     });
-    const reads: any[] = [{ ...festivalWith(before), publishedAt: published ? '2026-01-01T00:00:00.000Z' : null }, festivalWith(after)];
+    const reads: Record<string, unknown>[] = [{ ...festivalWith(before), publishedAt: published ? '2026-01-01T00:00:00.000Z' : null }, festivalWith(after)];
     const plan = { rows: [], counts: { error: 0 }, problems: [] };
-    const warnings: any[] = [];
-    const deps: any = {
+    const warnings: unknown[][] = [];
+    const deps: Record<string, unknown> = {
       express,
-      log: { info() {}, warn: (...args: any[]) => warnings.push(args), error() {}, debug() {} },
+      log: { info() {}, warn: (...args: unknown[]) => warnings.push(args), error() {}, debug() {} },
       config: {},
-      adminAuth: (req: any, _res: any, next: any) => {
-        req.user = { userId: 'admin-1' };
+      adminAuth: (req: TestReq, _res: Response, next: NextFunction) => {
+        req.user = { userId: 'admin-1', username: 'admin' };
         next();
       },
       setNoStore: () => {},
-      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      rateLimit: () => (_req: Request, _res: Response, next: NextFunction) => next(),
       sanitizeIdentifier: (v: string) => v,
-      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
-      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      sendSuccess: (res: Response, data: unknown) => res.json({ data, error: null }),
+      sendError: (res: Response, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
       ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
       stores: {
         festivals: { getById: async () => reads.shift() ?? festivalWith(after) },
@@ -309,7 +317,7 @@ describe('lineup-import commit: picker alerts, no festival-wide alert (mocked de
     await settle();
     assert.equal(scheduleChanged.mock.calls.length, 1);
     const arg = scheduleChanged.mock.calls[0]!.arguments[0];
-    assert.deepEqual(arg.changes.map((c: any) => c.setId), ['s1']);
+    assert.deepEqual(arg.changes.map((c) => c.setId), ['s1']);
     assert.deepEqual([...arg.pickersBySet], [['s1', ['picker-1']]]);
   });
 
@@ -347,23 +355,23 @@ describe('lineup-import commit: picker alerts, no festival-wide alert (mocked de
 
 describe('lineup-import commit and undo: festival:updated and list cache (mocked deps)', () => {
   function build(publishedAt: string | null, calls: string[] = []) {
-    const festivalUpdated = mock.fn((_arg: any) => {});
+    const festivalUpdated = mock.fn((_arg: { festival: { id: string } }) => {});
     const invalidateFestivalListCache = mock.fn(() => {});
     const festival = { id: 'f-1', name: 'Fest', publishedAt, stages: [], days: [], b2bSeparator: 'b2b' };
     const plan = { rows: [], counts: { error: 0 }, problems: [] };
-    const deps: any = {
+    const deps: Record<string, unknown> = {
       express,
       log: { info() {}, warn() {}, error() {}, debug() {} },
       config: {},
-      adminAuth: (req: any, _res: any, next: any) => {
-        req.user = { userId: 'admin-1' };
+      adminAuth: (req: TestReq, _res: Response, next: NextFunction) => {
+        req.user = { userId: 'admin-1', username: 'admin' };
         next();
       },
       setNoStore: () => {},
-      rateLimit: () => (_req: any, _res: any, next: any) => next(),
+      rateLimit: () => (_req: Request, _res: Response, next: NextFunction) => next(),
       sanitizeIdentifier: (v: string) => v,
-      sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
-      sendError: (res: any, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
+      sendSuccess: (res: Response, data: unknown) => res.json({ data, error: null }),
+      sendError: (res: Response, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
       ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
       stores: {
         festivals: {
@@ -406,14 +414,14 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
     const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
     await request(app).post('/f-1/import-lineup').send(body).expect(200);
     assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
-    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c) => c.arguments[0].festival.id), ['f-1']);
   });
 
   test('an undo on a published festival drops the list cache and emits festival:updated', async () => {
     const { app, festivalUpdated, invalidateFestivalListCache } = build(PUBLISHED);
     await request(app).post('/f-1/imports/imp-1/undo').expect(200);
     assert.equal(invalidateFestivalListCache.mock.calls.length, 1);
-    assert.deepEqual(festivalUpdated.mock.calls.map((c: any) => c.arguments[0].festival.id), ['f-1']);
+    assert.deepEqual(festivalUpdated.mock.calls.map((c) => c.arguments[0].festival.id), ['f-1']);
   });
 
   test('an undo reads the festival before it commits, so a failed read cannot report a done undo as failed', async () => {
@@ -450,7 +458,7 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     assert.equal(await countSets(EMPTY_FEST_ID), 3);
     const kai = await withPool((pool) => pool.query(
       `SELECT artists FROM festival_sets WHERE festival_id = $1 AND artist = 'Kai b2b Mira'`, [EMPTY_FEST_ID]));
-    assert.deepEqual(kai.rows[0].artists.map((a: any) => a.name), ['Kai', 'Mira']);
+    assert.deepEqual(kai.rows[0].artists.map((a: { name: string }) => a.name), ['Kai', 'Mira']);
   });
 
   test('importing the same rows twice adds nothing the second time', async () => {
@@ -500,7 +508,7 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
 
     const sets = await withPool((pool) => pool.query(
       `SELECT start_time FROM festival_sets WHERE festival_id = $1`, [FEST_ID]));
-    assert.deepEqual(sets.rows.map((r: any) => r.start_time), ['21:00']);
+    assert.deepEqual(sets.rows.map((r) => r.start_time), ['21:00']);
   });
 
   test('a set_id row on another day is skipped and listed first, and the other rows commit', async () => {
@@ -509,7 +517,7 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     const alpha = { row: 2, artist: 'DJ Alpha', stage: 'Main Stage', day: 'Friday', startTime: '20:00', endTime: '21:00' };
     const beta = { row: 3, artist: 'DJ Beta', stage: 'Forest', day: 'Friday', startTime: '20:00', endTime: '21:00' };
     const seeded = await postImport(server, admin, FEST_ID, { rows: [alpha, beta], skipSpotify: true }).expect(200);
-    const [alphaId, betaId] = seeded.body.data.result.rows.map((r: any) => r.setId);
+    const [alphaId, betaId] = seeded.body.data.result.rows.map((r: { setId: string }) => r.setId);
 
     const res = await postImport(server, admin, FEST_ID, {
       rows: [
@@ -521,13 +529,13 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     }).expect(200);
 
     const { result } = res.body.data;
-    assert.deepEqual(result.rows.map((r: any) => r.status), ['updated', 'skipped']);
+    assert.deepEqual(result.rows.map((r: { status: string }) => r.status), ['updated', 'skipped']);
     assert.equal(result.skipped, 1);
     assert.match(result.warnings[0], /^Row 3: Skipped: the file says Saturday, the stored day is Friday\./);
     const sets = await withPool((pool) => pool.query(
       `SELECT id, start_time FROM festival_sets WHERE festival_id = $1 ORDER BY id`, [FEST_ID]));
     assert.deepEqual(
-      Object.fromEntries(sets.rows.map((r: any) => [r.id, r.start_time])),
+      Object.fromEntries(sets.rows.map((r) => [r.id, r.start_time])),
       { [alphaId]: '20:00', [betaId]: '21:00' },
     );
   });
@@ -567,7 +575,7 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
 
     const history = await server.request
       .get(`/api/v1/admin/festivals/${FEST_ID}/imports`).set('x-user-token', admin).expect(200);
-    assert.deepEqual(history.body.data.imports.map((i: any) => i.canUndo), [true, false]);
+    assert.deepEqual(history.body.data.imports.map((i: { canUndo: boolean }) => i.canUndo), [true, false]);
     assert.equal(history.body.data.imports[0].createdBy, `li-${RUN_ID}-admin`);
 
     const undo = (id: string) => server.request
@@ -595,7 +603,7 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     const afterUndo = await server.request
       .get(`/api/v1/admin/festivals/${FEST_ID}/imports`).set('x-user-token', admin).expect(200);
     assert.ok(afterUndo.body.data.imports[0].undoneAt);
-    assert.deepEqual(afterUndo.body.data.imports.map((i: any) => i.canUndo), [false, true]);
+    assert.deepEqual(afterUndo.body.data.imports.map((i: { canUndo: boolean }) => i.canUndo), [false, true]);
   });
 
   test('a repeat commit that changes nothing does not block undoing the real import', async () => {
@@ -606,7 +614,7 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }).expect(200);
     const history = await server.request
       .get(`/api/v1/admin/festivals/${FEST_ID}/imports`).set('x-user-token', admin).expect(200);
-    assert.equal(history.body.data.imports.find((i: any) => i.id === first.body.data.result.importId).canUndo, true);
+    assert.equal(history.body.data.imports.find((i: { id: string }) => i.id === first.body.data.result.importId).canUndo, true);
     await server.request
       .post(`/api/v1/admin/festivals/${FEST_ID}/imports/${first.body.data.result.importId}/undo`)
       .set('x-user-token', admin).set(TRUSTED_MUTATION_HEADER, '1').expect(200);
@@ -686,14 +694,14 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
 const SPOTIFY_22 = 'https://open.spotify.com/artist/0TnOYISbd1XYRBk9myaseg';
 const AR = (suffix: string) => `ar-${RUN_ID}-${suffix}`;
 
-async function seedArtist(pool: any, suffix: string, name: string, label = '', links: any = {}) {
+async function seedArtist(pool: Pool, suffix: string, name: string, label = '', links: Record<string, string> = {}) {
   await pool.query(
     `INSERT INTO artists (id, name, name_key, label, links) VALUES ($1, $2, $3, $4, $5::jsonb)`,
     [AR(suffix), name, artistNameKey(name), label, JSON.stringify(links)],
   );
 }
 
-const undoImport = (server: any, token: string, festivalId: string, importId: string) =>
+const undoImport = (server: Server, token: string, festivalId: string, importId: string) =>
   server.request
     .post(`/api/v1/admin/festivals/${festivalId}/imports/${importId}/undo`)
     .set('x-user-token', token)
@@ -713,11 +721,11 @@ describe('lineup-import P6: announced rows', { skip }, () => {
     assert.equal(commit.body.data.committed, true);
     assert.equal(commit.body.data.result.created, 0);
     assert.equal(commit.body.data.result.announced, 2);
-    assert.deepEqual(commit.body.data.result.rows.map((r: any) => r.message), ['Added to the announced lineup.', 'Added to the announced lineup.']);
+    assert.deepEqual(commit.body.data.result.rows.map((r: { message: string }) => r.message), ['Added to the announced lineup.', 'Added to the announced lineup.']);
     assert.equal(await countSets(EMPTY_FEST_ID), 0);
 
     const lineup = await lineupOf(EMPTY_FEST_ID);
-    assert.deepEqual(lineup.map((e: any) => e.artists.map((a: any) => a.name)), [['Alok'], ['Kai', 'Mira']]);
+    assert.deepEqual(lineup.map((e: LineupEntry) => e.artists.map((a) => a.name)), [['Alok'], ['Kai', 'Mira']]);
     assert.deepEqual(lineup[1].artists[0].links, { instagram: 'https://www.instagram.com/kai' });
     assert.deepEqual({ status: lineup[0].status, dayDate: lineup[0].dayDate, tier: lineup[0].tier }, { status: 'announced', dayDate: null, tier: null });
     assert.match(lineup[0].announcedAt, /^\d{4}-\d{2}-\d{2}$/);
@@ -748,11 +756,11 @@ describe('lineup-import P6: announced rows', { skip }, () => {
     const undo = await undoImport(server, admin, EMPTY_FEST_ID, second.body.data.result.importId).expect(200);
     assert.equal(undo.body.data.restoredEntries, 1);
     assert.equal(undo.body.data.removedEntries, 0);
-    assert.deepEqual(undo.body.data.kept.map((k: any) => [k.artist, k.reason]), [['Zed', 'edited']]);
+    assert.deepEqual(undo.body.data.kept.map((k: { artist: string; reason: string }) => [k.artist, k.reason]), [['Zed', 'edited']]);
     const lineup = await lineupOf(EMPTY_FEST_ID);
-    assert.deepEqual(lineup.map((e: any) => e.artists[0].name).sort(), ['Alok', 'Sub Focus', 'Zed']);
+    assert.deepEqual(lineup.map((e: LineupEntry) => e.artists[0]!.name).sort(), ['Alok', 'Sub Focus', 'Zed']);
     // The link lives on the artist's row, so an undo does not take it back: the restored entry shows the artist's links.
-    assert.deepEqual(lineup.find((e: any) => e.artists[0].name === 'Alok').artists[0].links, { instagram: 'https://www.instagram.com/alok' });
+    assert.deepEqual(lineup.find((e: LineupEntry) => e.artists[0]!.name === 'Alok')!.artists[0]!.links, { instagram: 'https://www.instagram.com/alok' });
     void first;
   });
 });
@@ -791,7 +799,7 @@ describe('lineup-import P6: day moves, display names, links', { skip }, () => {
     await withPool((pool) => pool.query(`UPDATE festival_sets SET day_index = 0 WHERE id = $1`, [setId]));
     const undo = await undoImport(server, admin, FEST_ID, moved.body.data.result.importId).expect(200);
     assert.equal(undo.body.data.restored, 0);
-    assert.deepEqual(undo.body.data.kept.map((k: any) => k.reason), ['edited']);
+    assert.deepEqual(undo.body.data.kept.map((k: { reason: string }) => k.reason), ['edited']);
   });
 
   test('writes the display name and one link per platform, and undo puts the old name back', async () => {
@@ -814,7 +822,7 @@ describe('lineup-import P6: day moves, display names, links', { skip }, () => {
 });
 
 describe('lineup-import P6: artist matching', { skip }, () => {
-  const cleanArtists = (pool: any) =>
+  const cleanArtists = (pool: Pool) =>
     pool.query(`UPDATE artists SET merged_into = NULL WHERE id LIKE $1`, [`ar-${RUN_ID}-%`])
       .then(() => pool.query(`DELETE FROM artists WHERE id LIKE $1`, [`ar-${RUN_ID}-%`]));
 
@@ -833,14 +841,14 @@ describe('lineup-import P6: artist matching', { skip }, () => {
       const blocked = await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }).expect(200);
       assert.equal(blocked.body.data.committed, false);
       assert.equal(blocked.body.data.plan.counts.needsChoice, 1);
-      assert.deepEqual(blocked.body.data.plan.rows[1].resolutions[0].candidates.map((c: any) => c.label), ['Russia', 'UK']);
+      assert.deepEqual(blocked.body.data.plan.rows[1].resolutions[0].candidates.map((c: { label: string }) => c.label), ['Russia', 'UK']);
       assert.equal(await countSets(FEST_ID), 0);
 
       const picked = [rows[0]!, { ...rows[1]!, artistId: AR('ru') }];
       const committed = await postImport(server, admin, FEST_ID, { rows: picked, skipSpotify: true }).expect(200);
       assert.equal(committed.body.data.committed, true);
       const sets = await withPool((pool) => pool.query(`SELECT artist, artists FROM festival_sets WHERE festival_id = $1 ORDER BY artist`, [FEST_ID]));
-      assert.deepEqual(sets.rows.map((r: any) => [r.artist, r.artists[0].id]), [['Alok', AR('alok')], ['Nina Kraviz', AR('ru')]]);
+      assert.deepEqual(sets.rows.map((r) => [r.artist, r.artists[0].id]), [['Alok', AR('alok')], ['Nina Kraviz', AR('ru')]]);
       assert.deepEqual(sets.rows[0].artists[0].links, { instagram: 'https://www.instagram.com/alok' });
 
       const again = await postImport(server, admin, FEST_ID, { rows, skipSpotify: true }, '/preview').expect(200);
@@ -869,7 +877,7 @@ describe('lineup-import P6: artist matching', { skip }, () => {
         const store = createLineupImportsStore(pool, { festivals: { getById: async () => ({}) } });
         const plan = { counts: { error: 0 }, problems: [] as string[] };
         const writes = { newStages: [], newDays: [], inserts: [], updates: [], announced: { inserts: [], updates: [] }, artistIds: [AR('gone')], spotifyMatched: 0 };
-        const outcome: any = await store.commit(FEST_ID, () => ({ plan, writes }) as any, { createdBy: null });
+        const outcome = await store.commit(FEST_ID, () => ({ plan, writes }) as unknown as ReturnType<BuildPlan>, { createdBy: null });
         assert.equal(outcome.committed, false);
         assert.deepEqual(outcome.plan.problems, ['An artist changed while you were importing. Check the rows again.']);
       });
@@ -891,16 +899,17 @@ describe('lineup-import P6: artist matching', { skip }, () => {
         const spy = {
           connect: async () => {
             const client = await pool.connect();
-            const run = client.query.bind(client);
-            client.query = (text: any, ...rest: any[]) => (sql.push(String(text?.text ?? text)), run(text, ...rest));
+            const patched = client as unknown as { query: (text: unknown, ...rest: unknown[]) => unknown };
+            const run = patched.query.bind(client);
+            patched.query = (text, ...rest) => (sql.push(String((text as { text?: string })?.text ?? text)), run(text, ...rest));
             return client;
           },
         };
-        const spied = createLineupImportsStore(spy as any, { festivals: { getById: async () => ({ id: EMPTY_FEST_ID, name: 'Empty', b2bSeparator: 'b2b', stages: [], days: [], lineup: [] }) } });
-        const outcome: any = await spied.commit(
+        const spied = createLineupImportsStore(spy as unknown as Pool, { festivals: { getById: async () => ({ id: EMPTY_FEST_ID, name: 'Empty', b2bSeparator: 'b2b', stages: [], days: [], lineup: [] }) } });
+        const outcome = await spied.commit(
           EMPTY_FEST_ID,
-          (f: any, locked?: Map<string, any>) =>
-            planLineupImport({ festival: f, rows, options: { updateExisting: false, createMissing: true }, config: { MAX_IMPORT_SETS: 500, MAX_STAGES: 20, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 } as any, artists: locked ? withLockedArtists(stale, locked) : stale }),
+          (f, locked) =>
+            planLineupImport({ festival: f, rows, options: { updateExisting: false, createMissing: true }, config: { MAX_IMPORT_SETS: 500, MAX_STAGES: 20, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 } as PlanConfig, artists: locked ? withLockedArtists(stale, locked) : stale }),
           { createdBy: null },
         );
         assert.equal(outcome.committed, true);
