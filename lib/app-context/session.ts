@@ -39,6 +39,24 @@ export const FESTIVAL_ACTIONS = {
 } as const;
 export type FestivalAction = keyof typeof FESTIVAL_ACTIONS;
 
+// Gate for a route scoped to one crew. Mount after userAuth and validateParams(crewIdParams). Handlers
+// read the caller's membership row (for example `role`) from `req.membership`.
+export function crewMembership({ stores, log, sendError, ErrorCodes }: any) {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+      const membership = await stores.crews.getMember(crewId, req.user.userId);
+      if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
+      // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
+      req.membership = membership;
+      return next();
+    } catch (err: any) {
+      log.error('crew membership check failed', { error: err.message, crewId: req.validatedParams?.crewId });
+      return sendError(res, 500, 'Failed to verify crew membership', ErrorCodes.INTERNAL_ERROR);
+    }
+  };
+}
+
 /**
  * Build session + auth helpers bound to the supplied deps.
  */
