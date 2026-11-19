@@ -1458,6 +1458,27 @@ describe('routes/admin-bulk.js', () => {
     assert.ok(deps.stores.crews.removeMember.mock.calls.length > 0);
   });
 
+  test('DELETE /crews/:id/members/:userId drops the cached position and tells peers even without a sharing socket', async () => {
+    const emitFn = mock.fn((..._args: any[]) => {});
+    const io: any = {
+      to: mock.fn((..._args: any[]) => ({ emit: emitFn })),
+      in: mock.fn((..._args: any[]) => ({ fetchSockets: async () => [] })),
+    };
+    const redis: any = { hdel: mock.fn(async () => 1) };
+    const { app } = await buildBulkRouter({ io, redis });
+
+    await request(app).delete('/crews/crew-1/members/user-2').expect(200);
+
+    assert.deepEqual(redis.hdel.mock.calls[0]!.arguments, ['loc:pos:crew-1', 'user-2']);
+    const stopped = emitFn.mock.calls.find((c: any) => c.arguments[0] === 'location:peer-stopped');
+    assert.deepEqual(stopped?.arguments[1], {
+      _v: 1,
+      crewId: 'crew-1',
+      userId: 'user-2',
+      reason: 'kicked',
+    });
+  });
+
   test('DELETE /crews/:id/members/:userId records crew name and username', async () => {
     const { app, deps } = await buildBulkRouter();
     await request(app).delete('/crews/crew-1/members/user-2').expect(200);

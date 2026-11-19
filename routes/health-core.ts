@@ -16,6 +16,7 @@
 // exposition without reaching through module state.
 
 import { Router, json } from 'express';
+import { clientPerfBeaconSchema, validate } from '../lib/schemas.js';
 
 // A CSP report's URLs can carry query strings (invite or friend-link tokens).
 // Log only the directive fields, with each URL cut back to origin and path.
@@ -42,7 +43,7 @@ export default function createHealthRoutes(deps: any) {
   const {
     log,
     stores, pool,
-    sendSuccess, sendError, ErrorCodes, rateLimit,
+    sendSuccess, rateLimit,
   } = deps;
 
   const router = Router();
@@ -59,13 +60,8 @@ export default function createHealthRoutes(deps: any) {
     return sendSuccess(res, { status: 'ok', uptime: Math.round(process.uptime()) });
   });
 
-  router.post('/metrics/client', rateLimit(10, 'client-metrics'), json({ limit: '1kb' }), (req: any, res: any) => {
-    const { lcp, fid, cls, avgRenderMs, renders } = req.body || {};
-    // Validate metrics are numbers only
-    if (typeof lcp !== 'number' || typeof fid !== 'number') return sendError(res, 400, 'LCP and FID metrics required', ErrorCodes.MISSING_FIELD);
-    if (typeof cls !== 'undefined' && typeof cls !== 'number') return sendError(res, 400, 'CLS must be a number', ErrorCodes.INVALID_INPUT);
-    if (typeof avgRenderMs !== 'undefined' && typeof avgRenderMs !== 'number') return sendError(res, 400, 'avgRenderMs must be a number', ErrorCodes.INVALID_INPUT);
-    if (typeof renders !== 'undefined' && typeof renders !== 'number') return sendError(res, 400, 'renders must be a number', ErrorCodes.INVALID_INPUT);
+  router.post('/metrics/client', rateLimit(10, 'client-metrics'), json({ limit: '1kb' }), validate(clientPerfBeaconSchema), (req: any, res: any) => {
+    const { lcp, fid, cls, avgRenderMs, renders } = req.validatedBody;
     clientMetrics.samples++;
     clientMetrics.lcpSum += Math.min(lcp, 30000);
     clientMetrics.fidSum += Math.min(fid, 5000);

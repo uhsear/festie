@@ -1,29 +1,51 @@
 import { describe, it, beforeEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
+import type { Redis } from 'ioredis';
+import type { Request, Response } from 'express';
+import type { TestContext } from 'node:test';
 
 // ─── Redis helpers ───────────────────────────────────────────────────────────
 
-function makeMockRedis(overrides: any = {}) {
-  const store = new Map();
-  const hashStore = new Map();
+type PipelineStub = {
+  incr(key: string): PipelineStub;
+  pttl(key: string): PipelineStub;
+  hdel(key: string, field: string): PipelineStub;
+  exec(): Promise<[null, number][]>;
+};
 
-  const redis: any = {
+type ResStub = { [method: string]: (...args: never[]) => unknown };
+
+type SubStub = {
+  on(event: string, cb: unknown): void;
+  subscribe(c1: unknown, c2: unknown, cb?: (err: null) => void): void;
+  unsubscribe(): Promise<void>;
+  disconnect(): void;
+  [key: string]: unknown;
+};
+
+type MockRedis = Redis & { store: Map<string, number>; hashStore: Map<string, Map<string, string>> };
+
+function makeMockRedis(overrides: Record<string, unknown> = {}) {
+  const store = new Map<string, number>();
+  const hashStore = new Map<string, Map<string, string>>();
+
+  const redis = {
     store,
     hashStore,
-    async get(key: any) {
+    async get(key: string) {
       return store.get(key) ?? null;
     },
-    async set(key: any, val: any) {
+    async set(key: string, val: number) {
       store.set(key, val);
     },
-    async setex(key: any, _ttl: any, val: any) {
+    async setex(key: string, _ttl: number, val: number) {
       store.set(key, val);
     },
-    async del(key: any) {
+    async del(key: string) {
       store.delete(key);
     },
-    async incr(key: any) {
+    async incr(key: string) {
       const v = (store.get(key) || 0) + 1;
       store.set(key, v);
       return v;
@@ -34,37 +56,37 @@ function makeMockRedis(overrides: any = {}) {
     async expire() {
       return 1;
     },
-    async hset(key: any, field: any, val: any) {
+    async hset(key: string, field: string, val: string) {
       if (!hashStore.has(key)) hashStore.set(key, new Map());
-      hashStore.get(key).set(field, val);
+      hashStore.get(key)!.set(field, val);
     },
-    async hdel(key: any, field: any) {
-      if (hashStore.has(key)) hashStore.get(key).delete(field);
+    async hdel(key: string, field: string) {
+      if (hashStore.has(key)) hashStore.get(key)!.delete(field);
     },
-    async hgetall(key: any) {
+    async hgetall(key: string) {
       const m = hashStore.get(key);
       if (!m) return {};
-      const obj: any = {};
+      const obj: Record<string, string> = {};
       for (const [k, v] of m) obj[k] = v;
       return obj;
     },
     pipeline() {
-      const cmds: any[] = [];
-      const p: any = {
-        incr(key: any) {
+      const cmds: [string, string, string?][] = [];
+      const p: PipelineStub = {
+        incr(key) {
           cmds.push(['incr', key]);
           return p;
         },
-        pttl(key: any) {
+        pttl(key) {
           cmds.push(['pttl', key]);
           return p;
         },
-        hdel(key: any, field: any) {
+        hdel(key, field) {
           cmds.push(['hdel', key, field]);
           return p;
         },
         async exec() {
-          const results: any[] = [];
+          const results: [null, number][] = [];
           for (const [cmd, key, field] of cmds) {
             if (cmd === 'incr') {
               const v = (store.get(key) || 0) + 1;
@@ -73,7 +95,7 @@ function makeMockRedis(overrides: any = {}) {
             } else if (cmd === 'pttl') {
               results.push([null, -1]);
             } else if (cmd === 'hdel') {
-              if (hashStore.has(key)) hashStore.get(key).delete(field);
+              if (hashStore.has(key)) hashStore.get(key)!.delete(field!);
               results.push([null, 1]);
             }
           }
@@ -86,11 +108,11 @@ function makeMockRedis(overrides: any = {}) {
       return 1;
     },
     duplicate() {
-      const sub: any = {
-        on(_event: any, _cb: any) {
+      const sub: SubStub = {
+        on(_event, _cb) {
           sub['_on_' + _event] = _cb;
         },
-        subscribe(_c1: any, _c2: any, cb: any) {
+        subscribe(_c1, _c2, cb) {
           if (cb) cb(null);
         },
         async unsubscribe() {},
@@ -101,7 +123,7 @@ function makeMockRedis(overrides: any = {}) {
     },
     ...overrides,
   };
-  return redis;
+  return redis as unknown as MockRedis;
 }
 
 function makeLog() {
@@ -170,9 +192,9 @@ describe('redis.js', () => {
     });
 
     it('check() sets expiry on first request (count === 1)', async () => {
-      const pexpireCalled: any[] = [];
+      const pexpireCalled: { key: string; ms: number }[] = [];
       const redis = makeMockRedis({
-        async pexpire(key: any, ms: any) {
+        async pexpire(key: string, ms: number) {
           pexpireCalled.push({ key, ms });
           return 1;
         },
@@ -180,7 +202,7 @@ describe('redis.js', () => {
       const limiter = createRedisRateLimiter(redis, { windowMs: 30000, maxRequests: 10, prefix: 'exp' });
       await limiter!.check('ip1');
       assert.ok(pexpireCalled.length > 0);
-      assert.equal(pexpireCalled[0].ms, 30000);
+      assert.equal(pexpireCalled[0]!.ms, 30000);
     });
 
     it('check() returns fallback when redis errors', async () => {
@@ -226,7 +248,7 @@ describe('redis.js', () => {
       const store = createRedisPresenceStore(redis)!;
       await store.setOnline('fest1', 'u1', 'Alice', 'sock1');
       const entries = await redis.hgetall('presence:fest1');
-      const parsed = JSON.parse(entries.sock1);
+      const parsed = JSON.parse(entries.sock1!);
       assert.equal(parsed.userId, 'u1');
       assert.equal(parsed.username, 'Alice');
       assert.equal(parsed.socketId, 'sock1');
@@ -274,16 +296,16 @@ describe('redis.js', () => {
     });
 
     it('refresh updates TTL', async () => {
-      const expireCalls: any[] = [];
+      const expireCalls: { key: string; ttl: number }[] = [];
       const redis = makeMockRedis({
-        async expire(key: any, ttl: any) {
+        async expire(key: string, ttl: number) {
           expireCalls.push({ key, ttl });
         },
       });
       const store = createRedisPresenceStore(redis)!;
       await store.refresh('fest1');
       assert.equal(expireCalls.length, 1);
-      assert.equal(expireCalls[0].ttl, 120);
+      assert.equal(expireCalls[0]!.ttl, 120);
     });
   });
 
@@ -297,12 +319,12 @@ describe('redis.js', () => {
 
     it('creates bus and subscribes to channels', () => {
       const log = makeLog();
-      let subscribedChannels: any[] = [];
+      let subscribedChannels: unknown[] = [];
       const redis = makeMockRedis({
         duplicate() {
           return {
-            on(_event: any, _cb: any) {},
-            subscribe(...args: any[]) {
+            on(_event: string, _cb: unknown) {},
+            subscribe(...args: unknown[]) {
               const cb = args[args.length - 1];
               subscribedChannels = args.slice(0, -1);
               if (typeof cb === 'function') cb(null);
@@ -322,17 +344,17 @@ describe('redis.js', () => {
     });
 
     it('publishUserInvalidation calls redis.publish', async () => {
-      const published: any[] = [];
+      const published: { channel: string; msg: string }[] = [];
       const log = makeLog();
       const redis = makeMockRedis({
-        async publish(channel: any, msg: any) {
+        async publish(channel: string, msg: string) {
           published.push({ channel, msg });
           return 1;
         },
         duplicate() {
           return {
             on() {},
-            subscribe(...args: any[]) {
+            subscribe(...args: unknown[]) {
               const cb = args[args.length - 1];
               if (typeof cb === 'function') cb(null);
             },
@@ -349,17 +371,17 @@ describe('redis.js', () => {
     });
 
     it('publishFestivalInvalidation calls redis.publish', async () => {
-      const published: any[] = [];
+      const published: { channel: string; msg: string }[] = [];
       const log = makeLog();
       const redis = makeMockRedis({
-        async publish(channel: any, msg: any) {
+        async publish(channel: string, msg: string) {
           published.push({ channel, msg });
           return 1;
         },
         duplicate() {
           return {
             on() {},
-            subscribe(...args: any[]) {
+            subscribe(...args: unknown[]) {
               const cb = args[args.length - 1];
               if (typeof cb === 'function') cb(null);
             },
@@ -382,7 +404,7 @@ describe('redis.js', () => {
         duplicate() {
           return {
             on() {},
-            subscribe(...args: any[]) {
+            subscribe(...args: unknown[]) {
               const cb = args[args.length - 1];
               if (typeof cb === 'function') cb(null);
             },
@@ -407,7 +429,7 @@ describe('redis.js', () => {
         duplicate() {
           return {
             on() {},
-            subscribe(...args: any[]) {
+            subscribe(...args: unknown[]) {
               const cb = args[args.length - 1];
               if (typeof cb === 'function') cb(null);
             },
@@ -431,7 +453,7 @@ describe('redis.js', () => {
         duplicate() {
           return {
             on() {},
-            subscribe(...args: any[]) {
+            subscribe(...args: unknown[]) {
               const cb = args[args.length - 1];
               if (typeof cb === 'function') cb(new Error('subscribe failed'));
             },
@@ -447,14 +469,14 @@ describe('redis.js', () => {
     it('message handler calls onInvalidateUsers for users channel', () => {
       const log = makeLog();
       let usersCalled = false;
-      let messageHandler: any;
+      let messageHandler: ((channel: string, msg: string) => void) | undefined;
       const redis = makeMockRedis({
         duplicate() {
           return {
-            on(event: any, cb: any) {
+            on(event: string, cb: (channel: string, msg: string) => void) {
               if (event === 'message') messageHandler = cb;
             },
-            subscribe(...args: any[]) {
+            subscribe(...args: unknown[]) {
               const cb = args[args.length - 1];
               if (typeof cb === 'function') cb(null);
             },
@@ -470,21 +492,21 @@ describe('redis.js', () => {
         },
       });
       assert.ok(messageHandler);
-      messageHandler('cache:invalidate:users', String(Date.now()));
+      messageHandler!('cache:invalidate:users', String(Date.now()));
       assert.ok(usersCalled);
     });
 
     it('message handler calls onInvalidateFestivals for festivals channel', () => {
       const log = makeLog();
       let festivalsCalled = false;
-      let messageHandler: any;
+      let messageHandler: ((channel: string, msg: string) => void) | undefined;
       const redis = makeMockRedis({
         duplicate() {
           return {
-            on(event: any, cb: any) {
+            on(event: string, cb: (channel: string, msg: string) => void) {
               if (event === 'message') messageHandler = cb;
             },
-            subscribe(...args: any[]) {
+            subscribe(...args: unknown[]) {
               const cb = args[args.length - 1];
               if (typeof cb === 'function') cb(null);
             },
@@ -499,7 +521,7 @@ describe('redis.js', () => {
           festivalsCalled = true;
         },
       });
-      messageHandler('cache:invalidate:festivals', String(Date.now()));
+      messageHandler!('cache:invalidate:festivals', String(Date.now()));
       assert.ok(festivalsCalled);
     });
   });
@@ -616,15 +638,15 @@ describe('redis.js', () => {
     });
 
     it('sets pexpire on first request (count === 1)', async () => {
-      const pexpireCalls: any[] = [];
+      const pexpireCalls: { key: string; ms: number }[] = [];
       const redis = makeMockRedis({
-        async pexpire(key: any, ms: any) {
+        async pexpire(key: string, ms: number) {
           pexpireCalls.push({ key, ms });
         },
       });
       await redisRateCheck(redis, 'rr:exp', 5, 30000);
       assert.ok(pexpireCalls.length > 0);
-      assert.equal(pexpireCalls[0].ms, 30000);
+      assert.equal(pexpireCalls[0]!.ms, 30000);
     });
 
     it('returns fallback when pipeline throws', async () => {
@@ -652,18 +674,21 @@ describe('redis.js', () => {
       const redis = makeMockRedis();
       // Override pipeline to return a positive pttl
       redis.pipeline = () => {
-        const cmds: any[] = [];
-        const p: any = {
-          incr(key: any) {
+        const cmds: [string, string][] = [];
+        const p: PipelineStub = {
+          incr(key) {
             cmds.push(['incr', key]);
             return p;
           },
-          pttl(key: any) {
+          pttl(key) {
             cmds.push(['pttl', key]);
             return p;
           },
+          hdel() {
+            return p;
+          },
           async exec() {
-            const results: any[] = [];
+            const results: [null, number][] = [];
             for (const [cmd, key] of cmds) {
               if (cmd === 'incr') {
                 const v = (redis.store.get(key) || 0) + 1;
@@ -677,7 +702,7 @@ describe('redis.js', () => {
             return results;
           },
         };
-        return p;
+        return p as unknown as ReturnType<Redis['pipeline']>;
       };
       // Pre-populate so count > 1
       redis.store.set('rr:ttl', 1);
@@ -729,16 +754,16 @@ describe('metrics.js', () => {
     it('returns passthrough when metrics is null', () => {
       const mw = metricsMiddleware(null);
       let called = false;
-      mw({} as any, {} as any, () => {
+      mw({} as Request, {} as Response, () => {
         called = true;
       });
       assert.ok(called);
     });
 
     it('returns passthrough when metrics.available is false', () => {
-      const mw = metricsMiddleware({ available: false } as any);
+      const mw = metricsMiddleware({ available: false } as ReturnType<typeof createMetrics>);
       let called = false;
-      mw({} as any, {} as any, () => {
+      mw({} as Request, {} as Response, () => {
         called = true;
       });
       assert.ok(called);
@@ -748,76 +773,76 @@ describe('metrics.js', () => {
       if (!sharedMetrics.available) return;
       const mw = metricsMiddleware(sharedMetrics);
 
-      let finishCallback: any;
+      let finishCallback: (() => void) | undefined;
       const req = { method: 'GET', route: { path: '/api/test' }, baseUrl: '/api' };
       const res = {
         statusCode: 200,
-        on(event: any, cb: any) {
+        on(event: string, cb: () => void) {
           if (event === 'finish') finishCallback = cb;
         },
       };
       let nextCalled = false;
-      mw(req as any, res as any, () => {
+      mw(req as unknown as Request, res as unknown as Response, () => {
         nextCalled = true;
       });
       assert.ok(nextCalled);
       // Simulate response finish
       assert.ok(finishCallback);
-      finishCallback();
+      finishCallback!();
     });
 
     it('uses baseUrl when route.path is absent', () => {
       if (!sharedMetrics.available) return;
       const mw = metricsMiddleware(sharedMetrics);
 
-      let finishCallback: any;
+      let finishCallback: (() => void) | undefined;
       const req = { method: 'POST', baseUrl: '/api/v2' };
       const res = {
         statusCode: 201,
-        on(event: any, cb: any) {
+        on(event: string, cb: () => void) {
           if (event === 'finish') finishCallback = cb;
         },
       };
-      mw(req as any, res as any, () => {});
-      finishCallback();
+      mw(req as unknown as Request, res as unknown as Response, () => {});
+      finishCallback!();
     });
 
     it('uses "unknown" when neither route nor baseUrl exists', () => {
       if (!sharedMetrics.available) return;
       const mw = metricsMiddleware(sharedMetrics);
 
-      let finishCallback: any;
+      let finishCallback: (() => void) | undefined;
       const req = { method: 'GET' };
       const res = {
         statusCode: 404,
-        on(event: any, cb: any) {
+        on(event: string, cb: () => void) {
           if (event === 'finish') finishCallback = cb;
         },
       };
-      mw(req as any, res as any, () => {});
-      finishCallback();
+      mw(req as unknown as Request, res as unknown as Response, () => {});
+      finishCallback!();
     });
   });
 
   describe('metricsHandler', () => {
     it('returns 503 when metrics unavailable', async () => {
       const handler = metricsHandler(null);
-      let statusCode: any, contentType: any, body: any;
-      const res: any = {
-        status(s: any) {
+      let statusCode: number | undefined, contentType: string | undefined, body: string | undefined;
+      const res: ResStub = {
+        status(s: number) {
           statusCode = s;
           return res;
         },
-        type(t: any) {
+        type(t: string) {
           contentType = t;
           return res;
         },
-        send(b: any) {
+        send(b: string) {
           body = b;
           return res;
         },
       };
-      await handler({} as any, res);
+      await handler({} as Request, res as unknown as Response);
       assert.equal(statusCode, 503);
       assert.ok(body!.includes('unavailable'));
     });
@@ -825,22 +850,22 @@ describe('metrics.js', () => {
     it('returns 403 with no Authorization header', async () => {
       if (!sharedMetrics.available) return;
       const handler = metricsHandler(sharedMetrics);
-      let statusCode: any, body: any;
+      let statusCode: number | undefined, body: string | undefined;
       const req = { ip: '8.8.8.8', connection: {}, headers: {} };
-      const res: any = {
-        status(s: any) {
+      const res: ResStub = {
+        status(s: number) {
           statusCode = s;
           return res;
         },
-        type(t: any) {
+        type(t: string) {
           return res;
         },
-        send(b: any) {
+        send(b: string) {
           body = b;
           return res;
         },
       };
-      await handler(req as any, res);
+      await handler(req as unknown as Request, res as unknown as Response);
       assert.equal(statusCode, 403);
     });
 
@@ -850,10 +875,10 @@ describe('metrics.js', () => {
       process.env.METRICS_TOKEN = 'test-metrics-token';
       try {
         const handler = metricsHandler(sharedMetrics);
-        let statusCode: any;
+        let statusCode: number | undefined;
         const req = { ip: '127.0.0.1', connection: {}, headers: { authorization: 'Bearer wrong-token' } };
-        const res: any = {
-          status(s: any) {
+        const res: ResStub = {
+          status(s: number) {
             statusCode = s;
             return res;
           },
@@ -864,7 +889,7 @@ describe('metrics.js', () => {
             return res;
           },
         };
-        await handler(req as any, res);
+        await handler(req as unknown as Request, res as unknown as Response);
         assert.equal(statusCode, 403);
       } finally {
         process.env.METRICS_TOKEN = originalToken;
@@ -885,8 +910,8 @@ describe('metrics.js', () => {
         const handler = metricsHandler(sharedMetrics);
         let statusCode = 200;
         const req = { ip: '127.0.0.1', connection: {}, headers: {} };
-        const res: any = {
-          status(s: any) {
+        const res: ResStub = {
+          status(s: number) {
             statusCode = s;
             return res;
           },
@@ -903,7 +928,7 @@ describe('metrics.js', () => {
             return res;
           },
         };
-        await handler(req as any, res);
+        await handler(req as unknown as Request, res as unknown as Response);
         assert.equal(statusCode, 403);
       } finally {
         process.env.METRICS_TOKEN = originalToken;
@@ -918,15 +943,15 @@ describe('metrics.js', () => {
       process.env.METRICS_TOKEN = 'test-metrics-token';
       try {
         const handler = metricsHandler(sharedMetrics);
-        const headers: any = {};
-        let responseBody: any;
+        const headers: Record<string, string> = {};
+        let responseBody: string | undefined;
         const req = { ip: '203.0.113.5', connection: {}, headers: { authorization: 'Bearer test-metrics-token' } };
-        const res: any = {
-          set(k: any, v: any) {
+        const res: ResStub = {
+          set(k: string, v: string) {
             headers[k] = v;
             return res;
           },
-          end(b: any) {
+          end(b: string) {
             responseBody = b;
             return res;
           },
@@ -936,12 +961,12 @@ describe('metrics.js', () => {
           type() {
             return res;
           },
-          send(b: any) {
+          send(b: string) {
             responseBody = b;
             return res;
           },
         };
-        await handler(req as any, res);
+        await handler(req as unknown as Request, res as unknown as Response);
         assert.ok(responseBody);
       } finally {
         process.env.METRICS_TOKEN = originalToken;
@@ -959,29 +984,29 @@ describe('metrics.js', () => {
       };
       try {
         const handler = metricsHandler(sharedMetrics);
-        let statusCode: any, body: any;
+        let statusCode: number | undefined, body: string | undefined;
         const req = { ip: '127.0.0.1', connection: {}, headers: { authorization: 'Bearer test-metrics-token' } };
-        const res: any = {
+        const res: ResStub = {
           set() {
             return res;
           },
-          end(b: any) {
+          end(b: string) {
             body = b;
             return res;
           },
-          status(s: any) {
+          status(s: number) {
             statusCode = s;
             return res;
           },
           type() {
             return res;
           },
-          send(b: any) {
+          send(b: string) {
             body = b;
             return res;
           },
         };
-        await handler(req as any, res);
+        await handler(req as unknown as Request, res as unknown as Response);
         assert.equal(statusCode, 500);
         assert.ok(body!.includes('boom'));
       } finally {
@@ -995,10 +1020,10 @@ describe('metrics.js', () => {
     it('returns 403 for empty IP and no token', async () => {
       if (!sharedMetrics.available) return;
       const handler = metricsHandler(sharedMetrics);
-      let statusCode: any;
+      let statusCode: number | undefined;
       const req = { ip: '', connection: {}, headers: {} };
-      const res: any = {
-        status(s: any) {
+      const res: ResStub = {
+        status(s: number) {
           statusCode = s;
           return res;
         },
@@ -1009,7 +1034,7 @@ describe('metrics.js', () => {
           return res;
         },
       };
-      await handler(req as any, res);
+      await handler(req as unknown as Request, res as unknown as Response);
       assert.equal(statusCode, 403);
     });
   });
@@ -1022,7 +1047,7 @@ describe('metrics.js', () => {
     });
 
     it('returns no-op stop when metrics.available is false', () => {
-      const stop = startMetricsSampler({ available: false } as any);
+      const stop = startMetricsSampler({ available: false } as ReturnType<typeof createMetrics>);
       assert.equal(typeof stop, 'function');
       stop();
     });
@@ -1031,8 +1056,8 @@ describe('metrics.js', () => {
     function fakeMetrics() {
       const sets: Record<string, number> = {};
       const gauge = (name: string) => ({ set: (v: number) => { sets[name] = v; } });
-      const metrics: any = {
-        available: true,
+      const metrics = {
+        available: true as const,
         pgPoolTotalGauge: gauge('total'),
         pgPoolIdleGauge: gauge('idle'),
         pgPoolWaitingGauge: gauge('waiting'),
@@ -1082,25 +1107,25 @@ describe('metrics.js', () => {
     });
 
     it('returns no-op when metrics.available is false', () => {
-      const stop = startMetricsListener({ available: false } as any);
+      const stop = startMetricsListener({ available: false } as ReturnType<typeof createMetrics>);
       assert.equal(typeof stop, 'function');
       stop();
     });
 
     // Helper: retry HTTP request until server is listening (replaces fixed setTimeout)
-    function httpGetWithRetry(url: any, maxAttempts = 10): Promise<{ statusCode: any; body: string }> {
+    function httpGetWithRetry(url: string, maxAttempts = 10): Promise<{ statusCode: number | undefined; body: string }> {
       return new Promise((resolve, reject) => {
         let attempts = 0;
         function attempt() {
           attempts++;
-          const req = http.get(url, (res: any) => {
+          const req = http.get(url, (res) => {
             let data = '';
-            res.on('data', (chunk: any) => {
+            res.on('data', (chunk: Buffer) => {
               data += chunk;
             });
             res.on('end', () => resolve({ statusCode: res.statusCode, body: data }));
           });
-          req.on('error', (err: any) => {
+          req.on('error', (err: NodeJS.ErrnoException) => {
             if (err.code === 'ECONNREFUSED' && attempts < maxAttempts) {
               setTimeout(attempt, 20);
             } else {
@@ -1157,7 +1182,7 @@ describe('notifications/retry.js', () => {
   // Helper: advance mock timers and yield to let drain() async work complete.
   // mock.timers.tick() fires the setTimeout callbacks synchronously, but the
   // drain() function is async, so we need to yield the microtask queue.
-  async function tickAndDrain(ctx: any, ms: any) {
+  async function tickAndDrain(ctx: TestContext, ms: number) {
     ctx.mock.timers.tick(ms);
     // Yield to let async drain() promises settle
     await new Promise((r) => setImmediate(r));
@@ -1260,7 +1285,7 @@ describe('notifications/retry.js', () => {
       q.enqueue({
         sendFn: async () => {
           attempts++;
-          const err: any = new Error('token expired');
+          const err: Error & { code?: string } = new Error('token expired');
           err.code = 'messaging/not-registered';
           throw err;
         },
@@ -1279,7 +1304,7 @@ describe('notifications/retry.js', () => {
       q.enqueue({
         sendFn: async () => {
           attempts++;
-          const err: any = new Error('bad token');
+          const err: Error & { code?: string } = new Error('bad token');
           err.code = 'messaging/invalid-registration';
           throw err;
         },
@@ -1298,7 +1323,7 @@ describe('notifications/retry.js', () => {
       q.enqueue({
         sendFn: async () => {
           attempts++;
-          const err: any = new Error('bad arg');
+          const err: Error & { code?: string } = new Error('bad arg');
           err.code = 'messaging/invalid-argument';
           throw err;
         },

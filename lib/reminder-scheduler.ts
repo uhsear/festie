@@ -53,6 +53,21 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
   }
 
   const _firedCache = new Map<string, number>(); // `${userId}:${setId}`  timestamp (in-memory dedup)
+  let _seeded = false;
+
+  // A restart empties the cache, so the first tick reloads it from the inbox rows send() already wrote.
+  async function _seedDedupCache() {
+    const { rows } = await pool.query(
+      `SELECT user_id AS "userId", data_json->>'setId' AS "setId", MAX(created_at) AS "firedAt"
+       FROM notification_log
+       WHERE type = 'set_reminder' AND platform = 'inbox' AND created_at > NOW() - make_interval(secs => $1)
+         AND data_json->>'setId' IS NOT NULL
+       GROUP BY user_id, data_json->>'setId'`,
+      [config.REMINDER_DEDUP_TTL_MS / 1000],
+    );
+    for (const r of rows) _firedCache.set(`${r.userId}:${r.setId}`, new Date(r.firedAt).getTime());
+    _seeded = true;
+  }
 
   function _cleanDedupCache() {
     const cutoff = Date.now() - config.REMINDER_DEDUP_TTL_MS;
@@ -200,6 +215,9 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
       );
       if (festivals.length === 0) return;
 
+      // Fail closed: sending without the seed could repeat reminders the last process already sent.
+      if (!_seeded) await _seedDedupCache();
+
       const now = Date.now();
       _cleanDedupCache();
 
@@ -298,6 +316,7 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
       _timer = null;
     }
     _firedCache.clear();
+    _seeded = false;
   }
 
   return { start, stop, tick, _timer: () => _timer };
