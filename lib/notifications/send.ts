@@ -1076,5 +1076,3 @@ export function createSendService({
 
   return { send, sendToOfflineUsers, sendSilentSync, markRead };
 }
-
-export { _fcmAgent };
