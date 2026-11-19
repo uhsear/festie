@@ -1786,12 +1786,12 @@ export const genericIdParams = z.object({
 });
 export type GenericIdParams = z.infer<typeof genericIdParams>;
 
-export const idUserIdParams = z.object({
+const idUserIdParams = z.object({
   id: z.string().min(1, 'ID required').max(100),
   userId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/, 'Invalid user ID'),
 });
 
-export const idRoleParams = z.object({
+const idRoleParams = z.object({
   id: z.string().min(1, 'ID required').max(100),
   role: z.string().trim().toLowerCase().pipe(z.enum(['admin', 'user'])),
 });
