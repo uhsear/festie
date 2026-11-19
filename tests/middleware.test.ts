@@ -674,6 +674,16 @@ describe('middleware: idempotency key logic', () => {
     assert.equal(res2.replayed, null);
   });
 
+  it('a replay refreshes the entry, so the least recently used one is evicted at the cap', () => {
+    const { middleware, cache } = createIdempotencyMiddleware({ ttl: 5 * 60 * 1000, maxEntries: 3 });
+    const post = (k: string) => {
+      const res = mkIdemRes();
+      middleware({ method: 'POST', headers: { 'idempotency-key': k }, ip: '1.2.3.4' }, res, () => res.json({ k }));
+    };
+    post('a'); post('b'); post('a'); post('c');
+    assert.deepEqual([...cache.keys()].map((k) => k.split(':').pop()), ['a', 'c']);
+  });
+
   it('a resolver throw falls back to IP and still dedups', async () => {
     const { middleware } = createIdempotencyMiddleware({
       ttl: 5 * 60 * 1000,

@@ -46,6 +46,16 @@ function resolveClusterSize(config: any) {
   }
 }
 
+// Map iterates in insertion order: re-inserting a hit key moves it to the back so cap eviction drops the least recently used.
+function getAndTouch(map: Map<any, any>, key: any) {
+  const entry = map.get(key);
+  if (entry !== undefined) {
+    map.delete(key);
+    map.set(key, entry);
+  }
+  return entry;
+}
+
 function createRateLimiters({
   config,
   state,
@@ -150,7 +160,7 @@ function createRateLimiters({
     // In-memory fallback (per-process, cluster-aware divisor applied)
     const effectiveMax = fallbackMax(max);
     const now = Date.now();
-    let entry = fallbackMap.get(fallbackKey);
+    let entry = getAndTouch(fallbackMap, fallbackKey);
     if (!entry || now - entry.start > windowMs) {
       entry = { start: now, count: 0 };
       fallbackMap.set(fallbackKey, entry);
@@ -313,7 +323,7 @@ function createRateLimiters({
       }
       const effectiveMax = fallbackMax(config.AUTH_RATE_LIMIT_MAX);
       const now = Date.now();
-      let entry = map.get(ip);
+      let entry = getAndTouch(map, ip);
       if (!entry || now - entry.start > config.AUTH_RATE_LIMIT_WINDOW) {
         entry = { start: now, count: 0 };
         map.set(ip, entry);
@@ -339,7 +349,7 @@ function createRateLimiters({
 
   function consumeSocketRateLimit(scopeKey: any, max: any) {
     const now = Date.now();
-    let entry = state.socketRateLimits.get(scopeKey);
+    let entry = getAndTouch(state.socketRateLimits, scopeKey);
     if (!entry || now - entry.windowStart > config.SOCKET_EVENT_WINDOW) {
       entry = { windowStart: now, count: 0 };
       state.socketRateLimits.set(scopeKey, entry);
@@ -351,7 +361,7 @@ function createRateLimiters({
 
   function consumeUserAuthRateLimit(userId: any, max: any) {
     const now = Date.now();
-    let entry = state.userAuthRateLimits.get(userId);
+    let entry = getAndTouch(state.userAuthRateLimits, userId);
     if (!entry || now - entry.windowStart > config.AUTH_RATE_LIMIT_WINDOW) {
       entry = { windowStart: now, count: 0 };
       state.userAuthRateLimits.set(userId, entry);
@@ -376,7 +386,7 @@ function createRateLimiters({
 
   function consumeSocketConnectRateLimitLocal(ip: any) {
     const now = Date.now();
-    let entry = state.socketConnectRateLimits.get(ip);
+    let entry = getAndTouch(state.socketConnectRateLimits, ip);
     if (!entry || now - entry.windowStart > config.SOCKET_CONNECT_WINDOW) {
       entry = { windowStart: now, count: 0 };
       state.socketConnectRateLimits.set(ip, entry);
@@ -501,7 +511,7 @@ function createPasswordResetRateLimit(
     // In-memory fallback (per-process, cluster-aware divisor applied)
     const effectiveMax = Math.max(1, Math.ceil(MAX_ATTEMPTS / CLUSTER_SIZE));
     const now = Date.now();
-    let entry = buckets.get(email);
+    let entry = getAndTouch(buckets, email);
     if (!entry || now - entry.start > WINDOW_MS) {
       entry = { start: now, count: 0 };
       buckets.set(email, entry);
@@ -577,7 +587,7 @@ function _createSocketEventLimiter(name: string, max: number, windowMs: number) 
         return { allowed: true, remaining: max, resetAt: Date.now() + windowMs };
       }
       const now = Date.now();
-      let entry = buckets.get(userId);
+      let entry = getAndTouch(buckets, userId);
       if (!entry || now - entry.windowStart > windowMs) {
         entry = { windowStart: now, count: 0 };
         buckets.set(userId, entry);
