@@ -358,12 +358,30 @@ export function createInterestConversion({ pool, stores, emitter, log, config }:
     const existingSetIds = new Set<string>(days.flatMap((day: any) => (day.sets ?? []).map((set: any) => set.id)));
     const { rows } = await client.query(
       `
-      SELECT fp.id, fp.interests_json AS marks,
-        COALESCE((SELECT jsonb_object_agg(p.set_id, p.priority) FROM festival_profile_picks p WHERE p.profile_id = fp.id), '{}'::jsonb) AS picks
-      FROM festival_profiles fp
-      WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL AND fp.interests_json <> '{}'::jsonb
-      ORDER BY fp.id
-      FOR UPDATE OF fp
+      SELECT
+        fp.id,
+        fp.interests_json AS marks,
+        COALESCE(
+          (
+            SELECT
+              jsonb_object_agg(p.set_id, p.priority)
+            FROM
+              festival_profile_picks p
+            WHERE
+              p.profile_id = fp.id
+          ),
+          '{}'::jsonb
+        ) AS picks
+      FROM
+        festival_profiles fp
+      WHERE
+        fp.festival_id = $1
+        AND fp.deleted_at IS NULL
+        AND fp.interests_json <> '{}'::jsonb
+      ORDER BY
+        fp.id
+      FOR UPDATE OF
+        fp
     `,
       [festivalId],
     );
@@ -390,9 +408,15 @@ export function createInterestConversion({ pool, stores, emitter, log, config }:
       }
       // The new picks go first, so a pick the mirror already holds keeps its priority.
       await client.query(
-        `UPDATE festival_profiles
-         SET interests_json = $2::jsonb, picks_json = $3::jsonb || COALESCE(picks_json, '{}'::jsonb), updated_at = NOW()
-         WHERE id = $1`,
+        `
+  UPDATE festival_profiles
+  SET
+    interests_json = $2::jsonb,
+    picks_json = $3::jsonb || COALESCE(picks_json, '{}'::jsonb),
+    updated_at = NOW()
+  WHERE
+    id = $1
+`,
         [row.id, JSON.stringify(plan.marks), JSON.stringify(plan.added)],
       );
       changedIds.push(row.id);

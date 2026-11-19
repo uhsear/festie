@@ -305,9 +305,27 @@ export interface SyncedFestival {
 async function rewriteCopies(client: any, festivalIds: string[], artist: ArtistRecord): Promise<SyncedFestival[]> {
   if (festivalIds.length === 0) return [];
   const { rows: festivals } = await client.query(
-    `SELECT id, COALESCE(b2b_separator, 'b2b') AS separator, lineup, published_at, time_zone,
-            (SELECT MAX(d.date) FROM festival_days d WHERE d.festival_id = festivals.id AND d.date <> '') AS last_date
-       FROM festivals WHERE id = ANY($1::text[])`,
+    `
+  SELECT
+    id,
+    COALESCE(b2b_separator, 'b2b') AS separator,
+    lineup,
+    published_at,
+    time_zone,
+    (
+      SELECT
+        MAX(d.date)
+      FROM
+        festival_days d
+      WHERE
+        d.festival_id = festivals.id
+        AND d.date <> ''
+    ) AS last_date
+  FROM
+    festivals
+  WHERE
+    id = ANY ($1::text[])
+`,
     [festivalIds],
   );
   const { rows: sets } = await client.query(

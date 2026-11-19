@@ -22,7 +22,7 @@ interface Props {
   /** Festival days, zone and stage pins: with `days` each clash shows a leave-at plan. */
   days?: FestivalDay[];
   timeZone?: string;
-  stages?: ReadonlyArray<Pick<Stage, 'id' | 'latitude' | 'longitude'>>;
+  stages?: readonly Pick<Stage, 'id' | 'latitude' | 'longitude'>[];
   /**
    * Resolve the user's pick priority for a set. When both sides of a clash are
    * `must`, the prompt escalates to an explicit "you have a conflict" — the
