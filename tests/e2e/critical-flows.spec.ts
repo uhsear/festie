@@ -126,7 +126,7 @@ test.describe('critical flows', () => {
       await page.getByRole('dialog').getByRole('button', { name: 'Send SOS', exact: true }).click();
       await expect(page.getByRole('tabpanel').getByText('You raised an SOS')).toBeVisible();
 
-      const alert = watcherPage.getByRole('tabpanel').getByText(`${raiser} raised an SOS`);
+      const alert = watcherPage.getByTestId('sos-banner').filter({ hasText: `${raiser} raised an SOS` });
       await expect(alert).toBeVisible({ timeout: 30_000 });
 
       await page.getByRole('tabpanel').getByRole('button', { name: "I'm safe — clear SOS" }).click();
@@ -189,11 +189,18 @@ test.describe('critical flows', () => {
       await expect(page.getByText('Not sent yet')).toHaveCount(0, { timeout: 30_000 });
     }
 
-    const res = await page.context().request.get(`${app.baseUrl}/api/v1/crews/${crew.id}/expenses`);
-    expect(res.ok()).toBe(true);
-    const { data } = (await res.json()) as { data: { description: string }[] };
+    // A reconnect refetch can drop the "Not sent yet" row before the replay lands, so poll the server.
     for (const description of descriptions) {
-      expect(data.filter((e) => e.description === description)).toHaveLength(1);
+      await expect
+        .poll(
+          async () => {
+            const res = await page.context().request.get(`${app.baseUrl}/api/v1/crews/${crew.id}/expenses`);
+            const { data } = (await res.json()) as { data: { description: string }[] };
+            return data.filter((e) => e.description === description).length;
+          },
+          { timeout: 30_000 },
+        )
+        .toBe(1);
     }
   });
 
