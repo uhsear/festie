@@ -352,7 +352,7 @@ All workflows in `.github/workflows/`:
 | `android-e2e.yml` | manual dispatch | Android emulator + Maestro smoke tests (~25 min) |
 | `ios-e2e.yml` | manual dispatch | iOS simulator + Maestro smoke tests, macOS 15 runner (~20 min) |
 
-**CI coverage gate** (`ci.yml` `test` job): `--lines 87 --branches 80 --functions 89 --statements 87`. The `c8` config is in `.c8rc.json` at the repo root.
+**CI coverage gate** (`ci.yml` `test` job): `--lines 87 --branches 80 --functions 89 --statements 87`. The `c8` config is in `config/c8rc.json`.
 
 **Secrets required by CI:**
 - `TEST_USERNAME` / `TEST_PASSWORD` — used by E2E and Maestro flows
