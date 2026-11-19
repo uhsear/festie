@@ -47,6 +47,7 @@ import { COPY, MEETING_POINT_KINDS, meetingPointKind } from '@festie/shared/cons
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import IconButton from '../ui/IconButton';
 import { inputBase } from '../../lib/styles';
+import { meetingPointsQuery } from '../../lib/queryPersist';
 import CrewStatus from './CrewStatus';
 import LiveLocationControls from './LiveLocationControls';
 import { useRovingTabs } from '@/hooks/useRovingTabs';
@@ -164,14 +165,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     isLoading,
     isError,
     refetch,
-  } = useQuery<CrewMeetingPoint[]>({
-    queryKey: ['meeting-points', crewId],
-    queryFn: async () => {
-      const res = await api.get<CrewMeetingPoint[] | { meetingPoints: CrewMeetingPoint[] }>(`/crews/${crewId}/meeting-points`);
-      return Array.isArray(res) ? res : res?.meetingPoints || [];
-    },
-    enabled: !!crewId,
-  });
+  } = useQuery({ ...meetingPointsQuery(crewId), enabled: !!crewId });
 
   // A failed past query shows nothing; the active list owns the error state.
   const { data: pastPoints = [] } = useQuery<CrewMeetingPoint[]>({
