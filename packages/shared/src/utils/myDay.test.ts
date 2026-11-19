@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
   buildMyDay,
   buildPlanList,
@@ -25,18 +26,7 @@ const STAGES = [
 ];
 
 function makeSet(id: string, startTime: string, endTime: string, extra: Partial<FestivalSet> = {}): FestivalSet {
-  return {
-    id,
-    festivalId: 'f1',
-    stageId: 's1',
-    dayIndex: 0,
-    startTime,
-    endTime,
-    artist: id.toUpperCase(),
-    createdAt: '',
-    updatedAt: '',
-    ...extra,
-  };
+  return makeFestivalSet({ id, festivalId: 'f1', stageId: 's1', dayIndex: 0, startTime, endTime, artist: id.toUpperCase(), createdAt: '', updatedAt: '', ...extra });
 }
 
 function meet(id: string, meetAt: string, extra: Partial<CrewMeetingPoint> = {}): CrewMeetingPoint {

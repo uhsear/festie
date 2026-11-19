@@ -22,15 +22,12 @@
  */
 
 import crypto from 'crypto';
+import { bootServer } from './_boot-server';
 import { afterEach, describe, test } from 'node:test';
 import {
   assert,
-  createFestivalPlanner,
   DEFAULT_PASSWORD,
-  ensureTestSchema,
   Pool,
-  PUBLIC_DIR,
-  request,
   TEST_DATABASE_URL,
   TRUSTED_MUTATION_HEADER,
 } from './_integration-helpers';
@@ -60,31 +57,17 @@ async function cleanupCreatedUsers() {
   createdUserIds.length = 0;
 }
 
-// Local, not the helper's: the shared `startServer` TRUNCATEs every table, which
+// No fixtures: the shared `startServer` default TRUNCATEs every table, which
 // would wipe the users of any suite running beside this one, and it does not
 // pin RESEND_API_KEY empty.
 async function startServer(overrides: Record<string, unknown> = {}) {
-  await ensureTestSchema();
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR,
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
+  return bootServer(TEST_DATABASE_URL, {
     AUTH_RATE_LIMIT_MAX: 1000,
     // Keeps every send on sendEmail's graceful-degrade path — no network, no
     // real mail. Assertions look at the token row, never at a send.
     RESEND_API_KEY: '',
     ...overrides,
   });
-  return {
-    planner,
-    request: request(planner.app),
-    async close() {
-      if (typeof planner.close === 'function') await planner.close();
-      else if (planner.server) await new Promise<void>((r) => planner.server.close(() => r()));
-    },
-  };
 }
 
 // `users.username` is capped at 30 chars and silently truncated, so keep the

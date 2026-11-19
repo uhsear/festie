@@ -181,8 +181,8 @@ export default function setupSocketHandlers(deps: any) {
     const sessionToken = resolveSocketToken(socket, userToken, config.USER_SESSION_COOKIE);
     const session = await validateUserSession(sessionToken);
     if (!session) {
-      disconnectSocket(socket, io);
-      return { ok: false, error: 'Authentication required' };
+      // Callers ack first, then disconnect: the disconnect closes the transport, so a later ack arrives as {}.
+      return { ok: false, error: 'Authentication required', disconnect: true };
     }
     if (!consumeSocketRateLimit(`${rateLimitScope}:${session.userId}`, config.SOCKET_JOIN_RATE_LIMIT)) {
       socket.emit('error', { message: 'Realtime rate limit exceeded' });
@@ -277,7 +277,9 @@ export default function setupSocketHandlers(deps: any) {
           rateLimitScope: 'join',
         });
         if (!result.ok) {
-          return respond({ ok: false, error: result.error, code: result.code });
+          respond({ ok: false, error: result.error, code: result.code });
+          if (result.disconnect) disconnectSocket(socket, io);
+          return;
         }
         respond({ ok: true, profileId: result.profile.id });
       } catch (error: any) {
@@ -722,7 +724,9 @@ export default function setupSocketHandlers(deps: any) {
           if (result.error === 'Authentication required') {
             log.warn('reconnect:restore session validation failed', { festivalId, socketId: socket.id });
           }
-          return respond({ ok: false, error: result.error, code: result.code });
+          respond({ ok: false, error: result.error, code: result.code });
+          if (result.disconnect) disconnectSocket(socket, io);
+          return;
         }
 
         log.info('reconnect:restore success', { userId: result.session.userId, festivalId });

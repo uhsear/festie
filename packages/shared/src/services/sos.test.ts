@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { clearCrewSos, sosErrorMessage } from './sos';
+import { clearCrewSos, sosErrorMessage, toSosPosition } from './sos';
 import { api, ApiClientError } from './api';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
 import type { SosEntry } from '../types';
@@ -75,5 +75,18 @@ describe('sosErrorMessage', () => {
     expect(sosErrorMessage(err(500), 'send')).toBe('Something went wrong on our side. Try again in a minute.');
     expect(sosErrorMessage('weird', 'send')).toBe('Could not send your SOS. Try again.');
     expect(sosErrorMessage('weird', 'clear')).toBe('Could not clear the SOS. Try again.');
+  });
+});
+
+describe('toSosPosition', () => {
+  it('maps a geolocation fix to the SOS wire position', () => {
+    expect(
+      toSosPosition({ coords: { latitude: 1.5, longitude: -2.5, accuracy: 12 }, timestamp: 0 }),
+    ).toEqual({ lat: 1.5, lng: -2.5, accuracy: 12, capturedAt: '1970-01-01T00:00:00.000Z' });
+  });
+
+  it('drops a null accuracy', () => {
+    const out = toSosPosition({ coords: { latitude: 0, longitude: 0, accuracy: null }, timestamp: 0 });
+    expect(out.accuracy).toBeUndefined();
   });
 });

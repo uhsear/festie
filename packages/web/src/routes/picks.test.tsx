@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
+import type { FestivalSet } from '@festie/shared/types';
 import { act, render, screen, fireEvent, within, waitFor } from '@testing-library/react';
 
 // Mock dependencies
@@ -103,19 +105,8 @@ const STAGES = [
   { id: 'st2', name: 'Sahara' },
 ];
 
-function makeSet(id: string, artist: string, extra: Record<string, unknown> = {}) {
-  return {
-    id,
-    festivalId: 'f1',
-    artist,
-    stageId: 'st1',
-    startTime: '14:00',
-    endTime: '15:00',
-    dayIndex: 0,
-    createdAt: '',
-    updatedAt: '',
-    ...extra,
-  };
+function makeSet(id: string, artist: string, extra: Partial<FestivalSet> = {}): FestivalSet {
+  return makeFestivalSet({ id, festivalId: 'f1', artist, stageId: 'st1', dayIndex: 0, createdAt: '', updatedAt: '', ...extra });
 }
 
 const picksOf = (picks: Record<string, string>) => ({ id: 'p1', userId: 'u1', picks, notes: {} });

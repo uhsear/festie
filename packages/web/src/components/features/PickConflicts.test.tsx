@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
+import type { FestivalSet } from '@festie/shared/types';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ConflictGroup } from '@festie/shared/utils';
@@ -69,18 +71,8 @@ vi.mock('lucide-react', () => ({
 
 import PickConflicts from './PickConflicts';
 
-function makeSet(id: string, overrides: Record<string, unknown> = {}) {
-  return {
-    id,
-    festivalId: 'f1',
-    stageId: 'st1',
-    artist: `Artist ${id}`,
-    startTime: '14:00',
-    endTime: '15:00',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
+function makeSet(id: string, overrides: Partial<FestivalSet> = {}): FestivalSet {
+  return makeFestivalSet({ id, festivalId: 'f1', stageId: 'st1', artist: `Artist ${id}`, ...overrides });
 }
 
 function setState() {

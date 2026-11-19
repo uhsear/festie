@@ -29,7 +29,7 @@ import { sharePoster, wrapShareLink } from '../lib/sharePoster';
 import WrapHero from '../components/wrap/WrapHero';
 import PosterPreview from '../components/wrap/PosterPreview';
 import WrapCarousel from '../components/wrap/WrapCarousel';
-import { useRovingTabs } from '../hooks/useRovingTabs';
+import SegmentedTablist from '../components/ui/SegmentedTablist';
 import { RATING_META } from '../lib/ratingIcon';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { Sparkles, Trophy, Share2, Users } from 'lucide-react';
@@ -56,8 +56,6 @@ function WrapPageInner() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { toast, toastError } = useToast();
-  const wrapTabsRef = useRef<HTMLDivElement>(null);
-  useRovingTabs(wrapTabsRef);
   const [sharing, setSharing] = useState(false);
   const [tab, setTab] = useState<'me' | 'crew'>('me');
 
@@ -152,35 +150,19 @@ function WrapPageInner() {
   // Tab bar — Personal vs Crew wrap.
   const tabBar = (
     <div className="max-w-lg mx-auto">
-      <div
-        ref={wrapTabsRef}
-        role="tablist"
-        aria-label="Wrap view"
-        className="grid grid-cols-2 gap-1 p-1 rounded-xl bg-bg-card border border-border"
-      >
-        <button
-          role="tab"
-          aria-selected={tab === 'me'}
-          aria-controls="wrap-tab-panel"
-          onClick={() => setTab('me')}
-          className={`min-h-[40px] rounded-lg text-sm font-medium transition-colors ${
-            tab === 'me' ? 'bg-accent-aqua text-bg-primary' : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          You
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === 'crew'}
-          aria-controls="wrap-tab-panel"
-          onClick={() => setTab('crew')}
-          className={`min-h-[40px] rounded-lg text-sm font-medium transition-colors ${
-            tab === 'crew' ? 'bg-accent-aqua text-bg-primary' : 'text-text-secondary hover:text-text-primary'
-          }`}
-        >
-          {COPY.wrap.crewName}
-        </button>
-      </div>
+      <SegmentedTablist
+        label="Wrap view"
+        panelId="wrap-tab-panel"
+        options={[
+          { value: 'me', label: 'You' },
+          { value: 'crew', label: COPY.wrap.crewName },
+        ]}
+        value={tab}
+        onChange={setTab}
+        tone="solid"
+        className="grid grid-cols-2 gap-1 rounded-xl bg-bg-card"
+        tabClassName="min-h-[40px] rounded-lg text-sm transition-colors"
+      />
     </div>
   );
 

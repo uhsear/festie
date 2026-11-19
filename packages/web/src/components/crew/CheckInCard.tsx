@@ -2,7 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useEffect, useState } from 'react';
-import { checkinErrorMessage } from '@festie/shared/services';
+import { checkinErrorMessage, toSosPosition } from '@festie/shared/services';
 import type { SosPosition } from '@festie/shared/services';
 import { useCheckIn } from '@festie/shared/hooks';
 import { CHECKIN_COPY, CHECKIN_DURATIONS } from '@festie/shared/constants';
@@ -19,13 +19,7 @@ function oneShotPosition(): Promise<SosPosition | undefined> {
   return new Promise((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(undefined);
     navigator.geolocation.getCurrentPosition(
-      (pos) =>
-        resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy ?? undefined,
-          capturedAt: new Date(pos.timestamp).toISOString(),
-        }),
+      (pos) => resolve(toSosPosition(pos)),
       () => resolve(undefined),
       { enableHighAccuracy: false, maximumAge: 60_000, timeout: 8_000 },
     );

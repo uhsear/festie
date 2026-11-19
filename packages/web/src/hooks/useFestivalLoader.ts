@@ -78,7 +78,7 @@ export function useFestivalLoader() {
       }
     ).persist;
     const probe = () => {
-      if (!cancelled) checkSession().catch(() => {});
+      if (!cancelled) checkSession().catch((err) => console.warn('Session check failed', err));
     };
     if (!persist || persist.hasHydrated()) {
       probe();
@@ -105,18 +105,18 @@ export function useFestivalLoader() {
         const fests = useFestivalStore.getState().festivals;
         if (linkedId) stripFestivalParam();
         if (linkedId && fests.some((f) => f.id === linkedId)) {
-          selectFestival(linkedId).catch(() => {});
+          selectFestival(linkedId).catch((err) => console.warn('Festival select failed', err));
           return;
         }
         const cached = useFestivalStore.getState().currentFestival;
         // Signed-in users revalidate in the effect below; guests would otherwise keep the cache forever.
-        if (cached && !useAuthStore.getState().user) selectFestival(cached.id).catch(() => {});
+        if (cached && !useAuthStore.getState().user) selectFestival(cached.id).catch((err) => console.warn('Festival select failed', err));
         if (fests.length > 0 && !cached) {
           const pick = pickDefaultFestival(fests);
-          if (pick) selectFestival(pick.id).catch(() => {});
+          if (pick) selectFestival(pick.id).catch((err) => console.warn('Festival select failed', err));
         }
       })
-      .catch(() => {});
+      .catch((err) => console.warn('Festival list load failed', err));
   }, [loadFestivals, selectFestival, userId]); // userId: refetch after sign-in/out, logout resets the stores
 
   // Tab back to the app on a later day: move the day tab to today (no fetch).
@@ -131,7 +131,7 @@ export function useFestivalLoader() {
   // Load crews whenever auth state transitions to logged-in
   useEffect(() => {
     if (userId) {
-      loadCrews().catch(() => {});
+      loadCrews().catch((err) => console.warn('Crews load failed', err));
     }
   }, [userId, loadCrews]);
 
@@ -187,7 +187,7 @@ export function useFestivalLoader() {
   // Re-fetch festival profiles on login once a festival is selected
   useEffect(() => {
     if (userId && currentFestivalId) {
-      selectFestival(currentFestivalId).catch(() => {});
+      selectFestival(currentFestivalId).catch((err) => console.warn('Festival select failed', err));
     }
   }, [userId, currentFestivalId, selectFestival]);
 

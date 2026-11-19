@@ -15,6 +15,7 @@ import request from 'supertest';
 import express from 'express';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import { bootServer } from './_boot-server';
 import { serializeExportCrewProfile } from '../lib/helpers/export-utils.js';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -108,27 +109,18 @@ async function cleanupById(pool: any) {
 }
 
 async function startServer() {
-  if (!createFestivalPlanner) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try {
-    await seedFestival(pool);
-  } finally {
-    await pool.end();
-  }
-  const planner = await (createFestivalPlanner as any)({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR: fs.existsSync(PUBLIC_DIR) ? PUBLIC_DIR : path.join(__dirname, '..'),
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-    EXPORT_COOLDOWN_MS: 10, // tight cooldown so back-to-back tests don't 429
-  });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  return {
-    planner,
-    request: request(planner.app),
-    async close() { await planner.close(); },
-  };
+  return bootServer(
+    TEST_DATABASE_URL!,
+    { EXPORT_COOLDOWN_MS: 10 }, // tight cooldown so back-to-back tests don't 429
+    async () => {
+      const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+      try {
+        await seedFestival(pool);
+      } finally {
+        await pool.end();
+      }
+    },
+  );
 }
 
 async function registerUser(server: any, suffix: any) {

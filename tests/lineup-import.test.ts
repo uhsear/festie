@@ -16,27 +16,22 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import fs from 'fs';
-import path from 'path';
 import { after, afterEach, describe, mock, test } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
+import { bootServer } from './_boot-server';
 import createLineupImportRoute from '../routes/lineup-import';
 import { createLineupImportsStore } from '../lib/db/stores/lineup-imports';
 import { planLineupImport, withLockedArtists } from '../lib/lineup-import-plan';
 import { artistNameKey } from '../lib/artist-key';
-import { fileURLToPath } from 'url';
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 // DB skip-gate: these integration tests require a live Postgres database.
 // Set TEST_DATABASE_URL to run them (always set in CI). See tests/README.md.
 const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
-const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const ADMIN_PASSWORD = 'test-admin-password-pass';
@@ -112,24 +107,12 @@ async function cleanupById(pool: any) {
 }
 
 async function startServer() {
-  if (!createFestivalPlanner) return;
-  const pool = new Pool({ connectionString: TEST_DATABASE_URL });
-  try { await seedFestival(pool); } finally { await pool.end(); }
-  const planner = await (createFestivalPlanner as any)({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR: fs.existsSync(PUBLIC_DIR) ? PUBLIC_DIR : path.join(__dirname, '..'),
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-    // Intentionally leave SPOTIFY_* unset so the route's internal spotify module stays disabled;
-    // if the test env has creds, we still force skipSpotify:true in every request payload.
+  // Intentionally leave SPOTIFY_* unset so the route's internal spotify module stays disabled;
+  // if the test env has creds, we still force skipSpotify:true in every request payload.
+  return bootServer(TEST_DATABASE_URL!, {}, async () => {
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try { await seedFestival(pool); } finally { await pool.end(); }
   });
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  return {
-    planner,
-    request: request(planner.app),
-    async close() { await planner.close(); },
-  };
 }
 
 async function registerUser(server: any, suffix: any) {

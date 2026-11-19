@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
   GRID_ZOOM_LEVELS, buildClashMarks, defaultZoomIndex, gridNeighbour, groupUntimedByStage,
   nextPickInCycle, twoUpColumnWidth,
@@ -10,10 +11,7 @@ const T0 = Date.UTC(2026, 5, 15, 10, 0);
 const MIN = 60000;
 
 function makeSet(id: string, extra: Partial<FestivalSet> = {}): FestivalSet {
-  return {
-    id, festivalId: 'f', stageId: 'main', artist: id.toUpperCase(),
-    createdAt: '2026-01-01T00:00:00Z', updatedAt: '2026-01-01T00:00:00Z', ...extra,
-  } as FestivalSet;
+  return makeFestivalSet({ id, festivalId: 'f', stageId: 'main', artist: id.toUpperCase(), ...extra });
 }
 
 /** Pick from `startMin` to `endMin` minutes after 10:00. */

@@ -11,7 +11,7 @@
         "preset": "desktop",
         "throttlingMethod": "simulate",
         "chromeFlags": "--no-sandbox --headless=new",
-        "budgetPath": "./lighthouse-budget.json"
+        "budgetPath": "./config/lighthouse-budget.json"
       }
     },
     "assert": {

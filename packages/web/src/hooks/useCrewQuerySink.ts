@@ -35,11 +35,11 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
 export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
   const reloadMeetingPoints = (crewId: string) => {
     void queryClient.invalidateQueries({ queryKey: ['meeting-points', crewId] });
-    useCrewStore.getState().loadMeetingPoints(crewId).catch(() => {});
+    useCrewStore.getState().loadMeetingPoints(crewId).catch((err) => console.warn('Crew meeting points reload failed', err));
   };
   const reloadPolls = (crewId: string) => {
     void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
-    useCrewStore.getState().loadPolls(crewId).catch(() => {});
+    useCrewStore.getState().loadPolls(crewId).catch((err) => console.warn('Crew polls reload failed', err));
   };
   const sink: CrewRealtimeSink = {
     onHomeBaseUpdated: (crewId, payload) => {
@@ -61,14 +61,14 @@ export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
       void useCrewStore
         .getState()
         .loadPacking(crewId)
-        .catch(() => {});
+        .catch((err) => console.warn('Crew packing reload failed', err));
     },
     onRidesChanged: (crewId) => {
       if (useCrewStore.getState().activeCrew?.id !== crewId) return;
       void useCrewStore
         .getState()
         .loadRides(crewId)
-        .catch(() => {});
+        .catch((err) => console.warn('Crew rides reload failed', err));
     },
     onActivityLogged: (crewId) => {
       void queryClient.invalidateQueries({ queryKey: ['crew-activity', crewId] });

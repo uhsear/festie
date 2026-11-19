@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalSet, Priority } from '@festie/shared/types';
@@ -35,7 +36,7 @@ vi.mock('@festie/shared/hooks', () => ({
 import AlsoPlaysSection from './AlsoPlaysSection';
 
 const makeSet = (id: string): FestivalSet =>
-  ({ id, festivalId: 'f1', stageId: 'st2', artist: 'Odesza', startTime: '21:00' }) as FestivalSet;
+  makeFestivalSet({ id, festivalId: 'f1', stageId: 'st2', artist: 'Odesza', startTime: '21:00' });
 
 const slot = { set: makeSet('s2'), when: 'Sat 9:00 PM', day: 'Sat' };
 

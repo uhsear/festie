@@ -5,6 +5,8 @@ import { useState } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { AlertCircle, X } from 'lucide-react';
 import { raiseSos, sosErrorMessage, isApiClientError } from '@festie/shared';
+import { toSosPosition } from '@festie/shared/services';
+import type { SosPosition } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
@@ -25,19 +27,14 @@ interface Props {
 // wait is capped at SOS_FIX_BUDGET_MS, because the geolocation timeout only
 // starts after the permission prompt is answered. Matches mobile's budget.
 const SOS_FIX_BUDGET_MS = 4_000;
-function oneShotPosition(): Promise<{ lat: number; lng: number; accuracy?: number; capturedAt: string } | undefined> {
+function oneShotPosition(): Promise<SosPosition | undefined> {
   return new Promise((resolve) => {
     if (typeof navigator === 'undefined' || !navigator.geolocation) return resolve(undefined);
     const budget = setTimeout(() => resolve(undefined), SOS_FIX_BUDGET_MS);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         clearTimeout(budget);
-        resolve({
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-          accuracy: pos.coords.accuracy ?? undefined,
-          capturedAt: new Date(pos.timestamp).toISOString(),
-        });
+        resolve(toSosPosition(pos));
       },
       () => {
         clearTimeout(budget);

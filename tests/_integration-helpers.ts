@@ -12,6 +12,7 @@ import { Pool } from 'pg';
 
 import { createFestivalPlanner } from '../server';
 import { ensureTestSchema as ensureTestSchemaFor } from './_test-schema';
+import { bootServer } from './_boot-server';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -128,33 +129,14 @@ async function seedTestData(databaseUrl: string, festivals: any[] = createFestiv
   }
 }
 
-async function startServer(overrides: Record<string, any> = {}) {
-  await ensureTestSchema();
-  await truncateAllTables(TEST_DATABASE_URL as string);
-  await seedTestData(TEST_DATABASE_URL as string);
-
-  const planner = await createFestivalPlanner({
-    DATABASE_URL: TEST_DATABASE_URL,
-    PUBLIC_DIR,
-    NODE_ENV: 'test',
-    REDIS_ENABLED: 'false',
-    PUBLIC_ORIGIN: '',
-    ...overrides,
-  });
-
-  await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
-  const address = planner.server.address() as any;
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-
-  return {
-    baseUrl,
-    databaseUrl: TEST_DATABASE_URL as string,
-    planner,
-    request: request(planner.app),
-    async close() {
-      await planner.close();
-    },
-  };
+async function startServer(
+  overrides: Record<string, any> = {},
+  fixtures: () => Promise<void> = async () => {
+    await truncateAllTables(TEST_DATABASE_URL as string);
+    await seedTestData(TEST_DATABASE_URL as string);
+  },
+) {
+  return bootServer(TEST_DATABASE_URL as string, overrides, fixtures);
 }
 
 async function registerUser(server: any, username: string, password: string = DEFAULT_PASSWORD) {

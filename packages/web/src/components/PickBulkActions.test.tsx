@@ -1,4 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
+import type { FestivalSet } from '@festie/shared/types';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 const festivalState: Record<string, unknown> = {};
@@ -16,16 +18,17 @@ vi.mock('../hooks/useUndoNotifier', () => ({ useUndoNotifier: () => ({}) }));
 
 import PickBulkActions from './PickBulkActions';
 
-const makeSet = (id: string, stageId: string, dayIndex: number, genres: string[]) => ({
-  id,
-  festivalId: 'f1',
-  stageId,
-  dayIndex,
-  artist: id,
-  artists: [{ id: `a-${id}`, name: id, genres }],
-  createdAt: '',
-  updatedAt: '',
-});
+const makeSet = (id: string, stageId: string, dayIndex: number, genres: string[]): FestivalSet =>
+  makeFestivalSet({
+    id,
+    festivalId: 'f1',
+    stageId,
+    dayIndex,
+    artist: id,
+    artists: [{ id: `a-${id}`, name: id, genres }],
+    createdAt: '',
+    updatedAt: '',
+  });
 
 describe('PickBulkActions', () => {
   beforeEach(() => {
