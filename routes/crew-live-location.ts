@@ -2,6 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 
@@ -53,6 +54,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
     redis,
     emitter,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
   const FLAG_OFF_MESSAGE = 'Live location is turned off right now.';
@@ -67,6 +69,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
     rateLimit(30, 'crew-live-location'),
     validateParams(schemas.crewIdParams),
     validate(schemas.liveLocationFix),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         if (config?.LIVE_LOCATION_ENABLED === false) {
@@ -77,8 +80,6 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier(params.crewId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const nowMs = Date.now();
         const exp = Date.parse(body.expiresAt);
@@ -133,6 +134,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
     userAuth,
     rateLimit(30, 'crew-live-location-stop'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         if (config?.LIVE_LOCATION_ENABLED === false) {
@@ -143,8 +145,6 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
         const userId = req.user.userId;
 
         // Membership first, so a client cannot spray peer-stopped into other crews.
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         void dropLivePosition(redis, crewId, userId);
         if (io) io.to('crew:' + crewId).emit('location:peer-stopped', { _v: 1, crewId, userId, reason: 'stop' });
