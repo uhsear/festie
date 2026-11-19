@@ -1,5 +1,8 @@
 const { defineConfig } = require('@playwright/test');
 
+// Local prerequisites: build the SPA (`pnpm --dir packages --filter @festie/web build`),
+// install a browser (`npx playwright install chromium`), and set TEST_DATABASE_URL.
+// See tests/README.md.
 const artifactDir = process.env.PLAYWRIGHT_ARTIFACT_DIR || 'output/playwright';
 
 module.exports = defineConfig({
