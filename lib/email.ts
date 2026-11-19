@@ -390,3 +390,31 @@ export async function sendCrewReformEmail({
   const text = `Hey ${username || 'there'},\n\n${crew} is getting back together${fest}.\n\nJoin the crew: ${url}\n\n${footer.text}`;
   return sendEmail({ to, subject: `${crew} reformed${fest}`, html, text, headers: reengagementHeaders(config), config, log, _client });
 }
+
+const POLICY_NOTICE_LINE = 'This is a service notice about changes to the Festie Privacy Policy and Terms. We send it to every account.';
+
+/**
+ * Policy-update notice. Transactional legal mail, so the caller sends it regardless of the
+ * marketing and re-engagement opt-outs, and it carries no List-Unsubscribe header.
+ * `html` is the admin's own markup; without it the body is the escaped text, one paragraph per blank line.
+ * dedupe is off: the policy_notice_sends ledger is the idempotency guard, and the 5-minute
+ * address+subject guard would report a suppressed send as delivered.
+ */
+export async function sendPolicyNoticeEmail({ to, subject, text, html, config, log, _client }: any) {
+  const bodyHtml =
+    html ??
+    text
+      .split(/\n{2,}/)
+      .map((p: string) => `<p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  return sendEmail({
+    to,
+    subject,
+    html: _wrapTemplate('Policy update', bodyHtml, POLICY_NOTICE_LINE),
+    text: `${text}\n\n${POLICY_NOTICE_LINE}`,
+    config,
+    log,
+    _client,
+    dedupe: false,
+  });
+}

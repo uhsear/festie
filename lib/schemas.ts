@@ -804,6 +804,18 @@ export const artistBackfillSchema = z.object({
   planHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 
+// The policy-update notice email. `send` needs a recent re-auth; `dry-run` only counts recipients.
+// noticeId keys the idempotency ledger, so one id is one notice. html is the admin's own markup; without it the mail is built from the escaped text.
+export const policyNoticeSchema = z
+  .object({
+    noticeId: z.string().regex(/^[a-z0-9][a-z0-9._-]{2,63}$/),
+    subject: z.string().trim().min(1).max(150),
+    text: z.string().trim().min(1).max(20000),
+    html: z.string().trim().min(1).max(100000).optional(),
+    mode: z.enum(['dry-run', 'send']),
+  })
+  .strict();
+
 // "Find Spotify links": the candidates for the artists on one festival, and the editor's picks.
 export const artistSpotifyCandidatesSchema = z.object({
   festivalId: identifier,
@@ -1879,6 +1891,7 @@ export const schemas = {
   artistUpdate: artistUpdateSchema,
   artistMerge: artistMergeSchema,
   artistBackfill: artistBackfillSchema,
+  policyNotice: policyNoticeSchema,
   artistListQuery: artistListQuerySchema,
   artistSpotifyCandidates: artistSpotifyCandidatesSchema,
   artistSpotifyPicks: artistSpotifyPicksSchema,
