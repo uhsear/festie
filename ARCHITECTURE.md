@@ -202,7 +202,7 @@ React 19 SPA with file-based routing via TanStack Router. Built with Vite 8 and 
 
 ### Routes (`packages/web/src/router.tsx`, views in `packages/web/src/routes/`)
 
-`/timeline` redirects to `/grid`: the web app has one grid. The timeline grid component lives in `packages/web/src/features/`.
+`/timeline` redirects to `/grid`: the web app has one grid. The timeline grid component lives in `packages/web/src/components/features/`.
 
 | Route | View |
 |-------|------|
