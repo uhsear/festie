@@ -223,6 +223,7 @@ export async function clearPersistedFailed(): Promise<void> {
 export async function clearQueue(): Promise<void> {
   await withQueueLock(async () => {
     await writeQueue([]);
+    await Promise.resolve(getStorage().removeItem(CORRUPT_KEY));
   });
 }
 

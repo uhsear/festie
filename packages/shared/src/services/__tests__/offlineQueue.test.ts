@@ -79,6 +79,12 @@ describe('offlineQueue', () => {
       expect(readPersisted()).toEqual([]);
       expect(useUIStore.getState().pendingSync).toBe(0);
     });
+
+    it('also drops the corrupt-queue backup so it cannot outlive logout', async () => {
+      getStorage().setItem('festie-offline-queue-corrupt', '{not json');
+      await clearQueue();
+      expect(getStorage().getItem('festie-offline-queue-corrupt')).toBeNull();
+    });
   });
 
   describe('corrupt stored queue', () => {
