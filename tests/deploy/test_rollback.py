@@ -38,6 +38,7 @@ class RollbackTest(unittest.TestCase):
         (Path(tmp.name) / "packages").mkdir()
         for name in ("git", "npm", "pnpm", "pm2", "curl", "sleep"):
             (bin_dir / name).write_text(STUB, newline="\n")
+            (bin_dir / name).chmod(0o755)  # without it the real git/npm/pm2 on PATH run
         log = Path(tmp.name) / "calls.log"
         log.write_text("")
         proc = subprocess.run(
