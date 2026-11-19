@@ -8,10 +8,8 @@ import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { discoverMigrationsOnDisk } from '../lib/planner-db-pg';
-import { ensureTestSchema } from './_test-schema';
+import { ensureTestSchema, TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('ensureTestSchema', () => {
   test('refuses a database whose name does not end in _test, before connecting', async () => {

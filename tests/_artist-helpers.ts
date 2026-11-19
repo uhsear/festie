@@ -1,9 +1,10 @@
 // Shared fixtures for the artist integration tests (artists-routes, artists-sync, artist-refs,
 // artists-concurrency). Not a test file: the test glob is tests/*.test.ts.
 import { Pool } from 'pg';
+import { skip } from './_test-schema';
 import { startServer, loginAdmin, TEST_DATABASE_URL, TRUSTED_MUTATION_HEADER } from './_integration-helpers';
 
-export const skip = !process.env.TEST_DATABASE_URL || !process.env.TEST_DATABASE_URL.includes('_test');
+export { skip };
 
 export async function withPool<T>(fn: (pool: Pool) => Promise<T>): Promise<T> {
   const pool = new Pool({ connectionString: TEST_DATABASE_URL });

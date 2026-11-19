@@ -8,12 +8,11 @@ import { createStores } from '../lib/db/index.js';
 import { createReengagementTriggers } from '../lib/notifications/reengagement.js';
 import createFestivalsRoutes from '../routes/festivals.js';
 import { sanitizeFestivalPayload, schemas } from '../lib/schemas.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Festival series (migration 111): the schema rule, the payload rule, the store round trip and
 // the lineup-drop audience. The real-DB part is skip-gated like integration-festival-slug;
 // run it only against a private test database on port 5434+.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('series id validation and payload', () => {
   const parse = (seriesId: unknown) => schemas.festivalCreate.safeParse({ name: 'Fest', seriesId }).success;

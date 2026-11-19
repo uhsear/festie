@@ -14,11 +14,10 @@ import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
 import { bootServer } from './_boot-server';
 import { festivalTint } from '../lib/festival-tint';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // DB skip-gate: these integration tests require a live Postgres database.
 // Set TEST_DATABASE_URL to run them (always set in CI). See tests/README.md.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 // The shared helpers exit the process without a test database, so load them only when it exists.
 const helpers = skip ? null : await import('./_integration-helpers');
 

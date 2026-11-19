@@ -17,9 +17,8 @@ import { after, afterEach, describe, mock, test } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import createFestivalsRoutes from '../routes/festivals.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const h: any = skip ? null : await import('./_integration-helpers');
 
 const servers: any[] = [];
