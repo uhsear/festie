@@ -7,6 +7,43 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Telemetry beacons (web-vitals, /metrics/client, install ping) are not user actions.
 const SKIPPED_PATHS = /^\/api(?:\/v1)?\/(?:metrics|analytics)(?:\/|$)/;
 
+interface AdminAuditEntry {
+  action: string;
+  targetType: string;
+  targetId: string | null | undefined;
+  details?: Record<string, unknown>;
+  status?: 'success' | 'failure';
+  // Rethrow a failed insert instead of logging it. Use it when the response must not go out without the row.
+  failClosed?: boolean;
+}
+
+// One row shape for explicit admin audit rows. By default a failed insert only logs, because the action
+// already took effect; auditWritten then stays unset and the generic middleware still records the request.
+export function createAdminAuditWriter({ stores, log, getRequestIp }: any) {
+  return async function writeAdminAudit(req: any, res: any, entry: AdminAuditEntry): Promise<boolean> {
+    if (!stores.auditLog) return false;
+    try {
+      await stores.auditLog.insert({
+        actorType: 'admin',
+        actorId: req.user?.userId || req.userId,
+        action: entry.action,
+        targetType: entry.targetType,
+        targetId: entry.targetId,
+        detailsJson: entry.details === undefined ? undefined : JSON.stringify(entry.details),
+        ip: getRequestIp(req),
+        requestId: req.id,
+        status: entry.status,
+      });
+    } catch (err: any) {
+      if (entry.failClosed) throw err;
+      log.warn('admin audit write failed', { action: entry.action, targetId: entry.targetId, error: err?.message });
+      return false;
+    }
+    if (res.locals) res.locals.auditWritten = true;
+    return true;
+  };
+}
+
 export default function createAuditMiddleware(deps: any) {
   const { stores, log, getRequestIp } = deps;
 
