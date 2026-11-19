@@ -11,6 +11,7 @@ vi.mock('../offlineQueue', () => ({ enqueueMutation, drainQueue }));
 
 import { api, isOfflineEligible, ApiClientError } from '../api';
 import { useUIStore } from '../../stores/uiStore';
+import { registerOfflineQueue } from '../offlineQueueRegistry';
 
 const okResponse = (data: unknown) =>
   ({
@@ -26,9 +27,6 @@ describe('api offline interception', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useUIStore.setState({ offlineMode: false });
-    // Ensure the web bridge isn't present so eligible offline writes take the
-    // native (enqueueMutation) path we can assert on.
-    delete (window as unknown as { __festieQueue?: unknown }).__festieQueue;
     fetchSpy = vi.fn(async () => okResponse({ data: { ok: true }, error: null }));
     vi.stubGlobal('fetch', fetchSpy);
   });
@@ -131,15 +129,27 @@ describe('api offline interception', () => {
       expect(result._optimistic).toBe(true);
     });
 
-    it('prefers the web bridge when window.__festieQueue is present', async () => {
+    it('queues through the registered web bridge', async () => {
       const queueMutation = vi.fn(async () => {});
-      (window as unknown as { __festieQueue: unknown }).__festieQueue = { queueMutation };
-      await api.put('/profiles/p1', { picks: {} });
-      expect(queueMutation).toHaveBeenCalledWith(
-        expect.objectContaining({ type: 'api', url: '/profiles/p1', method: 'PUT' }),
-      );
-      expect(enqueueMutation).not.toHaveBeenCalled();
-      delete (window as unknown as { __festieQueue?: unknown }).__festieQueue;
+      const unregister = registerOfflineQueue({ queueMutation, processQueue: vi.fn(async () => {}) });
+      try {
+        await api.post('/crews/c1/polls', { title: 'x' });
+        expect(queueMutation).toHaveBeenCalledWith(
+          expect.objectContaining({ type: 'api', url: '/crews/c1/polls', method: 'POST' }),
+        );
+        expect(enqueueMutation).not.toHaveBeenCalled();
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        unregister();
+      }
+    });
+
+    it('falls back to the native queue once the bridge unregisters', async () => {
+      const queueMutation = vi.fn(async () => {});
+      registerOfflineQueue({ queueMutation, processQueue: vi.fn(async () => {}) })();
+      await api.post('/crews/c1/polls', { title: 'x' });
+      expect(queueMutation).not.toHaveBeenCalled();
+      expect(enqueueMutation).toHaveBeenCalledTimes(1);
     });
   });
 

@@ -103,8 +103,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     _profileBatchTimers.delete(key);
     const payload = _profileBatchPayloads.get(key);
     _profileBatchPayloads.delete(key);
-    if (!payload) return;
-    void _emitToAuthorCrews(payload);
+    if (!payload) return Promise.resolve();
+    return _emitToAuthorCrews(payload);
   }
 
   // Picks reach only the author's own devices (user room) and crews on this
@@ -166,7 +166,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
           clearTimeout(_profileBatchTimers.get(oldest));
           _profileBatchTimers.delete(oldest);
         }
-        _flushProfileBatch(oldest);
+        void _flushProfileBatch(oldest);
       }
     }
 
@@ -189,7 +189,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       clearTimeout(_profileBatchTimers.get(key));
     }
     if (!_shuttingDown) {
-      _profileBatchTimers.set(key, setTimeout(() => _flushProfileBatch(key), BATCH_DEBOUNCE_MS));
+      _profileBatchTimers.set(key, setTimeout(() => void _flushProfileBatch(key), BATCH_DEBOUNCE_MS));
     }
 
     // Push notification for pick changes to offline crew
@@ -278,11 +278,13 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
   }
 
   // Flush all pending batches (useful for graceful shutdown)
-  function flushAll() {
+  // Resolves once every flushed batch has finished its crew lookup and emit.
+  async function flushAll() {
     _shuttingDown = true;
+    const pending: Promise<void>[] = [];
     for (const [key, timer] of _profileBatchTimers) {
       clearTimeout(timer);
-      _flushProfileBatch(key);
+      pending.push(_flushProfileBatch(key));
     }
     _profileBatchTimers.clear();
     _profileBatchPayloads.clear();
@@ -291,6 +293,9 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     _crewPushPending.clear();
     for (const timer of _silentSyncTimers.values()) clearTimeout(timer);
     _silentSyncTimers.clear();
+    for (const r of await Promise.allSettled(pending)) {
+      if (r.status === 'rejected') log.warn('profile:updated flush on shutdown failed', { error: r.reason?.message });
+    }
   }
 
   function crewExpenseAdded({ crewId, expense }: any) {

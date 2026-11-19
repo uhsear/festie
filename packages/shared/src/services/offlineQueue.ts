@@ -5,7 +5,7 @@ import { useUIStore, type FailedSyncItem } from '../stores/uiStore';
 
 /**
  * Persistent offline mutation queue for React Native (the web uses its own
- * IndexedDB-backed `window.__festieQueue`). Any eligible crew/pick mutation made
+ * IndexedDB-backed bridge registered through `registerOfflineQueue`). Any eligible crew/pick mutation made
  * while offline is persisted to storage and replayed oldest-first on reconnect,
  * so an optimistic UI change is never silently lost — matching what the
  * OfflineBanner promises. Mutations are keyed by a deterministic clientId so

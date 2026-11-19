@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import * as Dialog from '@radix-ui/react-dialog';
-import { X, CalendarPlus } from 'lucide-react';
+import * as RadixDialog from '@radix-ui/react-dialog';
+import { CalendarPlus } from 'lucide-react';
 import { useCrewStore } from '@festie/shared/stores';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import type { ReformCrewResponse } from '@festie/shared/types';
 import Button from '../ui/Button';
-import IconButton from '../ui/IconButton';
+import Dialog from '../ui/Dialog';
 import { inputBase } from '../../lib/styles';
 import { useToast } from '../../lib/toastContext';
 
@@ -68,68 +68,51 @@ export default function ReformCrewButton({ crewId, sourceFestivalId, crewName }:
   }
 
   return (
-    <Dialog.Root open={open} onOpenChange={setOpen}>
-      <Dialog.Trigger asChild>
-        <Button variant="outline" fullWidth className="min-h-11">
-          <CalendarPlus className="w-4 h-4" aria-hidden="true" /> Reform this crew for another festival
-        </Button>
-      </Dialog.Trigger>
-      <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-[var(--z-overlay)] bg-black/60 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in" />
-        <Dialog.Content
-          className="fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] max-w-sm -translate-x-1/2 -translate-y-1/2
-                     rounded-2xl bg-bg-card border border-border-light shadow-2xl p-5 space-y-4
-                     data-[state=open]:animate-in data-[state=open]:zoom-in-95"
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <Dialog.Title className="text-base font-bold text-text-primary">Reform crew</Dialog.Title>
-              <Dialog.Description className="mt-1 text-sm text-text-secondary">
-                Start “{crewName}” fresh for another festival. Members who’ve already joined that festival are added
-                automatically; share the invite link with everyone else.
-              </Dialog.Description>
-            </div>
-            <Dialog.Close asChild>
-              <IconButton label="Close" icon={<X className="w-5 h-5" />} />
-            </Dialog.Close>
-          </div>
-
-          <form onSubmit={submit} className="space-y-3" {...(busy ? { 'aria-busy': true } : {})}>
-            <select
-              ref={selectRef}
-              value={target}
-              onChange={(e) => setTarget(e.target.value)}
-              disabled={busy}
-              aria-label="Target festival"
-              className={`${inputBase} min-h-11`}
-            >
-              <option value="">Choose a festival…</option>
-              {options.map((f) => (
-                <option key={f.id} value={f.id}>
-                  {f.name}
-                </option>
-              ))}
-            </select>
-            {options.length === 0 && <p className="text-sm text-text-secondary">No other festivals available yet.</p>}
-            <div className="flex gap-2">
-              <Dialog.Close asChild>
-                <Button variant="outline" type="button" className="flex-1 min-h-11">
-                  Cancel
-                </Button>
-              </Dialog.Close>
-              <Button
-                type="submit"
-                variant="primary"
-                isLoading={busy}
-                disabled={!target || busy}
-                className="flex-1 min-h-11"
-              >
-                Reform
+    <>
+      <Button variant="outline" fullWidth className="min-h-11" onClick={() => setOpen(true)}>
+        <CalendarPlus className="w-4 h-4" aria-hidden="true" /> Reform this crew for another festival
+      </Button>
+      <Dialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Reform crew"
+        description={`Start “${crewName}” fresh for another festival. Members who’ve already joined that festival are added automatically; share the invite link with everyone else.`}
+      >
+        <form onSubmit={submit} className="space-y-3" {...(busy ? { 'aria-busy': true } : {})}>
+          <select
+            ref={selectRef}
+            value={target}
+            onChange={(e) => setTarget(e.target.value)}
+            disabled={busy}
+            aria-label="Target festival"
+            className={`${inputBase} min-h-11`}
+          >
+            <option value="">Choose a festival…</option>
+            {options.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.name}
+              </option>
+            ))}
+          </select>
+          {options.length === 0 && <p className="text-sm text-text-secondary">No other festivals available yet.</p>}
+          <div className="flex gap-2">
+            <RadixDialog.Close asChild>
+              <Button variant="outline" type="button" className="flex-1 min-h-11">
+                Cancel
               </Button>
-            </div>
-          </form>
-        </Dialog.Content>
-      </Dialog.Portal>
-    </Dialog.Root>
+            </RadixDialog.Close>
+            <Button
+              type="submit"
+              variant="primary"
+              isLoading={busy}
+              disabled={!target || busy}
+              className="flex-1 min-h-11"
+            >
+              Reform
+            </Button>
+          </div>
+        </form>
+      </Dialog>
+    </>
   );
 }

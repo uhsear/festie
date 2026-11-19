@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import {
   ArtistError,
   artistTitle,
@@ -14,6 +14,10 @@ import {
 import * as spotify from '../lib/spotify.js';
 import { applyBackfillPlan, planBackfill, planHash, verifyBackfill } from '../lib/artist-backfill.js';
 import { createOpaqueId } from '../lib/helpers.js';
+import type { Request, Response, NextFunction } from 'express';
+import type { z } from 'zod';
+import type { RouteDeps } from '../lib/types';
+import type { Params, Query } from '../lib/types/app-context';
 
 /** Artists searched per "Find Spotify links" run. The rest wait for the next run, after the editor skips or links these. */
 const MAX_CANDIDATE_ARTISTS = 150;
@@ -26,7 +30,7 @@ const BACKFILL_LOCK_KEY = '5063544977519632193';
  * lists the artist, past ones too. The festival copies are rewritten in the
  * same transaction as the artist row, so no reader ever sees them disagree.
  */
-export default function createArtistsRoutes(deps: any) {
+export default function createArtistsRoutes(deps: RouteDeps) {
   const {
     express,
     log,
@@ -46,46 +50,32 @@ export default function createArtistsRoutes(deps: any) {
     setNoStore,
     config,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
   // deps.artistBackfill lets a route test swap the three backfill steps.
   const backfill = deps.artistBackfill ?? { planBackfill, applyBackfillPlan, verifyBackfill };
 
   const router = express.Router();
 
-  function sendArtistError(res: any, error: any, what: string) {
+  function sendArtistError(res: Response, error: unknown, what: string) {
     if (error instanceof ArtistError) {
       return sendError(res, error.status, error.message, ErrorCodes[error.code], error.details);
     }
-    if (error?.code === 'SPOTIFY_RATE_LIMITED') {
+    if ((error as NodeJS.ErrnoException)?.code === 'SPOTIFY_RATE_LIMITED') {
       return sendError(res, 503, 'Spotify is busy right now. Try again in a minute.', ErrorCodes.SPOTIFY_RATE_LIMITED);
     }
     // The database gave up on a deadlock or a serialization failure after the retries.
-    if (error?.code === '40P01' || error?.code === '40001') {
+    if ((error as NodeJS.ErrnoException)?.code === '40P01' || (error as NodeJS.ErrnoException)?.code === '40001') {
       return sendError(res, 503, 'Festie is busy. Try again.', ErrorCodes.SERVICE_UNAVAILABLE);
     }
-    log.error(what, { error: error?.message });
+    log.error(what, { error: (error as NodeJS.ErrnoException)?.message });
     return sendError(res, 500, `Failed to ${what}`, ErrorCodes.INTERNAL_ERROR);
   }
 
-  // Same shape as the festival routes' audit helper: after the response, and a failure only logs.
-  function audit(action: string, artistId: string, req: any, details: Record<string, unknown>, targetType = 'artist') {
+  // After the response, and a failure only logs: claim the generic middleware's slot first.
+  function audit(action: string, artistId: string, req: Request, details: Record<string, unknown>, targetType = 'artist') {
     if (!stores.auditLog) return;
     if (req.res?.locals) req.res.locals.auditWritten = true;
-    Promise.resolve().then(async () => {
-      try {
-        await stores.auditLog.insert({
-          id: crypto.randomUUID(),
-          actorType: 'admin',
-          actorId: req.user?.userId,
-          action,
-          targetType,
-          targetId: artistId,
-          detailsJson: JSON.stringify(details),
-          ip: getRequestIp(req),
-        });
-      } catch (e: any) {
-        log.warn('audit log write failed', { error: e.message });
-      }
-    });
+    void writeAdminAudit(req, req.res, { action, targetType, targetId: artistId, details });
   }
 
   /**
@@ -102,8 +92,8 @@ export default function createArtistsRoutes(deps: any) {
       for (const festival of synced) {
         if (festival.published && isCurrentOrUpcoming(festival)) emitter.festivalUpdated({ festival: { id: festival.id } });
       }
-    } catch (error: any) {
-      log.warn('artist sync follow-up failed', { error: error?.message });
+    } catch (error) {
+      log.warn('artist sync follow-up failed', { error: (error as NodeJS.ErrnoException)?.message });
     }
   }
   // The single-link set route and the Spotify fill write through the same follow-up.
@@ -111,9 +101,9 @@ export default function createArtistsRoutes(deps: any) {
 
   // The duplicates list scans every live artist, so it is limited; the plain lists are not.
   const duplicatesLimit = rateLimit(30, 'artist-duplicates');
-  router.get('/', validateQuery(schemas.artistListQuery), (req: any, res: any, next: any) => (req.validatedQuery.duplicates === 'true' ? duplicatesLimit(req, res, next) : next()), async (req: any, res: any) => {
+  router.get('/', validateQuery(schemas.artistListQuery), (req: Request, res: Response, next: NextFunction) => ((req.validatedQuery as Query).duplicates === 'true' ? duplicatesLimit(req, res, next) : next()), async (req: Request, res: Response) => {
     try {
-      const { festivalId, q, limit, duplicates } = req.validatedQuery;
+      const { festivalId, q, limit, duplicates } = req.validatedQuery as Query;
       const artists = await stores.artists.list({
         festivalId,
         query: q,
@@ -121,32 +111,32 @@ export default function createArtistsRoutes(deps: any) {
         limit: limit ?? (festivalId && !duplicates ? 1000 : 200),
       });
       return sendSuccess(res, { artists });
-    } catch (error: any) {
+    } catch (error) {
       return sendArtistError(res, error, 'load artists');
     }
   });
 
-  router.post('/match', rateLimit(60, 'artist-match'), validate(schemas.artistMatch), async (req: any, res: any) => {
+  router.post('/match', rateLimit(60, 'artist-match'), validate(schemas.artistMatch), async (req: Request, res: Response) => {
     try {
-      return sendSuccess(res, { results: await stores.artists.match(req.validatedBody.items) });
-    } catch (error: any) {
+      return sendSuccess(res, { results: await stores.artists.match((req.validatedBody as z.infer<typeof schemas.artistMatch>).items) });
+    } catch (error) {
       return sendArtistError(res, error, 'match artists');
     }
   });
 
-  router.post('/', rateLimit(30, 'artist-create'), validate(schemas.artistCreate), async (req: any, res: any) => {
+  router.post('/', rateLimit(30, 'artist-create'), validate(schemas.artistCreate), async (req: Request, res: Response) => {
     try {
-      const artist = await stores.artists.create({ ...req.validatedBody, userId: req.user?.userId ?? null });
+      const artist = await stores.artists.create({ ...(req.validatedBody as z.infer<typeof schemas.artistCreate>), userId: req.user?.userId ?? null });
       audit(AUDIT_ACTIONS.ARTIST_CREATED, artist.id, req, { name: artist.name, label: artist.label });
       res.status(201);
       return sendSuccess(res, { artist: publicArtist(artist) });
-    } catch (error: any) {
+    } catch (error) {
       return sendArtistError(res, error, 'create the artist');
     }
   });
 
   /** The two Spotify routes need the client-credentials keys. Sends the 400 and returns it when they are not set. */
-  function spotifyKeysMissing(res: any) {
+  function spotifyKeysMissing(res: Response) {
     if (config.SPOTIFY_CLIENT_ID && config.SPOTIFY_CLIENT_SECRET) return null;
     return sendError(res, 400, 'Spotify API credentials not configured', ErrorCodes.INVALID_INPUT);
   }
@@ -161,11 +151,11 @@ export default function createArtistsRoutes(deps: any) {
     '/spotify-candidates',
     rateLimit(6, 'artist-spotify-search'),
     validate(schemas.artistSpotifyCandidates),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
         const missing = spotifyKeysMissing(res);
         if (missing) return missing;
-        const { festivalId, exclude } = req.validatedBody;
+        const { festivalId, exclude } = req.validatedBody as z.infer<typeof schemas.artistSpotifyCandidates>;
         const skipped = new Set<string>(exclude ?? []);
         const rows = (await stores.artists.list({ festivalId, limit: 1000 })).filter(
           (row: any) => !row.links?.spotify && !skipped.has(row.id),
@@ -194,7 +184,7 @@ export default function createArtistsRoutes(deps: any) {
           return { artist, candidates, singleExact };
         });
         return sendSuccess(res, { artists, notSearched: rows.length - searched.length, searchFailed });
-      } catch (error: any) {
+      } catch (error) {
         return sendArtistError(res, error, 'search Spotify');
       }
     },
@@ -209,11 +199,11 @@ export default function createArtistsRoutes(deps: any) {
     '/spotify-picks',
     rateLimit(20, 'artist-spotify-pick'),
     validate(schemas.artistSpotifyPicks),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
         const missing = spotifyKeysMissing(res);
         if (missing) return missing;
-        const { festivalId, picks } = req.validatedBody;
+        const { festivalId, picks } = req.validatedBody as z.infer<typeof schemas.artistSpotifyPicks>;
         const details: Map<string, any> = await spotify.getArtistsByIds(
           [...new Set<string>(picks.map((pick: any) => pick.spotifyId))],
           config.SPOTIFY_CLIENT_ID,
@@ -249,20 +239,20 @@ export default function createArtistsRoutes(deps: any) {
             // The store wrote the audit row in the pick's transaction.
             if (req.res?.locals) req.res.locals.auditWritten = true;
             results.push({ ...result, status: 'saved', artist: publicArtist(outcome.artist), festivalsUpdated: outcome.synced.length });
-          } catch (error: any) {
+          } catch (error) {
             if (!(error instanceof ArtistError)) {
-              log.error('spotify pick failed', { artistId: pick.artistId, error: error?.message });
+              log.error('spotify pick failed', { artistId: pick.artistId, error: (error as NodeJS.ErrnoException)?.message });
               results.push({ ...result, status: 'error', message: "Couldn't save this pick. Try again." });
             } else if (error.code === 'ARTIST_CHANGED') {
-              results.push({ ...result, status: 'changed', message: error.message, artist: error.details?.artist });
+              results.push({ ...result, status: 'changed', message: (error as NodeJS.ErrnoException).message, artist: error.details?.artist });
             } else {
-              results.push({ ...result, status: error.code === 'ARTIST_EXISTS' ? 'taken' : 'error', message: error.message });
+              results.push({ ...result, status: (error as NodeJS.ErrnoException).code === 'ARTIST_EXISTS' ? 'taken' : 'error', message: (error as NodeJS.ErrnoException).message });
             }
           }
         }
         await afterSync([...synced.values()]);
         return sendSuccess(res, { results });
-      } catch (error: any) {
+      } catch (error) {
         return sendArtistError(res, error, 'save the Spotify picks');
       }
     },
@@ -272,20 +262,20 @@ export default function createArtistsRoutes(deps: any) {
    * Applies the plan under the lock. Festivals commit one by one, so even a failed run may have changed
    * data: the caches are cleared and one audit row is written whichever way it ends.
    */
-  async function applyAndRecord(req: any, res: any, plan: any) {
+  async function applyAndRecord(req: Request, res: Response, plan: any) {
     const runId = createOpaqueId('abr');
     let result: any = null;
     let failure: any = null;
     try {
       result = await backfill.applyBackfillPlan(stores.pool, plan, { runId });
-    } catch (error: any) {
+    } catch (error) {
       failure = error;
     } finally {
       try {
         invalidateFestivalCache();
         deps.invalidateFestivalListCache?.();
-      } catch (error: any) {
-        log.warn('artist backfill cache clear failed', { error: error?.message });
+      } catch (error) {
+        log.warn('artist backfill cache clear failed', { error: (error as NodeJS.ErrnoException)?.message });
       }
     }
     const counts = plan.report.counts;
@@ -326,9 +316,9 @@ export default function createArtistsRoutes(deps: any) {
    * dry-run and verify write nothing. run needs a recent re-auth, holds an advisory lock, refuses a plan that
    * differs from the reviewed planHash, writes one audit row and clears the festival caches, which the script cannot do.
    */
-  const runOnlyReauth = (req: any, res: any, next: any) => (req.validatedBody.mode === 'run' ? requireRecentAuth(req, res, next) : next());
-  router.post('/backfill', rateLimit(10, 'artist-backfill'), validate(schemas.artistBackfill), runOnlyReauth, async (req: any, res: any) => {
-    const { mode, planHash: reviewedHash } = req.validatedBody;
+  const runOnlyReauth = (req: Request, res: Response, next: NextFunction) => ((req.validatedBody as z.infer<typeof schemas.artistBackfill>).mode === 'run' ? requireRecentAuth(req, res, next) : next());
+  router.post('/backfill', rateLimit(10, 'artist-backfill'), validate(schemas.artistBackfill), runOnlyReauth, async (req: Request, res: Response) => {
+    const { mode, planHash: reviewedHash } = req.validatedBody as z.infer<typeof schemas.artistBackfill>;
     let lock: any = null;
     let held = false;
     try {
@@ -351,7 +341,7 @@ export default function createArtistsRoutes(deps: any) {
         return sendError(res, 409, 'The data changed since the reviewed dry run, so nothing was written. Run a new dry run and review it.', ErrorCodes.PLAN_CHANGED);
       }
       return await applyAndRecord(req, res, plan);
-    } catch (error: any) {
+    } catch (error) {
       return sendArtistError(res, error, 'run the artist backfill');
     } finally {
       if (lock) {
@@ -360,8 +350,8 @@ export default function createArtistsRoutes(deps: any) {
           try {
             await lock.query('SELECT pg_advisory_unlock($1::bigint)', [BACKFILL_LOCK_KEY]);
             unlocked = true;
-          } catch (error: any) {
-            log.warn('artist backfill unlock failed', { error: error?.message });
+          } catch (error) {
+            log.warn('artist backfill unlock failed', { error: (error as NodeJS.ErrnoException)?.message });
           }
         }
         // A session that kept the lock is destroyed, not returned to the pool.
@@ -370,10 +360,10 @@ export default function createArtistsRoutes(deps: any) {
     }
   });
 
-  router.get('/:id/impact',validateParams(schemas.genericIdParams), async (req: any, res: any) => {
+  router.get('/:id/impact',validateParams(schemas.genericIdParams), async (req: Request, res: Response) => {
     try {
-      return sendSuccess(res, await stores.artists.impact(req.validatedParams.id));
-    } catch (error: any) {
+      return sendSuccess(res, await stores.artists.impact((req.validatedParams as Params).id));
+    } catch (error) {
       return sendArtistError(res, error, 'count where the artist plays');
     }
   });
@@ -383,17 +373,17 @@ export default function createArtistsRoutes(deps: any) {
     rateLimit(60, 'artist-update'),
     validateParams(schemas.genericIdParams),
     validate(schemas.artistUpdate),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const id = req.validatedParams.id;
-        const { expectedUpdatedAt, changes } = req.validatedBody;
+        const id = (req.validatedParams as Params).id;
+        const { expectedUpdatedAt, changes } = req.validatedBody as z.infer<typeof schemas.artistUpdate>;
         const result = await stores.artists.update(id, { expectedUpdatedAt, changes, userId: req.user?.userId ?? null, ip: getRequestIp(req) });
         await afterSync(result.synced);
         // The store wrote the audit row in the edit's transaction.
         if (req.res?.locals) req.res.locals.auditWritten = true;
         log.info('artist:updated', { artistId: id, festivals: result.synced.length });
         return sendSuccess(res, { artist: publicArtist(result.artist), festivalsUpdated: result.synced.length });
-      } catch (error: any) {
+      } catch (error) {
         return sendArtistError(res, error, 'update the artist');
       }
     },
@@ -411,11 +401,11 @@ export default function createArtistsRoutes(deps: any) {
     requireRecentAuth,
     validateParams(schemas.genericIdParams),
     validate(schemas.artistMerge),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const { loserId, survivorUpdatedAt, loserUpdatedAt, acceptedFestivals, pick } = req.validatedBody;
+        const { loserId, survivorUpdatedAt, loserUpdatedAt, acceptedFestivals, pick } = req.validatedBody as z.infer<typeof schemas.artistMerge>;
         const result = await stores.artists.merge({
-          survivorId: req.validatedParams.id,
+          survivorId: (req.validatedParams as Params).id,
           loserId,
           survivorUpdatedAt,
           loserUpdatedAt,
@@ -426,9 +416,9 @@ export default function createArtistsRoutes(deps: any) {
         });
         await afterSync(result.synced);
         if (req.res?.locals) req.res.locals.auditWritten = true;
-        log.info('artist:merged', { survivorId: req.validatedParams.id, loserId, ...result.counts });
+        log.info('artist:merged', { survivorId: (req.validatedParams as Params).id, loserId, ...result.counts });
         return sendSuccess(res, { artist: publicArtist(result.artist), loserId, counts: result.counts });
-      } catch (error: any) {
+      } catch (error) {
         return sendArtistError(res, error, 'merge the artists');
       }
     },

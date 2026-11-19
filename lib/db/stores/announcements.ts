@@ -7,6 +7,7 @@
  */
 
 import type { Pool } from 'pg';
+import { isoOrNull } from '../connection';
 
 export interface AnnouncementRow {
   id: string;
@@ -23,8 +24,6 @@ export interface AnnouncementRow {
   createdAt: string;
 }
 
-const iso = (v: any) => (v ? new Date(v).toISOString() : null);
-
 function mapRow(r: any): AnnouncementRow {
   return {
     id: r.id,
@@ -33,12 +32,12 @@ function mapRow(r: any): AnnouncementRow {
     title: r.title,
     body: r.body,
     screen: r.screen,
-    sendAt: iso(r.send_at)!,
-    sentAt: iso(r.sent_at),
-    cancelledAt: iso(r.cancelled_at),
+    sendAt: isoOrNull(r.send_at)!,
+    sentAt: isoOrNull(r.sent_at),
+    cancelledAt: isoOrNull(r.cancelled_at),
     recipientCount: r.recipient_count ?? null,
     createdBy: r.created_by ?? null,
-    createdAt: iso(r.created_at)!,
+    createdAt: isoOrNull(r.created_at)!,
   };
 }
 

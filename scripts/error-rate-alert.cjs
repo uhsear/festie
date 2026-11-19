@@ -4,12 +4,13 @@
 /**
  * Error Rate Alert — Lightweight cron-based alerting for Festie
  *
- * Checks the health endpoint and PM2 error logs for elevated error rates.
+ * Role: error rate, memory, disk and /api/ready (Redis). It does not poll
+ * /api/health: scripts/health-check.sh owns liveness, so a dead process alerts once.
  * Sends alerts via a webhook URL (Slack, Discord, ntfy, or any HTTP endpoint).
  *
  * Usage:
  *   Check every 5 minutes via cron:
- *   [star]/5 * * * * cd /path/to/festie && node scripts/error-rate-alert.js >> logs/alert.log 2>&1
+ *   [star]/5 * * * * cd /path/to/festie && node scripts/error-rate-alert.cjs >> logs/alert.log 2>&1
  *
  * Environment:
  *   ALERT_WEBHOOK_URL   - POST webhook for alerts (required for actual notifications).
@@ -19,7 +20,7 @@
  *   ALERT_COOLDOWN_MIN  - Minutes between repeat alerts of the same kind (default: 30).
  *                         A "recovered" notice is sent when a kind clears.
  *   ALERT_MEMORY_MB     - Per-instance memory (MB) that triggers an alert (default: 600)
- *   HEALTH_URL          - Health endpoint URL (default: http://127.0.0.1:4000/api/health)
+ *   HEALTH_URL          - Only used to derive READY_URL (default: http://127.0.0.1:4000/api/health)
  *   READY_URL           - Readiness endpoint URL (default: HEALTH_URL with /health -> /ready).
  *                         Not-ready and Redis-degraded alert after 2 consecutive polls.
  *   BACKUP_DIR          - Directory probed for writability (default: ~/backups/festie)
@@ -120,11 +121,6 @@ function fetchJson(url) {
     req.on('error', (err) => resolve({ status: 0, error: err.message }));
     req.on('timeout', () => { req.destroy(); resolve({ status: 0, error: 'timeout' }); });
   });
-}
-
-async function checkHealth(url) {
-  const res = await fetchJson(url);
-  return { ...res, ok: res.status === 200 && res.body?.data?.status === 'ok' };
 }
 
 // ── Pure checks (exported for tests) ──
@@ -267,24 +263,17 @@ async function main() {
   const state = loadState();
   const observations = {};
 
-  // 1. Health check
-  const health = await checkHealth(cfg.healthUrl);
-  observations.health = {
-    bad: !health.ok,
-    msg: `Health check FAILED (status: ${health.status}, error: ${health.error || 'unhealthy response'})`,
-  };
-
-  // 2. Readiness and Redis (page after 2 consecutive polls)
+  // 1. Readiness and Redis (page after 2 consecutive polls)
   Object.assign(observations, readyObservations(await fetchJson(cfg.readyUrl)));
 
-  // 3. Error log count
+  // 2. Error log count
   const errorCount = countRecentErrors(5);
   observations.errors = {
     bad: errorCount >= cfg.threshold,
     msg: `${errorCount} errors in PM2 error log (last 5 minutes, threshold: ${cfg.threshold})`,
   };
 
-  // 4. PM2 process health
+  // 3. PM2 process health
   const pm2 = checkPM2Processes(cfg.memoryMb);
   // pm2 null means `pm2 jlist` failed: no verdict, so the kinds are left out.
   if (pm2) {
@@ -295,17 +284,17 @@ async function main() {
     };
   }
 
-  // 5. Disk space and backup directory writability
+  // 4. Disk space and backup directory writability
   Object.assign(observations, diskObservations(checkDisk(cfg.backupDir)));
 
-  // 6. Decide what to send
+  // 5. Decide what to send
   const { state: next, alerts, recoveries, suppressed } = advance(state, observations, Date.now(), cfg.cooldownMin * 60_000);
   if (alerts.length > 0) await sendAlert(alerts.join('\n'), cfg.webhookUrl);
   if (recoveries.length > 0) await sendAlert(recoveries.join('\n'), cfg.webhookUrl, '✅ Festie Recovered');
   if (suppressed > 0) console.log(`[SUPPRESSED] ${suppressed} alert(s) within cooldown window`);
   if (Object.values(observations).every((o) => !o.bad)) {
     const pm2Line = pm2 ? `${pm2.online}/${pm2.total} online, Mem: ${pm2.avgMemoryMB}MB avg` : 'unknown';
-    console.log(`[OK ${new Date().toISOString()}] Health: ok, Errors: ${errorCount}, PM2: ${pm2Line}`);
+    console.log(`[OK ${new Date().toISOString()}] Ready: ok, Errors: ${errorCount}, PM2: ${pm2Line}`);
   }
 
   next.lastErrorCount = errorCount;

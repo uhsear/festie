@@ -92,4 +92,31 @@ export function createSocket(
   return socket;
 }
 
+/**
+ * The `onAuthError` callback for createSocket: one token refresh, then reconnect
+ * with the new token. On failure the socket stays disconnected (the next HTTP
+ * request drives the refresh/logout path). `getSocket` is read lazily because the
+ * callback is passed to createSocket before the socket exists. The auth store is
+ * injected (callers pass `useAuthStore.getState`) so the services barrel does not
+ * import the stores.
+ */
+export function createAuthErrorHandler(
+  getSocket: () => Socket | null,
+  getAuth: () => { refreshToken: () => Promise<unknown>; userToken: string | null },
+): () => void {
+  return () => {
+    getAuth()
+      .refreshToken()
+      .then(() => {
+        const token = getAuth().userToken;
+        const socket = getSocket();
+        if (token && socket) {
+          socket.auth = { token };
+          socket.connect();
+        }
+      })
+      .catch((e) => console.warn('socket token refresh failed; realtime paused until the next request', e));
+  };
+}
+
 export { Socket };

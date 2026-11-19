@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 
@@ -14,6 +15,7 @@ import type {
 } from '../lib/schemas';
 import { MAX_MEETING_POINTS_PER_CREW } from '../lib/constants';
 import { logCrewActivity } from '../lib/db/stores/activity';
+import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
 
 export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
   const {
@@ -33,6 +35,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     emitter,
     crewNotify,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
 
@@ -50,14 +53,13 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     rateLimit(10, 'crew-homebase'),
     validateParams(schemas.crewIdParams),
     validate(schemas.crewHomeBase),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdParams>;
         const body = req.validatedBody as z.infer<typeof crewHomeBaseSchema>;
         const crewId = sanitizeIdentifier(params.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
-        if (member.role !== 'owner') return sendError(res, 403, 'Only owner can set home base', ErrorCodes.FORBIDDEN);
+        if (req.membership.role !== 'owner') return sendError(res, 403, 'Only owner can set home base', ErrorCodes.FORBIDDEN);
 
         const { location, time, planB } = body;
         // planB undefined keeps the stored Plan B; the store clears it when location is empty.
@@ -93,13 +95,12 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     rateLimit(10, 'crew-photo-album'),
     validateParams(schemas.crewIdParams),
     validate(schemas.crewPhotoAlbum),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdParams>;
         const body = req.validatedBody as z.infer<typeof crewPhotoAlbumSchema>;
         const crewId = sanitizeIdentifier(params.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const photoAlbumUrl = body.photoAlbumUrl || null;
         const updated = await stores.crews.updatePhotoAlbum(crewId, { photoAlbumUrl });
@@ -123,12 +124,11 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     userAuth,
     rateLimit(120, 'crew-mp-list'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdParams>;
         const crewId = sanitizeIdentifier(params.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const points = await stores.crews.meetingPoints.listByCrew(crewId);
         return sendSuccess(res, { meetingPoints: points });
       } catch (err) {
@@ -144,12 +144,11 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     userAuth,
     rateLimit(60, 'crew-mp-past'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdParams>;
         const crewId = sanitizeIdentifier(params.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const points = await stores.crews.meetingPoints.listRecentlyExpired(crewId);
         return sendSuccess(res, { meetingPoints: points });
       } catch (err) {
@@ -166,13 +165,12 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     rateLimit(20, 'crew-mp-create'),
     validateParams(schemas.crewIdParams),
     validate(schemas.meetingPointCreate),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdParams>;
         const body = req.validatedBody as z.infer<typeof meetingPointCreateSchema>;
         const crewId = sanitizeIdentifier(params.crewId);
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const count = await stores.crews.meetingPoints.countByCrew(crewId);
         if (count >= MAX_MEETING_POINTS_PER_CREW) {
@@ -237,6 +235,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     rateLimit(20, 'crew-mp-update'),
     validateParams(schemas.crewIdMpIdParams),
     validate(schemas.meetingPointUpdate),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdMpIdParams>;
@@ -244,15 +243,13 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier(params.crewId);
         const mpId = sanitizeIdentifier(params.mpId);
 
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.crews.meetingPoints.getById(mpId);
         if (!existing || existing.crew_id !== crewId || !existing.active) {
           return sendError(res, 404, 'Meeting point not found', ErrorCodes.NOT_FOUND);
         }
 
-        if (existing.created_by !== req.user.userId && member.role !== 'owner') {
+        if (!isCreatorOrOwner(existing, req.user.userId, req.membership.role)) {
           return sendError(res, 403, 'Only the creator or crew owner can edit', ErrorCodes.FORBIDDEN);
         }
 
@@ -337,21 +334,20 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     userAuth,
     rateLimit(20, 'crew-mp-delete'),
     validateParams(schemas.crewIdMpIdParams),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdMpIdParams>;
         const crewId = sanitizeIdentifier(params.crewId);
         const mpId = sanitizeIdentifier(params.mpId);
 
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.crews.meetingPoints.getById(mpId);
         if (!existing || existing.crew_id !== crewId || !existing.active) {
           return sendError(res, 404, 'Meeting point not found', ErrorCodes.NOT_FOUND);
         }
 
-        if (existing.created_by !== req.user.userId && member.role !== 'owner') {
+        if (!isCreatorOrOwner(existing, req.user.userId, req.membership.role)) {
           return sendError(res, 403, 'Only the creator or crew owner can remove', ErrorCodes.FORBIDDEN);
         }
 
@@ -391,6 +387,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     rateLimit(30, 'crew-mp-coming'),
     validateParams(schemas.crewIdMpIdParams),
     validate(schemas.meetingPointComing),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         const params = req.validatedParams as z.infer<typeof crewIdMpIdParams>;
@@ -398,8 +395,6 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier(params.crewId);
         const mpId = sanitizeIdentifier(params.mpId);
 
-        const member = await stores.crews.getMember(crewId, req.user.userId);
-        if (!member) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const existing = await stores.crews.meetingPoints.getById(mpId);
         if (!existing || existing.crew_id !== crewId || !existing.active) {

@@ -9,6 +9,12 @@ interface DialogProps {
   onOpenChange: (open: boolean) => void;
   title: string;
   description?: string;
+  /** Keep the description for screen readers only. */
+  hideDescription?: boolean;
+  /** Icon shown before the title. */
+  icon?: ReactNode;
+  /** Disable the close button while an action is in flight. */
+  closeDisabled?: boolean;
   children: ReactNode;
 }
 
@@ -17,7 +23,16 @@ interface DialogProps {
  * aria-modal and portal; useReturnFocus restores focus. ConfirmDialog, PromptDialog and the
  * account modals all render through it so they open, close and trap alike.
  */
-export default function Dialog({ open, onOpenChange, title, description, children }: DialogProps) {
+export default function Dialog({
+  open,
+  onOpenChange,
+  title,
+  description,
+  hideDescription = false,
+  icon,
+  closeDisabled = false,
+  children,
+}: DialogProps) {
   const returnFocus = useReturnFocus();
   return (
     <RadixDialog.Root open={open} onOpenChange={onOpenChange}>
@@ -32,15 +47,20 @@ export default function Dialog({ open, onOpenChange, title, description, childre
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <RadixDialog.Title className="text-base font-bold text-text-primary">{title}</RadixDialog.Title>
+              <RadixDialog.Title
+                className={`text-base font-bold text-text-primary${icon ? ' flex items-center gap-2' : ''}`}
+              >
+                {icon}
+                {title}
+              </RadixDialog.Title>
               {description && (
-                <RadixDialog.Description className="mt-1 text-sm text-text-secondary">
+                <RadixDialog.Description className={hideDescription ? 'sr-only' : 'mt-1 text-sm text-text-secondary'}>
                   {description}
                 </RadixDialog.Description>
               )}
             </div>
             <RadixDialog.Close asChild>
-              <IconButton label="Close" icon={<X className="w-5 h-5" />} />
+              <IconButton label="Close" icon={<X className="w-5 h-5" />} disabled={closeDisabled} />
             </RadixDialog.Close>
           </div>
           {children}

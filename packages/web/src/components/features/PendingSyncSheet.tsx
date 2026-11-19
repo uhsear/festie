@@ -3,17 +3,18 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { FailedSyncItem } from '@festie/shared/stores/uiStore';
 import { timeAgo } from '@festie/shared/utils';
 import { clearPersistedFailed, dismissFailed } from '@festie/shared/services';
+import type { OfflineQueueBridge } from '@festie/shared/services';
+import { useOfflineQueueContext } from '../../hooks/useOfflineQueueBridge';
 import Sheet from '../ui/Sheet';
 
 /**
- * Re-enqueue a single failed mutation through the global web offline queue and
- * kick a drain, then drop it from the failed list. Feature-detects
- * window.__festieQueue so it's a no-op if the bridge isn't mounted yet.
+ * Re-enqueue a single failed mutation through the web offline queue and
+ * kick a drain, then drop it from the failed list. A no-op re-enqueue when
+ * the bridge isn't mounted yet (q is null).
  */
-function retryItem(item: FailedSyncItem): Promise<unknown> {
-  const q = typeof window !== 'undefined' ? window.__festieQueue : undefined;
+function retryItem(item: FailedSyncItem, q: OfflineQueueBridge | null): Promise<unknown> {
   let settled: Promise<unknown> = Promise.resolve();
-  if (q?.queueMutation) {
+  if (q) {
     settled = Promise.resolve(
       q.queueMutation({
         type: 'api',
@@ -23,7 +24,7 @@ function retryItem(item: FailedSyncItem): Promise<unknown> {
         clientId: item.clientId,
       }),
     )
-      .then(() => q.processQueue?.())
+      .then(() => q.processQueue())
       .catch(() => {
         /* a re-failure will re-add it to the list via processQueue */
       });
@@ -51,6 +52,7 @@ interface PendingSyncSheetProps {
 export default function PendingSyncSheet({ onClose }: PendingSyncSheetProps) {
   const failedSync = useUIStore((state) => state.failedSync);
   const clearFailedSync = useUIStore((state) => state.clearFailedSync);
+  const queue = useOfflineQueueContext();
 
   // Rows are dismissed before a retry resolves, so hold the sheet open until
   // every retry settles; a re-failure then re-adds the rows instead of closing it.
@@ -63,7 +65,7 @@ export default function PendingSyncSheet({ onClose }: PendingSyncSheetProps) {
 
   const handleRetry = (items: FailedSyncItem[]) => {
     setRetrying((n) => n + 1);
-    void Promise.all(items.map(retryItem)).finally(() => setRetrying((n) => n - 1));
+    void Promise.all(items.map((item) => retryItem(item, queue))).finally(() => setRetrying((n) => n - 1));
   };
 
   // Snapshot before mutating the store as we iterate.

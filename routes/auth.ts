@@ -239,8 +239,10 @@ export default function createAuthRoutes(deps: any): Router {
         );
       }
 
+      // The dummy compare keeps timing equal, but a user without a password hash
+      // (Google or Apple sign-in only) must never pass a password login.
       const passwordValid = await verifyPassword(String(password), user?.passwordHash || DUMMY_PASSWORD_HASH);
-      if (!user || !passwordValid) {
+      if (!user || !user.passwordHash || !passwordValid) {
         await handleLoginFailure(user, deps);
         const jitter = 500 + Math.floor(Math.random() * 1000);
         log.warn('authentication failed', { username: user ? user.username : 'unknown', ip: req.ip });

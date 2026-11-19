@@ -144,6 +144,10 @@ function createIdempotencyMiddleware({
       }
       if (!cached) return run();
 
+      // Re-insert so cap eviction drops the least recently used entry.
+      cache.delete(cacheKey);
+      cache.set(cacheKey, cached);
+
       // Completed response already cached -> replay synchronously.
       if (!cached.pending) {
         res.setHeader('X-Idempotency-Replayed', 'true');

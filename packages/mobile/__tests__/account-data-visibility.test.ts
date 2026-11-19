@@ -30,8 +30,8 @@ describe('T48 mobile Account: your data and who sees it', () => {
     expect(src).not.toContain('numberOfLines');
   });
 
-  it('useRealtimeSync registers and removes crew:status-updated', () => {
-    const src = read('hooks/useRealtimeSync.ts');
+  it('the shared realtime store sync registers and removes crew:status-updated', () => {
+    const src = read('../shared/src/hooks/useRealtimeSync.ts');
     expect(src).toContain("socket.on('crew:status-updated'");
     expect(src).toContain("socket.off('crew:status-updated'");
   });

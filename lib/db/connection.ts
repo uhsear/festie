@@ -58,6 +58,8 @@ export async function withTransactionRetry(pool: Pool, fn: (client: any) => Prom
   }
 }
 
+export const isoOrNull = (value: unknown) => (value ? new Date(value as string).toISOString() : null);
+
 export function parseJsonObject(value: any, fallback: any = {}): any {
   if (!value) return fallback;
 

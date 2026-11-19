@@ -30,19 +30,24 @@ import { parsePageParams, paginateArray } from '../lib/pagination.js';
 import mountAdminUserRoutes from './admin-users.js';
 import mountAdminAuditRoutes from './admin-audit.js';
 import mountAdminBulkRoutes from './admin-bulk.js';
+import mountAdminPolicyNoticeRoutes from './admin-policy-notice.js';
 import * as spotify from '../lib/spotify.js';
 import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { withTransactionRetry } from '../lib/db/connection.js';
 import { lockFestivalAny } from '../lib/db/stores/lineup-imports.js';
 import { rewriteCopies, type ArtistRecord } from '../lib/db/stores/artists.js';
 import { recentRequestTotals } from '../lib/recent-requests.js';
 import type { Router } from 'express';
+import type { Request, Response } from 'express';
+import type { RouteDeps } from '../lib/types';
+import type { Query } from '../lib/types/app-context';
 
 // Re-engagement news types the growth report counts. Add a type here when it joins the news set.
 const GROWTH_NEWS_TYPES = ['lineup_drop', 'set_times_out', 'days_out'];
 
-export default function createAdminRoutes(deps: any): Router {
+export default function createAdminRoutes(deps: RouteDeps): Router {
   const {
     express,
     config,
@@ -63,6 +68,7 @@ export default function createAdminRoutes(deps: any): Router {
     schemas,
     validateQuery,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const router = express.Router();
   const adminWriteLimit = rateLimit(config.ADMIN_WRITE_RATE_LIMIT_MAX, 'admin-write');
@@ -113,7 +119,7 @@ export default function createAdminRoutes(deps: any): Router {
   // POST /login, /verify, /logout removed — admin auth is role-based via user session (v2.1)
 
   // ── GET /dashboard — aggregated stats for admin dashboard ────────────
-  router.get('/dashboard', adminAuth, async (req: any, res: any) => {
+  router.get('/dashboard', adminAuth, async (req: Request, res: Response) => {
     try {
       setNoStore(res);
       const mem = process.memoryUsage();
@@ -188,8 +194,8 @@ export default function createAdminRoutes(deps: any): Router {
         recentActivity: enrichedActivity,
         groupedActivity,
       });
-    } catch (error: any) {
-      log.error('admin dashboard load failed', { error: error.message });
+    } catch (error) {
+      log.error('admin dashboard load failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load dashboard', ErrorCodes.INTERNAL_ERROR);
     }
   });
@@ -210,6 +216,7 @@ export default function createAdminRoutes(deps: any): Router {
   mountAdminUserRoutes({ router, deps, ctx }); // /users, /users/:id/*
   mountAdminAuditRoutes({ router, deps, ctx }); // /audit
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*
+  mountAdminPolicyNoticeRoutes({ router, deps, ctx }); // /policy-notice
 
   const REF_COUNTS_SQL = `
   SELECT
@@ -227,23 +234,23 @@ export default function createAdminRoutes(deps: any): Router {
 `;
 
   // ── GET /ref-counts — anonymous sign-ups per ?ref= source (migration 070) ──
-  router.get('/ref-counts', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
+  router.get('/ref-counts', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const { rows } = await stores.pool.query(REF_COUNTS_SQL, [req.validatedQuery.days]);
+      const { rows } = await stores.pool.query(REF_COUNTS_SQL, [(req.validatedQuery as Query).days]);
       return sendSuccess(res, rows);
-    } catch (error: any) {
-      log.error('admin ref counts failed', { error: error.message });
+    } catch (error) {
+      log.error('admin ref counts failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load sign-up ref counts', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
   // ── GET /growth — read-only growth report: sign-ups by ref, follows, and people reached by news pushes, emails and held pushes ──
   // Every ref count is a floor: mobile sign-ups and visitors who cleared storage carry no ref.
-  router.get('/growth', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
+  router.get('/growth', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const days = [req.validatedQuery.days];
+      const days = [(req.validatedQuery as Query).days];
       const dayOf = (column: string) => `to_char(${column}::date, 'YYYY-MM-DD')`;
       const [signups, followsPerDay, followers, news] = await Promise.all([
         stores.pool.query(REF_COUNTS_SQL, days),
@@ -301,7 +308,7 @@ export default function createAdminRoutes(deps: any): Router {
       const newsBy = (channel: string) =>
         news.rows.filter((row: any) => row.channel === channel).map(({ type, count }: any) => ({ type, count }));
       return sendSuccess(res, {
-        days: req.validatedQuery.days,
+        days: (req.validatedQuery as Query).days,
         signupsByRef: signups.rows,
         followsPerDay: followsPerDay.rows,
         followers: followers.rows,
@@ -310,15 +317,15 @@ export default function createAdminRoutes(deps: any): Router {
         newsHeld: newsBy('held'),
         generatedAt: new Date().toISOString(),
       });
-    } catch (error: any) {
-      log.error('admin growth report failed', { error: error.message });
+    } catch (error) {
+      log.error('admin growth report failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load the growth report', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
   // ── POST /festivals/:id/backfill-spotify — auto-populate link_url via Spotify ──
   // Preserves Agent E's SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET config reads.
-  router.post('/festivals/:id/backfill-spotify', adminAuth, adminWriteLimit, async (req: any, res: any) => {
+  router.post('/festivals/:id/backfill-spotify', adminAuth, adminWriteLimit, async (req: Request, res: Response) => {
     try {
       setNoStore(res);
       const parsed = spotifyBackfillSchema.safeParse(req.body ?? {});
@@ -333,7 +340,7 @@ export default function createAdminRoutes(deps: any): Router {
         return sendError(res, 400, 'Spotify API credentials not configured', ErrorCodes.INVALID_INPUT);
       }
 
-      const festivalId = req.params.id;
+      const festivalId = req.params.id as string;
       const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [
         festivalId,
       ]);
@@ -527,25 +534,18 @@ export default function createAdminRoutes(deps: any): Router {
         skipped: sets.length - updated,
         ip: getRequestIp(req),
       });
-      if (stores.auditLog) {
-        await stores.auditLog.insert({
-          actorType: 'admin',
-          actorId: req.user?.userId,
-          action: AUDIT_ACTIONS.SPOTIFY_BACKFILLED,
-          targetType: 'festival',
-          targetId: festivalId,
-          detailsJson: JSON.stringify({
-            updated,
-            skipped: sets.length - updated,
-            total: sets.length,
-            setIds: setIds?.length ?? null,
-            unmatched: unmatchedList.length,
-          }),
-          ip: getRequestIp(req),
-        });
-        // eslint-disable-next-line require-atomic-updates -- res is request-scoped
-        res.locals.auditWritten = true;
-      }
+      await writeAdminAudit(req, res, {
+        action: AUDIT_ACTIONS.SPOTIFY_BACKFILLED,
+        targetType: 'festival',
+        targetId: festivalId,
+        details: {
+          updated,
+          skipped: sets.length - updated,
+          total: sets.length,
+          setIds: setIds?.length ?? null,
+          unmatched: unmatchedList.length,
+        },
+      });
       return sendSuccess(res, {
         updated,
         skipped: sets.length - updated,
@@ -554,18 +554,18 @@ export default function createAdminRoutes(deps: any): Router {
         // On other festivals too: add their links on the Artists tab.
         skippedShared: [...skippedShared].sort((x, y) => x.localeCompare(y)).slice(0, 200),
       });
-    } catch (error: any) {
-      if (error?.code === 'SPOTIFY_RATE_LIMITED') {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'SPOTIFY_RATE_LIMITED') {
         return sendError(res, 503, 'Spotify is busy right now. Try again in a minute.', ErrorCodes.SPOTIFY_RATE_LIMITED);
       }
-      log.error('spotify backfill failed', { error: error.message, festivalId: req.params.id });
+      log.error('spotify backfill failed', { error: (error as NodeJS.ErrnoException).message, festivalId: req.params.id });
       return sendError(res, 500, 'Spotify backfill failed', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
   // ── GET /festivals/:id/set-engagement — picks and reminders per set ──
   // Reminders live in festival_profiles.reminders_json (no table since migration 013).
-  router.get('/festivals/:id/set-engagement', adminAuth, async (req: any, res: any) => {
+  router.get('/festivals/:id/set-engagement', adminAuth, async (req: Request, res: Response) => {
     try {
       setNoStore(res);
       const festivalId = req.params.id;
@@ -608,8 +608,8 @@ export default function createAdminRoutes(deps: any): Router {
         engagement.set(row.setId, { picks: engagement.get(row.setId)?.picks ?? 0, reminders: row.reminders });
       }
       return sendSuccess(res, Object.fromEntries(engagement));
-    } catch (error: any) {
-      log.error('admin set engagement failed', { error: error.message, festivalId: req.params.id });
+    } catch (error) {
+      log.error('admin set engagement failed', { error: (error as NodeJS.ErrnoException).message, festivalId: req.params.id });
       return sendError(res, 500, 'Failed to load set engagement', ErrorCodes.INTERNAL_ERROR);
     }
   });
