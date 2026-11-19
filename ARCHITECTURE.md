@@ -284,6 +284,8 @@ Key tables: `users`, `user_sessions`, `festivals`, `festival_stages`, `festival_
 
 ## Key Design Patterns
 
+For existing helpers, components and queries by task, see [`docs/REUSE.md`](./docs/REUSE.md).
+
 ### Dependency Injection via Factory Functions
 
 The central architectural pattern. Every route module exports a factory that receives the full `deps` object (pool, redis, config, io, log, stores, schemas, helpers, etc.) and returns an Express Router. This makes routes testable with swapped dependencies and keeps the dependency graph explicit.

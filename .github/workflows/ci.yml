@@ -10,7 +10,7 @@ on:
 # holds runners.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Opt every JS action into the Node 24 runtime ahead of GitHub's 2026-06-16
 # forced migration. This silences the Node 20 deprecation across all actions
@@ -527,28 +527,3 @@ jobs:
         run: pnpm exec bundlemon
       - name: Bundle growth gate (gzip size per group vs committed baseline)
         run: node scripts/ci/bundle-compare.mjs
-
-  docker:
-    needs: [test, frontend-tests, mobile-typecheck, mobile-tests]
-    # frontend-tests / mobile-typecheck / mobile-tests may be path-filtered out
-    # (P8). `always()` plus explicit result checks lets docker proceed when an
-    # upstream job is *skipped*, while still gating on real failures/cancellations.
-    if: |
-      github.ref == 'refs/heads/main' &&
-      always() &&
-      needs.test.result == 'success' &&
-      needs.frontend-tests.result != 'failure' && needs.frontend-tests.result != 'cancelled' &&
-      needs.mobile-typecheck.result != 'failure' && needs.mobile-typecheck.result != 'cancelled' &&
-      needs.mobile-tests.result != 'failure' && needs.mobile-tests.result != 'cancelled'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
-        with:
-          context: .
-          push: false
-          tags: festie:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max

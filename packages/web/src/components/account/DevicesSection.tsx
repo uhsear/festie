@@ -8,6 +8,7 @@ import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import Skeleton from '../ui/Skeleton';
+import { Card } from '../ui/Card';
 
 export default function DevicesSection() {
   const { toast } = useToast();
@@ -39,7 +40,7 @@ export default function DevicesSection() {
   };
 
   return (
-    <section className="p-4 rounded-lg bg-bg-card border border-border space-y-3">
+    <Card className="space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
         <MonitorSmartphone className="w-4 h-4" aria-hidden="true" />
         {ACCOUNT_COPY.devicesTitle}
@@ -106,6 +107,6 @@ export default function DevicesSection() {
         busy={busy}
         onConfirm={handleSignOutOthers}
       />
-    </section>
+    </Card>
   );
 }

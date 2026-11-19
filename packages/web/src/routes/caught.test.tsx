@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent, within } from '@testing-library/react';
+import { renderWithQueryClient } from '../test-utils';
 import CaughtPage from './caught';
 
 const mocks = vi.hoisted(() => ({
@@ -83,12 +83,7 @@ const planned = (over: Record<string, unknown>) => ({
 const future = { ...festival, id: 'f1', days: [{ date: '2999-04-24', label: 'Friday' }] };
 
 function renderPage() {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <CaughtPage />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<CaughtPage />);
 }
 
 describe('CaughtPage', () => {

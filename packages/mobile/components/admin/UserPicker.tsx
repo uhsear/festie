@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Modal, View, Text, TouchableOpacity, Pressable, FlatList } from 'react-native';
+import { View, Text, TouchableOpacity, FlatList } from 'react-native';
 import { fetchAdminUsers, type AdminUserRow } from '@festie/shared/services';
 import { maskEmail } from '@festie/shared/utils';
+import DialogShell from '../DialogShell';
 import { LabeledTextInput } from './AdminFields';
 import { makeStyles, typeStyle } from '../../hooks/useTokens';
 
@@ -78,90 +79,71 @@ export default function UserPicker({
   };
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={handleClose} statusBarTranslucent>
-      <View style={styles.scrim}>
-        <Pressable style={styles.backdrop} onPress={handleClose} accessible={false} />
-        <View style={styles.card} accessibilityViewIsModal>
-          <Text style={styles.title} accessibilityRole="header">
-            {title}
-          </Text>
-          <LabeledTextInput
-            label="Search by username or email"
-            value={query}
-            onChangeText={setQuery}
-            autoCapitalize="none"
-          />
-          {fullMessage ? <Text style={styles.warn}>{fullMessage}</Text> : null}
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <FlatList
-            data={results}
-            keyExtractor={(u) => u.id}
-            keyboardShouldPersistTaps="handled"
-            style={styles.list}
-            ListEmptyComponent={
-              <Text style={styles.hint}>{searched ? `No users match "${searched}".` : ''}</Text>
-            }
-            renderItem={({ item: user }) => {
-              const isMember = existingUserIds.includes(user.id);
-              const adding = pickingId === user.id;
-              return (
-                <View style={styles.row}>
-                  <View style={styles.meta}>
-                    <Text style={styles.name} numberOfLines={1}>
-                      @{user.username}
-                    </Text>
-                    <Text style={styles.hint} numberOfLines={1}>
-                      {maskEmail(user.email)}
-                    </Text>
-                  </View>
-                  {isMember ? (
-                    <Text style={styles.hint}>Already in crew</Text>
-                  ) : (
-                    <TouchableOpacity
-                      style={[styles.addButton, (!!fullMessage || !!pickingId) && styles.addDisabled]}
-                      disabled={!!fullMessage || !!pickingId}
-                      onPress={() => void pick(user)}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Add ${user.username}`}
-                    >
-                      <Text style={styles.addLabel}>{adding ? 'Adding…' : 'Add'}</Text>
-                    </TouchableOpacity>
-                  )}
-                </View>
-              );
-            }}
-          />
-          <TouchableOpacity
-            style={styles.doneButton}
-            onPress={handleClose}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Close"
-          >
-            <Text style={styles.doneLabel}>Close</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </Modal>
+    <DialogShell visible={visible} onClose={handleClose} cardStyle={styles.card}>
+      <Text style={styles.title} accessibilityRole="header">
+        {title}
+      </Text>
+      <LabeledTextInput
+        label="Search by username or email"
+        value={query}
+        onChangeText={setQuery}
+        autoCapitalize="none"
+      />
+      {fullMessage ? <Text style={styles.warn}>{fullMessage}</Text> : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+      <FlatList
+        data={results}
+        keyExtractor={(u) => u.id}
+        keyboardShouldPersistTaps="handled"
+        style={styles.list}
+        ListEmptyComponent={
+          <Text style={styles.hint}>{searched ? `No users match "${searched}".` : ''}</Text>
+        }
+        renderItem={({ item: user }) => {
+          const isMember = existingUserIds.includes(user.id);
+          const adding = pickingId === user.id;
+          return (
+            <View style={styles.row}>
+              <View style={styles.meta}>
+                <Text style={styles.name} numberOfLines={1}>
+                  @{user.username}
+                </Text>
+                <Text style={styles.hint} numberOfLines={1}>
+                  {maskEmail(user.email)}
+                </Text>
+              </View>
+              {isMember ? (
+                <Text style={styles.hint}>Already in crew</Text>
+              ) : (
+                <TouchableOpacity
+                  style={[styles.addButton, (!!fullMessage || !!pickingId) && styles.addDisabled]}
+                  disabled={!!fullMessage || !!pickingId}
+                  onPress={() => void pick(user)}
+                  activeOpacity={0.7}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${user.username}`}
+                >
+                  <Text style={styles.addLabel}>{adding ? 'Adding…' : 'Add'}</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          );
+        }}
+      />
+      <TouchableOpacity
+        style={styles.doneButton}
+        onPress={handleClose}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Close"
+      >
+        <Text style={styles.doneLabel}>Close</Text>
+      </TouchableOpacity>
+    </DialogShell>
   );
 }
 
 const useStyles = makeStyles((t) => ({
-  scrim: {
-    flex: 1,
-    backgroundColor: t.colors.shade[10],
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: t.spacing[5],
-  },
-  backdrop: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-  },
   card: {
     width: '100%',
     maxWidth: 400,

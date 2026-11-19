@@ -5,10 +5,10 @@ import { describe, it } from 'node:test';
 // lib/time-zone.ts. The parity test below imports the shared copy by relative path.
 import { register } from 'tsx/cjs/api';
 
-import { formatClock12, festivalStartMinutes, setMinuteRange } from '../lib/time-zone.js';
+import { formatClock12, festivalStartMinutes, setMinuteRange, zonedWallTimeToMs } from '../lib/time-zone.js';
 
 register();
-const { setMinuteRange: sharedSetMinuteRange } = await import('../packages/shared/src/utils/setStatus.js');
+const { setMinuteRange: sharedSetMinuteRange, zonedWallTimeToMs: sharedZonedWallTimeToMs } = await import('../packages/shared/src/utils/setStatus.js');
 
 describe('time-zone: festival day helpers', () => {
   it('festivalStartMinutes adds a day to starts before 06:00', () => {
@@ -30,6 +30,7 @@ describe('time-zone: setMinuteRange', () => {
     assert.deepEqual(setMinuteRange({ startTime: '23:30', endTime: '01:00' }), { start: 1410, end: 1500 });
     assert.deepEqual(setMinuteRange({ startTime: '00:30', endTime: '02:00' }), { start: 1470, end: 1560 });
     assert.deepEqual(setMinuteRange({ startTime: '05:00', endTime: '07:00' }), { start: 1740, end: 1860 });
+    assert.deepEqual(setMinuteRange({ startTime: '22:00', endTime: '02:00' }), { start: 1320, end: 1560 });
     assert.equal(setMinuteRange({ startTime: '20:00', endTime: null }), null);
   });
 
@@ -41,6 +42,25 @@ describe('time-zone: setMinuteRange', () => {
           sharedSetMinuteRange({ startTime, endTime }),
           `${startTime}-${endTime}`,
         );
+      }
+    }
+  });
+});
+
+describe('time-zone: zonedWallTimeToMs', () => {
+  it('matches the shared zonedWallTimeToMs, including DST transitions', () => {
+    const zones = ['America/New_York', 'America/Los_Angeles', 'Europe/London', 'Asia/Kolkata', 'UTC'];
+    const dates = ['2026-03-08', '2026-03-29', '2026-06-15', '2026-11-01', '2026-10-25'];
+    for (const timeZone of zones) {
+      for (const date of dates) {
+        const [y, m, d] = date.split('-').map(Number);
+        for (const [h, min] of [[0, 0], [1, 30], [2, 30], [12, 0], [23, 59]] as const) {
+          assert.equal(
+            zonedWallTimeToMs(y!, m!, d!, h, min, timeZone),
+            sharedZonedWallTimeToMs(date, h, min, timeZone),
+            `${timeZone} ${date} ${h}:${min}`,
+          );
+        }
       }
     }
   });

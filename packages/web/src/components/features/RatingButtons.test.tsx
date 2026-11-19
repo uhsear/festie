@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import type { ComponentProps } from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { screen, fireEvent } from '@testing-library/react';
+import { renderWithQueryClient } from '../../test-utils';
 import { api } from '@festie/shared/services';
 import RatingButtons from './RatingButtons';
 
@@ -20,12 +20,7 @@ vi.mock('../../hooks/useHaptics', () => ({
 }));
 
 function renderButtons(props: Partial<ComponentProps<typeof RatingButtons>> = {}) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
-    <QueryClientProvider client={qc}>
-      <RatingButtons setId="s1" festivalId="f1" {...props} />
-    </QueryClientProvider>,
-  );
+  return renderWithQueryClient(<RatingButtons setId="s1" festivalId="f1" {...props} />);
 }
 
 describe('RatingButtons', () => {

@@ -24,6 +24,7 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
 }));
 vi.mock('@festie/shared/hooks', () => ({
   useSetContext: () => state.ctx,
+  useFestival: () => ({ getStageName: (id: string) => ({ st1: 'Main', st2: 'Sahara' })[id] }),
   usePicks: () => ({ getMyPick: (id: string) => state.picks[id] }),
 }));
 

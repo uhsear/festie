@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { createCacheHelpers } from '../lib/app-context/cache.js';
+import createRolesStore from '../lib/db/stores/roles.js';
 
 // ─── Mock Stores ─────────────────────────────────────────────────────────────
 
@@ -291,5 +292,47 @@ describe('cache: festival rebuild that races an invalidation', () => {
 
     assert.equal((await cache.getFestivalById('f1'))?.name, 'New name');
     assert.equal(reads, 2, 'the raced result was not cached');
+  });
+});
+
+describe('cache: role cache bus', () => {
+  function makeBusRedis() {
+    const published: string[] = [];
+    let onMessage: ((channel: string, message: string) => void) | undefined;
+    const sub = {
+      on(event: string, handler: any) {
+        if (event === 'message') onMessage = handler;
+      },
+      subscribe() {},
+    };
+    const redis = {
+      duplicate: () => sub,
+      publish: async (channel: string) => {
+        published.push(channel);
+        return 1;
+      },
+    };
+    return { redis, published, emit: (channel: string) => onMessage?.(channel, '1') };
+  }
+
+  it('publishes a user invalidation when a role changes', async () => {
+    const { redis, published } = makeBusRedis();
+    const roles = createRolesStore({ query: async () => ({ rows: [] }) } as any, { nodeEnv: 'production' });
+    createCacheHelpers({ stores: { ...makeStores(), roles }, redis, log: noopLog });
+    await roles.grantRole('u1', 'admin');
+    assert.deepEqual(published, ['cache:invalidate:users']);
+  });
+
+  it('clears the role cache when a peer worker invalidates users', async () => {
+    const { redis, emit } = makeBusRedis();
+    let rows = [{ name: 'admin' }];
+    const pool = { query: async () => ({ rows }) } as any;
+    const roles = createRolesStore(pool, { nodeEnv: 'production' });
+    createCacheHelpers({ stores: { ...makeStores(), roles }, redis, log: noopLog });
+    assert.deepEqual(await roles.getUserRoles('u1'), ['admin']);
+    rows = [];
+    assert.deepEqual(await roles.getUserRoles('u1'), ['admin'], 'served from cache');
+    emit('cache:invalidate:users');
+    assert.deepEqual(await roles.getUserRoles('u1'), []);
   });
 });

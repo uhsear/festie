@@ -6,7 +6,7 @@
  */
 
 import { validateTime } from './validation';
-import { festivalStartMinutes } from '../time-zone';
+import { setMinuteRange } from '../time-zone';
 
 export interface ClashCandidate { aId: string; bId: string; people: number }
 
@@ -28,10 +28,8 @@ export function overlappingClashes(
   for (const day of festival?.days ?? []) {
     for (const set of day?.sets ?? []) {
       if (!validateTime(set?.startTime) || !validateTime(set?.endTime)) continue;
-      const start = festivalStartMinutes(set.startTime as string);
-      let end = festivalStartMinutes(set.endTime as string);
-      if (end <= start) end += 1440;
-      ranges.set(set.id, { start, end });
+      const range = setMinuteRange(set);
+      if (range) ranges.set(set.id, range);
     }
   }
 

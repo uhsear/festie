@@ -77,12 +77,13 @@ def main():
         if TEST_USER and TEST_PASSWORD:
             payload = json.dumps({"username": TEST_USER, "password": TEST_PASSWORD})
             tmp = "/tmp/festie-verify-login.$$.json"
-            run(client, f"umask 077 && cat > {tmp} <<'EOF'\n{payload}\nEOF")
+            # One command, so one remote shell: $$ matches across write, curl and rm.
             code, out, err = run(
                 client,
+                f"umask 077 && trap 'rm -f {tmp}' EXIT && cat > {tmp} <<'EOF'\n{payload}\nEOF\n"
                 f"curl -s -o /dev/null -w '%{{http_code}}' -X POST {LOGIN_URL} "
                 "-H 'Content-Type: application/json' -H 'X-Festie-Request: 1' "
-                f"-d @{tmp}; rm -f {tmp}",
+                f"-d @{tmp}",
                 timeout=60,
             )
             login_code = out.strip()

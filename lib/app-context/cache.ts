@@ -33,6 +33,7 @@ export function createCacheHelpers({ stores, redis, log }: { stores: any; redis:
     log,
     onInvalidateUsers() {
       _userDataVersion += 1;
+      stores.roles?.invalidateAllCaches();
       log.debug('cache-bus: user cache invalidated by peer worker');
     },
     onInvalidateFestivals() {
@@ -41,6 +42,8 @@ export function createCacheHelpers({ stores, redis, log }: { stores: any; redis:
       log.debug('cache-bus: festival cache invalidated by peer worker');
     },
   }) : null;
+
+  if (cacheBus) stores.roles?.setOnRolesChanged(() => cacheBus.publishUserInvalidation());
 
   // ── Data access helpers ────────────────────────────────────────────
   async function getFestivals() {

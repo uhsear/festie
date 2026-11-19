@@ -45,7 +45,6 @@ export default function createEmailAuthRoutes(deps: any): Router {
     validate,
     stores,
     invalidateUserCache,
-    state,
     createAuditLog,
     getRequestIp,
     io,
@@ -315,8 +314,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
   }
 
   /**
-   * Resolve the reset token to a userId. Checks in-memory admin tokens
-   * first, then falls back to self-service DB tokens.
+   * Resolve the reset token to a userId by consuming its DB row.
    * Returns { userId } or { error } with status/message/code.
    */
   // TOKEN_EXPIRED lets clients tell a dead link from a weak password without matching text.
@@ -324,15 +322,6 @@ export default function createEmailAuthRoutes(deps: any): Router {
 
   async function resolveResetToken(token: string) {
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
-
-    if (state._adminResetTokens?.has(tokenHash)) {
-      const tokenData = state._adminResetTokens.get(tokenHash);
-      if (Date.now() > tokenData.expiresAt) {
-        state._adminResetTokens.delete(tokenHash);
-        return { error: { status: 400, message: RESET_LINK_EXPIRED, code: ErrorCodes.TOKEN_EXPIRED } };
-      }
-      return { userId: tokenData.userId };
-    }
 
     const consumed = await stores.emailTokens.consumeResetToken(tokenHash);
     if (consumed) return { userId: consumed.user_id };
@@ -362,11 +351,9 @@ export default function createEmailAuthRoutes(deps: any): Router {
           return sendError(res, resolved.error.status, resolved.error.message, resolved.error.code);
         }
         const { userId: targetUserId } = resolved;
-        const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
         const user = await getUserById(targetUserId);
         if (!user) {
-          state._adminResetTokens.delete(tokenHash);
           return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
         }
 
@@ -385,7 +372,6 @@ export default function createEmailAuthRoutes(deps: any): Router {
         // link alongside a forgot-password one: either could reset again.
         await stores.emailTokens.invalidateResetTokens(targetUserId);
         disconnectUserSockets(targetUserId, io);
-        state._adminResetTokens.delete(tokenHash);
 
         const auditLog = createAuditLog('user_reset_password', 'user', {
           userId: targetUserId,

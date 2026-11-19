@@ -37,6 +37,7 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
 
 vi.mock('@festie/shared/hooks', () => ({
   useOffline: vi.fn(),
+  useFestival: () => ({ getStageName: () => undefined }),
 }));
 
 vi.mock('./Header', () => ({ default: () => <div data-testid="header">Header</div> }));

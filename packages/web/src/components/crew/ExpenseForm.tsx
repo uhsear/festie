@@ -8,6 +8,7 @@ import {
   sharesError,
   formatCents,
   toCents,
+  centsToInputText,
   attendingDayCount,
   hasDayAnswers,
   memberSummary,
@@ -40,8 +41,6 @@ interface Props {
   onCancel: () => void;
 }
 
-const centsToText = (cents: number) => (cents / 100).toFixed(2);
-
 export default function ExpenseForm({
   members,
   currentUserId,
@@ -65,7 +64,7 @@ export default function ExpenseForm({
   const initialShares = initial?.split_amounts;
   const [uneven, setUneven] = useState(!!initialShares && Object.keys(initialShares).length > 0);
   const [shareText, setShareText] = useState<Record<string, string>>(() =>
-    Object.fromEntries(Object.entries(initialShares ?? {}).map(([id, cents]) => [id, centsToText(cents)])),
+    Object.fromEntries(Object.entries(initialShares ?? {}).map(([id, cents]) => [id, centsToInputText(cents)])),
   );
 
   const daysIndex = useCrewDaysIndex();
@@ -85,7 +84,7 @@ export default function ExpenseForm({
   }
 
   function startUneven() {
-    setShareText(Object.fromEntries(evenShares(totalCents, splitWith).map((s) => [s.userId, centsToText(s.cents)])));
+    setShareText(Object.fromEntries(evenShares(totalCents, splitWith).map((s) => [s.userId, centsToInputText(s.cents)])));
     setUneven(true);
   }
 
@@ -95,7 +94,7 @@ export default function ExpenseForm({
     );
     if (byDays.length === 0) return;
     setSplitWith((prev) => prev.filter((id) => !removed.includes(id)));
-    setShareText(Object.fromEntries(byDays.map((s) => [s.userId, centsToText(s.cents)])));
+    setShareText(Object.fromEntries(byDays.map((s) => [s.userId, centsToInputText(s.cents)])));
     setRemovedNames(
       removed.map((id) => {
         const m = members.find((x) => x.userId === id);

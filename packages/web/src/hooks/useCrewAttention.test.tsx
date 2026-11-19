@@ -1,18 +1,14 @@
-import type React from 'react';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { createTestQueryClient, queryClientWrapper } from '../test-utils';
 import { useAuthStore, useCrewStore, useUIStore } from '@festie/shared/stores';
 import { useCrewAttention } from './useCrewAttention';
 
 function setup() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: Infinity } } });
+  const client = createTestQueryClient({ queries: { retry: false, staleTime: Infinity } });
   client.setQueryData(['polls', 'c1'], [{ id: 'p1', closed: false, votes: [] }]);
   client.setQueryData(['expense-balances', 'c1'], []);
-  const wrapper = ({ children }: { children: React.ReactNode }) => (
-    <QueryClientProvider client={client}>{children}</QueryClientProvider>
-  );
-  return renderHook(() => useCrewAttention(), { wrapper });
+  return renderHook(() => useCrewAttention(), { wrapper: queryClientWrapper(client) });
 }
 
 describe('useCrewAttention', () => {

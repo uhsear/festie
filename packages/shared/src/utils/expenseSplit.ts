@@ -5,13 +5,10 @@
  */
 import type { CrewExpense, CrewExpenseBalance, CrewMember, CrewSettlement } from '../types';
 import { memberDisplayName } from './crewLogistics';
-import { formatAmount, formatCents, toCents } from './money';
+import { ZERO_EPSILON, formatAmount, formatCents, toCents } from './money';
 import { timeAgo } from './timeAgo';
 
 export type ExpenseShare = { userId: string; cents: number };
-
-/** Same epsilon as `formatBalance`. */
-const ZERO_EPSILON = 0.01;
 
 /** Equal split: the leftover cents go one each to the first ids, in order. */
 export function evenShares(totalCents: number, userIds: string[]): ExpenseShare[] {

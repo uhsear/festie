@@ -15,6 +15,10 @@
 # read-only smoke spec (scripts/e2e-nightly-smoke.spec.mjs) copied into it, so
 # @playwright/test resolves. The full suite runs in CI (.github/workflows/e2e-web.yml).
 # Keep PW_VERSION in step with package.json's @playwright/test.
+#
+# Owner: whoever owns production operations (the cron host's maintainer). The spec
+# is outside the repo's test globs on purpose, so check it without running it:
+#   scripts/e2e-nightly.sh --list   (lists the smoke tests, sends no request)
 set -euo pipefail
 cd "$(cd "$(dirname "$0")/.." && pwd)"
 REPO="$(pwd)"
@@ -56,6 +60,6 @@ CFG
 echo "[e2e-nightly] $(date -Is) starting against ${BASE_URL}"
 cd "${TOOLCHAIN}"
 status=0
-./node_modules/.bin/playwright test --config=playwright.config.mjs --project=chromium --reporter=line || status=$?
+./node_modules/.bin/playwright test --config=playwright.config.mjs --project=chromium --reporter=line "$@" || status=$?
 echo "[e2e-nightly] $(date -Is) finished with exit=${status}"
 exit "${status}"
