@@ -34,6 +34,10 @@ const mockUtils: any = {
   toISOString: (val: any) => (val ? new Date(val).toISOString() : null),
 };
 
+// Collapse multi-line/whitespace-formatted SQL into a single normalized line
+// so substring assertions are not brittle to SQL formatting.
+const norm = (s: any) => String(s).replace(/\s+/g, ' ').trim();
+
 function fakeUserRow(overrides: any = {}) {
   return {
     id: 'u1',
@@ -191,6 +195,10 @@ describe('createUsersStore', () => {
       const result = await users.getByEmail('alice@example.com');
       assert.equal(result.username, 'alice');
       assert.equal(pool.calls[0].params[0], 'alice@example.com');
+      // case-insensitive lookup that excludes soft-deleted users
+      const sql = norm(pool.calls[0].sql);
+      assert.ok(sql.includes('LOWER(email) = $1'));
+      assert.ok(sql.includes('deleted_at IS NULL'));
     });
 
     it('returns null when no user has that email', async () => {
@@ -209,6 +217,10 @@ describe('createUsersStore', () => {
       const result = await users.findDeletedByUsername('alice');
       assert.equal(result.username, 'alice');
       assert.equal(pool.calls[0].params[0], 'alice');
+      // only soft-deleted users inside the 30-day reactivation window
+      const sql = norm(pool.calls[0].sql);
+      assert.ok(sql.includes('deleted_at IS NOT NULL'));
+      assert.ok(sql.includes("deleted_at > NOW() - INTERVAL '30 days'"));
     });
 
     it('returns null when not found', async () => {
@@ -228,6 +240,10 @@ describe('createUsersStore', () => {
       const result = await users.findDeletedByEmail('alice@example.com');
       assert.equal(result.username, 'alice');
       assert.equal(pool.calls[0].params[0], 'alice@example.com');
+      const sql = norm(pool.calls[0].sql);
+      assert.ok(sql.includes('LOWER(email) = $1'));
+      assert.ok(sql.includes('deleted_at IS NOT NULL'));
+      assert.ok(sql.includes("deleted_at > NOW() - INTERVAL '30 days'"));
     });
 
     it('returns null when not found', async () => {
@@ -244,6 +260,7 @@ describe('createUsersStore', () => {
       const users = createUsersStore(pool, mockUtils);
 
       await users.reactivate('u1');
+      assert.ok(norm(pool.calls[0].sql).includes('WHERE id = $1 AND deleted_at IS NOT NULL'));
       assert.deepEqual(pool.calls[0].params, ['u1']);
     });
   });
@@ -394,6 +411,14 @@ describe('createUsersStore', () => {
       assert.equal(pool.calls[0].params[1], null);
       assert.equal(pool.calls[0].params[2], null);
     });
+
+    it('only updates non-deleted users', async () => {
+      const pool = mockPool([{ rows: [], rowCount: 0 }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      await users.softDelete('u1');
+      assert.ok(pool.calls[0].sql.includes('deleted_at IS NULL'));
+    });
   });
 
   // ── delete (soft with return) ────────────────────────────────────
@@ -483,6 +508,14 @@ describe('createUsersStore', () => {
 
       const result = await users.count();
       assert.equal(result, 0);
+    });
+
+    it('only counts non-deleted users', async () => {
+      const pool = mockPool([{ rows: [{ count: '5' }] }]);
+      const users = createUsersStore(pool, mockUtils);
+
+      await users.count();
+      assert.ok(pool.calls[0].sql.includes('deleted_at IS NULL'));
     });
   });
 
@@ -1085,6 +1118,11 @@ describe('createSessionsStore', () => {
         const result = await sessions.refreshTokens.claim('rt1');
         assert.deepEqual(result, { userId: 'u1' });
         assert.equal(pool.calls.length, 1);
+        // single-use and expiry guard: replay of a revoked or expired token must claim nothing
+        const sql = norm(pool.calls[0].sql);
+        assert.ok(sql.startsWith('UPDATE refresh_tokens SET revoked = TRUE'));
+        assert.ok(sql.includes('revoked = FALSE'));
+        assert.ok(sql.includes('expires_at > NOW()'));
         assert.deepEqual(pool.calls[0].params, ['rt1']);
       });
 
@@ -1107,6 +1145,14 @@ describe('createSessionsStore', () => {
         assert.equal(pool.calls[0].params[0], 'u1');
       });
 
+      it('only targets non-revoked tokens', async () => {
+        const pool = mockPool([{ rows: [] }]);
+        const sessions = createSessionsStore(pool, mockUtils);
+
+        await sessions.refreshTokens.revokeAll('u1');
+        assert.ok(pool.calls[0].sql.includes('revoked = FALSE'));
+      });
+
       it('executes exactly one query', async () => {
         const pool = mockPool([{ rows: [] }]);
         const sessions = createSessionsStore(pool, mockUtils);
@@ -1121,6 +1167,9 @@ describe('createSessionsStore', () => {
         const sessions = createSessionsStore(pool, mockUtils);
 
         await sessions.refreshTokens.deleteExpired();
+        const sql = norm(pool.calls[0].sql);
+        assert.ok(sql.includes('expires_at < NOW()'));
+        assert.ok(sql.includes('revoked = TRUE'));
       });
 
       it('takes no parameters', async () => {
@@ -1148,6 +1197,10 @@ describe('createSessionsStore', () => {
         const sessions = createSessionsStore(pool, mockUtils);
 
         await sessions.loginFailures.record('u1');
+        // lockout counter: upsert that increments the existing row
+        const sql = norm(pool.calls[0].sql);
+        assert.ok(sql.includes('ON CONFLICT'));
+        assert.ok(sql.includes('consecutive_failures + 1'));
         assert.equal(pool.calls[0].params[0], 'u1');
       });
 
