@@ -32,10 +32,10 @@ export type { PublicUser };
 // `ZodType<any>` is Zod's own variance-correct way to accept any schema; the
 // `any` is the output-type parameter, not a real `any` value.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type ValidateFactory = (schema: z.ZodType<any>) => RequestHandler;
+type ValidateFactory = (schema: z.ZodType<any>) => RequestHandler;
 
 /** Response helpers (re-exported from lib/response). */
-export type SendSuccess = <T = unknown>(
+type SendSuccess = <T = unknown>(
   res: Response,
   data: T,
   // `meta` mirrors the runtime `sendSuccess` signature (lib/response.ts), an
@@ -45,7 +45,7 @@ export type SendSuccess = <T = unknown>(
   config?: AppConfig | null,
 ) => Response;
 
-export type SendError = (
+type SendError = (
   res: Response,
   status: number,
   message: string,
@@ -146,7 +146,7 @@ export interface AppState {
  * without the augmented-Request fields making the handler signature
  * structurally incompatible with Express's overloads.
  */
-export type Middleware = RequestHandler;
+type Middleware = RequestHandler;
 
 /**
  * The application context — dependency-injection surface for every route module
