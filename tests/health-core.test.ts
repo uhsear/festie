@@ -24,8 +24,8 @@ function makeDeps(overrides: any = {}) {
       MAX_STATUS_TEXT: 100,
     },
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
-    sendError: (res: any, status: number, msg: string, code: string) => res.status(status).json({ data: null, error: { message: msg, status, code: code || 'ERROR' } }),
-    ErrorCodes: { MISSING_FIELD: 'MISSING_FIELD', INVALID_INPUT: 'INVALID_INPUT' },
+    sendError: (res: any, status: number, msg: string, code: string, _details: any, data: any = null) => res.status(status).json({ data, error: { message: msg, status, code: code || 'ERROR' } }),
+    ErrorCodes: { MISSING_FIELD: 'MISSING_FIELD', INVALID_INPUT: 'INVALID_INPUT', SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE' },
     rateLimit: () => (req: any, res: any, next: any) => next(),
     redis: overrides.redis || null,
     ...overrides,
@@ -99,6 +99,19 @@ describe('health-core: GET /ready', () => {
     const res = await request(app, 'GET', '/ready');
     assert.equal(res.status, 503);
     assert.equal(res.body.data.status, 'not_ready');
+    assert.equal(res.body.error.status, 503);
+    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
+  });
+
+  it('returns an error envelope beside data.status when a dependency fails', async () => {
+    const deps = makeDeps({ stores: { pool: { query: async () => { throw new Error('down'); } } } });
+    const { app, setReady } = testApp(deps);
+    setReady(true);
+    const res = await request(app, 'GET', '/ready');
+    assert.equal(res.status, 503);
+    assert.equal(res.body.data.status, 'not_ready');
+    assert.equal(res.body.data.checks.database, 'failed');
+    assert.equal(res.body.error.code, 'SERVICE_UNAVAILABLE');
   });
 
   it('returns 200 when ready', async () => {
@@ -109,6 +122,7 @@ describe('health-core: GET /ready', () => {
     assert.equal(res.status, 200);
     assert.equal(res.body.data.status, 'ready');
     assert.ok(res.body.data.checks);
+    assert.equal(res.body.error, null);
   });
 
   it('reports redis as disabled when REDIS_ENABLED is false', async () => {
