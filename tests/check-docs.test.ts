@@ -63,6 +63,7 @@ describe('check-docs', () => {
 
   test('missing path in an ADR and a broken markdown link both fail', () => {
     const root = fixture({
+      'ARCHITECTURE.md': 'ok\n',
       'docs/SOCKET_CONTRACT.md': CONTRACT,
       'docs/adrs/002-y.md': 'See [spec](./missing.md) and `routes/nope.ts`.\n',
       'lib/emitter.ts': EMITTER,
@@ -92,6 +93,7 @@ describe('check-docs', () => {
 
   test('undocumented emitted event fails with its source location', () => {
     const root = fixture({
+      'ARCHITECTURE.md': 'ok\n',
       'docs/SOCKET_CONTRACT.md': CONTRACT,
       'lib/emitter.ts': EMITTER,
       'routes/crews.ts': "io.to(`crew:${id}`).emit('crew:renamed', {});\nsocket.emit(\"crew:other\", 1);\n",
@@ -104,6 +106,7 @@ describe('check-docs', () => {
 
   test('emits in tests and comments are ignored', () => {
     const root = fixture({
+      'ARCHITECTURE.md': 'ok\n',
       'docs/SOCKET_CONTRACT.md': CONTRACT,
       'lib/emitter.ts': `${EMITTER}// socket.emit('commented:out', 1)\n`,
       'lib/emitter.test.ts': "io.emit('test:only', 1);\n",
@@ -112,8 +115,15 @@ describe('check-docs', () => {
     assert.equal(code, 0, out);
   });
 
-  test('absent docs are skipped, not failed', () => {
+  test('missing ARCHITECTURE.md fails', () => {
     const root = fixture({ 'lib/emitter.ts': EMITTER });
+    const { code, out } = run(root);
+    assert.equal(code, 1);
+    assert.match(out, /ARCHITECTURE\.md is required but not present/);
+  });
+
+  test('absent private docs are skipped, not failed', () => {
+    const root = fixture({ 'ARCHITECTURE.md': 'ok\n', 'lib/emitter.ts': EMITTER });
     const { code, out } = run(root);
     assert.equal(code, 0, out);
     assert.match(out, /skipped docs\/SOCKET_CONTRACT\.md/);
