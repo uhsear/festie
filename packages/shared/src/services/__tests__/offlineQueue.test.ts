@@ -26,7 +26,6 @@ import {
   retryFailed,
   registerCreateReconciler,
   clearQueue,
-  registerCreateReconciler,
   dismissFailed,
   hydrateFailedSync,
   surfaceFailedSync,
