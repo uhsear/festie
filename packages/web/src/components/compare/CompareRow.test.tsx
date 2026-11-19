@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { vi } from 'vitest';
 import CompareRow from './CompareRow';
@@ -13,17 +14,7 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
-  return {
-    id: 'set-1',
-    festivalId: 'fest-1',
-    stageId: 'stage-1',
-    artist: 'Daft Punk',
-    startTime: '14:00',
-    endTime: '15:00',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
+  return makeFestivalSet({ artist: 'Daft Punk', ...overrides });
 }
 
 function renderInTable(ui: React.ReactElement) {

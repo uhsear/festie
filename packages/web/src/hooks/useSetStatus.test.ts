@@ -1,19 +1,11 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { renderHook, act } from '@testing-library/react';
 import { getSetStatus, useNow } from './useSetStatus';
 import type { FestivalSet, FestivalDay } from '@festie/shared/types';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
-  return {
-    id: 'set-1',
-    festivalId: 'fest-1',
-    stageId: 'stage-1',
-    startTime: '14:00',
-    endTime: '15:00',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
+  return makeFestivalSet(overrides);
 }
 
 function makeDay(overrides: Partial<FestivalDay> = {}): FestivalDay {

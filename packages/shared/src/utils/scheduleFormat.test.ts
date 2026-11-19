@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
   fmtCountdown,
   byStartTime,
@@ -50,15 +51,7 @@ describe('fmtCountdown', () => {
 // ---------------------------------------------------------------------------
 
 function makeSet(startTime: string | undefined): FestivalSet {
-  return {
-    id: 'x',
-    festivalId: 'f',
-    stageId: 's',
-    startTime: startTime ?? '',
-    endTime: '',
-    createdAt: '',
-    updatedAt: '',
-  };
+  return makeFestivalSet({ id: 'x', festivalId: 'f', stageId: 's', startTime: startTime ?? '', endTime: '', createdAt: '', updatedAt: '' });
 }
 
 describe('byStartTime', () => {

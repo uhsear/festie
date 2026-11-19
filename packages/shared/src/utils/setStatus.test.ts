@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
   getSetTimeBounds,
   getSetStatus,
@@ -12,17 +13,7 @@ import {
 import type { FestivalSet, FestivalDay } from '../types/domain';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
-  return {
-    id: 's1',
-    festivalId: 'f1',
-    stageId: 'st1',
-    startTime: '20:00',
-    endTime: '21:00',
-    date: '2026-09-04',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
+  return makeFestivalSet({ id: 's1', festivalId: 'f1', stageId: 'st1', startTime: '20:00', endTime: '21:00', date: '2026-09-04', ...overrides });
 }
 
 // Reconstruct the expected local-frame epoch-ms for a YYYY-MM-DD + HH:MM, the

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeFestivalSet } from '../../test-fixtures/festivalSet';
 import { renderHook, act } from '@testing-library/react';
 import { useClashResolver } from '../useClashResolver';
 import { useFestivalStore } from '../../stores/festivalStore';
@@ -21,17 +22,7 @@ vi.mock('../../stores/resetStores', () => ({
 const DAYS: FestivalDay[] = [{ id: 'd0', festivalId: 'f1', date: '2026-06-13', createdAt: '', updatedAt: '' }];
 
 function makeSet(id: string, startTime: string, endTime: string): FestivalSet {
-  return {
-    id,
-    festivalId: 'f1',
-    stageId: 'main',
-    dayIndex: 0,
-    startTime,
-    endTime,
-    artist: id.toUpperCase(),
-    createdAt: '',
-    updatedAt: '',
-  };
+  return makeFestivalSet({ id, festivalId: 'f1', stageId: 'main', dayIndex: 0, startTime, endTime, artist: id.toUpperCase(), createdAt: '', updatedAt: '' });
 }
 
 const SETS = [makeSet('a', '21:00', '22:30'), makeSet('b', '21:30', '23:00')];

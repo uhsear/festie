@@ -1,21 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ClashPrompt from './ClashPrompt';
 import type { FestivalSet } from '@festie/shared/types';
 
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
-  return {
-    id: 'set-1',
-    festivalId: 'fest-1',
-    stageId: 'stage-1',
-    artist: 'Test Artist',
-    startTime: '20:00',
-    endTime: '21:00',
-    createdAt: '2026-01-01T00:00:00Z',
-    updatedAt: '2026-01-01T00:00:00Z',
-    ...overrides,
-  };
+  return makeFestivalSet({ artist: 'Test Artist', startTime: '20:00', endTime: '21:00', ...overrides });
 }
 
 describe('ClashPrompt', () => {

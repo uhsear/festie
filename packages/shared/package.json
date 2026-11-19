@@ -18,7 +18,8 @@
     "./tokens": "./src/tokens/index.ts",
     "./platform": "./src/platform/index.ts",
     "./pwa": "./src/pwa/runtimeCaching.ts",
-    "./illustrations": "./src/illustrations/index.ts"
+    "./illustrations": "./src/illustrations/index.ts",
+    "./test-fixtures/festivalSet": "./src/test-fixtures/festivalSet.ts"
   },
   "scripts": {
     "test": "vitest run",
