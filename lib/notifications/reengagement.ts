@@ -306,27 +306,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return { sent, eventKey, dayIndex };
   }
 
-  // ── lineup_drop ─────────────────────────────────────────────────────────
-  //
-  // Fires from the admin "Announce lineup" action (routes/lineup-announce.ts). Two audiences:
-  // followers of the festival who have not joined it, and PRIOR-year attendees of the SAME-NAMED
-  // recurring festival (the inverse of getAttendedFestivals: users who attended an earlier edition
-  // but NOT the new one). Both get the push and the inbox row. Only followers get the email,
-  // because a name match can hit the wrong series. Deduped per user on eventKey `lineup:<festivalId>`.
-  async function resolveLineupDropRecipients(festivalId: string): Promise<
-    | {
-        festivalName: string;
-        hasTimes: boolean;
-        followerIds: string[];
-        priorEditionIds: string[];
-        matchedFestivalNames: string[];
-        fresh: string[];
-      }
-    | { reason: string }
-  > {
-    if (!festivalId || !db) return { reason: 'no_festival' };
-
-    // Resolve the new festival's name, and whether any set has a time (the copy depends on it).
+  /** Resolve the new festival's name, and whether any set has a time (the copy depends on it). */
+  async function loadLineupDropFestival(festivalId: string): Promise<{ festivalName: string; hasTimes: boolean }> {
     let festivalName = '';
     let hasTimes = false;
     try {
@@ -357,8 +338,11 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     } catch (err: any) {
       log?.warn?.('sendLineupDrop: name lookup failed', { festivalId, error: err?.message });
     }
-    if (!festivalName) return { reason: 'festival_not_found' };
+    return { festivalName, hasTimes };
+  }
 
+  /** Followers who have not joined, plus prior-edition profile rows. Returns null when a query fails. */
+  async function queryLineupDropAudience(festivalId: string) {
     let followerIds: string[];
     let priorRows: Array<{ userId: string; festivalName: string }>;
     try {
@@ -405,8 +389,37 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       priorRows = prior.rows.filter((r: any) => r.userId);
     } catch (err: any) {
       log?.warn?.('sendLineupDrop: recipient query failed', { festivalId, error: err?.message });
-      return { reason: 'query_failed' };
+      return null;
     }
+    return { followerIds, priorRows };
+  }
+
+  // ── lineup_drop ─────────────────────────────────────────────────────────
+  //
+  // Fires from the admin "Announce lineup" action (routes/lineup-announce.ts). Two audiences:
+  // followers of the festival who have not joined it, and PRIOR-year attendees of the SAME-NAMED
+  // recurring festival (the inverse of getAttendedFestivals: users who attended an earlier edition
+  // but NOT the new one). Both get the push and the inbox row. Only followers get the email,
+  // because a name match can hit the wrong series. Deduped per user on eventKey `lineup:<festivalId>`.
+  async function resolveLineupDropRecipients(festivalId: string): Promise<
+    | {
+        festivalName: string;
+        hasTimes: boolean;
+        followerIds: string[];
+        priorEditionIds: string[];
+        matchedFestivalNames: string[];
+        fresh: string[];
+      }
+    | { reason: string }
+  > {
+    if (!festivalId || !db) return { reason: 'no_festival' };
+
+    const { festivalName, hasTimes } = await loadLineupDropFestival(festivalId);
+    if (!festivalName) return { reason: 'festival_not_found' };
+
+    const audience = await queryLineupDropAudience(festivalId);
+    if (!audience) return { reason: 'query_failed' };
+    const { followerIds, priorRows } = audience;
     // A follower who also attended before is a follower: they get the email, so they leave the prior list.
     const followerSet = new Set(followerIds);
     const priorOnly = priorRows.filter((r) => !followerSet.has(r.userId));
@@ -590,6 +603,44 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return { recipients: userIds.length, ...(await planAlertEmail(userIds, 'set_times_out', `times:${festivalId}`)) };
   }
 
+  /** Stamp the claimed release rows once someone was reached, or free the date when nobody was. */
+  async function settleTimeRelease({ festivalId, eventKey, userIds, releaseCount, pushSent, emailSent }: any) {
+    // People this release reached by inbox, push or email, retries included.
+    const { rows: reached } = await db.query(
+      `SELECT COUNT(DISTINCT user_id)::int AS "reached" FROM notification_log
+       WHERE type = 'set_times_out' AND status <> 'failed' AND user_id = ANY($2::text[])
+         AND data_json->>'eventKey' = ANY($1::text[])`,
+      [[eventKey, `${eventKey}#email`], userIds],
+    );
+    const recipients: number = reached[0]?.reached ?? 0;
+    if (userIds.length > 0 && recipients === 0) {
+      // Nobody was reached (a push provider outage, say): free the date so the admin can send it again.
+      await db.query('DELETE FROM festival_time_releases WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL', [
+        festivalId,
+        eventKey,
+      ]);
+      log?.warn?.('sendTimeRelease: nobody reached, claim released', { festivalId, eventKey, audience: userIds.length });
+      return { sent: pushSent, emailSent, eventKey, recipients: 0, reason: 'none_reached' };
+    }
+    await db.query(
+      'UPDATE festival_time_releases SET sent_at = NOW(), recipients = $3 WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL',
+      [festivalId, eventKey, recipients],
+    );
+    // The first release also writes the marker that "Announce days" and older builds still read.
+    await db.query('UPDATE festivals SET set_times_out_at = NOW() WHERE id = $1 AND set_times_out_at IS NULL', [festivalId]);
+
+    log?.info?.('sendTimeRelease: done', {
+      festivalId,
+      eventKey,
+      days: releaseCount,
+      audience: userIds.length,
+      recipients,
+      pushSent,
+      emailSent,
+    });
+    return { sent: pushSent, emailSent, eventKey, recipients };
+  }
+
   // ── set_times_out ───────────────────────────────────────────────────────
   //
   // Fires only from the admin release panel (routes/time-releases.ts), once per festival date. No save,
@@ -647,40 +698,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
         )
       : 0;
 
-    // People this release reached by inbox, push or email, retries included.
-    const { rows: reached } = await db.query(
-      `SELECT COUNT(DISTINCT user_id)::int AS "reached" FROM notification_log
-       WHERE type = 'set_times_out' AND status <> 'failed' AND user_id = ANY($2::text[])
-         AND data_json->>'eventKey' = ANY($1::text[])`,
-      [[eventKey, `${eventKey}#email`], userIds],
-    );
-    const recipients: number = reached[0]?.reached ?? 0;
-    if (userIds.length > 0 && recipients === 0) {
-      // Nobody was reached (a push provider outage, say): free the date so the admin can send it again.
-      await db.query('DELETE FROM festival_time_releases WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL', [
-        festivalId,
-        eventKey,
-      ]);
-      log?.warn?.('sendTimeRelease: nobody reached, claim released', { festivalId, eventKey, audience: userIds.length });
-      return { sent: pushSent, emailSent, eventKey, recipients: 0, reason: 'none_reached' };
-    }
-    await db.query(
-      'UPDATE festival_time_releases SET sent_at = NOW(), recipients = $3 WHERE festival_id = $1 AND event_key = $2 AND sent_at IS NULL',
-      [festivalId, eventKey, recipients],
-    );
-    // The first release also writes the marker that "Announce days" and older builds still read.
-    await db.query('UPDATE festivals SET set_times_out_at = NOW() WHERE id = $1 AND set_times_out_at IS NULL', [festivalId]);
-
-    log?.info?.('sendTimeRelease: done', {
-      festivalId,
-      eventKey,
-      days: releases.length,
-      audience: userIds.length,
-      recipients,
-      pushSent,
-      emailSent,
-    });
-    return { sent: pushSent, emailSent, eventKey, recipients };
+    return settleTimeRelease({ festivalId, eventKey, userIds, releaseCount: releases.length, pushSent, emailSent });
   }
 
   // The fan-out is sequential and can outlast the stuck window, so a live job refreshes its claim.
