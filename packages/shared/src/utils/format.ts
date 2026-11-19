@@ -70,6 +70,13 @@ export function formatTime(t: string | undefined): string {
   return `${hr}:${mm} ${ap}`;
 }
 
+const HHMM = /^\d{2}:\d{2}$/;
+
+/** Formats an HH:MM value as 12h time; free-text values pass through unchanged. */
+export function formatTimeOrRaw(t: string): string {
+  return HHMM.test(t) ? formatTime(t) : t;
+}
+
 export function timeToMinutes(t: string | undefined): number {
   if (!t) return 0;
   const [hh = 0, mm = 0] = t.split(':').map((x) => parseInt(x, 10));
