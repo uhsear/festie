@@ -54,7 +54,25 @@ describe('scripts/backup-restore-drill.sh', { skip }, () => {
     writeFileSync(path.join(work, 'drill-db.env'), 'DB_USER=festie\nPGPASSWORD=drillpw\nDB_NAME=festie_test\n');
     chmodSync(path.join(work, 'drill-db.env'), 0o600);
 
+    // A stand-in for dist/server.js: answers every request with the status in ./ready-status and
+    // records what it was started with. The boot step starts it under env -i, so only the file
+    // and PORT cross over.
+    const appDir = path.join(work, 'app');
+    mkdirSync(path.join(appDir, 'dist'), { recursive: true });
+    writeFileSync(path.join(appDir, 'ready-status'), '200');
+    writeFileSync(path.join(appDir, 'dist', 'server.js'), [
+      "const fs = require('fs');",
+      "fs.writeFileSync('seen.json', JSON.stringify(process.env));",
+      "require('http').createServer((req, res) => {",
+      "  res.statusCode = Number(fs.readFileSync('ready-status', 'utf8'));",
+      "  res.end('{}');",
+      "}).listen(Number(process.env.PORT), '127.0.0.1');",
+    ].join('\n'));
+
     env = stubEnv(bin, log, {
+      DRILL_APP_DIR: appDir,
+      DRILL_BOOT_PORT: '4199',
+      DRILL_BOOT_TIMEOUT: '10',
       DRILL_DB_ENV: path.join(work, 'drill-db.env'),
       FESTIE_ENV_FILE: path.join(work, 'prod.env'),
       FAKE_REPO: repo,
@@ -82,6 +100,36 @@ describe('scripts/backup-restore-drill.sh', { skip }, () => {
     assert.match(r.stdout, /host=127\.0\.0\.1 port=5433 admin_db=festie_test restore_db=festie_drill_\d+/);
     assert.ok(dbCommands().some((c) => c.startsWith('createdb ')));
     assert.ok(dbCommands().some((c) => c.startsWith('dropdb ')));
+  });
+
+  it('boots the app on the restored database with a scrubbed environment', () => {
+    const r = run({ LEAKED_SECRET: 'x' });
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /Boot drill PASSED: \/api\/ready 200/);
+    const seen = JSON.parse(readFileSync(path.join(work, 'app', 'seen.json'), 'utf8'));
+    assert.match(seen.DATABASE_URL, /^postgresql:\/\/festie:drillpw@127\.0\.0\.1:5433\/festie_drill_\d+$/);
+    assert.equal(seen.PORT, '4199');
+    assert.equal(seen.NODE_ENV, 'production');
+    assert.equal(seen.REDIS_ENABLED, 'false');
+    assert.equal(seen.LEAKED_SECRET, undefined);
+    for (const key of SERVICE_KEYS) assert.equal(seen[key], undefined, key);
+  });
+
+  it('fails the drill, and still drops the restore DB, when /api/ready never returns 200', () => {
+    writeFileSync(path.join(work, 'app', 'ready-status'), '503');
+    const r = run({ DRILL_BOOT_TIMEOUT: '3' });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /Boot drill FAILED: \/api\/ready returned '503'/);
+    assert.doesNotMatch(r.stdout, /Restore drill PASSED/);
+    assert.ok(dbCommands().some((c) => c.startsWith('dropdb ')));
+  });
+
+  it('fails the drill when the app is not built', () => {
+    rmSync(path.join(work, 'app', 'dist'), { recursive: true });
+    const r = run();
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /dist\/server\.js not found/);
+    assert.doesNotMatch(r.stdout, /Restore drill PASSED/);
   });
 
   it('sends every database call to port 5433 with the drill password', () => {
