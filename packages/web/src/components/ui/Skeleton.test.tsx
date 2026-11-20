@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import Skeleton from './Skeleton';
+import Skeleton, { SkeletonGroup } from './Skeleton';
 
 describe('Skeleton', () => {
   it('renders with default text variant', () => {
@@ -64,5 +64,34 @@ describe('Skeleton', () => {
 
     rerender(<Skeleton variant="header" />);
     expect(screen.getByLabelText('Loading').className).toContain('skeleton-shimmer');
+  });
+
+  describe('SkeletonGroup', () => {
+    it('announces one loading status for all its skeletons', () => {
+      render(
+        <SkeletonGroup className="px-4">
+          <Skeleton />
+          <Skeleton variant="card" />
+          <Skeleton variant="circle" />
+        </SkeletonGroup>,
+      );
+      const statuses = screen.getAllByRole('status');
+      expect(statuses).toHaveLength(1);
+      expect(statuses[0]).toHaveAccessibleName('Loading');
+      expect(statuses[0]).toHaveAttribute('aria-busy', 'true');
+      expect(statuses[0]).toHaveClass('px-4');
+    });
+
+    it('hides the grouped skeletons from assistive technology but keeps their look', () => {
+      const { container } = render(
+        <SkeletonGroup>
+          <Skeleton variant="card" />
+        </SkeletonGroup>,
+      );
+      const child = container.querySelector('.skeleton-shimmer');
+      expect(child).toHaveAttribute('aria-hidden', 'true');
+      expect(child).not.toHaveAttribute('role');
+      expect(child?.className).toContain('h-32');
+    });
   });
 });
