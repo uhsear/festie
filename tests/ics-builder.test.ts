@@ -126,3 +126,24 @@ describe('buildIcsEventsFromPicks event rules', () => {
     assert.equal(events[1].description, 'Priority: Maybe');
   });
 });
+
+describe('buildIcsEventsFromPicks time zone', () => {
+  const build = (festival: any) =>
+    buildIcsEventsFromPicks(
+      makeFestival({ days: [{ date: '2026-06-05', label: 'Friday', sets: [{ id: 'set-a', artist: 'Alpha', stageId: 'main', startTime: '20:00', endTime: '21:30' }, { id: 'set-b', artist: 'Beta', stageId: 'main', startTime: '00:30', endTime: '01:30' }] }], ...festival }),
+      { picks: { 'set-a': 'must', 'set-b': 'must' } },
+      'festie.us',
+    );
+
+  test('a New York festival exports the absolute UTC instant, whatever the server zone', () => {
+    const [evening, night] = build({ timeZone: 'America/New_York' });
+    assert.equal(evening.dtstart, '20260606T000000Z');
+    assert.equal(evening.dtend, '20260606T013000Z');
+    assert.equal(night.dtstart, '20260606T043000Z');
+  });
+
+  test('a festival without a usable zone keeps floating local times', () => {
+    assert.equal(build({})[0].dtstart, '20260605T200000');
+    assert.equal(build({ timeZone: 'Not/AZone' })[0].dtstart, '20260605T200000');
+  });
+});

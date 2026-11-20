@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { FESTIVAL_DAY_START_HOUR } from '../time-zone.js';
+import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from '../time-zone.js';
 
 /**
  * Shared ICS (RFC 5545) calendar generation utilities.
@@ -111,6 +111,22 @@ export function addDaysCompact(date: string, days: number): string {
   return d.toISOString().slice(0, 10).replace(/-/g, '');
 }
 
+/** `YYYYMMDD` + `HHMM` wall time as an ICS date-time: UTC `Z` in `timeZone`, floating when the zone is absent or unknown. */
+function icsDateTime(date: string, hhmm: string, timeZone?: string | null): string {
+  const floating = `${date}T${hhmm}00`;
+  if (!timeZone) return floating;
+  const ms = zonedWallTimeToMs(
+    Number(date.slice(0, 4)),
+    Number(date.slice(4, 6)),
+    Number(date.slice(6, 8)),
+    Number(hhmm.slice(0, 2)),
+    Number(hhmm.slice(2, 4)),
+    timeZone,
+  );
+  if (!Number.isFinite(ms)) return floating;
+  return new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+}
+
 /**
  * Transform a festival + profile into an array of ICS event descriptors
  * suitable for `buildVCalendar`. Shared by the one-off export route and the
@@ -176,8 +192,8 @@ export function buildIcsEventsFromPicks(festival: any, profile: any, origin: str
     events.push({
       ...base,
       summary: set.artist,
-      dtstart: startDateStr + 'T' + startTime.replace(':', '') + '00',
-      dtend: endDateStr + 'T' + endHhmm + '00',
+      dtstart: icsDateTime(startDateStr, startTime.replace(':', ''), festival.timeZone),
+      dtend: icsDateTime(endDateStr, endHhmm, festival.timeZone),
       ...(Number.isInteger(reminder) && reminder > 0 ? { alarmMinutes: reminder } : {}),
     });
   }

@@ -3,13 +3,14 @@
  * lib/helpers/ics-builder.ts so mobile (and later web) can export a user's
  * picks to a .ics file fully offline — no server round-trip, no native module.
  *
- * Times are emitted as floating local time (`YYYYMMDDTHHMMSS`, no Z / TZID),
- * matching the backend export: festival schedules are venue-local and must not
- * shift by the device's UTC offset.
+ * Timed events are emitted as UTC (`YYYYMMDDTHHMMSSZ`) when the festival has a
+ * valid IANA `timeZone`, so a traveller's calendar shows the right absolute
+ * instant. Without a zone they fall back to floating local time (no Z / TZID),
+ * matching the backend export.
  */
 import type { FestivalSet, Stage, Priority } from '../types';
 import { PRIORITY_LABELS } from '../constants';
-import { FESTIVAL_DAY_START_HOUR } from './setStatus';
+import { FESTIVAL_DAY_START_HOUR, zonedWallTimeToMs } from './setStatus';
 
 /** Escape a value for an ICS TEXT property (RFC 5545). */
 export function escIcs(v: unknown): string {
@@ -126,7 +127,7 @@ export interface PicksIcsResult {
 }
 
 export interface BuildPicksIcsOpts {
-  festival: { id: string; name?: string; location?: string };
+  festival: { id: string; name?: string; location?: string; timeZone?: string | null };
   sets: FestivalSet[];
   stages: Stage[];
   picks: Record<string, Priority>;
@@ -142,6 +143,24 @@ function addDaysCompact(date: string, days: number): string {
 }
 
 const DEFAULT_SET_MINUTES = 60;
+
+/** `YYYYMMDD` + `HHMM` wall time as an ICS date-time: UTC `Z` in `timeZone`, floating when the zone is absent or unknown. */
+function icsDateTime(date: string, hhmm: string, timeZone?: string | null): string {
+  const floating = `${date}T${hhmm}00`;
+  if (!timeZone) return floating;
+  try {
+    const ms = zonedWallTimeToMs(
+      `${date.slice(0, 4)}-${date.slice(4, 6)}-${date.slice(6, 8)}`,
+      Number(hhmm.slice(0, 2)),
+      Number(hhmm.slice(2, 4)),
+      timeZone,
+    );
+    if (!Number.isFinite(ms)) return floating;
+    return new Date(ms).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  } catch {
+    return floating;
+  }
+}
 
 /**
  * Build a .ics for the picks in `picks`, using the already-loaded (flattened)
@@ -214,8 +233,8 @@ export function buildPicksIcsExport(opts: BuildPicksIcsOpts & { reminders?: Reco
     events.push({
       ...base,
       summary: artist,
-      dtstart: startDateStr + 'T' + startTime.replace(':', '') + '00',
-      dtend: endDateStr + 'T' + endHhmm + '00',
+      dtstart: icsDateTime(startDateStr, startTime.replace(':', ''), festival.timeZone),
+      dtend: icsDateTime(endDateStr, endHhmm, festival.timeZone),
       ...(Number.isInteger(reminder) && reminder! > 0 ? { alarmMinutes: reminder } : {}),
     });
   }

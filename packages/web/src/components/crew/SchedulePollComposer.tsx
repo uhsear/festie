@@ -8,8 +8,8 @@ import {
   getSetTimeBounds,
   resolveFestivalTimeZone,
   pollClosesAt,
+  buildPollSlots,
   type PollEndChoice,
-  type FestivalSet,
   type PollSetRef,
 } from '@festie/shared';
 import { useToast } from '../../lib/toastContext';
@@ -23,14 +23,6 @@ interface Props {
   crewId: string;
   onCreated: () => void;
   onCancel: () => void;
-}
-
-interface Slot {
-  /** `HH:MM` start time shared by every set in the slot. */
-  startTime: string;
-  /** Day index this slot belongs to (slots never span days). */
-  dayIndex: number;
-  sets: FestivalSet[];
 }
 
 const REMINDER_LEAD_MINUTES = 15;
@@ -58,19 +50,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
 
   // Group the lineup into start-time slots (a "9pm clash" = every set starting
   // at 21:00 that day). Sorted by day then time so the picker reads in order.
-  const slots = useMemo<Slot[]>(() => {
-    const byKey = new Map<string, Slot>();
-    for (const set of sets) {
-      if (!set.startTime || typeof set.dayIndex !== 'number') continue;
-      const key = `${set.dayIndex}|${set.startTime}`;
-      const slot = byKey.get(key);
-      if (slot) slot.sets.push(set);
-      else byKey.set(key, { startTime: set.startTime, dayIndex: set.dayIndex, sets: [set] });
-    }
-    return Array.from(byKey.values())
-      .filter((s) => s.sets.length >= 2) // a poll needs ≥2 options
-      .sort((a, b) => a.dayIndex - b.dayIndex || a.startTime.localeCompare(b.startTime));
-  }, [sets]);
+  const slots = useMemo(() => buildPollSlots(sets), [sets]);
 
   const [slotKey, setSlotKey] = useState('');
   const [question, setQuestion] = useState('');

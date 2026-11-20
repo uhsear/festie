@@ -1,4 +1,5 @@
-import type { CrewMember, CrewPoll } from '../types/domain';
+import type { CrewMember, CrewPoll, FestivalSet } from '../types/domain';
+import { festivalStartMinutes } from './setStatus';
 
 export interface PollTally {
   counts: number[];
@@ -131,4 +132,30 @@ export function voterNamesLine(userIds: string[], members: CrewMember[], max = 3
   const names = userIds.slice(0, max).map((id) => crewMemberName(members.find((m) => m.userId === id)));
   const extra = userIds.length - names.length;
   return extra > 0 ? `${names.join(', ')} +${extra}` : names.join(', ');
+}
+
+export interface PollSlot {
+  /** `HH:MM` start time shared by every set in the slot. */
+  startTime: string;
+  /** Day index this slot belongs to (slots never span days). */
+  dayIndex: number;
+  sets: FestivalSet[];
+}
+
+/**
+ * Group the lineup into start-time slots with a clash (two or more sets at the
+ * same time on one day), in festival-day order: a 00:30 slot sorts after 21:00.
+ */
+export function buildPollSlots(sets: FestivalSet[]): PollSlot[] {
+  const byKey = new Map<string, PollSlot>();
+  for (const set of sets) {
+    if (!set.startTime || typeof set.dayIndex !== 'number') continue;
+    const key = `${set.dayIndex}|${set.startTime}`;
+    const slot = byKey.get(key);
+    if (slot) slot.sets.push(set);
+    else byKey.set(key, { startTime: set.startTime, dayIndex: set.dayIndex, sets: [set] });
+  }
+  return Array.from(byKey.values())
+    .filter((s) => s.sets.length >= 2)
+    .sort((a, b) => a.dayIndex - b.dayIndex || festivalStartMinutes(a.startTime) - festivalStartMinutes(b.startTime));
 }

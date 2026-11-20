@@ -147,6 +147,13 @@ describe('export-utils pure helpers', () => {
       'end should be rolled forward 24h so duration is 2h');
   });
 
+  test('getSetTiming treats a set before 06:00 as the night after the labelled day', () => {
+    const { start, end } = exportUtils.getSetTiming({ dayDate: '2026-06-05', startTime: '01:00', endTime: '02:00' });
+    assert.ok(start instanceof Date && end instanceof Date);
+    assert.equal(start.getDate(), 6);
+    assert.equal(end.getTime() - start.getTime(), 60 * 60 * 1000);
+  });
+
   test('getAvatarColor is deterministic for the same name', () => {
     const a = exportUtils.getAvatarColor('Alice');
     const b = exportUtils.getAvatarColor('Alice');
@@ -341,6 +348,15 @@ describe('getExportReminderItems', () => {
     assert.deepEqual(reminders.map((r: any) => r.set.id), ['set-a', 'set-c']);
     assert.equal(reminders[0].lead, 15);
     assert.equal(reminders[1].lead, 30);
+  });
+
+  test('orders an after-midnight set after the evening set of the same day', () => {
+    const sets = [
+      { id: 'late', artist: 'Late', dayDate: '2026-06-05', startTime: '01:00', endTime: '02:00' },
+      { id: 'eve', artist: 'Eve', dayDate: '2026-06-05', startTime: '20:00', endTime: '21:00' },
+    ] as any[];
+    const reminders = exportUtils.getExportReminderItems(sets, makeProfile({ reminders: { late: 15, eve: 15 } }));
+    assert.deepEqual(reminders.map((r: any) => r.set.id), ['eve', 'late']);
   });
 
   test('returns empty list when no reminders are set', () => {
@@ -549,5 +565,37 @@ describe('buildExportHtml', () => {
   test('formatMoney formats cents in the given currency', () => {
     assert.equal(formatMoney(1240, 'USD'), '$12.40');
     assert.equal(formatMoney(1240, 'EUR'), '€12.40');
+  });
+});
+
+describe('buildExportHtml pick ordering', () => {
+  const fest = makeFestival({
+    days: [
+      {
+        label: 'Thursday',
+        date: '2026-06-04',
+        sets: [{ id: 'thu', artist: 'Thu Act', stageId: 'main', startTime: '20:00', endTime: '21:00' }],
+      },
+      {
+        label: 'Friday',
+        date: '2026-06-05',
+        sets: [
+          { id: 'fri-late', artist: 'Fri Late', stageId: 'main', startTime: '01:00', endTime: '02:00' },
+          { id: 'fri-eve', artist: 'Fri Eve', stageId: 'main', startTime: '23:00', endTime: '23:59' },
+        ],
+      },
+    ],
+  });
+  const picks = { thu: 'must', 'fri-late': 'must', 'fri-eve': 'must' };
+  const order = (html: string) => ['Thu Act', 'Fri Eve', 'Fri Late'].sort((a, b) => html.indexOf(a) - html.indexOf(b));
+
+  test('lists Thu before Fri and the 23:00 set before the 01:00 after-midnight set', () => {
+    const html = exportUtils.buildExportHtml(TEMPLATE, fest, makeProfile({ picks }), [], '2026-06-01T12:00:00Z');
+    assert.deepEqual(order(html), ['Thu Act', 'Fri Eve', 'Fri Late']);
+  });
+
+  test('buildFestivalSetList puts the 01:00 after-midnight set after the 23:00 set', () => {
+    const ids = exportUtils.buildFestivalSetList(fest).map((s: any) => s.id);
+    assert.deepEqual(ids, ['thu', 'fri-eve', 'fri-late']);
   });
 });

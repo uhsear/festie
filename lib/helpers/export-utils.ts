@@ -7,6 +7,7 @@
 
 import { escapeHtml } from './sanitize';
 import type { Profile } from '../types/contracts';
+import { FESTIVAL_DAY_START_HOUR, festivalStartMinutes } from '../time-zone';
 
 interface FestivalSet {
   id: string;
@@ -125,7 +126,10 @@ export function timeToMinutes(value: string | null | undefined) {
 export function buildSetDateStamp(dayDate: string | null | undefined, timeValue: string | null | undefined) {
   if (!dayDate || !timeValue) return null;
   const stamp = new Date(`${dayDate}T${timeValue}:00`);
-  return Number.isNaN(stamp.getTime()) ? null : stamp;
+  if (Number.isNaN(stamp.getTime())) return null;
+  // A time before the festival-day start belongs to the night after the labelled day.
+  if (stamp.getHours() < FESTIVAL_DAY_START_HOUR) stamp.setDate(stamp.getDate() + 1);
+  return stamp;
 }
 
 export function getSetTiming(set: Pick<ExportSet, 'dayDate' | 'startTime' | 'endTime'>) {
@@ -133,6 +137,20 @@ export function getSetTiming(set: Pick<ExportSet, 'dayDate' | 'startTime' | 'end
   let end = buildSetDateStamp(set.dayDate, set.endTime);
   if (start && end && end <= start) end = new Date(end.getTime() + (24 * 60 * 60 * 1000));
   return { start, end };
+}
+
+/** Day order, then timed sets by festival-day minutes (after-midnight sets last), untimed sets after, then artist. */
+function compareExportSets(
+  left: Pick<ExportSet, 'dayIndex' | 'startTime' | 'artist'>,
+  right: Pick<ExportSet, 'dayIndex' | 'startTime' | 'artist'>,
+) {
+  if (left.dayIndex !== right.dayIndex) return left.dayIndex - right.dayIndex;
+  if (left.startTime && right.startTime) {
+    return festivalStartMinutes(left.startTime) - festivalStartMinutes(right.startTime) || left.artist.localeCompare(right.artist);
+  }
+  if (left.startTime) return -1;
+  if (right.startTime) return 1;
+  return left.artist.localeCompare(right.artist);
 }
 
 // any[]: tests index the list and its entries without an undefined check.
@@ -144,15 +162,7 @@ export function buildFestivalSetList(festival: ExportFestival): any[] {
       dayLabel: day.label || day.date || 'Day',
       dayDate: day.date || '',
     })))
-    .sort((left, right) => {
-      if (left.dayIndex !== right.dayIndex) return left.dayIndex - right.dayIndex;
-      const lT = left.startTime || '';
-      const rT = right.startTime || '';
-      if (lT && rT) return lT.localeCompare(rT) || left.artist.localeCompare(right.artist);
-      if (lT && !rT) return -1;
-      if (!lT && rT) return 1;
-      return left.artist.localeCompare(right.artist);
-    });
+    .sort(compareExportSets);
 }
 
 export function pickTimedFestivalSet<T extends Pick<ExportSet, 'dayDate' | 'startTime' | 'endTime'>>(
@@ -354,7 +364,7 @@ export function buildExportHtml(
     .map(([priority, label, color]) => {
       const items = sets
         .filter((set) => profile.picks?.[set.id] === priority)
-        .sort((left, right) => `${left.dayLabel}${left.startTime}`.localeCompare(`${right.dayLabel}${right.startTime}`));
+        .sort(compareExportSets);
 
       if (items.length === 0) return '';
 
@@ -395,7 +405,7 @@ export function buildExportHtml(
       const memberPicks = member.picks || {};
       const memberSets = sets
         .filter((s) => memberPicks[s.id])
-        .sort((a, b) => `${a.dayLabel}${a.startTime}`.localeCompare(`${b.dayLabel}${b.startTime}`));
+        .sort(compareExportSets);
       const myPicks = profile.picks || {};
       const shared = memberSets.filter((s) => myPicks[s.id]).length;
       const colorValue = getAvatarColor(member.name);

@@ -38,10 +38,24 @@ function inQuietHours(ms: number, q: QuietHours): boolean {
   return start < end ? hhmm >= start && hhmm <= end : hhmm >= start || hhmm < end;
 }
 
+const MINUTE_MS = 60_000;
+
+/** First minute at or after `ms` that is outside quiet hours; `ms` itself when it is not inside them. */
+function quietHoursEnd(ms: number, q: QuietHours): number {
+  if (!inQuietHours(ms, q)) return ms;
+  const toMinutes = (hhmm: string) => Number(hhmm.slice(0, 2)) * 60 + Number(hhmm.slice(3, 5));
+  const untilEnd = (toMinutes(q.dndEnd!) - toMinutes(wallClockHhmm(ms, q.dndTimeZone)) + 1440) % 1440;
+  let at = ms + untilEnd * MINUTE_MS;
+  // The window's end minute can itself be inside it (same-day windows are inclusive), and a DST change can shift the wall clock.
+  for (let i = 0; i < 180 && inQuietHours(at, q); i++) at += MINUTE_MS;
+  return at;
+}
+
 /**
  * When to remind people to save the offline pack: 18:00 festival time on the
  * day before day 1 (device-local when the festival has no zone). Null when the
- * pack is ready, no day has a date, or that time falls in the user's quiet hours.
+ * pack is ready or no day has a date. A time inside the user's quiet hours moves
+ * to the end of them, and is dropped when that is not before the first day starts.
  * The result may be in the past; the caller decides what that means.
  */
 export function offlineReminderAt(
@@ -53,11 +67,13 @@ export function offlineReminderAt(
   if (dates.length === 0) return null;
   const [y, m, d] = dates.sort()[0]!.split('-').map(Number) as [number, number, number];
   const eve = new Date(Date.UTC(y, m - 1, d - 1)).toISOString().slice(0, 10);
-  const at = opts.timeZone
-    ? zonedWallTimeToMs(eve, REMINDER_HOUR, 0, opts.timeZone)
-    : new Date(y, m - 1, d - 1, REMINDER_HOUR).getTime();
+  const wallMs = (date: string, hour: number, localParts: [number, number, number]) =>
+    opts.timeZone ? zonedWallTimeToMs(date, hour, 0, opts.timeZone) : new Date(...localParts, hour).getTime();
+  const at = wallMs(eve, REMINDER_HOUR, [y, m - 1, d - 1]);
   if (Number.isNaN(at)) return null;
-  // shortcut: a reminder inside quiet hours is skipped, not moved; the status chips still offer the download.
-  if (opts.quietHours && inQuietHours(at, opts.quietHours)) return null;
-  return at;
+  if (!opts.quietHours) return at;
+  const moved = quietHoursEnd(at, opts.quietHours);
+  if (moved === at) return at;
+  const start = wallMs(dates[0]!, 0, [y, m - 1, d]);
+  return Number.isNaN(start) || moved >= start ? null : moved;
 }
