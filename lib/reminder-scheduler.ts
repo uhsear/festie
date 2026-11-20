@@ -13,6 +13,7 @@
  * notifications (4x fan-out). Other workers return a no-op start/stop.
  */
 
+import { isLeader } from './process-role.js';
 import { isInDndWindow } from './notifications/index.js';
 import { appLink } from './notifications/links.js';
 import { FESTIVAL_DAY_START_HOUR, formatClock12, zonedWallTimeToMs } from './time-zone.js';
@@ -38,11 +39,9 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
   // PM2 sets NODE_APP_INSTANCE to '0'..'3' in cluster mode. Only instance 0
   // runs the scheduler; other workers return a no-op start/stop so the tick
   // fires exactly once per cycle instead of 4x.
-  const instance = process.env.NODE_APP_INSTANCE;
-  const isLeader = instance === undefined || instance === '0';
-  if (!isLeader) {
+  if (!isLeader()) {
     log.info('reminder-scheduler: not leader (instance !== 0), skipping scheduler start', {
-      instance,
+      instance: process.env.NODE_APP_INSTANCE,
     });
     return {
       start: () => {},
@@ -307,7 +306,7 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
     if (_timer) return;
     _timer = setInterval(tick, config.REMINDER_TICK_INTERVAL_MS);
     _timer.unref();
-    log.info('reminder scheduler started', { instance });
+    log.info('reminder scheduler started', { instance: process.env.NODE_APP_INSTANCE });
   }
 
   function stop() {
