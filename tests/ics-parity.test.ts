@@ -79,4 +79,19 @@ describe('backend ↔ shared ICS builder parity', () => {
     assert.equal(a.length, 7);
     assert.deepStrictEqual(a, vevents(shared));
   });
+
+  it('VEVENT lines match when the festival has a time zone', () => {
+    const festival = {
+      id: 'fest-1',
+      name: 'Fest',
+      timeZone: 'America/New_York',
+      stages,
+      days: [{ date: '2026-06-05', label: 'Friday', sets: daySets }],
+    };
+    const sets = festival.days.flatMap((d) => d.sets.map((s) => ({ ...s, date: d.date })));
+    const backend = buildVCalendar(buildIcsEventsFromPicks(festival, { picks }, 'festie.us'), { calendarName: 'x' });
+    const shared = buildPicksIcsExport({ festival, sets: sets as any, stages: stages as any, picks: picks as any, origin: 'festie.us' }).ics;
+    assert.deepStrictEqual(vevents(backend), vevents(shared));
+    assert.ok(backend.includes('DTSTART:20260605T140000Z'));
+  });
 });

@@ -555,6 +555,7 @@ export default function PicksScreen() {
           id: currentFestival.id,
           name: currentFestival.name,
           location: currentFestival.location,
+          timeZone: currentFestival.timeZone,
         },
         sets,
         stages,
