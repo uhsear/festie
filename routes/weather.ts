@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import type { Params } from '../lib/types/app-context';
 
 // In-memory cache: { key: { data, expiresAt } }
+// shortcut: per-process cache, so N instances fetch up to N times per TTL; move to Redis if the app scales out.
 const weatherCache = new Map();
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
 
