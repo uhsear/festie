@@ -207,6 +207,34 @@ describe('spotify candidates and picks', { skip, concurrency: 1 }, () => {
     assert.equal(row.spotify_id, id(31));
   });
 
+  test('replacing a Spotify link drops the old Spotify photo and genres, so the next pick fills them', async () => {
+    const artist = await createArtist(app, { name: 'Swap Me' });
+    await withPool((pool) => seedFestival(pool, { id: 'fest-swap-1', sets: [{ id: 'swap-1-0', artist: 'Swap Me', artists: [elementOf(artist)] }] }));
+    artistTable[id(40)] = spotifyArtist(40, 'Swap Me');
+    await app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-swap-1', artist, id(40))).expect(200);
+    const picked = (await app.get('/api/v1/admin/artists?q=swap me').expect(200)).body.data.artists[0];
+    assert.equal(picked.photo, 'https://i.scdn.co/image/40');
+    await app.patch(`/api/v1/admin/artists/${artist.id}`, { expectedUpdatedAt: picked.updatedAt, changes: { removeLinks: ['spotify'] } }).expect(200);
+    const row = await artistRow(artist.id);
+    assert.equal(row.spotify_id, null);
+    assert.equal(row.photo, null);
+    assert.deepEqual(row.genres, []);
+    const set = await withPool((pool) => setRow(pool, 'swap-1-0'));
+    assert.equal(set.artists[0].photo, undefined, 'the festival copy loses the old photo too');
+    const fresh = (await app.get('/api/v1/admin/artists?q=swap me').expect(200)).body.data.artists[0];
+    artistTable[id(41)] = spotifyArtist(41, 'Swap Me');
+    await app.post('/api/v1/admin/artists/spotify-picks', pickBody('fest-swap-1', fresh, id(41))).expect(200);
+    assert.equal((await artistRow(artist.id)).photo, 'https://i.scdn.co/image/41');
+  });
+
+  test('a photo that did not come from Spotify stays when the Spotify link goes', async () => {
+    const artist = await createArtist(app, { name: 'Swap Keep', link: `https://open.spotify.com/artist/${id(42)}` });
+    await withPool((pool) => pool.query(`UPDATE artists SET photo = 'https://example.com/mine.jpg' WHERE id = $1`, [artist.id]));
+    const fresh = (await app.get('/api/v1/admin/artists?q=swap keep').expect(200)).body.data.artists[0];
+    await app.patch(`/api/v1/admin/artists/${artist.id}`, { expectedUpdatedAt: fresh.updatedAt, changes: { removeLinks: ['spotify'] } }).expect(200);
+    assert.equal((await artistRow(artist.id)).photo, 'https://example.com/mine.jpg');
+  });
+
   test('picks: an id that Spotify does not know is refused and nothing is written', async () => {
     const artist = await createArtist(app, { name: 'Pick Ghost' });
     await withPool((pool) => seedFestival(pool, { id: 'fest-pick-3', sets: [{ id: 'pick-3-0', artist: 'Pick Ghost', artists: [elementOf(artist)] }] }));
