@@ -655,7 +655,7 @@ describe('routes/crew-meeting-points.js -- POST /:crewId/meeting-points', () => 
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:meeting-point-created');
     const created = (ioObj._emit.mock.calls as any[])[0].arguments[1];
     assert.equal(created.crew_id, 'crew-1');
-    assert.equal(created.crewId, undefined, 'payload is the raw row; no camelCase duplicate');
+    assert.equal(created.crewId, 'crew-1', 'camelCase crewId matches the shared payload type');
   });
 
   // ── Max limit ─────────────────────────────────────────────────────
@@ -878,7 +878,7 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/meeting-points/:mpId', (
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:meeting-point-updated');
     const updatedPayload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
     assert.equal(updatedPayload.crew_id, 'crew-1');
-    assert.equal(updatedPayload.crewId, undefined, 'payload is the raw row; no camelCase duplicate');
+    assert.equal(updatedPayload.crewId, 'crew-1', 'camelCase crewId matches the shared payload type');
   });
 
   // ── Not found cases ───────────────────────────────────────────────
@@ -1577,7 +1577,7 @@ describe('routes/crew-meeting-points.js -- edit trail', () => {
     assert.equal(crewNotify.now.mock.calls.length, 0);
   });
 
-  test('the response and the emit carry the store row unchanged', async () => {
+  test('the response carries the store row unchanged and the emit adds a camelCase crewId', async () => {
     const row = {
       ...DEFAULT_MEETING_POINT,
       location: 'North gate',
@@ -1602,6 +1602,6 @@ describe('routes/crew-meeting-points.js -- edit trail', () => {
     const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ location: 'North gate' });
     assert.equal(res.status, 200);
     assert.deepEqual(res.body.data.meetingPoint, row);
-    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[1], row);
+    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { ...row, crewId: 'crew-1' });
   });
 });

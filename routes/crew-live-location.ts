@@ -8,9 +8,8 @@ import type { z } from 'zod';
 
 import type { RouteDeps } from '../lib/types';
 import type { crewIdParams, liveLocationFixSchema } from '../lib/schemas';
-import { LOCATION_UPDATE_LIMIT } from '../lib/rate-limiting.js';
+import { LOCATION_UPDATE_LIMIT, shareWindowError } from '../lib/rate-limiting.js';
 import {
-  MAX_SHARE_WINDOW_MS,
   clampCapturedAt,
   dropLivePosition,
   writeLivePosition,
@@ -59,8 +58,6 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
   const router = Router({ mergeParams: true });
   const FLAG_OFF_MESSAGE = 'Live location is turned off right now.';
   const FAILED_MESSAGE = "Couldn't update your live location. Try again.";
-  // Clock-skew allowance on the far end of the share window.
-  const EXPIRES_AT_SKEW_MS = 60_000;
 
   // ── POST /:crewId/live-location — relay one background fix ───────
   router.post(
@@ -82,11 +79,11 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
 
 
         const nowMs = Date.now();
-        const exp = Date.parse(body.expiresAt);
-        if (exp <= nowMs) {
+        const windowError = shareWindowError(body.expiresAt, nowMs);
+        if (windowError === 'ended') {
           return sendError(res, 400, 'This share has ended. Turn sharing on again.', ErrorCodes.INVALID_INPUT);
         }
-        if (exp > nowMs + MAX_SHARE_WINDOW_MS + EXPIRES_AT_SKEW_MS) {
+        if (windowError === 'too-long') {
           return sendError(res, 400, 'Pick a sharing time of 12 hours or less.', ErrorCodes.INVALID_INPUT);
         }
 

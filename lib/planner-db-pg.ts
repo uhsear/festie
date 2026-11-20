@@ -4,47 +4,24 @@
 /**
  * Public entry point for the PostgreSQL data layer.
  *
- * Historically this file was a one-line re-export of `./db/index`. The
- * 2026-04-14 audit found that `schema_migrations` was drifting — several
- * migration files (012–015, 017–024, 026) were clearly applied to the DB
- * (their tables/columns/indexes exist) yet the bookkeeping rows were
- * missing from `schema_migrations`. Root cause analysis traced the drift
- * to two defects in the historical runner chain:
+ * The runner applies each `migrations/NNN_*.sql` file inside a single
+ * connection: one `BEGIN … COMMIT` holds the SQL file and the INSERT into
+ * `schema_migrations`. Any failure rolls the whole file back and throws, so
+ * the ledger can never drift from the schema silently. Earlier shell runners
+ * applied the file and recorded the row in separate steps, which left
+ * migrations applied but unrecorded.
  *
- *   1. `scripts/auto-deploy.sh` (legacy) ran `for f in migrations/*.sql;
- *      do psql -f "$f"; done` with NO per-migration transaction and NO
- *      INSERT into `schema_migrations`. Every apply succeeded in the DB
- *      but zero rows were ever recorded.
- *   2. `docs/research/research-2026/phase-3-6/migrate.sh` (partially
- *      adopted) DID record rows, but it ran the `-f file` and the
- *      `INSERT INTO schema_migrations` as two SEPARATE `psql` invocations
- *      — i.e. two distinct TCP sessions. If anything (network blip,
- *      trigger side-effect, PK collision on the double-version 019
- *      files) made the second call fail, the schema change landed and
- *      the row didn't. The error was printed but `set -e` on the bash
- *      script did not always halt cleanly because the apply had already
- *      exited 0.
- *
- * The fix moves the runner into Node, inside a single psql connection
- * (one client, one `BEGIN … COMMIT`, the SQL file + the INSERT execute
- * together). Any failure rolls the whole thing back and throws — never
- * silent-continue. The runner also performs a boot-time gap check:
- * count of `migrations/NNN_*.sql` files on disk vs. count of rows in
- * `schema_migrations`. If the disk count is larger, we log a single
- * `WARN` per process boot listing the missing versions so the drift is
- * loud and actionable.
+ * The runner also performs a boot-time gap check: the `migrations/NNN_*.sql`
+ * versions on disk vs. the rows in `schema_migrations`. If a version is
+ * missing from the ledger, it logs a single `WARN` per process boot listing
+ * the missing versions.
  *
  * Public API compatibility: this module still exports everything
  * `./db/index` did (`createStores`, `openPlannerDatabase`, etc.) with
  * identical signatures and return shapes. Only `openPlannerDatabase`
  * gets a thin wrapper that triggers the migration runner exactly once
- * per-process (protected by an in-memory `Set` keyed on DATABASE_URL so
+ * per-process (protected by an in-memory `Map` keyed on DATABASE_URL so
  * repeated calls in tests don't re-run migrations).
- *
- * See `_MIGRATE_AUDIT_NOTES.md` in this directory for the full
- * investigation trail, including how the legacy SQLite `lib/migrate.js`
- * runner (still present for the sqlite-to-pg import script) differs
- * from this Postgres runner and why the two must not be confused.
  */
 
 import { createHash } from 'crypto';
@@ -63,7 +40,7 @@ const MIGRATIONS_DIR = path.join(import.meta.dirname, '..', 'migrations');
  * Fixed application-specific key for the Postgres session advisory lock
  * that serializes the migration-apply critical section across instances.
  *
- * Under a multi-instance deploy (e.g. PM2 cluster x4, or N rolling
+ * Under a multi-instance deploy (e.g. several PM2 workers, or N rolling
  * pods), every worker boots and races to apply the same pending
  * migrations. While each apply is individually safe (single-txn for
  * normal migrations, idempotent IF [NOT] EXISTS for CONCURRENTLY ones),
@@ -434,7 +411,7 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
           diskCount: diskVersions.size,
           recordedCount: finalApplied.size,
           missingVersions: gap,
-          hint: 'Backfill via scripts/backfill-schema-migrations.sql; see docs/plans/schema-migration-reconciliation-2026-04.md',
+          hint: 'Insert the missing versions into schema_migrations, or re-run the migration runner after fixing the failed file',
         });
       } else {
         log('info', 'schema_migrations consistent with migrations/ on disk', {
