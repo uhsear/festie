@@ -21,6 +21,7 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     return festivalId;
   }
 
+  // shortcut: state.onlineUsers is per process, so each instance counts only its own sockets; read counts from the Redis presence path if the app scales out.
   async function setSocketPresence(festivalId: any, userId: any, username: any, socketId: any) {
     if (!state.onlineUsers.has(festivalId)) {
       state.onlineUsers.set(festivalId, new Map());

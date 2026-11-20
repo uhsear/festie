@@ -23,6 +23,7 @@ class SpotifyRateLimitedError extends Error {
   }
 }
 
+// shortcut: the token cache is per process, so each instance fetches its own token; share it through Redis if token requests hit rate limits.
 let cachedToken: string | null = null;
 let tokenExpiry = 0;
 

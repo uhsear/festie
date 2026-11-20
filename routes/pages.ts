@@ -117,6 +117,7 @@ export default function createPageRoutes(deps: any) {
   // The cache sits behind loadPublicFestival, so an unpublished festival still 404s at once.
   const OG_TTL_MS = 10 * 60 * 1000;
   const OG_MAX_ENTRIES = 200;
+  // shortcut: ogCache is per process, so an edit can show stale on other instances; share it through Redis if the app scales out.
   const ogCache = new Map<string, { png: Buffer; expires: number }>();
 
   router.get('/f/:slug/og.png', rateLimit(30, 'festival-og'), async (req: any, res: any) => {
