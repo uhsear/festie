@@ -11,6 +11,7 @@ import express from 'express';
 import request from 'supertest';
 
 import { schemas, validate, validateParams, validateQuery } from '../lib/schemas.js';
+import { ioEmitter } from './_io-emitter';
 
 const noop = () => {};
 
@@ -43,7 +44,7 @@ function buildDeps() {
     config: { SOS_ENABLED: true, LIVE_LOCATION_ENABLED: true },
     redis: {},
     io: { to: () => ({ emit: noop }) },
-    emitter: {},
+    emitter: ioEmitter({ to: () => ({ emit: noop }) }),
     crewNotify: mock.fn(),
     stores: { crews: { getMember: mock.fn(async () => null) } },
   };

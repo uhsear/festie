@@ -166,6 +166,7 @@ function makeDeps(overrides: any = {}) {
       of: () => ({ to: () => ({ emit: mock.fn() }) }),
       engine: { clientsCount: 5 },
     },
+    emitter: { toCrew: mock.fn(), toRoom: mock.fn(), broadcast: mock.fn() },
     metrics: {
       totalRequests: 100,
       totalErrors: 2,

@@ -19,6 +19,7 @@ import request from 'supertest';
 import { validate, validateParams, schemas } from '../lib/schemas.js';
 import { sendSuccess, sendError, ErrorCodes } from '../lib/response.js';
 import { sanitizeIdentifier } from '../lib/helpers/sanitize.js';
+import { ioEmitter } from './_io-emitter';
 
 function noop() {}
 const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
@@ -88,7 +89,7 @@ function makeDeps(overrides: any = {}) {
     io,
     redis,
     pool,
-    emitter: { crewActivityLogged: mock.fn(() => {}) },
+    emitter: { crewActivityLogged: mock.fn(() => {}), ...ioEmitter(io) },
     stores: { crews, activity: { log: mock.fn(async () => 'act-1') } },
   };
   return { deps, io, redis, pool, crews, userId };

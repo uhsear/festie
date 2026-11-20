@@ -3,6 +3,7 @@ import { describe, test, mock, beforeEach } from 'node:test';
 import crypto from 'crypto';
 import express from 'express';
 import request from 'supertest';
+import { ioEmitter } from './_io-emitter';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Shared mock factory
@@ -34,6 +35,7 @@ function makePool(queryResult = { rows: [] }) {
 }
 
 function baseDeps(overrides: any = {}) {
+  const io = makeIo();
   const deps: any = {
     express,
     config: {
@@ -111,7 +113,7 @@ function baseDeps(overrides: any = {}) {
     sanitizeString: (s: any) => (s || '').trim(),
     sanitizeIdentifier: (s: any) => (s || '').trim(),
     createOpaqueId: () => 'opaque-123',
-    io: makeIo(),
+    io,
     stores: { pool: makePool() },
     pool: makePool(),
     state: {
@@ -121,6 +123,7 @@ function baseDeps(overrides: any = {}) {
       timers: [],
     },
     emitter: {
+      ...ioEmitter(io),
       crewExpenseAdded: noop,
       crewExpenseDeleted: noop,
     },

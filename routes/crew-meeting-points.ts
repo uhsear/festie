@@ -31,7 +31,6 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
     schemas,
     validate,
     validateParams,
-    io,
     emitter,
     crewNotify,
   } = deps;
@@ -66,7 +65,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         const updated = (await stores.crews.updateHomeBase(crewId, { location, time, planB })) as {
           homeBasePlanB?: string | null;
         } | null;
-        io.to('crew:' + crewId).emit('crew:home-base-updated', {
+        emitter.toCrew(crewId, 'crew:home-base-updated', {
           crewId,
           location,
           time,
@@ -104,7 +103,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
 
         const photoAlbumUrl = body.photoAlbumUrl || null;
         const updated = await stores.crews.updatePhotoAlbum(crewId, { photoAlbumUrl });
-        io.to('crew:' + crewId).emit('crew:photo-album-updated', { crewId, photoAlbumUrl });
+        emitter.toCrew(crewId, 'crew:photo-album-updated', { crewId, photoAlbumUrl });
         const activity = { crewId, userId: req.user.userId, type: 'photo-album-updated', detail: photoAlbumUrl };
         await stores.activity
           .log(activity)
@@ -209,7 +208,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           recursDaily: recursDaily ?? false,
         });
 
-        io.to('crew:' + crewId).emit('crew:meeting-point-created', { ...(point as object), crewId });
+        emitter.toCrew(crewId, 'crew:meeting-point-created', { ...(point as object), crewId });
         await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'meeting-point-added', detail: label });
         pushInBackground({
           crewId,
@@ -286,7 +285,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
             : {};
 
         const updated = await stores.crews.meetingPoints.update(mpId, { ...body, expiresAt, ...trail });
-        io.to('crew:' + crewId).emit('crew:meeting-point-updated', { ...(updated as object), crewId });
+        emitter.toCrew(crewId, 'crew:meeting-point-updated', { ...(updated as object), crewId });
         const label = String((updated as { label?: string } | null)?.label ?? existing.label);
         await logCrewActivity(deps, { crewId, userId: req.user.userId, type: 'meeting-point-updated', detail: label });
         const moved =
@@ -352,7 +351,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         }
 
         await stores.crews.meetingPoints.deactivate(mpId);
-        io.to('crew:' + crewId).emit('crew:meeting-point-removed', { id: mpId, crewId });
+        emitter.toCrew(crewId, 'crew:meeting-point-removed', { id: mpId, crewId });
         await logCrewActivity(deps, {
           crewId,
           userId: req.user.userId,
@@ -402,7 +401,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         }
 
         const point = await stores.crews.meetingPoints.setComing(mpId, crewId, req.user.userId, body.coming);
-        io.to('crew:' + crewId).emit('crew:meeting-point-updated', { ...(point as object), crewId });
+        emitter.toCrew(crewId, 'crew:meeting-point-updated', { ...(point as object), crewId });
         return sendSuccess(res, { meetingPoint: point });
       } catch (err) {
         log.error('set meeting point coming failed', { error: (err as Error).message });

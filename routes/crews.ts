@@ -76,6 +76,7 @@ export default function createCrewRoutes(deps: RouteDeps) {
     validateQuery,
     validateParams,
     io,
+    emitter,
     crewNotify,
   } = deps;
 
@@ -497,8 +498,8 @@ export default function createCrewRoutes(deps: RouteDeps) {
 
         // Members are still in the SOURCE crew room (nobody can have joined the
         // brand-new room yet), so target both; the new room covers a re-run.
-        if (io) {
-          io.to(`crew:${sourceCrewId}`).to(`crew:${newCrew.id}`).emit('crew:reformed', {
+        if (emitter) {
+          emitter.toRoom([`crew:${sourceCrewId}`, `crew:${newCrew.id}`], 'crew:reformed', {
             crewId: newCrew.id,
             reformedFrom: sourceCrewId,
             festivalId: targetFestivalId,
@@ -675,10 +676,10 @@ export default function createCrewRoutes(deps: RouteDeps) {
         const updated = await stores.crews.getById(crewId);
         const members = await stores.crews.getMembers(crewId);
 
-        if (io) {
+        if (emitter) {
           const broadcastData = serializeCrewWithMembers(updated, members, null);
           delete broadcastData.inviteCode;
-          io.to(`crew:${crewId}`).emit('crew:updated', broadcastData);
+          emitter.toCrew(crewId, 'crew:updated', broadcastData);
         }
 
         log.info('crew:updated', { crewId, userId: req.user.userId });
@@ -706,8 +707,8 @@ export default function createCrewRoutes(deps: RouteDeps) {
         const { crew } = resolved;
 
         const members = await stores.crews.getMembers(crewId);
-        if (io)
-          io.to(`crew:${crewId}`).emit('crew:deleted', {
+        if (emitter)
+          emitter.toCrew(crewId, 'crew:deleted', {
             crewId,
             festivalId: crew.festivalId,
             deletedBy: req.user.userId,

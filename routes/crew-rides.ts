@@ -22,7 +22,6 @@ export default function createCrewRidesRoutes(deps: any) {
     schemas,
     validate,
     validateParams,
-    io,
     emitter,
   } = deps;
   const crewMember = crewMembership(deps);
@@ -79,7 +78,7 @@ export default function createCrewRidesRoutes(deps: any) {
           departTime: departTime ?? null,
         });
 
-        io.to('crew:' + crewId).emit('crew:ride-created', { crewId, offer });
+        emitter.toCrew(crewId, 'crew:ride-created', { crewId, offer });
         const activity = {
           crewId,
           userId,
@@ -135,7 +134,7 @@ export default function createCrewRidesRoutes(deps: any) {
         }
 
         const offer = await stores.crewRides.update(itemId, req.validatedBody);
-        io.to('crew:' + crewId).emit('crew:ride-updated', { crewId, offer });
+        emitter.toCrew(crewId, 'crew:ride-updated', { crewId, offer });
         return sendSuccess(res, { offer });
       } catch (err: any) {
         log.error('update ride offer error', { error: err.message });
@@ -166,7 +165,7 @@ export default function createCrewRidesRoutes(deps: any) {
         }
 
         await stores.crewRides.delete(itemId);
-        io.to('crew:' + crewId).emit('crew:ride-deleted', { crewId, itemId });
+        emitter.toCrew(crewId, 'crew:ride-deleted', { crewId, itemId });
         return sendSuccess(res, { deleted: true });
       } catch (err: any) {
         log.error('delete ride offer error', { error: err.message });
@@ -193,7 +192,7 @@ export default function createCrewRidesRoutes(deps: any) {
         ? await stores.crewRides.takeSeat(itemId, userId)
         : await stores.crewRides.leaveSeat(itemId, userId);
       if (offer === 'full') return sendError(res, 409, 'This ride is full.', ErrorCodes.CONFLICT);
-      io.to('crew:' + crewId).emit('crew:ride-updated', { crewId, offer });
+      emitter.toCrew(crewId, 'crew:ride-updated', { crewId, offer });
       return sendSuccess(res, { offer });
     } catch (err: any) {
       log.error('ride seat error', { error: err.message, take });

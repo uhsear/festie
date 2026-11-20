@@ -31,12 +31,11 @@ export default function createCrewPollRoutes(deps: RouteDeps) {
     schemas,
     validate,
     validateParams,
-    io,
     emitter,
     crewNotify,
   } = deps;
   const crewMember = crewMembership(deps);
-  const pollCloser = deps.pollCloser ?? createPollCloser({ stores, io, emitter, crewNotify, createOpaqueId, log });
+  const pollCloser = deps.pollCloser ?? createPollCloser({ stores, emitter, crewNotify, createOpaqueId, log });
 
   const isEnded = (poll: any) => poll.closed || (poll.closes_at && new Date(poll.closes_at) <= new Date());
 
@@ -98,7 +97,7 @@ export default function createCrewPollRoutes(deps: RouteDeps) {
           multiAnswer: multiAnswer === true,
         });
 
-        io.to('crew:' + crewId).emit('crew:poll-created', {
+        emitter.toCrew(crewId, 'crew:poll-created', {
           pollId: poll.id,
           question: poll.question,
           options: poll.options,
@@ -146,7 +145,7 @@ export default function createCrewPollRoutes(deps: RouteDeps) {
 
         if (indexes.length) await stores.polls.vote(pollId, userId, indexes);
         else await stores.polls.removeVote(pollId, userId);
-        io.to('crew:' + crewId).emit('crew:poll-voted', {
+        emitter.toCrew(crewId, 'crew:poll-voted', {
           pollId,
           userId,
           optionIndex: indexes[0] ?? -1,

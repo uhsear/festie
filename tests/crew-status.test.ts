@@ -15,6 +15,7 @@ import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { makeIo } from './_make-io';
+import { ioEmitter } from './_io-emitter';
 
 function noop() {}
 const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
@@ -80,6 +81,7 @@ function makeDeps(overrides: any = {}) {
       }),
     schemas: { crewIdParams: {}, crewStatus: {} },
     io: overrides.io !== undefined ? overrides.io : ioObj,
+    emitter: ioEmitter(overrides.io !== undefined ? overrides.io : ioObj),
     stores,
   };
 }

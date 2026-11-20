@@ -519,7 +519,7 @@ describe('lib/shutdown.js — additional coverage', async () => {
         pool: { end: mock.fn(async () => {}) },
         redis: null,
         cacheBus: null,
-        emitter: null,
+        emitter: { broadcast: mock.fn() },
         clearPresenceTimers: mock.fn(),
         avatarPool: { terminate: mock.fn(async () => {}) },
         inFlightRequests: {

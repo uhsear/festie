@@ -26,7 +26,6 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
     schemas,
     validate,
     validateParams,
-    io,
     emitter,
   } = deps;
   const crewMember = crewMembership(deps);
@@ -83,7 +82,7 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
           claimed: claimed === true,
         });
 
-        io.to('crew:' + crewId).emit('crew:packing-created', { crewId, item });
+        emitter.toCrew(crewId, 'crew:packing-created', { crewId, item });
         const activity = { crewId, userId, type: 'packing-created', detail: item.label.slice(0, 100) };
         await stores.activity
           .log(activity)
@@ -135,7 +134,7 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         }
 
         const items = await stores.crewPacking.createMany(crewId, userId, kept);
-        io.to('crew:' + crewId).emit('crew:packing-created', { crewId, items });
+        emitter.toCrew(crewId, 'crew:packing-created', { crewId, items });
         const activity = {
           crewId,
           userId,
@@ -212,7 +211,7 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         }
 
         const item = await stores.crewPacking.update(itemId, fields);
-        io.to('crew:' + crewId).emit('crew:packing-updated', { crewId, item });
+        emitter.toCrew(crewId, 'crew:packing-updated', { crewId, item });
         return sendSuccess(res, { item });
       } catch (err) {
         log.error('update packing item error', { error: (err as NodeJS.ErrnoException).message });
@@ -243,7 +242,7 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         }
 
         await stores.crewPacking.delete(itemId);
-        io.to('crew:' + crewId).emit('crew:packing-deleted', { crewId, itemId });
+        emitter.toCrew(crewId, 'crew:packing-deleted', { crewId, itemId });
         return sendSuccess(res, { deleted: true });
       } catch (err) {
         log.error('delete packing item error', { error: (err as NodeJS.ErrnoException).message });
