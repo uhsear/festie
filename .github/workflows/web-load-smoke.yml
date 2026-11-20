@@ -4,15 +4,26 @@ on:
   schedule:
     - cron: '*/30 * * * *'
   workflow_dispatch:
+    inputs:
+      base_url:
+        description: Site to load (override only to force a failure and test the alert)
+        required: false
+        default: https://festie.us
+        type: string
 
 # Catches a web app that never mounts while the API still answers 200. A failed
-# scheduled run emails the repository owner through GitHub's default notifications.
+# run on main opens (or reuses) a "Web load smoke failing" issue labelled
+# web-load-smoke, which also notifies the repository owner; the next green run on
+# main closes it. Same pattern as e2e-web.yml. A repeat failure does not comment
+# again: the run is every 30 minutes, so a long outage would otherwise post 48
+# comments a day.
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 permissions:
   contents: read
+  issues: write
 
 jobs:
   web-load-smoke:
@@ -31,4 +42,74 @@ jobs:
       - name: Load the live site anonymously
         run: npx playwright test tests/e2e/web-load-smoke.spec.ts --project=chromium
         env:
-          BASE_URL: https://festie.us
+          BASE_URL: ${{ inputs.base_url || 'https://festie.us' }}
+
+      # The alert belongs to runs on main: a dispatch on a branch cannot open or close it.
+      # Housekeeping only: a GitHub API blip here must not turn a green run red.
+      - name: Close any open failing issue (site loads)
+        if: success() && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'Web load smoke failing';
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'web-load-smoke',
+              per_page: 10,
+            });
+            for (const issue of issues.filter(i => i.title === title)) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `The site loaded again at ${new Date().toUTCString()}.`,
+              });
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                state: 'closed',
+              });
+              core.info(`Closed issue #${issue.number}`);
+            }
+
+      - name: Open failing issue (site does not load)
+        if: failure() && github.ref == 'refs/heads/main'
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const title = 'Web load smoke failing';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const { data: issues } = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'web-load-smoke',
+              per_page: 10,
+            });
+            const existing = issues.find(i => i.title === title);
+            if (existing) {
+              core.info(`Issue #${existing.number} is already open`);
+              return;
+            }
+            const { data: newIssue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              labels: ['web-load-smoke'],
+              body: [
+                '## The live site does not load',
+                '',
+                `The web load smoke run failed at **${new Date().toUTCString()}**.`,
+                '',
+                `[View failing run](${runUrl})`,
+                '',
+                '_This issue closes automatically when the next run on main passes._',
+              ].join('\n'),
+            });
+            core.info(`Opened new issue #${newIssue.number}`);
