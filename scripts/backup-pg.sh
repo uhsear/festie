@@ -12,6 +12,13 @@ set -euo pipefail
 # Run via cron:    0 */6 * * * cd /opt/festie && bash scripts/backup-pg.sh \
 #                      >> logs/backup.log 2>&1
 # npm alias:       npm run db:backup
+#
+# Avatars: uploaded avatar files live on disk, not in the database, so each run
+# also writes BACKUP_DIR/avatars_YYYYMMDD.tar.gz from AVATAR_DIR (a later run the
+# same day replaces it). Restore one file or all of them into the live directory:
+#   tar -xzf avatars_YYYYMMDD.tar.gz -C <public dir>/uploads            (all)
+#   tar -xzf avatars_YYYYMMDD.tar.gz -C <public dir>/uploads avatars/<file>.webp
+# The off-site copy covers the dump only; the avatar archive stays on this host.
 # ──────────────────────────────────────────────────────────────────────────────
 
 # ── Configuration (override with env vars) ───────────────────────────────────
@@ -27,6 +34,7 @@ DAILY_KEEP="${DAILY_KEEP:-30}"      # days to keep daily backups
 WEEKLY_KEEP="${WEEKLY_KEEP:-12}"    # weekly snapshots to retain
 VERIFY="${BACKUP_VERIFY:-1}"        # pg_restore --list is cheap; catches truncated dumps
 LOCK_WAIT="${BACKUP_LOCK_WAIT:-120}" # seconds to wait for another backup run; 0 = do not wait
+AVATAR_DIR="${AVATAR_DIR:-${PUBLIC_DIR:-$SCRIPT_DIR/public}/uploads/avatars}"
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -134,12 +142,33 @@ if [ "$DOW" = "7" ] && ! compgen -G "${BACKUP_DIR}/fp_${TIMESTAMP%%_*}_*_weekly.
   log "Weekly snapshot: $WEEKLY_FILE"
 fi
 
+# ── Avatars ──────────────────────────────────────────────────────────────────
+# The dump holds avatar keys, not the image files. Written to a temp name first,
+# so a failed run never replaces the last good archive. A failure is reported
+# after rotation, so the dump and its pruning still happen.
+
+AVATAR_FAILED=0
+if [ -d "$AVATAR_DIR" ]; then
+  AVATAR_ARCHIVE="${BACKUP_DIR}/avatars_${TIMESTAMP%%_*}.tar.gz"
+  if tar -czf "${AVATAR_ARCHIVE}.tmp" -C "$(dirname "$AVATAR_DIR")" "$(basename "$AVATAR_DIR")" \
+       && mv -f "${AVATAR_ARCHIVE}.tmp" "$AVATAR_ARCHIVE"; then
+    log "Avatar archive OK: $AVATAR_ARCHIVE ($(du -h "$AVATAR_ARCHIVE" | cut -f1))"
+  else
+    rm -f "${AVATAR_ARCHIVE}.tmp"
+    log "ERROR: avatar archive failed for ${AVATAR_DIR}"
+    AVATAR_FAILED=1
+  fi
+else
+  log "No avatar directory at ${AVATAR_DIR}: avatar archive skipped"
+fi
+
 # ── Rotation: daily ─────────────────────────────────────────────────────────
 # Delete daily dumps (not tagged _weekly) older than DAILY_KEEP days.
 
 DAILY_PRUNED=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump" \
   -not -name "*_weekly.dump" -mtime +"${DAILY_KEEP}" -print -delete | wc -l)
 find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump.counts" -mtime +"${DAILY_KEEP}" -delete
+find "$BACKUP_DIR" -maxdepth 1 -name "avatars_*.tar.gz*" -mtime +"${DAILY_KEEP}" -delete
 log "Daily rotation: pruned ${DAILY_PRUNED} backups older than ${DAILY_KEEP}d"
 
 # ── Rotation: weekly ────────────────────────────────────────────────────────
@@ -162,4 +191,5 @@ log "Weekly rotation: pruned ${WEEKLY_PRUNED} snapshots, keeping ${WEEKLY_KEEP}"
 REMAINING_DAILY=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump" -not -name "*_weekly.dump" | wc -l)
 REMAINING_WEEKLY=$(ls -1 "$BACKUP_DIR"/fp_*_weekly.dump 2>/dev/null | wc -l || echo 0)
 log "Retention summary: ${REMAINING_DAILY} daily + ${REMAINING_WEEKLY} weekly backups on disk"
+[ "$AVATAR_FAILED" = "0" ] || die "Dump OK, but the avatar archive failed"
 log "Backup complete"
