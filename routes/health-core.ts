@@ -52,6 +52,7 @@ export default function createHealthRoutes(deps: any) {
   let isReady = false;
 
   // Client performance metrics collection (beaconed from frontend)
+  // shortcut: client metric aggregates and error fingerprints are per process, so each instance reports only its own beacons; export them through Prometheus if the app scales out.
   const clientMetrics = { samples: 0, lcpSum: 0, fidSum: 0, clsSum: 0, renderMsSum: 0, renderCount: 0 };
   const clientMetricsBuckets = { lcp_under_2500: 0, lcp_over_2500: 0, fid_under_100: 0, fid_over_100: 0, render_under_500: 0, render_over_500: 0 };
 

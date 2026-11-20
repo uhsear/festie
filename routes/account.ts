@@ -294,6 +294,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // limit covers every PM2 process and survives restarts. The slot is reserved
   // before collecting and released if the export fails, so a failure does not
   // use up the day. Without Redis, a per-process Map applies the same rules.
+  // shortcut: the Redis-less fallback is per process; Redis is the multi-instance path and is already used when configured.
   const localExportReservations = new Map<string, number>();
   const EXPORT_RATE_LIMIT_MS = 24 * 60 * 60 * 1000; // 24 hours
   const MAX_EXPORT_RATE_ENTRIES = 1000;
