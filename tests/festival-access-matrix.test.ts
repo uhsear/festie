@@ -18,9 +18,8 @@ import { after, afterEach, describe, test } from 'node:test';
 import express from 'express';
 import { createSessionHelpers, FESTIVAL_ACTIONS } from '../lib/app-context/session';
 import { buildFestivalMounts } from '../lib/festival-mounts';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const h: any = skip ? null : await import('./_integration-helpers');
 
 // Construction-only deps: handlers never run, so every dependency except express and the real

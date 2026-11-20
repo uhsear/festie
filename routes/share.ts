@@ -16,6 +16,8 @@
  */
 
 import sharp from 'sharp';
+import type { Request, Response } from 'express';
+import type { RouteDeps } from '../lib/types';
 
 import { dayHeadingDate } from '../lib/festival-page.js';
 import { festivalTint } from '../lib/festival-tint.js';
@@ -31,7 +33,7 @@ import { validateUsername } from '../lib/helpers/validation.js';
 import { buildShareOgSvg, pickOgArtists } from '../lib/helpers/share-og-image.js';
 import { festivalStartMinutes } from '../lib/time-zone.js';
 
-export default function createShareRoutes(deps: any) {
+export default function createShareRoutes(deps: RouteDeps) {
   const {
     express, log, config,
     stores, getFestivalById, getUserById,
@@ -44,7 +46,7 @@ export default function createShareRoutes(deps: any) {
   // Envelope exception (see lib/response.ts): the HTML pages (/u/:username, /:profileId) and
   // the og.png handlers serve browsers and link-preview crawlers, so they send their own bodies,
   // not sendSuccess. The two /json routes are API routes and do use sendSuccess.
-  function sendShareError(res: any, status: any, title: any, message: any) {
+  function sendShareError(res: Response, status: any, title: any, message: any) {
     res.status(status);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
@@ -70,34 +72,34 @@ export default function createShareRoutes(deps: any) {
 
   // GET /u/:username/og.png and /:shareId/og.png — link-preview image. Same
   // lookups as the page, so a reset link also stops its image.
-  router.get('/u/:username/og.png', rateLimit(30, 'share-og'), async (req: any, res: any) => {
+  router.get('/u/:username/og.png', rateLimit(30, 'share-og'), async (req: Request, res: Response) => {
     try {
       const username = vanityUsername(req.params.username);
       if (!username) return res.status(400).end();
       const found = await findVanityProfile(username);
       if (!found.profileId) return res.status(404).end();
       return await sendShareOg(res, found.profileId);
-    } catch (error: any) {
-      log.error('share og render failed', { error: error.message, username: req.params.username });
+    } catch (error) {
+      log.error('share og render failed', { error: (error as NodeJS.ErrnoException).message, username: req.params.username });
       return res.status(500).end();
     }
   });
 
-  router.get('/:shareId/og.png', rateLimit(30, 'share-og'), async (req: any, res: any) => {
+  router.get('/:shareId/og.png', rateLimit(30, 'share-og'), async (req: Request, res: Response) => {
     try {
       const shareId = String(req.params.shareId || '').trim();
       if (!isValidShareId(shareId)) return res.status(400).end();
       const profileId = await stores.shareLinks.findProfileId(shareId);
       if (!profileId) return res.status(404).end();
       return await sendShareOg(res, profileId);
-    } catch (error: any) {
-      log.error('share og render failed', { error: error.message, shareId: req.params.shareId });
+    } catch (error) {
+      log.error('share og render failed', { error: (error as NodeJS.ErrnoException).message, shareId: req.params.shareId });
       return res.status(500).end();
     }
   });
 
   // GET /u/:username/json — JSON mirror of the vanity page, with the same checks.
-  router.get('/u/:username/json', rateLimit(30, 'share-json'), async (req: any, res: any) => {
+  router.get('/u/:username/json', rateLimit(30, 'share-json'), async (req: Request, res: Response) => {
     try {
       const username = vanityUsername(req.params.username);
       if (!username) {
@@ -108,15 +110,15 @@ export default function createShareRoutes(deps: any) {
         return sendError(res, 404, 'Schedule not found', ErrorCodes.NOT_FOUND);
       }
       return await sendProfileJson(res, found.profileId);
-    } catch (error: any) {
-      log.error('vanity share json error', { error: error.message, username: req.params.username });
+    } catch (error) {
+      log.error('vanity share json error', { error: (error as NodeJS.ErrnoException).message, username: req.params.username });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
   // GET /u/:username — opt-in vanity page. Renders in place: a redirect would
   // leak the revocable token, or break after a reset.
-  router.get('/u/:username', rateLimit(30, 'share'), async (req: any, res: any) => {
+  router.get('/u/:username', rateLimit(30, 'share'), async (req: Request, res: Response) => {
     try {
       const username = vanityUsername(req.params.username);
       if (!username) {
@@ -131,8 +133,8 @@ export default function createShareRoutes(deps: any) {
         return sendShareError(res, 404, 'No Schedule Yet', 'This user hasn\'t joined a festival yet.');
       }
       return await renderProfileShare(req, res, found.profileId, `u/${username}`);
-    } catch (error: any) {
-      log.error('vanity share lookup failed', { error: error.message, username: req.params.username });
+    } catch (error) {
+      log.error('vanity share lookup failed', { error: (error as NodeJS.ErrnoException).message, username: req.params.username });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
     }
   });
@@ -169,7 +171,7 @@ export default function createShareRoutes(deps: any) {
     };
   }
 
-  function shareOrigin(req: any) {
+  function shareOrigin(req: Request) {
     return config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
   }
 
@@ -187,7 +189,7 @@ export default function createShareRoutes(deps: any) {
   }
 
   // shareRef is the part after /s/: a share token, or `u/<username>` for the vanity page.
-  async function renderProfileShare(req: any, res: any, profileId: string, shareRef: string) {
+  async function renderProfileShare(req: Request, res: Response, profileId: string, shareRef: string) {
     const { profile, festival } = await loadShare(profileId);
     if (!profile) {
       return sendShareError(res, 404, 'Schedule Not Found', SCHEDULE_NOT_FOUND);
@@ -230,7 +232,7 @@ export default function createShareRoutes(deps: any) {
     }));
   }
 
-  async function sendShareOg(res: any, profileId: string) {
+  async function sendShareOg(res: Response, profileId: string) {
     const { profile, festival } = await loadShare(profileId);
     // Crawlers need no HTML error page.
     if (!profile || !festival) return res.status(404).end();
@@ -254,7 +256,7 @@ export default function createShareRoutes(deps: any) {
     return res.send(png);
   }
 
-  async function sendProfileJson(res: any, profileId: string) {
+  async function sendProfileJson(res: Response, profileId: string) {
     const { profile, festival } = await loadShare(profileId);
     if (!profile) {
       return sendError(res, 404, 'Schedule not found', ErrorCodes.NOT_FOUND);
@@ -282,7 +284,7 @@ export default function createShareRoutes(deps: any) {
   }
 
   // GET /s/:shareId — public share page (rate limited to prevent scraping)
-  router.get('/:profileId', rateLimit(30, 'share'), async (req: any, res: any) => {
+  router.get('/:profileId', rateLimit(30, 'share'), async (req: Request, res: Response) => {
     try {
       const shareId = String(req.params.profileId || '').trim();
       if (!isValidShareId(shareId)) {
@@ -294,14 +296,14 @@ export default function createShareRoutes(deps: any) {
         return sendShareError(res, 404, 'Schedule Not Found', SCHEDULE_NOT_FOUND);
       }
       return await renderProfileShare(req, res, profileId, shareId);
-    } catch (error: any) {
-      log.error('share page error', { error: error.message, profileId: req.params.profileId });
+    } catch (error) {
+      log.error('share page error', { error: (error as NodeJS.ErrnoException).message, profileId: req.params.profileId });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
   // JSON API for share data (rate limited to prevent scraping)
-  router.get('/:profileId/json', rateLimit(30, 'share-json'), async (req: any, res: any) => {
+  router.get('/:profileId/json', rateLimit(30, 'share-json'), async (req: Request, res: Response) => {
     try {
       const shareId = String(req.params.profileId || '').trim();
       if (!isValidShareId(shareId)) {
@@ -313,8 +315,8 @@ export default function createShareRoutes(deps: any) {
         return sendError(res, 404, 'Schedule not found', ErrorCodes.NOT_FOUND);
       }
       return await sendProfileJson(res, profileId);
-    } catch (error: any) {
-      log.error('share json error', { error: error.message, profileId: req.params.profileId });
+    } catch (error) {
+      log.error('share json error', { error: (error as NodeJS.ErrnoException).message, profileId: req.params.profileId });
       return sendError(res, 500, 'Failed to load schedule', ErrorCodes.INTERNAL_ERROR);
     }
   });

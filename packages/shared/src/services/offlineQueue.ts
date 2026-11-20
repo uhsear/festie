@@ -29,7 +29,7 @@ const MAX_FAILED_PERSISTED = 50;
 type FailedSyncRecord = FailedSyncItem & Pick<QueuedMutation, 'idempotencyKey' | 'maybeSent'>;
 
 /** Drop queued mutations older than this on read (mirrors the web queue policy). */
-export const MAX_QUEUE_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
+export const MAX_QUEUE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days: outlasts a multi-day festival with patchy signal
 
 /** Cap on transient (5xx/network) replay attempts before surfacing (matches web). */
 export const MAX_RETRIES = 5;
@@ -102,7 +102,7 @@ async function readQueue(): Promise<QueuedMutation[]> {
   }
   if (stale.length > 0) {
     for (const m of stale) {
-      recordFailed(m, 'Expired before it could sync (offline more than 24h)');
+      recordFailed(m, 'Expired before it could sync (offline more than 7 days)');
     }
     await writeQueue(fresh);
   }
@@ -450,7 +450,7 @@ export async function drainQueue(): Promise<void> {
       } catch (err) {
         if (isOffline()) break;
         if (isRateLimited(err)) {
-          // Transient: wait out Retry-After, no retry consumed (24h age-out still bounds it).
+          // Transient: wait out Retry-After, no retry consumed (7-day age-out still bounds it).
           const waitMs = parseRetryAfterMs((err as { retryAfter?: number | string | null }).retryAfter) ?? DEFAULT_RATE_LIMIT_WAIT_MS;
           await patchQueued(m.clientId, { notBefore: Date.now() + waitMs });
         } else if (isNetworkTimeout(err) || (isEdge(err) && (m.edgeRetries ?? 0) + 1 < MAX_EDGE_RETRIES)) {

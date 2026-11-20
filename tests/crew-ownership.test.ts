@@ -4,6 +4,7 @@ import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import createCrewsStore from '../lib/db/stores/crews.js';
 import { createStores } from '../lib/db/index.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Crew ownership in the store: transferOwnership moves crews.created_by with the
 // role rows, and handOverOwnedCrews (DELETE /account) picks a new owner per crew.
@@ -30,7 +31,10 @@ function handoverPool({
     committed,
     query: async (sql: string, params: any[]) => {
       if (sql.includes("role = 'owner'")) return { rows: owned.map((crew_id) => ({ crew_id })) };
-      return { rows: (candidates[params[0]] ?? []).map((user_id) => ({ user_id })) };
+      const crewIds: string[] = params[0];
+      return {
+        rows: crewIds.flatMap((crew_id) => (candidates[crew_id] ?? []).map((user_id) => ({ crew_id, user_id }))),
+      };
     },
     connect: async () => {
       let pending: { crewId: string; to: string } | null = null;
@@ -92,8 +96,6 @@ describe('crews.handOverOwnedCrews (no database)', () => {
   });
 });
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('crews.transferOwnership (database)', { skip }, () => {
   let pool: Pool;

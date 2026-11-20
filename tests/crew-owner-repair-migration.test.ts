@@ -5,13 +5,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Migration 078 repairs crew ownership written before the transfer and
 // account-deletion fixes: a stale crews.created_by after a transfer, and a crew
 // whose only owner is a soft-deleted user. Running it again changes nothing.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '078_crew_owner_repair.sql'),
   'utf8',

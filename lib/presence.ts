@@ -28,11 +28,7 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     state.onlineUsers.get(festivalId).set(socketId, { userId, username });
     log.info('presence: user joined', { festivalId, userId, username, socketId });
     if (redisPresence) {
-      try {
-        await redisPresence.setOnline(festivalId, userId, username, socketId);
-      } catch (err: any) {
-        log.debug('redis presence setOnline failed', { error: err.message });
-      }
+      await redisPresence.setOnline(festivalId, userId, username, socketId);
     }
   }
 
@@ -87,7 +83,9 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
         try {
           const online = await getPresenceList(festivalId);
           if (redisPresence) {
-            redisPresence.refresh(festivalId).catch(() => {});
+            redisPresence.refresh(festivalId).catch((err: any) => {
+              log.warn('redis presence refresh failed', { festivalId, error: err.message });
+            });
           }
           io.to(festivalId).emit('presence:update', { online });
         } catch (err: any) {
@@ -177,7 +175,9 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     }
     state.onlineUsers.delete(festivalId);
     if (redisPresence && redis) {
-      redis.del(`presence:${festivalId}`).catch(() => {});
+      redis.del(`presence:${festivalId}`).catch((err: any) => {
+        log.warn('redis presence delete failed', { festivalId, error: err.message });
+      });
     }
     for (const targetFestivalId of presenceTargets) emitPresence(targetFestivalId, io);
   }
