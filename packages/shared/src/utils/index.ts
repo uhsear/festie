@@ -82,6 +82,7 @@ export * from './passwordPolicy';
 export * from './supportMail';
 export * from './beacon';
 export * from './expenseSplit';
+export * from './expenseView';
 export * from './crewLogistics';
 export * from './crewWrapPoster';
 export * from './discover';

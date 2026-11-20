@@ -1,4 +1,4 @@
-import type { CrewExpense, CrewExpenseBalance, CrewSettlement } from '@festie/shared/types';
+import type { CrewExpense, CrewExpenseBalance, CrewSettlement } from '../types';
 import {
   sanitizeAmountInput,
   canAddExpense,
