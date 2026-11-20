@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool, QueryResultRow } from 'pg';
 import { parseJsonObject } from './connection';
 import { cleanLineupLinks } from '../lineup';
 
@@ -32,12 +32,12 @@ export function buildUpdate(
  */
 export default function createUtils(pool: Pool) {
   // Convert PostgreSQL Date objects to ISO strings for consistent serialization
-  function toISOString(value: any): any {
+  function toISOString<T>(value: T): T | string {
     if (!value) return value;
     return value instanceof Date ? value.toISOString() : String(value);
   }
 
-  function mapProfileRow(row: any) {
+  function mapProfileRow(row: QueryResultRow) {
     return {
       id: row.id,
       festivalId: row.festivalId,
@@ -124,11 +124,11 @@ export default function createUtils(pool: Pool) {
       ORDER BY f.created_at ASC, f.id ASC
     `);
 
-    return result.rows.map((row: any) => ({ ...row, lineup: cleanLineupLinks(row.lineup) }));
+    return result.rows.map((row) => ({ ...row, lineup: cleanLineupLinks(row.lineup) }));
   }
 
-  function parseMessageRow(row: any) {
-    let reactions: any = null;
+  function parseMessageRow(row: QueryResultRow) {
+    let reactions: Record<string, unknown> | null = null;
     if (row.reactionsJson) {
       try {
         reactions = JSON.parse(row.reactionsJson);

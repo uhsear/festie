@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { describe, mock, test } from 'node:test';
 import express from 'express';
 import request from 'supertest';
+import { createAnalyticsStore } from '../lib/db/stores/analytics.js';
 import createAdminStatusRoutes from '../routes/admin-status.js';
 
 const FESTIVAL = {
@@ -48,8 +49,10 @@ function makeApp({ pool = { query: queryMock() } as any, festival = FESTIVAL as 
       res.status(status).json({ data: null, error: { message, code } }),
     ErrorCodes: { NOT_FOUND: 'NOT_FOUND', SERVICE_UNAVAILABLE: 'SERVICE_UNAVAILABLE', INTERNAL_ERROR: 'INTERNAL_ERROR' },
     adminAuth: (_req: any, res: any, next: any) => (isAdmin ? next() : res.status(403).json({ data: null })),
-    pool,
-    stores: { festivals: { getById: mock.fn(async (id: string) => (id === festival?.id ? festival : null)) } },
+    stores: {
+      festivals: { getById: mock.fn(async (id: string) => (id === festival?.id ? festival : null)) },
+      ...(pool ? { analytics: createAnalyticsStore(pool) } : {}),
+    },
   };
   const app = express();
   app.use(createAdminStatusRoutes(deps).router);

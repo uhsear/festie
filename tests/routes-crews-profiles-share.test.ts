@@ -12,6 +12,7 @@ import { describe, test, mock, beforeEach } from 'node:test';
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import request from 'supertest';
+import { ioEmitter } from './_io-emitter';
 
 type TestReq = Request & Record<string, unknown>;
 
@@ -43,7 +44,7 @@ function makeCrewDeps(overrides: Record<string, unknown> = {}) {
     getUserFestivalProfile: mock.fn(async () => ({ id: 'prof-1', userId: 'user-1' })),
     getUserById: mock.fn(async (id: string) => ({ id, username: 'testuser' })),
     getProfiles: mock.fn(async () => []),
-    emitter: { profileCreated: mock.fn() },
+    emitter: { profileCreated: mock.fn(), ...ioEmitter(ioObj) },
     userAuth: (req: TestReq, _res: Response, next: NextFunction) => { req.user = { userId: 'user-1', username: 'testuser' }; next(); },
     adminAuth: async (req: TestReq, res: Response, next: NextFunction) => {
       req.user = { userId: 'user-1', username: 'testuser' };

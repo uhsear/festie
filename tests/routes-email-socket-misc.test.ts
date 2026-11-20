@@ -3,6 +3,8 @@ import { describe, test, mock, beforeEach } from 'node:test';
 import crypto from 'crypto';
 import express from 'express';
 import request from 'supertest';
+import { ioEmitter } from './_io-emitter';
+import createFestivalsStore from '../lib/db/stores/festivals.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Shared mock factory
@@ -34,6 +36,7 @@ function makePool(queryResult = { rows: [] }) {
 }
 
 function baseDeps(overrides: any = {}) {
+  const io = makeIo();
   const deps: any = {
     express,
     config: {
@@ -111,7 +114,7 @@ function baseDeps(overrides: any = {}) {
     sanitizeString: (s: any) => (s || '').trim(),
     sanitizeIdentifier: (s: any) => (s || '').trim(),
     createOpaqueId: () => 'opaque-123',
-    io: makeIo(),
+    io,
     stores: { pool: makePool() },
     pool: makePool(),
     state: {
@@ -121,12 +124,16 @@ function baseDeps(overrides: any = {}) {
       timers: [],
     },
     emitter: {
+      ...ioEmitter(io),
       crewExpenseAdded: noop,
       crewExpenseDeleted: noop,
     },
     ...overrides,
   };
-  deps.festivalAccess = () => deps.adminAuth;
+  deps.festivalAccess = ({ param = 'id' }: any = {}) => (req: any, res: any, next: any) => {
+    req.festivalId = req.params[param];
+    return deps.adminAuth(req, res, next);
+  };
   return deps;
 }
 
@@ -1906,16 +1913,16 @@ describe('routes/lineup-import', () => {
 
 describe('routes/weather', () => {
   function buildWeatherDeps(overrides: any = {}) {
-    return baseDeps({
-      stores: {
-        pool: {
-          query: mock.fn(async () => ({
-            rows: [{ latitude: 25.76, longitude: -80.19, name: 'Ultra Miami' }],
-          })),
-        },
+    const stores: any = {
+      pool: {
+        query: mock.fn(async () => ({
+          rows: [{ latitude: 25.76, longitude: -80.19, name: 'Ultra Miami' }],
+        })),
       },
-      ...overrides,
-    });
+    };
+    // The route reads the festival through the store; a test swaps stores.pool.query to change the row.
+    stores.festivals = createFestivalsStore({ query: (...args: any[]) => stores.pool.query(...args) } as any, {});
+    return baseDeps({ stores, ...overrides });
   }
 
   async function mountWeather(deps: any) {

@@ -33,6 +33,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
     getRequestIp,
     buildAvatarUrl,
     io,
+    emitter,
     stores,
     schemas,
     validate,
@@ -448,7 +449,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         await removeAvatarFile(removedUser.avatarKey).catch(() => {});
         for (const profile of removedProfiles || []) {
           await removeProfileSockets(profile, io);
-          io.to(profile.festivalId).emit('profile:deleted', { festivalId: profile.festivalId, profileId: profile.id });
+          emitter.toRoom(profile.festivalId, 'profile:deleted', { festivalId: profile.festivalId, profileId: profile.id });
         }
         await invalidateUserSessions(targetUserId);
         // Revoke long-lived refresh tokens so a held token chain cannot

@@ -425,6 +425,43 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     socket.close();
   });
 
+  test('crew events routed through the emitter keep their wire shape', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    await joinFestivalProfile(server, alice.token);
+    const crewId = (
+      await server.request
+        .post('/api/v1/crews')
+        .set('x-user-token', alice.token)
+        .set('x-festie-request', '1')
+        .send({ name: 'Emitter Crew', festivalId: 'fest-1' })
+        .expect(201)
+    ).body.data.id;
+
+    const socket = connectSocket(server.baseUrl);
+    await waitForEvent(socket, 'connect');
+    socket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    await waitForEvent(socket, 'presence:update', (p) => p.online.length === 1);
+    const ack: any = await new Promise((resolve) => socket.emit('join:crew', { crewId }, resolve));
+    assert.equal(ack.ok, true);
+
+    const packed = waitForEvent(socket, 'crew:packing-created');
+    await server.request
+      .post(`/api/v1/crews/${crewId}/packing`)
+      .set('x-user-token', alice.token)
+      .set('x-festie-request', '1')
+      .send({ label: 'Tent' })
+      .expect(200);
+    const packedPayload: any = await packed;
+    assert.deepEqual(Object.keys(packedPayload).sort(), ['crewId', 'item']);
+    assert.equal(packedPayload.crewId, crewId);
+    assert.equal(packedPayload.item.label, 'Tent');
+
+    socket.close();
+  });
+
   test('leave:crew — user leaves a crew room', async () => {
     const server = await startServer();
     servers.push(server);

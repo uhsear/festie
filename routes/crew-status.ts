@@ -30,7 +30,7 @@ export default function createCrewStatusRoutes(deps: any) {
     schemas,
     validate,
     validateParams,
-    io,
+    emitter,
   } = deps;
   const crewMember = crewMembership(deps);
 
@@ -95,7 +95,7 @@ export default function createCrewStatusRoutes(deps: any) {
         // Broadcast to the crew room so any open client patches in place. The
         // payload IS the upserted row (snake_case) so the client can render it
         // with honest staleness from `updated_at`.
-        io.to('crew:' + crewId).emit('crew:status-updated', { status: row });
+        emitter.toCrew(crewId, 'crew:status-updated', { status: row });
         return sendSuccess(res, { status: row });
       } catch (err: any) {
         log.error('update crew status error', { error: err.message });

@@ -26,7 +26,7 @@ export interface SosRaiseInput {
   position?: { lat: number; lng: number; accuracy?: number; capturedAt: string };
 }
 
-export function createSosRaiser({ stores, io, redis, emitter, notificationService, log, config }: any) {
+export function createSosRaiser({ stores, redis, emitter, notificationService, log, config }: any) {
   async function raise({ crewId, userId, username, message, position }: SosRaiseInput) {
     // Durable side-effect #1: one crew_activity row. Detail = capped message
     // + optional coarse coords (the single intentional durable location datum).
@@ -65,7 +65,7 @@ export function createSosRaiser({ stores, io, redis, emitter, notificationServic
     await markSosActive(redis, crewId, payload);
 
     // Durable side-effect #2: crew-wide socket broadcast (primary delivery).
-    if (io) io.to('crew:' + crewId).emit('sos:raised', payload);
+    emitter.toCrew(crewId, 'sos:raised', payload);
 
     // Activity-feed fan-out, only when the row landed. Strictly AFTER the
     // primary broadcast: this is a feed nicety and must never preempt SOS.
@@ -124,5 +124,3 @@ export function createSosRaiser({ stores, io, redis, emitter, notificationServic
 
   return { raise };
 }
-
-export type SosRaiser = ReturnType<typeof createSosRaiser>;

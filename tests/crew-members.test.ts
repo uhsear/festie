@@ -19,6 +19,7 @@ import request from 'supertest';
 import { schemas, validate, validateParams, validateQuery } from '../lib/schemas.js';
 import { makeIo } from './_make-io';
 import { createSessionHelpers } from '../lib/app-context/session.js';
+import { ioEmitter } from './_io-emitter';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -142,6 +143,7 @@ function makeDeps(overrides: any = {}) {
     validateParams: overrides.validateParams || validateParams,
     schemas,
     io: overrides.io !== undefined ? overrides.io : ioObj,
+    emitter: ioEmitter(overrides.io !== undefined ? overrides.io : ioObj),
     crewNotify: overrides.crewNotify,
     getRequestIp: () => '127.0.0.1',
     stores,

@@ -166,7 +166,7 @@ type SocketSetup = ReturnType<typeof configureSocketIO>;
  * notifications, poll closing, check-ins, announcements) and registers each one on
  * `ctx` (read by background tasks and shutdown) and on `deps` (read by route modules).
  */
-function wireServices(ctx: AppContext, deps: RouteDeps, { io, emitter, notificationService }: SocketSetup) {
+function wireServices(ctx: AppContext, deps: RouteDeps, { emitter, notificationService }: SocketSetup) {
   const { config, pool, redis } = ctx;
 
   // M3 re-engagement triggers (event-gated push+email): lineup_drop / crew_reformed / wrap_ready.
@@ -216,7 +216,6 @@ function wireServices(ctx: AppContext, deps: RouteDeps, { io, emitter, notificat
   const crewNotify = createCrewNotifier({ stores: ctx.stores, notificationService, log });
   const pollCloser = createPollCloser({
     stores: ctx.stores,
-    io,
     emitter,
     crewNotify,
     createOpaqueId: ctx.createOpaqueId,

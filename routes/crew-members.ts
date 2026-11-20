@@ -23,6 +23,7 @@ export default function createCrewMemberRoutes(deps: any) {
     validateQuery,
     validateParams,
     io,
+    emitter,
     redis,
     crewNotify,
     getRequestIp,
@@ -65,7 +66,7 @@ export default function createCrewMemberRoutes(deps: any) {
     if (!io || typeof io.in !== 'function') return;
     const room = `crew:${crewId}`;
     try {
-      io.to(room).emit('location:peer-stopped', {
+      emitter.toRoom(room, 'location:peer-stopped', {
         _v: 1,
         crewId,
         userId: removedUserId,
@@ -165,8 +166,8 @@ export default function createCrewMemberRoutes(deps: any) {
 
         await stores.crews.removeMember(crewId, req.user.userId);
 
-        if (io) {
-          io.to(`crew:${crewId}`).emit('crew:member-left', {
+        if (emitter) {
+          emitter.toCrew(crewId, 'crew:member-left', {
             crewId,
             userId: req.user.userId,
             username: req.user.username,
@@ -211,8 +212,8 @@ export default function createCrewMemberRoutes(deps: any) {
 
         await stores.crews.removeMember(crewId, targetUserId);
 
-        if (io) {
-          io.to(`crew:${crewId}`).emit('crew:member-kicked', {
+        if (emitter) {
+          emitter.toCrew(crewId, 'crew:member-kicked', {
             crewId,
             userId: targetUserId,
           });
@@ -290,10 +291,10 @@ export default function createCrewMemberRoutes(deps: any) {
         const crew = (await stores.crews.getById(crewId)) ?? resolved.crew;
         const members = await stores.crews.getMembers(crewId);
 
-        if (io) {
+        if (emitter) {
           const broadcastData = serializeCrewWithMembers(crew, members, null);
           delete broadcastData.inviteCode;
-          io.to(`crew:${crewId}`).emit('crew:updated', broadcastData);
+          emitter.toCrew(crewId, 'crew:updated', broadcastData);
         }
 
         const newOwner = members.find((m: any) => m.userId === targetUserId);
@@ -410,8 +411,8 @@ export default function createCrewMemberRoutes(deps: any) {
 
         const members = await stores.crews.getMembers(crew.id);
 
-        if (io) {
-          io.to(`crew:${crew.id}`).emit('crew:member-joined', {
+        if (emitter) {
+          emitter.toCrew(crew.id, 'crew:member-joined', {
             crewId: crew.id,
             userId: targetUserId,
             username: targetUser.username,

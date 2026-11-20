@@ -373,8 +373,22 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     io.to('crew:' + crewId).emit('crew:activity', { _v: EVENT_VERSION, crewId, item });
   }
 
+  // Generic fan-out for events whose payload the caller already shaped; payloads go out unchanged (no _v added).
+  function toCrew(crewId: string, event: string, payload: unknown) {
+    io.to('crew:' + crewId).emit(event, payload);
+  }
+  function toRoom(room: string | string[], event: string, payload: unknown) {
+    io.to(room).emit(event, payload);
+  }
+  function broadcast(event: string, payload: unknown) {
+    io.emit(event, payload);
+  }
+
   return {
     EVENT_VERSION,
+    toCrew,
+    toRoom,
+    broadcast,
     profileCreated,
     profileUpdated,
     profileDeleted,

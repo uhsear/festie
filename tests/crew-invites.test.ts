@@ -11,6 +11,7 @@ import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { makeIo } from './_make-io';
+import { ioEmitter } from './_io-emitter';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -106,7 +107,7 @@ function makeInviteDeps(overrides: any = {}) {
     getUserById: mock.fn(async (id: any) => ({ id, username: 'testuser' })),
     getProfiles: mock.fn(async () => []),
     createOpaqueId: (prefix: any) => `${prefix}-new`,
-    emitter: { profileCreated: mock.fn() },
+    emitter: { profileCreated: mock.fn(), ...ioEmitter(overrides.io !== undefined ? overrides.io : ioObj) },
     userAuth: overrides.userAuth || ((req: any, _res: any, next: any) => {
       req.user = { userId: 'user-1', username: 'testuser' };
       next();

@@ -34,7 +34,7 @@ export function pollDecisionText(question: string, options: string[], counts: nu
   return decide(question, options, counts).text;
 }
 
-export function createPollCloser({ stores, io, emitter, crewNotify, createOpaqueId, log }: any) {
+export function createPollCloser({ stores, emitter, crewNotify, createOpaqueId, log }: any) {
   async function announce(poll: any, actorId: string | null) {
     const crewId = poll.crew_id;
     const by = actorId ?? poll.created_by;
@@ -70,7 +70,7 @@ export function createPollCloser({ stores, io, emitter, crewNotify, createOpaque
             longitude: null,
             recursDaily: false,
           });
-          io.to('crew:' + crewId).emit('crew:meeting-point-created', meetingPoint);
+          emitter.toCrew(crewId, 'crew:meeting-point-created', meetingPoint);
         }
       } catch (err: any) {
         log.warn('poll close meeting point failed', { error: err.message, pollId: poll.id });
@@ -86,7 +86,7 @@ export function createPollCloser({ stores, io, emitter, crewNotify, createOpaque
     }
 
     try {
-      io.to('crew:' + crewId).emit('crew:poll-closed', { pollId: poll.id });
+      emitter.toCrew(crewId, 'crew:poll-closed', { pollId: poll.id });
     } catch (err: any) {
       log.warn('poll close emit failed', { error: err.message, pollId: poll.id });
     }

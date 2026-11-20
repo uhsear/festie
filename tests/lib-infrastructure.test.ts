@@ -519,7 +519,7 @@ describe('lib/shutdown.js', () => {
         pool: { end: mock.fn(async () => {}) },
         redis: { disconnect: mock.fn() },
         cacheBus: { close: mock.fn(async () => {}) },
-        emitter: { flushAll: mock.fn() },
+        emitter: { flushAll: mock.fn(), broadcast: (event: string, payload: unknown) => deps.io.emit(event, payload) },
         clearPresenceTimers: mock.fn(),
         avatarPool: { terminate: mock.fn(async () => {}) },
         inFlightRequests: { count: 0 },

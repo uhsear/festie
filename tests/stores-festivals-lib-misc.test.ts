@@ -519,7 +519,7 @@ describe('lib/shutdown.js — additional coverage', async () => {
         pool: { end: mock.fn(async () => {}) },
         redis: null,
         cacheBus: null,
-        emitter: null,
+        emitter: { broadcast: mock.fn() },
         clearPresenceTimers: mock.fn(),
         avatarPool: { terminate: mock.fn(async () => {}) },
         inFlightRequests: {
@@ -995,19 +995,28 @@ describe('routes/spotify.js', () => {
 
   beforeEach(async () => {
     const mod = await import('../routes/spotify.js');
-    createSpotifyRoutes = mod.default;
+    const { default: createStore } = await import('../lib/db/stores/festivals.js');
+    // The route reads the set through the festivals store; build the real one over each test's mock pool.
+    createSpotifyRoutes = (deps) => {
+      deps.stores.festivals ??= createStore(deps.stores.pool, {});
+      return mod.default(deps);
+    };
   });
 
   function previewHandler(router: ReturnType<typeof createSpotifyRoutes>) {
     const layer = router.stack.find((l) => l.route?.path === '/spotify/preview/:setId');
     assert.ok(layer?.route, 'should have /spotify/preview/:setId route');
     const { stack } = layer.route;
-    return stack[stack.length - 1]!.handle as (req: unknown, res: unknown) => Promise<void>;
+    const handle = stack[stack.length - 1]!.handle as (req: unknown, res: unknown) => Promise<void>;
+    // validateParams runs earlier in the stack; set its output by hand since only the last handler is called.
+    return (req: { params: unknown }, res: unknown) => handle({ ...req, validatedParams: req.params }, res);
   }
 
   function makeDeps(overrides: Record<string, unknown> = {}) {
     return {
       express,
+      schemas: { setIdParams: {} },
+      validateParams: () => () => {},
       config: {
         SPOTIFY_CLIENT_ID: 'test-id',
         SPOTIFY_CLIENT_SECRET: 'test-secret',

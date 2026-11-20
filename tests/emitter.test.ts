@@ -587,6 +587,21 @@ describe('emitter: presenceUpdate', () => {
   });
 });
 
+describe('emitter: generic fan-out', () => {
+  it('sends the caller payload unchanged to crew rooms, explicit rooms and everyone', () => {
+    const io = makeIo();
+    const emitter = createSocketEmitter(defaultDeps({ io }));
+
+    emitter.toCrew('c1', 'crew:x', { crewId: 'c1' });
+    emitter.toRoom('fest-1', 'profile:deleted', { profileId: 'p1' });
+    emitter.broadcast('server:draining', { message: 'bye' });
+
+    assert.deepEqual(io._rooms['crew:c1'], [['crew:x', { crewId: 'c1' }]]);
+    assert.deepEqual(io._rooms['fest-1'], [['profile:deleted', { profileId: 'p1' }]]);
+    assert.deepEqual(io._globalEmits, [['server:draining', { message: 'bye' }]]);
+  });
+});
+
 describe('emitter: flushAll', () => {
   it('flushes all pending batched profile updates', async () => {
     const io = makeIo();

@@ -155,7 +155,7 @@ export default function createLineupImportRoute(deps: any) {
       sendError(res, 400, 'Invalid import payload', ErrorCodes.INVALID_INPUT);
       return null;
     }
-    const festivalId = sanitizeIdentifier(req.params.id, 100);
+    const festivalId = req.festivalId;
     if (!festivalId) {
       sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
       return null;
@@ -257,7 +257,7 @@ export default function createLineupImportRoute(deps: any) {
   router.get('/:id/imports', festivalAccess({ action: 'lineup.history' }), async (req: any, res: any) => {
     try {
       setNoStore(res);
-      const festivalId = sanitizeIdentifier(req.params.id, 100);
+      const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
       const history = await stores.lineupImports.list(festivalId);
       if (!history) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
@@ -275,7 +275,7 @@ export default function createLineupImportRoute(deps: any) {
     async (req: any, res: any) => {
       try {
         setNoStore(res);
-        const festivalId = sanitizeIdentifier(req.params.id, 100);
+        const festivalId = req.festivalId;
         const importId = sanitizeIdentifier(req.params.importId, 100);
         if (!festivalId || !importId) return sendError(res, 404, 'Import not found.', ErrorCodes.NOT_FOUND);
         // Read before the undo commits: a failed read then fails the request while nothing has changed.
