@@ -260,8 +260,16 @@ describe('createUsersStore', () => {
       const users = createUsersStore(pool, mockUtils);
 
       await users.reactivate('u1');
-      assert.ok(norm(pool.calls[0].sql).includes('WHERE id = $1 AND deleted_at IS NOT NULL'));
-      assert.deepEqual(pool.calls[0].params, ['u1']);
+      assert.ok(norm(pool.calls[0].sql).includes('WHERE id = $1 AND id <> $2 AND deleted_at IS NOT NULL'));
+      assert.deepEqual(pool.calls[0].params, ['u1', 'deleted-user']);
+    });
+
+    it('refuses the deleted-user placeholder without querying', async () => {
+      const pool = mockPool([]);
+      const users = createUsersStore(pool, mockUtils);
+
+      await users.reactivate('deleted-user');
+      assert.equal(pool.calls.length, 0);
     });
   });
 
