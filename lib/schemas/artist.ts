@@ -122,6 +122,8 @@ export const artistSpotifyPicksSchema = z.object({
     .max(200),
 });
 
+export const artistSpotifyRefreshSchema = z.object({ festivalId: identifier });
+
 // Spotify backfill body. All optional: old mobile bundles post no body.
 export const spotifyBackfillSchema = z
   .object({

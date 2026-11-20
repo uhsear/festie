@@ -259,6 +259,75 @@ export default function createArtistsRoutes(deps: RouteDeps) {
   );
 
   /**
+   * Fills the photo and genres that artists with a Spotify link still lack, from Spotify. Only empty
+   * fields are written, one transaction per artist. Artists on other festivals are included: every
+   * festival they are on is synced.
+   */
+  router.post(
+    '/spotify-refresh',
+    rateLimit(6, 'artist-spotify-refresh'),
+    validate(schemas.artistSpotifyRefresh),
+    async (req: Request, res: Response) => {
+      try {
+        const missing = spotifyKeysMissing(res);
+        if (missing) return missing;
+        const { festivalId } = req.validatedBody as z.infer<typeof schemas.artistSpotifyRefresh>;
+        const rows = (await stores.artists.list({ festivalId, limit: 1000 })).filter(
+          (row: any) => row.spotifyId && (!row.photo || !row.genres?.length),
+        );
+        const details: Map<string, any> = rows.length
+          ? await spotify.getArtistsByIds(
+              [...new Set<string>(rows.map((row: any) => row.spotifyId))],
+              config.SPOTIFY_CLIENT_ID,
+              config.SPOTIFY_CLIENT_SECRET,
+              { log },
+            )
+          : new Map();
+        const results: any[] = [];
+        const synced = new Map<string, SyncedFestival>();
+        let updated = 0;
+        let skipped = 0;
+        let unavailable = 0;
+        for (const row of rows) {
+          const spotifyArtist = details.get(row.spotifyId);
+          if (!spotifyArtist) {
+            unavailable++;
+            results.push({ artistId: row.id, status: 'unavailable' });
+            continue;
+          }
+          try {
+            const outcome = await stores.artists.refreshSpotifyDetails(row.id, {
+              photo: spotifyArtist.imageUrl,
+              genres: spotifyArtist.genres,
+              userId: req.user?.userId ?? null,
+              ip: getRequestIp(req),
+            });
+            if (outcome.status === 'unchanged') {
+              skipped++;
+              results.push({ artistId: row.id, status: 'skipped' });
+              continue;
+            }
+            for (const festival of outcome.synced) {
+              const have = synced.get(festival.id);
+              synced.set(festival.id, have ? { ...have, setIds: [...have.setIds, ...festival.setIds] } : festival);
+            }
+            if (req.res?.locals) req.res.locals.auditWritten = true;
+            updated++;
+            results.push({ artistId: row.id, status: 'updated' });
+          } catch (error) {
+            log.error('spotify refresh failed', { artistId: row.id, error: (error as NodeJS.ErrnoException)?.message });
+            results.push({ artistId: row.id, status: 'error' });
+          }
+        }
+        await afterSync([...synced.values()]);
+        return sendSuccess(res, { updated, skipped, unavailable, results });
+      } catch (error) {
+        return sendArtistError(res, error, 'fill photos from Spotify');
+      }
+    },
+  );
+
+  /**
    * Applies the plan under the lock. Festivals commit one by one, so even a failed run may have changed
    * data: the caches are cleared and one audit row is written whichever way it ends.
    */

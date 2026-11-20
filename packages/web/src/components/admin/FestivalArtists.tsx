@@ -5,6 +5,7 @@ import {
   changedArtistFrom,
   listDuplicateArtists,
   listFestivalArtists,
+  refreshSpotifyDetails,
   searchArtists,
   updateArtist,
 } from '@festie/shared/services';
@@ -59,6 +60,8 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
   const [asked, setAsked] = useState<Set<string>>(new Set());
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [findOpen, setFindOpen] = useState(false);
+  const [filling, setFilling] = useState(false);
+  const [fillNote, setFillNote] = useState<string | null>(null);
   const [mergeId, setMergeId] = useState<string | null>(null);
 
   // Each load takes a number. A reply that arrives after a newer load started is dropped.
@@ -138,6 +141,20 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
     }
   };
 
+  const fillPhotos = async () => {
+    setFilling(true);
+    setFillNote(null);
+    try {
+      const done = await refreshSpotifyDetails(festivalId);
+      setFillNote(`Filled ${done.updated}, nothing to fill for ${done.skipped}, Spotify had no data for ${done.unavailable}.`);
+      await refresh();
+    } catch (err) {
+      setFillNote(err instanceof Error ? err.message : "Couldn't fill photos. Try again.");
+    } finally {
+      setFilling(false);
+    }
+  };
+
   const requestSave = (artist: AdminArtistRow) => {
     if (artist.alsoOn > 0 && !asked.has(artist.id)) setConfirmId(artist.id);
     else void save(artist);
@@ -177,7 +194,12 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         <Button size="sm" disabled={findOpen} onClick={() => setFindOpen(true)}>
           Find Spotify links
         </Button>
+        <Button size="sm" disabled={filling} onClick={() => void fillPhotos()}>
+          {filling ? 'Filling…' : 'Fill photos from Spotify'}
+        </Button>
       </div>
+
+      {fillNote && <p role="status" className="text-sm text-text-secondary">{fillNote}</p>}
 
       {scope === 'all' && (
         <input

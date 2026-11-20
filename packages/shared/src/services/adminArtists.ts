@@ -235,6 +235,18 @@ export async function pickSpotifyCandidates(festivalId: string, picks: SpotifyPi
   return data.results;
 }
 
+export interface SpotifyRefreshResult {
+  updated: number;
+  skipped: number;
+  unavailable: number;
+  results: Array<{ artistId: string; status: 'updated' | 'skipped' | 'unavailable' | 'error' }>;
+}
+
+/** Fills the photo and genres that linked artists lack, from Spotify. Never replaces what an admin set. */
+export function refreshSpotifyDetails(festivalId: string): Promise<SpotifyRefreshResult> {
+  return api.post<SpotifyRefreshResult>('/admin/artists/spotify-refresh', { festivalId }, { timeoutMs: 120_000 });
+}
+
 /** "1.2M followers". Null when Spotify gave no count. */
 export function followersText(followers: number | null): string | null {
   if (followers === null) return null;

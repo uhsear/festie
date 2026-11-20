@@ -249,6 +249,57 @@ export function createArtistsStore(pool: Pool) {
     },
 
     /**
+     * Fills an empty photo or genre list of an artist that already has a Spotify link, from Spotify's
+     * data. Nothing the artist has is replaced. Every festival's copy follows, so an artist on other
+     * festivals is allowed: filling an empty field is not a contested edit. `unchanged` when nothing was empty.
+     */
+    async refreshSpotifyDetails(
+      id: string,
+      input: { photo: string | null; genres: string[]; userId: string | null; ip?: string | null },
+    ): Promise<{ status: 'saved'; artist: ArtistRecord; synced: SyncedFestival[] } | { status: 'unchanged' }> {
+      try {
+        return await withTransactionRetry(pool, async (client) => {
+          const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
+          const { rows } = await client.query(
+            `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 AND merged_into IS NULL FOR UPDATE`,
+            [id],
+          );
+          const before = rows[0] as ArtistRecord | undefined;
+          if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
+          const filled = await this.fillEmpty(
+            client,
+            id,
+            { photo: input.photo ?? undefined, genres: input.genres },
+            { userId: input.userId, ip: input.ip, skipAudit: true },
+          );
+          if (!filled?.changed) return { status: 'unchanged' as const };
+          const artist = filled.artist;
+          await assertUnchanged();
+          const synced = await rewriteCopies(client, festivalIds, artist);
+          await insertArtistAudit(
+            client,
+            id,
+            { userId: input.userId, ip: input.ip },
+            {
+              name: artist.name,
+              fields: [
+                ...(before.photo !== artist.photo ? ['photo'] : []),
+                ...(JSON.stringify(before.genres ?? []) !== JSON.stringify(artist.genres ?? []) ? ['genres'] : []),
+              ],
+              via: 'spotify-refresh',
+              festivalsUpdated: synced.length,
+              before: { photo: before.photo ?? null, genres: before.genres ?? [] },
+              after: { photo: artist.photo ?? null, genres: artist.genres ?? [] },
+            },
+          );
+          return { status: 'saved' as const, artist, synced };
+        });
+      } catch (error) {
+        throw artistConflict(error) ?? error;
+      }
+    },
+
+    /**
      * Stores a Spotify artist the editor picked: the link and spotify_id, and the photo and genres
      * only where the artist has none. The copies in every festival follow, past ones too, so an
      * artist on other festivals needs `acceptedAlsoOn`, the number of other festivals the editor
