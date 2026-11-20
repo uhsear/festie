@@ -8,6 +8,7 @@ const searchArtists = vi.fn();
 const listDuplicateArtists = vi.fn();
 const updateArtist = vi.fn();
 const findSpotifyCandidates = vi.fn();
+const refreshSpotifyDetails = vi.fn();
 
 vi.mock('@festie/shared/services', async (orig) => ({
   ...(await orig<typeof import('@festie/shared/services')>()),
@@ -16,6 +17,7 @@ vi.mock('@festie/shared/services', async (orig) => ({
   listDuplicateArtists: (...a: unknown[]) => listDuplicateArtists(...a),
   updateArtist: (...a: unknown[]) => updateArtist(...a),
   findSpotifyCandidates: (...a: unknown[]) => findSpotifyCandidates(...a),
+  refreshSpotifyDetails: (...a: unknown[]) => refreshSpotifyDetails(...a),
 }));
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError }) }));
 vi.mock('../../hooks/useReauthPrompt', () => ({ useReauthPrompt: () => ({ askPassword: vi.fn(), reauthDialog: null }) }));
@@ -137,6 +139,15 @@ describe('FestivalArtists', () => {
     await waitFor(() => expect(findSpotifyCandidates).toHaveBeenCalledWith('f1', []));
     expect(await screen.findByRole('region', { name: 'Find Spotify links' })).toBeTruthy();
     expect(updateArtist).not.toHaveBeenCalled();
+  });
+
+  it('Fill photos from Spotify calls the refresh for this festival, shows the counts and reloads the list', async () => {
+    refreshSpotifyDetails.mockResolvedValue({ updated: 3, skipped: 1, unavailable: 2, results: [] });
+    await open();
+    fireEvent.click(screen.getByRole('button', { name: 'Fill photos from Spotify' }));
+    await waitFor(() => expect(refreshSpotifyDetails).toHaveBeenCalledWith('f1'));
+    expect((await screen.findByRole('status')).textContent).toBe('Filled 3, nothing to fill for 1, Spotify had no data for 2.');
+    await waitFor(() => expect(listFestivalArtists).toHaveBeenCalledTimes(2));
   });
 
   it('renames an artist through the Name field and shows a refused name on the row', async () => {

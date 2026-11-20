@@ -354,6 +354,7 @@ const ALLOWLIST: Record<string, string> = {
   'POST /api/v1/admin/artists/match': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/artists/spotify-candidates': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/artists/spotify-picks': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/artists/spotify-refresh': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/artists/{id}/merge': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/festivals': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/festivals/{id}/backfill-spotify': 'admin: out of the public spec on purpose',

@@ -243,6 +243,7 @@ test('artist routes stay admin only, validated and rate limited', () => {
       'artists.ts POST /match',
       'artists.ts POST /spotify-candidates',
       'artists.ts POST /spotify-picks',
+      'artists.ts POST /spotify-refresh',
     ],
   );
   for (const r of artistRoutes) {
@@ -259,4 +260,5 @@ test('artist routes stay admin only, validated and rate limited', () => {
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /match')!, /rateLimit\(60, 'artist-match'\)/));
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-candidates')!, /rateLimit\(6, 'artist-spotify-search'\)/));
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-picks')!, /rateLimit\(20, 'artist-spotify-pick'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-refresh')!, /rateLimit\(6, 'artist-spotify-refresh'\)/));
 });

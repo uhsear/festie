@@ -346,3 +346,93 @@ describe('spotify candidates and picks', { skip, concurrency: 1 }, () => {
     assert.deepEqual((await withPool((p) => setRow(p, 'race-b'))).artists[0].links, {});
   });
 });
+
+describe('spotify refresh', { skip, concurrency: 1 }, () => {
+  const link = (n: number) => `https://open.spotify.com/artist/${id(n)}`;
+  const auditRows = (artistId: string) =>
+    withPool(async (pool) =>
+      (await pool.query(`SELECT details_json FROM audit_log WHERE action = 'artist.updated' AND target_id = $1`, [artistId])).rows.map((r: any) =>
+        typeof r.details_json === 'string' ? JSON.parse(r.details_json) : r.details_json,
+      ),
+    );
+
+  test('refresh: refuses a caller without an admin session and a body without a festival', async () => {
+    await app.server.request.post('/api/v1/admin/artists/spotify-refresh').send({ festivalId: 'x' }).expect(401);
+    await app.post('/api/v1/admin/artists/spotify-refresh', {}).expect(400);
+  });
+
+  test('refresh: fills an empty photo and genres, in the sets and the lineup, and audits it', async () => {
+    const artist = await createArtist(app, { name: 'Refresh Me', link: link(60) });
+    const element = elementOf(artist);
+    await withPool((pool) =>
+      seedFestival(pool, { id: 'fest-ref-1', lineup: [{ id: 'l1', artists: [element] }], sets: [{ id: 'ref-1-0', artist: 'Refresh Me', artists: [element] }] }),
+    );
+    artistTable[id(60)] = spotifyArtist(60, 'Refresh Me');
+    const res = await app.post('/api/v1/admin/artists/spotify-refresh', { festivalId: 'fest-ref-1' }).expect(200);
+    assert.deepEqual([res.body.data.updated, res.body.data.skipped, res.body.data.unavailable], [1, 0, 0]);
+    assert.deepEqual(res.body.data.results, [{ artistId: artist.id, status: 'updated' }]);
+    const row = await artistRow(artist.id);
+    assert.equal(row.photo, 'https://i.scdn.co/image/60');
+    assert.deepEqual(row.genres, ['house', 'techno']);
+    assert.equal(row.spotify_id, id(60));
+    const set = await withPool((pool) => setRow(pool, 'ref-1-0'));
+    assert.equal(set.artists[0].photo, 'https://i.scdn.co/image/60');
+    const festival = await withPool((pool) => festivalRow(pool, 'fest-ref-1'));
+    assert.equal(festival.lineup[0].artists[0].photo, 'https://i.scdn.co/image/60');
+    let entries: any[] = [];
+    for (let attempt = 0; attempt < 50 && entries.length < 2; attempt++) {
+      entries = await auditRows(artist.id);
+      if (entries.length < 2) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    const refresh = entries.find((entry) => entry.via === 'spotify-refresh');
+    assert.deepEqual(refresh?.fields, ['photo', 'genres']);
+  });
+
+  test('refresh: never overwrites a photo or genres an admin set, and skips an artist without a Spotify link', async () => {
+    const kept = await createArtist(app, { name: 'Refresh Kept', link: link(61) });
+    const bare = await createArtist(app, { name: 'Refresh Bare' });
+    await withPool((pool) =>
+      pool.query(`UPDATE artists SET photo = 'https://example.com/mine.jpg', genres = '["ambient"]'::jsonb WHERE id = $1`, [kept.id]),
+    );
+    const fresh = (await app.get('/api/v1/admin/artists?q=refresh kept').expect(200)).body.data.artists[0];
+    await withPool((pool) =>
+      seedFestival(pool, {
+        id: 'fest-ref-2',
+        sets: [
+          { id: 'ref-2-0', artist: 'Refresh Kept', artists: [elementOf(fresh)] },
+          { id: 'ref-2-1', artist: 'Refresh Bare', artists: [elementOf(bare)] },
+        ],
+      }),
+    );
+    artistTable[id(61)] = spotifyArtist(61, 'Refresh Kept');
+    const res = await app.post('/api/v1/admin/artists/spotify-refresh', { festivalId: 'fest-ref-2' }).expect(200);
+    assert.deepEqual([res.body.data.updated, res.body.data.skipped, res.body.data.unavailable, res.body.data.results.length], [0, 0, 0, 0]);
+    const row = await artistRow(kept.id);
+    assert.equal(row.photo, 'https://example.com/mine.jpg');
+    assert.deepEqual(row.genres, ['ambient']);
+    assert.equal((await artistRow(bare.id)).photo, null);
+  });
+
+  test('refresh: reports unavailable when Spotify returns nothing, and writes nothing', async () => {
+    const artist = await createArtist(app, { name: 'Refresh Ghost', link: link(62) });
+    await withPool((pool) => seedFestival(pool, { id: 'fest-ref-3', sets: [{ id: 'ref-3-0', artist: 'Refresh Ghost', artists: [elementOf(artist)] }] }));
+    const res = await app.post('/api/v1/admin/artists/spotify-refresh', { festivalId: 'fest-ref-3' }).expect(200);
+    assert.deepEqual([res.body.data.updated, res.body.data.unavailable], [0, 1]);
+    assert.deepEqual(res.body.data.results, [{ artistId: artist.id, status: 'unavailable' }]);
+    assert.equal((await artistRow(artist.id)).photo, null);
+  });
+
+  test('refresh: an artist on another festival is filled and every festival copy follows', async () => {
+    const artist = await createArtist(app, { name: 'Refresh Shared', link: link(63) });
+    const element = elementOf(artist);
+    await withPool(async (pool) => {
+      await seedFestival(pool, { id: 'fest-ref-4a', sets: [{ id: 'ref-4a', artist: 'Refresh Shared', artists: [element] }] });
+      await seedFestival(pool, { id: 'fest-ref-4b', date: '2020-01-01', sets: [{ id: 'ref-4b', artist: 'Refresh Shared', artists: [element] }] });
+    });
+    artistTable[id(63)] = spotifyArtist(63, 'Refresh Shared');
+    await app.post('/api/v1/admin/artists/spotify-refresh', { festivalId: 'fest-ref-4a' }).expect(200);
+    for (const setId of ['ref-4a', 'ref-4b']) {
+      assert.equal((await withPool((pool) => setRow(pool, setId))).artists[0].photo, 'https://i.scdn.co/image/63', setId);
+    }
+  });
+});
