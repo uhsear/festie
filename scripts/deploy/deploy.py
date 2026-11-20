@@ -179,7 +179,8 @@ def pre_deploy_dump(client, runner=run):
         )
     print(f"[pre-deploy-dump] exit={code}\n{out}{err}")
     # backup-pg.sh only warns when pg_restore --list fails, and still exits 0.
-    if code != 0 or "pg_restore --list failed" in f"{out}{err}":
+    # Exit 76 means the dump is good and only the avatar archive failed; the deploy goes on.
+    if code not in (0, 76) or "pg_restore --list failed" in f"{out}{err}":
         raise SystemExit(
             f"pre-deploy dump failed (exit {code}); nothing was changed on the host. "
             "Fix the dump, then deploy again."

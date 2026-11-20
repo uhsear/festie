@@ -82,14 +82,25 @@ describe('scripts/backup-pg.sh avatar archive', { skip }, () => {
     assert.equal(archives(backupDir).length, 1);
   });
 
-  it('keeps the dump and exits 1 when the avatar archive cannot be written', () => {
+  it('keeps the dump and exits 76 when the avatar archive cannot be written', () => {
     const { backupDir, env } = setup();
     const bin = path.dirname(env.STUB_LOG!) + '/bin';
     writeStub(bin, 'tar', 'exit 2');
     const r = runScript('scripts/backup-pg.sh', [], env);
-    assert.equal(r.status, 1, r.stdout + r.stderr);
+    assert.equal(r.status, 76, r.stdout + r.stderr);
     assert.match(r.stdout + r.stderr, /avatar archive failed/);
     assert.equal(readdirSync(backupDir).filter((f) => f.endsWith('.dump')).length, 1);
     assert.equal(archives(backupDir).length, 0);
+  });
+
+  it('keeps the archive and exits 0 when tar reports a file changed while it read (exit 1)', () => {
+    const { backupDir, env } = setup();
+    const bin = path.dirname(env.STUB_LOG!) + '/bin';
+    const realTar = spawnSync('bash', ['-c', 'command -v tar'], { encoding: 'utf8' }).stdout.trim();
+    writeStub(bin, 'tar', `"${realTar}" "$@"; exit 1`);
+    const r = runScript('scripts/backup-pg.sh', [], env);
+    assert.equal(r.status, 0, r.stdout + r.stderr);
+    assert.match(r.stdout, /changed while archiving/);
+    assert.equal(archives(backupDir).length, 1);
   });
 });

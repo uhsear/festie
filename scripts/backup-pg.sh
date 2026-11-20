@@ -145,17 +145,21 @@ fi
 # ── Avatars ──────────────────────────────────────────────────────────────────
 # The dump holds avatar keys, not the image files. Written to a temp name first,
 # so a failed run never replaces the last good archive. A failure is reported
-# after rotation, so the dump and its pruning still happen.
+# after rotation (exit 76), so the dump and its pruning still happen.
 
 AVATAR_FAILED=0
 if [ -d "$AVATAR_DIR" ]; then
   AVATAR_ARCHIVE="${BACKUP_DIR}/avatars_${TIMESTAMP%%_*}.tar.gz"
-  if tar -czf "${AVATAR_ARCHIVE}.tmp" -C "$(dirname "$AVATAR_DIR")" "$(basename "$AVATAR_DIR")" \
-       && mv -f "${AVATAR_ARCHIVE}.tmp" "$AVATAR_ARCHIVE"; then
+  # GNU tar exits 1 when a file changed or vanished mid-read, which happens on a
+  # live upload directory. The archive is still written, so only exit 2+ is a failure.
+  TAR_RC=0
+  tar --warning=no-file-changed --warning=no-file-removed -czf "${AVATAR_ARCHIVE}.tmp"       -C "$(dirname "$AVATAR_DIR")" "$(basename "$AVATAR_DIR")" || TAR_RC=$?
+  if [ "$TAR_RC" -le 1 ] && mv -f "${AVATAR_ARCHIVE}.tmp" "$AVATAR_ARCHIVE"; then
+    [ "$TAR_RC" -eq 0 ] || log "WARNING: avatar files changed while archiving; the archive may miss the newest upload"
     log "Avatar archive OK: $AVATAR_ARCHIVE ($(du -h "$AVATAR_ARCHIVE" | cut -f1))"
   else
     rm -f "${AVATAR_ARCHIVE}.tmp"
-    log "ERROR: avatar archive failed for ${AVATAR_DIR}"
+    log "ERROR: avatar archive failed for ${AVATAR_DIR} (tar exit ${TAR_RC})"
     AVATAR_FAILED=1
   fi
 else
@@ -191,5 +195,10 @@ log "Weekly rotation: pruned ${WEEKLY_PRUNED} snapshots, keeping ${WEEKLY_KEEP}"
 REMAINING_DAILY=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump" -not -name "*_weekly.dump" | wc -l)
 REMAINING_WEEKLY=$(ls -1 "$BACKUP_DIR"/fp_*_weekly.dump 2>/dev/null | wc -l || echo 0)
 log "Retention summary: ${REMAINING_DAILY} daily + ${REMAINING_WEEKLY} weekly backups on disk"
-[ "$AVATAR_FAILED" = "0" ] || die "Dump OK, but the avatar archive failed"
+# Exit 76 = the dump is good but the avatar archive failed. deploy.py and
+# backup-festival-hourly.sh accept it; every other non-zero exit stays fatal.
+if [ "$AVATAR_FAILED" != "0" ]; then
+  log "ERROR: dump OK, but the avatar archive failed" >&2
+  exit 76
+fi
 log "Backup complete"
