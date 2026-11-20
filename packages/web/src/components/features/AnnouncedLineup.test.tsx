@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { describe, it, expect, vi, beforeAll, beforeEach } from 'vitest';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const state: Record<string, unknown> = {};
@@ -76,6 +76,12 @@ function setFestival(lineup: unknown[], sets: unknown[] = [], extra: Record<stri
 }
 
 const names = (container: HTMLElement) => [...container.querySelectorAll('li')].map((li) => li.firstElementChild?.textContent);
+
+// jsdom has no pointer capture; vaul calls it on pointerdown inside the sheet.
+beforeAll(() => {
+  HTMLElement.prototype.setPointerCapture = vi.fn();
+  HTMLElement.prototype.releasePointerCapture = vi.fn();
+});
 
 describe('AnnouncedLineup', () => {
   beforeEach(() => {
@@ -272,5 +278,23 @@ describe('AnnouncedLineup interest marks', () => {
     render(<AnnouncedLineup />);
     await userEvent.click(screen.getByRole('button', { name: 'Interested (0)' }));
     expect(screen.getByText('You have not marked any acts yet.')).toBeInTheDocument();
+  });
+  it('tapping an act without a set opens its sheet with links, an Interested toggle, and closes again', async () => {
+    setFestival([
+      entry('1', 'Open Act', {
+        artists: [{ name: 'Open Act', genres: ['House'], links: { spotify: 'https://open.spotify.com/a', website: 'javascript:alert(1)' } }],
+      }),
+    ]);
+    render(<AnnouncedLineup />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open Act details' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('House')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Spotify' })).toHaveAttribute('href', 'https://open.spotify.com/a');
+    expect(within(dialog).queryByRole('link', { name: 'Website' })).not.toBeInTheDocument();
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Interested in Open Act' }));
+    expect(interest.toggle).toHaveBeenCalledWith('1');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+    // vaul keeps the panel mounted through its exit animation, which jsdom never finishes.
+    await waitFor(() => expect(dialog).toHaveAttribute('data-state', 'closed'));
   });
 });

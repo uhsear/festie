@@ -130,6 +130,17 @@ export function isSafeExternalUrl(url: string): boolean {
   return /^https?:\/\//i.test(url);
 }
 
+const LINK_ORDER = ['spotify', 'apple_music', 'soundcloud', 'youtube', 'instagram', 'twitter', 'tiktok', 'facebook', 'website'];
+
+/** An artist's openable links, music services first, then socials; unknown keys last. Non-http(s) URLs are dropped. */
+export function artistLinkEntries(links: Record<string, string> | undefined): Array<{ key: string; label: string; url: string }> {
+  const rank = (key: string) => (LINK_ORDER.includes(key) ? LINK_ORDER.indexOf(key) : LINK_ORDER.length);
+  return Object.entries(links ?? {})
+    .filter(([, url]) => typeof url === 'string' && isSafeExternalUrl(url))
+    .sort(([a], [b]) => rank(a) - rank(b))
+    .map(([key, url]) => ({ key, label: platformLabel(key), url }));
+}
+
 export function getSetLinks(set: FestivalSet): Array<{ name: string; links: Record<string, string> }> {
   if (!set.artists?.length) {
     return set.linkUrl ? [{ name: set.artist || 'Unknown', links: { spotify: set.linkUrl } }] : [];

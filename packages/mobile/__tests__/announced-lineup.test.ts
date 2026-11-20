@@ -85,6 +85,7 @@ describe('grid bottom panel rows', () => {
 describe('lineupView helpers', () => {
   it('parseLineupView falls back to the Poster view', () => {
     expect(parseLineupView('az')).toBe('az');
+    expect(parseLineupView('interested')).toBe('interested');
     expect(parseLineupView('poster')).toBe('poster');
     expect(parseLineupView('nonsense')).toBe('poster');
     expect(parseLineupView(null)).toBe('poster');
@@ -110,13 +111,20 @@ describe('announced lineup wiring (source guards)', () => {
       expect(component).toContain(fn);
     }
     expect(component).toContain("from '@festie/shared/utils'");
-    expect(component).not.toMatch(/from '@festie\/shared\/(?!stores|types|utils)/);
+    expect(component).not.toMatch(/from '@festie\/shared\/(?!hooks\/useInterest'|stores|types|utils)/);
     expect(component).not.toContain('socket.io-client');
   });
 
   it('a tap on the view switch is not undone by a late saved-view read', () => {
     expect(component).toContain('if (!userChose.current) setView(parseLineupView(raw));');
     expect(component).toContain('userChose.current = true;');
+  });
+
+  it('an announced row with no set opens the artist sheet, and the sheet and rows carry the shared Interested toggle', () => {
+    expect(component).toContain('setSheetEntry(entry)');
+    expect(component).toContain('artistLinkEntries(artist.links)');
+    expect(component).toContain("from '@festie/shared/hooks/useInterest'");
+    expect(component).toContain('Linking.openURL(link.url)');
   });
 
   it('a scheduled row opens its set and a cancelled one is struck through', () => {

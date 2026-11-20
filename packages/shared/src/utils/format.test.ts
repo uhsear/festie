@@ -11,6 +11,7 @@ import {
   artistSubtitle,
   getSetLinks,
   platformLabel,
+  artistLinkEntries,
   isSafeExternalUrl,
   formatFestivalDateRange,
 } from './format';
@@ -301,5 +302,23 @@ describe('isSafeExternalUrl', () => {
     expect(isSafeExternalUrl('data:text/html,hi')).toBe(false);
     expect(isSafeExternalUrl('intent://x#Intent;end')).toBe(false);
     expect(isSafeExternalUrl('')).toBe(false);
+  });
+});
+
+describe('artistLinkEntries', () => {
+  it('orders music services before socials, puts unknown keys last, and drops non-http(s) urls', () => {
+    const out = artistLinkEntries({
+      instagram: 'https://instagram.com/a',
+      zzz: 'https://z.example',
+      spotify: 'https://open.spotify.com/a',
+      website: 'javascript:alert(1)',
+      twitter: 'https://x.com/a',
+    });
+    expect(out.map((l) => l.key)).toEqual(['spotify', 'instagram', 'twitter', 'zzz']);
+    expect(out[2].label).toBe('X');
+  });
+
+  it('returns an empty list for no links', () => {
+    expect(artistLinkEntries(undefined)).toEqual([]);
   });
 });

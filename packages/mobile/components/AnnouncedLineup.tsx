@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Text, TouchableOpacity, View } from 'react-native';
+import { Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
+import { useInterest, useInterestedRows } from '@festie/shared/hooks/useInterest';
 import type { LineupEntry } from '@festie/shared/types';
 import {
+  artistLinkEntries,
   groupLineupAlphabetically,
   groupLineupByTier,
   lineupCoveringSets,
@@ -14,20 +16,106 @@ import {
   searchLineupEntries,
   selectLineupEntries,
 } from '@festie/shared/utils';
+import type { InterestRow } from '@festie/shared/utils';
 import type { AnnouncedLineupModel } from '../hooks/useAnnouncedLineup';
 import { useNow } from '../hooks/useNow';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { LINEUP_VIEW_KEY, parseLineupView, type LineupView } from '../lib/lineupView';
+import Avatar from './Avatar';
 import SegmentedControl from './SegmentedControl';
+import SheetShell from './SheetShell';
+
+const INTEREST_COPY = 'Marked acts become want-to-see picks when sets are out. Your crew sees your picks.';
 
 const VIEW_OPTIONS: { value: LineupView; label: string }[] = [
   { value: 'poster', label: 'Poster' },
   { value: 'az', label: 'A-Z' },
 ];
 
+const INTEREST_STATUS: Record<InterestRow['status'], string | null> = {
+  waiting: null,
+  'has-set': 'Has a set now',
+  'in-picks': 'In your picks',
+  'not-in-picks': 'Not in your picks',
+  cancelled: null,
+};
+
 type NameTier = 'tier1' | 'tier2' | 'rest';
 // Tier 1 is the top line of the poster, so it gets the largest type.
 const nameTier = (tier: number | null): NameTier => (tier === 1 ? 'tier1' : tier === 2 ? 'tier2' : 'rest');
+
+/** The filled or empty "Interested" toggle on one act. A guest's mark stays on the device. */
+function InterestToggle({ entryId, name }: { entryId: string; name: string }) {
+  const styles = useStyles();
+  const { marked, toggle } = useInterest(entryId);
+  return (
+    <TouchableOpacity
+      style={[styles.interestToggle, marked && styles.interestToggleOn]}
+      // toggleInterest rolls the mark back and sets the store error when the write fails, so the toggle already shows the truth.
+      onPress={() => toggle().catch(() => {})}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityState={{ selected: marked }}
+      accessibilityLabel={`Interested in ${name}`}
+    >
+      <Text style={[styles.interestText, marked && styles.interestTextOn]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        Interested
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+/** An announced act with no linked set: each artist's photo, genres and links, plus the Interested toggle. */
+function ArtistSheet({ entry, name, onClose }: { entry: LineupEntry | null; name: string; onClose: () => void }) {
+  const styles = useStyles();
+  return (
+    <SheetShell visible={entry !== null} onClose={onClose} backdropLabel="Close" maxHeight="85%">
+      {entry ? (
+        <>
+          <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            {name}
+          </Text>
+          <ScrollView style={styles.sheetList} contentContainerStyle={styles.sheetListContent}>
+            {entry.artists.map((artist, i) => (
+              <View key={artist.id ?? i} style={styles.artist}>
+                <Avatar name={artist.name} image={artist.photo} size="md" />
+                <View style={styles.artistBody}>
+                  <Text style={styles.artistName} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                    {artist.name}
+                  </Text>
+                  {artist.genres?.length ? (
+                    <Text style={styles.when} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {artist.genres.join(' · ')}
+                    </Text>
+                  ) : null}
+                  <View style={styles.linkRow}>
+                    {artistLinkEntries(artist.links).map((link) => (
+                      <TouchableOpacity
+                        key={link.key}
+                        style={styles.linkButton}
+                        onPress={() => Linking.openURL(link.url).catch(() => {})}
+                        activeOpacity={0.7}
+                        accessibilityRole="link"
+                        accessibilityLabel={`${artist.name} on ${link.label}`}
+                      >
+                        <Text style={styles.linkText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                          {link.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            ))}
+          </ScrollView>
+          <View style={styles.sheetFooter}>
+            <InterestToggle entryId={entry.id} name={name} />
+          </View>
+        </>
+      ) : null}
+    </SheetShell>
+  );
+}
 
 /**
  * The announced lineup: acts the organizer has named before, or without, set times. Mirrors the web
@@ -47,6 +135,8 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
   const [full, setFull] = useState(false);
   // A tap on the switch beats a saved-view read that is still in flight.
   const userChose = useRef(false);
+  const [sheetEntry, setSheetEntry] = useState<LineupEntry | null>(null);
+  const interestedRows = useInterestedRows();
 
   useEffect(() => {
     AsyncStorage.getItem(LINEUP_VIEW_KEY)
@@ -85,12 +175,13 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
     if (!cover) return null;
     const first = cover.state === 'scheduled' ? lineupCoveringSets(cover, sets)[0] : undefined;
     const badges = lineupEntryBadge(entry, cover, model.days, festival?.publishedAt, nowMs);
+    const label = lineupEntryName(entry, separator);
     const name = (
       <Text
         style={[styles[tier], cover.state === 'cancelled' && styles.cancelled]}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
       >
-        {lineupEntryName(entry, separator)}
+        {label}
       </Text>
     );
     return (
@@ -108,6 +199,16 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
               {lineupSetWhen(first, model.days, stages)}
             </Text>
           </TouchableOpacity>
+        ) : cover.state === 'announced' ? (
+          <TouchableOpacity
+            style={styles.rowLink}
+            onPress={() => setSheetEntry(entry)}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`${label} details`}
+          >
+            {name}
+          </TouchableOpacity>
         ) : (
           name
         )}
@@ -118,9 +219,18 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
             </Text>
           </View>
         ))}
+        {cover.state === 'announced' ? <InterestToggle entryId={entry.id} name={label} /> : null}
       </View>
     );
   };
+
+  const sheet = (
+    <ArtistSheet
+      entry={sheetEntry}
+      name={sheetEntry ? lineupEntryName(sheetEntry, separator) : ''}
+      onClose={() => setSheetEntry(null)}
+    />
+  );
 
   if (query) {
     if (matches.length === 0) return null;
@@ -130,11 +240,13 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
           Announced acts
         </Text>
         {matches.map((entry) => renderRow(entry, 'rest'))}
+        {sheet}
       </View>
     );
   }
 
   const { summary } = model;
+  const viewOptions = [...VIEW_OPTIONS, { value: 'interested' as const, label: `Interested (${interestedRows.length})` }];
   const nothingToList = selection.active.length === 0 && selection.cancelled.length === 0;
 
   return (
@@ -144,16 +256,17 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
       </Text>
       <Text style={styles.summary} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {summary.header}
+        {interestedRows.length > 0 ? ` · ${interestedRows.length} marked` : ''}
       </Text>
       {model.noSets ? (
         <Text style={styles.summary} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          Set times aren’t out yet.
+          Set times aren’t out yet. Mark the acts you want to see.
         </Text>
       ) : null}
 
       <View style={styles.controls}>
         <View style={styles.viewSwitch}>
-          <SegmentedControl options={VIEW_OPTIONS} value={view} onChange={changeView} accessibilityLabel="Lineup view" />
+          <SegmentedControl options={viewOptions} value={view} onChange={changeView} accessibilityLabel="Lineup view" />
         </View>
         {summary.scheduled > 0 ? (
           <TouchableOpacity
@@ -171,7 +284,39 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
         ) : null}
       </View>
 
-      {nothingToList ? (
+      {view === 'interested' ? (
+        <View style={styles.groups}>
+          <Text style={styles.summary} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            {INTEREST_COPY}
+          </Text>
+          {interestedRows.length === 0 ? (
+            <Text style={styles.empty} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              You have not marked any acts yet.
+            </Text>
+          ) : (
+            interestedRows.map((row) => {
+              const label = lineupEntryName(row.entry, separator);
+              const status = INTEREST_STATUS[row.status];
+              return (
+                <View key={row.entry.id} style={styles.row}>
+                  <Text
+                    style={[styles.rest, row.status === 'cancelled' && styles.cancelled]}
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  >
+                    {label}
+                  </Text>
+                  {status ? (
+                    <Text style={styles.when} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {row.status === 'in-picks' ? `${status} · ${row.pickedWhen}` : status}
+                    </Text>
+                  ) : null}
+                  {row.status !== 'cancelled' ? <InterestToggle entryId={row.entry.id} name={label} /> : null}
+                </View>
+              );
+            })
+          )}
+        </View>
+      ) : nothingToList ? (
         <Text style={styles.empty} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {summary.scheduled > 0
             ? 'Every announced act for this day is on the timetable. Open the full lineup to see them.'
@@ -196,7 +341,7 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
         </View>
       )}
 
-      {selection.cancelled.length > 0 ? (
+      {view !== 'interested' && selection.cancelled.length > 0 ? (
         <View style={styles.groups}>
           <Text style={styles.groupHeading} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
             Cancelled
@@ -204,6 +349,7 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
           {selection.cancelled.map((entry) => renderRow(entry, 'rest'))}
         </View>
       ) : null}
+      {sheet}
     </View>
   );
 }
@@ -264,6 +410,33 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.default,
   },
+  interestToggle: {
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    justifyContent: 'center',
+    borderRadius: t.radii.pill,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+  },
+  interestToggleOn: { backgroundColor: t.colors.accent.aqua, borderColor: t.colors.accent.aqua },
+  interestText: { ...typeStyle('caption', 600), color: t.colors.text.secondary },
+  interestTextOn: { color: t.colors.text.onLightAccent },
+  sheetList: { flexGrow: 0 },
+  sheetListContent: { gap: t.spacing[4] },
+  sheetFooter: { alignItems: 'flex-start' },
+  artist: { flexDirection: 'row', gap: t.spacing[3], alignItems: 'flex-start' },
+  artistBody: { flex: 1, gap: t.spacing[1] },
+  artistName: { ...typeStyle('body', 600), color: t.colors.text.primary },
+  linkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing[2] },
+  linkButton: {
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    justifyContent: 'center',
+    borderRadius: t.radii.pill,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+  },
+  linkText: { ...typeStyle('label', 600), color: t.colors.text.primary },
   pillNew: { borderColor: t.colors.accent.aqua },
   pillText: { ...typeStyle('caption'), color: t.colors.text.secondary },
   pillTextNew: { color: t.colors.accent.aqua },
