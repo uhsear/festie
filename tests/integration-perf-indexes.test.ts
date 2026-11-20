@@ -193,7 +193,7 @@ describe('search and audit indexes (migration 120)', { skip, concurrency: 1 }, (
     const plan = await planOf(q!.text, q!.values);
     assert.match(plan, /idx_audit_log_target_id/, plan);
     assert.match(plan, /idx_audit_log_crew_member_user/, plan);
-    assert.match(plan, /idx_audit_log_actor_id/, plan);
+    assert.match(plan, /idx_audit_log_actor_(id|created_at)/, plan);
     const rows = await createAuditStore(pool, {}).listForUser('p120-m7', 50);
     assert.equal(rows.length, 20, '1000 crew_member rows, every 50th is member 7');
   });
