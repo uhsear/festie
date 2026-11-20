@@ -16,8 +16,8 @@
  *
  * Backend emit shapes (verified against routes/ + lib/emitter.ts):
  *   crew:home-base-updated      { crewId, location, time }
- *   crew:meeting-point-created  <raw DB row> { crew_id, created_by, meet_at, ... }
- *   crew:meeting-point-updated  <raw DB row> { crew_id, ... }
+ *   crew:meeting-point-created  <raw DB row> + crewId { crewId, crew_id, created_by, meet_at, ... }
+ *   crew:meeting-point-updated  <raw DB row> + crewId { crewId, crew_id, ... }
  *   crew:meeting-point-removed  { id, crewId }
  *   crew:poll-created           { pollId, question, options, createdBy }   (no crewId)
  *   crew:poll-voted             { pollId, userId, optionIndex, optionIndexes } (no crewId)
@@ -187,8 +187,8 @@ export type CrewRealtimeIntent =
 
 /**
  * Resolve a meeting-point payload's crew id. The created/updated payloads are
- * the raw serialized DB row whose id is snake_case (`crew_id`); fall back to
- * camelCase (`crewId`) only for safety. Mirrors mobile useRealtimeSync.
+ * the raw DB row (`crew_id`) plus a camelCase `crewId`; older clients read only
+ * `crew_id`, so it stays first. Mirrors mobile useRealtimeSync.
  */
 function resolveMeetingPointCrewId(payload: CrewMeetingPointPayload): string | undefined {
   const p = payload as { crew_id?: string; crewId?: string };
