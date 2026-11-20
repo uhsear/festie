@@ -19,10 +19,11 @@ BEGIN
   -- notification_log: personal data, keep 90 days (the inbox reads the newest 50).
   -- Keep eventKey rows (once-per-event-per-user send dedup, uq_notification_log_event_key) and the
   -- news types the admin growth report counts over up to 365 days; purging them would allow a re-send.
+  -- type is nullable and NULL NOT IN (...) is NULL, so a NULL type is matched explicitly.
   DELETE FROM notification_log
   WHERE created_at < now() - interval '90 days'
     AND data_json->>'eventKey' IS NULL
-    AND type NOT IN ('lineup_drop', 'set_times_out', 'days_out', 'wrap_ready', 'crew_reformed');
+    AND (type IS NULL OR type NOT IN ('lineup_drop', 'set_times_out', 'days_out', 'wrap_ready', 'crew_reformed'));
 
   -- Purge soft-deleted festivals older than 90 days
   -- Mirror festivals.hardDelete(): child rows under FK RESTRICT

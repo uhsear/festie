@@ -525,9 +525,9 @@ describe('createUsersStore', () => {
   describe('hardDelete', () => {
     it('deletes child rows then user within transaction', async () => {
       const row = fakeUserRow();
-      // BEGIN(1) + 21 child DELETEs + SELECT owned crews(1) + DELETE FROM users RETURNING(1) + COMMIT(1) = 25
+      // BEGIN(1) + 23 child statements + SELECT owned crews(1) + DELETE FROM users RETURNING(1) + COMMIT(1) = 27
       const results: any[] = [{ rows: [] }]; // BEGIN
-      for (let i = 0; i < 21; i++) results.push({ rows: [] }); // 21 child deletes
+      for (let i = 0; i < 23; i++) results.push({ rows: [] }); // 23 child statements
       results.push({ rows: [] }); // SELECT id FROM crews WHERE created_by (none owned → loop skips)
       results.push({ rows: [row], rowCount: 1 }); // DELETE FROM users RETURNING
       results.push({ rows: [] }); // COMMIT
@@ -544,6 +544,10 @@ describe('createUsersStore', () => {
           (c: any) => c.sql.includes('DELETE FROM crew_member_status WHERE user_id') && c.params[0] === 'u1',
         ),
       );
+      // crew_packing_items and crew_ride_offers have no user FK either (created_by TEXT)
+      for (const t of ['crew_packing_items', 'crew_ride_offers']) {
+        assert.ok(pool.calls.some((c: any) => c.sql.includes(`DELETE FROM ${t} WHERE created_by`) && c.params[0] === 'u1'), t);
+      }
       // Last non-COMMIT call should be DELETE FROM users
       const deleteUsersCall = pool.calls[pool.calls.length - 2];
       assert.deepEqual(deleteUsersCall.params, ['u1']);
@@ -551,7 +555,7 @@ describe('createUsersStore', () => {
 
     it('returns null when user does not exist in hard delete', async () => {
       const results: any[] = [{ rows: [] }]; // BEGIN
-      for (let i = 0; i < 21; i++) results.push({ rows: [] }); // 21 child deletes
+      for (let i = 0; i < 23; i++) results.push({ rows: [] }); // 23 child statements
       results.push({ rows: [] }); // SELECT id FROM crews WHERE created_by (none owned → loop skips)
       results.push({ rows: [], rowCount: 0 }); // DELETE FROM users RETURNING (no match)
       results.push({ rows: [] }); // COMMIT
