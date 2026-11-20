@@ -814,7 +814,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     validate(schemas.setLink),
     async (req: Request, res: Response) => {
       try {
-        const festivalId = req.params.festivalId as string;
+        const festivalId = (req as { festivalId?: string }).festivalId as string;
         const setId = req.params.setId as string;
         const { linkUrl, artistIndex = 0 } = req.validatedBody as z.infer<typeof schemas.setLink>;
 
@@ -866,9 +866,10 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   // GET /:festivalId/sets/links — Admin: list all set links for a festival
   router.get('/:festivalId/sets/links', festivalAccess({ action: 'links.edit', param: 'festivalId' }), async (req: Request, res: Response) => {
     try {
-      const festivalId = req.params.festivalId;
-      if (!(await stores.festivals.exists(festivalId as string))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-      return sendSuccess(res, await stores.festivals.listSetLinks(festivalId as string));
+      const festivalId = (req as { festivalId?: string }).festivalId;
+      if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
+      if (!(await stores.festivals.exists(festivalId))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      return sendSuccess(res, await stores.festivals.listSetLinks(festivalId));
     } catch (error) {
       log.error('set links list failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load set links', ErrorCodes.INTERNAL_ERROR);

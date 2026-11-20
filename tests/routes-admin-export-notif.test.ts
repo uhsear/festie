@@ -58,8 +58,8 @@ function makeDeps(overrides: any = {}) {
       next();
     },
     rateLimit: () => (req: any, res: any, next: any) => next(),
-    validate: () => (req: any, res: any, next: any) => {
-      req.validatedBody = req.body;
+    validate: (schema?: any) => (req: any, res: any, next: any) => {
+      req.validatedBody = schema?.safeParse ? schema.safeParse(req.body).data : req.body;
       next();
     },
     validateQuery: () => (req: any, res: any, next: any) => {
