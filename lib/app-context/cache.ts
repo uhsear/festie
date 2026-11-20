@@ -10,6 +10,15 @@
  * `getProfileById`, `getUserFestivalProfile`) are included because they
  * are the building blocks of the cache population logic and the map
  * lookups that consume it.
+ *
+ * Per-process state inventory (PM2 runs one fork instance; a second instance
+ * needs each of these moved to Redis or a lock, see the shortcut: comment at
+ * each site): lib/emitter.ts digest timers, lib/lineup.ts in-flight map,
+ * lib/notifications/crew-notify.ts buffer, lib/metrics.ts last metrics,
+ * lib/presence.ts onlineUsers, lib/spotify.ts token, routes/export.ts
+ * cooldowns and worker pool, routes/account.ts export fallback,
+ * routes/weather.ts, routes/spotify.ts and routes/pages.ts caches,
+ * routes/health-core.ts client metrics, and the caches in this file.
  */
 
 import { createCacheInvalidationBus } from '../redis';
@@ -23,6 +32,7 @@ const MAX_USER_BY_ID_ENTRIES = 5000;
  */
 export function createCacheHelpers({ stores, redis, log }: { stores: any; redis: any; log: any }) {
   // ── Version counters ───────────────────────────────────────────────
+  // shortcut: version counters and the user and festival caches are per process; the Redis bus below keeps them coherent across instances.
   let _userDataVersion = 0;
   let _festivalDataVersion = 0;
 
