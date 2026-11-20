@@ -33,10 +33,13 @@ async function waitForShell(page: Page) {
 }
 
 // Scan the page as rendered right now and fail on serious/critical violations.
-// `baselineRules` lists rule ids that are a known, documented defect on this page: they are still
-// logged but do not fail the run. Every entry needs a reason at its call site and leaves the list
+// `baseline` lists known, documented defects on this page: a rule id plus a pattern that the failing
+// node's HTML must match. Matching nodes are still logged but do not fail the run; the rule stays
+// active for every other node. Every entry needs a reason at its call site and leaves the list
 // when the defect is fixed.
-async function expectNoGatingViolations(page: Page, label: string, baselineRules: readonly string[] = []) {
+type BaselineEntry = { rule: string; nodeHtml: RegExp };
+
+async function expectNoGatingViolations(page: Page, label: string, baseline: readonly BaselineEntry[] = []) {
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
     .analyze();
@@ -54,7 +57,13 @@ async function expectNoGatingViolations(page: Page, label: string, baselineRules
 ${JSON.stringify(summary, null, 2)}`);
   }
 
-  const gating = results.violations.filter((v) => GATE_IMPACTS.has(v.impact ?? '') && !baselineRules.includes(v.id));
+  const gating = results.violations
+    .filter((v) => GATE_IMPACTS.has(v.impact ?? ''))
+    .map((v) => ({
+      ...v,
+      nodes: v.nodes.filter((n) => !baseline.some((b) => b.rule === v.id && b.nodeHtml.test(n.html))),
+    }))
+    .filter((v) => v.nodes.length > 0);
   expect(gating, `serious/critical a11y violations on ${label}`).toEqual([]);
 }
 
@@ -103,8 +112,11 @@ test.describe('accessibility (axe) — signed-in routes', () => {
     await page.waitForLoadState('networkidle');
     // Baseline: the related-set buttons ("Gamma", "Beta") use an aria-label that starts with the
     // artist but does not contain the visible text as one phrase (WCAG 2.5.3 label in name).
-    // Fix in packages/web/src/components/features/AlsoPlaysSection.tsx, then drop this entry.
-    await expectNoGatingViolations(page, 'the set detail panel', ['label-content-name-mismatch']);
+    // Only nodes with that aria-label ending are ignored. Fix in
+    // packages/web/src/components/features/AlsoPlaysSection.tsx, then drop this entry.
+    await expectNoGatingViolations(page, 'the set detail panel', [
+      { rule: 'label-content-name-mismatch', nodeHtml: /aria-label="[^"]*Open this set\./ },
+    ]);
   });
 });
 
