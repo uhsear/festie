@@ -248,7 +248,7 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
       );
     },
 
-    // shortcut: notification_log has no age-based cleanup; the inbox reads the newest 50. Add a retention rule if the table grows.
+    // retention_cleanup() (migration 119) purges notification_log rows older than 90 days; the inbox reads the newest 50.
     async listInbox(userId: string, limit: number = 50) {
       // data holds only these four keys, so SOS coordinates in data_json are never returned.
       const result = await pool.query(
