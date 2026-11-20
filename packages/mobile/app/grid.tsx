@@ -60,6 +60,7 @@ import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import Avatar from '../components/Avatar';
 import ClashHatch from '../components/ClashHatch';
 import ClashChip from '../components/ClashChip';
+import FreshnessChip from '../components/FreshnessChip';
 import TBASection from '../components/TBASection';
 import AnnouncedLineup from '../components/AnnouncedLineup';
 import OtherDayMatches from '../components/OtherDayMatches';
@@ -681,6 +682,11 @@ export default function GridScreen() {
         </View>
       </View>
 
+      {/* Offline-honest freshness, like the schedule tab and the web grid. */}
+      <View style={styles.freshnessRow}>
+        <FreshnessChip surface="schedule" />
+      </View>
+
       {/* Sticky chrome: the stage header row and the time gutter are separate,
           non-interactive ScrollViews whose offsets follow the body below, so
           stage names and hour labels stay on screen on both axes. */}
@@ -881,6 +887,9 @@ const useStyles = makeStyles((t: Tokens) => ({
     paddingHorizontal: t.spacing[2],
     paddingVertical: t.spacing[1],
     gap: t.spacing[2],
+  },
+  freshnessRow: {
+    paddingHorizontal: t.spacing[4],
   },
   zoomButtons: {
     flexDirection: 'row',
