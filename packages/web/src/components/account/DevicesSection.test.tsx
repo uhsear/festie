@@ -42,6 +42,12 @@ describe('DevicesSection', () => {
     expect(screen.queryByRole('button', { name: 'Sign out Chrome on Windows' })).not.toBeInTheDocument();
   });
 
+  it('announces loading once, not once per placeholder', () => {
+    state = { devices: [], loading: true, error: null };
+    render(<DevicesSection />);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
   it('signs out one device from its row', async () => {
     const user = userEvent.setup();
     render(<DevicesSection />);

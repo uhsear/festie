@@ -17,7 +17,7 @@ import { useToast } from '../../lib/toastContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { cn } from '../../lib/utils';
 import Button from '../ui/Button';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
 import Switch from '../ui/Switch';
 import { Card } from '../ui/Card';
 
@@ -49,11 +49,11 @@ const windowLabel = (start: string, end: string) => `${formatTime(start)}–${fo
 
 function SkeletonRows({ count }: { count: number }) {
   return (
-    <div className="space-y-3 py-2">
+    <SkeletonGroup className="space-y-3 py-2">
       {Array.from({ length: count }, (_, i) => (
         <Skeleton key={i} />
       ))}
-    </div>
+    </SkeletonGroup>
   );
 }
 
