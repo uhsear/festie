@@ -58,7 +58,7 @@ type JobName = 'wrap_ready' | 'lineup_drop' | 'crew_reformed' | 'rate_prompt' | 
 // the process shutdown timeout; on timeout we force-close.
 const WORKER_CLOSE_TIMEOUT_MS = 10_000;
 
-export interface ReengagementExecutor {
+interface ReengagementExecutor {
   sendWrapReady: (festivalId: string) => Promise<any>;
   sendLineupDrop: (festivalId: string) => Promise<any>;
   sendCrewReformed: (args: any) => Promise<any>;

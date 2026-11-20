@@ -8,7 +8,7 @@
  */
 
 /** Keys shorter than this are never compared by edit distance: "abc" and "abd" are different acts. */
-export const MIN_FUZZY_KEY_LENGTH = 5;
+const MIN_FUZZY_KEY_LENGTH = 5;
 
 /**
  * For each artist that has a possible duplicate, the ids of those duplicates. An artist with none is absent.

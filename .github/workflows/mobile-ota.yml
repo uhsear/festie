@@ -98,11 +98,13 @@ jobs:
           MSG: ${{ inputs.message }}
           # app.config.js bakes extra.appleSignIn/googleSignIn from these into the update manifest;
           # unset, an OTA would turn provider sign-in off on builds that have it.
+          # `bash ota.sh --check` below fails the job when either is missing.
           FESTIE_APPLE_SIGNIN: '1'
           GOOGLE_IOS_URL_SCHEME: ${{ secrets.GOOGLE_IOS_URL_SCHEME }}
           # Inlined into the JS bundle at export; unset, the update ships with Sentry off.
           EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
         run: |
+          bash ota.sh --check
           eas update \
             --branch "$BRANCH" \
             --message "$MSG" \

@@ -10,6 +10,8 @@
 // User-Agent and at most one request per second, so requests are serialised.
 // Only admin festival saves and a one-time boot backfill call this.
 
+import { createHash } from 'node:crypto';
+
 const NOMINATIM_URL = 'https://nominatim.openstreetmap.org/search';
 const USER_AGENT = 'Festie/1.0 (+https://festie.us; security@festie.us)';
 const MIN_INTERVAL_MS = 1100;
@@ -55,6 +57,7 @@ export function venueQueries(location: string): string[] {
 
 type FetchLike = (url: string, init: { headers: Record<string, string>; signal: AbortSignal }) => Promise<{
   ok: boolean;
+  status?: number;
   json(): Promise<unknown>;
 }>;
 
@@ -70,7 +73,7 @@ export function createVenueGeocoder({ fetchImpl = fetch as unknown as FetchLike,
     if (startAt > now) await new Promise((r) => setTimeout(r, startAt - now));
     const url = `${NOMINATIM_URL}?${new URLSearchParams({ q, format: 'jsonv2', limit: '1' })}`;
     const resp = await fetchImpl(url, { headers: { 'User-Agent': USER_AGENT }, signal: AbortSignal.timeout(TIMEOUT_MS) });
-    if (!resp.ok) return null;
+    if (!resp.ok) throw new Error(`geocoder answered HTTP ${resp.status ?? 'error'}`);
     const rows = (await resp.json()) as Array<{ lat?: string; lon?: string; addresstype?: string; importance?: number }>;
     const latitude = Number(rows?.[0]?.lat);
     const longitude = Number(rows?.[0]?.lon);
@@ -79,7 +82,7 @@ export function createVenueGeocoder({ fetchImpl = fetch as unknown as FetchLike,
     return { latitude, longitude, guessed: isWeakVenueMatch(rows[0]) };
   }
 
-  /** Resolve a festival location to coordinates, or null when nothing matches or the lookup fails. */
+  /** Resolve a festival location to coordinates, or null when nothing matches. Rejects when the lookup fails (network, timeout, HTTP error), so callers can tell a failure from a miss. */
   function geocodeVenue(location: string | null | undefined): Promise<VenueCoords | null> {
     const run = async () => {
       if (!location?.trim()) return null;
@@ -89,7 +92,7 @@ export function createVenueGeocoder({ fetchImpl = fetch as unknown as FetchLike,
           if (hit) return hit;
         } catch (error: any) {
           log?.warn?.('venue geocode failed', { query: q, error: error?.message });
-          return null;
+          throw error;
         }
       }
       return null;
@@ -102,21 +105,38 @@ export function createVenueGeocoder({ fetchImpl = fetch as unknown as FetchLike,
   return { geocodeVenue };
 }
 
+// A location Nominatim could not resolve is remembered this long, so each boot does not ask again.
+// Only a definite miss is remembered. A failed lookup (network error, rate limit) is not, and it ends the pass,
+// so an outage or a 429 does not hide the festival for a week. Saving the festival in the admin tools geocodes it again at once.
+const MISS_TTL_SECONDS = 7 * 24 * 60 * 60;
+
+const missKey = (location: string) => `geocode:miss:${createHash('sha256').update(location.trim().toLowerCase()).digest('hex')}`;
+
 /**
  * One pass over festivals that have a location but no venue coordinates. Run once
  * at boot by the leader instance, so festivals saved before geocoding existed get
  * a map centre and weather. Requests are serialised by the geocoder (1 per second).
- * shortcut: a location Nominatim cannot find is retried on every boot; add a
- * "not found" marker if that list ever grows past a handful.
+ * With Redis, a location that found nothing (not one that failed) is skipped on later boots until MISS_TTL_SECONDS pass.
  */
-export async function backfillVenueCoords({ pool, geocodeVenue, log, onUpdated }: any): Promise<number> {
+export async function backfillVenueCoords({ pool, geocodeVenue, redis, log, onUpdated }: any): Promise<number> {
   const { rows } = await pool.query(
     "SELECT id, location FROM festivals WHERE deleted_at IS NULL AND latitude IS NULL AND COALESCE(location, '') <> ''",
   );
   let filled = 0;
   for (const row of rows) {
-    const coords = await geocodeVenue(row.location);
-    if (!coords) continue;
+    const key = missKey(row.location);
+    if (redis && (await redis.get(key).catch(() => null))) continue;
+    let coords;
+    try {
+      coords = await geocodeVenue(row.location);
+    } catch (error: any) {
+      log?.warn?.('venue backfill stopped: geocoder failed', { error: error?.message });
+      break;
+    }
+    if (!coords) {
+      if (redis) await redis.set(key, '1', 'EX', MISS_TTL_SECONDS).catch((error: any) => log?.warn?.('venue miss cache failed', { error: error?.message }));
+      continue;
+    }
     await pool.query('UPDATE festivals SET latitude = $1, longitude = $2 WHERE id = $3 AND latitude IS NULL', [
       coords.latitude,
       coords.longitude,

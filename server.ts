@@ -473,7 +473,7 @@ function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
   if (_isPurgeLeader && deps.geocodeVenue) {
     Promise.resolve(ctx.migrationsReady)
       .then(() =>
-        backfillVenueCoords({ pool, geocodeVenue: deps.geocodeVenue, log, onUpdated: deps.invalidateFestivalCache }),
+        backfillVenueCoords({ pool, geocodeVenue: deps.geocodeVenue, redis: deps.redis, log, onUpdated: deps.invalidateFestivalCache }),
       )
       .catch((err: any) => log.warn('venue backfill failed', { error: err.message }));
   }

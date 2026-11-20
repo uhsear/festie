@@ -129,7 +129,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
           newPassword: 'newpass123',
           confirmPassword: 'newpass123',
         });
-        assert(res.status >= 400);
+        assert.equal(res.status, 400);
       } finally {
         await pool.end();
       }
@@ -154,7 +154,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
         newPassword: 'newpass123',
         confirmPassword: 'newpass123',
       });
-      assert(res.status >= 400);
+      assert.equal(res.status, 400);
     });
 
     test('POST /api/v1/auth/forgot-password rate limits per email', async () => {
@@ -426,7 +426,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
       server = testServer;
 
       const res = await request(app).get('/s/invalid-profile-id');
-      assert(res.status === 404 || res.status === 400);
+      assert.equal(res.status, 404);
     });
 
     test('GET /s/:profileId/json returns JSON data', async () => {
@@ -510,7 +510,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
       server = testServer;
 
       const res = await request(app).get('/s/invalid-profile-id/json');
-      assert.ok(res.status === 400 || res.status === 404, "Expected 400 or 404 for invalid profile");
+      assert.equal(res.status, 404);
     });
   });
 
@@ -518,7 +518,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
     test('GET /api/ready returns 200 when ready', async () => {
       await ensureTestSchema(TEST_DATABASE_URL);
       await truncateAllTables(TEST_DATABASE_URL);
-      const { app: testApp, server: testServer } = await createFestivalPlanner({
+      const { app: testApp, server: testServer, setHealthReady } = await createFestivalPlanner({
         DATABASE_URL: TEST_DATABASE_URL,
         NODE_ENV: 'test',
         REDIS_ENABLED: 'false',
@@ -529,8 +529,9 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
       app = testApp;
       server = testServer;
 
+      setHealthReady(true);
       const res = await request(app).get('/api/ready');
-      assert(res.status === 200 || res.status === 503);
+      assert.equal(res.status, 200);
     });
 
     test('GET /api/info returns feature flags and limits', async () => {
