@@ -92,6 +92,7 @@ function makeMockDeps(overrides: any = {}) {
     getProfiles: mock.fn(async () => []),
     disconnectUserSockets: mock.fn(),
     disconnectSessionTokens: mock.fn(),
+    fetchRevocationSockets: mock.fn(async () => []),
     createOpaqueId: mock.fn(() => 'opaque-123'),
     serializePublicUser: mock.fn((u: any) => ({ id: u.id, username: u.username })),
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),

@@ -279,7 +279,7 @@ export default function createProfilesRoutes(deps: any) {
 
       if (!profile) return sendError(res, 404, 'Profile not found', ErrorCodes.NOT_FOUND);
       log.info('profile:deleted', { profileId: profile.id, festivalId: profile.festivalId, userId: profile.userId });
-      removeProfileSockets(profile, io);
+      await removeProfileSockets(profile, io);
       emitter.profileDeleted({ festivalId: profile.festivalId, profileId: profile.id });
       return sendSuccess(res, { success: true });
     } catch (error: any) {

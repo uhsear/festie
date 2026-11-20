@@ -794,7 +794,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         }
         invalidateFestivalCache();
 
-        removeFestivalSockets(festivalId, io);
+        await removeFestivalSockets(festivalId, io);
         invalidateFestivalListCache();
         audit(hardDelete ? AUDIT_ACTIONS.FESTIVAL_PURGED : AUDIT_ACTIONS.FESTIVAL_DELETED, 'festival', festivalId, req, {
           name: festival.name,

@@ -379,6 +379,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     disconnectSessionTokens,
     removeFestivalSockets,
     removeProfileSockets,
+    fetchRevocationSockets,
   } = presenceManager;
 
   const emitProfileIdentityWrapped = (user: any, io: any) => emitProfileIdentity(user, io);
@@ -392,6 +393,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     disconnectSocket,
     emitPresence,
     disconnectUserSockets,
+    fetchRevocationSockets,
     sendError,
     ErrorCodes,
   });
