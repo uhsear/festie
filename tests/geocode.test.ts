@@ -64,6 +64,48 @@ describe('backfillVenueCoords', () => {
   });
 });
 
+describe('backfillVenueCoords not-found cache', () => {
+  const rows = [{ id: 'a', location: 'Found' }, { id: 'b', location: 'Lost' }];
+  const pool = { query: async (sql: string) => (sql.startsWith('SELECT') ? { rows } : { rowCount: 1 }) };
+  const fakeRedis = () => {
+    const store = new Map<string, string>();
+    return {
+      store,
+      get: async (key: string) => store.get(key) ?? null,
+      set: async (key: string, value: string) => {
+        store.set(key, value);
+        return 'OK';
+      },
+    };
+  };
+
+  it('does not look a cached miss up again on the next boot', async () => {
+    const redis = fakeRedis();
+    const calls: string[] = [];
+    const geocodeVenue = async (loc: string) => {
+      calls.push(loc);
+      return loc === 'Found' ? { latitude: 1, longitude: 2, guessed: false } : null;
+    };
+    await backfillVenueCoords({ pool, geocodeVenue, redis });
+    assert.deepEqual(calls, ['Found', 'Lost']);
+    calls.length = 0;
+    await backfillVenueCoords({ pool, geocodeVenue, redis });
+    assert.deepEqual(calls, ['Found']);
+  });
+
+  it('still looks a miss up when Redis is absent or fails', async () => {
+    const calls: string[] = [];
+    const geocodeVenue = async (loc: string) => {
+      calls.push(loc);
+      return null;
+    };
+    await backfillVenueCoords({ pool, geocodeVenue });
+    const broken = { get: async () => { throw new Error('down'); }, set: async () => { throw new Error('down'); } };
+    await backfillVenueCoords({ pool, geocodeVenue, redis: broken });
+    assert.deepEqual(calls, ['Found', 'Lost', 'Found', 'Lost']);
+  });
+});
+
 describe('isWeakVenueMatch', () => {
   it('flags area-level and low-importance matches', () => {
     assert.equal(isWeakVenueMatch({ addresstype: 'city', importance: 0.7 }), true);
