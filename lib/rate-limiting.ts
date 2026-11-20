@@ -24,6 +24,7 @@
 import crypto from 'crypto';
 import { loadConfig } from './config.js';
 import { redisRateCheck as redisRateCheckFn } from './redis.js';
+import { MAX_SHARE_WINDOW_MS } from './live-location-cache.js';
 
 const FALLBACK_WARN_INTERVAL_MS = 30_000;
 // Guests behind one festival IP keep their own token buckets; one caller cycling tokens is capped per IP.
@@ -719,7 +720,7 @@ const socketEventLimits = {
 // effort: when Redis is unavailable we allow (the H1/M2 membership controls and
 // the per-socket limiter still apply).
 const MAX_CONCURRENT_SHARING_SOCKETS = 3;
-const SHARING_SOCKET_TTL_MS = 5 * 60 * 1000; // refreshed on every share/update tick
+const SHARING_SOCKET_TTL_MS = 5 * 60 * 1000; // refreshed on every share and every accepted update
 
 /**
  * Register a sharing socket for a user and report whether the per-user
@@ -742,10 +743,25 @@ async function registerSharingSocket(redis: any, userId: any, socketId: any) {
     pipeline.pexpire(key, SHARING_SOCKET_TTL_MS);
     const results = await pipeline.exec();
     const count = (results?.[2]?.[1] as number) || 0;
-    return { allowed: count <= MAX_CONCURRENT_SHARING_SOCKETS, count };
+    const allowed = count <= MAX_CONCURRENT_SHARING_SOCKETS;
+    // A rejected socket must not hold a slot for the TTL.
+    if (!allowed) await redis.zrem(key, socketId);
+    return { allowed, count };
   } catch {
     return { allowed: true, count: 0 };
   }
+}
+
+// Clock-skew allowance on the far end of the share window.
+const EXPIRES_AT_SKEW_MS = 60_000;
+
+/** Time-box check shared by the HTTP and socket paths. An absent expiresAt is allowed. */
+export function shareWindowError(expiresAt: string | undefined, nowMs: number): 'ended' | 'too-long' | null {
+  if (!expiresAt) return null;
+  const exp = Date.parse(expiresAt);
+  if (exp <= nowMs) return 'ended';
+  if (exp > nowMs + MAX_SHARE_WINDOW_MS + EXPIRES_AT_SKEW_MS) return 'too-long';
+  return null;
 }
 
 /**

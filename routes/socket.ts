@@ -39,7 +39,12 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { generateTraceId, propagateTraceId } from '../lib/tracing.js';
 import { schemas } from '../lib/schemas.js';
-import { LOCATION_UPDATE_LIMIT, registerSharingSocket, unregisterSharingSocket } from '../lib/rate-limiting.js';
+import {
+  LOCATION_UPDATE_LIMIT,
+  registerSharingSocket,
+  shareWindowError,
+  unregisterSharingSocket,
+} from '../lib/rate-limiting.js';
 import {
   writeLivePosition,
   dropLivePosition,
@@ -430,10 +435,11 @@ export default function setupSocketHandlers(deps: any) {
         const validation = schemas.locationShare.safeParse(data);
         if (!validation.success) return respond({ ok: false, code: 'SCHEMA_MISMATCH' });
         const { crewId, position, expiresAt } = validation.data;
+        if (shareWindowError(expiresAt, Date.now())) return respond({ ok: false, code: 'INVALID_EXPIRY' });
 
         // The socket must already be joined to this crew room (join:crew set it).
         if (socket.data?.crewId !== crewId) return respond({ ok: false, code: 'NOT_IN_CREW_ROOM' });
-        if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
+        if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_LOCATION_SHARE_RATE_LIMIT)) {
           return respond({ ok: false, code: 'RATE_LIMITED' });
         }
 
@@ -530,6 +536,10 @@ export default function setupSocketHandlers(deps: any) {
           socket.emit('error', { message: 'Not sharing location to this crew', code: 'NOT_SHARING' });
           return;
         }
+        if (shareWindowError(expiresAt, Date.now())) {
+          socket.emit('error', { message: 'Share window ended or too long', code: 'INVALID_EXPIRY' });
+          return;
+        }
 
         const userId = socket.data.userId;
 
@@ -539,6 +549,13 @@ export default function setupSocketHandlers(deps: any) {
         const check = await LOCATION_UPDATE_LIMIT.consumeAsync(userId, redis);
         if (!check.allowed) {
           socket.emit('error', { message: 'Location update rate limit exceeded', code: 'RATE_LIMITED' });
+          return;
+        }
+        // Refresh this socket's slot so the sharing-socket cap holds past the TTL.
+        const sharingCap = await registerSharingSocket(redis, userId, socket.id);
+        if (!sharingCap.allowed) {
+          delete socket.data.sharingCrewId;
+          socket.emit('error', { message: 'Too many sharing sockets', code: 'TOO_MANY_SHARING_SOCKETS' });
           return;
         }
 
@@ -674,7 +691,7 @@ export default function setupSocketHandlers(deps: any) {
 
         // Must already be joined to this crew room (join:crew gated membership).
         if (socket.data?.crewId !== crewId) return respond({ ok: false, peers: [] });
-        if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
+        if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_LOCATION_SYNC_RATE_LIMIT)) {
           return respond({ ok: false, peers: [] });
         }
 

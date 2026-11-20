@@ -9,6 +9,8 @@ import { createRateLimiters } from '../lib/rate-limiting.js';
 
 const noop = () => {};
 const SOCKET_JOIN_RATE_LIMIT = 12;
+const SOCKET_LOCATION_SHARE_RATE_LIMIT = 5;
+const SOCKET_LOCATION_SYNC_RATE_LIMIT = 7;
 
 function buildDeps() {
   const config = {
@@ -17,6 +19,9 @@ function buildDeps() {
     MAX_RATE_LIMIT_ENTRIES: 10000,
     SOCKET_EVENT_WINDOW: 10_000,
     SOCKET_JOIN_RATE_LIMIT,
+    SOCKET_LOCATION_SHARE_RATE_LIMIT,
+    SOCKET_LOCATION_SYNC_RATE_LIMIT,
+    LIVE_LOCATION_ENABLED: true,
     SOCKET_LEAVE_RATE_LIMIT: 100,
     USER_SESSION_COOKIE: 'session',
   };
@@ -69,10 +74,10 @@ function emit(handler: any, data: any) {
 }
 
 describe('socket event limits', () => {
-  test('the 13th location:sync in one window is refused before any store call', async () => {
+  test('the 8th location:sync in one window is refused before any store call', async () => {
     const deps = buildDeps();
     const handlers = await connectSocket(deps);
-    for (let i = 0; i < SOCKET_JOIN_RATE_LIMIT; i++) {
+    for (let i = 0; i < SOCKET_LOCATION_SYNC_RATE_LIMIT; i++) {
       const ack = await emit(handlers['location:sync'], { crewId: 'crew-1' });
       assert.equal(ack.ok, true);
     }
@@ -85,10 +90,10 @@ describe('socket event limits', () => {
     assert.equal(deps.stores.crews.getMember.mock.callCount(), members);
   });
 
-  test('the 13th location:share in one window answers RATE_LIMITED before any store call', async () => {
+  test('the 6th location:share in one window answers RATE_LIMITED before any store call', async () => {
     const deps = buildDeps();
     const handlers = await connectSocket(deps);
-    for (let i = 0; i < SOCKET_JOIN_RATE_LIMIT; i++) {
+    for (let i = 0; i < SOCKET_LOCATION_SHARE_RATE_LIMIT; i++) {
       const ack = await emit(handlers['location:share'], { crewId: 'crew-1' });
       assert.equal(ack.ok, true);
     }
@@ -97,5 +102,42 @@ describe('socket event limits', () => {
     const ack = await emit(handlers['location:share'], { crewId: 'crew-1' });
     assert.deepEqual(ack, { ok: false, code: 'RATE_LIMITED' });
     assert.equal(deps.stores.crews.getMember.mock.callCount(), members);
+  });
+
+  test('location:share refuses an expired or over-long expiresAt', async () => {
+    const deps = buildDeps();
+    const handlers = await connectSocket(deps);
+    const past = new Date(Date.now() - 1000).toISOString();
+    const far = new Date(Date.now() + 13 * 3_600_000).toISOString();
+    for (const expiresAt of [past, far]) {
+      const ack = await emit(handlers['location:share'], { crewId: 'crew-1', expiresAt });
+      assert.deepEqual(ack, { ok: false, code: 'INVALID_EXPIRY' });
+    }
+    const ok = await emit(handlers['location:share'], {
+      crewId: 'crew-1',
+      expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+    });
+    assert.equal(ok.ok, true);
+  });
+
+  test('a rejected sharing socket is removed from the per-user set', async () => {
+    const deps: any = buildDeps();
+    const zrem = mock.fn(async () => 1);
+    deps.redis = {
+      pipeline: () => {
+        const p: any = { zremrangebyscore: () => p, zadd: () => p, pexpire: () => p, zcard: () => p };
+        p.exec = async () => [[null, 0], [null, 1], [null, 4], [null, 1]];
+        return p;
+      },
+      zrem,
+      hset: async () => 1,
+      hgetall: async () => ({}),
+      expire: async () => 1,
+      pexpire: async () => 1,
+    };
+    const handlers = await connectSocket(deps);
+    const ack = await emit(handlers['location:share'], { crewId: 'crew-1' });
+    assert.deepEqual(ack, { ok: false, code: 'TOO_MANY_SHARING_SOCKETS' });
+    assert.equal(zrem.mock.callCount(), 1);
   });
 });
