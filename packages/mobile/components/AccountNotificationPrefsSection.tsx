@@ -6,6 +6,7 @@ import { AndroidImportance } from 'expo-notifications';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import { useNotificationTopics } from '@festie/shared/hooks';
+import { NOTIFICATION_TOPIC_COPY } from '@festie/shared/constants';
 import {
   MUST_SEE_REMINDER_OPTIONS,
   QUIET_HOURS_PRESETS,
@@ -50,8 +51,8 @@ const ROW_ICONS: Record<NotificationBoolKey, keyof typeof Ionicons.glyphMap> = {
 };
 
 const TOPIC_ROWS = [
-  { key: 'crew', title: 'Crew picks', icon: 'people-outline' },
-  { key: 'schedule', title: 'Schedule changes', icon: 'calendar-outline' },
+  { key: 'crew', title: NOTIFICATION_TOPIC_COPY.topicLabels.crew, icon: 'people-outline' },
+  { key: 'schedule', title: NOTIFICATION_TOPIC_COPY.topicLabels.schedule, icon: 'calendar-outline' },
 ] as const;
 
 /**
@@ -245,13 +246,13 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
         {rows.filter((r) => r.onDevice).map(renderRow)}
         <View style={styles.selectWrap}>
           <ModalSelect
-            label="Must-see reminders"
+            label={NOTIFICATION_TOPIC_COPY.mustSeeTitle}
             value={String(prefs.mustSeeReminderMinutes ?? 'off')}
             options={MUST_SEE_REMINDER_OPTIONS.map((v) => ({ label: mustSeeOptionLabel(v), value: String(v ?? 'off') }))}
             onSelect={(v) =>
               set({ mustSeeReminderMinutes: v === 'off' ? null : (Number(v) as 5 | 10 | 15 | 30 | 60) })
             }
-            hint="Reminds you before every set you mark Must see."
+            hint={NOTIFICATION_TOPIC_COPY.mustSeeHint}
           />
         </View>
       </View>

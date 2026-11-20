@@ -26,6 +26,25 @@ describe('Account screen', () => {
     expect(source).not.toContain('uri: asset.uri');
   });
 
+  it('delete section goes through the store, never a raw DELETE /account/', async () => {
+    const source = await read('components', 'AccountDangerSection.tsx');
+    expect(source).toContain('deleteAccount(password, crewHandover)');
+    expect(source).toContain('deleteAccount(undefined, crewHandover)');
+    expect(source).not.toContain("api.delete('/account/");
+    expect(source).not.toContain('api.delete<');
+  });
+
+  it('keeps shared UI copy in @festie/shared/constants, not inline', async () => {
+    const danger = await read('components', 'AccountDangerSection.tsx');
+    expect(danger).not.toContain('>Delete Account<');
+    expect(danger).not.toContain("text: 'Delete Account'");
+    const prefs = await read('components', 'AccountNotificationPrefsSection.tsx');
+    expect(prefs).not.toContain('Must-see reminders');
+    expect(prefs).not.toContain("title: 'Crew picks'");
+    const account = await read('app', '(tabs)', 'account.tsx');
+    expect(account).not.toContain('top sets after the festival');
+  });
+
   it('email card re-checks the session when the app returns to the foreground', async () => {
     const source = await read('components', 'AccountEmailVerifySection.tsx');
     expect(source).toContain('AppState.addEventListener');

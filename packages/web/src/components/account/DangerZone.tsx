@@ -105,7 +105,7 @@ export default function DangerZone() {
       >
         <h3 className="text-sm font-semibold text-accent-coral flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" aria-hidden="true" />
-          Delete Account
+          {ACCOUNT_COPY.deleteTitle}
         </h3>
 
         <p className="text-sm text-text-muted">

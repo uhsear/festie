@@ -12,6 +12,7 @@ import {
   visibleNotificationRows,
 } from '@festie/shared/utils';
 import { useNotificationTopics } from '@festie/shared/hooks';
+import { NOTIFICATION_TOPIC_COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { cn } from '../../lib/utils';
@@ -68,8 +69,8 @@ function FestivalTopicsSubsection() {
   if (!festival) return null;
 
   const rows = [
-    { topic: 'crew', label: 'Crew picks' },
-    { topic: 'schedule', label: 'Schedule changes' },
+    { topic: 'crew', label: NOTIFICATION_TOPIC_COPY.topicLabels.crew },
+    { topic: 'schedule', label: NOTIFICATION_TOPIC_COPY.topicLabels.schedule },
   ] as const;
 
   return (
@@ -349,8 +350,8 @@ function PrefsSubsection() {
               {row.key === 'setReminders' ? (
                 <div className="flex items-center justify-between py-2">
                   <label htmlFor="must-see-reminder" className="min-w-0">
-                    <div className="text-sm text-text-primary">Must-see reminders</div>
-                    <div className="text-xs text-text-muted">Remind me before every set I mark Must see.</div>
+                    <div className="text-sm text-text-primary">{NOTIFICATION_TOPIC_COPY.mustSeeTitle}</div>
+                    <div className="text-xs text-text-muted">{NOTIFICATION_TOPIC_COPY.mustSeeHint}</div>
                   </label>
                   <select
                     id="must-see-reminder"

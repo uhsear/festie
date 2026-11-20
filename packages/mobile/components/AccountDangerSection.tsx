@@ -100,7 +100,7 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
       [
         { text: 'Cancel', style: 'cancel' },
         {
-          text: 'Delete Account',
+          text: ACCOUNT_COPY.deleteTitle,
           style: 'destructive',
           onPress: () => void handleDelete(),
         },
@@ -155,7 +155,7 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
           <Ionicons name="trash-outline" size={20} color={t.colors.text.danger} />
         </View>
         <View style={styles.rowBody}>
-          <Text style={[styles.rowTitle, styles.dangerText]}>Delete Account</Text>
+          <Text style={[styles.rowTitle, styles.dangerText]}>{ACCOUNT_COPY.deleteTitle}</Text>
           <Text style={styles.rowHint}>Deleted 30 days after you ask</Text>
         </View>
         <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.danger} />
