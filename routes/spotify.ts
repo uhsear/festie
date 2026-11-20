@@ -5,6 +5,7 @@ export default function createSpotifyRoutes(deps: any) {
   const { config, log, rateLimit, sendSuccess, sendError, ErrorCodes } = deps;
   const router = Router();
 
+  // shortcut: per-process cache, so N instances fetch up to N times per TTL; move to Redis if the app scales out.
   const previewCache = new Map();
   const CACHE_TTL = config.SPOTIFY_CACHE_TTL_MS;
   const MAX_CACHE_SIZE = config.SPOTIFY_CACHE_MAX;
