@@ -86,7 +86,7 @@ export function createPollCloser({ stores, emitter, crewNotify, createOpaqueId, 
     }
 
     try {
-      emitter.toCrew(crewId, 'crew:poll-closed', { pollId: poll.id });
+      emitter.toCrew(crewId, 'crew:poll-closed', { crewId, pollId: poll.id });
     } catch (err: any) {
       log.warn('poll close emit failed', { error: err.message, pollId: poll.id });
     }

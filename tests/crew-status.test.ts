@@ -175,6 +175,7 @@ describe('routes/crew-status.js -- PUT /:crewId/status', () => {
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:status-updated');
     const payload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
+    assert.equal(payload.crewId, 'crew-1');
     assert.ok(payload.status);
     assert.equal(payload.status.location_captured_at !== undefined, true);
   });
