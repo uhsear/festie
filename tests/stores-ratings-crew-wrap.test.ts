@@ -1,7 +1,8 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { aggregateCrewWrap, createRatingsStore } from '../lib/db/stores/ratings.js';
-import type { CrewWrapMember, CrewHighRating, CrewWrapExpense } from '../lib/db/stores/ratings.js';
+import { createRatingsStore } from '../lib/db/stores/ratings.js';
+import { aggregateCrewWrap } from '../lib/db/stores/ratings-crew-wrap.js';
+import type { CrewWrapMember, CrewHighRating, CrewWrapExpense } from '../lib/db/stores/ratings-crew-wrap.js';
 
 // ---------------------------------------------------------------------------
 // aggregateCrewWrap — pure superlative math (no DB)
@@ -166,13 +167,10 @@ describe('aggregateCrewWrap — graceful degradation', () => {
   });
 
   it('drops a non-finite expense amount instead of poisoning the sum', () => {
-    const wrap = aggregateCrewWrap(
-      'crew-1',
-      'fest-1',
-      members,
-      highRatings,
-      [{ amount: '10.00' }, { amount: 'not-a-number' }],
-    );
+    const wrap = aggregateCrewWrap('crew-1', 'fest-1', members, highRatings, [
+      { amount: '10.00' },
+      { amount: 'not-a-number' },
+    ]);
     assert.strictEqual(wrap.totalSplit, 10);
   });
 });
