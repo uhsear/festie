@@ -4,7 +4,7 @@
 /**
  * Festival announcement delivery (T44). deliverDue() expires late rows, claims
  * due rows and pushes each to everyone who joined its festival. The leader sweep
- * in lib/shutdown.ts and the "send now" route both call it; claimDue's SKIP
+ * in lib/background-tasks.ts and the "send now" route both call it; claimDue's SKIP
  * LOCKED keeps a row from going out twice. It never throws.
  */
 

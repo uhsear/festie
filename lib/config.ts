@@ -22,6 +22,20 @@ export const ANDROID_APP_SIGNING_CERTS = [
   '0C:49:FB:87:94:C5:D4:39:F8:BE:BD:D1:D3:78:B9:CD:B8:40:7E:4E:4C:A3:73:96:73:57:13:79:B8:92:6D:01',
 ] as const;
 
+// Fixed schedule of the leader-only background sweeps (lib/background-tasks.ts).
+// One key per job so tuning one never moves another.
+export const JOB_INTERVALS_MS = {
+  AVATAR_CLEANUP: 6 * 60 * 60 * 1000,
+  TOKEN_CLEANUP: 6 * 60 * 60 * 1000,
+  AUDIT_CLEANUP: 6 * 60 * 60 * 1000,
+  RETENTION: 24 * 60 * 60 * 1000,
+  RETENTION_FIRST_RUN: 10 * 60 * 1000,
+  POLL_EXPIRY: 5 * 1000,
+  ANNOUNCEMENTS: 60 * 1000,
+  WRAP_READY: 60 * 60 * 1000,
+  RATE_PROMPT: 60 * 60 * 1000,
+} as const;
+
 export const DEFAULTS = {
   PORT: 4000,
   RATE_LIMIT_WINDOW: 60_000,
@@ -154,6 +168,7 @@ export const DEFAULTS = {
   REDIS_PREFIX: 'fp:',
   LOG_LEVEL: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
   SENTRY_DSN: '',
+  METRICS_TOKEN: '',
   SENTRY_TRACES_RATE: 0.05,
   SENTRY_PROFILES_RATE: 0,
   FESTIE_ENV_LABEL: '',
@@ -414,6 +429,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   LINEUP_CANCEL_ALERTS_ENABLED: boolean;
   LOG_LEVEL: string;
   SENTRY_DSN: string;
+  METRICS_TOKEN: string;
   SENTRY_TRACES_RATE: number;
   SENTRY_PROFILES_RATE: number;
   FESTIE_ENV_LABEL: string;
@@ -850,6 +866,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     CLUSTER_SIZE: Number(readInt(overrides.CLUSTER_SIZE || process.env.CLUSTER_SIZE, DEFAULTS.CLUSTER_SIZE, 1, 64)),
     LOG_LEVEL: overrides.LOG_LEVEL || process.env.LOG_LEVEL || DEFAULTS.LOG_LEVEL,
     SENTRY_DSN: overrides.SENTRY_DSN || process.env.SENTRY_DSN || DEFAULTS.SENTRY_DSN,
+    METRICS_TOKEN: overrides.METRICS_TOKEN || process.env.METRICS_TOKEN || DEFAULTS.METRICS_TOKEN,
     SENTRY_TRACES_RATE: Number(
       overrides.SENTRY_TRACES_RATE ?? process.env.SENTRY_TRACES_RATE ?? DEFAULTS.SENTRY_TRACES_RATE,
     ),

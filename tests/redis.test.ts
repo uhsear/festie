@@ -13,8 +13,6 @@ import {
   shouldReconnectOnError,
   isTransientRedisError,
   COMMAND_TIMEOUT_MS,
-  REDIS_ENABLED,
-  REDIS_PREFIX,
 } from '../lib/redis.js';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -103,18 +101,6 @@ function fakeRedis(overrides: any = {}) {
     ...overrides,
   };
 }
-
-// ─── Module exports ──────────────────────────────────────────────────────────
-
-describe('redis: module exports', () => {
-  it('exports REDIS_PREFIX as a string', () => {
-    assert.equal(typeof REDIS_PREFIX, 'string');
-  });
-
-  it('exports REDIS_ENABLED as a boolean', () => {
-    assert.equal(typeof REDIS_ENABLED, 'boolean');
-  });
-});
 
 // ─── createRedisRateLimiter ──────────────────────────────────────────────────
 

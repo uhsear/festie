@@ -51,6 +51,7 @@ import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
+import { loadConfig } from './config.js';
 import { splitSqlStatements, stripSqlComments, usesConcurrently } from './db/sql-split.js';
 import { createStores, createDbLatencyTracker, openPlannerDatabase as openPlannerDatabaseRaw } from './db/index.js';
 
@@ -550,7 +551,7 @@ async function runPostgresMigrationsWithConnectRetry(pool: any, opts: any = {}) 
 function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Promise<any> } {
   const result = openPlannerDatabaseRaw(opts);
   const pool = result && result.pool;
-  const databaseUrl = opts.databaseUrl || process.env.DATABASE_URL || '';
+  const databaseUrl = opts.databaseUrl || loadConfig().DATABASE_URL;
   // app-context passes the structured logger (an object with level methods), not a
   // function. Adapt it, or every runner line and the connect-retry warning is dropped.
   const log =
@@ -574,7 +575,7 @@ function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Pro
   // startup runner against a test DB re-applies migrations that aren't
   // recorded in schema_migrations and breaks NOT-NULL constraints mid-suite.
   const isTestEnv =
-    process.env.NODE_ENV === 'test' || (typeof databaseUrl === 'string' && /_test(\?|$)/.test(databaseUrl));
+    opts.nodeEnv === 'test' || (typeof databaseUrl === 'string' && /_test(\?|$)/.test(databaseUrl));
   if (isTestEnv) {
     return Object.assign(result, {
       migrationsReady: Promise.resolve({ applied: [], current: 0, gap: [] }),
