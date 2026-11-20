@@ -21,7 +21,7 @@ describe('CompareCell', () => {
 
   it('uses on-accent ink for the Must pill', () => {
     renderInTable(<CompareCell priority="must" />);
-    expect(screen.getByText('Must')).toHaveStyle({ color: 'var(--color-text-on-accent)' });
+    expect(screen.getByText('Must').style.color).toBe('var(--color-text-on-accent)');
   });
 
   it('renders "Want" label for want-to-see priority', () => {
