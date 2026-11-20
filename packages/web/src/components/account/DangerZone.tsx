@@ -138,7 +138,7 @@ export default function DangerZone() {
                   <label key={h.crew.id} className="block text-sm text-text-secondary">
                     {crewCopy.newOwnerFor(h.crew.name)}
                     <select
-                      className="mt-1 block w-full min-h-11 rounded-lg bg-bg-card border border-border px-2 text-text-primary"
+                      className="mt-1 block w-full min-h-11 rounded-lg bg-bg-card border border-border-input px-2 text-text-primary"
                       value={newOwners[h.crew.id] ?? h.defaultOwnerId}
                       onChange={(e) => setNewOwners((prev) => ({ ...prev, [h.crew.id]: e.target.value }))}
                     >

@@ -159,7 +159,7 @@ export default function SchedulePollComposer({ crewId, onCreated, onCancel }: Pr
           id="slot-picker"
           value={slotKey}
           onChange={(e) => selectSlot(e.target.value)}
-          className="w-full min-h-11 rounded-lg bg-bg-input border border-border px-3 text-text-primary"
+          className="w-full min-h-11 rounded-lg bg-bg-input border border-border-input px-3 text-text-primary"
         >
           <option value="">Pick a timeslot…</option>
           {slots.map((slot) => {
