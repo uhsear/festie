@@ -413,6 +413,25 @@ describe('spotify refresh', { skip, concurrency: 1 }, () => {
     assert.equal((await artistRow(bare.id)).photo, null);
   });
 
+  test('refresh: an artist with a photo but no genres reaches the store, which fills only the genres', async () => {
+    const part = await createArtist(app, { name: 'Refresh Part', link: link(64) });
+    await withPool((pool) => pool.query(`UPDATE artists SET photo = 'https://example.com/mine.jpg' WHERE id = $1`, [part.id]));
+    const fresh = (await app.get('/api/v1/admin/artists?q=refresh part').expect(200)).body.data.artists[0];
+    await withPool((pool) => seedFestival(pool, { id: 'fest-ref-5', sets: [{ id: 'ref-5-0', artist: 'Refresh Part', artists: [elementOf(fresh)] }] }));
+    artistTable[id(64)] = spotifyArtist(64, 'Refresh Part');
+    const res = await app.post('/api/v1/admin/artists/spotify-refresh', { festivalId: 'fest-ref-5' }).expect(200);
+    assert.deepEqual(res.body.data.results, [{ artistId: part.id, status: 'updated' }]);
+    const row = await artistRow(part.id);
+    assert.equal(row.photo, 'https://example.com/mine.jpg');
+    assert.deepEqual(row.genres, ['house', 'techno']);
+    let entries: any[] = [];
+    for (let attempt = 0; attempt < 50 && !entries.some((entry) => entry.via === 'spotify-refresh'); attempt++) {
+      entries = await auditRows(part.id);
+      if (!entries.some((entry) => entry.via === 'spotify-refresh')) await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    assert.deepEqual(entries.find((entry) => entry.via === 'spotify-refresh')?.fields, ['genres']);
+  });
+
   test('refresh: reports unavailable when Spotify returns nothing, and writes nothing', async () => {
     const artist = await createArtist(app, { name: 'Refresh Ghost', link: link(62) });
     await withPool((pool) => seedFestival(pool, { id: 'fest-ref-3', sets: [{ id: 'ref-3-0', artist: 'Refresh Ghost', artists: [elementOf(artist)] }] }));

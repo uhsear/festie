@@ -260,14 +260,19 @@ export function createArtistsStore(pool: Pool) {
       try {
         return await withTransactionRetry(pool, async (client) => {
           const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
+          const { rows } = await client.query(
+            `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 AND merged_into IS NULL FOR UPDATE`,
+            [id],
+          );
+          const before = rows[0] as ArtistRecord | undefined;
+          if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
           const filled = await this.fillEmpty(
             client,
             id,
             { photo: input.photo ?? undefined, genres: input.genres },
             { userId: input.userId, ip: input.ip, skipAudit: true },
           );
-          if (!filled) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
-          if (!filled.changed) return { status: 'unchanged' as const };
+          if (!filled?.changed) return { status: 'unchanged' as const };
           const artist = filled.artist;
           await assertUnchanged();
           const synced = await rewriteCopies(client, festivalIds, artist);
@@ -275,7 +280,17 @@ export function createArtistsStore(pool: Pool) {
             client,
             id,
             { userId: input.userId, ip: input.ip },
-            { name: artist.name, fields: ['photo', 'genres'], via: 'spotify-refresh', festivalsUpdated: synced.length },
+            {
+              name: artist.name,
+              fields: [
+                ...(before.photo !== artist.photo ? ['photo'] : []),
+                ...(JSON.stringify(before.genres ?? []) !== JSON.stringify(artist.genres ?? []) ? ['genres'] : []),
+              ],
+              via: 'spotify-refresh',
+              festivalsUpdated: synced.length,
+              before: { photo: before.photo ?? null, genres: before.genres ?? [] },
+              after: { photo: artist.photo ?? null, genres: artist.genres ?? [] },
+            },
           );
           return { status: 'saved' as const, artist, synced };
         });
