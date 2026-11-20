@@ -93,6 +93,14 @@ const pairs: Array<[string, string, string, number]> = [
   ['priority.maybe on bg.card', colors.priority.maybe, colors.bg.card, LARGE],
   ['stage.purpleAccessible on bg.primary', colors.stage.purpleAccessible, colors.bg.primary, LARGE],
   ['stage.fallback on bg.primary', colors.stage.fallback, colors.bg.primary, LARGE],
+  // WCAG 1.4.11: a form field's outline is the control boundary, so it needs 3:1 on the field fill and on each surface the field sits on.
+  ['border.input on bg.input', colors.border.input, over(colors.bg.input, colors.bg.primary), LARGE],
+  ['border.input on bg.primary', colors.border.input, colors.bg.primary, LARGE],
+  ['border.input on bg.secondary', colors.border.input, colors.bg.secondary, LARGE],
+  ['border.input on bg.elevated', colors.border.input, over(colors.bg.elevated, colors.bg.primary), LARGE],
+  ['Daylight border.input on bg.input', colorsDaylight.border.input, colorsDaylight.bg.input, LARGE],
+  ['Daylight border.input on bg.primary', colorsDaylight.border.input, colorsDaylight.bg.primary, LARGE],
+  ['Daylight border.input on bg.secondary', colorsDaylight.border.input, colorsDaylight.bg.secondary, LARGE],
   // Confidence + delivery. These colour a NUMERAL (the `numeral` type role,
   // 14px / weight 500), which is NORMAL text by WCAG — large text starts at
   // 24px, or 18.66px bold — so every pair below is held to 4.5:1, not 3.0:1.

@@ -56,7 +56,7 @@ const ORDERS: Array<{ value: PicksOrder; label: string }> = [
 ];
 
 const chipClass = (active: boolean) =>
-  `inline-flex items-center gap-1.5 rounded-full border px-3 min-h-9 text-xs font-semibold cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 ${
+  `inline-flex items-center gap-1.5 rounded-full border px-3 min-h-11 text-xs font-semibold cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 ${
     active
       ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover'
       : 'border-border text-text-secondary hover:bg-bg-card-hover'
@@ -379,7 +379,7 @@ function PicksViewInner() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter picks by artist or stage"
               aria-label="Filter my picks"
-              className="w-full min-h-9 rounded-full border border-border bg-bg-card pl-9 pr-9 text-sm"
+              className="w-full min-h-11 rounded-full border border-border-input bg-bg-card pl-9 pr-9 text-sm"
             />
             {search && (
               <button

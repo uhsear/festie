@@ -55,6 +55,8 @@ export const colors = {
   border: {
     default: 'rgba(255, 255, 255, 0.06)',
     light: 'rgba(255, 255, 255, 0.1)',
+    /** Form-field outline: 3:1 on bg.input and every surface a field sits on (WCAG 1.4.11). */
+    input: '#70707a',
   },
   /** Off-state track of a switch: 3:1 on bg.secondary, and the white thumb stays visible on it. */
   control: {
