@@ -48,6 +48,7 @@ export const colorsDaylight = {
   border: {
     default: 'rgba(0, 0, 0, 0.12)',
     light: 'rgba(0, 0, 0, 0.3)',
+    input: '#767684',
   },
   control: {
     trackOff: '#767684',
