@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { api, mapErrorToUserMessage } from '@festie/shared/services';
+import { clearSetRating, fetchFestivalRatings, mapErrorToUserMessage, rateSet } from '@festie/shared/services';
 import { RATING_SCALE_DATA, ratingCaption } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -28,12 +28,6 @@ const RATINGS = RATING_SCALE_DATA.map((r) => ({
   label: r.label,
 }));
 
-interface Rating {
-  setId: string;
-  rating: number;
-  note?: string | null;
-}
-
 interface RatingButtonsProps {
   /** The set being rated. */
   setId: string;
@@ -54,13 +48,12 @@ const MEMORY_MAX = 140;
 /**
  * Mobile rating primitive — 5 emoji buttons in a row. Mirrors the web
  * RatingButtons behavior: tapping a rating upserts it (POST /ratings/:setId),
- * re-tapping the active rating removes it (DELETE /ratings/:setId). Mobile has
- * no react-query/offline-queue bridge, so this uses plain api calls with an
- * optimistic local useState that rolls back on error. CONFIRMED endpoints:
- * GET /ratings/festival/:festivalId (api.get unwraps the success envelope to
- * the { ratings } object), POST /ratings/:setId { rating }, DELETE
- * /ratings/:setId. Pass `initial` to skip the GET and `compact` to hide the
- * crowd/crew summary when rendering many rows.
+ * re-tapping the active rating removes it (DELETE /ratings/:setId). It goes
+ * through the shared rateSet / clearSetRating / fetchFestivalRatings services,
+ * so offline taps queue under a rate-<setId> clientId and collapse into one
+ * replayed call. Mobile has no react-query, so the local useState is
+ * optimistic and rolls back on error. Pass `initial` to skip the GET and
+ * `compact` to hide the crowd/crew summary when rendering many rows.
  */
 export default function RatingButtons({ setId, festivalId, onRated, showMemory = true, initial, compact = false }: RatingButtonsProps) {
   const styles = useStyles();
@@ -69,9 +62,8 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
   const [current, setCurrent] = useState<number | null>(initial?.rating ?? null);
   const [busy, setBusy] = useState(false);
   // Set when an optimistic write rolls back, so the failure is VISIBLE (not just
-  // a haptic, which is silent for users with haptics disabled). Mobile ratings
-  // don't go through the offline queue, so a tap while offline would otherwise
-  // fill-then-quietly-vanish with no explanation.
+  // a haptic, which is silent for users with haptics disabled). A rejected write
+  // would otherwise fill-then-quietly-vanish with no explanation.
   const [saveError, setSaveError] = useState<string | null>(null);
   // Until the initial GET resolves we don't know if there's an existing rating,
   // so we hold the controls at a slightly reduced opacity and show "Loading…"
@@ -105,8 +97,7 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
         return;
       }
       try {
-        const res = await api.get<{ ratings: Rating[] } | Rating[]>(`/ratings/festival/${festivalId}`);
-        const ratings = Array.isArray(res) ? res : res?.ratings || [];
+        const ratings = await fetchFestivalRatings(festivalId);
         const found = ratings.find((r) => r.setId === setId);
         if (!cancelled) {
           setCurrent(found?.rating ?? null);
@@ -142,18 +133,17 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
       }
       try {
         if (removing) {
-          await api.delete(`/ratings/${setId}`);
+          await clearSetRating(setId);
         } else {
-          await api.post(`/ratings/${setId}`, { rating: n });
+          await rateSet(setId, n);
           // Success notification only when COMMITTING a rating (not clearing) —
           // a small "logged it" confirmation, distinct from the per-tap select.
           haptics.success();
           onRated?.(n);
         }
       } catch (e) {
-        // Roll back on failure + a warning buzz AND an explicit message — offline
-        // is the common cause (no offline queue here), and mapErrorToUserMessage
-        // distinguishes "you appear to be offline" from server/other failures.
+        // Roll back on failure + a warning buzz AND an explicit message;
+        // mapErrorToUserMessage distinguishes offline from server/other failures.
         haptics.warning();
         setCurrent(prev);
         setNote(prevNote);
@@ -171,7 +161,7 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
     setMemoryBusy(true);
     setMemoryError(null);
     try {
-      await api.post(`/ratings/${setId}`, { rating: current, note: text });
+      await rateSet(setId, current, text);
       setNote(text);
       setEditing(false);
       setMemorySaved(true);
