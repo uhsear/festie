@@ -39,12 +39,18 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { generateTraceId, propagateTraceId } from '../lib/tracing.js';
 import { schemas } from '../lib/schemas.js';
-import { LOCATION_UPDATE_LIMIT, registerSharingSocket, unregisterSharingSocket } from '../lib/rate-limiting.js';
+import {
+  LOCATION_UPDATE_LIMIT,
+  registerSharingSocket,
+  shareWindowError,
+  unregisterSharingSocket,
+} from '../lib/rate-limiting.js';
 import {
   writeLivePosition,
   dropLivePosition,
   readLiveSnapshot,
   clampCapturedAt,
+  MAX_SHARE_WINDOW_MS,
 } from '../lib/live-location-cache.js';
 import { noteBatteryLevel } from '../lib/battery-low.js';
 import type { LocationPeerStoppedReason } from '../packages/shared/src/types/socket-events.js';
@@ -430,10 +436,11 @@ export default function setupSocketHandlers(deps: any) {
         const validation = schemas.locationShare.safeParse(data);
         if (!validation.success) return respond({ ok: false, code: 'SCHEMA_MISMATCH' });
         const { crewId, position, expiresAt } = validation.data;
+        if (shareWindowError(expiresAt, Date.now())) return respond({ ok: false, code: 'INVALID_EXPIRY' });
 
         // The socket must already be joined to this crew room (join:crew set it).
         if (socket.data?.crewId !== crewId) return respond({ ok: false, code: 'NOT_IN_CREW_ROOM' });
-        if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
+        if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_LOCATION_SHARE_RATE_LIMIT)) {
           return respond({ ok: false, code: 'RATE_LIMITED' });
         }
 
@@ -465,6 +472,8 @@ export default function setupSocketHandlers(deps: any) {
         socket.data.username = session.username;
         socket.data.sharingCrewId = crewId;
         socket.data.sharingSince = Date.now();
+        // The accepted window end: later updates may not outlive it or claim a later one.
+        socket.data.sharingUntil = expiresAt ? Date.parse(expiresAt) : socket.data.sharingSince + MAX_SHARE_WINDOW_MS;
         // M2: seed the streaming-path membership re-check cache — membership was
         // just verified above, so the next recheck is N updates / T seconds out.
         socket.data.crewMembershipCheckedAt = Date.now();
@@ -530,6 +539,15 @@ export default function setupSocketHandlers(deps: any) {
           socket.emit('error', { message: 'Not sharing location to this crew', code: 'NOT_SHARING' });
           return;
         }
+        const sharingUntil = socket.data.sharingUntil;
+        if (
+          shareWindowError(expiresAt, Date.now()) ||
+          Date.now() >= sharingUntil ||
+          (expiresAt && Date.parse(expiresAt) > sharingUntil)
+        ) {
+          socket.emit('error', { message: 'Share window ended or too long', code: 'INVALID_EXPIRY' });
+          return;
+        }
 
         const userId = socket.data.userId;
 
@@ -539,6 +557,13 @@ export default function setupSocketHandlers(deps: any) {
         const check = await LOCATION_UPDATE_LIMIT.consumeAsync(userId, redis);
         if (!check.allowed) {
           socket.emit('error', { message: 'Location update rate limit exceeded', code: 'RATE_LIMITED' });
+          return;
+        }
+        // Refresh this socket's slot so the sharing-socket cap holds past the TTL.
+        const sharingCap = await registerSharingSocket(redis, userId, socket.id);
+        if (!sharingCap.allowed) {
+          delete socket.data.sharingCrewId;
+          socket.emit('error', { message: 'Too many sharing sockets', code: 'TOO_MANY_SHARING_SOCKETS' });
           return;
         }
 
@@ -674,7 +699,7 @@ export default function setupSocketHandlers(deps: any) {
 
         // Must already be joined to this crew room (join:crew gated membership).
         if (socket.data?.crewId !== crewId) return respond({ ok: false, peers: [] });
-        if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
+        if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_LOCATION_SYNC_RATE_LIMIT)) {
           return respond({ ok: false, peers: [] });
         }
 

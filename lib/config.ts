@@ -71,6 +71,8 @@ export const DEFAULTS = {
   SOCKET_PING_TIMEOUT: 60_000,
   SOCKET_EVENT_WINDOW: 10_000,
   SOCKET_JOIN_RATE_LIMIT: 12,
+  SOCKET_LOCATION_SHARE_RATE_LIMIT: 12,
+  SOCKET_LOCATION_SYNC_RATE_LIMIT: 12,
   SOCKET_LEAVE_RATE_LIMIT: 20,
   JSON_LIMIT: '256kb',
   // Total REGISTERED accounts, enforced at signup (routes/auth.ts:195). Raised
@@ -326,6 +328,8 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   SOCKET_CONNECT_RATE_LIMIT: number;
   SOCKET_EVENT_WINDOW: number;
   SOCKET_JOIN_RATE_LIMIT: number;
+  SOCKET_LOCATION_SHARE_RATE_LIMIT: number;
+  SOCKET_LOCATION_SYNC_RATE_LIMIT: number;
   SOCKET_LEAVE_RATE_LIMIT: number;
   JSON_LIMIT: string;
   MAX_USERS: number;
@@ -572,6 +576,14 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     SOCKET_JOIN_RATE_LIMIT: readInt(
       overrides.SOCKET_JOIN_RATE_LIMIT || process.env.SOCKET_JOIN_RATE_LIMIT,
       DEFAULTS.SOCKET_JOIN_RATE_LIMIT,
+    ),
+    SOCKET_LOCATION_SHARE_RATE_LIMIT: readInt(
+      overrides.SOCKET_LOCATION_SHARE_RATE_LIMIT || process.env.SOCKET_LOCATION_SHARE_RATE_LIMIT,
+      DEFAULTS.SOCKET_LOCATION_SHARE_RATE_LIMIT,
+    ),
+    SOCKET_LOCATION_SYNC_RATE_LIMIT: readInt(
+      overrides.SOCKET_LOCATION_SYNC_RATE_LIMIT || process.env.SOCKET_LOCATION_SYNC_RATE_LIMIT,
+      DEFAULTS.SOCKET_LOCATION_SYNC_RATE_LIMIT,
     ),
     SOCKET_LEAVE_RATE_LIMIT: readInt(
       overrides.SOCKET_LEAVE_RATE_LIMIT || process.env.SOCKET_LEAVE_RATE_LIMIT,
