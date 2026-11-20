@@ -30,6 +30,7 @@ async function buildApp(
     config: { NODE_ENV: 'test' },
     log: { info: noop, warn: noop, error: noop, debug: noop },
     userAuth: (_req: any, res: any) => res.status(401).json({ error: 'auth should not run' }),
+    adminAuth: (_req: any, res: any) => res.status(401).json({ error: 'auth should not run' }),
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
     sendError: (res: any, status: any, message: any, code: any) =>
       res.status(status).json({ data: null, error: { message, status, code } }),

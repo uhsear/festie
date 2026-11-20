@@ -53,6 +53,7 @@ export default function createExportRoutes(deps: any) {
   const MAX_CREW_IN_EXPORT = config.MAX_CREW_IN_EXPORT || 20;
   const EXPORT_COOLDOWN_MS = config.EXPORT_COOLDOWN_MS || 5_000;
   const MAX_COOLDOWN_ENTRIES = config.MAX_EXPORT_COOLDOWN_ENTRIES;
+  // shortcut: cooldowns and the worker pool are per process, so N instances allow N exports per window; move the cooldown to Redis if the app scales out.
   const exportCooldowns = new Map();
   const cooldownCleanup = setInterval(() => {
     const now = Date.now();
