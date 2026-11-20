@@ -283,6 +283,10 @@ function isGuestWrite(get: () => FestivalDataStore): boolean {
 // its merge drops these ids so a removed pick does not come back. The merge clears the map.
 const guestUnpicked = new Map<string, Set<string>>();
 
+export function clearGuestUnpicked(): void {
+  guestUnpicked.clear();
+}
+
 /** Store one festival's guest picks; an empty map removes the festival entry. */
 function setGuestFestivalPicks(
   get: () => FestivalDataStore,
@@ -290,8 +294,10 @@ function setGuestFestivalPicks(
   festivalId: string,
   picks: Record<string, Priority>,
 ): void {
-  const { [festivalId]: _old, ...others } = get().guestPicks;
+  const { [festivalId]: old = {}, ...others } = get().guestPicks;
   for (const setId of Object.keys(picks)) guestUnpicked.get(festivalId)?.delete(setId);
+  const removed = Object.keys(old).filter((setId) => !(setId in picks));
+  if (removed.length > 0) guestUnpicked.set(festivalId, new Set([...(guestUnpicked.get(festivalId) ?? []), ...removed]));
   set({ guestPicks: Object.keys(picks).length > 0 ? { ...others, [festivalId]: picks } : others });
 }
 
@@ -839,7 +845,6 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       const key = guestFestivalKey(festivalId);
       const { [setId]: _removed, ...rest } = get().guestPicks[key] ?? {};
       setGuestFestivalPicks(get, set, key, rest);
-      guestUnpicked.set(key, (guestUnpicked.get(key) ?? new Set()).add(setId));
       return;
     }
     // Snapshot only the removed key, not the whole profile (see rollbackKeys).
