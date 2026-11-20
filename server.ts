@@ -151,7 +151,7 @@ import createSocketHandlers from './routes/socket';
 import createDeepLinkRoutes from './routes/deep-links';
 
 import type { Express, Request, Response, NextFunction } from 'express';
-import type { AppContext, RouteDeps } from './lib/types';
+import type { AppContext, RouteDeps } from './lib/types/app-context';
 
 const metrics = createMetrics();
 const workerId =
