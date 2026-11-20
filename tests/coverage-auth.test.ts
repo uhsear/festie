@@ -132,13 +132,13 @@ describe('POST /api/v1/auth/forgot-password', () => {
     assert.ok(res.body.data.message);
   });
 
-  test('missing email returns 400 (or 422)', async () => {
+  test('missing email returns 400', async () => {
     const server = await startServer(); servers.push(server);
     const res = await server.request
       .post('/api/v1/auth/forgot-password')
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({});
-    assert.ok([400, 422].includes(res.status));
+    assert.equal(res.status, 400);
   });
 });
 
