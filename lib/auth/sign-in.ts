@@ -10,6 +10,7 @@
 import crypto from 'crypto';
 import type { Request, Response } from 'express';
 import { sendVerificationEmail } from '../email';
+import { DELETED_USER_ID } from '../db/stores/users';
 import { describeDevice } from '../helpers/device-label';
 import type {} from '../types';
 
@@ -147,6 +148,9 @@ export async function finishSignIn(
   { status = 200, extra = {} }: { status?: number; extra?: Record<string, unknown> } = {},
 ) {
   const { stores, log, invalidateUserCache, createUserSession, setNoStore, setUserSessionCookie } = deps;
+  if (user.id === DELETED_USER_ID) {
+    return deps.sendError(res, 401, 'Wrong username, email or password.', deps.ErrorCodes.INVALID_CREDENTIALS);
+  }
   const reactivated = Boolean(user.deletedAt);
   if (reactivated) {
     await stores.users.reactivate(user.id);

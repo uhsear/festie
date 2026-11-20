@@ -18,6 +18,7 @@
 import crypto from 'crypto';
 import type { Request, Response, Router } from 'express';
 import { withTransaction } from '../lib/db/connection';
+import { DELETED_USER_ID } from '../lib/db/stores/users';
 import type { Identity, IdentityProvider } from '../lib/db/stores/identities';
 import {
   checkRegistrationConflicts,
@@ -105,8 +106,8 @@ export default function createOAuthRoutes(deps: any): Router {
     const active = await getUserById(identity.userId);
     if (active) return active;
     const { rows } = await stores.pool.query(
-      "SELECT username FROM users WHERE id = $1 AND deleted_at > NOW() - INTERVAL '30 days'",
-      [identity.userId],
+      "SELECT username FROM users WHERE id = $1 AND id <> $2 AND deleted_at > NOW() - INTERVAL '30 days'",
+      [identity.userId, DELETED_USER_ID],
     );
     if (!rows[0]) return null;
     const deleted = await stores.users.findDeletedByUsername(rows[0].username);

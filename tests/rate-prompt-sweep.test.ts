@@ -1,6 +1,6 @@
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBackgroundTasks } from '../lib/shutdown.js';
+import { createBackgroundTasks } from '../lib/background-tasks.js';
 
 // The hourly rate_prompt sweep: one sendRatePrompt per candidate festival, and
 // one failing festival does not stop the rest.
