@@ -541,6 +541,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     disconnectSessionTokens,
     removeFestivalSockets,
     removeProfileSockets,
+    fetchRevocationSockets,
 
     // Response helpers (re-exports)
     sendSuccess,
