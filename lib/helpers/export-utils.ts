@@ -8,7 +8,7 @@
 import { escapeHtml } from './sanitize';
 import type { Profile } from '../types/contracts';
 
-export interface FestivalSet {
+interface FestivalSet {
   id: string;
   artist: string;
   stageId?: string;

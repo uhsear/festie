@@ -9,7 +9,7 @@ type FestivalUtils = Pick<ReturnType<typeof createUtils>, 'buildFestivalRecords'
 /** One VALUES row for buildMultiInsert. */
 type Row = unknown[];
 
-export interface StageInput {
+interface StageInput {
   id: string;
   name: string;
   color: string;
@@ -17,7 +17,7 @@ export interface StageInput {
   longitude?: number | null;
 }
 
-export interface SetInput {
+interface SetInput {
   id: string;
   artist: string;
   stageId: string;
@@ -28,7 +28,7 @@ export interface SetInput {
   displayName?: string | null;
 }
 
-export interface DayInput {
+interface DayInput {
   label?: string;
   date?: string;
   sets?: SetInput[];
