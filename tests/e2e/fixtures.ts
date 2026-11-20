@@ -179,6 +179,9 @@ async function startServer() {
     // can't fail server boot (presence/rate-limit fall back to memory).
     REDIS_ENABLED: process.env.REDIS_URL ? 'true' : 'false',
     PUBLIC_ORIGIN: '',
+    // Auth counters live in Redis and outlive each test's server, so every test in the run shares one budget per address.
+    // The 10 per 5 minutes default starved later registrations (Too many tries); raise it above what any run uses.
+    AUTH_RATE_LIMIT_MAX: '1000',
   });
 
   await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));
