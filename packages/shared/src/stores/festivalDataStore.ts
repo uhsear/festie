@@ -279,6 +279,10 @@ function isGuestWrite(get: () => FestivalDataStore): boolean {
   return !get().currentProfile && !useAuthStore.getState().user;
 }
 
+// Guest unpicks per festival. The persisted snapshot hydrates after the first taps, and
+// its merge drops these ids so a removed pick does not come back. The merge clears the map.
+const guestUnpicked = new Map<string, Set<string>>();
+
 /** Store one festival's guest picks; an empty map removes the festival entry. */
 function setGuestFestivalPicks(
   get: () => FestivalDataStore,
@@ -287,6 +291,7 @@ function setGuestFestivalPicks(
   picks: Record<string, Priority>,
 ): void {
   const { [festivalId]: _old, ...others } = get().guestPicks;
+  for (const setId of Object.keys(picks)) guestUnpicked.get(festivalId)?.delete(setId);
   set({ guestPicks: Object.keys(picks).length > 0 ? { ...others, [festivalId]: picks } : others });
 }
 
@@ -834,6 +839,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
       const key = guestFestivalKey(festivalId);
       const { [setId]: _removed, ...rest } = get().guestPicks[key] ?? {};
       setGuestFestivalPicks(get, set, key, rest);
+      guestUnpicked.set(key, (guestUnpicked.get(key) ?? new Set()).add(setId));
       return;
     }
     // Snapshot only the removed key, not the whole profile (see rollbackKeys).
@@ -1222,6 +1228,18 @@ function mergeByFestival<T>(persisted: Record<string, Record<string, T>> = {}, c
   return out;
 }
 
+function withoutGuestUnpicked(picks: Record<string, Record<string, Priority>>) {
+  const out = { ...picks };
+  for (const [festivalId, setIds] of guestUnpicked) {
+    if (!out[festivalId]) continue;
+    const kept = Object.fromEntries(Object.entries(out[festivalId]).filter(([id]) => !setIds.has(id)));
+    if (Object.keys(kept).length > 0) out[festivalId] = kept;
+    else delete out[festivalId];
+  }
+  guestUnpicked.clear();
+  return out;
+}
+
 export const useFestivalDataStore = create<FestivalDataStore>()(
   persist(festivalDataStore, {
     name: 'festie-festival',
@@ -1267,7 +1285,6 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
     // persisted snapshot (null for a first-time guest) — bouncing the user
     // back to the picker. When the live state already has a selection that
     // the persisted blob doesn't match, keep the live selection.
-    // shortcut: an unpick made before hydration is not carried over and the persisted entry returns, upgrade when picks track removals
     merge: (persisted, current) => {
       const p = (persisted ?? {}) as Partial<FestivalDataState>;
       if (current.currentFestivalId && p.currentFestivalId !== current.currentFestivalId) {
@@ -1287,14 +1304,14 @@ export const useFestivalDataStore = create<FestivalDataStore>()(
         return {
           ...current,
           ...rest,
-          guestPicks: mergeByFestival(p.guestPicks, current.guestPicks),
+          guestPicks: withoutGuestUnpicked(mergeByFestival(p.guestPicks, current.guestPicks)),
           guestInterests: mergeByFestival(p.guestInterests, current.guestInterests),
         };
       }
       return {
         ...current,
         ...p,
-        guestPicks: mergeByFestival(p.guestPicks, current.guestPicks),
+        guestPicks: withoutGuestUnpicked(mergeByFestival(p.guestPicks, current.guestPicks)),
         guestInterests: mergeByFestival(p.guestInterests, current.guestInterests),
       };
     },
