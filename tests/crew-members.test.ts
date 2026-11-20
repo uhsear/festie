@@ -113,6 +113,14 @@ function makeDeps(overrides: any = {}) {
       req.user = { userId: 'user-1', username: 'testuser' };
       next();
     }),
+    adminAuth: overrides.adminAuth || (async (req: any, res: any, next: any) => {
+      req.user = { userId: 'user-1', username: 'testuser' };
+      if (!(await stores.roles.hasRole('user-1', 'admin'))) {
+        return res.status(403).json({ data: null, error: { message: 'Admin access required', status: 403, code: 'FORBIDDEN' } });
+      }
+      req.isAdmin = true;
+      return next();
+    }),
     setNoStore: overrides.setNoStore || ((_res: any) => {}),
     sanitizeIdentifier: overrides.sanitizeIdentifier || ((s: any, _max?: any) => (typeof s === 'string' ? s.trim() : '')),
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
@@ -1201,7 +1209,8 @@ describe('routes/crew-members.js — POST /:crewId/members (admin force-add)', (
   test('returns 500 on internal error', async () => {
     const { app } = await buildApp({
       stores: {
-        roles: { hasRole: mock.fn(async () => { throw new Error('db down'); }) },
+        roles: { hasRole: mock.fn(async () => true) },
+        crews: { getById: mock.fn(async () => { throw new Error('db down'); }) },
       },
     });
 
