@@ -10,12 +10,10 @@ import { toBeAccessible } from '@sa11y/vitest';
 expect.extend({ toBeAccessible });
 
 declare module 'vitest' {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- must mirror vitest's own `Assertion<T = any>` signature (TS2428).
-  interface Assertion<T = any> {
-    toBeAccessible(config?: unknown): Promise<T>;
-  }
-  interface AsymmetricMatchersContaining {
-    toBeAccessible(config?: unknown): Promise<void>;
+  // Type parameter names and defaults must mirror vitest's own `Matchers<R, T>` declaration (TS2428).
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- declaration merging requires R and T.
+  interface Matchers<R extends void | Promise<void> = void | Promise<void>, T = unknown> {
+    toBeAccessible(config?: Parameters<typeof toBeAccessible>[1]): Promise<void>;
   }
 }
 
