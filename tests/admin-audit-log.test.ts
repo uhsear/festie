@@ -18,11 +18,10 @@ import request from 'supertest';
 import { Pool } from 'pg';
 import { createFestivalPlanner } from '../server';
 import { fileURLToPath } from 'url';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';

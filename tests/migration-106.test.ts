@@ -5,6 +5,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Migration 106 adds festival_time_releases and backfills it from festivals.set_times_out_at. It runs
 // twice without error, gives a row only to a dated day that has a timed set, never touches a festival
@@ -12,8 +13,6 @@ import { Pool } from 'pg';
 // COMMIT (the runner wraps each file itself).
 // Run it only on a private Postgres (port 5434 or higher), never 5432 or 5433.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '106_festival_time_releases.sql'),
   'utf8',
