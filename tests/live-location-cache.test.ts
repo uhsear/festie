@@ -26,6 +26,7 @@ import {
   readLiveSnapshot,
   readLivePosition,
   clampCapturedAt,
+  buildPeerUpdatePayload,
 } from '../lib/live-location-cache.js';
 
 const NOW = Date.parse('2026-06-25T18:00:00.000Z');
@@ -318,5 +319,38 @@ describe('clampCapturedAt', () => {
   it('clamps a fix 5 minutes ahead to now plus 30 s', () => {
     const ahead = new Date(NOW + 5 * 60_000).toISOString();
     assert.equal(clampCapturedAt(ahead, NOW, nowIso), new Date(NOW + 30_000).toISOString());
+  });
+});
+
+describe('buildPeerUpdatePayload', () => {
+  const who = { crewId: 'crew-1', userId: 'user-a', username: 'ana' };
+  const nowIso = new Date(NOW).toISOString();
+
+  it('emits the exact wire shape with every field passed through', () => {
+    const fix = {
+      lat: 1,
+      lng: 2,
+      accuracy: 3,
+      heading: 4,
+      speed: 5,
+      battery: 6,
+      lowPower: true,
+      expiresAt: '2026-06-25T20:00:00.000Z',
+      capturedAt: nowIso,
+    };
+    assert.deepEqual(buildPeerUpdatePayload(who, fix, NOW), { _v: 1, ...who, ...fix, serverAt: nowIso });
+  });
+
+  it('drops optional fields from the JSON and clamps capturedAt', () => {
+    const old = new Date(NOW - 10 * 60_000).toISOString();
+    const out = JSON.parse(JSON.stringify(buildPeerUpdatePayload(who, { lat: 1, lng: 2, capturedAt: old }, NOW)));
+    assert.deepEqual(out, {
+      _v: 1,
+      ...who,
+      lat: 1,
+      lng: 2,
+      capturedAt: new Date(NOW - 60_000).toISOString(),
+      serverAt: nowIso,
+    });
   });
 });

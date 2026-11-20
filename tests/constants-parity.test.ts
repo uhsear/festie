@@ -53,7 +53,7 @@ describe('root ↔ @festie/shared constant parity', () => {
     }
   });
 
-  it('live-location TTLs match the shared mirror', () => {
+  it('live-location TTLs are read from shared', () => {
     assert.equal(POSITION_TTL_MS, shared.LIVE_LOCATION.STALE_MS);
     assert.equal(MAX_SHARE_WINDOW_MS, shared.LIVE_SHARE_MAX_MS);
   });

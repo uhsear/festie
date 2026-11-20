@@ -49,7 +49,7 @@ import {
   writeLivePosition,
   dropLivePosition,
   readLiveSnapshot,
-  clampCapturedAt,
+  buildPeerUpdatePayload,
   MAX_SHARE_WINDOW_MS,
 } from '../lib/live-location-cache.js';
 import { noteBatteryLevel } from '../lib/battery-low.js';
@@ -528,28 +528,11 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         // If a first fix is included, broadcast it immediately so peers see the
         // sharer without waiting for the first periodic update tick.
         if (position) {
-          const nowMs = Date.now();
-          const serverAt = new Date(nowMs).toISOString();
-          const payload = {
-            _v: 1,
-            crewId,
-            userId: session.userId,
-            username: session.username,
-            lat: position.lat,
-            lng: position.lng,
-            accuracy: position.accuracy,
-            heading: position.heading,
-            // Phase 4C: relay battery (off the fix) + the share-window expiry so
-            // peers render the direction/battery/countdown chips. Pure pass-through.
-            battery: position.battery,
-            // Peer low-power flag (#5): relay the sharer's battery-saver state so
-            // peers render a low-power cue next to battery. Optional pass-through.
-            lowPower: position.lowPower,
-            expiresAt,
-            // L4: clamp client capturedAt to a small window around server time.
-            capturedAt: clampCapturedAt(position.capturedAt, nowMs, serverAt),
-            serverAt,
-          };
+          const payload = buildPeerUpdatePayload(
+            { crewId, userId: session.userId, username: session.username },
+            { ...position, expiresAt },
+            Date.now(),
+          );
           socket.to('crew:' + crewId).emit('location:peer-update', payload);
           // Phase 3C: cache the first fix so a late-joiner snapshot (location:sync)
           // can render this sharer immediately. Ephemeral (Redis-only) + fail-open.
@@ -646,28 +629,11 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
           }
         }
 
-        const serverAt = new Date(nowMs).toISOString();
-        const payload = {
-          _v: 1,
-          crewId,
-          userId,
-          username: socket.data.username as string,
-          lat,
-          lng,
-          accuracy,
-          heading,
-          speed,
-          // Phase 4C: relay sharer battery + the share-window expiry (both optional)
-          // so peers render the heading/battery/countdown chips. Pure pass-through.
-          battery,
-          // Peer low-power flag (#5): relay the sharer's battery-saver state so
-          // peers render a low-power cue next to battery. Optional pass-through.
-          lowPower,
-          expiresAt,
-          // L4: clamp client capturedAt to a small window around server time.
-          capturedAt: clampCapturedAt(capturedAt, nowMs, serverAt),
-          serverAt,
-        };
+        const payload = buildPeerUpdatePayload(
+          { crewId, userId, username: socket.data.username as string },
+          { lat, lng, accuracy, heading, speed, battery, lowPower, expiresAt, capturedAt },
+          nowMs,
+        );
         // Broadcast to the crew room EXCLUDING the sender.
         socket.to('crew:' + crewId).emit('location:peer-update', payload);
         // Phase 3C: refresh the late-joiner snapshot cache with this fix.
