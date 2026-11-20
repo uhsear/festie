@@ -356,7 +356,7 @@ export interface ServerToClientEvents {
   // System
   'session:revoked': (data: { reason: string }) => void;
   'server:draining': (data: { message: string }) => void;
-  error: (error: { message: string; code?: string }) => void;
+  error: (error: SocketErrorPayload) => void;
   connect: () => void;
   disconnect: (reason: string) => void;
 }
@@ -365,30 +365,42 @@ export interface ServerToClientEvents {
 // Client → Server event map
 // ════════════════════════════════════════════════════════════════════════════════
 
+/** Failure fields every socket ack carries when ok is false. code is the stable machine-readable value. */
+export interface SocketAckFailure {
+  error?: string;
+  code?: string;
+}
+
+/** Async failure pushed on the 'error' event. code is the same vocabulary as SocketAckFailure.code. */
+export interface SocketErrorPayload {
+  message: string;
+  code?: string;
+}
+
 export interface ClientToServerEvents {
   'join:festival': (
     festivalId: string,
     data: { _v?: number; userToken?: string | null },
-    ack: (response: { ok: boolean; profileId?: string; error?: string }) => void,
+    ack: (response: { ok: boolean; profileId?: string } & SocketAckFailure) => void,
   ) => void;
   'leave:festival': () => void;
   'join:crew': (
     data: { _v?: number; crewId: string },
-    ack: (response: { ok: boolean; crewId?: string; error?: string }) => void,
+    ack: (response: { ok: boolean; crewId?: string } & SocketAckFailure) => void,
   ) => void;
   'leave:crew': (data: { _v?: number; crewId: string }) => void;
   'reconnect:restore': (
     data: { _v?: number; festivalId: string; userToken?: string | null },
-    ack: (response: { ok: boolean; profileId?: string; error?: string }) => void,
+    ack: (response: { ok: boolean; profileId?: string } & SocketAckFailure) => void,
   ) => void;
 
   // Live Location (ephemeral). SOS raise/clear are HTTP POSTs, not socket emits.
-  'location:share': (data: LocationSharePayload, ack: (response: { ok: boolean; code?: string }) => void) => void;
+  'location:share': (data: LocationSharePayload, ack: (response: { ok: boolean } & SocketAckFailure) => void) => void;
   'location:update': (data: LocationUpdatePayload) => void;
-  'location:stop': (data: LocationStopPayload, ack: (response: { ok: boolean }) => void) => void;
+  'location:stop': (data: LocationStopPayload, ack: (response: { ok: boolean } & SocketAckFailure) => void) => void;
   // Late-joiner snapshot request; handled by the server in routes/socket.ts.
   'location:sync': (
     data: LocationSyncPayload,
-    ack: (response: { ok: boolean; peers: LocationPeerUpdatePayload[] }) => void,
+    ack: (response: { ok: boolean; peers: LocationPeerUpdatePayload[] } & SocketAckFailure) => void,
   ) => void;
 }

@@ -597,8 +597,22 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     const disconnected = waitForEvent(badSocket, 'disconnect', () => true);
     const ack = await new Promise<any>((resolve) =>
       badSocket.emit('join:festival', 'fest-1', { userToken: 'invalid-token-value' }, resolve));
-    assert.equal(ack.error, 'Authentication required');
+    assert.deepEqual(ack, { ok: false, error: 'Authentication required', code: 'AUTH_REQUIRED' });
     await disconnected;
+  });
+
+  test('failure acks for location:stop carry error and code', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const alice = await registerUser(server, 'socket-stop-fail');
+
+    const socket = connectSocket(server.baseUrl, { auth: { token: alice.token } });
+    await waitForEvent(socket, 'connect');
+    const bad = await new Promise<any>((resolve) => socket.emit('location:stop', {}, resolve));
+    assert.deepEqual(bad, { ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH' });
+    const notJoined = await new Promise<any>((resolve) => socket.emit('location:stop', { _v: 1, crewId: 'crew-x' }, resolve));
+    assert.deepEqual(notJoined, { ok: false, error: 'NOT_IN_CREW_ROOM', code: 'NOT_IN_CREW_ROOM' });
+    socket.close();
   });
 
   test('disconnects a socket that joins with an invalid token', async () => {
