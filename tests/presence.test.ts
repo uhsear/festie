@@ -221,9 +221,9 @@ describe('presence: getPresenceList', () => {
 
     const result = await pm.getPresenceList('fest-1');
     assert.equal(result.length, 1);
-    assert.equal(result[0].userId, 'user-1');
-    assert.equal(result[0].username, 'alice');
-    assert.equal(result[0].avatarUrl, '/avatar/abc');
+    assert.equal(result[0]!.userId, 'user-1');
+    assert.equal(result[0]!.username, 'alice');
+    assert.equal(result[0]!.avatarUrl, '/avatar/abc');
   });
 
   it('deduplicates users with multiple sockets', async () => {
@@ -247,8 +247,8 @@ describe('presence: getPresenceList', () => {
     const result = await pm.getPresenceList('fest-1');
     assert.equal(rp.getOnline.mock.callCount(), 1);
     assert.equal(result.length, 1);
-    assert.equal(result[0].userId, 'user-1');
-    assert.equal(result[0].avatarUrl, '/avatar/key1');
+    assert.equal(result[0]!.userId, 'user-1');
+    assert.equal(result[0]!.avatarUrl, '/avatar/key1');
   });
 
   it('falls back to local state when redis getOnline fails', async () => {
@@ -262,7 +262,7 @@ describe('presence: getPresenceList', () => {
     const result = await pm.getPresenceList('fest-1');
 
     assert.equal(result.length, 1);
-    assert.equal(result[0].userId, 'user-1');
+    assert.equal(result[0]!.userId, 'user-1');
   });
 });
 
@@ -277,7 +277,7 @@ describe('presence: getPresenceList reads avatars in one batch', () => {
   it('in-memory path: one getByIds call, no getUserMap, same list as before', async () => {
     const stores = makeStores(users);
     const getUserMap = mock.fn(async () => new Map());
-    const pm = createPresenceManager({ ...defaultDeps({ stores }), getUserMap });
+    const pm = createPresenceManager(Object.assign(defaultDeps({ stores }), { getUserMap }));
     for (let i = 0; i < 50; i++) await pm.setSocketPresence('fest-1', `user-${i}`, `name-${i}`, `sock-${i}`);
     // A second socket for one user must not duplicate the entry.
     await pm.setSocketPresence('fest-1', 'user-3', 'name-3', 'sock-3b');
@@ -366,7 +366,7 @@ describe('presence: leaveFestivalRealtime', () => {
     const deps = defaultDeps();
     const pm = createPresenceManager(deps);
     const io = makeIo();
-    const targets = new Set();
+    const targets = new Set<string>();
 
     await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
     const socket = makeSocket({ id: 'sock-1', festivalId: 'fest-1' });
