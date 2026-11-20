@@ -51,13 +51,10 @@ env:
   # and is unrelated to N, so we add this offset to keep our codes ABOVE the last
   # EAS one and monotonically increasing per run.
   #
-  # ACTION REQUIRED (owner): 100 is a placeholder, not a verified value. Look up the last published
-  # versionCode in Play Console (Release > Production/Internal > App bundle explorer) and set this to a value
-  # strictly greater than (last EAS versionCode - current github.run_number) so
-  # the very first GH build already exceeds it. A safe choice: set the offset to
-  # (last EAS versionCode + 100). E.g. last EAS code 42 -> set 142 here.
-  # The exact lookup steps are a checklist in the private deploy runbook (P18).
-  VERSION_CODE_OFFSET: '100'
+  # Set 2026-11-20 from the last EAS-published Play versionCode, 203 (Android 1.5.0), plus 100,
+  # so the first GH build (run_number 1) gets 304. If EAS publishes past this offset, raise it again
+  # to (last EAS versionCode + 100). The lookup steps are in the private deploy runbook (P18).
+  VERSION_CODE_OFFSET: '303'
 
 permissions:
   contents: read
