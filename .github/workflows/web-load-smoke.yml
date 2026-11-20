@@ -1,0 +1,34 @@
+name: Web load smoke
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+# Catches a web app that never mounts while the API still answers 200. A failed
+# scheduled run emails the repository owner through GitHub's default notifications.
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  web-load-smoke:
+    # Pinned: Playwright browsers do not install or launch on ubuntu-26.04, which ubuntu-latest became in 2026-11.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+        timeout-minutes: 5
+      - name: Load the live site anonymously
+        run: npx playwright test tests/e2e/web-load-smoke.spec.ts --project=chromium
+        env:
+          BASE_URL: https://festie.us
