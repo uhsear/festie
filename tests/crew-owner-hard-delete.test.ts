@@ -19,6 +19,10 @@ describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
   before(async () => {
     pool = new Pool({ connectionString: TEST_DATABASE_URL });
     stores = createStores(pool);
+    // Other suites truncate users, which removes the placeholder migration 116 seeds.
+    await pool.query(
+      "INSERT INTO users (id, username, display_name, created_at, deleted_at) VALUES ('deleted-user', '[deleted user]', 'Deleted user', NOW(), '9999-12-31T00:00:00Z') ON CONFLICT (id) DO NOTHING",
+    );
   });
 
   after(async () => {
@@ -94,6 +98,38 @@ describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
 
     const { rows } = await pool.query("SELECT 1 FROM crews WHERE id = 'gdpr-test-crew2'");
     assert.equal(rows.length, 0, 'sole-member crew is deleted with the user');
+  });
+
+  test('hardDelete and retention_cleanup keep the expenses a deleted user paid', async () => {
+    await mkFestival('gdpr-test-f6');
+    await mkUser('gdpr-test-px-a');
+    await mkUser('gdpr-test-px-b');
+    await mkUser('gdpr-test-px-c');
+    await mkCrew('gdpr-test-crew6', 'gdpr-test-f6', 'gdpr-test-px-c');
+    await addMember('gdpr-test-crew6', 'gdpr-test-px-c', 'owner', '2020-01-01T00:00:00Z');
+    const mkExpense = (id: string, paidBy: string) =>
+      pool.query(
+        "INSERT INTO crew_expenses (id, crew_id, paid_by, description, amount, split_with) VALUES ($1, 'gdpr-test-crew6', $2, 'Food', 10, '[]')",
+        [id, paidBy],
+      );
+    await mkExpense('gdpr-test-exp-a', 'gdpr-test-px-a');
+    await mkExpense('gdpr-test-exp-b', 'gdpr-test-px-b');
+    await pool.query("UPDATE users SET deleted_at = now() - interval '40 days' WHERE id = 'gdpr-test-px-b'");
+
+    await stores.users.hardDelete('gdpr-test-px-a');
+    await pool.query('SELECT retention_cleanup()');
+
+    const { rows } = await pool.query(
+      "SELECT id, paid_by FROM crew_expenses WHERE id LIKE 'gdpr-test-exp-%' ORDER BY id",
+    );
+    assert.deepEqual(
+      rows.map((r: any) => r.paid_by),
+      ['deleted-user', 'deleted-user'],
+      'both paths keep the expense and re-point it at the placeholder',
+    );
+    const { rows: placeholder } = await pool.query("SELECT 1 FROM users WHERE id = 'deleted-user'");
+    assert.equal(placeholder.length, 1, 'retention_cleanup never purges the placeholder user');
+    await pool.query("DELETE FROM crews WHERE id = 'gdpr-test-crew6'");
   });
 
   test('retention_cleanup transfers/deletes owned crews for users soft-deleted > 30 days', async () => {
