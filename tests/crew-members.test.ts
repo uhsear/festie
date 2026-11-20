@@ -18,6 +18,7 @@ import express from 'express';
 import request from 'supertest';
 import { schemas, validate, validateParams, validateQuery } from '../lib/schemas.js';
 import { makeIo } from './_make-io';
+import { createSessionHelpers } from '../lib/app-context/session.js';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -241,6 +242,34 @@ describe('routes/crew-members.js — GET /search-users', () => {
     assert.equal(res.status, 403);
     assert.equal(res.body.error.code, 'FORBIDDEN');
     assert.match(res.body.error.message, /Admin access required/i);
+  });
+
+  test('real adminAuth returns 403 for a valid non-admin session', async () => {
+    const hasRole = mock.fn(async () => false);
+    const sendError = (res: any, status: number, msg: string, code: string) =>
+      res.status(status).json({ data: null, error: { message: msg, status, code } });
+    const { adminAuth } = createSessionHelpers({
+      config: { SESSION_TTL: 86400000, USER_SESSION_MAX: 5, USER_SESSION_COOKIE: 'festie_session' },
+      stores: {
+        sessions: { validateUserSession: async () => ({ userId: 'user-1', username: 'testuser' }) },
+        roles: { hasRole },
+      },
+      getIO: () => null,
+      resolveRequestToken: () => ({ token: 'a'.repeat(64), source: 'header' }),
+      disconnectSocket: () => {},
+      emitPresence: () => {},
+      disconnectUserSockets: () => {},
+      fetchRevocationSockets: async () => [],
+      sendError,
+      ErrorCodes: { AUTH_REQUIRED: 'AUTH_REQUIRED', FORBIDDEN: 'FORBIDDEN' },
+    });
+    const { app } = await buildApp({ adminAuth, stores: { roles: { hasRole } } });
+
+    const res = await request(app).get('/search-users?q=test');
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'FORBIDDEN');
+    assert.equal(hasRole.mock.callCount(), 1);
   });
 
   // ── LIKE metacharacter escaping ───────────────────────────────────
