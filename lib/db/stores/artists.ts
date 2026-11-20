@@ -212,17 +212,23 @@ export function createArtistsStore(pool: Pool) {
           await assertFreshToken(client, before, input.expectedUpdatedAt);
           const next = applyChanges(before, input.changes);
           await assertNoClash(client, id, next);
+          // A Spotify photo and the genres belong to the Spotify artist, so they leave with its link. Another photo stays.
+          const spotifyReplaced = !!before.spotify_id && before.spotify_id !== next.spotifyId;
           const { rows: updated } = await client.query(
             `UPDATE artists SET name = $2, name_key = $3, label = $4, spotify_id = $5, links = $6::jsonb,
+                    photo = CASE WHEN $8 AND photo LIKE 'https://i.scdn.co/%' THEN NULL ELSE photo END,
+                    genres = CASE WHEN $8 THEN '[]'::jsonb ELSE genres END,
                     updated_by = $7, updated_at = now()
               WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
-            [id, next.name, next.key, next.label, next.spotifyId, JSON.stringify(next.links), input.userId],
+            [id, next.name, next.key, next.label, next.spotifyId, JSON.stringify(next.links), input.userId, spotifyReplaced],
           );
           const artist = updated[0] as ArtistRecord;
           // A save may have put the artist on a festival after the first read, before it could lock the artist.
           await assertUnchanged();
           const copyChanged =
-            before.name !== artist.name || JSON.stringify(before.links ?? {}) !== JSON.stringify(artist.links ?? {});
+            before.name !== artist.name ||
+            before.photo !== artist.photo ||
+            JSON.stringify(before.links ?? {}) !== JSON.stringify(artist.links ?? {});
           const synced = copyChanged ? await rewriteCopies(client, festivalIds, artist) : [];
           await insertArtistAudit(
             client,
