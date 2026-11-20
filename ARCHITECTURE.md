@@ -21,7 +21,8 @@ server.ts ─── orchestrator
   lib/app-context/ ─── DI composition (config, DB, Redis, caches, auth, rate limiters)
   lib/middleware.ts ── Express middleware stack (security, CORS, parsing, metrics)
   lib/socket-setup.ts  Socket.IO server + Redis adapter
-  lib/shutdown.ts ──── graceful shutdown + background cleanup tasks
+  lib/shutdown.ts ──── graceful shutdown
+  lib/background-tasks.ts ─ leader-only background jobs (timers)
   routes/*.ts ──────── 51 API route modules (factory pattern)
 ```
 
@@ -50,7 +51,8 @@ server.ts ─── orchestrator
 | `redis.ts` | Redis client, rate limiter, presence store, cache invalidation bus, circuit breaker |
 | `middleware.ts` | Express middleware composition (Helmet, CORS, compression, body parsing, metrics, rate limits) |
 | `metrics.ts` | Prometheus metrics (prom-client) collection and endpoint |
-| `shutdown.ts` | Graceful shutdown (drain requests, close DB/Redis, clear timers) + background task scheduling |
+| `shutdown.ts` | Graceful shutdown (drain requests, close DB/Redis, clear timers) |
+| `background-tasks.ts` | Leader-only background job timers (cleanup sweeps, announcements, expiry) |
 | `openapi.ts` | OpenAPI 3.0 spec generation from route metadata |
 | `emitter.ts` | Typed event emitter for internal pub/sub |
 | `reminder-scheduler.ts` | Background scheduler for set reminders (push notifications) |
@@ -307,7 +309,7 @@ Where to start reading when one of these features misbehaves.
 
 - An admin creates an announcement through `routes/festival-announcements.ts`. The row waits in `festival_announcements` until its `sendAt`.
 - `deliverDue()` in `lib/announcements.ts` expires late rows, claims due rows and pushes each one to everyone who joined the festival. `claimDue` uses SKIP LOCKED, so a row goes out once. An announcement for a deleted or unpublished (draft) festival is claimed but sent to nobody, and gets recipient count 0.
-- Two callers run it: the 60-second sweep in `lib/shutdown.ts` and the create route, for a send-now announcement.
+- Two callers run it: the 60-second sweep in `lib/background-tasks.ts` and the create route, for a send-now announcement.
 - If a push never arrives, check the `announcements` job run metric, then the delivery log lines.
 
 ### Offline queue replay

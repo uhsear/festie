@@ -547,6 +547,40 @@ function createPasswordResetRateLimit(
   };
 }
 
+// Fixed-window counter for a per-email budget a route checks inline (it must answer
+// a specific way when over budget, so it cannot be middleware). Redis-first; the
+// in-memory map only serves while Redis is unavailable.
+function createEmailWindowLimit(config: any, { redis, scope, max, windowMs }: any) {
+  const MAX_ENTRIES = 10_000;
+  const REDIS_PREFIX = (config && config.REDIS_PREFIX) || 'fp:';
+  const buckets = new Map();
+
+  return async function check(email: string): Promise<{ limited: boolean; resetMs: number }> {
+    const emailHash = crypto.createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 32);
+    if (redis) {
+      try {
+        const result = await redisRateCheckFn(redis, `${REDIS_PREFIX}rl:${scope}:${emailHash}`, max, windowMs);
+        if (!result.fallback) return { limited: result.limited, resetMs: result.resetMs };
+      } catch {
+        // fall through to in-memory
+      }
+    }
+    const now = Date.now();
+    let entry = getAndTouch(buckets, emailHash);
+    if (!entry || now - entry.start >= windowMs) {
+      entry = { start: now, count: 0 };
+      buckets.set(emailHash, entry);
+      while (buckets.size > MAX_ENTRIES) {
+        const oldest = buckets.keys().next().value;
+        if (oldest === undefined) break;
+        buckets.delete(oldest);
+      }
+    }
+    entry.count += 1;
+    return { limited: entry.count > max, resetMs: entry.start + windowMs - now };
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Admin-write rate limiter factory
 // ─────────────────────────────────────────────────────────────────────────
@@ -877,6 +911,7 @@ async function clearSosSeen(redis: any, crewId: any, raiserId: any): Promise<voi
 export {
   createRateLimiters,
   createPasswordResetRateLimit,
+  createEmailWindowLimit,
   createAdminWriteRateLimit,
   // Socket event limiters (named exports for convenience + object export for bulk wiring)
   PICK_SET_LIMIT,

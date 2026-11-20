@@ -14,15 +14,13 @@
  *   Added per-email password-reset limiter (`passwordResetRateLimit`) to
  *   `/forgot-password` and `/reset-password`. The old IP-keyed `rateLimit()`
  *   middleware is preserved alongside it for defense-in-depth (IP + email
- *   tiers). Legacy inline `_forgotPwLimits` map is left intact — the new
- *   factory is a stricter outer gate, not a replacement, and the inline map
- *   continues to silently cap per-email attempts without revealing rate
- *   limiting (to block enumeration).
+ *   tiers). The inline `forgotPwLimit` (Redis-first) still silently caps
+ *   per-email attempts without revealing rate limiting (to block enumeration).
  */
 
 import crypto from 'crypto';
 import type { Router } from 'express';
-import { createPasswordResetRateLimit } from '../lib/rate-limiting';
+import { createEmailWindowLimit, createPasswordResetRateLimit } from '../lib/rate-limiting';
 import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail } from '../lib/email';
 import { escapeHtml } from '../lib/helpers/sanitize';
 
@@ -61,14 +59,10 @@ export default function createEmailAuthRoutes(deps: any): Router {
   });
 
   // Per-email rate limiting for forgot-password (3 requests per 60 seconds)
-  const _forgotPwLimits = new Map();
-  const FORGOT_PW_WINDOW = 60_000;
-  const FORGOT_PW_MAX = 3;
+  const forgotPwLimit = createEmailWindowLimit(config, { redis: deps.redis, scope: 'forgot-pw-email', max: 3, windowMs: 60_000 });
 
   // Per-email rate limiting for resend-verification (3 requests per 5 minutes)
-  const _resendVerifyLimits = new Map();
-  const RESEND_VERIFY_WINDOW = 5 * 60_000;
-  const RESEND_VERIFY_MAX = 3;
+  const resendVerifyLimit = createEmailWindowLimit(config, { redis: deps.redis, scope: 'resend-verify-email', max: 3, windowMs: 5 * 60_000 });
 
   const router = express.Router();
 
@@ -87,17 +81,9 @@ export default function createEmailAuthRoutes(deps: any): Router {
         const successMsg = 'If an account with that email exists, a reset link has been sent';
 
         // Check per-email rate limit (3 requests per 60 seconds)
-        const now = Date.now();
-        const emailKey = cleanEmail.toLowerCase();
-        const entry = _forgotPwLimits.get(emailKey);
-        if (entry && now - entry.resetAt < FORGOT_PW_WINDOW && entry.count >= FORGOT_PW_MAX) {
+        if ((await forgotPwLimit(cleanEmail)).limited) {
           // Still return 200 to not reveal rate limiting
           return sendSuccess(res, { message: successMsg });
-        }
-        if (!entry || now - entry.resetAt >= FORGOT_PW_WINDOW) {
-          _forgotPwLimits.set(emailKey, { count: 1, resetAt: now });
-        } else {
-          entry.count += 1;
         }
 
         const user = await stores.emailTokens.findUserByEmail(cleanEmail);
@@ -117,7 +103,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
         await stores.emailTokens.createResetToken(user.id, tokenHash);
 
         const resetUrl = `${config.PUBLIC_ORIGIN}/reset-password?token=${resetToken}`;
-        const sent = await sendPasswordResetEmail({ to: cleanEmail, username: user.username, resetUrl, config, log });
+        const sent = await sendPasswordResetEmail({ to: cleanEmail, username: user.username, resetUrl, config, log, redis: deps.redis });
         if (!sent) {
           // The response stays identical so it cannot reveal accounts. sendEmail has already logged
           // the provider error; this line says which request lost its reset mail.
@@ -253,22 +239,15 @@ export default function createEmailAuthRoutes(deps: any): Router {
       if (user.emailVerifiedAt) return sendError(res, 400, 'Email already verified', ErrorCodes.INVALID_INPUT);
 
       // Per-email rate limiting (separate from global endpoint limit)
-      const emailKey = user.email.toLowerCase();
-      const now = Date.now();
-      const attempts = _resendVerifyLimits.get(emailKey) || [];
-      const recentAttempts = attempts.filter((t: number) => now - t < RESEND_VERIFY_WINDOW);
-      if (recentAttempts.length >= RESEND_VERIFY_MAX) {
+      const resendLimit = await resendVerifyLimit(user.email);
+      if (resendLimit.limited) {
         return sendError(
           res,
           429,
-          `Too many verification emails sent to this address. Try again in ${Math.ceil((recentAttempts[0] + RESEND_VERIFY_WINDOW - now) / 1000)}s`,
+          `Too many verification emails sent to this address. Try again in ${Math.ceil(resendLimit.resetMs / 1000)}s`,
           ErrorCodes.RATE_LIMITED,
         );
       }
-      if (_resendVerifyLimits.size >= 10_000) {
-        _resendVerifyLimits.delete(_resendVerifyLimits.keys().next().value);
-      }
-      _resendVerifyLimits.set(emailKey, [...recentAttempts, now]);
 
       // Invalidate old tokens for this address only; a pending email-change
       // link for another address stays live.
@@ -283,7 +262,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
         config.EMAIL_VERIFY_TOKEN_TTL_HOURS,
       );
       const verifyUrl = `${config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
-      const sent = await sendVerificationEmail({ to: user.email, username: user.username, verifyUrl, config, log });
+      const sent = await sendVerificationEmail({ to: user.email, username: user.username, verifyUrl, config, log, redis: deps.redis });
       if (!sent) {
         return sendError(res, 503, 'We could not send the verification email. Try again in a few minutes.', ErrorCodes.SERVICE_UNAVAILABLE);
       }
@@ -294,29 +273,6 @@ export default function createEmailAuthRoutes(deps: any): Router {
       return sendError(res, 500, 'Failed to resend verification', ErrorCodes.INTERNAL_ERROR);
     }
   });
-
-  // Cleanup interval for stale forgot-password rate limit entries (every 60 seconds)
-  const cleanupInterval = setInterval(() => {
-    const now = Date.now();
-    for (const [emailKey, entry] of _forgotPwLimits.entries()) {
-      if (now - entry.resetAt >= FORGOT_PW_WINDOW) {
-        _forgotPwLimits.delete(emailKey);
-      }
-    }
-    // Prune expired resend-verification entries (no separate timer needed)
-    for (const [emailKey, timestamps] of _resendVerifyLimits.entries()) {
-      const active = timestamps.filter((t: number) => now - t < RESEND_VERIFY_WINDOW);
-      if (active.length === 0) {
-        _resendVerifyLimits.delete(emailKey);
-      } else {
-        _resendVerifyLimits.set(emailKey, active);
-      }
-    }
-  }, FORGOT_PW_WINDOW);
-
-  if (deps.state?.timers) {
-    deps.state.timers.push(cleanupInterval);
-  }
 
   /**
    * Resolve the reset token to a userId by consuming its DB row.
