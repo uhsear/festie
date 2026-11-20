@@ -4,9 +4,17 @@ import {
   isValidQuietWindow,
   describeScheduleNotice,
   mustSeeOptionLabel,
+  NOTIFICATION_TYPE_ROWS,
 } from './notificationSettings';
+import { NOTIFICATION_TOPIC_COPY } from '../constants/accountSettings';
 
 describe('notificationSettings', () => {
+  it('names the global crew and schedule rows from the per-festival topic labels', () => {
+    const label = (key: string) => NOTIFICATION_TYPE_ROWS.find((r) => r.key === key)?.label;
+    expect(label('crewUpdates')).toBe(NOTIFICATION_TOPIC_COPY.topicLabels.crew);
+    expect(label('scheduleChanges')).toBe(NOTIFICATION_TOPIC_COPY.topicLabels.schedule);
+  });
+
   it('hides the three crew rows that have no sender yet', () => {
     const keys = visibleNotificationRows().map((r) => r.key);
     expect(keys).toHaveLength(8);
