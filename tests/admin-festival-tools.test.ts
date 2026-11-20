@@ -66,7 +66,10 @@ function baseDeps(overrides: any = {}) {
     state: { onlineUsers: new Map() },
     ...overrides,
   };
-  deps.festivalAccess = () => deps.adminAuth;
+  deps.festivalAccess = ({ param = 'id' }: any = {}) => (req: any, res: any, next: any) => {
+    req.festivalId = req.params[param];
+    return deps.adminAuth(req, res, next);
+  };
   return deps;
 }
 

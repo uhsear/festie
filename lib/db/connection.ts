@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { Pool } from 'pg';
+import { Pool, type PoolClient } from 'pg';
 import { createLogger } from '../logger.js';
 
 // Simple LRU cache for parsed JSON objects to reduce allocation
@@ -16,20 +16,20 @@ const txLog = createLogger('db:connection');
  * @param fn - Async function that receives a client
  * @returns Result of fn
  */
-export async function withTransaction(pool: Pool, fn: (client: any) => Promise<any>): Promise<any> {
+export async function withTransaction<T>(pool: Pool, fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const result = await fn(client);
     await client.query('COMMIT');
     return result;
-  } catch (err: any) {
+  } catch (err) {
     // ROLLBACK failing (e.g. connection already dropped) must never mask the
     // real error that triggered the rollback — log it separately and rethrow err.
     try {
       await client.query('ROLLBACK');
-    } catch (rollbackErr: any) {
-      txLog.error('withTransaction:rollback-failed', { rollbackError: rollbackErr?.message, originalError: err?.message });
+    } catch (rollbackErr) {
+      txLog.error('withTransaction:rollback-failed', { rollbackError: (rollbackErr as Error)?.message, originalError: (err as Error)?.message });
     }
     throw err;
   } finally {
@@ -46,13 +46,14 @@ const RETRYABLE_TX_CODES = new Set(['40P01', '40001']);
  * and any other error, is rethrown unchanged: a route maps it to 503 "Festie is busy. Try again."
  * Global lock order for every writer: festivals in id order, then artists in id order.
  */
-export async function withTransactionRetry(pool: Pool, fn: (client: any) => Promise<any>, attempts = 3): Promise<any> {
+export async function withTransactionRetry<T>(pool: Pool, fn: (client: PoolClient) => Promise<T>, attempts = 3): Promise<T> {
   for (let attempt = 1; ; attempt++) {
     try {
       return await withTransaction(pool, fn);
-    } catch (err: any) {
-      if (attempt >= attempts || !RETRYABLE_TX_CODES.has(err?.code)) throw err;
-      txLog.warn('withTransactionRetry:retry', { code: err.code, attempt });
+    } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      if (attempt >= attempts || !code || !RETRYABLE_TX_CODES.has(code)) throw err;
+      txLog.warn('withTransactionRetry:retry', { code, attempt });
       await new Promise((resolve) => setTimeout(resolve, 20 * attempt + Math.floor(Math.random() * 30)));
     }
   }
@@ -89,7 +90,7 @@ export function parseJsonObject(value: any, fallback: any = {}): any {
   }
 }
 
-export function serializeJson(value: any, fallback: any = {}): string {
+export function serializeJson(value: unknown, fallback: unknown = {}): string {
   return JSON.stringify(value ?? fallback);
 }
 
@@ -99,7 +100,7 @@ export function serializeJson(value: any, fallback: any = {}): string {
  * @returns {pool} PostgreSQL connection pool
  * @throws If pool cannot be created
  */
-export function openPlannerDatabase({ databaseUrl, log = null, poolSize = 15, poolMin = 2 }: { databaseUrl: string; log?: any; poolSize?: number; poolMin?: number }): { pool: Pool } {
+export function openPlannerDatabase({ databaseUrl, log = null, poolSize = 15, poolMin = 2 }: { databaseUrl: string; log?: { error?: (...args: unknown[]) => void } | null; poolSize?: number; poolMin?: number }): { pool: Pool } {
   const pool = new Pool({
     connectionString: databaseUrl,
     max: poolSize,
@@ -112,7 +113,7 @@ export function openPlannerDatabase({ databaseUrl, log = null, poolSize = 15, po
   // Optional error logging
   if (log?.error) {
     pool.on('error', (err: Error) => {
-      log.error('Unexpected error on idle client', err);
+      log.error?.('Unexpected error on idle client', err);
     });
   }
 

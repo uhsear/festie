@@ -1007,12 +1007,16 @@ describe('routes/spotify.js', () => {
     const layer = router.stack.find((l) => l.route?.path === '/spotify/preview/:setId');
     assert.ok(layer?.route, 'should have /spotify/preview/:setId route');
     const { stack } = layer.route;
-    return stack[stack.length - 1]!.handle as (req: unknown, res: unknown) => Promise<void>;
+    const handle = stack[stack.length - 1]!.handle as (req: unknown, res: unknown) => Promise<void>;
+    // validateParams runs earlier in the stack; set its output by hand since only the last handler is called.
+    return (req: { params: unknown }, res: unknown) => handle({ ...req, validatedParams: req.params }, res);
   }
 
   function makeDeps(overrides: Record<string, unknown> = {}) {
     return {
       express,
+      schemas: { setIdParams: {} },
+      validateParams: () => () => {},
       config: {
         SPOTIFY_CLIENT_ID: 'test-id',
         SPOTIFY_CLIENT_SECRET: 'test-secret',
