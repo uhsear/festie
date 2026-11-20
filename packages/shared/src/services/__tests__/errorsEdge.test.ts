@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mapErrorToUserMessage, isEdgeUnavailable, canQueueOnEdgeError } from '../errors';
+import { mapErrorToUserMessage, isEdgeUnavailable, canQueueOnEdgeError, classifyReplayFailure, MAX_RETRIES, MAX_EDGE_RETRIES } from '../errors';
 
 const apiErr = (o: Record<string, unknown>) =>
   Object.assign(new Error(String(o.message)), { name: 'ApiClientError', ...o });
@@ -52,3 +52,22 @@ describe('edge 5xx queueing', () => {
   });
 });
 
+
+describe('classifyReplayFailure', () => {
+  it('holds on a network error and on an edge 5xx below the cap', () => {
+    expect(classifyReplayFailure(apiErr({ message: 'x', status: 0, isNetworkError: true }), {})).toBe('hold-network');
+    expect(classifyReplayFailure(apiErr({ message: 'x', status: 502 }), { edgeRetries: MAX_EDGE_RETRIES - 2 })).toBe('hold-edge');
+  });
+  it('treats an exhausted edge 5xx, any other 4xx and 409 as permanent', () => {
+    expect(classifyReplayFailure(apiErr({ message: 'x', status: 502 }), { edgeRetries: MAX_EDGE_RETRIES - 1 })).toBe('permanent');
+    expect(classifyReplayFailure(apiErr({ message: 'x', status: 400 }), {})).toBe('permanent');
+    expect(classifyReplayFailure(apiErr({ message: 'x', status: 409 }), {})).toBe('permanent');
+  });
+  it('waits out a 429 without consuming a retry', () => {
+    expect(classifyReplayFailure(apiErr({ message: 'x', status: 429 }), { retries: MAX_RETRIES })).toBe('rate-limited');
+  });
+  it('retries a plain 500 until MAX_RETRIES, then goes permanent', () => {
+    expect(classifyReplayFailure(apiErr({ message: 'x', status: 500 }), { retries: MAX_RETRIES - 2 })).toBe('transient');
+    expect(classifyReplayFailure(apiErr({ message: 'x', status: 500 }), { retries: MAX_RETRIES - 1 })).toBe('permanent');
+  });
+});

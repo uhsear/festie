@@ -2,10 +2,8 @@ import Redis from 'ioredis';
 import { loadConfig } from './config.js';
 
 // Config centralized — all values flow through lib/config.js DEFAULTS
-const _cfg = loadConfig();
-const REDIS_URL = _cfg.REDIS_URL;
-const REDIS_PREFIX = _cfg.REDIS_PREFIX;
-const REDIS_ENABLED = _cfg.REDIS_ENABLED;
+let _loaded: ReturnType<typeof loadConfig> | undefined;
+const cfg = () => (_loaded ??= loadConfig());
 
 // ─── Connection tuning ───────────────────────────────────────────────────────
 
@@ -67,11 +65,11 @@ function isTransientRedisError(err: any): boolean {
  * are reachable in bounded time rather than being bypassed by a hung promise.
  */
 function createRedisClient(opts: any = {}): Redis | null {
-  const enabled = opts.enabled !== undefined ? opts.enabled : REDIS_ENABLED;
+  const enabled = opts.enabled !== undefined ? opts.enabled : cfg().REDIS_ENABLED;
   if (!enabled) return null;
 
   const log = opts.log || { info() {}, warn() {}, error() {} };
-  const client = new Redis(REDIS_URL, {
+  const client = new Redis(cfg().REDIS_URL, {
     // WHY THESE OPTIONS — single-worker backend where Redis backs rate
     // limiting, sessions, the Socket.IO adapter, presence and the
     // live-location cache:
@@ -109,10 +107,10 @@ function createRedisClient(opts: any = {}): Redis | null {
     reconnectOnError: shouldReconnectOnError,
     lazyConnect: false,
     enableReadyCheck: true,
-    keyPrefix: REDIS_PREFIX,
+    keyPrefix: cfg().REDIS_PREFIX,
   });
 
-  client.on('connect', () => log.info('redis connected', { url: REDIS_URL.replace(/\/\/.*@/, '//***@') }));
+  client.on('connect', () => log.info('redis connected', { url: cfg().REDIS_URL.replace(/\/\/.*@/, '//***@') }));
   client.on('error', (err: any) => {
     // Expected reconnect churn is a warn; anything else is a real error.
     const level = isTransientRedisError(err) ? 'warn' : 'error';
@@ -502,6 +500,4 @@ export {
   shouldReconnectOnError,
   isTransientRedisError,
   COMMAND_TIMEOUT_MS,
-  REDIS_ENABLED,
-  REDIS_PREFIX,
 };

@@ -151,6 +151,7 @@ import {
   metricsHandler,
   startMetricsSampler,
   startMetricsListener,
+  __resetMetricsConfigForTests,
 } from '../lib/metrics.js';
 
 import { createRetryQueue } from '../lib/notifications/retry.js';
@@ -873,6 +874,7 @@ describe('metrics.js', () => {
       if (!sharedMetrics.available) return;
       const originalToken = process.env.METRICS_TOKEN;
       process.env.METRICS_TOKEN = 'test-metrics-token';
+      __resetMetricsConfigForTests();
       try {
         const handler = metricsHandler(sharedMetrics);
         let statusCode: number | undefined;
@@ -906,6 +908,7 @@ describe('metrics.js', () => {
       if (!sharedMetrics.available) return;
       const originalToken = process.env.METRICS_TOKEN;
       process.env.METRICS_TOKEN = 'test-metrics-token';
+      __resetMetricsConfigForTests();
       try {
         const handler = metricsHandler(sharedMetrics);
         let statusCode = 200;
@@ -941,6 +944,7 @@ describe('metrics.js', () => {
       if (!sharedMetrics.available) return;
       const originalToken = process.env.METRICS_TOKEN;
       process.env.METRICS_TOKEN = 'test-metrics-token';
+      __resetMetricsConfigForTests();
       try {
         const handler = metricsHandler(sharedMetrics);
         const headers: Record<string, string> = {};
@@ -977,6 +981,7 @@ describe('metrics.js', () => {
       if (!sharedMetrics.available) return;
       const originalToken = process.env.METRICS_TOKEN;
       process.env.METRICS_TOKEN = 'test-metrics-token';
+      __resetMetricsConfigForTests();
       // Monkey-patch registry to throw
       const origMetrics = sharedMetrics.registry!.metrics;
       sharedMetrics.registry!.metrics = async () => {

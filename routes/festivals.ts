@@ -10,7 +10,7 @@ import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
 import { ArtistError } from '../lib/db/stores/artists.js';
-import { lockFestivalAny } from '../lib/db/stores/lineup-imports.js';
+import { lockFestivalAny } from '../lib/db/stores/festival-lock.js';
 import { withTransactionRetry } from '../lib/db/connection.js';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';

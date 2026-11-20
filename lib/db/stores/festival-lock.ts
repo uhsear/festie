@@ -4,6 +4,15 @@
 // Its own module so the artist store can take the festival lock without importing lineup-imports,
 // which imports artist-refs, which imports the artist store.
 
+/** The locked festival row (truthy), or null when it does not exist or is soft-deleted. */
+export async function lockFestival(client: any, festivalId: string) {
+  const { rows } = await client.query(
+    'SELECT id, published_at FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+    [festivalId],
+  );
+  return (rows[0] as { id: string; published_at: Date | null } | undefined) ?? null;
+}
+
 /**
  * Like lockFestival, but it also locks a soft-deleted festival. Artist sync, merge and the
  * backfill use it so a restored festival shows current copies with no rebuild.
