@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
 import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
+import { MAX_CREW_LIST_ITEMS } from '../lib/helpers/crew-list-cap';
 import { randomUUID } from 'crypto';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
@@ -45,7 +46,10 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         const items = await stores.crewPacking.listByCrew(crewId);
         return sendSuccess(res, { items });
       } catch (err) {
-        log.error('get packing error', { error: (err as NodeJS.ErrnoException).message, crewId: (req.validatedParams as Params)?.crewId });
+        log.error('get packing error', {
+          error: (err as NodeJS.ErrnoException).message,
+          crewId: (req.validatedParams as Params)?.crewId,
+        });
         return sendError(res, 500, 'Failed to list packing items', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -65,9 +69,9 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         const { label, claimed } = req.validatedBody as z.infer<typeof schemas.packingCreate>;
         const userId = req.user.userId;
 
-
         const count = await stores.crewPacking.countByCrew(crewId);
-        if (count >= 200) return sendError(res, 409, 'Max 200 packing items per crew', ErrorCodes.CONFLICT);
+        if (count >= MAX_CREW_LIST_ITEMS)
+          return sendError(res, 409, `Max ${MAX_CREW_LIST_ITEMS} packing items per crew`, ErrorCodes.CONFLICT);
 
         const item = await stores.crewPacking.create({
           id: 'pack-' + randomUUID(),
@@ -108,7 +112,6 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
         const userId = req.user.userId;
 
-
         const current = await stores.crewPacking.listByCrew(crewId);
         const seen = new Set(current.map((i: any) => String(i.label).trim().toLowerCase()));
         const kept: string[] = [];
@@ -122,8 +125,13 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         if (kept.length === 0) return sendSuccess(res, { items: [] });
 
         const count = await stores.crewPacking.countByCrew(crewId);
-        if (count + kept.length > 200) {
-          return sendError(res, 409, 'A crew list can hold 200 items. Remove some first.', ErrorCodes.CONFLICT);
+        if (count + kept.length > MAX_CREW_LIST_ITEMS) {
+          return sendError(
+            res,
+            409,
+            `A crew list can hold ${MAX_CREW_LIST_ITEMS} items. Remove some first.`,
+            ErrorCodes.CONFLICT,
+          );
         }
 
         const items = await stores.crewPacking.createMany(crewId, userId, kept);
@@ -159,7 +167,6 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
         const itemId = sanitizeIdentifier((req.validatedParams as Params).itemId);
         const userId = req.user.userId;
-
 
         const existing = await stores.crewPacking.getById(itemId);
         if (!existing || existing.crew_id !== crewId) {
@@ -226,7 +233,6 @@ export default function createCrewPackingRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId);
         const itemId = sanitizeIdentifier((req.validatedParams as Params).itemId);
         const userId = req.user.userId;
-
 
         const existing = await stores.crewPacking.getById(itemId);
         if (!existing || existing.crew_id !== crewId) {
