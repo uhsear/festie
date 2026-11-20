@@ -152,7 +152,9 @@ export default function createLineupImportRoute(deps: any) {
   async function loadRequest(req: any, res: any) {
     const validation = lineupImportRequestSchema.safeParse(req.body);
     if (!validation.success) {
-      sendError(res, 400, 'Invalid import payload', ErrorCodes.INVALID_INPUT);
+      sendError(res, 400, 'Invalid import payload', ErrorCodes.VALIDATION_ERROR, {
+        fields: validation.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
+      });
       return null;
     }
     const festivalId = req.festivalId;

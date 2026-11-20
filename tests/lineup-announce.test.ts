@@ -44,8 +44,9 @@ function build({
     rateLimit: () => (_req: any, _res: any, next: any) => next(),
     sanitizeIdentifier: (v: string) => v,
     sendSuccess: (res: any, data: any) => res.json({ success: true, data }),
-    sendError: (res: any, status: number, message: string) => res.status(status).json({ success: false, error: message }),
-    ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+    sendError: (res: any, status: number, message: string, code?: string) =>
+      res.status(status).json({ success: false, error: message, code }),
+    ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', DRAFT: 'DRAFT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
     stores: { auditLog: { insert: async (row: any) => calls.audit.push(row) } },
     getFestivalById: async (id: string) => ({ id, name, publishedAt }),
     getRequestIp: () => '127.0.0.1',
@@ -119,6 +120,7 @@ describe('lineup-announce route', () => {
     const res = await request(app).post('/api/v1/admin/festivals/f1/lineup-announcement');
     assert.equal(res.status, 409);
     assert.match(res.body.error, /Publish the festival/);
+    assert.equal(res.body.code, 'DRAFT');
     assert.equal(calls.sendLineupDrop, 0);
   });
 

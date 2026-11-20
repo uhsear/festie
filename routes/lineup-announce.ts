@@ -64,7 +64,7 @@ export default function createLineupAnnounceRoute(deps: any) {
       const festival = await getFestivalById(festivalId);
       if (festival && !festival.publishedAt) {
         // The push deep-links to the festival, which attendees cannot open while it is a draft.
-        return sendError(res, 409, 'Publish the festival before you announce its lineup.', ErrorCodes.INVALID_INPUT);
+        return sendError(res, 409, 'Publish the festival before you announce its lineup.', ErrorCodes.DRAFT);
       }
       const { festivalName, recipients, followers, priorAttendees } = await reengagementExecutor.countLineupDrop(festivalId);
       if (!festivalName) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
