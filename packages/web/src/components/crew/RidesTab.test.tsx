@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RidesTab from './RidesTab';
 
 const { state } = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
@@ -97,6 +97,30 @@ describe('RidesTab', () => {
   it('keeps rides already in the store visible when the refresh fails', async () => {
     setup([offer({})], false, 'fest-1', vi.fn().mockRejectedValue(offlineError()));
     expect(await screen.findByRole('button', { name: 'Take a seat' })).toBeTruthy();
+    expect(screen.queryByText("Couldn't load rides")).toBeNull();
+    expect(await screen.findByText(/Couldn't refresh/)).toBeTruthy();
+  });
+
+  it('retries a failed refresh through the stale note', async () => {
+    const loadRides = vi.fn().mockRejectedValueOnce(offlineError()).mockResolvedValue(undefined);
+    setup([offer({})], false, 'fest-1', loadRides);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByText(/Couldn't refresh/)).toBeNull());
+    expect(loadRides).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a Retry that settles after the crew changed', async () => {
+    let rejectRetry: (e: unknown) => void = () => {};
+    const loadRides = vi
+      .fn()
+      .mockRejectedValueOnce(offlineError())
+      .mockImplementationOnce(() => new Promise((_, reject) => (rejectRetry = reject)))
+      .mockResolvedValue(undefined);
+    const view = setup([], false, 'fest-1', loadRides);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    view.rerender(<RidesTab crewId="crew-2" currentUserId="me" isOwner={false} />);
+    rejectRetry(serverError());
+    expect(await screen.findByText('No rides yet')).toBeTruthy();
     expect(screen.queryByText("Couldn't load rides")).toBeNull();
   });
 

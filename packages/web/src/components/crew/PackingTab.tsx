@@ -64,6 +64,8 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
   // tracked here rather than pulled from the store.
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped by Retry so the load effect (and its cancelled flag) handles the retry too.
+  const [reloadKey, setReloadKey] = useState(0);
   const { hiddenIds, remove } = useUndoableRemove(
     (itemId) => deletePackingItem(crewId, itemId),
     "Couldn't remove item. Try again.",
@@ -88,7 +90,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [crewId, loadPacking]);
+  }, [crewId, loadPacking, reloadKey]);
 
   function reset() {
     setLabel('');
@@ -195,13 +197,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
           description={loadError}
           cta={{
             label: 'Retry',
-            onClick: () => {
-              setLoading(true);
-              setLoadError(null);
-              loadPacking(crewId)
-                .catch((err) => setLoadError(loadErrorMessage(err, PACKING_LOAD_FAILED)))
-                .finally(() => setLoading(false));
-            },
+            onClick: () => setReloadKey((k) => k + 1),
           }}
         />
       ) : visibleItems.length === 0 ? (

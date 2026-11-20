@@ -22,6 +22,7 @@ import EmptyState from '../ui/EmptyState';
 import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
 import IconButton from '../ui/IconButton';
 import SyncMarker from './SyncMarker';
+import StaleNote from './StaleNote';
 import { useUndoableRemove } from './useUndoableRemove';
 import { loadErrorMessage } from './loadErrorMessage';
 import { Car, MapPin, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
@@ -88,6 +89,8 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
   // The store's error is shared across crew tabs, so the load state lives here (as in PackingTab).
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped by Retry so the load effect (and its cancelled flag) handles the retry too.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     if (!crewId) {
@@ -107,7 +110,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [crewId, loadRides]);
+  }, [crewId, loadRides, reloadKey]);
 
   const myName = members.find((m) => m.userId === currentUserId);
   const myDisplayName = myName?.name || myName?.username || '';
@@ -317,13 +320,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
           description={loadError}
           cta={{
             label: 'Retry',
-            onClick: () => {
-              setLoading(true);
-              setLoadError(null);
-              loadRides(crewId)
-                .catch((err) => setLoadError(loadErrorMessage(err, RIDES_LOAD_FAILED)))
-                .finally(() => setLoading(false));
-            },
+            onClick: () => setReloadKey((k) => k + 1),
           }}
         />
       ) : visibleOffers.length === 0 ? (
@@ -334,6 +331,8 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
           cta={{ label: 'Offer a ride', onClick: openCreate }}
         />
       ) : (
+        <>
+        <StaleNote show={!!loadError} onRetry={() => setReloadKey((k) => k + 1)} />
         <ul className="space-y-2">
           {visibleOffers.map((offer) => {
             // A queued create has no server id yet, so it cannot be removed or edited.
@@ -410,6 +409,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
             );
           })}
         </ul>
+        </>
       )}
     </div>
   );

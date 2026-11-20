@@ -114,6 +114,8 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
   // tracked here rather than pulled from the store.
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped by Retry so the load effect (and its cancelled flag) handles the retry too.
+  const [reloadKey, setReloadKey] = useState(0);
 
   // Load once per crew. Offline this resolves from the persisted read-cache.
   useEffect(() => {
@@ -134,7 +136,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
     return () => {
       cancelled = true;
     };
-  }, [crewId, loadStatuses]);
+  }, [crewId, loadStatuses, reloadKey]);
 
   // Realtime crew:status-updated patching is wired centrally in
   // useRealtimeSync (it owns the single shared socket), so this component just
@@ -425,13 +427,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
           description={loadError}
           cta={{
             label: 'Retry',
-            onClick: () => {
-              setLoading(true);
-              setLoadError(null);
-              loadStatuses(crewId)
-                .catch((err) => setLoadError(loadErrorMessage(err, STATUS_LOAD_FAILED)))
-                .finally(() => setLoading(false));
-            },
+            onClick: () => setReloadKey((k) => k + 1),
           }}
         />
       ) : (
