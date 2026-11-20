@@ -98,8 +98,7 @@ function setup(options: { marks?: Record<string, string[]>; pickers?: Record<str
     sanitizeFestivalPayload: (input: any, ex: any) =>
       sanitizeFestivalPayload(input, ex, config, (prefix: string) => `${prefix}-id${++counter}`),
     stores: {
-      pool: { query: async () => ({ rows: [{ count: String(options.picks ?? 0) }] }) },
-      festivals: { update },
+      festivals: { update, countOnSets: async (_table: string, setIds: string[]) => (setIds.length ? (options.picks ?? 0) : 0) },
       profiles: { interestedProfilesByEntry: interested, pickersBySet },
     },
   };

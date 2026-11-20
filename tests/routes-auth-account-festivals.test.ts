@@ -9,6 +9,7 @@
  */
 
 import assert from 'node:assert/strict';
+import createFestivalsStore from '../lib/db/stores/festivals.js';
 import { describe, test, mock, beforeEach, afterEach } from 'node:test';
 import request from 'supertest';
 import express from 'express';
@@ -237,6 +238,13 @@ function makeMockDeps(overrides: any = {}) {
   if (overrides.stores) {
     deps.stores = { ...deps.stores, ...overrides.stores };
   }
+
+  // The routes reach SQL through the festivals store. Run the real one over the test's mock pool; mocks win.
+  const livePool: any = {
+    query: (...args: any[]) => deps.stores.pool.query(...args),
+    connect: () => deps.stores.pool.connect(),
+  };
+  deps.stores.festivals = { ...createFestivalsStore(livePool, {}), ...deps.stores.festivals };
 
   return deps;
 }

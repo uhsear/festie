@@ -75,11 +75,11 @@ function build() {
     rateLimit: pass,
     stores: {
       festivals: {
+        countOnSets: async () => 0,
         update: mock.fn(async (id: string, data: any) => ({ ...existing, id, ...data })),
       },
       profiles: { pickersBySet },
       timeReleases: { releasedDates: async () => new Set<string>() },
-      pool: { query: async () => ({ rows: [{ count: '0' }] }) },
     },
     emitter: { festivalCreated: mock.fn(), festivalUpdated: mock.fn(), scheduleChanged: mock.fn() },
     schemas: {},

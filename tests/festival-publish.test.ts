@@ -104,12 +104,12 @@ describe('set times: PUT and publish send no festival-wide alert', () => {
       rateLimit: pass,
       stores: {
         festivals: {
+          countOnSets: async () => 0,
           update: mock.fn(async (id: string, data: any) => ({ ...existing, id, ...data })),
           publish: mock.fn(async () => ({ publishedAt: '2026-11-01T00:00:00.000Z', slug: 'fest-2026' })),
         },
         profiles: { pickersBySet },
         timeReleases: { releasedDates: mock.fn(async () => new Set(released)) },
-        pool: { query: async () => ({ rows: [{ count: '0' }] }) },
       },
       emitter: { festivalCreated: mock.fn(), festivalUpdated: mock.fn(), scheduleChanged: mock.fn() },
       schemas: {},

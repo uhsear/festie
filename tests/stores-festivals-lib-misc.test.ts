@@ -995,7 +995,12 @@ describe('routes/spotify.js', () => {
 
   beforeEach(async () => {
     const mod = await import('../routes/spotify.js');
-    createSpotifyRoutes = mod.default;
+    const { default: createStore } = await import('../lib/db/stores/festivals.js');
+    // The route reads the set through the festivals store; build the real one over each test's mock pool.
+    createSpotifyRoutes = (deps) => {
+      deps.stores.festivals ??= createStore(deps.stores.pool, {});
+      return mod.default(deps);
+    };
   });
 
   function previewHandler(router: ReturnType<typeof createSpotifyRoutes>) {
