@@ -1,4 +1,4 @@
-import type { Pool } from 'pg';
+import type { Pool, QueryResultRow } from 'pg';
 import { withTransaction } from '../connection';
 import { buildUpdate } from '../utils';
 import { createLogger } from '../../logger.js';
@@ -11,13 +11,39 @@ import { createCrewDaysStore } from './crews-days.js';
 
 const log = createLogger('db:crews');
 
-export default function createCrewsStore(pool: Pool, _utils: any) {
+type NewCrew = {
+  id: string;
+  festivalId: string;
+  name: string;
+  createdBy: string;
+  inviteCode: string;
+  inviteExpiresAt?: string | null;
+  maxMembers: number;
+  reformedFrom?: string | null;
+  totemName?: string | null;
+  totemEmoji?: string | null;
+};
+
+type CrewUpdate = {
+  id: string;
+  name: string;
+  maxMembers: number;
+  totemName?: string | null;
+  totemEmoji?: string | null;
+  inviteLocked?: boolean;
+};
+
+type NewCrewMember = { crewId: string; userId: string; role: string };
+
+export default function createCrewsStore(pool: Pool, _utils: unknown) {
   const CREW_COLUMNS =
     'id, festival_id AS "festivalId", name, created_by AS "createdBy", invite_code AS "inviteCode", invite_expires_at AS "inviteExpiresAt", max_members AS "maxMembers", reformed_from AS "reformedFrom", home_base_location AS "homeBaseLocation", home_base_time AS "homeBaseTime", home_base_updated_at AS "homeBaseUpdatedAt", photo_album_url AS "photoAlbumUrl", totem_name AS "totemName", totem_emoji AS "totemEmoji", invite_locked AS "inviteLocked", home_base_plan_b AS "homeBasePlanB", created_at AS "createdAt", updated_at AS "updatedAt"';
 
   // Phase 7: Crew system store
-  const crews: any = {
-    async create(data: any) {
+  const crews = {
+    meetingPoints: createMeetingPointsStore(pool),
+
+    async create(data: NewCrew) {
       await pool.query(
         `
         INSERT INTO
@@ -72,7 +98,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
      * Create a crew and add the owner as a member in a single transaction.
      * Prevents orphaned crews if addMember fails after create succeeds.
      */
-    async createWithOwner(data: any) {
+    async createWithOwner(data: NewCrew) {
       return withTransaction(pool, async (client) => {
         await client.query(
           `
@@ -134,7 +160,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       });
     },
 
-    async update(data: any) {
+    async update(data: CrewUpdate) {
       const sets: Array<[string, unknown]> = [
         ['name', data.name],
         ['max_members', data.maxMembers],
@@ -289,7 +315,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
      * Without a cap (owner creation, reform) it's a plain insert.
      */
     async addMember(
-      data: any,
+      data: NewCrewMember,
       maxMembers?: number,
       opts?: { inviteJoin?: boolean },
     ): Promise<'added' | 'full' | 'locked'> {
@@ -356,8 +382,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
      * Returns a Map keyed by crewId, each value an array of member rows.
      * Used by the crew list endpoint to avoid N+1 queries.
      */
-    async getMembersForCrews(crewIds: string[]): Promise<Map<string, any[]>> {
-      const membersByCrewId = new Map<string, any[]>();
+    async getMembersForCrews(crewIds: string[]): Promise<Map<string, QueryResultRow[]>> {
+      const membersByCrewId = new Map<string, QueryResultRow[]>();
       if (crewIds.length === 0) return membersByCrewId;
 
       const result = await pool.query(
@@ -447,7 +473,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
       const owned = await pool.query("SELECT crew_id FROM crew_members WHERE user_id = $1 AND role = 'owner'", [
         userId,
       ]);
-      const ownedIds: string[] = owned.rows.map((r: any) => r.crew_id);
+      const ownedIds: string[] = owned.rows.map((r) => r.crew_id);
       if (ownedIds.length === 0) return handedOver;
       const members = await pool.query(
         `
@@ -468,7 +494,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
         [ownedIds, userId],
       );
       for (const crewId of ownedIds) {
-        const candidates: string[] = members.rows.filter((r: any) => r.crew_id === crewId).map((r: any) => r.user_id);
+        const candidates: string[] = members.rows.filter((r) => r.crew_id === crewId).map((r) => r.user_id);
         const choice = choices.find((c) => c.crewId === crewId)?.newOwnerId;
         if (choice && candidates.includes(choice)) {
           candidates.splice(candidates.indexOf(choice), 1);
@@ -480,8 +506,8 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
             await crews.transferOwnership(crewId, userId, candidate);
             newOwnerId = candidate;
             break;
-          } catch (err: any) {
-            if (err?.code !== '23505') throw err;
+          } catch (err) {
+            if ((err as { code?: string } | null)?.code !== '23505') throw err;
           }
         }
         if (newOwnerId) handedOver.push({ crewId, newOwnerId });
@@ -556,7 +582,7 @@ export default function createCrewsStore(pool: Pool, _utils: any) {
   return {
     crews,
     topicSubscriptions: createTopicSubscriptionsStore(pool),
-    meetingPoints: createMeetingPointsStore(pool),
+    meetingPoints: crews.meetingPoints,
     crewPacking: createCrewPackingStore(pool),
     crewRides: createCrewRidesStore(pool),
     crewStatus: createCrewStatusStore(pool),
