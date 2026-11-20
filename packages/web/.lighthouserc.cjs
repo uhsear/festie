@@ -12,6 +12,9 @@
  * Instead we build the static SPA and serve the `dist/` output with `lhci`'s
  * built-in static server, then audit the public, fully client-rendered routes
  * (home + the auth surfaces). This is deterministic and needs no backend.
+ *
+ * This file audits the desktop preset. `.lighthouserc.mobile.cjs` reuses it with
+ * Lighthouse's default mobile emulation; CI runs both configs.
  */
 module.exports = {
   ci: {
@@ -22,10 +25,14 @@ module.exports = {
       // index.html for deep links like /login, otherwise they 404.
       isSinglePageApplication: true,
       // Public routes that render fully client-side (no API / no auth).
+      // /f/<slug> is deliberately absent: the backend renders it, so the static
+      // server would audit the SPA shell instead of the festival page.
       url: [
         'http://localhost/index.html',
         'http://localhost/login',
         'http://localhost/register',
+        'http://localhost/forgot-password',
+        'http://localhost/reset-password',
       ],
       numberOfRuns: 3,
       settings: {

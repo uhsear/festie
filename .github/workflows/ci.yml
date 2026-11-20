@@ -483,7 +483,7 @@ jobs:
       needs.changes.outputs.web == 'true' &&
       (github.event_name == 'pull_request' || github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/pnpm-setup
@@ -497,7 +497,9 @@ jobs:
           path: packages/web/dist
       - name: Run Lighthouse CI
         working-directory: packages/web
-        run: pnpm exec lhci autorun --config=.lighthouserc.cjs
+        run: |
+          pnpm exec lhci autorun --config=.lighthouserc.cjs
+          pnpm exec lhci autorun --config=.lighthouserc.mobile.cjs
 
   bundle-size:
     # Reuses the web build from `test` (P5); only runs on web/shared changes (P8).
