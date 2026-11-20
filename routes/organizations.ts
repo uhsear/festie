@@ -5,6 +5,8 @@
  * Admin routes for organizations, mounted at /api/v1/admin/organizations behind adminAuth
  * (lib/festival-mounts.ts). Only a platform admin creates or activates an organization, adds an owner,
  * sets verified_at or suspends. Member changes need a recent password, as other destructive admin actions do.
+ * The review queue lives here too: publish requests that wait for a decision, and the attendee alerts that an
+ * organizer's save held. An admin releases a held alert, which sends it, or discards it (plan-v3 6.2).
  */
 
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
@@ -16,6 +18,8 @@ export default function createOrganizationsRoutes(deps: any) {
     express,
     log,
     stores,
+    emitter,
+    festivalAccess,
     schemas,
     validate,
     validateQuery,
@@ -72,6 +76,66 @@ export default function createOrganizationsRoutes(deps: any) {
       return fail(res, error, 'list organizations');
     }
   });
+
+  // What waits for an admin: publish requests (decide with POST /admin/festivals/:id/publish or .../publish/decline)
+  // and held attendee alerts. Declared before '/:id', which would take 'review-queue' for an organization id.
+  router.get('/review-queue', rateLimit(60, 'admin-review-queue'), async (_req: any, res: any) => {
+    try {
+      setNoStore(res);
+      const [requests, held] = await Promise.all([stores.festivalReview.reviewQueue(), stores.festivalReview.listHeld()]);
+      return sendSuccess(res, { requests, held });
+    } catch (error) {
+      return fail(res, error, 'load the review queue');
+    }
+  });
+
+  // Sends the held alerts of a festival once. The delete is the claim, so a second press finds nothing.
+  router.post(
+    '/held-alerts/:festivalId/release',
+    festivalAccess({ action: 'alert.release', param: 'festivalId' }),
+    rateLimit(10, 'admin-held-release'),
+    async (req: any, res: any) => {
+      try {
+        const festivalId = req.festivalId;
+        const { rows, alert } = await stores.festivalReview.claimHeld(festivalId);
+        if (rows === 0) return sendError(res, 404, 'No alerts are held for this festival.', ErrorCodes.NOT_FOUND);
+        const people = new Set<string>([...(alert?.pickersBySet.values() ?? []), ...(alert?.interestedByEntry?.values() ?? [])].flat());
+        const festival = alert ? await stores.festivals.getById(festivalId) : null;
+        if (alert && festival) await emitter.scheduleChanged({ festival, ...alert });
+        await writeAdminAudit(req, res, {
+          action: AUDIT_ACTIONS.FESTIVAL_ALERT_RELEASED,
+          targetType: 'festival',
+          targetId: festivalId,
+          details: { held: rows, sent: festival && alert ? alert.changes.length : 0, people: festival ? people.size : 0 },
+        });
+        return sendSuccess(res, { released: festival && alert ? alert.changes.length : 0, people: festival ? people.size : 0 });
+      } catch (error) {
+        return fail(res, error, 'send the held alerts');
+      }
+    },
+  );
+
+  // Drops the held alerts without sending them.
+  router.delete(
+    '/held-alerts/:festivalId',
+    festivalAccess({ action: 'alert.release', param: 'festivalId' }),
+    rateLimit(10, 'admin-held-discard'),
+    async (req: any, res: any) => {
+      try {
+        const { rows } = await stores.festivalReview.claimHeld(req.festivalId);
+        if (rows === 0) return sendError(res, 404, 'No alerts are held for this festival.', ErrorCodes.NOT_FOUND);
+        await writeAdminAudit(req, res, {
+          action: AUDIT_ACTIONS.FESTIVAL_ALERT_DISCARDED,
+          targetType: 'festival',
+          targetId: req.festivalId,
+          details: { held: rows },
+        });
+        return sendSuccess(res, { discarded: rows });
+      } catch (error) {
+        return fail(res, error, 'discard the held alerts');
+      }
+    },
+  );
 
   router.get('/:id', rateLimit(60, 'admin-org-get'), validateParams(schemas.organizationIdParams), async (req: any, res: any) => {
     try {

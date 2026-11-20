@@ -7,6 +7,11 @@ import { diffCancelledEntries } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { auditContext } from '../lib/audit-middleware.js';
+import { deliverScheduleAlert } from '../lib/alert-hold.js';
+import { normalizeArtistLink } from '../lib/artist-links.js';
+import { sendPublishDecisionEmail } from '../lib/email.js';
+import { appOrigin } from '../lib/notifications/links.js';
+import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organizer-rules.js';
 import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
@@ -89,15 +94,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   const refusal = (message: string) => ({ status: 403, code: 'FORBIDDEN' as const, message });
 
   // A member's save keeps a set id only when the festival already holds it: set ids are global primary keys, so
-  // a foreign id would clash with another tenant's row. Attendee alerts wait for the review hold, so none go out.
-  function memberBody<T extends { days?: any[]; notify?: boolean }>(req: Request, sent: T, existing: any): T {
+  // a foreign id would clash with another tenant's row. Alerts the save would send are held (lib/alert-hold.ts).
+  function memberBody<T extends { days?: any[] }>(req: Request, sent: T, existing: any): T {
     if (!isMemberReq(req)) return sent;
     const own = new Set(setsOf(existing).map((set: any) => set.id));
     const days = sent.days?.map((day: any) => ({
       ...day,
       sets: (day.sets || []).map((set: any) => (own.has(set.id) ? set : { ...set, id: `set-${crypto.randomUUID()}` })),
     }));
-    return { ...sent, notify: false, ...(days ? { days } : {}) };
+    return { ...sent, ...(days ? { days } : {}) };
   }
 
   // 400 with one issue per problem; `message` stays one sentence for old clients.
@@ -114,6 +119,30 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   function sendIssues(res: Response, issues: any[]) {
     const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
     return sendError(res, 400, `${issues[0].message}${more}`, ErrorCodes.INVALID_INPUT, { issues });
+  }
+
+  // A 400 for a member's body that breaks the link and hosting rules, one entry per problem.
+  function sendRuleIssues(res: Response, error: z.ZodError) {
+    return sendError(res, 400, firstRuleMessage(error), ErrorCodes.INVALID_INPUT, {
+      issues: error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
+    });
+  }
+
+  // Who saved first and when, for a member whose save lost the race (plan-v3 5.9). The name follows the rule of
+  // the festival page: a teammate's display name, otherwise "Festie support". An admin's 409 keeps its old body.
+  async function staleDetails(req: Request): Promise<{ updatedAt: string | null; updatedBy: string | null } | undefined> {
+    if (!isMemberReq(req)) return undefined;
+    try {
+      const info = await stores.festivalReview.editInfo((req.validatedParams as Params).id);
+      if (!info) return undefined;
+      return {
+        updatedAt: new Date(info.editedAt).toISOString(),
+        updatedBy: await stores.organizations.editorLabel((req as any).organizationId, info.updatedBy),
+      };
+    } catch (err) {
+      log.warn('stale save details failed', { error: (err as Error).message });
+      return undefined;
+    }
   }
 
   // A primary-key clash on save (an id another festival, or another festival's set, already holds) is the caller's mistake, not a server fault.
@@ -443,12 +472,20 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         if (isAdminReq(req) || isMemberReq(req)) {
           const editorId = await stores.festivals.getEditor(festival.id);
           const editor = editorId ? await getUserById(editorId) : null;
-          // A member sees the name of a teammate only. An edit by anyone else, an admin included, reads "Festie support".
-          const teammate = editor && isMemberReq(req) && (await stores.organizations.isMember((req as any).organizationId, editor.id));
+          // A member sees "<display name> at <organization>" for a teammate. An edit by anyone else, an admin
+          // included, reads "Festie support". The attendee username is never shown to a member.
+          const updatedByUsername = !editor
+            ? null
+            : isMemberReq(req)
+              ? await stores.organizations.editorLabel((req as any).organizationId, editor.id)
+              : editor.username;
+          // The state of a publish request, so the editor can show "Waiting for review" or the note of a decline.
+          const review = await stores.festivalReview?.reviewState?.(festival.id);
           return sendSuccess(res, {
             ...festival,
             publishedAt: festival.publishedAt ?? null,
-            updatedByUsername: !editor ? null : isMemberReq(req) && !teammate ? 'Festie support' : editor.username,
+            updatedByUsername,
+            ...(review ? { publishRequestedAt: review.requestedAt, publishReviewNote: review.note } : {}),
             checklist: publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival) }),
           });
         }
@@ -508,6 +545,14 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         const existingFestival = await getFestivalById((req.validatedParams as Params).id);
         if (!existingFestival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
         const body = memberBody(req, req.validatedBody as z.infer<typeof schemas.festivalUpdate>, existingFestival);
+        if (isMemberReq(req)) {
+          // Two editors at once: a member's save always names the version it was made from (plan-v3 5.9).
+          if (body.expectedUpdatedAt === undefined) {
+            return sendError(res, 400, 'Reload this festival, then save again.', ErrorCodes.INVALID_INPUT);
+          }
+          const rules = organizerFestivalRules(appOrigin(config)).safeParse(body);
+          if (!rules.success) return sendRuleIssues(res, rules.error);
+        }
         // The body is partial, so check the festival that results from the save.
         // A stored lineup is not re-checked: only a body that carries one can fail on duplicates.
         const issues = validateFestivalIssues(config, { ...existingFestival, lineup: undefined, ...body });
@@ -516,6 +561,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         // The token is checked inside the save, under the festival row lock, against the last form edit.
         // A check here would compare the cache's updatedAt, which an artist edit moves.
         const nextFestival = sanitizeFestivalPayload(body, existingFestival);
+        // Until Festie verifies the organization, the name and place of a live festival change only through Festie (plan-v3 6.3).
+        if (
+          isMemberReq(req) &&
+          existingFestival.publishedAt &&
+          !(req as any).orgVerified &&
+          (nextFestival.name !== existingFestival.name || (nextFestival.location ?? '') !== (existingFestival.location ?? ''))
+        ) {
+          return sendError(res, 403, 'Ask Festie to change the name or location of a live festival.', ErrorCodes.FORBIDDEN);
+        }
         const venueSent = body.latitude !== undefined || body.longitude !== undefined;
         // Days and sets are touched only when the payload sends them; the map
         // editors leave them out so a map save cannot rewrite the lineup.
@@ -645,7 +699,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
         const people = pickers.size + marked;
         const notified = body.notify !== false && people > 0;
-        const scheduleNotice = { changes: changes.length + cancelled.length, people, notified, ...(marked > 0 ? { marked } : {}) };
+        // An organizer's alerts are held for an admin, so the save reports them as held and not as sent.
+        const organizer = isMemberReq(req);
+        const scheduleNotice = {
+          changes: changes.length + cancelled.length,
+          people,
+          notified: notified && !organizer,
+          ...(notified && organizer ? { held: true } : {}),
+          ...(marked > 0 ? { marked } : {}),
+        };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
         // The saved row lacks stages and days, so those come from the payload that was written.
         const fieldChanges = festivalAuditChanges(existingFestival, { ...nextFestival, ...festival }, daysSent);
@@ -653,12 +715,30 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
           name: festival.name,
           ...stats,
           scheduleChanges: changes.length + cancelled.length,
-          notifiedPeople: notified ? people : 0,
+          notifiedPeople: notified && !organizer ? people : 0,
           ...(Object.keys(fieldChanges).length > 0 ? { changes: fieldChanges } : {}),
         });
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
-        if (notified) void emitter.scheduleChanged({ festival, changes: [...changes, ...cancelled], pickersBySet, interestedByEntry });
+        if (notified) {
+          const sending = deliverScheduleAlert({
+            stores,
+            emitter,
+            festival,
+            alert: { changes: [...changes, ...cancelled], pickersBySet, interestedByEntry },
+            organizer,
+          });
+          if (!organizer) void sending.catch((err: Error) => log.warn('schedule alert failed', { festivalId: festival.id, error: err.message }));
+          else {
+            // The save is committed, so a failed hold is logged for an admin to find, and the save still succeeds.
+            try {
+              const result = await sending;
+              audit(AUDIT_ACTIONS.FESTIVAL_ALERT_HELD, 'festival', festival.id, req, { changes: result.changes, people: result.people });
+            } catch (err) {
+              log.error('schedule alert hold failed', { festivalId: festival.id, error: (err as Error).message });
+            }
+          }
+        }
         // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
         if (daysSent || body.lineup !== undefined || body.b2bSeparator !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
@@ -688,6 +768,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             409,
             'This festival changed since you opened it. Reload it, then make your change again.',
             ErrorCodes.FESTIVAL_CHANGED,
+            await staleDetails(req),
           );
         }
         if ((error as NodeJS.ErrnoException)?.code === '40P01' || (error as NodeJS.ErrnoException)?.code === '40001') {
@@ -712,11 +793,35 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     }
   });
 
+  // The owners of an organization hear the decision on a publish request by email. Fire and forget: the
+  // decision is already saved, so a mail failure only logs.
+  function emailDecision(organizationId: string | null | undefined, festivalName: string, decision: 'approved' | 'declined', note?: string) {
+    if (!organizationId) return;
+    void (async () => {
+      const [organization, owners] = await Promise.all([
+        stores.organizations.getById(organizationId),
+        stores.organizations.ownerEmails(organizationId),
+      ]);
+      if (!organization) return;
+      // A test seam: deps.sendPublishDecisionEmail replaces the mail send.
+      const send = deps.sendPublishDecisionEmail ?? sendPublishDecisionEmail;
+      for (const to of owners) {
+        await send({ to, organizationName: organization.name, festivalName, decision, note, config, log });
+      }
+    })().catch((err: Error) => log.warn('publish decision email failed', { organizationId, error: err.message }));
+  }
+
   // Publish a draft once the checklist has no 'todo' item. There is no unpublish:
   // it would cut off attendees with picks. Delete and Restore cover mistakes.
+  // An admin publishes any festival and so approves a request. An organization publishes its own only once Festie
+  // has verified it (owner decision 8); every other organization submits for review instead.
   router.post(
     '/:id/publish',
-    festivalAccess({ action: 'publish.decide' }),
+    festivalAccess({
+      action: 'publish.direct',
+      allow: (_req, _festival, membership) =>
+        membership.verified ? true : refusal('Festie checks the first publish of your organization. Submit this festival for review.'),
+    }),
     rateLimit(10, 'festival-publish'),
     validateParams(schemas.genericIdParams),
     async (req: Request, res: Response) => {
@@ -730,6 +835,8 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             checklist,
           });
         }
+        // Read before the publish, which clears the request.
+        const waiting = !isMemberReq(req) && !!(await stores.festivalReview?.reviewState?.(festival.id))?.requestedAt;
         const row = await stores.festivals.publish(festival.id, req.user?.userId ?? null);
         if (!row) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
         invalidateFestivalCache();
@@ -740,10 +847,40 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         });
         log.info('festival:published', { festivalId: festival.id, name: festival.name });
         emitter.festivalCreated({ id: festival.id, name: festival.name });
+        if (waiting) emailDecision((req as any).organizationId, festival.name, 'approved');
         return sendSuccess(res, { publishedAt: row.publishedAt, checklist });
       } catch (error) {
         log.error('festival publish failed', { error: (error as NodeJS.ErrnoException).message, festivalId: (req.validatedParams as Params)?.id });
         return sendError(res, 500, 'Failed to publish festival', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // Decline a publish request with a note the organization's owners read. The festival stays a draft, and
+  // submitting again clears the note. Only a platform admin: the manage mount does not list this route.
+  router.post(
+    '/:id/publish/decline',
+    festivalAccess({ action: 'publish.decide' }),
+    rateLimit(10, 'festival-publish-decline'),
+    validateParams(schemas.genericIdParams),
+    validate(schemas.publishDecline),
+    async (req: Request, res: Response) => {
+      try {
+        const id = (req.validatedParams as Params).id;
+        const { note } = req.validatedBody as { note: string };
+        const declined = await stores.festivalReview.declinePublish(id, note);
+        if (!declined) {
+          const festival = await getFestivalById(id);
+          if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+          return sendError(res, 409, 'No review request is waiting for this festival.', ErrorCodes.CONFLICT);
+        }
+        audit(AUDIT_ACTIONS.FESTIVAL_PUBLISH_DECLINED, 'festival', id, req, { name: declined.name, note });
+        log.info('festival:publish-declined', { festivalId: id });
+        emailDecision(declined.organizationId, declined.name, 'declined', note);
+        return sendSuccess(res, { declined: true });
+      } catch (error) {
+        log.error('festival publish decline failed', { error: (error as NodeJS.ErrnoException).message, festivalId: (req.validatedParams as Params)?.id });
+        return sendError(res, 500, 'Failed to decline the request', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );
@@ -856,6 +993,11 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
 
         // Validated by Zod schema — normalize to null if empty
         const cleanUrl = linkUrl && typeof linkUrl === 'string' && linkUrl.trim() ? linkUrl.trim() : null;
+        // A member's link must be a profile on Spotify (lib/artist-links.ts); an admin's keeps the wider rule.
+        if (isMemberReq(req) && cleanUrl) {
+          const checked = normalizeArtistLink('spotify', cleanUrl);
+          if (!checked.ok) return sendError(res, 400, checked.message, ErrorCodes.INVALID_INPUT);
+        }
 
         // One transaction under the festival lock, reading the set row itself, so a link edit never
         // rebuilds a set from a cache and never races a festival save.
@@ -863,6 +1005,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         if (outcome.missing) return sendError(res, 404, outcome.missing, ErrorCodes.NOT_FOUND);
         if (outcome.badIndex) return sendError(res, 400, 'That artist is not on this set.', ErrorCodes.INVALID_INPUT);
         if (outcome.artistId) {
+          // An artist row is shared by every festival that lists it. A member writes it only while all of them are the
+          // organization's own, so a link never changes another tenant's festival (plan-v3 6.7 rule 3).
+          // shortcut: read before the write, not under the artist's row lock; the artist rules slice makes it atomic.
+          if (isMemberReq(req)) {
+            const usedBy = (await stores.artists.impact(outcome.artistId)).festivals.map((used: { id: string }) => used.id);
+            if (await stores.organizations.hasForeignFestival(usedBy, (req as any).organizationId)) {
+              return sendError(res, 403, 'This artist is also on festivals that are not yours. Ask Festie to change the link.', ErrorCodes.FORBIDDEN);
+            }
+          }
           const current = await stores.artists.getById(outcome.artistId);
           const result = await stores.artists.update(outcome.artistId, {
             expectedUpdatedAt: new Date(current.updated_at).toISOString(),

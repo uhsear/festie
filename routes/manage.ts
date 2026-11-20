@@ -5,7 +5,8 @@
  * The organizer router, mounted at /api/v1/manage behind userAuth (lib/festival-mounts.ts).
  *
  * It is the only place where an organization member is granted a role (festivalAccess reads
- * req.organizerMount, which only this file sets). Own handlers: GET /me, GET /festivals, POST /festivals.
+ * req.organizerMount, which only this file sets). Own handlers: GET /me, GET /festivals, POST /festivals, and
+ * POST|DELETE /festivals/:id/publish-request (submit for review and withdraw).
  * Every other path is forwarded to an existing router, and only when it is on MANAGE_WHITELIST. A path
  * that is not listed answers 404 and never reaches those routers, so a route added to them later stays
  * admin-only until someone lists it here and the access-matrix test covers it.
@@ -13,6 +14,9 @@
 
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { auditContext } from '../lib/audit-middleware.js';
+import { publishChecklist, submitBlockers } from '../lib/helpers/validation.js';
+import { appOrigin } from '../lib/notifications/links.js';
+import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organizer-rules.js';
 import type { FestivalAction } from '../lib/app-context/session.js';
 
 type ForwardTarget = 'festivals' | 'lineupImport' | 'siteplan';
@@ -33,12 +37,14 @@ export type ManageEntry = {
 const RESERVED_IDS = ['archived', 'follows'];
 
 // plan-v3 section 3.6. GET /festivals (the router's GET '/') is absent on purpose, so the shared admin list
-// cache is never filled for an organizer, and so are publish, restore and every announcement route.
+// cache is never filled for an organizer, and so are restore, the decline of a request and every announcement route.
 export const MANAGE_WHITELIST: ManageEntry[] = [
   { method: 'GET', mount: '/festivals', path: '/:id', target: 'festivals', guard: 'festival.view', reserved: RESERVED_IDS },
   { method: 'PUT', mount: '/festivals', path: '/:id', target: 'festivals', reserved: RESERVED_IDS },
   { method: 'DELETE', mount: '/festivals', path: '/:id', target: 'festivals', reserved: RESERVED_IDS },
   { method: 'GET', mount: '/festivals', path: '/:id/impact', target: 'festivals' },
+  // Direct publish: the route lets in only a member of a verified organization, and an admin.
+  { method: 'POST', mount: '/festivals', path: '/:id/publish', target: 'festivals' },
   { method: 'POST', mount: '/festivals', path: '/:id/import-lineup/preview', target: 'lineupImport' },
   { method: 'POST', mount: '/festivals', path: '/:id/import-lineup', target: 'lineupImport' },
   { method: 'GET', mount: '/festivals', path: '/:id/imports', target: 'lineupImport' },
@@ -192,6 +198,12 @@ export default function createManageRoutes(
             return sendError(res, 403, `An organization can hold ${config.ORGANIZER_ACTIVE_FESTIVAL_CAP} festivals. Contact Festie for more.`, ErrorCodes.FORBIDDEN);
           }
         }
+        const rules = organizerFestivalRules(appOrigin(config)).safeParse(input);
+        if (!rules.success) {
+          return sendError(res, 400, firstRuleMessage(rules.error), ErrorCodes.INVALID_INPUT, {
+            issues: rules.error.issues.map((issue: any) => ({ path: issue.path.join('.'), message: issue.message })),
+          });
+        }
         const issues = validateFestivalIssues(config, input);
         if (issues.length > 0) {
           const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
@@ -216,6 +228,56 @@ export default function createManageRoutes(
       } catch (error) {
         log.error('manage festival create failed', { error: (error as Error).message });
         return sendError(res, 500, 'Failed to create festival', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // Submit a draft for review. An owner of an active organization may; the request waits for an admin. The
+  // checklist gate ignores the days item, so a festival with names only can be submitted (master plan C10),
+  // but publishing still needs dated days. A second submit keeps the first time and writes no second audit row.
+  router.post(
+    '/festivals/:id/publish-request',
+    festivalAccess({ action: 'publish.request' }),
+    rateLimit(10, 'manage-publish-request'),
+    async (req: any, res: any) => {
+      try {
+        const festival = await stores.festivals.getById(req.festivalId);
+        if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        if (festival.publishedAt) return sendError(res, 409, 'This festival is already live.', ErrorCodes.CONFLICT);
+        const checklist = publishChecklist(config, festival);
+        if (submitBlockers(festival, checklist).length > 0) {
+          return sendError(res, 409, 'Finish the checklist before you submit.', ErrorCodes.PUBLISH_BLOCKED, { checklist });
+        }
+        const requested = await stores.festivalReview.requestPublish(festival.id);
+        if (!requested) return sendError(res, 409, 'This festival is already live.', ErrorCodes.CONFLICT);
+        if (!requested.already) {
+          await writeAudit(req, AUDIT_ACTIONS.FESTIVAL_PUBLISH_REQUESTED, 'festival', festival.id, { name: festival.name });
+        }
+        deps.invalidateFestivalListCache?.();
+        return sendSuccess(res, { requestedAt: requested.requestedAt, checklist });
+      } catch (error) {
+        log.error('manage publish request failed', { error: (error as Error).message });
+        return sendError(res, 500, 'Failed to submit for review', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // Take a waiting request back. The draft stays as it is.
+  router.delete(
+    '/festivals/:id/publish-request',
+    festivalAccess({ action: 'publish.withdraw' }),
+    rateLimit(10, 'manage-publish-withdraw'),
+    async (req: any, res: any) => {
+      try {
+        if (!(await stores.festivalReview.withdrawPublish(req.festivalId))) {
+          if (!(await stores.festivalReview.reviewState(req.festivalId))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+          return sendError(res, 409, 'No review request is waiting for this festival.', ErrorCodes.CONFLICT);
+        }
+        await writeAudit(req, AUDIT_ACTIONS.FESTIVAL_PUBLISH_WITHDRAWN, 'festival', req.festivalId, {});
+        return sendSuccess(res, { withdrawn: true });
+      } catch (error) {
+        log.error('manage publish withdraw failed', { error: (error as Error).message });
+        return sendError(res, 500, 'Failed to withdraw the request', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );

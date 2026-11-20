@@ -460,6 +460,8 @@ export default function createFestivalsStore(pool: Pool, utils: Partial<Festival
   SET
     published_at = COALESCE(published_at, NOW()),
     slug = COALESCE(slug, festival_next_slug (id)),
+    publish_requested_at = NULL,
+    publish_review_note = NULL,
     updated_at = NOW(),
     updated_by = $2
   WHERE

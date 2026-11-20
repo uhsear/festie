@@ -35,6 +35,11 @@ export const FESTIVAL_ACTIONS = {
   'festival.delete': { role: 'owner', write: true },
   'festival.restore': { role: 'admin', write: true },
   'publish.decide': { role: 'admin', write: true },
+  // An owner asks for a review, takes the request back, or (verified organizations only, see the route) publishes.
+  'publish.request': { role: 'owner', write: true, activeOnly: true },
+  'publish.withdraw': { role: 'owner', write: true },
+  'publish.direct': { role: 'owner', write: true, activeOnly: true },
+  'alert.release': { role: 'admin', write: true },
   'links.edit': { role: 'editor', write: true },
   'lineup.import': { role: 'editor', write: true },
   'lineup.history': { role: 'viewer', write: false },

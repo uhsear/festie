@@ -695,8 +695,9 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
     },
 
     /**
-     * The newest 20 imports, or null when the festival does not exist. With `viewerOrganizationId`, a creator
-     * who is not a member of that organization (an admin, in practice) reads "Festie support" instead of a username.
+     * The newest 20 imports, or null when the festival does not exist. With `viewerOrganizationId` the creator
+     * reads as "<display name> at <organization>" for a member of that organization, and as "Festie support" for
+     * anyone else (an admin, in practice). An organizer never sees an attendee username.
      */
     async list(festivalId: string, viewerOrganizationId: string | null = null) {
       const fest = await pool.query('SELECT name FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
@@ -712,7 +713,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
       WHEN u.id IS NULL OR $2::text IS NULL THEN u.username
       WHEN EXISTS (
         SELECT 1 FROM organization_members m WHERE m.organization_id = $2 AND m.user_id = u.id
-      ) THEN u.username
+      ) THEN COALESCE(NULLIF(btrim(u.display_name), ''), 'A teammate') || ' at ' || (SELECT o.name FROM organizations o WHERE o.id = $2)
       ELSE 'Festie support'
     END AS username,
     (

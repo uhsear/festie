@@ -525,3 +525,16 @@ export function publishChecklist(config: any, festival: any, extras: { ambiguous
 
   return [timeZone, stagesItem, daysItem, setsItem, errors, pins, times, overlaps, durationOdd, startUnusual, artistDouble, ...artists];
 }
+
+/**
+ * The checklist items that stop an organizer from submitting a festival for review. Submitting ignores
+ * the `days` item, so a names-only festival can go to review (master plan C10); publishing still needs dated days.
+ * With no days, the `sets` item is the same missing-days problem, so it is ignored while the lineup has names.
+ */
+export function submitBlockers(festival: any, checklist: ChecklistItem[]): ChecklistItem[] {
+  const noDays = !Array.isArray(festival?.days) || festival.days.length === 0;
+  const hasNames = Array.isArray(festival?.lineup) && festival.lineup.length > 0;
+  return checklist.filter(
+    (item) => item.status === 'todo' && item.key !== 'days' && !(item.key === 'sets' && noDays && hasNames),
+  );
+}

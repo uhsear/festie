@@ -23,6 +23,8 @@ after(() => {
 
 const ADMIN_ORGS = '/api/v1/admin/organizations';
 const MANAGE = '/api/v1/manage';
+// A member's save names the version it started from. A far-future token is never stale.
+const FAR_FUTURE = '2999-01-01T00:00:00.000Z';
 
 async function boot(overrides: Record<string, any> = {}) {
   const server = await h.startServer({ AUTH_RATE_LIMIT_MAX: 1000, ...overrides });
@@ -211,7 +213,7 @@ describe('organizations: members and pending members', { skip }, () => {
     await o.addMember(server, 'org-1', boss.id, 'owner');
     await o.addMember(server, 'org-1', editor.id, 'editor');
     await o.seedFestival(server, 'f-1', 'org-1');
-    const edit = () => o.as(server, editor.token).put(`${MANAGE}/festivals/f-1`, { name: 'Renamed' });
+    const edit = () => o.as(server, editor.token).put(`${MANAGE}/festivals/f-1`, { name: 'Renamed', expectedUpdatedAt: FAR_FUTURE });
 
     assert.equal((await edit()).status, 200);
     assert.equal((await admin.put(`${ADMIN_ORGS}/org-1/members/${editor.id}`, { role: 'viewer' })).status, 200);
@@ -227,7 +229,7 @@ describe('organizations: members and pending members', { skip }, () => {
     const user = await o.makeUser(server, `susp-${Date.now()}`);
     await o.addMember(server, 'org-1', user.id, 'owner');
     await o.seedFestival(server, 'f-1', 'org-1');
-    const edit = () => o.as(server, user.token).put(`${MANAGE}/festivals/f-1`, { name: 'Renamed' });
+    const edit = () => o.as(server, user.token).put(`${MANAGE}/festivals/f-1`, { name: 'Renamed', expectedUpdatedAt: FAR_FUTURE });
     assert.equal((await edit()).status, 200);
     await admin.put(`${ADMIN_ORGS}/org-1/status`, { status: 'suspended' });
     assert.equal((await edit()).status, 403);
@@ -270,7 +272,7 @@ describe('organizations: /auth/me and the audit rows', { skip }, () => {
   test('audit rows carry the organizer actor and the organization; an admin on the same festival stays admin', async () => {
     const { server, adminToken } = await boot();
     const users = await o.seedScenario(server);
-    await o.as(server, users.editorA.token).put(`${MANAGE}/festivals/f-a`, { name: 'By editor' });
+    await o.as(server, users.editorA.token).put(`${MANAGE}/festivals/f-a`, { name: 'By editor', expectedUpdatedAt: FAR_FUTURE });
     const organizer = await auditRows(server, "action = 'festival.updated' AND target_id = 'f-a' AND actor_id = $1", [users.editorA.id]);
     assert.equal(organizer.length, 1);
     assert.deepEqual([organizer[0].actor_type, organizer[0].organization_id], ['organizer', 'org-a']);

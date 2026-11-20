@@ -175,6 +175,7 @@ describe('festival access: route inventory', () => {
       'POST /festivals/:id/import-lineup',
       'POST /festivals/:id/import-lineup/preview',
       'POST /festivals/:id/imports/:importId/undo',
+      'POST /festivals/:id/publish',
       'POST /festivals/:id/siteplan-image',
       'PUT /festivals/:festivalId/sets/:setId/link',
       'PUT /festivals/:id',
@@ -348,7 +349,7 @@ describe('festival access: the guard', () => {
     });
 
     test('never passes an admin-only action', async () => {
-      for (const action of ['publish.decide', 'festival.restore', 'lineup.drop', 'announcement.manage']) {
+      for (const action of ['publish.decide', 'festival.restore', 'lineup.drop', 'announcement.manage', 'alert.release']) {
         const { res, nexted } = await call({ memberships: member('owner') }, action, 'draft');
         assert.equal(res.statusCode, 403, action);
         assert.equal(nexted, false, action);
@@ -428,6 +429,7 @@ const BASELINE: Record<string, [number, number, number]> = {
   'POST /api/v1/admin/festivals/:id/time-releases': [401, 403, 400],
   'GET /api/v1/admin/festivals/:id/lineup-interest': [401, 403, 404],
   'POST /api/v1/admin/festivals/:id/publish': [401, 403, 404],
+  'POST /api/v1/admin/festivals/:id/publish/decline': [401, 403, 400],
   'POST /api/v1/admin/festivals/:id/restore': [401, 403, 404],
   'DELETE /api/v1/admin/festivals/:id': [401, 403, 403],
   'PUT /api/v1/admin/festivals/:festivalId/sets/:setId/link': [401, 403, 404],
@@ -455,6 +457,7 @@ const BASELINE: Record<string, [number, number, number]> = {
   'PUT /api/v1/festivals/:id': [401, 403, 400],
   'GET /api/v1/festivals/:id/impact': [401, 403, 404],
   'POST /api/v1/festivals/:id/publish': [401, 403, 404],
+  'POST /api/v1/festivals/:id/publish/decline': [401, 403, 400],
   'POST /api/v1/festivals/:id/restore': [401, 403, 404],
   'DELETE /api/v1/festivals/:id': [401, 403, 403],
   'PUT /api/v1/festivals/:festivalId/sets/:setId/link': [401, 403, 404],
@@ -463,6 +466,10 @@ const BASELINE: Record<string, [number, number, number]> = {
   'POST /api/v1/admin/organizations/': [401, 403, 400],
   'GET /api/v1/admin/organizations/': [401, 403, 200],
   'GET /api/v1/admin/organizations/:id': [401, 403, 404],
+  // The review queue: publish requests and held alerts. Release and discard name a festival.
+  'GET /api/v1/admin/organizations/review-queue': [401, 403, 200],
+  'POST /api/v1/admin/organizations/held-alerts/:festivalId/release': [401, 403, 404],
+  'DELETE /api/v1/admin/organizations/held-alerts/:festivalId': [401, 403, 404],
   'PUT /api/v1/admin/organizations/:id/status': [401, 403, 400],
   'PUT /api/v1/admin/organizations/:id/verified': [401, 403, 400],
   'POST /api/v1/admin/organizations/:id/members': [401, 403, 403],
@@ -484,6 +491,9 @@ const BASELINE: Record<string, [number, number, number]> = {
   'PUT /api/v1/manage/festivals/:festivalId/sets/:setId/link': [401, 404, 404],
   'GET /api/v1/manage/festivals/:festivalId/sets/links': [401, 404, 404],
   'POST /api/v1/manage/festivals/:id/siteplan-image': [401, 404, 404],
+  'POST /api/v1/manage/festivals/:id/publish-request': [401, 404, 404],
+  'DELETE /api/v1/manage/festivals/:id/publish-request': [401, 404, 404],
+  'POST /api/v1/manage/festivals/:id/publish': [401, 404, 404],
 };
 
 describe('festival access: every route through the real app', { skip }, () => {
@@ -610,7 +620,8 @@ describe('festival access: organization cells', { skip }, () => {
       ['viewerA', `PUT ${MANAGE}/f-a`, 403],
       ['editorA', `PUT ${MANAGE}/f-a`, 200],
       ['ownerA', `PUT ${MANAGE}/f-a`, 200],
-      ['ownerA', `PUT ${MANAGE}/f-a-live`, 200],
+      // A live festival's name is Festie's until the organization is verified (the body below renames it).
+      ['ownerA', `PUT ${MANAGE}/f-a-live`, 403],
       ['ownerA', `PUT ${MANAGE}/f-b`, 404],
       ['ownerA', `PUT ${MANAGE}/f-plat`, 404],
       ['ownerB', `PUT ${MANAGE}/f-a`, 404],
@@ -641,13 +652,15 @@ describe('festival access: organization cells', { skip }, () => {
       ['viewerA', `POST ${MANAGE}/f-a/siteplan-image`, 403],
       ['ownerP', `POST ${MANAGE}/f-p/siteplan-image`, 403],
     ];
-    const body = (url: string) => (url.endsWith('/import-lineup') || url.endsWith('/preview') ? { rows: [] } : { name: 'Renamed' });
+    // A member's save names the version it started from. A far-future token is never stale.
+    const body = (url: string) =>
+      url.endsWith('/import-lineup') || url.endsWith('/preview') ? { rows: [] } : { name: 'Renamed', expectedUpdatedAt: '2999-01-01T00:00:00Z' };
     assert.deepEqual(await runCells(server, tokensOf(users, adminToken), cells, body), []);
   });
 
   test('dropping picked sets, live delete and hard delete are not organizer decisions', async () => {
     const { server, users } = await boot();
-    const editor = await o.as(server, users.editorA.token).put(`${MANAGE}/f-a`, { name: 'x', confirmRemovals: true });
+    const editor = await o.as(server, users.editorA.token).put(`${MANAGE}/f-a`, { name: 'x', confirmRemovals: true, expectedUpdatedAt: '2999-01-01T00:00:00Z' });
     assert.equal(editor.status, 403);
     assert.match(editor.body.error.message, /An owner of Org org-a must confirm the removal/);
 
@@ -771,7 +784,7 @@ describe('festival access: organization cells', { skip }, () => {
   test('routes that stay admin are 404 on the manage mount, for a member and for an admin', async () => {
     const { server, users, adminToken } = await boot();
     const paths = [
-      'POST /f-a/publish',
+      'POST /f-a/publish/decline',
       'POST /f-a/restore',
       'GET /archived',
       'GET /follows',
@@ -821,6 +834,9 @@ describe('festival access: organization cells', { skip }, () => {
       ['ownerA', `PUT ${MANAGE}/f-a`, 404],
       ['ownerA', 'GET /api/v1/manage/me', 404],
       ['ownerA', `POST ${MANAGE}`, 404],
+      ['ownerA', `POST ${MANAGE}/f-a/publish-request`, 404],
+      ['ownerA', `DELETE ${MANAGE}/f-a/publish-request`, 404],
+      ['ownerA', `POST ${MANAGE}/f-a/publish`, 404],
       ['admin', 'GET /api/v1/manage/me', 404],
       ['anon', `GET ${MANAGE}/f-a`, 404],
       ['editorA', 'PUT /api/v1/festivals/f-a', 403],

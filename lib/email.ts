@@ -273,6 +273,39 @@ export async function sendEmailChangedEmail({ to, config, log, _client }: any) {
   });
 }
 
+/**
+ * The decision on an organizer's publish request, sent to the organization's owners. The text is fixed: only
+ * the organization name, the festival name and the admin's note are filled in, and each is escaped.
+ */
+export async function sendPublishDecisionEmail({ to, organizationName, festivalName, decision, note, config, log, _client }: any) {
+  const approved = decision === 'approved';
+  const lines = approved
+    ? [
+        `Festie reviewed ${festivalName} for ${organizationName}, and it is live.`,
+        'Attendees can find it now. Open your festivals to copy the public link.',
+      ]
+    : [
+        `Festie asked for changes to ${festivalName} before it goes live.`,
+        `Festie asked for changes: ${note}.`,
+        'Edit your festival, then submit it again.',
+      ];
+  const bodyHtml = `${lines.map((line) => `<p style="${ALERT_P}">${escapeHtml(line)}</p>`).join('\n    ')}
+    ${_buttonHtml(`${_origin(config)}/manage`, 'Open your festivals')}`;
+  const footer = `You get this email because you are an owner of ${escapeHtml(organizationName)} on Festie.`;
+  const subjectName = String(festivalName).replace(/[\r\n]+/g, ' ');
+  return sendEmail({
+    to,
+    subject: approved ? `${subjectName} is live on Festie` : `Festie asked for changes to ${subjectName}`,
+    html: _wrapTemplate(approved ? 'Festival live' : 'Changes requested', bodyHtml, footer),
+    text: `${lines.join('\n\n')}\n\nOpen your festivals: ${_origin(config)}/manage\n\nYou get this email because you are an owner of ${organizationName} on Festie.`,
+    config,
+    log,
+    _client,
+    type: approved ? 'publish_approved' : 'publish_declined',
+    dedupe: false,
+  });
+}
+
 // ── M3 re-engagement emails ─────────────────────────────────────────────
 // All three follow the _wrapTemplate + _buttonHtml pattern and deep-link to the
 // relevant surface. They degrade gracefully when RESEND_API_KEY is unset

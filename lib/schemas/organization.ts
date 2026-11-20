@@ -29,6 +29,10 @@ export const organizationMemberAddSchema = z.object({
 });
 export const organizationMemberRoleSchema = z.object({ role: orgRole });
 
+// An admin declines a publish request with a note the owners read, so it is required and bounded.
+export const publishDeclineSchema = z.object({ note: z.string().trim().min(1).max(500) }).strict();
+export const heldAlertParams = z.object({ festivalId: identifier });
+
 export const organizationIdParams = z.object({ id: identifier });
 export const organizationMemberParams = z.object({ id: identifier, userId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/, 'Invalid user ID') });
 export const organizationPendingParams = z.object({ id: identifier, email: z.string().trim().toLowerCase().email().max(254) });

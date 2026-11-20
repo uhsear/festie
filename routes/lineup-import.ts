@@ -33,6 +33,7 @@ import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
 import { planPickerAlerts } from '../lib/picker-alerts.js';
+import { deliverScheduleAlert, isOrganizerRequest } from '../lib/alert-hold.js';
 import {
   artistLookupKeys,
   planLineupImport,
@@ -119,14 +120,24 @@ export default function createLineupImportRoute(deps: any) {
 
   // After a commit: a set that got its first time on a released date tells the people who picked it. The
   // festival is read before and after the commit, outside its transaction, so a concurrent edit can cause
-  // one missed or extra alert. Fire and forget: the import has committed, so a failure here only logs.
-  function alertPickersOfFirstTimes(before: any) {
-    if (!before.publishedAt) return;
-    void (async () => {
+  // one missed or extra alert. The import has committed, so a failure here only logs. An organization member's
+  // alert is held for an admin instead of sent (lib/alert-hold.ts), and the caller awaits that so the hold is written.
+  function alertPickersOfFirstTimes(before: any, req: any): Promise<void> {
+    if (!before.publishedAt) return Promise.resolve();
+    return (async () => {
       const after = await stores.festivals.getById(before.id);
       if (!after) return;
       const { changes, pickersBySet } = await planPickerAlerts({ stores, before, after, tbaOnly: true });
-      if (changes.length > 0) await emitter?.scheduleChanged?.({ festival: after, changes, pickersBySet });
+      if (changes.length === 0) return;
+      const result = await deliverScheduleAlert({ stores, emitter, festival: after, alert: { changes, pickersBySet }, organizer: isOrganizerRequest(req) });
+      if (result.held) {
+        await writeAdminAudit(req, {}, {
+          action: AUDIT_ACTIONS.FESTIVAL_ALERT_HELD,
+          targetType: 'festival',
+          targetId: before.id,
+          details: { changes: result.changes, people: result.people },
+        });
+      }
     })().catch((err: any) => log.warn('import picker alerts failed', { festivalId: before.id, error: err?.message }));
   }
 
@@ -227,8 +238,8 @@ export default function createLineupImportRoute(deps: any) {
       }
       // After the response is built, so the save never waits. It logs its own failure.
       void deps.interestConversion?.convert(festivalId);
-      // An organization member's import sends no alert: those wait for the review hold.
-      if (req.festivalRole === undefined || req.festivalRole === 'admin') alertPickersOfFirstTimes(festival);
+      const alerting = alertPickersOfFirstTimes(festival, req);
+      if (isOrganizerRequest(req)) await alerting;
       const result = buildResult(outcome.plan, outcome.writes, outcome.importId, warnings, festival.b2bSeparator || 'b2b');
       log.info('lineup imported', {
         festivalId,
@@ -262,7 +273,7 @@ export default function createLineupImportRoute(deps: any) {
       setNoStore(res);
       const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
-      // A member sees usernames of its own team only. An import by anyone else reads "Festie support".
+      // A member sees display names of its own team only. An import by anyone else reads "Festie support".
       const member = req.festivalRole !== undefined && req.festivalRole !== 'admin';
       const history = await stores.lineupImports.list(festivalId, member ? req.organizationId : null);
       if (!history) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);

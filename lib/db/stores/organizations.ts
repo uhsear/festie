@@ -37,6 +37,9 @@ const ORG_COLUMNS = `
   o.updated_at AS "updatedAt"
 `;
 
+/** What an organizer sees in place of the name of anyone outside the organization, an admin included. */
+export const SUPPORT_LABEL = 'Festie support';
+
 // The one rule for "this user may act as a member": not deleted, email confirmed.
 const ACTIVE_USER = 'u.deleted_at IS NULL AND u.email_verified_at IS NOT NULL';
 
@@ -310,6 +313,52 @@ export function createOrganizationsStore(pool: Pool) {
       return rows.length > 0;
     },
 
+    /**
+     * How organizer-visible lists name the person behind an edit (owner decision 9): "Alex at Venue X" for a
+     * teammate, from the display name and never the attendee username, and "Festie support" for anyone else.
+     */
+    async editorLabel(organizationId: string, userId: string | null) {
+      if (!userId) return null;
+      const { rows } = await pool.query(
+        `
+  SELECT
+    u.display_name AS "displayName",
+    o.name AS "organizationName"
+  FROM
+    organization_members m
+    JOIN users u ON u.id = m.user_id
+    JOIN organizations o ON o.id = m.organization_id
+  WHERE
+    m.organization_id = $1
+    AND m.user_id = $2
+`,
+        [organizationId, userId],
+      );
+      if (!rows[0]) return SUPPORT_LABEL;
+      return `${String(rows[0].displayName ?? '').trim() || 'A teammate'} at ${rows[0].organizationName}`;
+    },
+
+    /** True when any of the festivals (archived ones included) is not owned by the organization. */
+    async hasForeignFestival(festivalIds: string[], organizationId: string) {
+      if (festivalIds.length === 0) return false;
+      const { rows } = await pool.query(
+        'SELECT 1 FROM festivals WHERE id = ANY($1::text[]) AND organization_id IS DISTINCT FROM $2 LIMIT 1',
+        [festivalIds, organizationId],
+      );
+      return rows.length > 0;
+    },
+
+    /** Confirmed email addresses of the organization's active owners, for decision emails. */
+    async ownerEmails(organizationId: string): Promise<string[]> {
+      const { rows } = await pool.query(
+        `SELECT u.email FROM organization_members m JOIN users u ON u.id = m.user_id
+          WHERE m.organization_id = $1 AND m.role = 'owner' AND ${ACTIVE_USER} AND u.email IS NOT NULL
+          ORDER BY m.created_at, m.user_id`,
+        [organizationId],
+      );
+      return rows.map((row: { email: string }) => row.email);
+    },
+
     /** What festivalAccess needs about a festival: its owner organization and whether it is live. */
     async festivalAccessRow(festivalId: string) {
       const { rows } = await pool.query(
@@ -345,6 +394,8 @@ export function createOrganizationsStore(pool: Pool) {
     slug,
     (published_at IS NOT NULL) AS published,
     (deleted_at IS NOT NULL) AS deleted,
+    publish_requested_at AS "publishRequestedAt",
+    publish_review_note AS "publishReviewNote",
     updated_at AS "updatedAt"
   FROM
     festivals
