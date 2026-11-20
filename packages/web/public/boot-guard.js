@@ -7,7 +7,7 @@
   var STATUS_URL = 'https://github.com/uhsear/upptime';
   var shown = false;
 
-  function show() {
+  function show(slow) {
     var shell = document.querySelector('.boot-shell');
     // React replaces the shell when it mounts, so no shell means the app booted.
     if (shown || !shell) return;
@@ -16,9 +16,11 @@
     shell.textContent = '';
 
     var heading = document.createElement('strong');
-    heading.textContent = 'Festie didn’t finish loading';
+    heading.textContent = slow === true ? 'Still loading…' : 'Festie didn’t finish loading';
     var hint = document.createElement('span');
-    hint.textContent = 'Check your connection and reload. If it keeps happening, check the status page.';
+    hint.textContent = slow === true
+      ? 'This is taking a while. Reload if it doesn’t clear, or check the status page.'
+      : 'Check your connection and reload. If it keeps happening, check the status page.';
     var reload = document.createElement('button');
     reload.type = 'button';
     reload.textContent = 'Reload';
@@ -36,12 +38,22 @@
   window.addEventListener(
     'error',
     function (event) {
-      // Ignore scripts from other origins (browser extensions): they are not the app failing.
-      if (event.filename && event.filename.indexOf(window.location.origin) !== 0) return;
+      var target = event.target;
+      if (target === window) {
+        // Ignore scripts from other origins (browser extensions): they are not the app failing.
+        if (event.filename && event.filename.indexOf(window.location.origin) !== 0) return;
+      } else if (!(target instanceof HTMLScriptElement) || target.src.indexOf(window.location.origin) !== 0) {
+        // A blocked font, stylesheet or image is not a failed boot.
+        return;
+      }
       show();
     },
     true,
   );
-  window.addEventListener('unhandledrejection', show);
-  window.setTimeout(show, TIMEOUT_MS);
+  window.addEventListener('unhandledrejection', function () {
+    show();
+  });
+  window.setTimeout(function () {
+    show(true);
+  }, TIMEOUT_MS);
 })();
