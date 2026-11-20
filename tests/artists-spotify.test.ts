@@ -6,6 +6,8 @@ import 'dotenv/config';
  */
 process.env.SPOTIFY_CLIENT_ID = 'test-client-id';
 process.env.SPOTIFY_CLIENT_SECRET = 'test-client-secret';
+// The file creates more artists than the per-minute route limit allows; a 1 s window keeps the limits from leaking between tests.
+process.env.RATE_LIMIT_WINDOW = '1000';
 
 import assert from 'node:assert/strict';
 import { after, afterEach, before, describe, test } from 'node:test';
