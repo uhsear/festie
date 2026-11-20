@@ -49,6 +49,44 @@ export interface PresenceIo {
   };
 }
 
+/** What crew-room eviction needs from the Socket.IO `Server`. */
+export interface CrewEvictionIo {
+  in(room: string): { fetchSockets(): Promise<RevocableSocket[]> };
+}
+
+/** Drops the streaming-path membership cache so a later re-join re-checks. */
+export function resetCrewMembershipCache(data: SocketData) {
+  delete data.crewMembershipCheckedAt;
+  delete data.crewMembershipUpdateCount;
+}
+
+const CREW_EVICTION_TIMEOUT_MS = 3_000;
+
+/**
+ * Force sockets out of `crew:${crewId}` on every instance behind the adapter and clear their
+ * sharing stamps. With `userId`, only that user's sockets leave and each is told
+ * `crew:access-revoked`; without it every socket leaves (the caller emits `crew:deleted`).
+ * `s.data.crewId` is kept on purpose so a stray location:share is rejected NOT_A_MEMBER.
+ * Bounded because fetchSockets() can hang for a Redis outage. Throws on failure.
+ */
+export async function evictCrewRoomSockets(io: CrewEvictionIo, crewId: string, userId?: string) {
+  const room = `crew:${crewId}`;
+  let timer: NodeJS.Timeout | undefined;
+  const sockets = await Promise.race([
+    io.in(room).fetchSockets(),
+    new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => reject(new Error('fetchSockets timed out')), CREW_EVICTION_TIMEOUT_MS);
+    }),
+  ]).finally(() => clearTimeout(timer));
+  for (const s of sockets) {
+    if (userId && s.data?.userId !== userId) continue;
+    if (userId) s.emit('crew:access-revoked', { crewId });
+    if (userId || s.data?.sharingCrewId === crewId) delete s.data.sharingCrewId;
+    resetCrewMembershipCache(s.data);
+    s.leave(room);
+  }
+}
+
 type Log = ReturnType<typeof createLogger>;
 type AvatarBuilder = (user: { avatarKey?: string | null; avatarVersion?: string | number | null; [key: string]: unknown } | null | undefined) => string | null;
 type PresenceStore = NonNullable<ReturnType<typeof createRedisPresenceStore>>;

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { parseJsonObject } from '../lib/db/connection';
 import { logCrewActivity } from '../lib/db/stores/activity';
 import { dropLivePosition } from '../lib/live-location-cache.js';
+import { evictCrewRoomSockets } from '../lib/presence.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 
@@ -52,13 +53,6 @@ export default function createCrewMemberRoutes(deps: any) {
    * @param removedUserId - the user whose sockets must leave the room
    * @param reason - 'left' for a voluntary leave, 'kicked' for removal by an owner/admin
    */
-  /**
-   * Bound on the adapter round-trip below. Generous enough that a healthy Redis
-   * never trips it (observed ~2ms), short enough that a member-removal request
-   * cannot hang on a Redis outage.
-   */
-  const EVICTION_TIMEOUT_MS = 3_000;
-
   async function evictUserFromCrewRoom(crewId: string, removedUserId: string, reason: 'left' | 'kicked') {
     // A background (HTTP) sharer has no sharing socket, so evict the cached fix
     // and tell peers to drop the marker once, whatever sockets the user holds.
@@ -72,32 +66,7 @@ export default function createCrewMemberRoutes(deps: any) {
         userId: removedUserId,
         reason,
       });
-      // fetchSockets() goes through the Redis adapter, which issues PUBSUB NUMSUB
-      // on the pub connection. That connection now buffers while Redis is
-      // unavailable (the offline queue is ON for pub/sub clients — see
-      // PUBSUB_CLIENT_OPTIONS), which is right for correctness but means this
-      // call can HANG for the length of an outage rather than failing. This is a
-      // revocation path reached from an HTTP request, so it must be bounded.
-      const sockets: any[] = await Promise.race([
-        io.in(room).fetchSockets(),
-        new Promise((_resolve, reject) =>
-          setTimeout(() => reject(new Error('fetchSockets timed out')), EVICTION_TIMEOUT_MS).unref?.(),
-        ),
-      ]);
-      for (const s of sockets) {
-        if (s.data?.userId !== removedUserId) continue;
-        // Tell the evicted client to tear down crew + SOS state.
-        s.emit('crew:access-revoked', { crewId });
-        // Clear the sharing stamp so the socket can no longer inject location
-        // updates. We deliberately KEEP s.data.crewId so a stray location:share
-        // still reaches the membership re-check and is rejected NOT_A_MEMBER
-        // (matching the documented contract) rather than the coarser
-        // NOT_IN_CREW_ROOM; the room eviction below is what stops broadcasts.
-        delete s.data.sharingCrewId;
-        delete s.data.crewMembershipCheckedAt;
-        delete s.data.crewMembershipUpdateCount;
-        s.leave(room);
-      }
+      await evictCrewRoomSockets(io, crewId, removedUserId);
     } catch (error: any) {
       // ERROR, not warn: this is the enforcement half of a revocation. The DB
       // membership row is already gone, but a socket that was not evicted keeps
