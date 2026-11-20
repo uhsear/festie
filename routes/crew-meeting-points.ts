@@ -177,7 +177,7 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
             res,
             400,
             'Maximum ' + MAX_MEETING_POINTS_PER_CREW + ' meeting points per crew',
-            ErrorCodes.VALIDATION_ERROR,
+            ErrorCodes.MAX_LIMIT_REACHED,
           );
         }
 

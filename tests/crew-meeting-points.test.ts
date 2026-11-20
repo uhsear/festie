@@ -100,6 +100,7 @@ function makeDeps(overrides: any = {}) {
       NOT_FOUND: 'NOT_FOUND',
       FORBIDDEN: 'FORBIDDEN',
       VALIDATION_ERROR: 'VALIDATION_ERROR',
+      MAX_LIMIT_REACHED: 'MAX_LIMIT_REACHED',
       INTERNAL_ERROR: 'INTERNAL_ERROR',
     },
     rateLimit: overrides.rateLimit || (() => (_req: any, _res: any, next: any) => next()),
@@ -675,7 +676,7 @@ describe('routes/crew-meeting-points.js -- POST /:crewId/meeting-points', () => 
     const res = await request(app).post('/crew-1/meeting-points').send({ label: 'One more', location: 'Nope' });
 
     assert.equal(res.status, 400);
-    assert.equal(res.body.error.code, 'VALIDATION_ERROR');
+    assert.equal(res.body.error.code, 'MAX_LIMIT_REACHED');
     assert.match(res.body.error.message, /Maximum 20/);
   });
 

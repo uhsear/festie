@@ -45,7 +45,7 @@ function build({
     sanitizeIdentifier: (v: string) => v,
     sendSuccess: (res: any, data: any) => res.json({ success: true, data }),
     sendError: (res: any, status: number, message: string) => res.status(status).json({ success: false, error: message }),
-    ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+    ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', DRAFT: 'DRAFT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
     stores: { auditLog: { insert: async (row: any) => calls.audit.push(row) } },
     getFestivalById: async (id: string) => ({ id, name, publishedAt }),
     getRequestIp: () => '127.0.0.1',

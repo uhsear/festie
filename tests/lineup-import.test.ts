@@ -270,7 +270,7 @@ describe('lineup-import commit: picker alerts, no festival-wide alert (mocked de
       sanitizeIdentifier: (v: string) => v,
       sendSuccess: (res: Response, data: unknown) => res.json({ data, error: null }),
       sendError: (res: Response, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
-      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', VALIDATION_ERROR: 'VALIDATION_ERROR', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
       stores: {
         festivals: { getById: async () => reads.shift() ?? festivalWith(after) },
         profiles: { pickersBySet },
@@ -374,7 +374,7 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
       sanitizeIdentifier: (v: string) => v,
       sendSuccess: (res: Response, data: unknown) => res.json({ data, error: null }),
       sendError: (res: Response, status: number, message: string) => res.status(status).json({ data: null, error: { message } }),
-      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
+      ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', VALIDATION_ERROR: 'VALIDATION_ERROR', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
       stores: {
         festivals: {
           getById: async () => {

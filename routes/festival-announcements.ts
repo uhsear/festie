@@ -101,7 +101,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
         const festival = await getFestivalById(festivalId);
         if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
         if (!festival.publishedAt) {
-          return sendError(res, 409, 'Publish the festival before you send announcements.', ErrorCodes.INVALID_INPUT);
+          return sendError(res, 409, 'Publish the festival before you send announcements.', ErrorCodes.DRAFT);
         }
         const { severity, title, body, screen, sendAt: requested } = req.validatedBody;
         const now = Date.now();
