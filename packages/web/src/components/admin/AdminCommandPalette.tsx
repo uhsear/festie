@@ -97,6 +97,7 @@ export default function AdminCommandPalette() {
           <input
             type="text"
             role="combobox"
+            aria-label="Find a festival, user, crew or invite code"
             aria-expanded={ordered.length > 0}
             aria-controls={LISTBOX_ID}
             aria-activedescendant={ordered[active] ? `admin-palette-option-${active}` : undefined}
