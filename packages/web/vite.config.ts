@@ -53,7 +53,10 @@ export default defineConfig({
             { name: 'react-core', test: /[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/, priority: 9 },
             { name: 'router', test: /@tanstack/, priority: 8 },
             { name: 'data', test: /zustand|socket\.io-client|[\\/]zod[\\/]/, priority: 7 },
-            { name: 'ui-motion', test: /vaul|@radix-ui|[\\/]motion[\\/]|@use-gesture/, priority: 6 },
+            // motion re-exports framer-motion, motion-dom and motion-utils. Left out, they formed a
+            // separate chunk that imported ui-motion while ui-motion imported it: a cycle that threw
+            // "ie is not iterable" at load and left the app on "Loading Festie…".
+            { name: 'ui-motion', test: /vaul|@radix-ui|[\\/](framer-)?motion(-dom|-utils)?[\\/]|@use-gesture/, priority: 6 },
             { name: 'icons', test: /lucide-react/, priority: 5 },
             { name: 'export-tools', test: /html-to-image/, priority: 4 },
             { name: 'telemetry', test: /@sentry|web-vitals|workbox/, priority: 3 },
