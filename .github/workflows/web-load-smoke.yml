@@ -45,9 +45,11 @@ jobs:
           BASE_URL: ${{ inputs.base_url || 'https://festie.us' }}
 
       # The alert belongs to runs on main: a dispatch on a branch cannot open or close it.
+      # Only a run against the live site may close the issue: a green run against another
+      # site says nothing about festie.us.
       # Housekeeping only: a GitHub API blip here must not turn a green run red.
       - name: Close any open failing issue (site loads)
-        if: success() && github.ref == 'refs/heads/main'
+        if: success() && github.ref == 'refs/heads/main' && (inputs.base_url || 'https://festie.us') == 'https://festie.us'
         continue-on-error: true
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
@@ -80,6 +82,8 @@ jobs:
       - name: Open failing issue (site does not load)
         if: failure() && github.ref == 'refs/heads/main'
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          TESTED_URL: ${{ inputs.base_url || 'https://festie.us' }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -105,11 +109,11 @@ jobs:
               body: [
                 '## The live site does not load',
                 '',
-                `The web load smoke run failed at **${new Date().toUTCString()}**.`,
+                `The web load smoke run failed at **${new Date().toUTCString()}** while loading ${process.env.TESTED_URL}.`,
                 '',
                 `[View failing run](${runUrl})`,
                 '',
-                '_This issue closes automatically when the next run on main passes._',
+                '_This issue closes automatically when the next run on main passes against the live site._',
               ].join('\n'),
             });
             core.info(`Opened new issue #${newIssue.number}`);
