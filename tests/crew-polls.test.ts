@@ -611,6 +611,7 @@ describe('routes/crew-polls.js — POST /:crewId/polls/:pollId/vote', () => {
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:poll-voted');
     assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], {
+      crewId: 'crew-1',
       pollId: 'poll-1',
       userId: 'user-1',
       optionIndex: 0,
@@ -666,6 +667,7 @@ describe('routes/crew-polls.js — POST /:crewId/polls/:pollId/vote', () => {
     assert.equal(voteFn.mock.calls.length, 0);
     assert.deepEqual((removeFn.mock.calls as any[])[0].arguments, ['poll-1', 'user-1']);
     assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], {
+      crewId: 'crew-1',
       pollId: 'poll-1',
       userId: 'user-1',
       optionIndex: -1,
@@ -916,7 +918,7 @@ describe('routes/crew-polls.js — DELETE /:crewId/polls/:pollId', () => {
 
     assert.equal((ioObj.to.mock.calls as any[])[0].arguments[0], 'crew:crew-1');
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:poll-closed');
-    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { pollId: 'poll-1' });
+    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { crewId: 'crew-1', pollId: 'poll-1' });
   });
 
   // ── Close creates the winning set's meeting point ─────────────────
