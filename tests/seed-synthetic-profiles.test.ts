@@ -114,6 +114,34 @@ describe('seed-synthetic-profiles on the test database', { skip }, () => {
     assert.equal(Number((await pool.query("SELECT count(*) AS n FROM users WHERE id NOT LIKE 'synth-%'")).rows[0].n), realUsers);
   });
 
+  test('a rerun for another festival adds no profiles and no picks', async () => {
+    const other = `${FESTIVAL}-other`;
+    await pool.query(
+      `INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, time_zone, lineup)
+       VALUES ($1, 'Other Fest', 'There', now(), now(), now(), 'b2b', 'America/New_York', '[]'::jsonb)`,
+      [other],
+    );
+    await pool.query(`INSERT INTO festival_stages (festival_id, id, name, color, sort_order) VALUES ($1, $2, 'Main', '#ff3366', 0)`, [other, `${other}-main`]);
+    await pool.query(`INSERT INTO festival_days (festival_id, day_index, label, date) VALUES ($1, 0, 'Friday', '2099-08-21')`, [other]);
+    await pool.query(
+      `INSERT INTO festival_sets (id, festival_id, day_index, artist, stage_id, start_time, end_time, sort_order, artists)
+       VALUES ($1, $2, 0, 'Other Artist', $3, '20:00', '21:00', 0, '[]'::jsonb)`,
+      [`${other}-set-0`, other, `${other}-main`],
+    );
+    try {
+      assert.equal(runSeed(TEST_DATABASE_URL, ['--festival', FESTIVAL, '--count', '4', '--picks', '2']).status, 0);
+      const before = await counts();
+      const run = runSeed(TEST_DATABASE_URL, ['--festival', other, '--count', '4', '--picks', '2']);
+      assert.equal(run.status, 0, run.stderr);
+      assert.deepEqual(JSON.parse(run.stdout), { users: 0, profiles: 0, picks: 0 });
+      assert.deepEqual(await counts(), before);
+    } finally {
+      assert.equal(runSeed(TEST_DATABASE_URL, ['--remove']).status, 0);
+      for (const table of ['festival_sets', 'festival_days', 'festival_stages']) await pool.query(`DELETE FROM ${table} WHERE festival_id = $1`, [other]);
+      await pool.query('DELETE FROM festivals WHERE id = $1', [other]);
+    }
+  });
+
   test('fails with a clear message for a festival that has no sets', () => {
     const run = runSeed(TEST_DATABASE_URL, ['--festival', 'no-such-festival', '--count', '1']);
     assert.equal(run.status, 1);

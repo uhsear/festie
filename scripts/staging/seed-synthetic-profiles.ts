@@ -10,7 +10,8 @@
  *       --festival <festival id> [--count 2000] [--picks 8] [--remove]
  *
  * It adds one account and one festival profile per synthetic user, each with up to --picks picks
- * on the festival's sets. A second run adds nothing that exists already. --remove deletes every
+ * on the festival's sets. A second run adds nothing that exists already, including picks for a
+ * profile that belongs to another festival: run --remove before seeding a different festival. --remove deletes every
  * synthetic row and nothing else.
  *
  * It fails closed: the URL comes only from SEED_DATABASE_URL (never DATABASE_URL), the database
@@ -117,17 +118,23 @@ async function seedBatch(client: any, festival: string, indexes: number[], setId
     `INSERT INTO festival_profiles (id, festival_id, user_id, name, picks_json, created_at, updated_at)
      SELECT 'synth-profile-' || n, $2, 'synth-user-' || n, 'Synthetic ' || n, p::jsonb, now(), now()
      FROM unnest($1::text[], $3::text[]) AS u(n, p)
-     ON CONFLICT DO NOTHING`,
+     ON CONFLICT DO NOTHING
+     RETURNING id`,
     [numbers, festival, picks.map((p) => JSON.stringify(p))],
   );
-  const rows = picks.flatMap((p, k) => Object.entries(p).map(([setId, priority]) => [`synth-profile-${numbers[k]}`, setId, priority]));
+  // Picks only for profiles this run created, so a rerun never adds picks to another festival's profile
+  // or picks that are missing from picks_json.
+  const created = new Set(profiles.rows.map((r: { id: string }) => r.id));
+  const rows = picks
+    .flatMap((p, k) => Object.entries(p).map(([setId, priority]) => [`synth-profile-${numbers[k]}`, setId, priority]))
+    .filter(([profileId]) => created.has(profileId));
   const inserted = await client.query(
     `INSERT INTO festival_profile_picks (profile_id, set_id, priority)
      SELECT * FROM unnest($1::text[], $2::text[], $3::text[])
      ON CONFLICT DO NOTHING`,
     [0, 1, 2].map((col) => rows.map((r) => r[col])),
   );
-  return { users: users.rowCount ?? 0, profiles: profiles.rowCount ?? 0, picks: inserted.rowCount ?? 0 };
+  return { users: users.rowCount ?? 0, profiles: created.size, picks: inserted.rowCount ?? 0 };
 }
 
 async function seed(pool: Pool, { festival, count, picks }: Args) {
