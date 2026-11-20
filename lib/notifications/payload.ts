@@ -5,13 +5,10 @@ import crypto from 'crypto';
 import https from 'https';
 import { loadConfig } from '../config';
 
-const config = loadConfig();
+let _loaded: ReturnType<typeof loadConfig> | undefined;
+const cfg = () => (_loaded ??= loadConfig());
 
-// External webhook for persistent FCM retry queue
-const FCM_RETRY_WEBHOOK_URL = config.FCM_RETRY_WEBHOOK_URL;
-
-// HMAC key for hashing device tokens before transmitting to external webhook
-const WEBHOOK_TOKEN_HMAC_KEY = config.WEBHOOK_TOKEN_HMAC_KEY;
+// Config is read on first use (FCM retry webhook URL, token HMAC key), not at import.
 
 // M3 re-engagement triggers (after-festival growth loops): lineup_drop / crew_reformed / wrap_ready.
 // All event-gated (never cron-spam), per-type opt-out, DND-respecting, deduped once-per-event-per-user.
@@ -47,11 +44,12 @@ export const MAX_DATA_KEYS = 10;
 
 // Hash device token with HMAC-SHA256 before transmitting to webhook
 function hashDeviceToken(token: any) {
-  return crypto.createHmac('sha256', WEBHOOK_TOKEN_HMAC_KEY).update(String(token)).digest('hex');
+  return crypto.createHmac('sha256', cfg().WEBHOOK_TOKEN_HMAC_KEY).update(String(token)).digest('hex');
 }
 
 // Fire-and-forget POST to FCM retry webhook
 export function postToWebhookRetry(token: any, payload: any, attempt: any) {
+  const FCM_RETRY_WEBHOOK_URL = cfg().FCM_RETRY_WEBHOOK_URL;
   if (!FCM_RETRY_WEBHOOK_URL) return;
   try {
     const url = new URL(FCM_RETRY_WEBHOOK_URL);
@@ -63,7 +61,7 @@ export function postToWebhookRetry(token: any, payload: any, attempt: any) {
         path: url.pathname,
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) },
-        timeout: config.WEBHOOK_RETRY_TIMEOUT_MS,
+        timeout: cfg().WEBHOOK_RETRY_TIMEOUT_MS,
       },
       () => {},
     );

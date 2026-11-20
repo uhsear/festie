@@ -36,7 +36,7 @@ import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { withTransactionRetry } from '../lib/db/connection.js';
-import { lockFestivalAny } from '../lib/db/stores/lineup-imports.js';
+import { lockFestivalAny } from '../lib/db/stores/festival-lock.js';
 import { rewriteCopies, type ArtistRecord } from '../lib/db/stores/artists.js';
 import { recentRequestTotals } from '../lib/recent-requests.js';
 import type { Router } from 'express';
