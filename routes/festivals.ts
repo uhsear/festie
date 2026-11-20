@@ -10,8 +10,6 @@ import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
 import { ArtistError } from '../lib/db/stores/artists.js';
-import { lockFestivalAny } from '../lib/db/stores/festival-lock.js';
-import { withTransactionRetry } from '../lib/db/connection.js';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 import type { RouteDeps } from '../lib/types';
@@ -223,9 +221,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   }
 
   async function countOnSets(table: 'festival_profile_picks' | 'set_ratings', setIds: string[]) {
-    if (setIds.length === 0) return 0;
-    const result = await stores.pool.query(`SELECT COUNT(*) AS count FROM ${table} WHERE set_id = ANY($1)`, [setIds]);
-    return Number.parseInt(result.rows[0]?.count ?? '0', 10) || 0;
+    return stores.festivals.countOnSets(table, setIds);
   }
 
   // The cancel line of the removal confirm: what cancelling these acts takes away and who hears about it.
@@ -317,14 +313,10 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     try {
       const setId = String(req.params.setId || '');
       if (!setId) return sendError(res, 400, 'Set ID required', ErrorCodes.INVALID_INPUT);
-      const result = await stores.pool.query(
-        `SELECT fs.festival_id, (f.published_at IS NOT NULL) AS published FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
-         WHERE fs.id = $1 AND f.deleted_at IS NULL AND (f.published_at IS NOT NULL OR $2::boolean) LIMIT 1`,
-        [setId, isAdminReq(req)],
-      );
-      if (!result.rows.length) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
-      res.setHeader('Cache-Control', result.rows[0].published ? 'public, max-age=300' : 'private, no-store');
-      return sendSuccess(res, { festivalId: result.rows[0].festival_id });
+      const located = await stores.festivals.locateSet(setId, isAdminReq(req));
+      if (!located) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
+      res.setHeader('Cache-Control', located.published ? 'public, max-age=300' : 'private, no-store');
+      return sendSuccess(res, { festivalId: located.festivalId });
     } catch (error) {
       log.error('locate-set failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to locate set', ErrorCodes.INTERNAL_ERROR);
@@ -822,7 +814,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     validate(schemas.setLink),
     async (req: Request, res: Response) => {
       try {
-        const festivalId = req.params.festivalId as string;
+        const festivalId = (req as { festivalId?: string }).festivalId as string;
         const setId = req.params.setId as string;
         const { linkUrl, artistIndex = 0 } = req.validatedBody as z.infer<typeof schemas.setLink>;
 
@@ -837,37 +829,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
 
         // One transaction under the festival lock, reading the set row itself, so a link edit never
         // rebuilds a set from a cache and never races a festival save.
-        const outcome: any = await withTransactionRetry(stores.pool, async (client: any) => {
-          const locked = await lockFestivalAny(client, festivalId);
-          if (!locked || locked.deleted_at) return { missing: 'Festival not found' };
-          const { rows } = await client.query(
-            'SELECT artist, artists FROM festival_sets WHERE id = $1 AND festival_id = $2 FOR UPDATE',
-            [setId, festivalId],
-          );
-          if (!rows[0]) return { missing: 'Set not found' };
-          // A set saved before the artists array existed has only its display name.
-          const artists: any[] = rows[0].artists?.length
-            ? rows[0].artists.map((a: any) => ({ ...a, links: { ...(a?.links || {}) } }))
-            : [{ name: rows[0].artist, links: {} }];
-          if (artistIndex >= artists.length) return { badIndex: true };
-          const artistId = artists[artistIndex].id;
-          // An artist that has a row owns its link: write the row, which rewrites every copy.
-          if (artistId && (await client.query('SELECT 1 FROM artists WHERE id = $1 AND merged_into IS NULL', [artistId])).rowCount) {
-            return { artistId };
-          }
-          if (cleanUrl) artists[artistIndex].links.spotify = cleanUrl;
-          else delete artists[artistIndex].links.spotify;
-          // link_url mirrors the first artist's Spotify link (backward compat).
-          const firstLink = artists[0].links.spotify || null;
-          await client.query('UPDATE festival_sets SET artists = $1, link_url = $2 WHERE id = $3 AND festival_id = $4', [
-            JSON.stringify(artists),
-            firstLink,
-            setId,
-            festivalId,
-          ]);
-          await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
-          return {};
-        });
+        const outcome = await stores.festivals.setSpotifyLink(festivalId, setId, artistIndex, cleanUrl);
         if (outcome.missing) return sendError(res, 404, outcome.missing, ErrorCodes.NOT_FOUND);
         if (outcome.badIndex) return sendError(res, 400, 'That artist is not on this set.', ErrorCodes.INVALID_INPUT);
         if (outcome.artistId) {
@@ -904,14 +866,10 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   // GET /:festivalId/sets/links — Admin: list all set links for a festival
   router.get('/:festivalId/sets/links', festivalAccess({ action: 'links.edit', param: 'festivalId' }), async (req: Request, res: Response) => {
     try {
-      const festivalId = req.params.festivalId;
-      const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
-      if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-      const result = await stores.pool.query(
-        'SELECT id, artist, link_url AS "linkUrl", artists FROM festival_sets WHERE festival_id = $1 AND (link_url IS NOT NULL OR artists != \'[]\'::jsonb) ORDER BY artist',
-        [festivalId],
-      );
-      return sendSuccess(res, result.rows);
+      const festivalId = (req as { festivalId?: string }).festivalId;
+      if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
+      if (!(await stores.festivals.exists(festivalId))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      return sendSuccess(res, await stores.festivals.listSetLinks(festivalId));
     } catch (error) {
       log.error('set links list failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load set links', ErrorCodes.INTERNAL_ERROR);

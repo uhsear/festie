@@ -4,6 +4,8 @@ import express from 'express';
 import path from 'path';
 import request from 'supertest';
 import { fileURLToPath } from 'url';
+import createFestivalsStore from '../lib/db/stores/festivals.js';
+import { createAnalyticsStore } from '../lib/db/stores/analytics.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -56,8 +58,8 @@ function makeDeps(overrides: any = {}) {
       next();
     },
     rateLimit: () => (req: any, res: any, next: any) => next(),
-    validate: () => (req: any, res: any, next: any) => {
-      req.validatedBody = req.body;
+    validate: (schema?: any) => (req: any, res: any, next: any) => {
+      req.validatedBody = schema?.safeParse ? schema.safeParse(req.body).data : req.body;
       next();
     },
     validateQuery: () => (req: any, res: any, next: any) => {
@@ -314,6 +316,10 @@ function makeDeps(overrides: any = {}) {
     },
     ...overrides,
   };
+  // The routes reach SQL through the stores. Run the real ones over whichever pool mock a test swaps in.
+  const live: any = { query: (...args: any[]) => deps.stores.pool.query(...args), connect: () => deps.stores.pool.connect() };
+  deps.stores.festivals = { ...createFestivalsStore(live, {}), ...deps.stores.festivals };
+  deps.stores.analytics ??= createAnalyticsStore(live);
   return deps;
 }
 
@@ -458,7 +464,7 @@ describe('routes/admin-status.js', () => {
   test('GET /admin/analytics returns totals, distribution, install and scope', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
-    deps.pool.query = analyticsQueryMock();
+    deps.stores.pool.query = analyticsQueryMock();
     const { router } = createAdminStatusRoutes(deps);
     const app = buildApp(router);
 
@@ -478,27 +484,27 @@ describe('routes/admin-status.js', () => {
     assert.equal(data.festivalStats.length, 1);
     assert.ok(data.generatedAt);
     // Every scoped query gets the festival id (here NULL) as a parameter.
-    const calls = deps.pool.query.mock.calls;
+    const calls = deps.stores.pool.query.mock.calls;
     assert.ok(calls.filter((c: any) => c.arguments[1]?.[0] === null).length >= 4);
   });
 
   test('GET /admin/analytics?festivalId scopes the queries and names the festival', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
-    deps.pool.query = analyticsQueryMock();
+    deps.stores.pool.query = analyticsQueryMock();
     const { router } = createAdminStatusRoutes(deps);
     const app = buildApp(router);
 
     const res = await request(app).get('/admin/analytics?festivalId=f1').expect(200);
     assert.deepEqual(res.body.data.scope, { festivalId: 'f1', festivalName: 'Bonnaroo' });
-    const scoped = deps.pool.query.mock.calls.filter((c: any) => c.arguments[1]?.[0] === 'f1');
+    const scoped = deps.stores.pool.query.mock.calls.filter((c: any) => c.arguments[1]?.[0] === 'f1');
     assert.equal(scoped.length, 5);
   });
 
   test('GET /admin/analytics returns 404 for an unknown or deleted festival', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
-    deps.pool.query = analyticsQueryMock();
+    deps.stores.pool.query = analyticsQueryMock();
     const { router } = createAdminStatusRoutes(deps);
     const app = buildApp(router);
 
@@ -510,8 +516,7 @@ describe('routes/admin-status.js', () => {
   test('GET /admin/analytics returns 503 when pool unavailable', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
-    deps.pool = null;
-    deps.stores.pool = null;
+    deps.stores.analytics = undefined;
     const { router } = createAdminStatusRoutes(deps);
     const app = buildApp(router);
 
@@ -523,7 +528,7 @@ describe('routes/admin-status.js', () => {
   test('GET /admin/analytics returns 500 on query error', async () => {
     const { default: createAdminStatusRoutes } = await import('../routes/admin-status.js');
     const deps = makeDeps();
-    deps.pool.query = mock.fn(async () => {
+    deps.stores.pool.query = mock.fn(async () => {
       throw new Error('DB down');
     });
     const { router } = createAdminStatusRoutes(deps);
@@ -2185,7 +2190,7 @@ describe('routes/admin.js — GET /ref-counts', () => {
           ],
         };
       }
-      if (sql.includes('GROUP BY 1, 2, 3')) return { rows: [{ day: '2026-11-01', festivalId: 'f1', festivalName: 'Fest', follows: 4 }] };
+      if (/GROUP BY\s+1,\s+2,\s+3/.test(sql)) return { rows: [{ day: '2026-11-01', festivalId: 'f1', festivalName: 'Fest', follows: 4 }] };
       if (sql.includes('festival_follows')) return { rows: [{ festivalId: 'f1', festivalName: 'Fest', followers: 9 }] };
       return { rows: [] };
     });

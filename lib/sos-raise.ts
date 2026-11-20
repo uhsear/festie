@@ -124,5 +124,3 @@ export function createSosRaiser({ stores, redis, emitter, notificationService, l
 
   return { raise };
 }
-
-export type SosRaiser = ReturnType<typeof createSosRaiser>;

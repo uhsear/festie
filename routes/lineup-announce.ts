@@ -31,7 +31,6 @@ export default function createLineupAnnounceRoute(deps: any) {
     log,
     festivalAccess,
     rateLimit,
-    sanitizeIdentifier,
     sendSuccess,
     sendError,
     ErrorCodes,
@@ -47,7 +46,7 @@ export default function createLineupAnnounceRoute(deps: any) {
 
   router.get('/:id/lineup-announcement', festivalAccess({ action: 'lineup.drop' }), async (req: any, res: any) => {
     try {
-      const festivalId = sanitizeIdentifier(req.params.id, 100);
+      const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
       const { reason: _reason, ...count } = await reengagementExecutor.countLineupDrop(festivalId);
       if (!count.festivalName) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
@@ -60,7 +59,7 @@ export default function createLineupAnnounceRoute(deps: any) {
 
   router.post('/:id/lineup-announcement', festivalAccess({ action: 'lineup.drop' }), rateLimit(3, 'lineup-announce'), async (req: any, res: any) => {
     try {
-      const festivalId = sanitizeIdentifier(req.params.id, 100);
+      const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
       const festival = await getFestivalById(festivalId);
       if (festival && !festival.publishedAt) {
@@ -94,7 +93,7 @@ export default function createLineupAnnounceRoute(deps: any) {
 
   router.get('/:id/days-announcement', festivalAccess({ action: 'lineup.drop' }), async (req: any, res: any) => {
     try {
-      const festivalId = sanitizeIdentifier(req.params.id, 100);
+      const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
       const count = await reengagementExecutor.countDaysOut(festivalId);
       if (count.reason === 'festival_not_found' || count.reason === 'no_festival') {
@@ -109,7 +108,7 @@ export default function createLineupAnnounceRoute(deps: any) {
 
   router.post('/:id/days-announcement', festivalAccess({ action: 'lineup.drop' }), rateLimit(3, 'days-announce'), async (req: any, res: any) => {
     try {
-      const festivalId = sanitizeIdentifier(req.params.id, 100);
+      const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
       const count = await reengagementExecutor.countDaysOut(festivalId);
       if (count.reason === 'festival_not_found' || count.reason === 'no_festival') {

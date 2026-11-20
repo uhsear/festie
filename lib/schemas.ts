@@ -908,9 +908,10 @@ export const crewDaysSchema = z
 /** The request members the factories read and write, so a bare double can stand in for a request. */
 type ValidatedRequest = Pick<Partial<Request>, 'body' | 'query' | 'params' | 'validatedBody' | 'validatedQuery' | 'validatedParams'>;
 
-export function validate(schema: z.ZodType) {
+/** One middleware for all three request sources, so the 400 shape stays in one place. */
+function validateSource(source: 'body' | 'query' | 'params', target: 'validatedBody' | 'validatedQuery' | 'validatedParams', schema: z.ZodType) {
   return (req: ValidatedRequest, res: Partial<Response>, next: NextFunction) => {
-    const result = schema.safeParse(req.body);
+    const result = schema.safeParse(req[source]);
     if (!result.success) {
       const firstIssue = result.error.issues[0]!;
       const message =
@@ -919,50 +920,19 @@ export function validate(schema: z.ZodType) {
         fields: result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
       });
     }
-    req.validatedBody = result.data;
+    req[target] = result.data;
     next();
   };
 }
 
-/**
- * Middleware factory for query-string validation via Zod.
- * Parses req.query and stores the result in req.validatedQuery.
- */
-export function validateQuery(schema: z.ZodType) {
-  return (req: ValidatedRequest, res: Partial<Response>, next: NextFunction) => {
-    const result = schema.safeParse(req.query);
-    if (!result.success) {
-      const firstIssue = result.error.issues[0]!;
-      const message =
-        firstIssue.path.length > 0 ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : firstIssue.message;
-      return sendError(res as Response, 400, message, ErrorCodes.VALIDATION_ERROR, {
-        fields: result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-      });
-    }
-    req.validatedQuery = result.data;
-    next();
-  };
-}
+/** Parses req.body and stores the result in req.validatedBody. */
+export const validate = (schema: z.ZodType) => validateSource('body', 'validatedBody', schema);
 
-/**
- * Middleware factory for URL params validation via Zod.
- * Parses req.params and stores the result in req.validatedParams.
- */
-export function validateParams(schema: z.ZodType) {
-  return (req: ValidatedRequest, res: Partial<Response>, next: NextFunction) => {
-    const result = schema.safeParse(req.params);
-    if (!result.success) {
-      const firstIssue = result.error.issues[0]!;
-      const message =
-        firstIssue.path.length > 0 ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : firstIssue.message;
-      return sendError(res as Response, 400, message, ErrorCodes.VALIDATION_ERROR, {
-        fields: result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-      });
-    }
-    req.validatedParams = result.data;
-    next();
-  };
-}
+/** Parses req.query and stores the result in req.validatedQuery. */
+export const validateQuery = (schema: z.ZodType) => validateSource('query', 'validatedQuery', schema);
+
+/** Parses req.params and stores the result in req.validatedParams. */
+export const validateParams = (schema: z.ZodType) => validateSource('params', 'validatedParams', schema);
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Payload Normalizers (consolidated from lib/validation.js)

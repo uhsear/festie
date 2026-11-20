@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import express from 'express';
 import request from 'supertest';
 import { ioEmitter } from './_io-emitter';
+import createFestivalsStore from '../lib/db/stores/festivals.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Shared mock factory
@@ -129,7 +130,10 @@ function baseDeps(overrides: any = {}) {
     },
     ...overrides,
   };
-  deps.festivalAccess = () => deps.adminAuth;
+  deps.festivalAccess = ({ param = 'id' }: any = {}) => (req: any, res: any, next: any) => {
+    req.festivalId = req.params[param];
+    return deps.adminAuth(req, res, next);
+  };
   return deps;
 }
 
@@ -1909,16 +1913,16 @@ describe('routes/lineup-import', () => {
 
 describe('routes/weather', () => {
   function buildWeatherDeps(overrides: any = {}) {
-    return baseDeps({
-      stores: {
-        pool: {
-          query: mock.fn(async () => ({
-            rows: [{ latitude: 25.76, longitude: -80.19, name: 'Ultra Miami' }],
-          })),
-        },
+    const stores: any = {
+      pool: {
+        query: mock.fn(async () => ({
+          rows: [{ latitude: 25.76, longitude: -80.19, name: 'Ultra Miami' }],
+        })),
       },
-      ...overrides,
-    });
+    };
+    // The route reads the festival through the store; a test swaps stores.pool.query to change the row.
+    stores.festivals = createFestivalsStore({ query: (...args: any[]) => stores.pool.query(...args) } as any, {});
+    return baseDeps({ stores, ...overrides });
   }
 
   async function mountWeather(deps: any) {
