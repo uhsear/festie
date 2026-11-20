@@ -731,7 +731,7 @@ export default function setupSocketHandlers(deps: any) {
       }
     });
 
-    // #17: Reconnection recovery — client sends last known state, server gap-fills
+    // #17: Reconnection recovery — re-auth and rejoin the room. No server gap-fill: the client refetches missed state.
     // Security: Always re-validate session on reconnect (not just initial connection)
     socket.on('reconnect:restore', async (data: any = {}, ack: any) => {
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
@@ -741,7 +741,6 @@ export default function setupSocketHandlers(deps: any) {
           _v: data._v || 1,
           festivalId: data.festivalId || '',
           userToken: data.userToken || null,
-          lastMessageSequence: data.lastMessageSequence || null,
         };
         const validation = reconnectRestoreEventSchema.safeParse(eventData);
         if (!validation.success) {
