@@ -4,6 +4,7 @@ import { act, renderHook } from '@testing-library/react';
 import { useUIStore } from '../stores/uiStore';
 import { useFestivalDataStore } from '../stores/festivalDataStore';
 import { useCrewStore } from '../stores/crewStore';
+import { useNotificationPrefsStore, DEFAULT_NOTIFICATION_PREFS } from '../stores/notificationPrefsStore';
 import type { Socket } from '../services/socket';
 import { useRealtimeStoreSync } from './useRealtimeSync';
 
@@ -185,6 +186,42 @@ describe('useRealtimeStoreSync: event handlers', () => {
     expect(setOnlineUsers).not.toHaveBeenCalled();
     socket.fire('presence:update', { online: [{ userId: 'u1', username: 'Ann', avatarUrl: 'a.png' }] });
     expect(setOnlineUsers).toHaveBeenCalledWith([{ id: 'u1', name: 'Ann', avatar: 'a.png', status: 'online' }]);
+  });
+});
+
+describe('useRealtimeStoreSync: quiet-hours time zone on foreground', () => {
+  const real = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const savedZone = real === 'Pacific/Auckland' ? 'Europe/Paris' : 'Pacific/Auckland';
+
+  beforeEach(() => {
+    useNotificationPrefsStore.setState({
+      loaded: true,
+      prefs: { ...DEFAULT_NOTIFICATION_PREFS, dndStart: '23:00', dndEnd: '08:00', dndTimeZone: savedZone },
+    });
+  });
+
+  it('a zone change plus a backfill updates dndTimeZone', () => {
+    const updatePrefs = vi.fn().mockResolvedValue(undefined);
+    useNotificationPrefsStore.setState({ updatePrefs });
+    const { result } = mount();
+    act(() => result.current.backfill());
+    expect(updatePrefs).toHaveBeenCalledWith({ dndTimeZone: real });
+  });
+
+  it('a zone change plus a visibilitychange to visible updates dndTimeZone', () => {
+    const updatePrefs = vi.fn().mockResolvedValue(undefined);
+    useNotificationPrefsStore.setState({ updatePrefs });
+    mount();
+    act(() => void document.dispatchEvent(new Event('visibilitychange')));
+    expect(updatePrefs).toHaveBeenCalledWith({ dndTimeZone: real });
+  });
+
+  it('does nothing when the zone is unchanged', () => {
+    const updatePrefs = vi.fn().mockResolvedValue(undefined);
+    useNotificationPrefsStore.setState({ updatePrefs, prefs: { ...useNotificationPrefsStore.getState().prefs, dndTimeZone: real } });
+    const { result } = mount();
+    act(() => result.current.backfill());
+    expect(updatePrefs).not.toHaveBeenCalled();
   });
 });
 
