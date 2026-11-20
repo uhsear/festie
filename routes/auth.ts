@@ -69,9 +69,9 @@ function computeSessionOpaqueId(tokenHash: string) {
  * Disconnect sockets belonging to a user whose session token hash matches
  * `targetTokenHash`, emitting a revocation event before disconnecting.
  */
-function disconnectSessionSockets(userId: string, targetTokenHash: string, reason: string, deps: any) {
-  const { io, hashSessionToken: hashToken } = deps;
-  for (const [, socket] of io.sockets.sockets) {
+async function disconnectSessionSockets(userId: string, targetTokenHash: string, reason: string, deps: any) {
+  const { io, hashSessionToken: hashToken, fetchRevocationSockets } = deps;
+  for (const socket of await fetchRevocationSockets(io)) {
     if (socket.data?.userId === userId) {
       const socketTokenHash = socket.data.userSessionToken ? hashToken(socket.data.userSessionToken) : null;
       if (socketTokenHash === targetTokenHash) {
@@ -317,7 +317,7 @@ export default function createAuthRoutes(deps: any): Router {
       if (token) {
         await stores.sessions.deleteUserSession(hashSessionToken(token));
         const disconnectSessionTokens = deps.disconnectSessionTokens;
-        disconnectSessionTokens([token], io);
+        await disconnectSessionTokens([token], io);
       }
       clearUserSessionCookie(res);
       return sendSuccess(res, { success: true });
@@ -336,7 +336,7 @@ export default function createAuthRoutes(deps: any): Router {
       const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req), req.userToken ?? null);
       if (req.userToken) {
         // Disconnect sockets still using the old token to prevent stale connections
-        disconnectSessionTokens([req.userToken], io);
+        await disconnectSessionTokens([req.userToken], io);
       }
       setUserSessionCookie(res, token);
       const { serializePublicUser } = deps;
@@ -466,7 +466,7 @@ export default function createAuthRoutes(deps: any): Router {
       }
 
       await stores.sessions.deleteUserSession(target.token);
-      disconnectSessionSockets(req.user.userId, target.token, 'Session revoked by user', deps);
+      await disconnectSessionSockets(req.user.userId, target.token, 'Session revoked by user', deps);
 
       log.info('session:revoked', { userId: req.user.userId, sessionId });
       return sendSuccess(res, { success: true });
@@ -484,7 +484,7 @@ export default function createAuthRoutes(deps: any): Router {
       const currentTokenHash = req.userToken ? hashToken(req.userToken) : null;
 
       // Notify other sockets before invalidateUserSessions disconnects them (it spares the current session)
-      for (const [, socket] of io.sockets.sockets) {
+      for (const socket of await deps.fetchRevocationSockets(io)) {
         if (socket.data?.userId === req.user.userId) {
           const socketTokenHash = socket.data.userSessionToken ? hashToken(socket.data.userSessionToken) : null;
           if (socketTokenHash !== currentTokenHash) {
@@ -548,7 +548,7 @@ export default function createAuthRoutes(deps: any): Router {
         // revocations. `user.email` is spared so an unclicked signup or resend
         // token for the address already on file survives.
         await stores.emailTokens.invalidatePendingEmailChanges(req.user.userId, user.email ?? null);
-        disconnectUserSockets(req.user.userId, io);
+        await disconnectUserSockets(req.user.userId, io);
         const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req));
         setNoStore(res);
         setUserSessionCookie(res, token);

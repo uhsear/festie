@@ -812,7 +812,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           if (stores.profiles) {
             await stores.profiles.deleteByUserId(req.user.userId, { reason: 'account-deleted', keepPicks: true });
           }
-          disconnectUserSockets(req.user.userId, io);
+          await disconnectUserSockets(req.user.userId, io);
           // Apple requires the revoke on delete. Best effort, never throws. The identity
           // rows stay, so a sign-in with Apple inside the 30 days restores the account.
           await revokeAppleForUser(req.user.userId, deps);

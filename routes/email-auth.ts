@@ -205,7 +205,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
         await stores.emailTokens.invalidateVerificationTokens(userId);
         await invalidateUserSessions(userId);
         if (stores.refreshTokens) await stores.refreshTokens.revokeAll(userId);
-        disconnectUserSockets(userId, io);
+        await disconnectUserSockets(userId, io);
         // Tell the old address. sendEmail never throws, so a mail failure
         // cannot fail the confirm.
         await sendEmailChangedEmail({ to: currentUser.email, config, log });
@@ -332,7 +332,7 @@ export default function createEmailAuthRoutes(deps: any): Router {
         // Retire every other outstanding reset link too, e.g. a "This wasn't me"
         // link alongside a forgot-password one: either could reset again.
         await stores.emailTokens.invalidateResetTokens(targetUserId);
-        disconnectUserSockets(targetUserId, io);
+        await disconnectUserSockets(targetUserId, io);
 
         const auditLog = createAuditLog('user_reset_password', 'user', {
           userId: targetUserId,
