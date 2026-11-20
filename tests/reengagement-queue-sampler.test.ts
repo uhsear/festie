@@ -30,7 +30,7 @@ describe('startReengagementQueueSampler', () => {
   it('stops sampling once the queue is closing instead of warning on every tick', async () => {
     const metrics = fakeMetrics();
     let calls = 0;
-    const queue: any = {
+    const queue: { closing?: Promise<void>; getWaitingCount(): Promise<number>; getDelayedCount(): Promise<number> } = {
       closing: undefined,
       getWaitingCount: async () => {
         calls += 1;
