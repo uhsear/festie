@@ -143,9 +143,30 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     socket.disconnect(true);
   }
 
-  function disconnectUserSockets(userId: any, io: any, exceptToken: any = null) {
+  // Revocation must reach sockets on every process behind the adapter. fetchSockets() can hang
+  // while Redis is down, so bound it and fall back to this process's sockets.
+  async function fetchRevocationSockets(io: any): Promise<any[]> {
+    const nsp = io.of('/');
+    if (typeof nsp.fetchSockets !== 'function') return Array.from(nsp.sockets.values());
+    let timer: any;
+    try {
+      return await Promise.race([
+        nsp.fetchSockets(),
+        new Promise<never>((_resolve, reject) => {
+          timer = setTimeout(() => reject(new Error('fetchSockets timed out')), 2000);
+        }),
+      ]);
+    } catch (err: any) {
+      log.warn('presence: fetchSockets failed, revoking local sockets only', { error: err.message });
+      return Array.from(nsp.sockets.values());
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  async function disconnectUserSockets(userId: any, io: any, exceptToken: any = null) {
     const presenceTargets = new Set();
-    for (const socket of Array.from(io.of('/').sockets.values()) as any[]) {
+    for (const socket of await fetchRevocationSockets(io)) {
       if (socket.data?.userId !== userId) continue;
       if (exceptToken && socket.data?.userSessionToken === exceptToken) continue;
       disconnectSocket(socket, io, presenceTargets);
@@ -155,20 +176,20 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     for (const festivalId of presenceTargets) emitPresence(festivalId, io);
   }
 
-  function disconnectSessionTokens(tokens: any, io: any) {
+  async function disconnectSessionTokens(tokens: any, io: any) {
     const tokenSet = new Set((tokens || []).filter(Boolean));
     if (tokenSet.size === 0) return;
     const presenceTargets = new Set();
-    for (const socket of Array.from(io.of('/').sockets.values()) as any[]) {
+    for (const socket of await fetchRevocationSockets(io)) {
       if (!tokenSet.has(socket.data?.userSessionToken)) continue;
       disconnectSocket(socket, io, presenceTargets);
     }
     for (const festivalId of presenceTargets) emitPresence(festivalId, io);
   }
 
-  function removeFestivalSockets(festivalId: any, io: any) {
+  async function removeFestivalSockets(festivalId: any, io: any) {
     const presenceTargets = new Set();
-    for (const socket of Array.from(io.of('/').sockets.values()) as any[]) {
+    for (const socket of await fetchRevocationSockets(io)) {
       if (socket.data?.festivalId !== festivalId) continue;
       leaveFestivalRealtime(socket, io, presenceTargets);
       socket.emit('festival:access-revoked', { festivalId });
@@ -182,10 +203,10 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     for (const targetFestivalId of presenceTargets) emitPresence(targetFestivalId, io);
   }
 
-  function removeProfileSockets(profile: any, io: any) {
+  async function removeProfileSockets(profile: any, io: any) {
     if (!profile?.userId || !profile?.festivalId) return;
     const presenceTargets = new Set();
-    for (const socket of Array.from(io.of('/').sockets.values()) as any[]) {
+    for (const socket of await fetchRevocationSockets(io)) {
       if (socket.data?.userId !== profile.userId || socket.data?.festivalId !== profile.festivalId) continue;
       leaveFestivalRealtime(socket, io, presenceTargets);
       socket.emit('festival:access-revoked', { festivalId: profile.festivalId, profileId: profile.id });
@@ -207,5 +228,6 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     disconnectSessionTokens,
     removeFestivalSockets,
     removeProfileSockets,
+    fetchRevocationSockets,
   };
 }

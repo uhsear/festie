@@ -91,6 +91,27 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     await logoutDisconnect;
   });
 
+  test('revoking all other sessions disconnects their sockets', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    await joinFestivalProfile(server, alice.token);
+    const other = await loginUser(server, 'alice');
+
+    const socket = connectSocket(server.baseUrl);
+    await waitForEvent(socket, 'connect');
+    socket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    await waitForEvent(socket, 'presence:update', (payload) => payload.online.length === 1);
+
+    const disconnected = waitForEvent(socket, 'disconnect', () => true);
+    await server.request
+      .delete('/api/v1/auth/sessions')
+      .set('x-user-token', other.token)
+      .expect(200);
+    await disconnected;
+  });
+
   test('rate limits noisy realtime join events', async () => {
     const server = await startServer({ SOCKET_JOIN_RATE_LIMIT: 2, SOCKET_EVENT_WINDOW: 10_000 });
     servers.push(server);
