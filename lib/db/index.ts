@@ -24,6 +24,7 @@ import { createTimeReleasesStore } from './stores/time-releases.js';
 import { createAnnouncementsStore } from './stores/announcements.js';
 import { createIdentitiesStore } from './stores/identities.js';
 import { createArtistsStore } from './stores/artists.js';
+import { createOrganizationsStore } from './stores/organizations.js';
 import { createAnalyticsStore } from './stores/analytics.js';
 import { createDbLatencyTracker } from './latency.js';
 import type { Pool } from 'pg';
@@ -77,6 +78,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
   const announcements = createAnnouncementsStore(pool);
   const identities = createIdentitiesStore(pool);
   const artists = createArtistsStore(pool);
+  const organizations = createOrganizationsStore(pool);
   const analytics = createAnalyticsStore(pool);
 
   return {
@@ -114,6 +116,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
     announcements,
     identities,
     artists,
+    organizations,
     analytics,
 
     async counts() {

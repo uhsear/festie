@@ -93,6 +93,8 @@ const REQUIRE_RECENT_AUTH = [
   'admin-users.ts PUT /users/:id/reset-password', 'admin-users.ts DELETE /users/:id', 'admin-bulk.ts DELETE /crews/:id',
   'admin-bulk.ts POST /bulk/deactivate', 'admin-bulk.ts POST /bulk/archive-festivals', 'festivals.ts DELETE /:id',
   'identities.ts POST /identities/:provider', 'identities.ts DELETE /identities/:provider', 'identities.ts POST /set-password',
+  'organizations.ts POST /:id/members', 'organizations.ts PUT /:id/members/:userId', 'organizations.ts DELETE /:id/members/:userId',
+  'organizations.ts DELETE /:id/pending-members/:email',
 ];
 
 // Blank out comments but keep line numbers. `/*` and `//` must follow whitespace, so '/set/*' and URLs survive.
@@ -176,10 +178,16 @@ const adminMounted = new Set(files.filter((f) => {
     return adminUses > 0 && serverSrc.match(new RegExp(`\\b${v}\\b`, 'g'))!.length === adminUses + 1;
   });
 }));
+// lib/festival-mounts.ts mounts these two files; tests/festival-access-matrix.test.ts calls every route in them.
+// organizations.ts sits behind adminGuard. manage.ts sits behind userAuth and grants roles only through
+// festivalAccess and orgAccess, which refuse a caller without a role.
+const mountsSrc = stripComments(readFileSync(join(root, 'lib/festival-mounts.ts'), 'utf8'));
+const festivalMountsAdmin = new Set(files.filter((f) => f === 'organizations.ts' && /guards:\s*adminGuard,\s*router:\s*organizationsRoutes\b/.test(mountsSrc)));
+const festivalMountsUser = new Set(files.filter((f) => f === 'manage.ts' && /guards:\s*\[deps\.userAuth\],\s*router:\s*createManageRoutes\(/.test(mountsSrc)));
 const has = (r: Route, re: RegExp) => re.test(r.mw);
-// festivalAccess refuses every non-admin until organizer roles exist, so it counts as an admin gate.
-const isAdmin = (r: Route) => adminMounted.has(r.file) || has(r, /(^|[\s.|])(adminAuth|festivalAccess)\b/);
-const isAuthed = (r: Route) => isAdmin(r) || has(r, /(^|[\s|])userAuth\b/);
+// festivalAccess refuses a non-admin off the /manage mount, and the manage router refuses a caller with no role, so both count as gates.
+const isAdmin = (r: Route) => adminMounted.has(r.file) || festivalMountsAdmin.has(r.file) || has(r, /(^|[\s.|])(adminAuth|festivalAccess)\b/);
+const isAuthed = (r: Route) => isAdmin(r) || festivalMountsUser.has(r.file) || has(r, /(^|[\s|])userAuth\b/);
 const fail = (r: Route, msg: string) => problems.push(`${r.where} ${r.verb} ${r.path}: ${msg}`);
 
 const socketSrc = stripComments(readFileSync(join(root, 'routes/socket.ts'), 'utf8'));

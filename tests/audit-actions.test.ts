@@ -53,9 +53,9 @@ describe('audit action names', () => {
     const problems: string[] = [];
     for (const file of writers) {
       const src = fs.readFileSync(path.join(ROOT, file), 'utf8');
-      // A string literal, or a bare constant that bypasses AUDIT_ACTIONS. festivalAccess({ action }) names
-      // an access action, not an audit action, so it is skipped.
-      for (const m of src.matchAll(/(?<!festivalAccess\(\{\s*)\baction:\s*(['"`][^'"`]*['"`]|[A-Z][A-Z0-9_]*\b(?!\.))/g)) {
+      // A string literal, or a bare constant that bypasses AUDIT_ACTIONS. festivalAccess({ action }) and orgAccess({ action })
+      // name an access action, not an audit action, so they are skipped.
+      for (const m of src.matchAll(/(?<!(?:festivalAccess|orgAccess)\(\{\s*)\baction:\s*(['"`][^'"`]*['"`]|[A-Z][A-Z0-9_]*\b(?!\.))/g)) {
         problems.push(`${file}: action: ${m[1]}`);
       }
       for (const m of src.matchAll(/(?<!function )\b(audit|writeAudit|writeAuditRow)\(([^)]*)/g)) {

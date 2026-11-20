@@ -45,6 +45,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       const userAgent = entry.user_agent || entry.userAgent || null;
       const requestId = entry.request_id || entry.requestId || null;
       const status = entry.status || 'success';
+      const organizationId = entry.organization_id || entry.organizationId || null;
 
       await pool.query(`
         INSERT INTO
@@ -60,6 +61,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
             user_agent,
             request_id,
             status,
+            organization_id,
             created_at
           )
         VALUES
@@ -75,9 +77,10 @@ export default function createAuditStore(pool: Pool, _utils: any) {
             $9,
             $10,
             $11,
+            $12,
             NOW()
           )
-      `, [id, actorType, actorId, entry.action, targetType, targetId, detailsJson, entry.ip || null, userAgent, requestId, status]);
+      `, [id, actorType, actorId, entry.action, targetType, targetId, detailsJson, entry.ip || null, userAgent, requestId, status, organizationId]);
 
       return id;
     },

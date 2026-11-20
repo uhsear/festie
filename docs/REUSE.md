@@ -66,7 +66,8 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | `adminAuth` | `lib/app-context/session.ts:110` | Session check then hasRole admin or 403; sets req.isAdmin used by audit middleware. | `routes/admin-users.ts:67` |
 | `adminWriteLimit` | `routes/admin.ts:68` | Per-router const rateLimit(config.ADMIN_WRITE_RATE_LIMIT_MAX, 'admin-write'). Other route files get it from ctx. | `routes/admin-bulk.ts:132` |
 | `requireRecentAuth` | `lib/app-context/session.ts:152` | 403 REAUTH_REQUIRED unless password re-entered recently. | `routes/admin-bulk.ts:131` |
-| `festivalAccess({ action, param })` | `lib/app-context/session.ts:129` | Wraps adminAuth, sets req.festivalRole and req.festivalId; tagged for the access-matrix test. | `routes/lineup-announce.ts:47` |
+| `festivalAccess({ action, param, allow })` | `lib/app-context/session.ts:129` | Admin passes everywhere. An organization member passes only on the /manage mount, by role, organization status and `allow`; others get 403 (404 on /manage). Sets req.festivalRole, req.festivalId and req.organizationId; tagged for the access-matrix test. | `routes/lineup-announce.ts:47` |
+| `orgAccess({ action })` | `lib/app-context/session.ts:129` | The same rules for a create that names `organizationId` in the body. | `routes/manage.ts:140` |
 | `createFestivalMounts adminGuard` | `lib/festival-mounts.ts:29` | Admin festival routers mount behind adminGuard = [deps.adminAuth]. | `lib/festival-mounts.ts:32` |
 | `setNoStore` | `lib/app-context/cookies.ts:23` | Sets no-store cache headers; call on admin reads and writes. | `routes/admin-users.ts:69` |
 

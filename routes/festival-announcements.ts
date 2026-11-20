@@ -16,6 +16,7 @@
 
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { auditContext } from '../lib/audit-middleware.js';
 
 const MAX_LATE_MS = 60_000;
 const MAX_AHEAD_MS = 14 * 24 * 60 * 60 * 1000;
@@ -53,7 +54,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
     try {
       await stores.auditLog.insert({
         id: crypto.randomUUID(),
-        actorType: 'admin',
+        ...auditContext(req),
         actorId: req.user?.userId,
         action,
         targetType: 'festival',

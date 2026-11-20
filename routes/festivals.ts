@@ -6,6 +6,7 @@ import { planPickerAlerts } from '../lib/picker-alerts.js';
 import { diffCancelledEntries } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { auditContext } from '../lib/audit-middleware.js';
 import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
@@ -78,10 +79,26 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     }
   }
 
-  // The router is mounted at /festivals and at /admin/festivals; adminAuth and festivalAccess set
-  // req.isAdmin on the admin mount. Drafts (no publishedAt) are visible there only.
+  // The router is mounted at /festivals, at /admin/festivals and, through routes/manage.ts, at /manage.
+  // adminAuth and festivalAccess set req.isAdmin for an admin. Only festivalAccess sets req.festivalRole, and it
+  // gives an organization member a role on /manage alone, so a member sees drafts there and nowhere else.
   const isAdminReq = (req: Request) => (req as Request & { isAdmin?: boolean }).isAdmin === true;
-  const visible = (festival: any, req: Request) => (festival && (festival.publishedAt || isAdminReq(req)) ? festival : null);
+  const isMemberReq = (req: Request) => !isAdminReq(req) && (req as Request & { festivalRole?: string }).festivalRole !== undefined;
+  const visible = (festival: any, req: Request) =>
+    festival && (festival.publishedAt || isAdminReq(req) || isMemberReq(req)) ? festival : null;
+  const refusal = (message: string) => ({ status: 403, code: 'FORBIDDEN' as const, message });
+
+  // A member's save keeps a set id only when the festival already holds it: set ids are global primary keys, so
+  // a foreign id would clash with another tenant's row. Attendee alerts wait for the review hold, so none go out.
+  function memberBody<T extends { days?: any[]; notify?: boolean }>(req: Request, sent: T, existing: any): T {
+    if (!isMemberReq(req)) return sent;
+    const own = new Set(setsOf(existing).map((set: any) => set.id));
+    const days = sent.days?.map((day: any) => ({
+      ...day,
+      sets: (day.sets || []).map((set: any) => (own.has(set.id) ? set : { ...set, id: `set-${crypto.randomUUID()}` })),
+    }));
+    return { ...sent, notify: false, ...(days ? { days } : {}) };
+  }
 
   // 400 with one issue per problem; `message` stays one sentence for old clients.
   // Names that fit two artists. The checklist only warns, so a failed lookup never blocks the page.
@@ -100,8 +117,10 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   }
 
   // A primary-key clash on save (an id another festival, or another festival's set, already holds) is the caller's mistake, not a server fault.
-  function sendIdClash(res: Response, error: any) {
+  // A member never learns which id is taken, because the id may belong to another tenant.
+  function sendIdClash(res: Response, error: any, member = false) {
     if (error?.code !== '23505') return null;
+    if (member) return sendError(res, 409, 'That id is taken.', ErrorCodes.ALREADY_EXISTS);
     const clashing = /Key \(id\)=\(([^)]*)\)/.exec(error.detail ?? '')?.[1];
     const what = String(error.constraint ?? '').startsWith('festival_sets') ? 'set' : 'festival';
     const message = clashing ? `A ${what} with id "${clashing}" already exists.` : `A ${what} with that id already exists.`;
@@ -151,7 +170,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   }
 
   // Audit log helper — writes to audit_log table if available (async, fire-and-forget with error handling).
-  // Every caller sits behind adminAuth, so the actor is the signed-in admin.
+  // Every caller sits behind festivalAccess, so the actor is the signed-in admin or an organization member.
   function audit(action: any, targetType: any, targetId: any, req: Request, details: any = {}) {
     if (!stores.auditLog) return;
     // Tells the generic audit middleware this request already has its row.
@@ -161,7 +180,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
       try {
         await stores.auditLog.insert({
           id: crypto.randomUUID(),
-          actorType: 'admin',
+          ...auditContext(req),
           actorId: req.user?.userId,
           action,
           targetType,
@@ -421,13 +440,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         }
 
         // depth=2 or omitted: full festival (backward compatible)
-        if (isAdminReq(req)) {
+        if (isAdminReq(req) || isMemberReq(req)) {
           const editorId = await stores.festivals.getEditor(festival.id);
           const editor = editorId ? await getUserById(editorId) : null;
+          // A member sees the name of a teammate only. An edit by anyone else, an admin included, reads "Festie support".
+          const teammate = editor && isMemberReq(req) && (await stores.organizations.isMember((req as any).organizationId, editor.id));
           return sendSuccess(res, {
             ...festival,
             publishedAt: festival.publishedAt ?? null,
-            updatedByUsername: editor?.username ?? null,
+            updatedByUsername: !editor ? null : isMemberReq(req) && !teammate ? 'Festie support' : editor.username,
             checklist: publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival) }),
           });
         }
@@ -471,15 +492,22 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
 
   router.put(
     '/:id',
-    festivalAccess({ action: 'festival.edit' }),
+    festivalAccess({
+      action: 'festival.edit',
+      // Dropping sets that attendees picked is an owner decision.
+      allow: (req, _festival, membership) =>
+        req.body?.confirmRemovals === true && membership.role !== 'owner'
+          ? refusal(`Attendees already picked these sets. An owner of ${membership.name} must confirm the removal.`)
+          : true,
+    }),
     rateLimit(10, 'festival-update'),
     validateParams(schemas.genericIdParams),
     validate(schemas.festivalUpdate),
     async (req: Request, res: Response) => {
       try {
-        const body = req.validatedBody as z.infer<typeof schemas.festivalUpdate>;
         const existingFestival = await getFestivalById((req.validatedParams as Params).id);
         if (!existingFestival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        const body = memberBody(req, req.validatedBody as z.infer<typeof schemas.festivalUpdate>, existingFestival);
         // The body is partial, so check the festival that results from the save.
         // A stored lineup is not re-checked: only a body that carries one can fail on duplicates.
         const issues = validateFestivalIssues(config, { ...existingFestival, lineup: undefined, ...body });
@@ -665,7 +693,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         if ((error as NodeJS.ErrnoException)?.code === '40P01' || (error as NodeJS.ErrnoException)?.code === '40001') {
           return sendError(res, 503, 'Festie is busy. Try again.', ErrorCodes.SERVICE_UNAVAILABLE);
         }
-        if (sendIdClash(res, error)) return;
+        if (sendIdClash(res, error, isMemberReq(req))) return;
         log.error('festival update failed', { error: (error as NodeJS.ErrnoException).message, festivalId: (req.validatedParams as Params)?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
       }
@@ -750,7 +778,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   // P3.18: Soft-delete (default). Pass ?hard=true for permanent removal.
   router.delete(
     '/:id',
-    festivalAccess({ action: 'festival.delete' }),
+    festivalAccess({
+      action: 'festival.delete',
+      // A member may delete a draft softly. A live festival and a permanent delete stay with Festie.
+      allow: (req, festival) => {
+        if (festival.publishedAt) return refusal('Only Festie can delete a festival that is live. Contact Festie.');
+        if (req.query?.hard === 'true') return refusal('Only Festie can delete a festival permanently.');
+        return true;
+      },
+    }),
     rateLimit(5, 'festival-delete'),
     requireRecentAuth,
     validateParams(schemas.genericIdParams),

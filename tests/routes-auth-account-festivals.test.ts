@@ -163,6 +163,7 @@ function makeMockDeps(overrides: any = {}) {
       },
       pool: { query: mock.fn(async () => ({ rows: [] })) },
       roles: { getUserRoles: mock.fn(async () => []) },
+      organizations: { listForUser: mock.fn(async () => []) },
       emailTokens: {
         getPendingEmailChange: mock.fn(async () => null),
         checkEmailExists: mock.fn(async () => false),
@@ -673,6 +674,22 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.equal(res.body.data.festivals.length, 1);
       assert.equal(res.body.data.festivals[0].festivalId, 'f-1');
       assert.equal(res.body.data.pendingEmail, null);
+      assert.deepEqual(res.body.data.organizations, []);
+    });
+
+    test('lists the organizations of the user, read only', async () => {
+      const deps = makeMockDeps();
+      deps.stores.organizations.listForUser = mock.fn(async () => [
+        { id: 'org-1', name: 'Venue', kind: 'venue', status: 'active', verified: true, role: 'owner' },
+      ]);
+      const res = await request(createApp(createAuthRoutes(deps))).get('/me');
+
+      assert.equal(res.status, 200);
+      // The kind stays out of the response, and nothing is written.
+      assert.deepEqual(res.body.data.organizations, [
+        { id: 'org-1', name: 'Venue', role: 'owner', status: 'active', verified: true },
+      ]);
+      assert.deepEqual(deps.stores.organizations.listForUser.mock.calls[0]!.arguments, ['user-1']);
     });
 
     test('returns the address of a pending email change', async () => {

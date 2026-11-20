@@ -43,6 +43,16 @@ export const AUDIT_ACTIONS = {
   CREW_MEMBER_ADDED: 'crew.member.added',
   CREW_MEMBER_REMOVED: 'crew.member.removed',
   CREW_DELETED: 'crew.deleted',
+  ORGANIZATION_CREATED: 'organization.created',
+  ORGANIZATION_ACTIVATED: 'organization.activated',
+  ORGANIZATION_SUSPENDED: 'organization.suspended',
+  ORGANIZATION_VERIFIED: 'organization.verified',
+  ORGANIZATION_UNVERIFIED: 'organization.unverified',
+  ORGANIZATION_MEMBER_ADDED: 'organization.member_added',
+  ORGANIZATION_MEMBER_REMOVED: 'organization.member_removed',
+  ORGANIZATION_MEMBER_ROLE_CHANGED: 'organization.member_role_changed',
+  ORGANIZATION_PENDING_MEMBER_ADDED: 'organization.pending_member_added',
+  ORGANIZATION_PENDING_MEMBER_REMOVED: 'organization.pending_member_removed',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

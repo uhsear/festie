@@ -694,8 +694,11 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
       return lookup;
     },
 
-    /** The newest 20 imports, or null when the festival does not exist. */
-    async list(festivalId: string) {
+    /**
+     * The newest 20 imports, or null when the festival does not exist. With `viewerOrganizationId`, a creator
+     * who is not a member of that organization (an admin, in practice) reads "Festie support" instead of a username.
+     */
+    async list(festivalId: string, viewerOrganizationId: string | null = null) {
       const fest = await pool.query('SELECT name FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
       if (fest.rows.length === 0) return null;
       const { rows } = await pool.query(
@@ -705,7 +708,13 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
     li.created_at,
     li.counts,
     li.undone_at,
-    u.username,
+    CASE
+      WHEN u.id IS NULL OR $2::text IS NULL THEN u.username
+      WHEN EXISTS (
+        SELECT 1 FROM organization_members m WHERE m.organization_id = $2 AND m.user_id = u.id
+      ) THEN u.username
+      ELSE 'Festie support'
+    END AS username,
     (
       SELECT
         COALESCE(array_agg(DISTINCT d.date ORDER BY d.date), '{}')
@@ -737,7 +746,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
   LIMIT
     20
 `,
-        [festivalId],
+        [festivalId, viewerOrganizationId],
       );
       const newestOpen = rows.find((r: any) => r.undone_at === null)?.id ?? null;
       return {

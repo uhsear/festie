@@ -32,6 +32,7 @@ import { changePasswordSchema, loginSchema, oauthCompleteSchema, oauthProviderPa
 import { joinFestivalSchema, profileUpdateSchema } from './schemas/profile';
 import { accountDeleteSchema, deleteTokenSchema, displayNameChangeSchema, forgotPasswordSchema, markReadSchema, notificationPrefsSchema, paymentHandlesSchema, publicScheduleSchema, pushTokenSchema, reauthSchema, resetPasswordPublicSchema, resetPasswordSchema, topicSubscriptionSchema, updateEmailSchema, usernameChangeSchema } from './schemas/account';
 import { festivalAnnouncementSchema, festivalCreateSchema, festivalMapConfigSchema, festivalUpdateSchema, timeReleaseSendSchema } from './schemas/festival';
+import { organizationCreateSchema, organizationIdParams, organizationListQuery, organizationMemberAddSchema, organizationMemberParams, organizationMemberRoleSchema, organizationPendingParams, organizationStatusSchema, organizationVerifiedSchema, organizerFestivalCreateSchema } from './schemas/organization';
 import { crewAddMemberSchema, crewCreateSchema, crewDaysSchema, crewInviteCodeParams, crewJoinSchema, crewReformSchema, crewTransferSchema, crewUpdateSchema, meetingPointComingSchema, meetingPointCreateSchema, meetingPointUpdateSchema } from './schemas/crew';
 import { artistBackfillSchema, artistCreateSchema, artistListQuerySchema, artistMatchSchema, artistMergeSchema, artistSpotifyCandidatesSchema, artistSpotifyPicksSchema, artistSpotifyRefreshSchema, artistUpdateSchema, policyNoticeSchema, setLinkSchema, spotifyBackfillSchema } from './schemas/artist';
 import { caughtUpdateSchema, checkinStartSchema, crewHomeBaseSchema, crewPhotoAlbumSchema, crewStatusSchema, liveLocationFixSchema, locationShareSchema, locationStopSchema, locationSyncSchema, locationUpdateSchema, packingBatchSchema, packingCreateSchema, packingUpdateSchema, pollCreateSchema, pollVoteSchema, ratingCreateSchema, refreshTokenSchema, rideCreateSchema, rideUpdateSchema, sosClearSchema, sosRaiseSchema, sosSeenSchema, wrapQuery } from './schemas/crew-activity';
@@ -84,6 +85,16 @@ export const schemas = {
   topicSubscription: topicSubscriptionSchema,
   festivalCreate: festivalCreateSchema,
   festivalUpdate: festivalUpdateSchema,
+  organizerFestivalCreate: organizerFestivalCreateSchema,
+  organizationCreate: organizationCreateSchema,
+  organizationList: organizationListQuery,
+  organizationStatus: organizationStatusSchema,
+  organizationVerified: organizationVerifiedSchema,
+  organizationMemberAdd: organizationMemberAddSchema,
+  organizationMemberRole: organizationMemberRoleSchema,
+  organizationIdParams,
+  organizationMemberParams,
+  organizationPendingParams,
   festivalMapConfig: festivalMapConfigSchema,
   crewCreate: crewCreateSchema,
   crewUpdate: crewUpdateSchema,

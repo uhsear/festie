@@ -227,7 +227,8 @@ export default function createLineupImportRoute(deps: any) {
       }
       // After the response is built, so the save never waits. It logs its own failure.
       void deps.interestConversion?.convert(festivalId);
-      alertPickersOfFirstTimes(festival);
+      // An organization member's import sends no alert: those wait for the review hold.
+      if (req.festivalRole === undefined || req.festivalRole === 'admin') alertPickersOfFirstTimes(festival);
       const result = buildResult(outcome.plan, outcome.writes, outcome.importId, warnings, festival.b2bSeparator || 'b2b');
       log.info('lineup imported', {
         festivalId,
@@ -261,7 +262,9 @@ export default function createLineupImportRoute(deps: any) {
       setNoStore(res);
       const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
-      const history = await stores.lineupImports.list(festivalId);
+      // A member sees usernames of its own team only. An import by anyone else reads "Festie support".
+      const member = req.festivalRole !== undefined && req.festivalRole !== 'admin';
+      const history = await stores.lineupImports.list(festivalId, member ? req.organizationId : null);
       if (!history) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       return sendSuccess(res, history);
     } catch (error: any) {

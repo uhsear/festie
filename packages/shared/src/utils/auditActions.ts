@@ -38,6 +38,16 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'crew.member.added': 'Crew member added',
   'crew.member.removed': 'Crew member removed',
   'crew.deleted': 'Crew deleted',
+  'organization.created': 'Organization created',
+  'organization.activated': 'Organization activated',
+  'organization.suspended': 'Organization suspended',
+  'organization.verified': 'Organization verified',
+  'organization.unverified': 'Organization verification removed',
+  'organization.member_added': 'Organization member added',
+  'organization.member_removed': 'Organization member removed',
+  'organization.member_role_changed': 'Organization member role changed',
+  'organization.pending_member_added': 'Organization member invited by email',
+  'organization.pending_member_removed': 'Organization invitation removed',
 };
 
 const COLON_VERBS: Record<string, string> = {

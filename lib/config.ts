@@ -164,6 +164,12 @@ export const DEFAULTS = {
   SOS_ENABLED: true,
   // Cancel alerts for marked acts stay dark until the owner turns them on (LINEUP_CANCEL_ALERTS_ENABLED=true).
   LINEUP_CANCEL_ALERTS_ENABLED: false,
+  // The organizer platform (/api/v1/manage). Inert until an admin creates an organization; false unmounts it and
+  // refuses every organizer role, so each route is admin-only again.
+  ORGANIZER_PLATFORM_ENABLED: true,
+  // Festivals an organization may hold: drafts while it is pending, and live (not deleted) festivals once active.
+  ORGANIZER_PENDING_FESTIVAL_CAP: 2,
+  ORGANIZER_ACTIVE_FESTIVAL_CAP: 20,
   REMINDER_TICK_INTERVAL_MS: 60_000,
   REMINDER_FIRE_WINDOW_MS: 65_000,
   REMINDER_DEDUP_TTL_MS: 7_200_000,
@@ -431,6 +437,9 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   LIVE_LOCATION_ENABLED: boolean;
   SOS_ENABLED: boolean;
   LINEUP_CANCEL_ALERTS_ENABLED: boolean;
+  ORGANIZER_PLATFORM_ENABLED: boolean;
+  ORGANIZER_PENDING_FESTIVAL_CAP: number;
+  ORGANIZER_ACTIVE_FESTIVAL_CAP: number;
   LOG_LEVEL: string;
   SENTRY_DSN: string;
   METRICS_TOKEN: string;
@@ -723,6 +732,20 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     LINEUP_CANCEL_ALERTS_ENABLED: readBool(
       overrides.LINEUP_CANCEL_ALERTS_ENABLED ?? process.env.LINEUP_CANCEL_ALERTS_ENABLED,
       DEFAULTS.LINEUP_CANCEL_ALERTS_ENABLED,
+    ),
+    ORGANIZER_PLATFORM_ENABLED: readBool(
+      overrides.ORGANIZER_PLATFORM_ENABLED ?? process.env.ORGANIZER_PLATFORM_ENABLED,
+      DEFAULTS.ORGANIZER_PLATFORM_ENABLED,
+    ),
+    ORGANIZER_PENDING_FESTIVAL_CAP: readInt(
+      overrides.ORGANIZER_PENDING_FESTIVAL_CAP || process.env.ORGANIZER_PENDING_FESTIVAL_CAP,
+      DEFAULTS.ORGANIZER_PENDING_FESTIVAL_CAP,
+      0,
+    ),
+    ORGANIZER_ACTIVE_FESTIVAL_CAP: readInt(
+      overrides.ORGANIZER_ACTIVE_FESTIVAL_CAP || process.env.ORGANIZER_ACTIVE_FESTIVAL_CAP,
+      DEFAULTS.ORGANIZER_ACTIVE_FESTIVAL_CAP,
+      1,
     ),
 
     // Deep linking — populate when you have your Apple/Android signing credentials

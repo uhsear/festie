@@ -2648,6 +2648,15 @@ export type components = {
             photo?: string;
         };
         AuthEnvelope: {
+            organizations?: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                role: "owner" | "editor" | "viewer";
+                /** @enum {string} */
+                status: "pending" | "active" | "suspended";
+                verified: boolean;
+            }[];
             pendingEmail?: string | null;
             reactivated?: boolean;
             refreshToken?: string;
@@ -3189,6 +3198,15 @@ export type components = {
             userId: string | null;
         };
         RefreshTokenResponse: {
+            organizations?: {
+                id: string;
+                name: string;
+                /** @enum {string} */
+                role: "owner" | "editor" | "viewer";
+                /** @enum {string} */
+                status: "pending" | "active" | "suspended";
+                verified: boolean;
+            }[];
             pendingEmail?: string | null;
             reactivated?: boolean;
             refreshToken?: string;
