@@ -380,7 +380,8 @@ describe('lib/db/stores/festivals.js', () => {
 // 2. lib/shutdown.js — uncovered lines (memory monitor, meeting point expiry)
 // ---------------------------------------------------------------------------
 describe('lib/shutdown.js — additional coverage', async () => {
-  const { createBackgroundTasks, createCloseHandler } = await import('../lib/shutdown.js');
+  const { createBackgroundTasks } = await import('../lib/background-tasks.js');
+  const { createCloseHandler } = await import('../lib/shutdown.js');
 
   describe('memory pressure monitoring (lines 107-119)', () => {
     let ctx: BgCtx;

@@ -5,6 +5,7 @@ import { describe, it, beforeEach, mock } from 'node:test';
 import {
   createRateLimiters,
   createPasswordResetRateLimit,
+  createEmailWindowLimit,
   createAdminWriteRateLimit,
   PICK_SET_LIMIT,
   NOTE_ADD_LIMIT,
@@ -754,5 +755,43 @@ describe('rate-limiting: Redis failure paths (characterization)', () => {
     const middleware = createRateLimiters(deps).rateLimit();
     for (const n of [1, 2, 3, 1, 4]) await middleware(mockReq({ ip: `203.0.113.${n}` }), mockRes(), () => {});
     assert.deepEqual([...deps.state.rateLimits.keys()], ['203.0.113.3', '203.0.113.1', '203.0.113.4']);
+  });
+});
+
+describe('rate-limiting: createEmailWindowLimit', () => {
+  it('limits after max in memory when no Redis is given', async () => {
+    const check = createEmailWindowLimit({}, { scope: 't', max: 2, windowMs: 60_000 });
+    assert.equal((await check('A@x.com')).limited, false);
+    assert.equal((await check('a@x.com')).limited, false);
+    const third = await check('a@x.com');
+    assert.equal(third.limited, true);
+    assert.ok(third.resetMs > 0);
+    assert.equal((await check('b@x.com')).limited, false);
+  });
+
+  it('counts in Redis, and falls back to memory when Redis fails', async () => {
+    const counts = new Map<string, number>();
+    const redis: any = {
+      pipeline: () => {
+        let key = '';
+        const p: any = {
+          incr: (k: string) => { key = k; counts.set(k, (counts.get(k) || 0) + 1); return p; },
+          pttl: () => p,
+          exec: async () => [[null, counts.get(key)], [null, 1000]],
+        };
+        return p;
+      },
+      pexpire: async () => 1,
+    };
+    const check = createEmailWindowLimit({}, { redis, scope: 't', max: 1, windowMs: 60_000 });
+    assert.equal((await check('r@x.com')).limited, false);
+    assert.equal((await check('r@x.com')).limited, true);
+    assert.equal([...counts.keys()].length, 1);
+    assert.ok(![...counts.keys()][0]!.includes('r@x.com'));
+
+    const down: any = { pipeline: () => { throw new Error('down'); } };
+    const fb = createEmailWindowLimit({}, { redis: down, scope: 't', max: 1, windowMs: 60_000 });
+    assert.equal((await fb('r@x.com')).limited, false);
+    assert.equal((await fb('r@x.com')).limited, true);
   });
 });

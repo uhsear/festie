@@ -4,7 +4,7 @@
  * Path construction and avatar-key validation deliberately stay in
  * `lib/app-context/avatar.ts` — this module receives real absolute paths and
  * never invents one. `avatarDirPath()` must keep returning a plain string
- * because `lib/middleware.ts` (express.static) and `lib/shutdown.ts` (orphan
+ * because `lib/middleware.ts` (express.static) and `lib/background-tasks.ts` (orphan
  * sweep) consume that same directory directly.
  */
 import fs from 'fs';

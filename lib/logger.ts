@@ -6,7 +6,8 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 
 import { loadConfig } from './config.js';
 
-const _cfg = loadConfig();
+let _loaded: ReturnType<typeof loadConfig> | undefined;
+const cfg = () => (_loaded ??= loadConfig());
 
 type RequestContext = { reqId: string; traceId?: string };
 
@@ -59,8 +60,8 @@ try {
   // Optional dep — if pino isn't installed, we fall back to the console logger.
 
   const pino = (await import('pino')).default;
-  const isProd = _cfg.NODE_ENV === 'production';
-  const level = _cfg.LOG_LEVEL || (isProd ? 'info' : 'debug');
+  const isProd = cfg().NODE_ENV === 'production';
+  const level = cfg().LOG_LEVEL || (isProd ? 'info' : 'debug');
 
   const redactPaths = [
     'password', 'pass', 'pwd', 'secret', 'token', 'apiKey', 'api_key',
@@ -79,7 +80,7 @@ try {
 
   const baseOpts: any = {
     level,
-    base: { service: 'festie', env: _cfg.NODE_ENV || 'dev' },
+    base: { service: 'festie', env: cfg().NODE_ENV || 'dev' },
     timestamp: pino.stdTimeFunctions.isoTime,
     redact: { paths: redactPaths, censor: '[REDACTED]', remove: false },
     messageKey: 'msg',
@@ -112,7 +113,7 @@ try {
  * ------------------------------------------------------------------ */
 
 const LEVELS: Record<string, number> = { error: 0, warn: 1, info: 2, debug: 3 };
-const envLevel = _cfg.LOG_LEVEL || (_cfg.NODE_ENV === 'production' ? 'info' : 'debug');
+const envLevel = cfg().LOG_LEVEL || (cfg().NODE_ENV === 'production' ? 'info' : 'debug');
 
 function formatConsole(level: string, prefix: string, bindings: any, message: string, meta: any) {
   const ts = new Date().toISOString();
