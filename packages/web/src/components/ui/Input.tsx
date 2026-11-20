@@ -61,7 +61,7 @@ export default function Input({
             // Mobile glass input: rounded-xl (radii.default), translucent glass
             // surface, soft border, aqua focus ring, 16px body text (avoids the
             // iOS focus-zoom). Override the shared inputBase defaults.
-            'rounded-xl bg-bg-card border-border text-base',
+            'rounded-xl bg-bg-card border-border-input text-base',
             // Standardize on the outline focus affordance used by Button/IconButton/AuthTabs;
             // inputBase's own ring is inherited too, so cancel its width here.
             'focus-visible:ring-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',

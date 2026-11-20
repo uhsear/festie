@@ -126,7 +126,8 @@ select {
      Gives the festival selector + any native select a visible open/focus
      affordance instead of the bare UA outline. */
 select:hover {
-  border-color: var(--color-border-light);
+  /* Must stay at least as strong as --color-border-input (WCAG 1.4.11). */
+  border-color: var(--color-text-muted);
 }
 select:focus {
   border-color: var(--color-accent-aqua);
