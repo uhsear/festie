@@ -180,21 +180,21 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
                 onChange={(e) => setDraft(e.target.value)}
                 placeholder="What do you want to remember?"
                 aria-label="Memory"
-                className="w-full min-h-9 rounded-lg border border-border bg-bg-card px-3 text-sm"
+                className="w-full min-h-11 rounded-lg border border-border-input bg-bg-card px-3 text-sm"
               />
               <div className="flex justify-center gap-2">
                 <button
                   type="button"
                   disabled={busy}
                   onClick={saveMemory}
-                  className="min-h-9 px-3 rounded-full bg-accent-aqua text-bg-primary text-xs font-semibold cursor-pointer"
+                  className="min-h-11 px-3 rounded-full bg-accent-aqua text-bg-primary text-xs font-semibold cursor-pointer"
                 >
                   Save
                 </button>
                 <button
                   type="button"
                   onClick={() => setEditing(false)}
-                  className="min-h-9 px-3 rounded-full border border-border text-xs font-semibold text-text-secondary cursor-pointer"
+                  className="min-h-11 px-3 rounded-full border border-border text-xs font-semibold text-text-secondary cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -209,7 +209,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
                   setDraft(savedNote);
                   setEditing(true);
                 }}
-                className="min-h-9 px-2 text-xs font-semibold text-accent-aqua cursor-pointer"
+                className="min-h-11 px-2 text-xs font-semibold text-accent-aqua cursor-pointer"
               >
                 {savedNote ? 'Edit' : 'Add a memory'}
               </button>
