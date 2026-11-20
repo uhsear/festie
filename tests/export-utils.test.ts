@@ -147,6 +147,13 @@ describe('export-utils pure helpers', () => {
       'end should be rolled forward 24h so duration is 2h');
   });
 
+  test('getSetTiming treats a set before 06:00 as the night after the labelled day', () => {
+    const { start, end } = exportUtils.getSetTiming({ dayDate: '2026-06-05', startTime: '01:00', endTime: '02:00' });
+    assert.ok(start instanceof Date && end instanceof Date);
+    assert.equal(start.getDate(), 6);
+    assert.equal(end.getTime() - start.getTime(), 60 * 60 * 1000);
+  });
+
   test('getAvatarColor is deterministic for the same name', () => {
     const a = exportUtils.getAvatarColor('Alice');
     const b = exportUtils.getAvatarColor('Alice');
@@ -341,6 +348,15 @@ describe('getExportReminderItems', () => {
     assert.deepEqual(reminders.map((r: any) => r.set.id), ['set-a', 'set-c']);
     assert.equal(reminders[0].lead, 15);
     assert.equal(reminders[1].lead, 30);
+  });
+
+  test('orders an after-midnight set after the evening set of the same day', () => {
+    const sets = [
+      { id: 'late', artist: 'Late', dayDate: '2026-06-05', startTime: '01:00', endTime: '02:00' },
+      { id: 'eve', artist: 'Eve', dayDate: '2026-06-05', startTime: '20:00', endTime: '21:00' },
+    ] as any[];
+    const reminders = exportUtils.getExportReminderItems(sets, makeProfile({ reminders: { late: 15, eve: 15 } }));
+    assert.deepEqual(reminders.map((r: any) => r.set.id), ['eve', 'late']);
   });
 
   test('returns empty list when no reminders are set', () => {

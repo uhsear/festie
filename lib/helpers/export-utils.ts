@@ -7,7 +7,7 @@
 
 import { escapeHtml } from './sanitize';
 import type { Profile } from '../types/contracts';
-import { festivalStartMinutes } from '../time-zone';
+import { FESTIVAL_DAY_START_HOUR, festivalStartMinutes } from '../time-zone';
 
 interface FestivalSet {
   id: string;
@@ -126,7 +126,10 @@ export function timeToMinutes(value: string | null | undefined) {
 export function buildSetDateStamp(dayDate: string | null | undefined, timeValue: string | null | undefined) {
   if (!dayDate || !timeValue) return null;
   const stamp = new Date(`${dayDate}T${timeValue}:00`);
-  return Number.isNaN(stamp.getTime()) ? null : stamp;
+  if (Number.isNaN(stamp.getTime())) return null;
+  // A time before the festival-day start belongs to the night after the labelled day.
+  if (stamp.getHours() < FESTIVAL_DAY_START_HOUR) stamp.setDate(stamp.getDate() + 1);
+  return stamp;
 }
 
 export function getSetTiming(set: Pick<ExportSet, 'dayDate' | 'startTime' | 'endTime'>) {
