@@ -10,7 +10,9 @@ set -euo pipefail
 # stops the app before it exits.
 #
 # The app starts under `env -i`, so it carries no production service credentials:
-# no mail, push, Sentry or Firebase keys, and no Redis. See scripts/ops/drill.env.example.
+# no mail, push, Sentry or Firebase keys, and no Redis. The app imports dotenv/config, so
+# DOTENV_CONFIG_PATH points it at a missing file: a dotenv file in the app directory (the
+# live checkout keeps one) is never loaded. See scripts/ops/drill.env.example.
 #
 # Environment:
 #   DRILL_BOOT_DATABASE_URL   Required. URL of the restored database. Its name must start
@@ -63,6 +65,8 @@ log "Booting dist/server.js on 127.0.0.1:${PORT} against ${DB_NAME}"
   cd "$APP_DIR"
   exec env -i \
     PATH="$PATH" HOME="${HOME:-/tmp}" ${SYSTEMROOT:+SYSTEMROOT="$SYSTEMROOT"} ${TEMP:+TEMP="$TEMP"} \
+    DOTENV_CONFIG_PATH=/nonexistent/festie-drill-no-dotenv \
+    DOTENV_CONFIG_QUIET=true \
     NODE_ENV=production \
     PORT="$PORT" \
     METRICS_PORT="$METRICS_PORT" \
