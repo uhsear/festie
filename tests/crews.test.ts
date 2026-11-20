@@ -713,6 +713,7 @@ describe('routes/crews.ts -- DELETE /:crewId feed push (mocked deps)', () => {
         req.user = { userId: 'owner-1', username: 'boss' };
         next();
       },
+      adminAuth: (_req: any, _res: any, next: any) => next(),
       sanitizeIdentifier: (v: any) => v,
       sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
       sendError: (res: any, status: any, msg: any) => res.status(status).json({ data: null, error: { message: msg } }),
@@ -785,6 +786,7 @@ describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
         req.user = { userId: 'owner-1', username: 'boss' };
         next();
       },
+      adminAuth: (_req: any, _res: any, next: any) => next(),
       sanitizeIdentifier: (v: any) => v,
       sanitizeString: (v: any) => v,
       sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
