@@ -337,11 +337,16 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
 
   checkSession: async (): Promise<boolean> => {
     try {
-      const response = await api.get<{ user: User; roles?: string[]; pendingEmail?: string | null }>('/auth/me');
+      const response = await api.get<{
+        user: User;
+        roles?: string[];
+        pendingEmail?: string | null;
+        organizations?: User['organizations'];
+      }>('/auth/me');
       if (response && response.user) {
         const isAdmin = response.roles?.includes('admin') || response.user.isAdmin || false;
         set({
-          user: { ...response.user, isAdmin, pendingEmail: response.pendingEmail ?? null },
+          user: { ...response.user, isAdmin, pendingEmail: response.pendingEmail ?? null, ...(response.organizations?.length ? { organizations: response.organizations } : {}) },
           isAdmin,
           sessionChecked: true,
         });

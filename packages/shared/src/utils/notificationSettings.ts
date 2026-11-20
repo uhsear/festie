@@ -67,9 +67,12 @@ export interface ScheduleNotice {
   notified: boolean;
   /** People told about a cancelled act because their mark on it was still open. Absent when none. */
   marked?: number;
+  /** An organizer's save: the alert waits for an admin instead of going out (plan-v3 6.2). */
+  held?: boolean;
 }
 
 export function describeScheduleNotice(notice: ScheduleNotice): string {
+  if (notice.held) return 'Changes are saved. Festie will alert attendees after a quick check.';
   if (notice.notified) {
     const noun = notice.people === 1 ? 'person' : 'people';
     if (notice.marked) {

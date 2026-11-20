@@ -56,7 +56,7 @@ describe('FestivalStatusPanel', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Publish festival' }));
     expect(screen.getByText('Publish Fest?')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Publish' }));
-    await waitFor(() => expect(publishFestival).toHaveBeenCalledWith('f1'));
+    await waitFor(() => expect(publishFestival).toHaveBeenCalledWith('f1', 'admin'));
     await waitFor(() => expect(onPublished).toHaveBeenCalled());
   });
 

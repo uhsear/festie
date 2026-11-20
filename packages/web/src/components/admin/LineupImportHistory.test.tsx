@@ -44,6 +44,28 @@ describe('LineupImportHistory', () => {
     api.daysAnnouncement.mockResolvedValue({ ...DAYS, actsWithDay: 118, recipients: 12 });
   });
 
+  it('in organizer mode loads the history through /manage and leaves out the announcements', async () => {
+    api.history.mockResolvedValue({
+      imports: [
+        {
+          id: 'imp-1',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          source: 'paste',
+          undone: false,
+          counts: { added: 2, updated: 0, skipped: 0 },
+        },
+      ],
+    });
+    render(<LineupImportHistory festivalId="f1" festivalName="Fest" scope="manage" />);
+    await screen.findByText(/Import history|Undo/);
+    expect(api.history).toHaveBeenCalledWith('f1', 'manage');
+    expect(api.announcement).not.toHaveBeenCalled();
+    expect(api.daysAnnouncement).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Announce/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Announce lineup')).not.toBeInTheDocument();
+    expect(screen.queryByText('Announce days')).not.toBeInTheDocument();
+  });
+
   it('load fails, shows the error, Retry reloads', async () => {
     api.history.mockRejectedValueOnce(new Error('down'));
     render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);

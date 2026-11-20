@@ -31,20 +31,28 @@ export type AdminFestivalDetail = Festival & {
   publishedAt: string | null;
   updatedByUsername: string | null;
   checklist: ChecklistItem[];
+  /** Only a member's festival reads: the state of the review request (plan-v3 5.6). */
+  publishRequestedAt?: string | null;
+  publishReviewNote?: string | null;
 };
 
-const festivalPath = (id: string) => `/admin/festivals/${encodeURIComponent(id)}`;
+/** `admin` is the platform admin API. `manage` is the organizer API, which forwards the same festival routes. */
+export type FestivalScope = 'admin' | 'manage';
+
+const festivalPath = (id: string, scope: FestivalScope = 'admin') => `/${scope}/festivals/${encodeURIComponent(id)}`;
 
 export const fetchAdminFestivals = () => api.get<AdminFestivalSummary[]>('/admin/festivals');
 
 export const fetchArchivedFestivals = () => api.get<ArchivedFestival[]>('/admin/festivals/archived');
 
-export const fetchAdminFestival = (id: string) => api.get<AdminFestivalDetail>(festivalPath(id));
+export const fetchAdminFestival = (id: string, scope: FestivalScope = 'admin') =>
+  api.get<AdminFestivalDetail>(festivalPath(id, scope));
 
-export const fetchDeleteImpact = (id: string) => api.get<DeleteImpact>(`${festivalPath(id)}/impact`);
+export const fetchDeleteImpact = (id: string, scope: FestivalScope = 'admin') =>
+  api.get<DeleteImpact>(`${festivalPath(id, scope)}/impact`);
 
-export const publishFestival = (id: string) =>
-  api.post<{ publishedAt: string; checklist: ChecklistItem[] }>(`${festivalPath(id)}/publish`);
+export const publishFestival = (id: string, scope: FestivalScope = 'admin') =>
+  api.post<{ publishedAt: string; checklist: ChecklistItem[] }>(`${festivalPath(id, scope)}/publish`);
 
 export const restoreFestival = (id: string) =>
   api.post<{ id: string; published: boolean }>(`${festivalPath(id)}/restore`);
@@ -65,10 +73,11 @@ export function checklistFromError(err: unknown): ChecklistItem[] | null {
 
 export interface FestivalSaveResult { scheduleNotice?: ScheduleNotice; venueGuessed?: boolean }
 
-export const updateAdminFestival = (id: string, body: unknown) =>
-  api.put<FestivalSaveResult | undefined>(festivalPath(id), body);
+export const updateAdminFestival = (id: string, body: unknown, scope: FestivalScope = 'admin') =>
+  api.put<FestivalSaveResult | undefined>(festivalPath(id, scope), body);
 
 export const createAdminFestival = (body: unknown) =>
   api.post<{ id?: string; venueGuessed?: boolean }>('/admin/festivals', body);
 
-export const deleteAdminFestival = (id: string) => api.delete<void>(festivalPath(id));
+export const deleteAdminFestival = (id: string, scope: FestivalScope = 'admin') =>
+  api.delete<void>(festivalPath(id, scope));

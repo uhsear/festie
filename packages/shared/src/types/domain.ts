@@ -231,6 +231,8 @@ export interface User {
   publicSchedule?: boolean;
   // Address awaiting email-change confirmation (from /auth/me); null/absent = none.
   pendingEmail?: string | null;
+  /** From /auth/me: the organizations this user belongs to. Drives the account menu link to /manage. */
+  organizations?: Array<{ id: string; name: string; role: 'owner' | 'editor' | 'viewer'; status: string; verified: boolean }>;
   createdAt: string;
   updatedAt: string;
 }

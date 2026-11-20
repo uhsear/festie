@@ -40,6 +40,10 @@ describe('notificationSettings', () => {
     );
     expect(describeScheduleNotice({ changes: 1, people: 2, notified: false })).toBe('Saved without alerts.');
     expect(describeScheduleNotice({ changes: 0, people: 0, notified: false })).toBe('Festival updated');
+    // An organizer's alert waits for an admin, so the save says so instead of promising an alert now.
+    expect(describeScheduleNotice({ changes: 2, people: 5, notified: false, held: true })).toBe(
+      'Changes are saved. Festie will alert attendees after a quick check.',
+    );
     expect(describeScheduleNotice({ changes: 2, people: 12, notified: true, marked: 8 })).toBe(
       'Saved. 12 people will get an alert: 8 marked a cancelled act and 4 picked or set a reminder on the changed sets, unless they turned schedule alerts off.',
     );

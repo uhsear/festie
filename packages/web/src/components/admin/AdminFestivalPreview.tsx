@@ -9,7 +9,7 @@ type Preview = Awaited<ReturnType<typeof fetchFestivalPreview>>;
 const colorFor = (color: string | undefined) => resolveStageColor(color, 'var(--text-muted)');
 
 /** Read-only view of what attendees see. Never touches the admin's own festival selection. */
-export default function AdminFestivalPreview({ festivalId }: { festivalId: string }) {
+export default function AdminFestivalPreview({ festivalId, scope = 'admin' }: { festivalId: string; scope?: 'admin' | 'manage' }) {
   const navigate = useNavigate();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,7 +20,7 @@ export default function AdminFestivalPreview({ festivalId }: { festivalId: strin
     setPreview(null);
     setError(null);
     setDayIndex(0);
-    fetchFestivalPreview(festivalId)
+    fetchFestivalPreview(festivalId, scope)
       .then((p) => !cancelled && setPreview(p))
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Couldn't load the preview. Try again.");
@@ -28,13 +28,13 @@ export default function AdminFestivalPreview({ festivalId }: { festivalId: strin
     return () => {
       cancelled = true;
     };
-  }, [festivalId]);
+  }, [festivalId, scope]);
 
   const back = (
     <Button
       type="button"
       variant="secondary"
-      onClick={() => navigate({ to: '/admin', search: { tab: 'festivals' } })}
+      onClick={() => (scope === 'manage' ? navigate({ to: '/manage' }) : navigate({ to: '/admin', search: { tab: 'festivals' } }))}
       className="min-h-11"
     >
       Back to festivals

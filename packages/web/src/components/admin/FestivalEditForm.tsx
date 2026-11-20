@@ -64,6 +64,13 @@ export interface FestivalEditFormProps {
   festivals?: ReadonlyArray<SeriesFestival>;
   /** Marks per announced act, for the "N marked" figure on each lineup row. Absent until loaded. */
   interestCounts?: LineupInterestCounts;
+  /**
+   * `organizer` is the /manage editor of an organization member (plan-v3 5.5): no series, no set-time releases,
+   * and the alert checkbox gives way to the reason attendee alerts wait.
+   */
+  mode?: 'admin' | 'organizer';
+  /** A viewer reads the form but cannot change it: every input is disabled and the save buttons are gone. */
+  readOnly?: boolean;
   onSave: () => void;
   /** Edit mode: reset to the loaded festival. */
   onDiscard: () => void;
@@ -99,10 +106,13 @@ export default function FestivalEditForm({
   engagementError,
   festivals = [],
   interestCounts,
+  mode = 'admin',
+  readOnly = false,
   onSave,
   onDiscard,
   onCancel,
 }: FestivalEditFormProps) {
+  const organizer = mode === 'organizer';
   const { toast } = useToast();
   const rootRef = useRef<HTMLDivElement>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(initialExpandedDays ?? new Set());
@@ -354,6 +364,8 @@ export default function FestivalEditForm({
 
   return (
     <div ref={rootRef} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6 space-y-6">
+      <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-6 border-0 p-0">
+      <legend className="sr-only">Festival details</legend>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div data-issue-key="festival:name" data-issue={nameIssues.length ? 'true' : undefined}>
           <label htmlFor="festival-name" className="block text-sm font-medium text-text-primary mb-2">
@@ -425,6 +437,7 @@ export default function FestivalEditForm({
           />
           <span>Joins B2B artist names, for example b2b, vs or &amp;.</span>
         </label>
+        {!organizer && (
         <div className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
           <label htmlFor="festival-series" className="flex flex-col gap-1">
             Series
@@ -461,6 +474,7 @@ export default function FestivalEditForm({
           )}
           <span>Links editions so followers of an earlier edition hear about this one. Use lower-case letters, digits and hyphens.</span>
         </div>
+        )}
       </div>
 
       {/* Stages */}
@@ -620,7 +634,7 @@ export default function FestivalEditForm({
         </button>
       </div>
 
-      {editingId && (
+      {editingId && !organizer && (
         <div className="border-t border-glass-border pt-4">
           <SetTimeReleasePanel festivalId={editingId} refreshKey={formData.updatedAt} />
         </div>
@@ -642,7 +656,13 @@ export default function FestivalEditForm({
         </div>
       )}
 
-      {editingId && (
+      {editingId && organizer && !readOnly && (
+        <p className="border-t border-glass-border pt-4 text-sm text-text-secondary">
+          Attendees are alerted after Festie checks the change.
+        </p>
+      )}
+
+      {editingId && !organizer && (
         <div className="flex items-start gap-3 border-t border-glass-border pt-4 text-sm text-text-primary">
           <input
             id="festival-notify-pickers"
@@ -662,6 +682,8 @@ export default function FestivalEditForm({
         </div>
       )}
 
+      </fieldset>
+
       <div className="sticky bottom-0 flex items-center gap-2 justify-end border-t border-glass-border bg-bg-card pt-4">
         {editingId && (
           <span className="mr-auto text-sm text-text-muted">
@@ -674,7 +696,7 @@ export default function FestivalEditForm({
         >
           Cancel
         </button>
-        {editingId && total > 0 && (
+        {!readOnly && editingId && total > 0 && (
           <button
             onClick={onDiscard}
             className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
@@ -682,6 +704,7 @@ export default function FestivalEditForm({
             Discard
           </button>
         )}
+        {!readOnly && (
         <button
           onClick={onSave}
           disabled={saving || (!!editingId && total === 0)}
@@ -689,6 +712,7 @@ export default function FestivalEditForm({
         >
           {saving ? 'Saving…' : editingId ? `Save ${plural(total, 'change')}` : 'Create festival'}
         </button>
+        )}
       </div>
     </div>
   );

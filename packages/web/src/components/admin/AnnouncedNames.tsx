@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createArtist, matchArtists } from '@festie/shared/services';
+import { useCanMatchArtists } from './festivalModeContext';
 import type { ArtistCandidate } from '@festie/shared/services';
 import {
   MAX_LINEUP_LINES,
@@ -162,6 +163,7 @@ export default function AnnouncedNames<D extends FormDay>({
   const latestLineup = useRef(lineup);
   latestLineup.current = lineup;
   const matchRun = useRef(0);
+  const canMatch = useCanMatchArtists();
 
   /** Asks the server which unlinked names match an artist (one call per 500 names), then links the clear ones. */
   const matchNames = async (list: LineupDraft[]) => {
@@ -169,7 +171,7 @@ export default function AnnouncedNames<D extends FormDay>({
     const names = [
       ...new Map(list.flatMap((e) => e.artists).filter((a) => !a.id && a.name.trim()).map((a) => [nameKey(a.name), a.name.trim()])).values(),
     ];
-    if (names.length === 0) return setMatches({});
+    if (names.length === 0 || !canMatch) return setMatches({});
     try {
       const found = [];
       for (let i = 0; i < names.length; i += MATCH_BATCH) {

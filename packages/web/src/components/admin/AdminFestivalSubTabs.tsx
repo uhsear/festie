@@ -11,12 +11,14 @@ const SUB_TABS: ReadonlyArray<{ view: OpenView; label: string }> = [
 interface AdminFestivalSubTabsProps {
   current: OpenView;
   onSelect: (view: OpenView) => void;
+  /** The views to offer. A viewer of an organization sees Details only. */
+  views?: ReadonlyArray<OpenView>;
 }
 
-export default function AdminFestivalSubTabs({ current, onSelect }: AdminFestivalSubTabsProps) {
+export default function AdminFestivalSubTabs({ current, onSelect, views }: AdminFestivalSubTabsProps) {
   return (
   <div className="flex gap-2 overflow-x-auto border-b border-glass-border">
-    {SUB_TABS.map(({ view: v, label }) => (
+    {SUB_TABS.filter(({ view }) => !views || views.includes(view)).map(({ view: v, label }) => (
       <button
         key={v}
         type="button"

@@ -247,6 +247,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | `useRovingTabs` | `packages/web/src/hooks/useRovingTabs.ts` | Arrow-key roving focus for a role=tablist element. | `packages/web/src/components/crew/CrewTabBar.tsx:26` |
 | `useMediaQuery` | `packages/web/src/hooks/useMediaQuery.ts` | useSyncExternalStore over matchMedia with a window guard; use for min-width and prefers-reduced-motion. | `packages/web/src/components/features/DetailPanel.tsx:43` |
 | `adminKeys / ADMIN_QUERY_OPTIONS / useAdminSearch` | `packages/web/src/components/admin/adminQueries.ts, packages/web/src/components/admin/useAdminSearch.ts` | Query-key factory, shared react-query options and URL-backed search state. | `packages/web/src/components/admin/AdminDashboard.tsx:15` |
+| `AdminFestivals mode='organizer' / FestivalScope` | `packages/web/src/components/admin/AdminFestivals.tsx, packages/shared/src/services/festivalAdmin.ts` | The /manage festival editor. It reuses the admin editor over the organizer API (scope `manage`) and leaves out the admin-only panels. | `packages/web/src/routes/manage.tsx:63` |
 
 ## Add a form on web
 

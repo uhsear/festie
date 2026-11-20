@@ -18,6 +18,7 @@ interface UserMenuProps {
     name?: string;
     avatarUrl?: string;
     isAdmin?: boolean;
+    organizations?: ReadonlyArray<unknown>;
   };
 }
 

@@ -11,6 +11,8 @@ export * from './sharing';
 export * from './lineupImport';
 export * from './timeReleases';
 export * from './festivalAdmin';
+export * from './organizer';
+export * from './adminOrganizations';
 export * from './caught';
 export * from './adminFestivalTools';
 export * from './adminArtists';
