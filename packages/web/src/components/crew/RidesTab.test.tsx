@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import RidesTab from './RidesTab';
 
 const { state } = vi.hoisted(() => ({ state: {} as Record<string, unknown> }));
@@ -41,10 +41,21 @@ const offer = (over: Record<string, unknown>) => ({
   ...over,
 });
 
-function setup(offers: unknown[], isOwner = false, festivalId = 'fest-1') {
+const offlineError = () =>
+  Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true });
+const serverError = () => Object.assign(new Error('upstream exploded'), { name: 'ApiClientError', status: 503 });
+const OFFLINE_COPY = "You're offline. Check your connection and try again.";
+const SERVER_COPY = 'Something went wrong on our side. Try again in a minute.';
+
+function setup(
+  offers: unknown[],
+  isOwner = false,
+  festivalId = 'fest-1',
+  loadRides: () => Promise<void> = vi.fn().mockResolvedValue(undefined),
+) {
   Object.assign(state, {
     rideOffers: offers,
-    loadRides: vi.fn().mockResolvedValue(undefined),
+    loadRides,
     createRideOffer: vi.fn(),
     updateRideOffer: vi.fn(),
     deleteRideOffer: vi.fn(),
@@ -58,6 +69,60 @@ function setup(offers: unknown[], isOwner = false, festivalId = 'fest-1') {
 
 describe('RidesTab', () => {
   beforeEach(() => vi.clearAllMocks());
+
+  it('shows one loading status, not the empty state, while rides load', () => {
+    setup([], false, 'fest-1', () => new Promise(() => {}));
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveAccessibleName('Loading');
+    expect(screen.queryByText('No rides yet')).toBeNull();
+  });
+
+  it('shows the offline copy and a Retry, not "No rides yet", when the load fails offline', async () => {
+    const loadRides = vi.fn().mockRejectedValueOnce(offlineError()).mockResolvedValue(undefined);
+    setup([], false, 'fest-1', loadRides);
+    expect(await screen.findByText("Couldn't load rides")).toBeTruthy();
+    expect(screen.getByText(OFFLINE_COPY)).toBeTruthy();
+    expect(screen.queryByText('No rides yet')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(await screen.findByText('No rides yet')).toBeTruthy();
+    expect(loadRides).toHaveBeenCalledTimes(2);
+  });
+
+  it('shows the server copy when the load fails with a 5xx', async () => {
+    setup([], false, 'fest-1', vi.fn().mockRejectedValue(serverError()));
+    expect(await screen.findByText(SERVER_COPY)).toBeTruthy();
+    expect(screen.queryByText(/upstream exploded/)).toBeNull();
+  });
+
+  it('keeps rides already in the store visible when the refresh fails', async () => {
+    setup([offer({})], false, 'fest-1', vi.fn().mockRejectedValue(offlineError()));
+    expect(await screen.findByRole('button', { name: 'Take a seat' })).toBeTruthy();
+    expect(screen.queryByText("Couldn't load rides")).toBeNull();
+    expect(await screen.findByText(/Couldn't refresh/)).toBeTruthy();
+  });
+
+  it('retries a failed refresh through the stale note', async () => {
+    const loadRides = vi.fn().mockRejectedValueOnce(offlineError()).mockResolvedValue(undefined);
+    setup([offer({})], false, 'fest-1', loadRides);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(screen.queryByText(/Couldn't refresh/)).toBeNull());
+    expect(loadRides).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a Retry that settles after the crew changed', async () => {
+    let rejectRetry: (e: unknown) => void = () => {};
+    const loadRides = vi
+      .fn()
+      .mockRejectedValueOnce(offlineError())
+      .mockImplementationOnce(() => new Promise((_, reject) => (rejectRetry = reject)))
+      .mockResolvedValue(undefined);
+    const view = setup([], false, 'fest-1', loadRides);
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+    view.rerender(<RidesTab crewId="crew-2" currentUserId="me" isOwner={false} />);
+    rejectRetry(serverError());
+    expect(await screen.findByText('No rides yet')).toBeTruthy();
+    expect(screen.queryByText("Couldn't load rides")).toBeNull();
+  });
 
   it('open ride offers Take a seat and shows seats, direction and time in festival time', async () => {
     setup([offer({})]);

@@ -48,6 +48,12 @@ describe('AdminCommandPalette', () => {
     expect(setAdminSearch).toHaveBeenCalledWith({ tab: 'crews', q: 'ABC123' });
   });
 
+  it('names the search input for assistive technology, not only by its placeholder', () => {
+    const input = openPalette();
+    expect(input).toHaveAttribute('aria-label', PLACEHOLDER);
+    expect(screen.getByRole('combobox', { name: PLACEHOLDER })).toBe(input);
+  });
+
   it('Escape closes', () => {
     const input = openPalette();
     fireEvent.keyDown(input, { key: 'Escape' });

@@ -13,4 +13,12 @@ describe('index.html boot shell', () => {
     expect(html).not.toMatch(/<script(?![^>]*\ssrc=)[^>]*>/);
     expect(html).not.toMatch(/\sstyle="/);
   });
+
+  it('loads the boot guard as an external script before the bundle', () => {
+    expect(html).toMatch(/<script src="\/boot-guard\.js"><\/script>\s*<script type="module" src="\/src\/main\.tsx">/);
+  });
+
+  it('tells a no-JavaScript visitor to turn it on instead of showing the spinner', () => {
+    expect(html).toMatch(/<noscript>[\s\S]*\.boot-shell\s*\{\s*display: none;[\s\S]*needs JavaScript[\s\S]*<\/noscript>/);
+  });
 });
