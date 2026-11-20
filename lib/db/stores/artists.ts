@@ -11,7 +11,7 @@
  * to a festival in between: the transaction rolls back with a retryable error and starts again.
  */
 
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { withTransactionRetry } from '../connection';
 import { createOpaqueId } from '../../helpers';
 import { artistNameKey } from '../../artist-key';
@@ -74,6 +74,9 @@ export {
   type MergePick,
   type MatchItem,
 } from './artists-helpers';
+
+/** An artist entry on a set or lineup row, as a festival payload carries it. */
+type NamedArtist = { id?: string | null; name?: string } | null | undefined;
 
 export function createArtistsStore(pool: Pool) {
   const candidatesOf = (rows: ArtistRecord[], uses: Map<string, ArtistUse[]>) => {
@@ -166,7 +169,7 @@ export function createArtistsStore(pool: Pool) {
               400,
               'INVALID_INPUT',
               `There is already an artist named ${same[0].name}. Add a note to tell them apart, for example UK or Berlin.`,
-              { existingIds: same.map((row: any) => row.id) },
+              { existingIds: same.map((row: { id: string }) => row.id) },
             );
           }
           await assertNoClash(client, id, { key, label, spotifyId });
@@ -177,7 +180,7 @@ export function createArtistsStore(pool: Pool) {
           );
           return rows[0] as ArtistRecord;
         });
-      } catch (error: any) {
+      } catch (error) {
         throw artistConflict(error) ?? error;
       }
     },
@@ -240,7 +243,7 @@ export function createArtistsStore(pool: Pool) {
           );
           return { artist, synced, before };
         });
-      } catch (error: any) {
+      } catch (error) {
         throw artistConflict(error) ?? error;
       }
     },
@@ -334,7 +337,7 @@ export function createArtistsStore(pool: Pool) {
           );
           return { status: 'saved' as const, artist, before, synced };
         });
-      } catch (error: any) {
+      } catch (error) {
         throw artistConflict(error) ?? error;
       }
     },
@@ -493,7 +496,7 @@ export function createArtistsStore(pool: Pool) {
             },
           };
         });
-      } catch (error: any) {
+      } catch (error) {
         throw artistConflict(error) ?? error;
       }
     },
@@ -514,7 +517,7 @@ export function createArtistsStore(pool: Pool) {
           if (!filled?.changed) return { synced: [] };
           return { synced: await rewriteCopies(client, festivalIds, filled.artist) };
         });
-      } catch (error: any) {
+      } catch (error) {
         throw artistConflict(error) ?? error;
       }
     },
@@ -627,16 +630,19 @@ export function createArtistsStore(pool: Pool) {
      * How many distinct names on a festival have no artist id and fit two or more live artists. The
      * save keeps such a name without an id, so the publish checklist asks the editor to pick one.
      */
-    async countAmbiguousNames(festival: any): Promise<number> {
+    async countAmbiguousNames(festival: {
+      days?: ({ sets?: ({ artists?: NamedArtist[] } | null)[] } | null)[];
+      lineup?: ({ artists?: NamedArtist[] } | null)[];
+    } | null | undefined): Promise<number> {
       const elements = [
-        ...(festival?.days ?? []).flatMap((day: any) => (day?.sets ?? []).flatMap((set: any) => set?.artists ?? [])),
-        ...(festival?.lineup ?? []).flatMap((entry: any) => entry?.artists ?? []),
+        ...(festival?.days ?? []).flatMap((day) => (day?.sets ?? []).flatMap((set) => set?.artists ?? [])),
+        ...(festival?.lineup ?? []).flatMap((entry) => entry?.artists ?? []),
       ];
       const keys = [
         ...new Set(
           elements
-            .filter((e: any) => !e?.id && typeof e?.name === 'string' && e.name.trim())
-            .map((e: any) => artistNameKey(e.name)),
+            .filter((e) => !e?.id && typeof e?.name === 'string' && e.name.trim())
+            .map((e) => artistNameKey((e as { name: string }).name)),
         ),
       ];
       const byKey = await liveArtistsByKey(pool, keys);
@@ -659,7 +665,7 @@ export function createArtistsStore(pool: Pool) {
      * artist holds is left out and reported. Never overwrites a link.
      */
     async fillEmpty(
-      client: any,
+      client: PoolClient,
       id: string,
       fill: { spotifyUrl?: string; link?: string; photo?: string; genres?: string[] },
       actor: ArtistActor = { userId: null },
