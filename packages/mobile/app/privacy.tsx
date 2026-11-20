@@ -13,7 +13,7 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
  * on November 3, 2026. No attorney has reviewed it.
  *
  * The web policy remains the single source of truth; this screen reproduces
- * its text word for word (effective November 3, 2026) as a typed data array so it
+ * its text word for word (effective November 18, 2026) as a typed data array so it
  * renders like the rest of the app and works offline. Emails open the mail
  * client and the Terms reference opens the web Terms of Service in an in-app
  * browser sheet.
