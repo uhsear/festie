@@ -663,6 +663,8 @@ describe('lineup-import routes (admin)', { skip, concurrency: 1 }, () => {
     const { server, admin } = await adminServer();
     const res = await postImport(server, admin, FEST_ID, { text: 'artist\nX', format: 'csv' }).expect(400);
     assert.equal(res.body.error.message, 'Invalid import payload');
+    assert.equal(res.body.error.code, 'VALIDATION_ERROR');
+    assert.ok(res.body.error.fields.length > 0);
   });
 
   test('a missing or soft-deleted festival is a 404', async () => {
