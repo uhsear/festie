@@ -11,16 +11,19 @@
 
 import { Router } from 'express';
 import { installEventSchema, validate } from '../lib/schemas.js';
+import type { Request, Response } from 'express';
+import type { z } from 'zod';
+import type { RouteDeps } from '../lib/types';
 
-export default function createAnalyticsInstallRoutes(deps: any) {
+export default function createAnalyticsInstallRoutes(deps: RouteDeps) {
   const { log, stores, rateLimit } = deps;
   const router = Router();
 
   const limiter = rateLimit(60, 'install-analytics');
 
-  router.post('/install', limiter, validate(installEventSchema), async (req: any, res: any) => {
+  router.post('/install', limiter, validate(installEventSchema), async (req: Request, res: Response) => {
     try {
-      const { platform, event, reason, engagement_ms } = req.validatedBody;
+      const { platform, event, reason, engagement_ms } = req.validatedBody as z.infer<typeof installEventSchema>;
 
       const ua = (req.get('user-agent') || '').slice(0, 500);
       const reasonClean = reason === undefined ? null : reason.trim().slice(0, 64);
@@ -53,9 +56,9 @@ export default function createAnalyticsInstallRoutes(deps: any) {
       );
 
       res.status(204).end();
-    } catch (err: any) {
+    } catch (err) {
       // Never fail the request path on analytics errors
-      if (log && log.warn) log.warn('install analytics error', { message: err && err.message, code: err && err.code });
+      if (log && log.warn) log.warn('install analytics error', { message: err && (err as NodeJS.ErrnoException).message, code: err && (err as NodeJS.ErrnoException).code });
       res.status(204).end();
     }
   });

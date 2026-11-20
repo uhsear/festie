@@ -29,13 +29,12 @@ import createPollsStore from '../lib/db/stores/polls';
 import { createExpensesStore } from '../lib/db/stores/expenses';
 import { createActivityStore } from '../lib/db/stores/activity';
 import { createCalendarTokensStore } from '../lib/db/stores/calendar-tokens';
+import { requireTestDatabaseUrl } from './_test-schema';
 
 // SAFETY skip-gate — mandatory for every consolidated coverage file so CI stays
 // consistent when DB env is absent. Unit-only tests don't hit the pool, but we
 // still fail-fast on misconfigured environments to match the other files.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-if (!TEST_DATABASE_URL) { console.error('ERROR: TEST_DATABASE_URL env var required.'); process.exit(1); }
-if (!TEST_DATABASE_URL.includes('_test')) { console.error('SAFETY: TEST_DATABASE_URL must contain "_test".'); process.exit(1); }
+const TEST_DATABASE_URL = requireTestDatabaseUrl();
 
 // ════════════════════════════════════════════════════════════════════════
 // sanitizeLogMeta (lib/helpers)

@@ -5,14 +5,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
-import { ensureTestSchema } from './_test-schema';
+import { ensureTestSchema, TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Migration 112 guards artists.merge_refs and indexes artists.merged_into. It runs twice without
 // error, keeps data written between the runs, is ASCII only and holds no BEGIN or COMMIT (the runner
 // wraps each file itself). Run it only on a private Postgres (port 5434 or higher), never 5432 or 5433.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '112_artists_merge_refs.sql'),
   'utf8',

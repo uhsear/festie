@@ -5,10 +5,9 @@ import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 
 import { createIdentitiesStore } from '../lib/db/stores/identities.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Needs the Docker test DB (port 5433, a *_test database) with migrations applied.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const MIGRATION = path.join(import.meta.dirname, '..', 'migrations', '083_user_identities.sql');
 

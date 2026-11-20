@@ -123,7 +123,7 @@ describe('presence: setSocketPresence', () => {
     assert.deepEqual(rp.setOnline.mock.calls[0].arguments, ['fest-1', 'user-1', 'alice', 'sock-1']);
   });
 
-  it('handles redisPresence.setOnline failure gracefully', async () => {
+  it('rejects when redisPresence.setOnline fails but keeps in-memory state', async () => {
     const rp = makeRedisPresence({
       setOnline: mock.fn(async () => { throw new Error('redis down'); }),
     });
@@ -131,13 +131,10 @@ describe('presence: setSocketPresence', () => {
     const deps = defaultDeps({ redisPresence: rp, log });
     const pm = createPresenceManager(deps);
 
-    // Should not throw
-    await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
+    await assert.rejects(pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1'), /redis down/);
 
-    // In-memory state should still work
     const room = deps.state.onlineUsers.get('fest-1');
     assert.equal(room.size, 1);
-    assert.equal(log.debug.mock.callCount(), 1);
   });
 });
 

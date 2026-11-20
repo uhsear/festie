@@ -5,14 +5,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Migration 096 (T54) adds the crew lock, the Home Base Plan B line and the
 // meeting-point edit trail. It runs twice without error, and a hard delete of
 // the editor clears edited_by instead of removing the point.
 // Run it only on a private Postgres (port 5434 or higher), never 5432 or 5433.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '096_crew_lock_planb_mp_edits.sql'),
   'utf8',

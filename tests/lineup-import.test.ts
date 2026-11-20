@@ -28,11 +28,10 @@ import { createLineupImportsStore } from '../lib/db/stores/lineup-imports';
 import type { BuildPlan } from '../lib/db/stores/lineup-imports';
 import { planLineupImport, withLockedArtists } from '../lib/lineup-import-plan';
 import { artistNameKey } from '../lib/artist-key';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // DB skip-gate: these integration tests require a live Postgres database.
 // Set TEST_DATABASE_URL to run them (always set in CI). See tests/README.md.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 // The shared helpers exit the process without a test database, so load them only when it exists.
 const helpers = skip ? null : await import('./_integration-helpers');
 

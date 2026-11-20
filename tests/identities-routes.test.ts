@@ -22,9 +22,8 @@ import request from 'supertest';
 import { revokeAppleForUser, revokeAppleToken } from '../lib/oauth/revoke-user';
 import { seal } from '../lib/oauth/secretbox';
 import { bootServer } from './_boot-server';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const PASSWORD = 'identity-test-password-pass';
