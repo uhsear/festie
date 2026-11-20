@@ -10,9 +10,6 @@
   ],
   "project": ["lib/**/*.ts", "routes/**/*.ts", "scripts/**/*.{ts,mjs,js}"],
   "ignore": ["packages/**"],
-  "ignoreIssues": {
-    "lib/spotify.ts": ["exports"]
-  },
   "ignoreDependencies": ["@sentry/node", "papaparse", "@types/papaparse"],
   "ignoreBinaries": ["expo", "lhci", "psql", "pmtiles", "build-storybook", "bundlemon"]
 }
