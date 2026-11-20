@@ -32,6 +32,7 @@ import mountAdminAuditRoutes from './admin-audit.js';
 import mountAdminBulkRoutes from './admin-bulk.js';
 import mountAdminPolicyNoticeRoutes from './admin-policy-notice.js';
 import * as spotify from '../lib/spotify.js';
+import { z } from 'zod';
 import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
@@ -61,6 +62,7 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
     _invalidateFestivalCache,
     rateLimit,
     schemas,
+    validate,
     validateQuery,
   } = deps;
   const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
@@ -250,15 +252,11 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
 
   // ── POST /festivals/:id/backfill-spotify — auto-populate link_url via Spotify ──
   // Preserves Agent E's SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET config reads.
-  router.post('/festivals/:id/backfill-spotify', adminAuth, adminWriteLimit, async (req: Request, res: Response) => {
+  // An absent body is an empty request, as before.
+  const spotifyBackfillBody = validate(z.preprocess((body) => body ?? {}, spotifyBackfillSchema));
+  router.post('/festivals/:id/backfill-spotify', adminAuth, adminWriteLimit, spotifyBackfillBody, async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const parsed = spotifyBackfillSchema.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        const issue = parsed.error.issues[0]!;
-        const message = issue.path.length > 0 ? `${issue.path.join('.')}: ${issue.message}` : issue.message;
-        return sendError(res, 400, message, ErrorCodes.VALIDATION_ERROR);
-      }
       const spotifyClientId = config.SPOTIFY_CLIENT_ID;
       const spotifyClientSecret = config.SPOTIFY_CLIENT_SECRET;
       if (!spotifyClientId || !spotifyClientSecret) {
@@ -271,7 +269,7 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
       // Optional body: verified overrides (artistName -> spotifyUrl) take
       // precedence over search. A guess never replaces a link, and never touches an artist that
       // other festivals list: those artists are edited on the Artists tab.
-      const body = parsed.data;
+      const body = req.validatedBody as z.infer<typeof spotifyBackfillSchema>;
       const skipSearch = body.skipSearch === true; // overrides-only, no Spotify calls
       const setIds = body.setIds;
       const normName = (s: any) =>

@@ -296,7 +296,10 @@ describe('lineup-import commit: picker alerts, no festival-wide alert (mocked de
     };
     const app = express();
     app.use(express.json());
-    deps.festivalAccess = () => deps.adminAuth;
+    deps.festivalAccess = ({ param = 'id' }: any = {}) => (req: any, res: any, next: any) => {
+      req.festivalId = req.params[param];
+      return (deps.adminAuth as any)(req, res, next);
+    };
     app.use(createLineupImportRoute(deps));
     return { app, sendTimeRelease, scheduleChanged, warnings };
   }
@@ -402,7 +405,10 @@ describe('lineup-import commit and undo: festival:updated and list cache (mocked
     };
     const app = express();
     app.use(express.json());
-    deps.festivalAccess = () => deps.adminAuth;
+    deps.festivalAccess = ({ param = 'id' }: any = {}) => (req: any, res: any, next: any) => {
+      req.festivalId = req.params[param];
+      return (deps.adminAuth as any)(req, res, next);
+    };
     app.use(createLineupImportRoute(deps));
     return { app, festivalUpdated, invalidateFestivalListCache };
   }
