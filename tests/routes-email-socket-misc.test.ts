@@ -23,6 +23,7 @@ function makeIo(overrides: any = {}) {
   return {
     to: () => ({ emit: emitFn }),
     of: () => ({ to: () => ({ emit: emitFn }) }),
+    in: () => ({ fetchSockets: async () => [] }),
     sockets: { adapter: { rooms: new Map() } },
     engine: { clientsCount: 1 },
     on: mock.fn(),
