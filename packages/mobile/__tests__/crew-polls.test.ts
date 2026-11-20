@@ -13,6 +13,7 @@ describe('T24 mobile polls source guard', () => {
   it('CrewPolls groups decided polls and offers the Meet where template', () => {
     const src = read('components/CrewPolls.tsx');
     expect(src).toContain('splitPolls');
+    expect(src).toContain('buildPollSlots');
     expect(src).toContain('nextVoteIndexes');
     expect(src).toContain('Decided (');
     expect(src).toContain('Meet where?');

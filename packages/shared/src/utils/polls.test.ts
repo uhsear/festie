@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import type { CrewMember, CrewPoll } from '../types/domain';
+import type { CrewMember, CrewPoll, FestivalSet } from '../types/domain';
 import {
   tallyPoll,
+  buildPollSlots,
   isPollClosed,
   splitPolls,
   nextVoteIndexes,
@@ -156,5 +157,25 @@ describe('names helpers', () => {
     expect(crewMemberName({ username: 'sam' })).toBe('sam');
     expect(crewMemberName(undefined)).toBe('Someone');
     expect(pollNonVoterIds({ votes: [{ option: 0, user_id: 'a' }] }, ['a', 'b'])).toEqual(['b']);
+  });
+});
+
+describe('buildPollSlots', () => {
+  const set = (id: string, dayIndex: number, startTime: string) => ({ id, dayIndex, startTime }) as unknown as FestivalSet;
+
+  it('orders slots by day, then festival-day time, so 00:30 follows 21:00', () => {
+    const slots = buildPollSlots([
+      set('a', 1, '00:30'),
+      set('b', 1, '00:30'),
+      set('c', 1, '21:00'),
+      set('d', 1, '21:00'),
+      set('e', 0, '22:00'),
+      set('f', 0, '22:00'),
+    ]);
+    expect(slots.map((s) => `${s.dayIndex}|${s.startTime}`)).toEqual(['0|22:00', '1|21:00', '1|00:30']);
+  });
+
+  it('drops single-set, untimed and dayless slots', () => {
+    expect(buildPollSlots([set('a', 0, '20:00'), { id: 'b', dayIndex: 0 } as unknown as FestivalSet])).toEqual([]);
   });
 });

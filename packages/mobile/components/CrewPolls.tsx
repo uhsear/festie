@@ -20,7 +20,7 @@ import {
   crewCopy,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import type { PollEndChoice } from '@festie/shared/utils';
+import { buildPollSlots, type PollEndChoice, type PollSlot } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import AppSwitch from './AppSwitch';
@@ -35,12 +35,6 @@ const MAX_OPTIONS = 4;
 const EMPTY_SETS: FestivalSet[] = [];
 const EMPTY_DAYS: FestivalDay[] = [];
 const EMPTY_STAGES: Stage[] = [];
-
-interface Slot {
-  startTime: string;
-  dayIndex: number;
-  sets: FestivalSet[];
-}
 
 interface CrewPollsProps {
   crewId: string;
@@ -104,19 +98,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
 
   // Group the lineup into start-time slots that have a clash (≥2 sets) so the
   // crew can vote "which set at 9pm?". Sorted by day then time.
-  const slots = useMemo<Slot[]>(() => {
-    const byKey = new Map<string, Slot>();
-    for (const set of sets) {
-      if (!set.startTime || typeof set.dayIndex !== 'number') continue;
-      const key = `${set.dayIndex}|${set.startTime}`;
-      const slot = byKey.get(key);
-      if (slot) slot.sets.push(set);
-      else byKey.set(key, { startTime: set.startTime, dayIndex: set.dayIndex, sets: [set] });
-    }
-    return Array.from(byKey.values())
-      .filter((s) => s.sets.length >= 2)
-      .sort((a, b) => a.dayIndex - b.dayIndex || a.startTime.localeCompare(b.startTime));
-  }, [sets]);
+  const slots = useMemo(() => buildPollSlots(sets), [sets]);
 
   const selectedSlot = useMemo(
     () => slots.find((s) => `${s.dayIndex}|${s.startTime}` === slotKey) ?? null,
@@ -125,7 +107,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
 
   const dayLabel = (dayIndex: number) => days[dayIndex]?.label || days[dayIndex]?.date || `Day ${dayIndex + 1}`;
 
-  const selectSlot = (slot: Slot) => {
+  const selectSlot = (slot: PollSlot) => {
     const key = `${slot.dayIndex}|${slot.startTime}`;
     setSlotKey(key);
     const next: Record<string, boolean> = {};
