@@ -5,12 +5,11 @@ import { useAuth } from '@festie/shared/hooks';
 import { mapErrorToUserMessage, setPassword, withReauth } from '@festie/shared/services';
 import { PROVIDER_COPY } from '@festie/shared/constants';
 import { PASSWORD_CHANGED_MESSAGE, useAuthStore, useUIStore } from '@festie/shared/stores';
-import { PASSWORD_RULES, passwordPolicyError, validateNewPassword } from '@festie/shared/utils';
+import { PASSWORD_RULES, passwordPolicyError, passwordStrength, validateNewPassword } from '@festie/shared/utils';
 import Button from './Button';
 import { useReauthPrompt } from './admin';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
-import { passwordStrength } from '../lib/accountFormat';
 
 /**
  * Password-change form for the Account screen.

@@ -4,6 +4,7 @@ import { useAuthStore } from '@festie/shared';
 import { isResetLinkExpired, mapErrorToUserMessage } from '@festie/shared/services/api';
 import { AUTH_COPY } from '@festie/shared/constants';
 import { validateNewPassword } from '@festie/shared/utils';
+import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
 import AuthBrand from '../components/auth/AuthBrand';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -83,6 +84,7 @@ function ResetPasswordPageInner() {
               helperText={AUTH_COPY.passwordHint}
               disabled={busy}
             />
+            <PasswordStrengthMeter password={password} />
             <Input
               label={AUTH_COPY.confirmNewPasswordLabel}
               isPassword

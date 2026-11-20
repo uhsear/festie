@@ -89,6 +89,14 @@ describe('RegisterPage', () => {
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
   });
 
+  it('shows the strength meter as the password is typed', async () => {
+    const user = userEvent.setup();
+    render(<RegisterPage />);
+    expect(screen.queryByRole('status', { name: /Password strength/ })).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Password'), 'Abcdefgh1!');
+    expect(screen.getByRole('status', { name: 'Password strength: Strong' })).toBeInTheDocument();
+  });
+
   it('renders TOS checkbox and links', () => {
     render(<RegisterPage />);
     expect(screen.getByRole('checkbox')).not.toBeChecked();
