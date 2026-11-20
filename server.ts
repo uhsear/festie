@@ -645,7 +645,8 @@ if (isMainModule) {
   // is reported through the same path as any other crash.
   planner = await createFestieApp();
   // Only the real entry point binds the scrape port; importing server.ts (tests) must not.
-  startMetricsListener(metrics, { basePort: 9400, workerId });
+  // METRICS_PORT lets a second instance on the same host (staging) keep off production's port.
+startMetricsListener(metrics, { basePort: Number(process.env.METRICS_PORT) || 9400, workerId });
 
   async function listenWithRetry(server: any, port: number, host: string, maxRetries = 5, initialDelay = 1000) {
     const isCluster = typeof process.send === 'function';
