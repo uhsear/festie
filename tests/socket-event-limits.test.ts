@@ -49,7 +49,7 @@ function buildDeps() {
   };
 }
 
-async function connectSocket(deps: any) {
+async function connectSocket(deps: any, errors: any[] = []) {
   const { default: setupSocketHandlers } = await import('../routes/socket.js');
   let onConnection: any;
   deps.io.on = (event: string, handler: any) => {
@@ -63,7 +63,7 @@ async function connectSocket(deps: any) {
     handshake: { headers: {} },
     on: (event: string, handler: any) => { handlers[event] = handler; },
     to: () => ({ emit: noop }),
-    emit: noop,
+    emit: (event: string, payload: any) => { if (event === 'error') errors.push(payload); },
   };
   onConnection(socket);
   return handlers;
@@ -139,5 +139,78 @@ describe('socket event limits', () => {
     const ack = await emit(handlers['location:share'], { crewId: 'crew-1' });
     assert.deepEqual(ack, { ok: false, code: 'TOO_MANY_SHARING_SOCKETS' });
     assert.equal(zrem.mock.callCount(), 1);
+  });
+
+  describe('location:update after location:share', () => {
+    const fix = { crewId: 'crew-1', lat: 1, lng: 2, capturedAt: new Date().toISOString() };
+
+    test('an update past the window accepted at share is refused', async () => {
+      const deps = buildDeps();
+      const errors: any[] = [];
+      const handlers = await connectSocket(deps, errors);
+      const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+      assert.equal((await emit(handlers['location:share'], { crewId: 'crew-1', expiresAt })).ok, true);
+      const realNow = Date.now;
+      Date.now = () => realNow() + 2 * 3_600_000;
+      try {
+        await handlers['location:update'](fix);
+      } finally {
+        Date.now = realNow;
+      }
+      assert.equal(errors.at(-1)?.code, 'INVALID_EXPIRY');
+    });
+
+    test('an update that claims a later expiresAt than the share is refused', async () => {
+      const deps = buildDeps();
+      const errors: any[] = [];
+      const handlers = await connectSocket(deps, errors);
+      const expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+      await emit(handlers['location:share'], { crewId: 'crew-1', expiresAt });
+      await handlers['location:update']({ ...fix, expiresAt: new Date(Date.now() + 7_200_000).toISOString() });
+      assert.equal(errors.at(-1)?.code, 'INVALID_EXPIRY');
+      await handlers['location:update']({ ...fix, expiresAt });
+      assert.equal(errors.length, 1);
+    });
+
+    test('a share without expiresAt is bounded by the maximum window', async () => {
+      const deps = buildDeps();
+      const errors: any[] = [];
+      const handlers = await connectSocket(deps, errors);
+      await emit(handlers['location:share'], { crewId: 'crew-1' });
+      const realNow = Date.now;
+      Date.now = () => realNow() + 13 * 3_600_000;
+      try {
+        await handlers['location:update'](fix);
+      } finally {
+        Date.now = realNow;
+      }
+      assert.equal(errors.at(-1)?.code, 'INVALID_EXPIRY');
+    });
+
+    test('an accepted update refreshes the sharing-socket slot', async () => {
+      const deps: any = buildDeps();
+      const zadd = mock.fn();
+      deps.redis = {
+        pipeline: () => {
+          const p: any = { zremrangebyscore: () => p, zadd: (...a: any[]) => { zadd(...a); return p; }, pexpire: () => p, zcard: () => p };
+          p.exec = async () => [[null, 0], [null, 1], [null, 1], [null, 1]];
+          return p;
+        },
+        zrem: async () => 1,
+        eval: async () => [1, 0],
+        hset: async () => 1,
+        hgetall: async () => ({}),
+        expire: async () => 1,
+        pexpire: async () => 1,
+        incr: async () => 1,
+        set: async () => 'OK',
+      };
+      const errors: any[] = [];
+      const handlers = await connectSocket(deps, errors);
+      await emit(handlers['location:share'], { crewId: 'crew-1' });
+      const afterShare = zadd.mock.callCount();
+      await handlers['location:update'](fix);
+      assert.equal(zadd.mock.callCount(), afterShare + 1);
+    });
   });
 });

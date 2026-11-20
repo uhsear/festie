@@ -50,6 +50,7 @@ import {
   dropLivePosition,
   readLiveSnapshot,
   clampCapturedAt,
+  MAX_SHARE_WINDOW_MS,
 } from '../lib/live-location-cache.js';
 import { noteBatteryLevel } from '../lib/battery-low.js';
 import type { LocationPeerStoppedReason } from '../packages/shared/src/types/socket-events.js';
@@ -471,6 +472,8 @@ export default function setupSocketHandlers(deps: any) {
         socket.data.username = session.username;
         socket.data.sharingCrewId = crewId;
         socket.data.sharingSince = Date.now();
+        // The accepted window end: later updates may not outlive it or claim a later one.
+        socket.data.sharingUntil = expiresAt ? Date.parse(expiresAt) : socket.data.sharingSince + MAX_SHARE_WINDOW_MS;
         // M2: seed the streaming-path membership re-check cache — membership was
         // just verified above, so the next recheck is N updates / T seconds out.
         socket.data.crewMembershipCheckedAt = Date.now();
@@ -536,7 +539,12 @@ export default function setupSocketHandlers(deps: any) {
           socket.emit('error', { message: 'Not sharing location to this crew', code: 'NOT_SHARING' });
           return;
         }
-        if (shareWindowError(expiresAt, Date.now())) {
+        const sharingUntil = socket.data.sharingUntil;
+        if (
+          shareWindowError(expiresAt, Date.now()) ||
+          Date.now() >= sharingUntil ||
+          (expiresAt && Date.parse(expiresAt) > sharingUntil)
+        ) {
           socket.emit('error', { message: 'Share window ended or too long', code: 'INVALID_EXPIRY' });
           return;
         }
