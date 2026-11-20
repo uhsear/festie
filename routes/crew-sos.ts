@@ -58,7 +58,6 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
     schemas,
     validate,
     validateParams,
-    io,
     redis,
     emitter,
   } = deps;
@@ -193,8 +192,8 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         }
 
         const clearedAt = new Date().toISOString();
-        if (io) {
-          io.to('crew:' + crewId).emit('sos:cleared', {
+        if (emitter) {
+          emitter.toCrew(crewId, 'sos:cleared', {
             _v: 1,
             crewId,
             userId: raiserId,
@@ -251,7 +250,7 @@ export default function createCrewSosRoutes(deps: RouteDeps) {
         }
 
         const seenBy = (await markSosSeen(redis, crewId, raiserId, { userId, username })) ?? [{ userId, username }];
-        if (io) io.to('crew:' + crewId).emit('sos:seen', { _v: 1, crewId, raiserId, seenBy });
+        if (emitter) emitter.toCrew(crewId, 'sos:seen', { _v: 1, crewId, raiserId, seenBy });
         return sendSuccess(res, { seenBy });
       } catch (err) {
         log.error('sos seen failed', { error: (err as Error).message, crewId: (req.validatedParams as any)?.crewId });

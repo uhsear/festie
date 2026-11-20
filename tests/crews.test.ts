@@ -25,6 +25,7 @@ import request from 'supertest';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
 import { TEST_DATABASE_URL, skip } from './_test-schema';
+import { ioEmitter } from './_io-emitter';
 
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
@@ -600,8 +601,8 @@ describe('crews routes', { concurrency: 1, skip }, () => {
     const events: string[] = [];
     const io = server.planner.io;
     const realTo = io.to.bind(io);
-    mock.method(io, 'to', (room: string) => {
-      rooms.push(room);
+    mock.method(io, 'to', (room: string | string[]) => {
+      rooms.push(...[room].flat());
       const chain: any = realTo(room);
       chain.to = (r: string) => { rooms.push(r); return chain; };
       const origEmit = chain.emit.bind(chain);
@@ -727,6 +728,7 @@ describe('routes/crews.ts -- DELETE /:crewId feed push (mocked deps)', () => {
       },
       schemas: {},
       io,
+      emitter: ioEmitter(io),
       crewNotify,
       stores: {
         crews: {
@@ -808,6 +810,7 @@ describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
       getFestivalById: async () => null,
       schemas,
       io,
+      emitter: ioEmitter(io),
       stores: {
         crews: {
           getById: mock.fn(async () => ({ ...crew })),

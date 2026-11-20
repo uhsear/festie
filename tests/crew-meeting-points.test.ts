@@ -17,6 +17,7 @@ import request from 'supertest';
 
 import { createCrewNotifier } from '../lib/notifications/crew-notify.js';
 import { makeIo } from './_make-io';
+import { ioEmitter } from './_io-emitter';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -123,7 +124,7 @@ function makeDeps(overrides: any = {}) {
       meetingPointComing: {},
     },
     io: overrides.io !== undefined ? overrides.io : ioObj,
-    emitter: { crewActivityLogged: mock.fn(() => {}) },
+    emitter: { crewActivityLogged: mock.fn(() => {}), ...ioEmitter(overrides.io !== undefined ? overrides.io : ioObj) },
     crewNotify: overrides.crewNotify,
     stores,
   };

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { coarse, createSosRaiser } from '../lib/sos-raise';
+import { ioEmitter } from './_io-emitter';
 
 function setup(over: any = {}) {
   const events: any[] = [];
@@ -18,9 +19,8 @@ function setup(over: any = {}) {
       activity: { log: async (row: any) => (events.push(['log', row]), 'act1') },
       crews: { getMembers: async () => [{ userId: 'raiser' }, { userId: 'm1' }, { userId: null }, { userId: 'm2' }] },
     },
-    io: { to: (room: string) => ({ emit: (name: string, p: any) => events.push(['emit', room, name, p]) }) },
     redis,
-    emitter: { crewActivityLogged: (p: any) => events.push(['feed', p]) },
+    emitter: { ...ioEmitter({ to: (room: string) => ({ emit: (name: string, p: any) => events.push(['emit', room, name, p]) }) }), crewActivityLogged: (p: any) => events.push(['feed', p]) },
     notificationService: { send: async (p: any) => void sends.push(p) },
     log: {
       error: (...a: any[]) => logs.error.push(a),
@@ -91,6 +91,7 @@ describe('createSosRaiser.raise', () => {
   it('survives a throwing feed emitter', async () => {
     const { raiser } = setup({
       emitter: {
+        ...ioEmitter({ to: () => ({ emit: () => {} }) }),
         crewActivityLogged: () => {
           throw new Error('x');
         },

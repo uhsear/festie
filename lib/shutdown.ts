@@ -62,7 +62,7 @@ function createCloseHandler({
     }
 
     // Emit draining event to all connected sockets
-    io.emit('server:draining', { message: 'Server is shutting down' });
+    emitter.broadcast('server:draining', { message: 'Server is shutting down' });
 
     // Gracefully close sockets in batches
     const sockets = Array.from(io.of('/').sockets.values());

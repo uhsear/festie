@@ -49,7 +49,6 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
     schemas,
     validate,
     validateParams,
-    io,
     redis,
     emitter,
   } = deps;
@@ -111,7 +110,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
           capturedAt: clampCapturedAt(body.capturedAt, nowMs, serverAt),
           serverAt,
         };
-        if (io) io.to('crew:' + crewId).emit('location:peer-update', payload);
+        if (emitter) emitter.toCrew(crewId, 'location:peer-update', payload);
         void writeLivePosition(redis, crewId, payload);
         void noteBatteryLevel({ redis, stores, emitter, log }, payload);
         return sendSuccess(res, { serverAt });
@@ -143,7 +142,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
 
         // crewMember already ran, so a client cannot spray peer-stopped into other crews.
         void dropLivePosition(redis, crewId, userId);
-        if (io) io.to('crew:' + crewId).emit('location:peer-stopped', { _v: 1, crewId, userId, reason: 'stop' });
+        if (emitter) emitter.toCrew(crewId, 'location:peer-stopped', { _v: 1, crewId, userId, reason: 'stop' });
         return sendSuccess(res, { stopped: true });
       } catch (err) {
         log.error('live location stop failed', {

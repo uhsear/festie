@@ -12,6 +12,7 @@ import express from 'express';
 import request from 'supertest';
 
 import { schemas, validate, validateParams } from '../lib/schemas.js';
+import { ioEmitter } from './_io-emitter';
 
 function noop() {}
 const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
@@ -50,6 +51,7 @@ function makeApp(over: { member?: boolean; dayCount?: number; userId?: string } 
     validateParams,
     schemas,
     io,
+    emitter: ioEmitter(io),
     stores: {
       crews: { getMember: mock.fn(async () => (over.member === false ? null : { role: 'member' })) },
       crewDays,

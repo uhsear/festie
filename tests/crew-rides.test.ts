@@ -13,6 +13,7 @@ import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { makeIo } from './_make-io';
+import { ioEmitter } from './_io-emitter';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -100,7 +101,7 @@ function makeRidesDeps(overrides: any = {}) {
     validate: overrides.validate || ((_schema: any) => (req: any, _res: any, next: any) => { req.validatedBody = req.body; next(); }),
     validateParams: overrides.validateParams || ((_schema: any) => (req: any, _res: any, next: any) => { req.validatedParams = req.params; next(); }),
     io: overrides.io !== undefined ? overrides.io : ioObj,
-    emitter: { crewActivityLogged: mock.fn(() => {}) },
+    emitter: { crewActivityLogged: mock.fn(() => {}), ...ioEmitter(overrides.io !== undefined ? overrides.io : ioObj) },
     stores,
   };
 

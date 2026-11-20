@@ -23,7 +23,7 @@ export default function createCrewDaysRoutes(deps: any) {
     schemas,
     validate,
     validateParams,
-    io,
+    emitter,
   } = deps;
   const crewMember = crewMembership(deps);
 
@@ -67,7 +67,7 @@ export default function createCrewDaysRoutes(deps: any) {
         }
 
         const days = await stores.crewDays.replaceMine(crewId, userId, answers);
-        io.to('crew:' + crewId).emit('crew:days-updated', { crewId, userId, days });
+        emitter.toCrew(crewId, 'crew:days-updated', { crewId, userId, days });
         return sendSuccess(res, { days });
       } catch (err: any) {
         log.error('update crew days error', { error: err.message });
