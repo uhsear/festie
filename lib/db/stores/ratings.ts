@@ -327,7 +327,7 @@ export function createRatingsStore(pool: Pool) {
             SELECT r.set_id FROM set_ratings r
             WHERE r.user_id = $1
               AND NOT EXISTS (SELECT 1 FROM set_caught c2 WHERE c2.user_id = $1 AND c2.set_id = r.set_id AND NOT c2.caught)
-        );
+          ),
           names AS (
             SELECT s.festival_id, n.key, n.name
             FROM seen

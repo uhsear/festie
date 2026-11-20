@@ -353,8 +353,10 @@ describe('createRatingsStore.getLifetimeStats — SQL wiring', () => {
     // pg warns (and pg 9 throws) when a client gets a query while one is still running.
     let inFlight = 0;
     let maxInFlight = 0;
+    const sqls: string[] = [];
     const client = {
-      query: async () => {
+      query: async (sql: string) => {
+        sqls.push(sql);
         maxInFlight = Math.max(maxInFlight, ++inFlight);
         await new Promise((resolve) => setImmediate(resolve));
         inFlight--;
@@ -372,6 +374,8 @@ describe('createRatingsStore.getLifetimeStats — SQL wiring', () => {
       process.off('warning', onWarning);
     }
     assert.strictEqual(maxInFlight, 1);
+    // A stray ';' between CTEs is a Postgres syntax error that mock pools cannot catch.
+    for (const sql of sqls) assert.doesNotMatch(sql, /;\s*\S/);
     assert.deepStrictEqual(
       warnings.filter((m) => m.includes('client is already executing a query')),
       [],
