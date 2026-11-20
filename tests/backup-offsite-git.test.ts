@@ -43,6 +43,7 @@ describe('scripts/backup-offsite-git.sh', { skip }, () => {
     env = stubEnv(bin, path.join(work, 'stub.log'), {
       BACKUP_DIR: backupDir,
       BACKUP_GIT_CLONE: path.join(work, 'clone'),
+      BACKUP_GIT_REPO: 'git@example.invalid:backups.git',
       BACKUP_GPG_PASSPHRASE: 'pw',
       FESTIVAL_MODE_FLAG: path.join(work, 'no-festival-mode'),
       HOME: work,
