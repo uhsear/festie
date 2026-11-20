@@ -1,7 +1,13 @@
 import { useMemo, useState } from 'react';
 import { Check, ChevronDown, Share2 } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
-import { buildFestivalPageUrl, formatFestivalDateRange, groupFestivalsByStatus } from '@festie/shared/utils';
+import {
+  buildFestivalPageUrl,
+  festivalStatus,
+  formatFestivalDateRange,
+  groupFestivalsByStatus,
+  splitBySeries,
+} from '@festie/shared/utils';
 import { DISCOVER_COPY, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
 import Dialog from '../ui/Dialog';
@@ -35,8 +41,12 @@ export default function FestivalPicker() {
     const matches = q
       ? festivals.filter((f) => f.name.toLowerCase().includes(q) || (f.location ?? '').toLowerCase().includes(q))
       : festivals;
-    const g = groupFestivalsByStatus(matches);
+    // Editions of one recurring festival sit together under the series name, ahead of the status groups.
+    const ordered = groupFestivalsByStatus(matches);
+    const { series, standalone } = splitBySeries([...ordered.live, ...ordered.upcoming, ...ordered.past, ...ordered.undated]);
+    const g = groupFestivalsByStatus(standalone);
     return [
+      ...series.map((block) => ({ heading: block.label, items: block.editions, followable: null })),
       { heading: 'Live now', items: g.live, followable: false },
       { heading: 'Upcoming', items: g.upcoming, followable: true },
       { heading: 'Past', items: g.past, followable: false },
@@ -78,7 +88,10 @@ export default function FestivalPicker() {
     }
   };
 
-  const renderRow = (f: Festival, followable: boolean) => {
+  const renderRow = (f: Festival, groupFollowable: boolean | null) => {
+    // A series mixes statuses, so each edition decides: a festival that has not ended can be followed.
+    const status = festivalStatus(f);
+    const followable = groupFollowable ?? (status === 'upcoming' || status === null);
     const detail = [formatFestivalDateRange(f.startDate, f.endDate), f.location].filter(Boolean).join(' · ');
     const isCurrent = f.id === currentFestival?.id;
     const button = (

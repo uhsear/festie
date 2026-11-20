@@ -101,6 +101,23 @@ describe('FestivalPicker dialog', () => {
     expect(screen.getByTestId('festival-option-past')).not.toHaveAttribute('aria-current');
   });
 
+  it('groups the editions of one festival under the series name, ahead of the status groups', () => {
+    state.festivals = [
+      fest('nc-2026', 'North Coast 2026', 20, 22),
+      fest('fk-2026', 'Forbidden Kingdom 2026', -30, -28),
+      fest('fk-2027', 'Forbidden Kingdom 2027', 200, 202),
+    ];
+    render(<FestivalPicker />);
+    fireEvent.click(screen.getByTestId('festival-select'));
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Forbidden Kingdom', 'Upcoming']);
+    const section = screen.getByRole('heading', { name: 'Forbidden Kingdom' }).closest('section')!;
+    const options = Array.from(section.querySelectorAll('[data-testid^="festival-option-"]')).map((el) =>
+      el.getAttribute('data-testid'),
+    );
+    expect(options).toEqual(['festival-option-fk-2027', 'festival-option-fk-2026']);
+  });
+
   it('badges how far each festival\'s schedule has come, and none when no acts are out', () => {
     state.festivals = [
       { ...fest('t', 'Times Fest', 10, 12), scheduleProgress: 'times' },

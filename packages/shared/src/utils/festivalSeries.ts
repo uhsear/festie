@@ -39,3 +39,44 @@ export function otherEditions<T extends SeriesFestival>(
   if (!seriesId) return [];
   return festivals.filter((f) => f.seriesId === seriesId && f.id !== selfId);
 }
+
+export interface SeriesBlock<F> {
+  /** The series id when an edition carries one, else the slug of the name without its year. */
+  key: string;
+  /** The editions' shared name without the year, e.g. "Forbidden Kingdom". */
+  label: string;
+  /** Newest edition first. */
+  editions: F[];
+}
+
+/**
+ * Pulls the editions of one recurring festival out of a picker list. The public list hides `seriesId`
+ * (it is admin only), so editions also match on the name without its trailing year, the rule the server
+ * uses for re-engagement. A festival with no sibling stays standalone, so one-off festivals show as
+ * before. Blocks keep the order of their first edition in `festivals`, standalone keeps list order.
+ */
+export function splitBySeries<F extends SeriesFestival & { startDate?: string | null }>(
+  festivals: readonly F[],
+): { series: SeriesBlock<F>[]; standalone: F[] } {
+  const keyOf = (f: F) => f.seriesId || suggestSeriesId(f.name);
+  const byKey = new Map<string, F[]>();
+  for (const f of festivals) {
+    const key = keyOf(f);
+    if (key) byKey.set(key, [...(byKey.get(key) ?? []), f]);
+  }
+  const series: SeriesBlock<F>[] = [];
+  const seen = new Set<string>();
+  for (const f of festivals) {
+    const key = keyOf(f);
+    const editions = key ? byKey.get(key) : undefined;
+    if (!editions || editions.length < 2 || seen.has(key)) continue;
+    seen.add(key);
+    const newestFirst = [...editions].sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''));
+    series.push({ key, label: f.name.replace(TRAILING_YEAR, '').trim() || f.name, editions: newestFirst });
+  }
+  const standalone = festivals.filter((f) => {
+    const key = keyOf(f);
+    return !key || (byKey.get(key)?.length ?? 0) < 2;
+  });
+  return { series, standalone };
+}

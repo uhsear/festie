@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { otherEditions, seriesIdsIn, slugifySeriesInput, suggestSeriesId } from './festivalSeries';
+import { otherEditions, seriesIdsIn, slugifySeriesInput, splitBySeries, suggestSeriesId } from './festivalSeries';
 
 describe('suggestSeriesId', () => {
   it('strips a trailing year and slugifies', () => {
@@ -49,5 +49,50 @@ describe('seriesIdsIn / otherEditions', () => {
   it('returns nothing without a series id', () => {
     expect(otherEditions(list, null, 'x')).toEqual([]);
     expect(otherEditions(list, '', 'x')).toEqual([]);
+  });
+});
+
+describe('splitBySeries', () => {
+  const fest = (id: string, name: string, startDate: string | null, seriesId: string | null = null) => ({
+    id,
+    name,
+    startDate,
+    seriesId,
+  });
+
+  it('groups FK 2026 and FK 2027 under one series by name when the public list hides seriesId', () => {
+    const list = [
+      fest('nc-2026', 'North Coast 2026', '2026-09-04'),
+      fest('fk-2027', 'Forbidden Kingdom 2027', '2027-08-01'),
+      fest('fk-2026', 'Forbidden Kingdom 2026', '2026-08-01'),
+    ];
+    const { series, standalone } = splitBySeries(list);
+    expect(series).toHaveLength(1);
+    expect(series[0]!.label).toBe('Forbidden Kingdom');
+    expect(series[0]!.editions.map((f) => f.id)).toEqual(['fk-2027', 'fk-2026']);
+    expect(standalone.map((f) => f.id)).toEqual(['nc-2026']);
+  });
+
+  it('uses seriesId over the name, so a renamed edition still joins', () => {
+    const list = [
+      fest('a', 'Wasteland Weekend 2026', '2026-09-01', 'wasteland'),
+      fest('b', 'Wasteland Orlando 2027', '2027-02-01', 'wasteland'),
+    ];
+    const { series, standalone } = splitBySeries(list);
+    expect(series.map((s) => s.key)).toEqual(['wasteland']);
+    expect(standalone).toEqual([]);
+  });
+
+  it('leaves a festival with no sibling standalone and orders blocks by first appearance', () => {
+    const list = [
+      fest('x1', 'X Fest 2026', '2026-01-01'),
+      fest('y1', 'Y Fest 2026', '2026-02-01'),
+      fest('y2', 'Y Fest 2027', '2027-02-01'),
+      fest('x2', 'X Fest 2027', '2027-01-01'),
+      fest('solo', 'Solo', null),
+    ];
+    const { series, standalone } = splitBySeries(list);
+    expect(series.map((s) => s.label)).toEqual(['X Fest', 'Y Fest']);
+    expect(standalone.map((f) => f.id)).toEqual(['solo']);
   });
 });
