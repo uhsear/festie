@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { api } from '@festie/shared/services';
+import { locateSet } from '@festie/shared/services';
 import { useToast } from '../lib/toastContext';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import Button from '../components/ui/Button';
@@ -36,9 +36,7 @@ export default function SetDeepLink() {
         }
         let set = useFestivalStore.getState().sets.find((s) => s.id === setId);
         if (!set) {
-          const { festivalId } = await api.get<{ festivalId: string }>(
-            `/festivals/locate-set/${setId}`,
-          );
+          const { festivalId } = await locateSet(setId);
           if (festivalId && useFestivalStore.getState().currentFestivalId !== festivalId) {
             await useFestivalStore.getState().selectFestival(festivalId);
           }

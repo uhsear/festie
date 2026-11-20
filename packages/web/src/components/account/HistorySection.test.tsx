@@ -26,7 +26,7 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
 }));
-vi.mock('@festie/shared/services', () => ({ api: { get: vi.fn(async () => mocks.lifetime) } }));
+vi.mock('@festie/shared/services', () => ({ fetchLifetime: vi.fn(async () => mocks.lifetime) }));
 vi.mock('@festie/shared/stores', () => ({
   useAuthStore: (sel: (s: unknown) => unknown) => sel({ user: { id: 'u1' } }),
   useFestivalStore: (sel: (s: unknown) => unknown) =>

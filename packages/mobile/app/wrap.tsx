@@ -5,7 +5,7 @@ import * as Sharing from 'expo-sharing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { api } from '@festie/shared/services';
+import { fetchCrewWrap, fetchWrap } from '@festie/shared/services';
 import { useFestivalDataStore, useCrewStore, useAuthStore, useUIStore } from '@festie/shared/stores';
 import { artistOf, buildWrapCards, formatAmount, isWrapUnlocked, selectSetsToRate, sortRatingsForWrap, wrapByline, wrapCardShareText } from '@festie/shared/utils';
 import type { WrapRatedSet, WrapResponse } from '@festie/shared/types';
@@ -62,8 +62,7 @@ export default function WrapScreen() {
       if (!festivalId || !user) return;
       let cancelled = false;
       setError(false);
-      api
-        .get<WrapResponse>(`/ratings/wrap/${festivalId}${crewParam ? `?crewId=${encodeURIComponent(crewParam)}` : ''}`)
+      fetchWrap(festivalId, crewParam)
         .then((res) => {
           if (!cancelled) setData(res);
         })
@@ -500,10 +499,6 @@ function PosterPreview({ children }: { children: React.ReactNode }) {
 }
 
 
-interface CrewWrapResponse {
-  wrap: CrewWrapData;
-}
-
 /**
  * Crew wrap tab — fetches GET /ratings/crew-wrap/:crewId/:festivalId and renders
  * the shared recap, mirroring the web crew tab. Shares the off-screen poster +
@@ -542,8 +537,7 @@ function CrewWrapTab({
     // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: flip loading on before the async GET. Not derivable — loading tracks the in-flight request, not render inputs.
     setLoading(true);
     setError(false);
-    api
-      .get<CrewWrapResponse>(`/ratings/crew-wrap/${crewId}/${festivalId}`)
+    fetchCrewWrap(crewId, festivalId)
       .then((res) => {
         if (!cancelled) setWrap(res.wrap);
       })

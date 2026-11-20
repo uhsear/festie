@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, SectionList, Text, TextInput, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { api, markCaught, mapErrorToUserMessage } from '@festie/shared/services';
+import { api, fetchWrap, markCaught, mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import {
   applyCaughtMark,
@@ -63,8 +63,7 @@ export default function CaughtScreen() {
     useCallback(() => {
       if (!festivalId) return;
       let cancelled = false;
-      api
-        .get<WrapResponse>(`/ratings/wrap/${festivalId}`)
+      fetchWrap(festivalId)
         .then((res) => {
           if (cancelled) return;
           setData(res);

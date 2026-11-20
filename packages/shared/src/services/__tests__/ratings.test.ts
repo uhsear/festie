@@ -1,9 +1,20 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('../api', () => ({ api: { get: vi.fn() } }));
+vi.mock('../api', () => ({ api: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }));
 
 import { api } from '../api';
-import { fetchCrowdRatings, fetchCrewRatings, clearRatingsCache } from '../ratings';
+import {
+  fetchCrowdRatings,
+  fetchCrewRatings,
+  clearRatingsCache,
+  rateSet,
+  clearSetRating,
+  fetchFestivalRatings,
+  fetchWrap,
+  fetchCrewWrap,
+  fetchLifetime,
+  locateSet,
+} from '../ratings';
 
 const get = vi.mocked(api.get);
 
@@ -60,5 +71,48 @@ describe('ratings service', () => {
     get.mockResolvedValue({ ratings: [], nextCursor: 'more' });
     await fetchCrowdRatings('f1');
     expect(get).toHaveBeenCalledTimes(20);
+  });
+});
+
+describe('set rating writes', () => {
+  it('rateSet posts the encoded setId with the collapsing rate-<setId> clientId', async () => {
+    await rateSet('a/b', 4, 'loved it');
+    expect(api.post).toHaveBeenCalledWith('/ratings/a%2Fb', { rating: 4, note: 'loved it' }, { clientId: 'rate-a/b' });
+  });
+
+  it('rateSet leaves the note out when none is given', async () => {
+    await rateSet('s1', 3);
+    expect(api.post).toHaveBeenCalledWith('/ratings/s1', { rating: 3 }, { clientId: 'rate-s1' });
+  });
+
+  it('clearSetRating deletes with the same clientId', async () => {
+    await clearSetRating('s1');
+    expect(api.delete).toHaveBeenCalledWith('/ratings/s1', { clientId: 'rate-s1' });
+  });
+
+  it('fetchFestivalRatings accepts a bare array or an envelope', async () => {
+    get.mockResolvedValueOnce([{ setId: 'a', rating: 5 }]).mockResolvedValueOnce({ ratings: [{ setId: 'b', rating: 2 }] });
+    expect(await fetchFestivalRatings('f 1')).toEqual([{ setId: 'a', rating: 5 }]);
+    expect(get).toHaveBeenCalledWith('/ratings/festival/f%201');
+    expect(await fetchFestivalRatings('f1')).toEqual([{ setId: 'b', rating: 2 }]);
+  });
+});
+
+describe('wrap fetchers', () => {
+  it('fetchWrap adds the crew only when given', async () => {
+    await fetchWrap('f1');
+    await fetchWrap('f1', 'c 1');
+    expect(get.mock.calls.map((c) => c[0])).toEqual(['/ratings/wrap/f1', '/ratings/wrap/f1?crewId=c%201']);
+  });
+
+  it('fetchCrewWrap, fetchLifetime and locateSet hit their endpoints', async () => {
+    await fetchCrewWrap('c1', 'f1');
+    await fetchLifetime();
+    await locateSet('s/1');
+    expect(get.mock.calls.map((c) => c[0])).toEqual([
+      '/ratings/crew-wrap/c1/f1',
+      '/ratings/lifetime',
+      '/festivals/locate-set/s%2F1',
+    ]);
   });
 });

@@ -29,12 +29,10 @@ vi.mock('@tanstack/react-router', () => ({
 }));
 vi.mock('motion/react', () => ({ useReducedMotion: () => true }));
 vi.mock('@festie/shared/services', () => ({
-  api: {
-    get: vi.fn(async () => {
-      if (mocks.fail) throw new Error('boom');
-      return { planned: [], festival: { id: 'f1', days: [{ date: '2026-04-24', label: 'Friday' }] } };
-    }),
-  },
+  fetchWrap: vi.fn(async () => {
+    if (mocks.fail) throw new Error('boom');
+    return { planned: [], festival: { id: 'f1', days: [{ date: '2026-04-24', label: 'Friday' }] } };
+  }),
   markCaught: mocks.markCaught,
 }));
 vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toastError: vi.fn() }) }));

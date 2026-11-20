@@ -1,4 +1,6 @@
 import { api } from './api';
+import type { CrewWrapResponse } from '../types/crewWrap';
+import type { LifetimeResponse, WrapResponse } from '../types/wrap';
 
 export interface CrowdRating { avg: number; count: number }
 export interface CrewRating { userId: string; username: string; rating: number }
@@ -76,3 +78,16 @@ export const rateSet = (setId: string, rating: number, note?: string) =>
   api.post(`/ratings/${encodeURIComponent(setId)}`, { rating, ...(note !== undefined ? { note } : {}) }, ratingKey(setId));
 
 export const clearSetRating = (setId: string) => api.delete(`/ratings/${encodeURIComponent(setId)}`, ratingKey(setId));
+
+/** The wrap payload; `crewId` adds the crew context (the crew tab and `crewAlso` counts). */
+export const fetchWrap = (festivalId: string, crewId?: string | null) =>
+  api.get<WrapResponse>(`/ratings/wrap/${encodeURIComponent(festivalId)}${crewId ? `?crewId=${encodeURIComponent(crewId)}` : ''}`);
+
+export const fetchCrewWrap = (crewId: string, festivalId: string) =>
+  api.get<CrewWrapResponse>(`/ratings/crew-wrap/${encodeURIComponent(crewId)}/${encodeURIComponent(festivalId)}`);
+
+export const fetchLifetime = () => api.get<LifetimeResponse>('/ratings/lifetime');
+
+/** Which festival a set belongs to; the set-link deep-link flow uses it to switch festivals. */
+export const locateSet = (setId: string) =>
+  api.get<{ festivalId: string }>(`/festivals/locate-set/${encodeURIComponent(setId)}`);

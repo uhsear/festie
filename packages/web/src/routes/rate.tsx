@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearch } from '@tanstack/react-router';
 import { useReducedMotion } from 'motion/react';
-import { api, markCaught } from '@festie/shared/services';
+import { fetchWrap, markCaught } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { WrapPlannedSet, WrapResponse } from '@festie/shared/types';
 import { formatTime, isWrapUnlocked, selectSetsToRate } from '@festie/shared/utils';
@@ -61,7 +61,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
 
   const { data, isLoading, isError, refetch } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId],
-    queryFn: () => api.get<WrapResponse>(`/ratings/wrap/${festivalId}`),
+    queryFn: () => fetchWrap(festivalId),
   });
 
   // Freeze the list on first load so a rated set does not vanish from under the user mid-flow.

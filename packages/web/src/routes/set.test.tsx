@@ -24,7 +24,7 @@ vi.mock('@festie/shared/stores', () => ({ useFestivalStore: { getState: () => fe
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: { getState: () => ({ setDetailSet: mockSetDetailSet }) },
 }));
-vi.mock('@festie/shared/services', () => ({ api: { get: (...a: unknown[]) => mockApiGet(...a) } }));
+vi.mock('@festie/shared/services', () => ({ locateSet: (...a: unknown[]) => mockApiGet(...a) }));
 vi.mock('../components/ui/skeletons/CardsSkeleton', () => ({ default: () => null }));
 
 describe('SetDeepLink', () => {

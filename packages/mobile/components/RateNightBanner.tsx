@@ -1,10 +1,9 @@
 import { useCallback, useState } from 'react';
 import { Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { api } from '@festie/shared/services';
+import { fetchWrap } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
 import { festivalPhase, selectSetsToRate } from '@festie/shared/utils';
-import type { WrapResponse } from '@festie/shared/types';
 import Button from './Button';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 
@@ -27,8 +26,7 @@ export default function RateNightBanner() {
     useCallback(() => {
       if (!eligible) return;
       let cancelled = false;
-      api
-        .get<WrapResponse>(`/ratings/wrap/${festivalId}`)
+      fetchWrap(festivalId)
         .then((res) => {
           if (!cancelled) setCount(selectSetsToRate(res.planned, res.festival).length);
         })

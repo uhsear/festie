@@ -20,7 +20,7 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
 }));
-vi.mock('@festie/shared/services', () => ({ api: { get: mocks.get } }));
+vi.mock('@festie/shared/services', () => ({ fetchWrap: mocks.get, fetchCrewWrap: mocks.get }));
 vi.mock('@festie/shared/stores', () => {
   const state = {
     user: { id: 'u1', username: 'asir' },
@@ -83,13 +83,13 @@ describe('WrapPage', () => {
   it('requests the wrap of the festival in the search param', async () => {
     renderPage();
     await screen.findByText('Nothing to wrap yet');
-    expect(mocks.get).toHaveBeenCalledWith('/ratings/wrap/past1');
+    expect(mocks.get).toHaveBeenCalledWith('past1', null);
   });
 
   it('falls back to the current festival without a search param', async () => {
     mocks.search = {};
     renderPage();
-    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('/ratings/wrap/cur'));
+    await waitFor(() => expect(mocks.get).toHaveBeenCalledWith('cur', null));
   });
 
   it('sends the empty-state CTA to the lineup', async () => {
@@ -115,6 +115,12 @@ describe('WrapPage', () => {
       '/caught?festival=past1',
     );
     expect(mocks.summarizePlan).toHaveBeenCalledWith([{ setId: 'a' }], extra);
+  });
+
+  it('says the device is offline when the wrap fails to load on a network error', async () => {
+    mocks.get.mockRejectedValue(Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true }));
+    renderPage();
+    expect(await screen.findByText("You're offline. Check your connection and try again.")).toBeTruthy();
   });
 
   it('labels the handle switch with its row text', async () => {
