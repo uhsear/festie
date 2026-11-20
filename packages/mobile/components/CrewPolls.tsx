@@ -18,9 +18,11 @@ import {
   QUEUED_WRITE_MESSAGE,
   openPollState,
   crewCopy,
+  buildPollSlots,
+  type PollEndChoice,
+  type PollSlot,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { buildPollSlots, type PollEndChoice, type PollSlot } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import AppSwitch from './AppSwitch';
