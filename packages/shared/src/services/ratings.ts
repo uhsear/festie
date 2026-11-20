@@ -61,3 +61,18 @@ export function fetchCrewRatings(crewId: string, festivalId: string): Promise<Ma
     return bySet;
   });
 }
+
+export interface FestivalRating { setId: string; rating: number; note?: string | null }
+
+export async function fetchFestivalRatings(festivalId: string): Promise<FestivalRating[]> {
+  const res = await api.get<{ ratings: FestivalRating[] }>(`/ratings/festival/${encodeURIComponent(festivalId)}`);
+  return Array.isArray(res) ? res : res?.ratings || [];
+}
+
+const ratingKey = (setId: string) => ({ clientId: `rate-${setId}` });
+
+// The api layer queues these offline; the clientId collapses repeated toggles of one set into one replayed call.
+export const rateSet = (setId: string, rating: number, note?: string) =>
+  api.post(`/ratings/${encodeURIComponent(setId)}`, { rating, ...(note !== undefined ? { note } : {}) }, ratingKey(setId));
+
+export const clearSetRating = (setId: string) => api.delete(`/ratings/${encodeURIComponent(setId)}`, ratingKey(setId));

@@ -300,7 +300,9 @@ export default function setupSocketHandlers(deps: any) {
         const { crewId, sharingCrewId, userId } = socket.data ?? {};
         if (sharingCrewId) {
           socket.to(`crew:${sharingCrewId}`).emit('location:peer-stopped', { _v: 1, crewId: sharingCrewId, userId, reason: 'left' });
-          unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
+          unregisterSharingSocket(redis, userId, socket.id).catch((err: any) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
           void dropLivePosition(redis, sharingCrewId, userId);
         }
         for (const room of socket.rooms) {
@@ -396,7 +398,9 @@ export default function setupSocketHandlers(deps: any) {
             reason: 'left',
           });
           delete socket.data.sharingCrewId;
-          unregisterSharingSocket(redis, session.userId, socket.id).catch(() => {});
+          unregisterSharingSocket(redis, session.userId, socket.id).catch((err: any) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
           // Phase 3C: evict the cached position on crew-leave.
           void dropLivePosition(redis, crewId, session.userId);
         }
@@ -560,7 +564,9 @@ export default function setupSocketHandlers(deps: any) {
             delete socket.data.sharingCrewId;
             socket.leave('crew:' + crewId);
             if (socket.data?.crewId === crewId) delete socket.data.crewId;
-            unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
+            unregisterSharingSocket(redis, userId, socket.id).catch((err: any) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
             // Phase 3C: evict the cached position so the snapshot can't reveal a
             // revoked member's last-known GPS.
             void dropLivePosition(redis, crewId, userId);
@@ -624,7 +630,9 @@ export default function setupSocketHandlers(deps: any) {
 
         if (socket.data?.sharingCrewId === crewId) {
           delete socket.data.sharingCrewId;
-          unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
+          unregisterSharingSocket(redis, userId, socket.id).catch((err: any) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
         }
         // Phase 3C: evict the cached position so a snapshot won't show a member
         // who just stopped (peer-stopped already tells currently-connected peers).
@@ -769,7 +777,9 @@ export default function setupSocketHandlers(deps: any) {
             reason: 'disconnect',
           });
           // M3: drop the concurrent-sharing registration for this socket.
-          unregisterSharingSocket(redis, sharingUserId, socket.id).catch(() => {});
+          unregisterSharingSocket(redis, sharingUserId, socket.id).catch((err: any) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
           // Phase 3C: evict the cached position so a force-quit sharer's marker
           // isn't served in a later snapshot (the staleness filter is a backstop).
           void dropLivePosition(redis, sharingCrewId, sharingUserId);

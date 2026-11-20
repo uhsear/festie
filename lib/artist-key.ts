@@ -30,7 +30,8 @@ export function stripSetTag(name: string): string {
 /**
  * The name a set shows, a backend copy of shared artistDisplayName (packages/shared/src/utils/format.ts).
  * It honours displayName and a flat artist that differs from the joined artist names. The backend
- * artistDisplayName in lib/schemas.ts only joins names, so a rename report must not use it.
+ * artistDisplayName in lib/schemas.ts only joins names: use it to compare a typed name with the
+ * joined artists, and use this function to show a name.
  */
 export function shownSetName(
   set: { displayName?: string | null; artist?: string | null; artists?: Array<{ name?: string }> | null },

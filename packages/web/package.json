@@ -20,7 +20,7 @@
   "dependencies": {
     "@festie/shared": "workspace:*",
     "@radix-ui/react-dialog": "^1.1.23",
-    "@sentry/react": "^10.73.0",
+    "@sentry/react": "^11.12.0",
     "@tanstack/query-sync-storage-persister": "^5.102.8",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-query-persist-client": "^5.102.8",
@@ -30,7 +30,7 @@
     "html-to-image": "^1.11.13",
     "lucide-react": "^1.39.0",
     "maplibre-gl": "^6.7.0",
-    "motion": "^13.2.0",
+    "motion": "^14.13.0",
     "pmtiles": "^4.5.0",
     "qrcode.react": "^4.2.0",
     "react": "19.3.0",

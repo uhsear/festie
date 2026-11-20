@@ -8,14 +8,13 @@ import { Pool } from 'pg';
 
 import createPollsStore from '../lib/db/stores/polls.js';
 import createCrewsStore from '../lib/db/stores/crews.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Migration 099 (T58): the decided-polls branch of polls.listByCrew and
 // meetingPoints.listRecentlyExpired use the new crew history indexes, and both
 // queries return the same rows as before the migration.
 // Run it only on a private Postgres (port 5434 or higher), never 5432 or 5433.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '099_crew_history_indexes.sql'),
   'utf8',

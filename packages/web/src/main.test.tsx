@@ -7,6 +7,7 @@ const m = vi.hoisted(() => ({
   clearOfflineQueue: vi.fn(),
   clear: vi.fn(),
   render: vi.fn(),
+  sentryInit: vi.fn(),
 }));
 
 vi.mock('react-dom/client', () => ({
@@ -25,6 +26,11 @@ vi.mock('@festie/shared/services', async (orig) => ({
   noticeSignedOut: m.noticeSignedOut,
 }));
 vi.mock('./hooks/useOfflineQueue', () => ({ clearOfflineQueue: m.clearOfflineQueue }));
+vi.mock('@sentry/react', async (orig) => ({
+  ...(await orig<typeof import('@sentry/react')>()),
+  init: m.sentryInit,
+  tanstackRouterBrowserTracingIntegration: () => ({ name: 'stub' }),
+}));
 vi.mock('./router', () => ({ router: {} }));
 vi.mock('./lib/web-vitals', () => ({ initWebVitals: vi.fn() }));
 vi.mock('./styles/globals.css', () => ({}));
@@ -105,5 +111,22 @@ describe('main.tsx wiring', { timeout: 30000 }, () => {
     }
     expect(m.clearOfflineQueue).toHaveBeenCalledTimes(1);
     expect(unhandled).not.toHaveBeenCalled();
+  });
+
+  it('keeps the v10 sendDefaultPii:false baseline under @sentry/react 11', async () => {
+    vi.stubEnv('VITE_SENTRY_DSN', 'https://fake@sentry.io/1');
+    try {
+      await loadMain();
+    } finally {
+      vi.unstubAllEnvs();
+    }
+    const dc = m.sentryInit.mock.calls[0][0].dataCollection;
+    expect(dc.userInfo).toBe(false);
+    expect(dc.cookies).toBe(false);
+    expect(dc.httpBodies).toEqual([]);
+    expect(dc.databaseQueryData).toBe(false);
+    expect(dc.queues).toBe(false);
+    expect(dc.httpHeaders.request.deny).toContain('referer');
+    expect(dc.urlQueryParams.deny).toContain('token');
   });
 });

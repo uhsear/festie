@@ -10,9 +10,8 @@
 
 import assert from 'node:assert/strict';
 import { afterEach, describe, test } from 'node:test';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const ADMIN_PASSWORD = 'test-admin-password';
 const servers: any[] = [];

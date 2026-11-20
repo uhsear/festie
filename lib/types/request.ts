@@ -28,6 +28,7 @@ declare module 'express-serve-static-core' {
     user: { userId: string; username: string };
     userToken: string;
     userAuthSource: string;
+    membership: { role: string };
     validatedBody: unknown;
     validatedParams: unknown;
     validatedQuery: unknown;

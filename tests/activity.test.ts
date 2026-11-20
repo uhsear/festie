@@ -163,7 +163,8 @@ describe('activity: GET /crews/:crewId/activity', () => {
 
     const req = mockReq();
     const res = mockRes();
-    await handler(req, res);
+    // The membership gate runs just before the handler.
+    await getMiddleware(router, '/crews/:crewId/activity').at(-2)(req, res, () => {});
 
     assert.equal(res._status, 403);
     assert.equal(res._sent.data, null);
@@ -182,7 +183,8 @@ describe('activity: GET /crews/:crewId/activity', () => {
 
     const req = mockReq();
     const res = mockRes();
-    await handler(req, res);
+    // The membership gate runs just before the handler.
+    await getMiddleware(router, '/crews/:crewId/activity').at(-2)(req, res, () => {});
 
     assert.equal(res._status, 500);
     assert.equal(res._sent.data, null);

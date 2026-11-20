@@ -12,7 +12,7 @@
  */
 
 import type { Pool } from 'pg';
-import { withTransactionRetry } from '../connection';
+import { isoOrNull, withTransactionRetry } from '../connection';
 import { createOpaqueId } from '../../helpers';
 import { sanitizeString } from '../../helpers/sanitize';
 import { artistNameKey } from '../../artist-key';
@@ -109,8 +109,6 @@ async function insertArtistAudit(
   );
 }
 
-const iso = (value: unknown) => (value ? new Date(value as any).toISOString() : null);
-
 export function publicArtist(row: ArtistRecord) {
   return {
     id: row.id,
@@ -120,7 +118,7 @@ export function publicArtist(row: ArtistRecord) {
     photo: row.photo,
     genres: row.genres ?? [],
     spotifyId: row.spotify_id,
-    updatedAt: iso(row.updated_at) as string,
+    updatedAt: isoOrNull(row.updated_at) as string,
   };
 }
 
@@ -212,17 +210,22 @@ export async function lockArtistRows(client: any, ids: string[]): Promise<Map<st
   return out;
 }
 
+// Containment probes let the jsonb_path_ops GIN indexes of migration 118 narrow the rows before
+// the per-element id match below, which still decides the result.
+const ID_REF_PROBES = `ARRAY(SELECT jsonb_build_array(jsonb_build_object('id', i)) FROM unnest($1::text[]) i)`;
+const LINEUP_REF_PROBES = `ARRAY(SELECT jsonb_build_array(jsonb_build_object('artists', jsonb_build_array(jsonb_build_object('id', i)))) FROM unnest($1::text[]) i)`;
+
 const ELEMENT_IDS_OF_SETS = `
   SELECT s.festival_id, a->>'id' AS artist_id
   FROM festival_sets s, jsonb_array_elements(CASE WHEN jsonb_typeof(s.artists) = 'array' THEN s.artists ELSE '[]'::jsonb END) a
-  WHERE a->>'id' = ANY($1::text[])`;
+  WHERE s.artists @> ANY(${ID_REF_PROBES}) AND a->>'id' = ANY($1::text[])`;
 
 const ELEMENT_IDS_OF_LINEUPS = `
   SELECT f.id AS festival_id, a->>'id' AS artist_id
   FROM festivals f,
     jsonb_array_elements(CASE WHEN jsonb_typeof(f.lineup) = 'array' THEN f.lineup ELSE '[]'::jsonb END) e,
     jsonb_array_elements(CASE WHEN jsonb_typeof(e->'artists') = 'array' THEN e->'artists' ELSE '[]'::jsonb END) a
-  WHERE a->>'id' = ANY($1::text[])`;
+  WHERE f.lineup @> ANY(${LINEUP_REF_PROBES}) AND a->>'id' = ANY($1::text[])`;
 
 export interface ArtistUse {
   artistId: string;
@@ -295,6 +298,17 @@ export interface SyncedFestival {
   setIds: string[];
 }
 
+/** Writes festivals.lineup for several festivals in one round trip. */
+async function writeLineups(client: any, writes: Array<{ id: string; lineup: string }>) {
+  if (writes.length === 0) return;
+  await client.query(
+    `UPDATE festivals f SET lineup = v.lineup::jsonb
+       FROM unnest($1::text[], $2::text[]) AS v(id, lineup)
+      WHERE f.id = v.id`,
+    [writes.map((w) => w.id), writes.map((w) => w.lineup)],
+  );
+}
+
 /**
  * Rewrites the copy of one artist in every set and lineup entry of the festivals in `festivalIds`
  * (all locked by the caller). The flat `artist` follows only where it equals the old joined names:
@@ -335,20 +349,25 @@ async function rewriteCopies(client: any, festivalIds: string[], artist: ArtistR
   const separatorOf = new Map<string, string>(festivals.map((f: any) => [f.id, f.separator || 'b2b']));
   const joined = (elements: any[], separator: string) => elements.map((e) => e?.name).join(` ${separator} `);
   const changedSets = new Map<string, string[]>();
+  const writes: Array<{ id: string; artists: string; artist: string; linkUrl: string | null }> = [];
   for (const set of sets) {
     const separator = separatorOf.get(set.festival_id) ?? 'b2b';
     const next = set.artists.map((e: any) => (e?.id === artist.id ? copyOf(e, artist) : e));
     const flat = set.artist === joined(set.artists, separator) ? joined(next, separator) : set.artist;
     const linkUrl = next[0]?.links?.spotify ?? null;
     if (JSON.stringify(next) === JSON.stringify(set.artists) && flat === set.artist && linkUrl === (set.link_url ?? null)) continue;
-    await client.query('UPDATE festival_sets SET artists = $2::jsonb, artist = $3, link_url = $4 WHERE id = $1', [
-      set.id,
-      JSON.stringify(next),
-      flat,
-      linkUrl,
-    ]);
+    writes.push({ id: set.id, artists: JSON.stringify(next), artist: flat, linkUrl });
     changedSets.set(set.festival_id, [...(changedSets.get(set.festival_id) ?? []), set.id]);
   }
+  if (writes.length > 0) {
+    await client.query(
+      `UPDATE festival_sets s SET artists = v.artists::jsonb, artist = v.artist, link_url = v.link_url
+         FROM unnest($1::text[], $2::text[], $3::text[], $4::text[]) AS v(id, artists, artist, link_url)
+        WHERE s.id = v.id`,
+      [writes.map((w) => w.id), writes.map((w) => w.artists), writes.map((w) => w.artist), writes.map((w) => w.linkUrl)],
+    );
+  }
+  const lineupWrites: Array<{ id: string; lineup: string }> = [];
   for (const festival of festivals) {
     if (!Array.isArray(festival.lineup)) continue;
     let changed = false;
@@ -360,8 +379,9 @@ async function rewriteCopies(client: any, festivalIds: string[], artist: ArtistR
         return copyOf(e, artist);
       }),
     }));
-    if (changed) await client.query('UPDATE festivals SET lineup = $2::jsonb WHERE id = $1', [festival.id, JSON.stringify(lineup)]);
+    if (changed) lineupWrites.push({ id: festival.id, lineup: JSON.stringify(lineup) });
   }
+  await writeLineups(client, lineupWrites);
   await client.query('UPDATE festivals SET updated_at = now() WHERE id = ANY($1::text[])', [festivalIds]);
   return festivals.map((f: any) => ({
     id: f.id,
@@ -581,15 +601,22 @@ async function moveRefs(
   loserId: string,
 ) {
   const repoint = (elements: any[]) => elements.map((e: any) => (e?.id === loserId ? { ...e, id: survivorId } : e));
-  for (const set of found.sets) {
-    if (!idsOf(set.artists).includes(loserId)) continue;
-    await client.query('UPDATE festival_sets SET artists = $2::jsonb WHERE id = $1', [set.id, JSON.stringify(repoint(set.artists))]);
+  const moved = found.sets.filter((set) => idsOf(set.artists).includes(loserId));
+  if (moved.length > 0) {
+    await client.query(
+      `UPDATE festival_sets s SET artists = v.artists::jsonb
+         FROM unnest($1::text[], $2::text[]) AS v(id, artists)
+        WHERE s.id = v.id`,
+      [moved.map((set) => set.id), moved.map((set) => JSON.stringify(repoint(set.artists)))],
+    );
   }
+  const lineupWrites: Array<{ id: string; lineup: string }> = [];
   for (const { festivalId, lineup } of found.lineups) {
     if (!lineup.some((entry: any) => idsOf(entry?.artists).includes(loserId))) continue;
     const next = lineup.map((entry: any) => (Array.isArray(entry?.artists) ? { ...entry, artists: repoint(entry.artists) } : entry));
-    await client.query('UPDATE festivals SET lineup = $2::jsonb WHERE id = $1', [festivalId, JSON.stringify(next)]);
+    lineupWrites.push({ id: festivalId, lineup: JSON.stringify(next) });
   }
+  await writeLineups(client, lineupWrites);
 }
 
 export interface MatchItem {
@@ -991,8 +1018,8 @@ export function createArtistsStore(pool: Pool) {
            (SELECT count(*) FROM festival_sets WHERE jsonb_typeof(artists) = 'array' AND artists @> $1::jsonb)::int AS sets,
            (SELECT count(*) FROM festivals f,
               jsonb_array_elements(CASE WHEN jsonb_typeof(f.lineup) = 'array' THEN f.lineup ELSE '[]'::jsonb END) e
-              WHERE jsonb_typeof(e->'artists') = 'array' AND e->'artists' @> $1::jsonb)::int AS "lineupEntries"`,
-        [JSON.stringify([{ id }])],
+              WHERE f.lineup @> $2::jsonb AND jsonb_typeof(e->'artists') = 'array' AND e->'artists' @> $1::jsonb)::int AS "lineupEntries"`,
+        [JSON.stringify([{ id }]), JSON.stringify([{ artists: [{ id }] }])],
       );
       counts.sets = rows[0].sets;
       counts.lineupEntries = rows[0].lineupEntries;

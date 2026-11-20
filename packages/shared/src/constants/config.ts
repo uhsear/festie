@@ -4,15 +4,31 @@ export const API_BASE = '/api/v1';
 
 // ── Pick priority — shared data, no icon refs ──────────────────────────────
 
+/** Neutral icon keys for pick priority; web maps to Lucide, mobile to Ionicons. */
+export type PrioritySymbolKey = 'star' | 'heart' | 'circle';
+
+/**
+ * The one priority symbol set: every surface that shows a pick priority renders
+ * this icon + label in this colour token. Never colour alone (DESIGN.md).
+ */
+export const PRIORITY_SYMBOLS: Record<
+  Priority,
+  { icon: PrioritySymbolKey; label: string; short: string; colorToken: 'priority-must' | 'priority-want' | 'priority-maybe' }
+> = {
+  must: { icon: 'star', label: 'Must See', short: 'Must', colorToken: 'priority-must' },
+  'want-to-see': { icon: 'heart', label: 'Want to See', short: 'Want', colorToken: 'priority-want' },
+  maybe: { icon: 'circle', label: 'Maybe', short: 'Maybe', colorToken: 'priority-maybe' },
+};
+
 /**
  * Short display label for each pick priority (used in badges, pills, and
  * compact UI). Full-length labels ("Must See" / "Want to See") live in
  * PRIORITY_LABELS below. Both web and mobile import from here.
  */
 export const PRIORITY_LABEL: Record<Priority, string> = {
-  must: 'Must',
-  'want-to-see': 'Want',
-  maybe: 'Maybe',
+  must: PRIORITY_SYMBOLS.must.short,
+  'want-to-see': PRIORITY_SYMBOLS['want-to-see'].short,
+  maybe: PRIORITY_SYMBOLS.maybe.short,
 };
 
 /**
@@ -32,26 +48,10 @@ export const PRIORITY_OPTIONS: readonly {
   /** Display sort order: lower number renders first (must=0, want=1, maybe=2). */
   sort: number;
 }[] = [
-  { value: 'must', label: 'Must See', short: 'Must', sort: 0 },
-  { value: 'want-to-see', label: 'Want to See', short: 'Want', sort: 1 },
-  { value: 'maybe', label: 'Maybe', short: 'Maybe', sort: 2 },
+  { value: 'must', label: PRIORITY_SYMBOLS.must.label, short: PRIORITY_SYMBOLS.must.short, sort: 0 },
+  { value: 'want-to-see', label: PRIORITY_SYMBOLS['want-to-see'].label, short: PRIORITY_SYMBOLS['want-to-see'].short, sort: 1 },
+  { value: 'maybe', label: PRIORITY_SYMBOLS.maybe.label, short: PRIORITY_SYMBOLS.maybe.short, sort: 2 },
 ] as const;
-
-/** Neutral icon keys for pick priority; web maps to Lucide, mobile to Ionicons. */
-export type PrioritySymbolKey = 'star' | 'heart' | 'circle';
-
-/**
- * The one priority symbol set: every surface that shows a pick priority renders
- * this icon + label in this colour token. Never colour alone (DESIGN.md).
- */
-export const PRIORITY_SYMBOLS: Record<
-  Priority,
-  { icon: PrioritySymbolKey; label: string; short: string; colorToken: 'priority-must' | 'priority-want' | 'priority-maybe' }
-> = {
-  must: { icon: 'star', label: 'Must See', short: 'Must', colorToken: 'priority-must' },
-  'want-to-see': { icon: 'heart', label: 'Want to See', short: 'Want', colorToken: 'priority-want' },
-  maybe: { icon: 'circle', label: 'Maybe', short: 'Maybe', colorToken: 'priority-maybe' },
-};
 
 // ── Crew activity feed ─────────────────────────────────────────────────────
 
@@ -222,9 +222,9 @@ export const PRIORITY_COLORS: Record<Priority, string> = {
 };
 
 export const PRIORITY_LABELS: Record<Priority, string> = {
-  must: 'Must See',
-  'want-to-see': 'Want to See',
-  maybe: 'Maybe',
+  must: PRIORITY_SYMBOLS.must.label,
+  'want-to-see': PRIORITY_SYMBOLS['want-to-see'].label,
+  maybe: PRIORITY_SYMBOLS.maybe.label,
 };
 
 export const TRUSTED_MUTATION_HEADER = 'X-Festie-Request';
