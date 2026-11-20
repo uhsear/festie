@@ -65,6 +65,13 @@ describe('migration 119 retention cleanup', () => {
       assert.equal(await count('notification_log', 'id', `${s}-new`), 1);
     });
 
+    test('keeps old eventKey and news-type rows', async () => {
+      await pool.query("INSERT INTO notification_log (id, user_id, type, data_json, created_at) VALUES ($1, $3, 'x', $4, now() - interval '200 days'), ($2, $3, 'lineup_drop', NULL, now() - interval '200 days')", [`${s}-key`, `${s}-news`, keeper, JSON.stringify({ eventKey: 'lineup:f' })]);
+      await pool.query('SELECT retention_cleanup()');
+      assert.equal(await count('notification_log', 'id', `${s}-key`), 1);
+      assert.equal(await count('notification_log', 'id', `${s}-news`), 1);
+    });
+
     test('retention_cleanup purges the crew rows of a purged user and keeps the others', async () => {
       // Created here: test 1 also runs retention_cleanup, which would purge it early.
       await pool.query("INSERT INTO users (id, username, created_at, deleted_at) VALUES ($1, $2, NOW(), now() - interval '40 days')", [gone, gone]);

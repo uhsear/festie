@@ -1,6 +1,6 @@
 -- 119_retention_cleanup.sql
 -- retention_cleanup() re-issued from 116 (paid-expense placeholder handling kept) with three additions:
---   * notification_log rows older than 90 days are purged (the table had no age-based cleanup);
+--   * notification_log rows older than 90 days are purged, except eventKey dedup rows and news types;
 --   * crew_member_status (GPS/ETA breadcrumbs, no FK to users), crew_packing_items and
 --     crew_ride_offers (created_by TEXT, no FK) rows of a purged user are deleted. They
 --     were orphaned because only the crew cascade removed them.
@@ -16,8 +16,13 @@ BEGIN
   DELETE FROM audit_log
   WHERE created_at < now() - interval '1 year';
 
-  -- notification_log: personal data, keep 90 days (the inbox reads the newest 50)
-  DELETE FROM notification_log WHERE created_at < now() - interval '90 days';
+  -- notification_log: personal data, keep 90 days (the inbox reads the newest 50).
+  -- Keep eventKey rows (once-per-event-per-user send dedup, uq_notification_log_event_key) and the
+  -- news types the admin growth report counts over up to 365 days; purging them would allow a re-send.
+  DELETE FROM notification_log
+  WHERE created_at < now() - interval '90 days'
+    AND data_json->>'eventKey' IS NULL
+    AND type NOT IN ('lineup_drop', 'set_times_out', 'days_out', 'wrap_ready', 'crew_reformed');
 
   -- Purge soft-deleted festivals older than 90 days
   -- Mirror festivals.hardDelete(): child rows under FK RESTRICT
