@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ACCOUNT_SECTIONS, THEME_MODE_OPTIONS } from './accountSettings';
+import { ACCOUNT_SECTIONS, NOTIFICATION_TOPIC_COPY, THEME_MODE_OPTIONS } from './accountSettings';
 
 describe('ACCOUNT_SECTIONS', () => {
   it('has unique ids', () => {
@@ -24,5 +24,12 @@ describe('ACCOUNT_SECTIONS', () => {
 describe('THEME_MODE_OPTIONS', () => {
   it('offers stage, daylight and system', () => {
     expect(THEME_MODE_OPTIONS.map((o) => o.value)).toEqual(['stage', 'daylight', 'system']);
+  });
+});
+
+describe('NOTIFICATION_TOPIC_COPY', () => {
+  it('holds the labels web and mobile both render', () => {
+    expect(NOTIFICATION_TOPIC_COPY.mustSeeTitle).toBe('Must-see reminders');
+    expect(NOTIFICATION_TOPIC_COPY.topicLabels).toEqual({ crew: 'Crew picks', schedule: 'Schedule changes' });
   });
 });

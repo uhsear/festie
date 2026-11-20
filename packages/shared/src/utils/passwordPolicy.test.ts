@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { passwordPolicyError, PASSWORD_RULES } from './passwordPolicy';
+import { passwordPolicyError, passwordStrength, PASSWORD_RULES } from './passwordPolicy';
 
 describe('passwordPolicyError', () => {
   it('requires a value', () => expect(passwordPolicyError('')).toBe('Password is required'));
@@ -24,4 +24,25 @@ describe('passwordPolicyError', () => {
     expect(passwordPolicyError('bobsmith-2026!', { email: 'BobSmith@x.co' })).toBe('Password must not contain your email address');
   });
   it('states the rules', () => expect(PASSWORD_RULES).toContain('8 to 100'));
+});
+
+describe('passwordStrength', () => {
+  it('scores empty as 0 with no label', () => {
+    expect(passwordStrength('')).toEqual({ score: 0, label: '' });
+  });
+  it('flags anything under 8 characters as too short', () => {
+    expect(passwordStrength('abc')).toEqual({ score: 1, label: 'Too short' });
+    expect(passwordStrength('Abcd1!x')).toEqual({ score: 1, label: 'Too short' });
+  });
+  it('steps weak, fair, good, strong with length and variety', () => {
+    expect(passwordStrength('abcdefgh')).toEqual({ score: 1, label: 'Weak' });
+    expect(passwordStrength('abcdefgh1234')).toEqual({ score: 3, label: 'Good' });
+    expect(passwordStrength('Abcdefgh1!')).toEqual({ score: 4, label: 'Strong' });
+  });
+  it('caps a password the policy rejects instead of reading Good', () => {
+    expect(passwordStrength('Password1')).toEqual({ score: 1, label: 'Too guessable' });
+    expect(passwordStrength('Maria1234!', { username: 'maria' })).toEqual({ score: 1, label: 'Too guessable' });
+    expect(passwordStrength('Maria1234!', { email: 'maria@example.com' })).toEqual({ score: 1, label: 'Too guessable' });
+    expect(passwordStrength('Maria1234!', { username: 'sam' }).score).toBe(4);
+  });
 });

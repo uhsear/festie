@@ -45,6 +45,13 @@ describe('ResetPasswordPage', () => {
     expect(mockResetPassword).not.toHaveBeenCalled();
   });
 
+  it('shows the strength meter for the new password', async () => {
+    const user = userEvent.setup();
+    render(<ResetPasswordPage />);
+    await user.type(screen.getByLabelText('New password'), 'abc');
+    expect(screen.getByRole('status', { name: 'Password strength: Too short' })).toBeInTheDocument();
+  });
+
   it('navigates to /login with the reset flag on success', async () => {
     mockResetPassword.mockResolvedValue(undefined);
     const user = userEvent.setup();

@@ -19,6 +19,7 @@ import AuthTabs from '../components/ui/AuthTabs';
 import AuthBrand from '../components/auth/AuthBrand';
 import ProviderButtons from '../components/auth/ProviderButtons';
 import InviteBanner from '../components/auth/InviteBanner';
+import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
 import { cn } from '../lib/utils';
 import { readSignupRef } from '../hooks/useFestivalLoader';
 
@@ -175,6 +176,7 @@ function RegisterPageInner() {
             error={errors.password}
             helperText={AUTH_COPY.passwordHint}
           />
+          <PasswordStrengthMeter password={password} username={username} email={email} />
         </div>
 
         <div className="mb-3">

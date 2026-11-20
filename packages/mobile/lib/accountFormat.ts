@@ -40,32 +40,3 @@ export function formatQuietHours(
   if (!a || !b) return null;
   return `${a}–${b}`;
 }
-
-export interface PasswordStrength {
-  /** 0 (empty) … 4 (strong). Drives the meter segment count + label. */
-  score: 0 | 1 | 2 | 3 | 4;
-  label: string;
-}
-
-/**
- * Lightweight password-strength heuristic for the change-password meter. This is
- * UX guidance only — the authoritative rule is the shared 8-char minimum the
- * form already enforces; this just rewards length + character variety so a user
- * gets a "weak / fair / good / strong" nudge as they type.
- */
-export function passwordStrength(pw: string): PasswordStrength {
-  if (!pw) return { score: 0, label: '' };
-  let points = 0;
-  if (pw.length >= 8) points += 1;
-  if (pw.length >= 12) points += 1;
-  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) points += 1;
-  if (/\d/.test(pw)) points += 1;
-  if (/[^A-Za-z0-9]/.test(pw)) points += 1;
-  // Anything under the 8-char floor can never read above "Weak".
-  if (pw.length < 8) {
-    return { score: 1, label: 'Too short' };
-  }
-  const score = Math.max(1, Math.min(4, points)) as 1 | 2 | 3 | 4;
-  const label = (['', 'Weak', 'Fair', 'Good', 'Strong'] as const)[score];
-  return { score, label };
-}

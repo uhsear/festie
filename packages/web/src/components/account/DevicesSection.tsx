@@ -7,7 +7,7 @@ import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import ConfirmDialog from '../ui/ConfirmDialog';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
 import { Card } from '../ui/Card';
 
 export default function DevicesSection() {
@@ -47,10 +47,10 @@ export default function DevicesSection() {
       </h3>
 
       {loading && devices.length === 0 ? (
-        <div className="space-y-2">
+        <SkeletonGroup className="space-y-2">
           <Skeleton />
           <Skeleton />
-        </div>
+        </SkeletonGroup>
       ) : error ? (
         <div className="flex items-center justify-between gap-3">
           <p className="text-sm text-[var(--color-text-danger)]">{error}</p>
