@@ -25,7 +25,7 @@ export default defineConfig({
     'import.meta.env.VITE_APP_VERSION': JSON.stringify(buildId()),
   },
   build: {
-    chunkSizeWarningLimit: 1100,
+    chunkSizeWarningLimit: 600,
     target: 'es2022',
     cssCodeSplit: true,
     rolldownOptions: {

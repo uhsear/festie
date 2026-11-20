@@ -14,6 +14,10 @@
  * - Deep link payloads in push notifications for mobile app navigation
  */
 
+import type { PresenceUser } from '../packages/shared/src/types/socket-events.js';
+import type { createLogger } from './logger.js';
+import type { AppConfig } from './config.js';
+import type { createNotificationService } from './notifications/index.js';
 import { appLink } from './notifications/links.js';
 import { buildSchedulePushes } from './schedule-diff.js';
 
@@ -22,19 +26,70 @@ const SCHEDULE_PUSH_CHUNK = 20;
 /** A pick change sends at most one silent sync per festival per window (per process). */
 export const SILENT_SYNC_COALESCE_MS = 60_000;
 
-export function createSocketEmitter({ io, log, notificationService, buildAvatarUrl, stores, config }: any) {
+/** The slice of the Socket.IO `Server` the emitter uses; tests pass a fake. */
+interface EmitterIo {
+  emit(event: string, payload: unknown): unknown;
+  to(room: string | string[]): { emit(event: string, payload: unknown): unknown };
+}
+
+/** The store methods the emitter calls; every use is guarded, so a partial store is valid. */
+export interface EmitterStores {
+  crews?: {
+    listByUserAndFestival(userId: string, festivalId: string): Promise<{ id: string }[]>;
+    getMembersForCrews(crewIds: string[]): Promise<Map<string, { userId: string }[]>>;
+  };
+  topicSubscriptions?: {
+    getUnsubscribedUsers?(festivalId: string, topic: string): Promise<Iterable<string> | null | undefined>;
+  };
+}
+
+type NotificationService = ReturnType<typeof createNotificationService>;
+
+interface EmitterDeps {
+  io: EmitterIo;
+  log: ReturnType<typeof createLogger>;
+  /** Optional in practice: tests and partial boots omit it, and every use is guarded. */
+  notificationService?: Partial<NotificationService> | null;
+  buildAvatarUrl: (user: unknown) => string | null;
+  stores?: EmitterStores;
+  config: AppConfig;
+}
+
+export interface EmitterProfile {
+  id: string;
+  festivalId: string;
+  userId?: string;
+  name: string;
+  picks?: Record<string, unknown> | null;
+  updatedAt?: string;
+}
+
+/** One coalesced `profile:updated`, held until the debounce timer fires. */
+interface ProfileBatch {
+  festivalId: string;
+  profileId: string;
+  userId?: string;
+  name: string;
+  avatarUrl: string | null;
+  picks: Record<string, unknown>;
+  interestsChanged: boolean;
+  updatedAt: string;
+  _batchedAt: number;
+}
+
+export function createSocketEmitter({ io, log, notificationService, buildAvatarUrl, stores, config }: EmitterDeps) {
 
   // Crew pick push digest — one push per author per festival per window.
   // shortcut: digest timers are per process, so with N PM2 instances a busy picker can trigger up to N pushes per window; move the dedupe to Redis if users report doubles.
   const CREW_PUSH_DIGEST_MS = 5 * 60 * 1000;
-  const _crewPushTimers = new Map();
-  const _crewPushPending = new Map();
+  const _crewPushTimers = new Map<string, NodeJS.Timeout>();
+  const _crewPushPending = new Map<string, { name: string }>();
 
-  async function _sendCrewPickPush(festivalId: any, userId: any, profileId: any, name: any) {
+  async function _sendCrewPickPush(festivalId: string, userId: string, profileId: string, name: string) {
     if (!stores?.crews || typeof notificationService?.send !== 'function') return;
     const crews = await stores.crews.listByUserAndFestival(userId, festivalId);
     if (!crews?.length) return;
-    const membersByCrew = await stores.crews.getMembersForCrews(crews.map((c: any) => c.id));
+    const membersByCrew = await stores.crews.getMembersForCrews(crews.map((c: { id: string }) => c.id));
     const muted = new Set(
       (await stores.topicSubscriptions?.getUnsubscribedUsers?.(festivalId, 'crew')) || [],
     );
@@ -45,18 +100,18 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       }
     }
     await Promise.all([...recipients].map((uid) =>
-      notificationService.send({
+      notificationService.send!({
         userId: uid,
         type: 'crew_update',
         title: 'Crew update',
         body: `${name} updated their picks.`,
         data: { festivalId, profileId, deepLink: appLink(config, '/compare') },
         threadId: `crew-${festivalId}`,
-      }).catch((err: any) => log.warn('crew push failed', { error: err.message })),
+      }).catch((err: Error) => log.warn('crew push failed', { error: err.message })),
     ));
   }
 
-  function queueCrewPickPush(profile: any) {
+  function queueCrewPickPush(profile: EmitterProfile) {
     if (_shuttingDown || !notificationService?.isConfigured) return;
     const key = `${profile.festivalId}:${profile.userId}`;
     const pending = _crewPushPending.get(key);
@@ -70,8 +125,8 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       _crewPushTimers.delete(key);
       _crewPushPending.delete(key);
       if (!latest) return;
-      _sendCrewPickPush(profile.festivalId, profile.userId, profile.id, latest.name)
-        .catch((err: any) => log.warn('crew push failed', { error: err.message }));
+      _sendCrewPickPush(profile.festivalId, profile.userId!, profile.id, latest.name)
+        .catch((err: Error) => log.warn('crew push failed', { error: err.message }));
     }, CREW_PUSH_DIGEST_MS);
     timer.unref?.();
     _crewPushTimers.set(key, timer);
@@ -79,27 +134,27 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
 
   // One trailing silent sync per festival per window; later pick changes inside the window ride along.
   // No excludeUserIds: with several authors in one window, excluding one of them is wrong.
-  const _silentSyncTimers = new Map();
+  const _silentSyncTimers = new Map<string, NodeJS.Timeout>();
 
-  function queueSilentSync(festivalId: any) {
+  function queueSilentSync(festivalId: string) {
     if (_shuttingDown || typeof notificationService?.sendSilentSync !== 'function' || _silentSyncTimers.has(festivalId)) return;
     const timer = setTimeout(() => {
       _silentSyncTimers.delete(festivalId);
-      notificationService.sendSilentSync({ festivalId, syncType: 'profiles' })
-        .catch((err: any) => log.warn('silent sync push failed', { error: err.message }));
+      notificationService!.sendSilentSync!({ festivalId, syncType: 'profiles' })
+        .catch((err: Error) => log.warn('silent sync push failed', { error: err.message }));
     }, SILENT_SYNC_COALESCE_MS);
     timer.unref?.();
     _silentSyncTimers.set(festivalId, timer);
   }
 
   // Profile update batching — coalesce rapid pick/status changes into a single broadcast
-  const _profileBatchTimers = new Map();
-  const _profileBatchPayloads = new Map();
+  const _profileBatchTimers = new Map<string, NodeJS.Timeout>();
+  const _profileBatchPayloads = new Map<string, ProfileBatch>();
   const BATCH_DEBOUNCE_MS = 200;
   const MAX_BATCH_ENTRIES = 1000; // Safety cap on batch map size (#58)
   let _shuttingDown = false;
 
-  function _flushProfileBatch(key: any) {
+  function _flushProfileBatch(key: string): Promise<void> {
     _profileBatchTimers.delete(key);
     const payload = _profileBatchPayloads.get(key);
     _profileBatchPayloads.delete(key);
@@ -113,17 +168,17 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
   // offline queue's post-drain re-sync working for a crewless author.
   // shortcut: a socket sits in one crew room (its active crew), so a crew mate
   // viewing a different shared crew catches up on reload.
-  async function _emitToAuthorCrews(payload: any) {
+  async function _emitToAuthorCrews(payload: ProfileBatch) {
     if (!payload.userId) return;
     // A failed crew lookup still re-syncs the author's own devices.
     const crews = stores?.crews
-      ? await stores.crews.listByUserAndFestival(payload.userId, payload.festivalId).catch((err: any) => {
+      ? await stores.crews.listByUserAndFestival(payload.userId, payload.festivalId).catch((err: Error) => {
         log.warn('profile:updated crew lookup failed', { error: err.message });
         return [];
       })
       : [];
     const userRoom = 'user:' + payload.userId;
-    const crewRooms = (crews || []).map((c: any) => 'crew:' + c.id);
+    const crewRooms = (crews || []).map((c: { id: string }) => 'crew:' + c.id);
     const body = {
       _v: EVENT_VERSION,
       festivalId: payload.festivalId,
@@ -143,7 +198,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     if (crewRooms.length > 0) io.to(crewRooms).emit('profile:updated', { ...body, interestsChanged: false });
   }
 
-  function profileCreated({ festivalId, profile, user }: any) {
+  function profileCreated({ festivalId, profile, user }: { festivalId: string; profile: { id: string; name: string }; user: unknown }) {
     io.to(festivalId).emit('profile:created', {
       _v: EVENT_VERSION,
       festivalId,
@@ -155,7 +210,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     });
   }
 
-  function profileUpdated({ profile, user, changedFields = {} }: any) {
+  function profileUpdated({ profile, user, changedFields = {} }: { profile: EmitterProfile; user: unknown; changedFields?: { interests?: boolean; picks?: boolean } }) {
     const key = `${profile.festivalId}:${profile.id}`;
 
     // Safety cap on batch map size (#58) — evict oldest if at capacity
@@ -201,7 +256,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     }
   }
 
-  function profileDeleted({ festivalId, profileId }: any) {
+  function profileDeleted({ festivalId, profileId }: { festivalId: string; profileId: string }) {
     // Cancel any pending batch for this profile
     const key = `${festivalId}:${profileId}`;
     if (_profileBatchTimers.has(key)) {
@@ -212,11 +267,11 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     io.to(festivalId).emit('profile:deleted', { _v: EVENT_VERSION, festivalId, profileId });
   }
 
-  function festivalCreated({ id, name }: any) {
+  function festivalCreated({ id, name }: { id?: string; name: string }) {
     io.emit('festival:created', { _v: EVENT_VERSION, id, name });
   }
 
-  function festivalUpdated({ festival }: any) {
+  function festivalUpdated({ festival }: { festival: { id: string; name?: string } }) {
     io.emit('festival:updated', { _v: EVENT_VERSION, id: festival.id });
 
     // No visible push here: scheduleChanged alerts only the people whose picks moved.
@@ -225,7 +280,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
       notificationService.sendSilentSync({
         festivalId: festival.id,
         syncType: 'festival',
-      }).catch((err: any) => log.warn('silent sync push failed', { error: err.message }));
+      }).catch((err: Error) => log.warn('silent sync push failed', { error: err.message }));
     }
   }
 
@@ -233,16 +288,22 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
    * One alert per person who picked a set that moved or left the lineup, and one per person whose open
    * mark is on an act that was cancelled (`interestedByEntry`). Never throws.
    */
-  async function scheduleChanged({ festival, changes, pickersBySet, interestedByEntry }: any) {
+  async function scheduleChanged({ festival, changes, pickersBySet, interestedByEntry }: {
+    festival: { id: string; name: string };
+    changes: Parameters<typeof buildSchedulePushes>[1];
+    pickersBySet: Parameters<typeof buildSchedulePushes>[2];
+    interestedByEntry?: Parameters<typeof buildSchedulePushes>[3];
+  }) {
     if (!notificationService?.isConfigured || typeof notificationService.send !== 'function') return;
     try {
-      const muted: Set<string> =
-        (await stores?.topicSubscriptions?.getUnsubscribedUsers?.(festival.id, 'schedule')) || new Set();
+      const muted = new Set<string>(
+        (await stores?.topicSubscriptions?.getUnsubscribedUsers?.(festival.id, 'schedule')) || [],
+      );
       const messages = buildSchedulePushes(festival.name, changes, pickersBySet, interestedByEntry).filter((m) => !muted.has(m.userId));
       for (let i = 0; i < messages.length; i += SCHEDULE_PUSH_CHUNK) {
         const results = await Promise.allSettled(
           messages.slice(i, i + SCHEDULE_PUSH_CHUNK).map(({ userId, title, body, setId }) =>
-            notificationService.send({
+            notificationService.send!({
               userId,
               type: 'schedule_change',
               title,
@@ -262,18 +323,18 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
           }
         }
       }
-    } catch (err: any) {
-      log.warn('schedule push failed', { festivalId: festival?.id, error: err.message });
+    } catch (err) {
+      log.warn('schedule push failed', { festivalId: festival?.id, error: (err as Error).message });
     }
   }
 
-  function festivalDeleted({ id }: any) {
+  function festivalDeleted({ id }: { id: string }) {
     io.emit('festival:deleted', { _v: EVENT_VERSION, id });
   }
 
 
 
-  function presenceUpdate({ festivalId, online }: any) {
+  function presenceUpdate({ festivalId, online }: { festivalId: string; online: (Omit<PresenceUser, 'username'> & { username?: string })[] }) {
     io.to(festivalId).emit('presence:update', { _v: EVENT_VERSION, online });
   }
 
@@ -298,22 +359,36 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     }
   }
 
-  function crewExpenseAdded({ crewId, expense }: any) {
+  function crewExpenseAdded({ crewId, expense }: { crewId: string; expense: Record<string, unknown> }) {
     io.to('crew:' + crewId).emit('crew:expense-added', { _v: EVENT_VERSION, crewId, expense });
   }
-  function crewExpenseDeleted({ crewId, expenseId }: any) {
+  function crewExpenseDeleted({ crewId, expenseId }: { crewId: string; expenseId: string }) {
     io.to('crew:' + crewId).emit('crew:expense-deleted', { _v: EVENT_VERSION, crewId, expenseId });
   }
   // An expense was edited, a payment confirmed or disputed, or the currency changed.
-  function crewExpenseUpdated({ crewId, expense }: any) {
+  function crewExpenseUpdated({ crewId, expense }: { crewId: string; expense?: Record<string, unknown> }) {
     io.to('crew:' + crewId).emit('crew:expense-updated', { _v: EVENT_VERSION, crewId, expense });
   }
-  function crewActivityLogged({ crewId, item }: any) {
+  function crewActivityLogged({ crewId, item }: { crewId: string; item: Record<string, unknown> }) {
     io.to('crew:' + crewId).emit('crew:activity', { _v: EVENT_VERSION, crewId, item });
+  }
+
+  // Generic fan-out for events whose payload the caller already shaped; payloads go out unchanged (no _v added).
+  function toCrew(crewId: string, event: string, payload: unknown) {
+    io.to('crew:' + crewId).emit(event, payload);
+  }
+  function toRoom(room: string | string[], event: string, payload: unknown) {
+    io.to(room).emit(event, payload);
+  }
+  function broadcast(event: string, payload: unknown) {
+    io.emit(event, payload);
   }
 
   return {
     EVENT_VERSION,
+    toCrew,
+    toRoom,
+    broadcast,
     profileCreated,
     profileUpdated,
     profileDeleted,

@@ -3,6 +3,8 @@ import { describe, test, mock, beforeEach } from 'node:test';
 import crypto from 'crypto';
 import express from 'express';
 import request from 'supertest';
+import { ioEmitter } from './_io-emitter';
+import createFestivalsStore from '../lib/db/stores/festivals.js';
 
 // ════════════════════════════════════════════════════════════════════════════
 // Shared mock factory
@@ -34,6 +36,7 @@ function makePool(queryResult = { rows: [] }) {
 }
 
 function baseDeps(overrides: any = {}) {
+  const io = makeIo();
   const deps: any = {
     express,
     config: {
@@ -111,7 +114,7 @@ function baseDeps(overrides: any = {}) {
     sanitizeString: (s: any) => (s || '').trim(),
     sanitizeIdentifier: (s: any) => (s || '').trim(),
     createOpaqueId: () => 'opaque-123',
-    io: makeIo(),
+    io,
     stores: { pool: makePool() },
     pool: makePool(),
     state: {
@@ -121,12 +124,16 @@ function baseDeps(overrides: any = {}) {
       timers: [],
     },
     emitter: {
+      ...ioEmitter(io),
       crewExpenseAdded: noop,
       crewExpenseDeleted: noop,
     },
     ...overrides,
   };
-  deps.festivalAccess = () => deps.adminAuth;
+  deps.festivalAccess = ({ param = 'id' }: any = {}) => (req: any, res: any, next: any) => {
+    req.festivalId = req.params[param];
+    return deps.adminAuth(req, res, next);
+  };
   return deps;
 }
 
@@ -229,6 +236,25 @@ describe('routes/email-auth', () => {
 
     assert.equal(res.body.error, null);
     assert.ok(deps.stores.emailTokens.invalidateResetTokens.mock.calls.length >= 1);
+  });
+
+  test('POST /forgot-password — a failed send logs at warn with a reason and answers exactly like a success', async () => {
+    const warn = mock.fn();
+    const known = buildEmailAuthDeps({ log: { ...makeLog(), warn } });
+    known.stores.emailTokens.findUserByEmail = mock.fn(async () => ({ id: 'user-1', username: 'alice', email: 'alice@test.com' }));
+    const unknown = buildEmailAuthDeps();
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+
+    // No RESEND_API_KEY in this config, so the send fails.
+    const failed = await request(mountApp(createEmailAuthRoutes(known))).post('/forgot-password').send({ email: 'alice@test.com' });
+    const noAccount = await request(mountApp(createEmailAuthRoutes(unknown))).post('/forgot-password').send({ email: 'nobody@test.com' });
+
+    assert.equal(failed.status, noAccount.status);
+    assert.deepEqual(failed.body, noAccount.body);
+    const call = warn.mock.calls.find((c: any) => c.arguments[0] === 'forgot-password:email-failed');
+    assert.ok(call, 'expected a warn-level forgot-password:email-failed');
+    assert.deepEqual(call.arguments[1], { userId: 'user-1', reason: 'RESEND_API_KEY not configured' });
+    assert.ok(!JSON.stringify(warn.mock.calls).includes('alice@test.com'), 'the address must not be logged at warn');
   });
 
   test('POST /forgot-password — per-email rate limit kicks in after 3 attempts', async () => {
@@ -1887,16 +1913,16 @@ describe('routes/lineup-import', () => {
 
 describe('routes/weather', () => {
   function buildWeatherDeps(overrides: any = {}) {
-    return baseDeps({
-      stores: {
-        pool: {
-          query: mock.fn(async () => ({
-            rows: [{ latitude: 25.76, longitude: -80.19, name: 'Ultra Miami' }],
-          })),
-        },
+    const stores: any = {
+      pool: {
+        query: mock.fn(async () => ({
+          rows: [{ latitude: 25.76, longitude: -80.19, name: 'Ultra Miami' }],
+        })),
       },
-      ...overrides,
-    });
+    };
+    // The route reads the festival through the store; a test swaps stores.pool.query to change the row.
+    stores.festivals = createFestivalsStore({ query: (...args: any[]) => stores.pool.query(...args) } as any, {});
+    return baseDeps({ stores, ...overrides });
   }
 
   async function mountWeather(deps: any) {

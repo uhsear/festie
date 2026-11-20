@@ -24,13 +24,13 @@ import express from 'express';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
+import { ioEmitter } from './_io-emitter';
 
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
 // DB skip-gate: these integration tests require a live Postgres database.
 // Set TEST_DATABASE_URL to run them (always set in CI). See tests/README.md.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 // The shared helpers exit the process without a test database, so load them only when it exists.
 const helpers = skip ? null : await import('./_integration-helpers');
 const { registerFlatUser: registerUser } = (helpers ?? {}) as NonNullable<typeof helpers>;
@@ -601,8 +601,8 @@ describe('crews routes', { concurrency: 1, skip }, () => {
     const events: string[] = [];
     const io = server.planner.io;
     const realTo = io.to.bind(io);
-    mock.method(io, 'to', (room: string) => {
-      rooms.push(room);
+    mock.method(io, 'to', (room: string | string[]) => {
+      rooms.push(...[room].flat());
       const chain: any = realTo(room);
       chain.to = (r: string) => { rooms.push(r); return chain; };
       const origEmit = chain.emit.bind(chain);
@@ -714,6 +714,7 @@ describe('routes/crews.ts -- DELETE /:crewId feed push (mocked deps)', () => {
         req.user = { userId: 'owner-1', username: 'boss' };
         next();
       },
+      adminAuth: (_req: any, _res: any, next: any) => next(),
       sanitizeIdentifier: (v: any) => v,
       sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
       sendError: (res: any, status: any, msg: any) => res.status(status).json({ data: null, error: { message: msg } }),
@@ -727,6 +728,7 @@ describe('routes/crews.ts -- DELETE /:crewId feed push (mocked deps)', () => {
       },
       schemas: {},
       io,
+      emitter: ioEmitter(io),
       crewNotify,
       stores: {
         crews: {
@@ -786,6 +788,7 @@ describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
         req.user = { userId: 'owner-1', username: 'boss' };
         next();
       },
+      adminAuth: (_req: any, _res: any, next: any) => next(),
       sanitizeIdentifier: (v: any) => v,
       sanitizeString: (v: any) => v,
       sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
@@ -807,6 +810,7 @@ describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
       getFestivalById: async () => null,
       schemas,
       io,
+      emitter: ioEmitter(io),
       stores: {
         crews: {
           getById: mock.fn(async () => ({ ...crew })),

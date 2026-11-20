@@ -18,6 +18,8 @@ import express from 'express';
 import request from 'supertest';
 import { schemas, validate, validateParams, validateQuery } from '../lib/schemas.js';
 import { makeIo } from './_make-io';
+import { createSessionHelpers } from '../lib/app-context/session.js';
+import { ioEmitter } from './_io-emitter';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -113,6 +115,14 @@ function makeDeps(overrides: any = {}) {
       req.user = { userId: 'user-1', username: 'testuser' };
       next();
     }),
+    adminAuth: overrides.adminAuth || (async (req: any, res: any, next: any) => {
+      req.user = { userId: 'user-1', username: 'testuser' };
+      if (!(await stores.roles.hasRole('user-1', 'admin'))) {
+        return res.status(403).json({ data: null, error: { message: 'Admin access required', status: 403, code: 'FORBIDDEN' } });
+      }
+      req.isAdmin = true;
+      return next();
+    }),
     setNoStore: overrides.setNoStore || ((_res: any) => {}),
     sanitizeIdentifier: overrides.sanitizeIdentifier || ((s: any, _max?: any) => (typeof s === 'string' ? s.trim() : '')),
     sendSuccess: (res: any, data: any) => res.json({ data, error: null }),
@@ -133,6 +143,7 @@ function makeDeps(overrides: any = {}) {
     validateParams: overrides.validateParams || validateParams,
     schemas,
     io: overrides.io !== undefined ? overrides.io : ioObj,
+    emitter: ioEmitter(overrides.io !== undefined ? overrides.io : ioObj),
     crewNotify: overrides.crewNotify,
     getRequestIp: () => '127.0.0.1',
     stores,
@@ -233,6 +244,34 @@ describe('routes/crew-members.js — GET /search-users', () => {
     assert.equal(res.status, 403);
     assert.equal(res.body.error.code, 'FORBIDDEN');
     assert.match(res.body.error.message, /Admin access required/i);
+  });
+
+  test('real adminAuth returns 403 for a valid non-admin session', async () => {
+    const hasRole = mock.fn(async () => false);
+    const sendError = (res: any, status: number, msg: string, code: string) =>
+      res.status(status).json({ data: null, error: { message: msg, status, code } });
+    const { adminAuth } = createSessionHelpers({
+      config: { SESSION_TTL: 86400000, USER_SESSION_MAX: 5, USER_SESSION_COOKIE: 'festie_session' },
+      stores: {
+        sessions: { validateUserSession: async () => ({ userId: 'user-1', username: 'testuser' }) },
+        roles: { hasRole },
+      },
+      getIO: () => null,
+      resolveRequestToken: () => ({ token: 'a'.repeat(64), source: 'header' }),
+      disconnectSocket: () => {},
+      emitPresence: () => {},
+      disconnectUserSockets: () => {},
+      fetchRevocationSockets: async () => [],
+      sendError,
+      ErrorCodes: { AUTH_REQUIRED: 'AUTH_REQUIRED', FORBIDDEN: 'FORBIDDEN' },
+    });
+    const { app } = await buildApp({ adminAuth, stores: { roles: { hasRole } } });
+
+    const res = await request(app).get('/search-users?q=test');
+
+    assert.equal(res.status, 403);
+    assert.equal(res.body.error.code, 'FORBIDDEN');
+    assert.equal(hasRole.mock.callCount(), 1);
   });
 
   // ── LIKE metacharacter escaping ───────────────────────────────────
@@ -1201,7 +1240,8 @@ describe('routes/crew-members.js — POST /:crewId/members (admin force-add)', (
   test('returns 500 on internal error', async () => {
     const { app } = await buildApp({
       stores: {
-        roles: { hasRole: mock.fn(async () => { throw new Error('db down'); }) },
+        roles: { hasRole: mock.fn(async () => true) },
+        crews: { getById: mock.fn(async () => { throw new Error('db down'); }) },
       },
     });
 

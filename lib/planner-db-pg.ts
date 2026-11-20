@@ -4,54 +4,32 @@
 /**
  * Public entry point for the PostgreSQL data layer.
  *
- * Historically this file was a one-line re-export of `./db/index`. The
- * 2026-04-14 audit found that `schema_migrations` was drifting — several
- * migration files (012–015, 017–024, 026) were clearly applied to the DB
- * (their tables/columns/indexes exist) yet the bookkeeping rows were
- * missing from `schema_migrations`. Root cause analysis traced the drift
- * to two defects in the historical runner chain:
+ * The runner applies each `migrations/NNN_*.sql` file inside a single
+ * connection: one `BEGIN … COMMIT` holds the SQL file and the INSERT into
+ * `schema_migrations`. Any failure rolls the whole file back and throws, so
+ * the ledger can never drift from the schema silently. Earlier shell runners
+ * applied the file and recorded the row in separate steps, which left
+ * migrations applied but unrecorded.
  *
- *   1. `scripts/auto-deploy.sh` (legacy) ran `for f in migrations/*.sql;
- *      do psql -f "$f"; done` with NO per-migration transaction and NO
- *      INSERT into `schema_migrations`. Every apply succeeded in the DB
- *      but zero rows were ever recorded.
- *   2. `docs/research/research-2026/phase-3-6/migrate.sh` (partially
- *      adopted) DID record rows, but it ran the `-f file` and the
- *      `INSERT INTO schema_migrations` as two SEPARATE `psql` invocations
- *      — i.e. two distinct TCP sessions. If anything (network blip,
- *      trigger side-effect, PK collision on the double-version 019
- *      files) made the second call fail, the schema change landed and
- *      the row didn't. The error was printed but `set -e` on the bash
- *      script did not always halt cleanly because the apply had already
- *      exited 0.
- *
- * The fix moves the runner into Node, inside a single psql connection
- * (one client, one `BEGIN … COMMIT`, the SQL file + the INSERT execute
- * together). Any failure rolls the whole thing back and throws — never
- * silent-continue. The runner also performs a boot-time gap check:
- * count of `migrations/NNN_*.sql` files on disk vs. count of rows in
- * `schema_migrations`. If the disk count is larger, we log a single
- * `WARN` per process boot listing the missing versions so the drift is
- * loud and actionable.
+ * The runner also performs a boot-time gap check: the `migrations/NNN_*.sql`
+ * versions on disk vs. the rows in `schema_migrations`. If a version is
+ * missing from the ledger, it logs a single `WARN` per process boot listing
+ * the missing versions.
  *
  * Public API compatibility: this module still exports everything
  * `./db/index` did (`createStores`, `openPlannerDatabase`, etc.) with
  * identical signatures and return shapes. Only `openPlannerDatabase`
  * gets a thin wrapper that triggers the migration runner exactly once
- * per-process (protected by an in-memory `Set` keyed on DATABASE_URL so
+ * per-process (protected by an in-memory `Map` keyed on DATABASE_URL so
  * repeated calls in tests don't re-run migrations).
- *
- * See `_MIGRATE_AUDIT_NOTES.md` in this directory for the full
- * investigation trail, including how the legacy SQLite `lib/migrate.js`
- * runner (still present for the sqlite-to-pg import script) differs
- * from this Postgres runner and why the two must not be confused.
  */
 
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
 
-import { splitSqlStatements, usesConcurrently } from './db/sql-split.js';
+import { loadConfig } from './config.js';
+import { splitSqlStatements, stripSqlComments, usesConcurrently } from './db/sql-split.js';
 import { createStores, createDbLatencyTracker, openPlannerDatabase as openPlannerDatabaseRaw } from './db/index.js';
 
 // ── Migration runner ─────────────────────────────────────────────────────
@@ -62,7 +40,7 @@ const MIGRATIONS_DIR = path.join(import.meta.dirname, '..', 'migrations');
  * Fixed application-specific key for the Postgres session advisory lock
  * that serializes the migration-apply critical section across instances.
  *
- * Under a multi-instance deploy (e.g. PM2 cluster x4, or N rolling
+ * Under a multi-instance deploy (e.g. several PM2 workers, or N rolling
  * pods), every worker boots and races to apply the same pending
  * migrations. While each apply is individually safe (single-txn for
  * normal migrations, idempotent IF [NOT] EXISTS for CONCURRENTLY ones),
@@ -228,6 +206,26 @@ const RECORD_MIGRATION_SQL = `
     checksum = COALESCE(schema_migrations.checksum, EXCLUDED.checksum)
 `;
 
+const CREATE_INDEX_CONCURRENTLY_RE =
+  /^\s*CREATE\s+(?:UNIQUE\s+)?INDEX\s+CONCURRENTLY\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"((?:[^"]|"")+)"|(\w+))/i;
+
+/**
+ * A cancelled or failed CREATE INDEX CONCURRENTLY leaves an INVALID index that
+ * `IF NOT EXISTS` then skips, so a retry would never rebuild it. Drop such a
+ * leftover before re-running the statement, which makes the migration resumable.
+ */
+async function dropInvalidIndexBeforeCreate(client: any, statement: string) {
+  const m = CREATE_INDEX_CONCURRENTLY_RE.exec(stripSqlComments(statement));
+  if (!m) return;
+  const name = m[1] ? m[1].replace(/""/g, '"') : m[2]!.toLowerCase();
+  const invalid = await client.query(
+    `SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid
+     WHERE c.relname = $1 AND NOT i.indisvalid AND pg_table_is_visible(c.oid)`,
+    [name],
+  );
+  if (invalid.rowCount > 0) await client.query(`DROP INDEX CONCURRENTLY IF EXISTS "${name.replace(/"/g, '""')}"`);
+}
+
 /**
  * Apply one migration + record it in a SINGLE transaction. Any error
  * from either the SQL body or the bookkeeping INSERT rolls the whole
@@ -260,6 +258,7 @@ async function applyOneMigration(client: any, migration: any, log: any) {
         return false;
       }
       for (const statement of splitSqlStatements(cleaned)) {
+        await dropInvalidIndexBeforeCreate(client, statement);
         await client.query(statement);
       }
       // Some CONCURRENTLY migrations self-record their row; ON CONFLICT keeps
@@ -341,15 +340,13 @@ function stripOuterTxBoundaries(sql: string) {
 }
 
 /**
- * Module-level flag: once migrations complete successfully for ANY pool
- * in this process, skip all subsequent calls. In PM2 cluster mode each
- * worker only needs to check once; the expensive schema_migrations
- * queries (CREATE TABLE, ALTER TABLE, SELECT version) were the top 3
- * queries by total time because they ran on every process restart.
- * The flag is set AFTER successful completion so a failure still allows
- * a retry on the next call.
+ * Pools whose migrations completed successfully: later calls on the same
+ * pool skip the schema_migrations queries (CREATE TABLE, ALTER TABLE,
+ * SELECT version), which were the top 3 queries by total time. Keyed by
+ * pool, not process, so a second database is never skipped. A pool is
+ * added only AFTER success so a failure still allows a retry.
  */
-let _migrationsRan = false;
+let _migratedPools = new WeakSet<object>();
 
 /**
  * Run pending migrations against the given pg pool. Exposed as a named
@@ -357,7 +354,7 @@ let _migrationsRan = false;
  * `openPlannerDatabase`.
  */
 async function runPostgresMigrations(pool: any, opts: any = {}) {
-  if (_migrationsRan) return { applied: [], current: 0, gap: [] };
+  if (_migratedPools.has(pool)) return { applied: [], current: 0, gap: [] };
   const log = opts.log || (() => {});
   const client = await pool.connect();
   try {
@@ -414,7 +411,7 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
           diskCount: diskVersions.size,
           recordedCount: finalApplied.size,
           missingVersions: gap,
-          hint: 'Backfill via scripts/backfill-schema-migrations.sql; see docs/plans/schema-migration-reconciliation-2026-04.md',
+          hint: 'Insert the missing versions into schema_migrations, or re-run the migration runner after fixing the failed file',
         });
       } else {
         log('info', 'schema_migrations consistent with migrations/ on disk', {
@@ -430,7 +427,7 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
         totalRecorded: finalApplied.size,
       });
       const result = { applied: appliedVersions, current, gap };
-      _migrationsRan = true; // eslint-disable-line require-atomic-updates
+      _migratedPools.add(pool);
       return result;
     } finally {
       // Always release the advisory lock on the SAME client that acquired
@@ -529,7 +526,7 @@ async function runPostgresMigrationsWithConnectRetry(pool: any, opts: any = {}) 
 function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Promise<any> } {
   const result = openPlannerDatabaseRaw(opts);
   const pool = result && result.pool;
-  const databaseUrl = opts.databaseUrl || process.env.DATABASE_URL || '';
+  const databaseUrl = opts.databaseUrl || loadConfig().DATABASE_URL;
   // app-context passes the structured logger (an object with level methods), not a
   // function. Adapt it, or every runner line and the connect-retry warning is dropped.
   const log =
@@ -553,7 +550,7 @@ function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Pro
   // startup runner against a test DB re-applies migrations that aren't
   // recorded in schema_migrations and breaks NOT-NULL constraints mid-suite.
   const isTestEnv =
-    process.env.NODE_ENV === 'test' || (typeof databaseUrl === 'string' && /_test(\?|$)/.test(databaseUrl));
+    opts.nodeEnv === 'test' || (typeof databaseUrl === 'string' && /_test(\?|$)/.test(databaseUrl));
   if (isTestEnv) {
     return Object.assign(result, {
       migrationsReady: Promise.resolve({ applied: [], current: 0, gap: [] }),
@@ -592,7 +589,7 @@ function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Pro
  */
 const __resetMigrationCacheForTests = () => {
   MIGRATED_URLS.clear();
-  _migrationsRan = false;
+  _migratedPools = new WeakSet();
 };
 
 // ── Public API ───────────────────────────────────────────────────────────

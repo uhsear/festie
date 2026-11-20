@@ -16,9 +16,8 @@ import { after, afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const ADMIN_PASSWORD = 'test-admin-password-pass';

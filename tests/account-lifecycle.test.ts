@@ -13,13 +13,12 @@ import { afterEach, describe, test } from 'node:test';
 import request from 'supertest';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 const PASSWORD = 'Str0ngLife!Cycle9';
 const NEW_PASSWORD = 'N3wer!Cycle#Pass';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const RUN_TAG = `lc${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
 const FESTIVAL_ID = `fest-${RUN_TAG}`;

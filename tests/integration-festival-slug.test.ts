@@ -7,13 +7,12 @@ import { fileURLToPath } from 'node:url';
 import { Pool } from 'pg';
 import { createStores } from '../lib/db/index.js';
 import createFestivalsStore from '../lib/db/stores/festivals.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Festival slugs (migration 094): the slug rule, publish/create lifecycle and the
 // public lookups. The real-DB part is skip-gated like integration-festival-follows;
 // the helpers are imported lazily because _integration-helpers exits the process
 // without a test DB. Run it only against a private test database on port 5434+.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const MIGRATION = path.join(__dirname, '..', 'migrations', '094_festival_slug.sql');
 

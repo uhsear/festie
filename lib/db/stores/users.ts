@@ -3,6 +3,10 @@
 
 import type { Pool } from 'pg';
 import { withTransaction } from '../connection';
+import { buildUpdate } from '../utils';
+
+/** Placeholder owner of the expenses a hard-deleted user paid (migration 116). Never a sign-in identity. */
+export const DELETED_USER_ID = 'deleted-user';
 
 export default function createUsersStore(pool: Pool, utils: any) {
   const { toISOString } = utils;
@@ -105,8 +109,8 @@ export default function createUsersStore(pool: Pool, utils: any) {
 
     async getByUsername(username: string) {
       const result = await pool.query(
-        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND deleted_at IS NULL LIMIT 1`,
-        [username],
+        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND id <> $2 AND deleted_at IS NULL LIMIT 1`,
+        [username, DELETED_USER_ID],
       );
       return normalizeRow(result.rows[0]);
     },
@@ -114,8 +118,8 @@ export default function createUsersStore(pool: Pool, utils: any) {
     // Caller lower-cases the address; deleted accounts are excluded on purpose.
     async getByEmail(email: string) {
       const result = await pool.query(
-        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL LIMIT 1`,
-        [email],
+        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND id <> $2 AND deleted_at IS NULL LIMIT 1`,
+        [email, DELETED_USER_ID],
       );
       return normalizeRow(result.rows[0]);
     },
@@ -124,25 +128,26 @@ export default function createUsersStore(pool: Pool, utils: any) {
     // matches the copy even if the pg_cron purge runs late.
     async findDeletedByUsername(username: string) {
       const result = await pool.query(
-        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' LIMIT 1`,
-        [username],
+        `SELECT ${USER_COLUMNS} FROM users WHERE username = $1 AND id <> $2 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' LIMIT 1`,
+        [username, DELETED_USER_ID],
       );
       return normalizeRow(result.rows[0]);
     },
 
     async findDeletedByEmail(email: string) {
       const result = await pool.query(
-        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' ORDER BY deleted_at DESC LIMIT 1`,
-        [email],
+        `SELECT ${USER_COLUMNS} FROM users WHERE LOWER(email) = $1 AND id <> $2 AND deleted_at IS NOT NULL AND deleted_at > NOW() - INTERVAL '30 days' ORDER BY deleted_at DESC LIMIT 1`,
+        [email, DELETED_USER_ID],
       );
       return normalizeRow(result.rows[0]);
     },
 
     // `update` filters `deleted_at IS NULL`, so it cannot clear a soft delete.
     async reactivate(userId: string) {
+      if (userId === DELETED_USER_ID) return;
       await pool.query(
-        'UPDATE users SET deleted_at = NULL, deleted_by = NULL, deletion_reason = NULL, updated_at = NOW() WHERE id = $1 AND deleted_at IS NOT NULL',
-        [userId],
+        'UPDATE users SET deleted_at = NULL, deleted_by = NULL, deletion_reason = NULL, updated_at = NOW() WHERE id = $1 AND id <> $2 AND deleted_at IS NOT NULL',
+        [userId, DELETED_USER_ID],
       );
     },
 
@@ -181,23 +186,10 @@ export default function createUsersStore(pool: Pool, utils: any) {
     },
 
     async update(userId: string, fields: Record<string, any>) {
-      const sets: string[] = [];
-      const values: any[] = [];
-      let idx = 1;
-      for (const [key, val] of Object.entries(fields)) {
-        sets.push(`${toColumn(key)} = $${idx}`);
-        values.push(val);
-        idx++;
-      }
-      sets.push(`updated_at = $${idx}`);
-      values.push(new Date().toISOString());
-      idx++;
-      values.push(userId);
-
-      const result = await pool.query(
-        `UPDATE users SET ${sets.join(', ')} WHERE id = $${idx} AND deleted_at IS NULL RETURNING ${USER_COLUMNS}`,
-        values,
-      );
+      const sets: Array<[string, unknown]> = Object.entries(fields).map(([key, val]) => [toColumn(key), val]);
+      sets.push(['updated_at', new Date().toISOString()]);
+      const q = buildUpdate('users', sets, userId, { extraWhere: 'deleted_at IS NULL', returning: USER_COLUMNS });
+      const result = await pool.query(q.text, q.values);
       return normalizeRow(result.rows[0]);
     },
 
@@ -231,7 +223,10 @@ export default function createUsersStore(pool: Pool, utils: any) {
         // wouldn't even block this delete, the rows (incl. GPS/ETA breadcrumbs) would
         // just orphan silently, so purge explicitly.
         await client.query('DELETE FROM crew_member_status WHERE user_id = $1', [userId]);
-        await client.query('DELETE FROM crew_expenses WHERE paid_by = $1', [userId]);
+        await client.query('DELETE FROM crew_packing_items WHERE created_by = $1', [userId]);
+        await client.query('DELETE FROM crew_ride_offers WHERE created_by = $1', [userId]);
+        // Keep the expenses so the other members' balances stay put; migration 116 seeds the placeholder.
+        await client.query('UPDATE crew_expenses SET paid_by = $2 WHERE paid_by = $1', [userId, DELETED_USER_ID]);
         await client.query('DELETE FROM crew_activity WHERE user_id = $1', [userId]);
         await client.query('DELETE FROM login_failures WHERE user_id = $1', [userId]);
         await client.query('DELETE FROM email_verification_tokens WHERE user_id = $1', [userId]);
@@ -292,6 +287,31 @@ export default function createUsersStore(pool: Pool, utils: any) {
     },
 
     countActive: (...args: any[]) => users.count(...args),
+
+    /** True when a live user holds this email, compared case-insensitively. */
+    async emailInUse(email: string): Promise<boolean> {
+      const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL', [
+        email.toLowerCase(),
+      ]);
+      return rows.length > 0;
+    },
+
+    /** Username of a user soft-deleted in the last 30 days, never the placeholder owner; null otherwise. */
+    async findRecentlyDeletedUsername(userId: string): Promise<string | null> {
+      const { rows } = await pool.query(
+        "SELECT username FROM users WHERE id = $1 AND id <> $2 AND deleted_at > NOW() - INTERVAL '30 days'",
+        [userId, DELETED_USER_ID],
+      );
+      return rows[0]?.username ?? null;
+    },
+
+    /** Hard-delete a user that just signed up. Profiles it claimed go back to unclaimed: festival_profiles.user_id is RESTRICT. */
+    async discard(userId: string) {
+      await withTransaction(pool, async (client: any) => {
+        await client.query('UPDATE festival_profiles SET user_id = NULL WHERE user_id = $1', [userId]);
+        await client.query('DELETE FROM users WHERE id = $1', [userId]);
+      });
+    },
   };
 
   return users;

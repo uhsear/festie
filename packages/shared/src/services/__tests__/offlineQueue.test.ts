@@ -31,6 +31,9 @@ import {
   surfaceFailedSync,
   MAX_RETRIES,
   MAX_EDGE_RETRIES,
+  MAX_QUEUE_AGE_MS,
+  isQueueEntryExpired,
+  rewriteChildUrl,
   type QueuedMutation,
 } from '../offlineQueue';
 import { useUIStore } from '../../stores/uiStore';
@@ -368,20 +371,20 @@ describe('offlineQueue', () => {
     });
   });
 
-  describe('24h prune', () => {
-    it('drops entries older than 24h on read and updates the count', async () => {
-      const old = Date.now() - 25 * 60 * 60 * 1000;
+  describe('7-day prune', () => {
+    it('keeps day-old entries and drops those older than 7 days on read and updates the count', async () => {
+      const old = Date.now() - 8 * 24 * 60 * 60 * 1000;
       seed([
         makeMutation({ clientId: 'stale', createdAt: old }),
+        makeMutation({ clientId: 'two-days', createdAt: Date.now() - 2 * 24 * 60 * 60 * 1000 }),
         makeMutation({ clientId: 'fresh', createdAt: Date.now() }),
       ]);
 
       await refreshPendingCount();
 
       const q = readPersisted();
-      expect(q).toHaveLength(1);
-      expect(q[0]!.clientId).toBe('fresh');
-      expect(useUIStore.getState().pendingSync).toBe(1);
+      expect(q.map((m) => m.clientId)).toEqual(['two-days', 'fresh']);
+      expect(useUIStore.getState().pendingSync).toBe(2);
     });
   });
 
@@ -597,5 +600,15 @@ describe('offlineQueue', () => {
       await hydrateFailedSync();
       expect(useUIStore.getState().failedSync.map((f) => f.clientId)).toEqual(['a']);
     });
+  });
+});
+
+describe('queue core helpers', () => {
+  it('rewriteChildUrl replaces every occurrence of the temp id', () => {
+    expect(rewriteChildUrl('/a/tmp/b/tmp', 'tmp', 'real')).toBe('/a/real/b/real');
+  });
+  it('isQueueEntryExpired is true at the age cap and false just under it', () => {
+    expect(isQueueEntryExpired(1000, 1000 + MAX_QUEUE_AGE_MS)).toBe(true);
+    expect(isQueueEntryExpired(1000, 1000 + MAX_QUEUE_AGE_MS - 1)).toBe(false);
   });
 });

@@ -2,14 +2,14 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 import type { Request, Response } from 'express';
 import type { z } from 'zod';
 
 import type { RouteDeps } from '../lib/types';
 import type { crewIdParams, liveLocationFixSchema } from '../lib/schemas';
-import { LOCATION_UPDATE_LIMIT } from '../lib/rate-limiting.js';
+import { LOCATION_UPDATE_LIMIT, shareWindowError } from '../lib/rate-limiting.js';
 import {
-  MAX_SHARE_WINDOW_MS,
   clampCapturedAt,
   dropLivePosition,
   writeLivePosition,
@@ -49,16 +49,14 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
     schemas,
     validate,
     validateParams,
-    io,
     redis,
     emitter,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
   const FLAG_OFF_MESSAGE = 'Live location is turned off right now.';
   const FAILED_MESSAGE = "Couldn't update your live location. Try again.";
-  // Clock-skew allowance on the far end of the share window.
-  const EXPIRES_AT_SKEW_MS = 60_000;
 
   // ── POST /:crewId/live-location — relay one background fix ───────
   router.post(
@@ -67,6 +65,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
     rateLimit(30, 'crew-live-location'),
     validateParams(schemas.crewIdParams),
     validate(schemas.liveLocationFix),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         if (config?.LIVE_LOCATION_ENABLED === false) {
@@ -77,15 +76,13 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier(params.crewId);
         const userId = req.user.userId;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const nowMs = Date.now();
-        const exp = Date.parse(body.expiresAt);
-        if (exp <= nowMs) {
+        const windowError = shareWindowError(body.expiresAt, nowMs);
+        if (windowError === 'ended') {
           return sendError(res, 400, 'This share has ended. Turn sharing on again.', ErrorCodes.INVALID_INPUT);
         }
-        if (exp > nowMs + MAX_SHARE_WINDOW_MS + EXPIRES_AT_SKEW_MS) {
+        if (windowError === 'too-long') {
           return sendError(res, 400, 'Pick a sharing time of 12 hours or less.', ErrorCodes.INVALID_INPUT);
         }
 
@@ -113,7 +110,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
           capturedAt: clampCapturedAt(body.capturedAt, nowMs, serverAt),
           serverAt,
         };
-        if (io) io.to('crew:' + crewId).emit('location:peer-update', payload);
+        if (emitter) emitter.toCrew(crewId, 'location:peer-update', payload);
         void writeLivePosition(redis, crewId, payload);
         void noteBatteryLevel({ redis, stores, emitter, log }, payload);
         return sendSuccess(res, { serverAt });
@@ -133,6 +130,7 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
     userAuth,
     rateLimit(30, 'crew-live-location-stop'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: Request, res: Response) => {
       try {
         if (config?.LIVE_LOCATION_ENABLED === false) {
@@ -142,12 +140,9 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
         const crewId = sanitizeIdentifier(params.crewId);
         const userId = req.user.userId;
 
-        // Membership first, so a client cannot spray peer-stopped into other crews.
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
-
+        // crewMember already ran, so a client cannot spray peer-stopped into other crews.
         void dropLivePosition(redis, crewId, userId);
-        if (io) io.to('crew:' + crewId).emit('location:peer-stopped', { _v: 1, crewId, userId, reason: 'stop' });
+        if (emitter) emitter.toCrew(crewId, 'location:peer-stopped', { _v: 1, crewId, userId, reason: 'stop' });
         return sendSuccess(res, { stopped: true });
       } catch (err) {
         log.error('live location stop failed', {

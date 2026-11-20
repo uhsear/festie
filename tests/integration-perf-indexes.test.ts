@@ -8,14 +8,16 @@ import { Pool } from 'pg';
 
 import createPollsStore from '../lib/db/stores/polls.js';
 import createCrewsStore from '../lib/db/stores/crews.js';
+import { createArtistsStore } from '../lib/db/stores/artists.js';
+import createUsersStore from '../lib/db/stores/users.js';
+import createAuditStore from '../lib/db/stores/audit.js';
+import { TEST_DATABASE_URL, ensureTestSchema, skip } from './_test-schema';
 
 // Migration 099 (T58): the decided-polls branch of polls.listByCrew and
 // meetingPoints.listRecentlyExpired use the new crew history indexes, and both
 // queries return the same rows as before the migration.
 // Run it only on a private Postgres (port 5434 or higher), never 5432 or 5433.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '099_crew_history_indexes.sql'),
   'utf8',
@@ -58,6 +60,7 @@ describe('crew history indexes (migration 099)', { skip, concurrency: 1 }, () =>
   }
 
   before(async () => {
+    await ensureTestSchema(TEST_DATABASE_URL!);
     pool = new Pool({ connectionString: TEST_DATABASE_URL });
     await pool.query(
       "INSERT INTO users (id, username, password_hash, created_at) VALUES ('p099-u1', 'p099-u1', 'x', NOW()) ON CONFLICT DO NOTHING",
@@ -115,5 +118,83 @@ describe('crew history indexes (migration 099)', { skip, concurrency: 1 }, () =>
     assert.match(pollPlan, /(?:Bitmap )?Index (?:Only )?Scan.*idx_crew_polls_crew/, pollPlan);
     const pastPlan = await explain((p) => createCrewsStore(p, {}).meetingPoints.listRecentlyExpired(FIRST));
     assert.match(pastPlan, /(?:Bitmap )?Index (?:Only )?Scan.*idx_cmp_crew_inactive/, pastPlan);
+  });
+});
+
+// Migration 120: artist search, deleted-user email lookup and the per-user audit list each use an index.
+describe('search and audit indexes (migration 120)', { skip, concurrency: 1 }, () => {
+  let pool: Pool;
+  const utils = { toISOString: (v: any) => (v ? new Date(v).toISOString() : v) };
+  let md5Prefix = '';
+  const planOf = async (text: string, values: unknown[]) => {
+    const client = await pool.connect();
+    try {
+      await client.query('SET enable_seqscan = off');
+      const { rows } = await client.query(`EXPLAIN ${text}`, values);
+      return rows.map((r: any) => r['QUERY PLAN']).join('\n');
+    } finally {
+      await client.query('RESET enable_seqscan').catch(() => {});
+      client.release();
+    }
+  };
+
+  before(async () => {
+    await ensureTestSchema(TEST_DATABASE_URL!);
+    pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    await pool.query(
+      `INSERT INTO artists (id, name, name_key)
+       SELECT 'p120-a' || i, 'Act ' || i, 'p120 ' || md5(i::text) FROM generate_series(1, 20000) i ON CONFLICT DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO users (id, username, password_hash, email, created_at, deleted_at)
+       SELECT 'p120-u' || i, 'p120-u' || i, 'x', 'p120-' || i || '@example.com', NOW(),
+         CASE WHEN i % 2 = 0 THEN NOW() END FROM generate_series(1, 200) i ON CONFLICT DO NOTHING`,
+    );
+    await pool.query(
+      `INSERT INTO audit_log (id, actor_id, action, target_type, target_id, created_at)
+       SELECT 'p120-l' || i, 'p120-actor' || (i % 50), 'x', CASE WHEN i % 2 = 0 THEN 'crew_member' ELSE 'user' END,
+         CASE WHEN i % 2 = 0 THEN 'p120-crew' || i || ':p120-m' || ((i / 2) % 50) ELSE 'p120-t' || i END, NOW()
+       FROM generate_series(1, 2000) i ON CONFLICT DO NOTHING`,
+    );
+    md5Prefix = (await pool.query("SELECT substr(md5('42'), 1, 10) AS p")).rows[0].p;
+    for (const t of ['artists', 'users', 'audit_log']) await pool.query(`ANALYZE ${t}`);
+  });
+
+  after(async () => {
+    await pool.query("DELETE FROM artists WHERE id LIKE 'p120-%'").catch(() => {});
+    await pool.query("DELETE FROM users WHERE id LIKE 'p120-%'").catch(() => {});
+    await pool.query("DELETE FROM audit_log WHERE id LIKE 'p120-%'").catch(() => {});
+    await pool.end();
+  });
+
+  const capture = async (run: (p: any) => Promise<unknown>) => {
+    const seen: { text: string; values: unknown[] }[] = [];
+    await run({ query: async (text: string, values: unknown[]) => { seen.push({ text, values }); return { rows: [] }; } });
+    return seen;
+  };
+
+  test('artists.list search uses the trigram index and finds the rows', async () => {
+    const needle = md5Prefix;
+    const [q] = await capture((p) => createArtistsStore(p).list({ query: needle, limit: 10 }));
+    assert.match(await planOf(q!.text, q!.values), /idx_artists_name_key_trgm/);
+    const found = await createArtistsStore(pool).list({ query: needle, limit: 10 });
+    assert.ok(found.some((a: any) => a.name === 'Act 42'), 'finds the artist whose key holds the fragment');
+  });
+
+  test('users.findDeletedByEmail uses the deleted-email index and finds the row', async () => {
+    const [q] = await capture((p) => createUsersStore(p, utils).findDeletedByEmail('p120-42@example.com'));
+    assert.match(await planOf(q!.text, q!.values), /idx_users_deleted_email/);
+    assert.equal((await createUsersStore(pool, utils).findDeletedByEmail('p120-42@example.com'))?.id, 'p120-u42');
+    assert.equal(await createUsersStore(pool, utils).findDeletedByEmail('p120-43@example.com'), null);
+  });
+
+  test('audit.listForUser uses the target and crew-member indexes and finds all three kinds', async () => {
+    const [q] = await capture((p) => createAuditStore(p, {}).listForUser('p120-m7'));
+    const plan = await planOf(q!.text, q!.values);
+    assert.match(plan, /idx_audit_log_target_id/, plan);
+    assert.match(plan, /idx_audit_log_crew_member_user/, plan);
+    assert.match(plan, /idx_audit_log_actor_(id|created_at)/, plan);
+    const rows = await createAuditStore(pool, {}).listForUser('p120-m7', 50);
+    assert.equal(rows.length, 20, '1000 crew_member rows, every 50th is member 7');
   });
 });

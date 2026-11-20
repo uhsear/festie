@@ -17,12 +17,12 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWTVerifyG
 import { Pool } from 'pg';
 import request from 'supertest';
 
+import { DELETED_USER_ID } from '../lib/db/stores/users';
 import { open } from '../lib/oauth/secretbox';
 import { sha256hex } from '../lib/oauth/verify';
 import { bootServer } from './_boot-server';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 const PASSWORD = 'oauth-test-password-pass';
@@ -443,6 +443,21 @@ describe('provider sign-in routes (database)', { skip, concurrency: 1 }, () => {
     assert.equal(res.status, 200, JSON.stringify(res.body));
     assert.equal(res.body.data.status, 'signed-in');
     assert.equal(res.body.data.reactivated, true);
+  });
+
+  test('an identity linked to the deleted-user placeholder never signs in', async () => {
+    const s = await server();
+    const subject = uniqueSubject();
+    await withPool(async (pool) => {
+      await pool.query(
+        "INSERT INTO users (id, username, display_name, created_at, deleted_at) VALUES ($1, '[deleted user]', 'Deleted user', NOW(), NOW() - INTERVAL '1 day') ON CONFLICT (id) DO UPDATE SET deleted_at = NOW() - INTERVAL '1 day'",
+        [DELETED_USER_ID],
+      );
+      await pool.query("INSERT INTO user_identities (user_id, provider, subject) VALUES ($1, 'google', $2)", [DELETED_USER_ID, subject]);
+    });
+    const res = await signIn(s, 'google', { idToken: await googleToken({ sub: subject }) });
+    assert.notEqual(res.status, 200, JSON.stringify(res.body));
+    assert.notEqual(res.body.data?.status, 'signed-in');
   });
 
   test('strips angle brackets from the Apple name instead of rejecting the sign-in', async () => {

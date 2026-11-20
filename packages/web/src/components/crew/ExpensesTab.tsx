@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '@festie/shared';
+import { fetchCrewExpenses, fetchCrewSettlementPlan, createCrewExpense, deleteCrewExpense } from '@festie/shared/services';
 import { useCrewStore } from '@festie/shared/stores';
 import type {
   SettleCrewExpenseRequest,
@@ -95,10 +95,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     refetch,
   } = useQuery<RawExpense[]>({
     queryKey: ['expenses', crewId],
-    queryFn: async () => {
-      const res = await api.get<RawExpense[]>(`/crews/${crewId}/expenses`);
-      return Array.isArray(res) ? res : [];
-    },
+    queryFn: () => fetchCrewExpenses(crewId),
     enabled: !!crewId,
   });
 
@@ -107,10 +104,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   // old raw-balance + Math.min() settle heuristic.
   const { data: plan } = useQuery<CrewSettlementPlan>({
     queryKey: ['settlement-plan', crewId],
-    queryFn: async () => {
-      const res = await api.get<CrewSettlementPlan>(`/crews/${crewId}/expenses/settlement-plan`);
-      return { balances: res?.balances ?? [], settlements: res?.settlements ?? [], currency: res?.currency };
-    },
+    queryFn: () => fetchCrewSettlementPlan(crewId),
     enabled: !!crewId,
   });
   const balances: Balance[] = plan?.balances ?? [];
@@ -118,7 +112,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   const currency = plan?.currency ?? 'USD';
 
   const addExpense = useMutation({
-    mutationFn: (payload: CreateCrewExpenseRequest) => api.post(`/crews/${crewId}/expenses`, payload),
+    mutationFn: (payload: CreateCrewExpenseRequest) => createCrewExpense(crewId, payload),
     onSuccess: (result, payload) => {
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {
@@ -226,7 +220,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   });
 
   const removeExpense = useMutation({
-    mutationFn: (id: string) => api.delete(`/crews/${crewId}/expenses/${id}`),
+    mutationFn: (id: string) => deleteCrewExpense(crewId, id),
     onSuccess: (result, id) => {
       const outcome = writeOutcomeOf(result);
       if (outcome === 'queued') {

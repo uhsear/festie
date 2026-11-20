@@ -3,12 +3,14 @@ import { parseJsonObject } from '../lib/db/connection';
 import { logCrewActivity } from '../lib/db/stores/activity';
 import { dropLivePosition } from '../lib/live-location-cache.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 
 export default function createCrewMemberRoutes(deps: any) {
   const {
     log,
     pool,
     userAuth,
+    adminAuth,
     setNoStore,
     sanitizeIdentifier,
     sendSuccess,
@@ -21,10 +23,12 @@ export default function createCrewMemberRoutes(deps: any) {
     validateQuery,
     validateParams,
     io,
+    emitter,
     redis,
     crewNotify,
     getRequestIp,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const { resolveCrewOwnership, serializeCrewWithMembers } = deps._crewHelpers;
 
@@ -62,7 +66,7 @@ export default function createCrewMemberRoutes(deps: any) {
     if (!io || typeof io.in !== 'function') return;
     const room = `crew:${crewId}`;
     try {
-      io.to(room).emit('location:peer-stopped', {
+      emitter.toRoom(room, 'location:peer-stopped', {
         _v: 1,
         crewId,
         userId: removedUserId,
@@ -113,14 +117,11 @@ export default function createCrewMemberRoutes(deps: any) {
   // ── GET /search-users — Admin: search users for crew add ──────
   router.get(
     '/search-users',
-    userAuth,
+    adminAuth,
     rateLimit(30, 'crew-user-search'),
     validateQuery(schemas.crewUserSearchQuery),
     async (req: any, res: any) => {
       try {
-        const isAdmin = await stores.roles.hasRole(req.user.userId, 'admin');
-        if (!isAdmin) return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
-
         setNoStore(res);
         const q = (req.validatedQuery.q || '').trim();
         if (!q || q.length < 1) return sendSuccess(res, []);
@@ -165,8 +166,8 @@ export default function createCrewMemberRoutes(deps: any) {
 
         await stores.crews.removeMember(crewId, req.user.userId);
 
-        if (io) {
-          io.to(`crew:${crewId}`).emit('crew:member-left', {
+        if (emitter) {
+          emitter.toCrew(crewId, 'crew:member-left', {
             crewId,
             userId: req.user.userId,
             username: req.user.username,
@@ -211,8 +212,8 @@ export default function createCrewMemberRoutes(deps: any) {
 
         await stores.crews.removeMember(crewId, targetUserId);
 
-        if (io) {
-          io.to(`crew:${crewId}`).emit('crew:member-kicked', {
+        if (emitter) {
+          emitter.toCrew(crewId, 'crew:member-kicked', {
             crewId,
             userId: targetUserId,
           });
@@ -290,10 +291,10 @@ export default function createCrewMemberRoutes(deps: any) {
         const crew = (await stores.crews.getById(crewId)) ?? resolved.crew;
         const members = await stores.crews.getMembers(crewId);
 
-        if (io) {
+        if (emitter) {
           const broadcastData = serializeCrewWithMembers(crew, members, null);
           delete broadcastData.inviteCode;
-          io.to(`crew:${crewId}`).emit('crew:updated', broadcastData);
+          emitter.toCrew(crewId, 'crew:updated', broadcastData);
         }
 
         const newOwner = members.find((m: any) => m.userId === targetUserId);
@@ -365,15 +366,12 @@ export default function createCrewMemberRoutes(deps: any) {
   // ── POST /:crewId/members — Admin: add any user to a crew ─────
   router.post(
     '/:crewId/members',
-    userAuth,
+    adminAuth,
     rateLimit(10, 'crew-add-member'),
     validateParams(schemas.crewIdParams),
     validate(schemas.crewAddMember),
     async (req: any, res: any) => {
       try {
-        const isAdmin = await stores.roles.hasRole(req.user.userId, 'admin');
-        if (!isAdmin) return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
-
         const crewId = sanitizeIdentifier(req.validatedParams.crewId, 100);
         if (!crewId) return sendError(res, 400, 'Invalid crew ID', ErrorCodes.INVALID_INPUT);
 
@@ -404,37 +402,17 @@ export default function createCrewMemberRoutes(deps: any) {
           return sendError(res, 400, 'Crew is full', ErrorCodes.MAX_LIMIT_REACHED);
         }
 
-        // The member is already added, so a failed audit write is logged, not returned.
-        // auditWritten then stays unset and the generic middleware still records the request.
-        if (stores.auditLog) {
-          try {
-            await stores.auditLog.insert({
-              actorType: 'admin',
-              actorId: req.user.userId,
-              action: AUDIT_ACTIONS.CREW_MEMBER_ADDED,
-              targetType: 'user',
-              targetId: targetUserId,
-              detailsJson: JSON.stringify({
-                crewId: crew.id,
-                crewName: crew.name,
-                targetUsername: targetUser.username,
-              }),
-              ip: getRequestIp(req),
-            });
-            res.locals.auditWritten = true;
-          } catch (err: any) {
-            log.warn('crew admin add member audit write failed', {
-              crewId: crew.id,
-              targetUserId,
-              error: err?.message,
-            });
-          }
-        }
+        await writeAdminAudit(req, res, {
+          action: AUDIT_ACTIONS.CREW_MEMBER_ADDED,
+          targetType: 'user',
+          targetId: targetUserId,
+          details: { crewId: crew.id, crewName: crew.name, targetUsername: targetUser.username },
+        });
 
         const members = await stores.crews.getMembers(crew.id);
 
-        if (io) {
-          io.to(`crew:${crew.id}`).emit('crew:member-joined', {
+        if (emitter) {
+          emitter.toCrew(crew.id, 'crew:member-joined', {
             crewId: crew.id,
             userId: targetUserId,
             username: targetUser.username,

@@ -39,6 +39,24 @@ export const FESTIVAL_ACTIONS = {
 } as const;
 export type FestivalAction = keyof typeof FESTIVAL_ACTIONS;
 
+// Gate for a route scoped to one crew. Mount after userAuth and validateParams(crewIdParams). Handlers
+// read the caller's membership row (for example `role`) from `req.membership`.
+export function crewMembership({ stores, log, sendError, ErrorCodes }: any) {
+  return async (req: any, res: any, next: any) => {
+    try {
+      const crewId = sanitizeIdentifier(req.validatedParams.crewId);
+      const membership = await stores.crews.getMember(crewId, req.user.userId);
+      if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
+      // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
+      req.membership = membership;
+      return next();
+    } catch (err: any) {
+      log.error('crew membership check failed', { error: err.message, crewId: req.validatedParams?.crewId });
+      return sendError(res, 500, 'Failed to verify crew membership', ErrorCodes.INTERNAL_ERROR);
+    }
+  };
+}
+
 /**
  * Build session + auth helpers bound to the supplied deps.
  */
@@ -50,6 +68,7 @@ export function createSessionHelpers({
   disconnectSocket,
   emitPresence,
   disconnectUserSockets,
+  fetchRevocationSockets,
   sendError,
   ErrorCodes,
 }: {
@@ -60,6 +79,7 @@ export function createSessionHelpers({
   disconnectSocket: any;
   emitPresence: any;
   disconnectUserSockets: any;
+  fetchRevocationSockets: any;
   sendError: any;
   ErrorCodes: any;
 }) {
@@ -79,7 +99,7 @@ export function createSessionHelpers({
     if (evictedHashes && evictedHashes.length > 0 && io) {
       const hashSet = new Set(evictedHashes);
       const presenceTargets = new Set<any>();
-      for (const socket of io.of('/').sockets.values()) {
+      for (const socket of await fetchRevocationSockets(io)) {
         if (!socket.data?.userSessionToken) continue;
         if (hashSet.has(hashSessionToken(socket.data.userSessionToken))) {
           disconnectSocket(socket, io, presenceTargets);
@@ -98,7 +118,7 @@ export function createSessionHelpers({
   async function invalidateUserSessions(userId: any, exceptToken: any = null) {
     await stores.sessions.deleteUserSessions(userId, exceptToken ? hashSessionToken(exceptToken) : null);
     const io = getIO();
-    if (io) disconnectUserSockets(userId, io, exceptToken);
+    if (io) await disconnectUserSockets(userId, io, exceptToken);
   }
 
   async function resolveUserRequestSession(req: any) {
@@ -108,15 +128,25 @@ export function createSessionHelpers({
     return { token, source, session };
   }
 
-  async function adminAuth(req: any, res: any, next: any) {
+  // Sends the 401 and returns null when there is no valid session; otherwise sets req.user and friends.
+  async function attachUserSession(req: any, res: any) {
     const resolved = await resolveUserRequestSession(req);
-    if (!resolved) return sendError(res, 401, 'Please log in', ErrorCodes.AUTH_REQUIRED);
+    if (!resolved) {
+      sendError(res, 401, 'Please log in', ErrorCodes.AUTH_REQUIRED);
+      return null;
+    }
     // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
     req.user = resolved.session;
     // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
     req.userToken = resolved.token;
     // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
     req.userAuthSource = resolved.source;
+    return resolved;
+  }
+
+  async function adminAuth(req: any, res: any, next: any) {
+    const resolved = await attachUserSession(req, res);
+    if (!resolved) return;
     const isAdmin = await stores.roles.hasRole(resolved.session.userId, 'admin');
     if (!isAdmin) return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
     // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
@@ -158,14 +188,8 @@ export function createSessionHelpers({
   }
 
   async function userAuth(req: any, res: any, next: any) {
-    const resolved = await resolveUserRequestSession(req);
-    if (!resolved) return sendError(res, 401, 'Please log in', ErrorCodes.AUTH_REQUIRED);
-    // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
-    req.user = resolved.session;
-    // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
-    req.userToken = resolved.token;
-    // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
-    req.userAuthSource = resolved.source;
+    const resolved = await attachUserSession(req, res);
+    if (!resolved) return;
     res.setHeader('Vary', 'Cookie');
     return next();
   }

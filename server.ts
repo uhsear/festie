@@ -6,16 +6,16 @@
  * Festie Server — v3.0.0
  *
  * Orchestrator: creates app context, wires middleware, routes, sockets, and shutdown.
- * See lib/app-context.js for infrastructure setup and utility functions.
+ * See lib/app-context/index.ts for infrastructure setup and utility functions.
  *
  * ARCHITECTURE:
  *   server.ts ─── orchestrator (this file)
- *   lib/app-context.js ─── config, DB, Redis, caches, auth, sessions, utilities
- *   lib/middleware.js ──── Express middleware (security, CORS, parsing, metrics, rate limits)
- *   lib/socket-setup.js ─ Socket.IO server, Redis adapter, push notifications
- *   lib/shutdown.js ───── background tasks (cleanup timers) + graceful shutdown
- *   routes/pages.js ───── static pages, password reset forms, SPA catch-all
- *   routes/*.js ────────── API route modules (auth, profiles, crews, etc.)
+ *   lib/app-context/index.ts ─── config, DB, Redis, caches, auth, sessions, utilities
+ *   lib/middleware.ts ──── Express middleware (security, CORS, parsing, metrics, rate limits)
+ *   lib/socket-setup.ts ─ Socket.IO server, Redis adapter, push notifications
+ *   lib/background-tasks.ts + lib/shutdown.ts ── cleanup timers; graceful shutdown
+ *   routes/pages.ts ───── static pages, password reset forms, SPA catch-all
+ *   routes/*.ts ────────── API route modules (auth, profiles, crews, etc.)
  */
 
 import 'dotenv/config';
@@ -103,7 +103,8 @@ import { createAppContext, buildContentSecurityPolicy, collectInlineHashes, load
 import { configureMiddleware } from './lib/middleware';
 import { buildFestivalMounts } from './lib/festival-mounts';
 import { configureSocketIO } from './lib/socket-setup';
-import { createBackgroundTasks, createCloseHandler } from './lib/shutdown';
+import { createBackgroundTasks } from './lib/background-tasks';
+import { createCloseHandler } from './lib/shutdown';
 import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
 import { createCrewNotifier } from './lib/notifications/crew-notify';
@@ -115,6 +116,7 @@ import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
 import createPageRoutes from './routes/pages';
 import { createLogger } from './lib/logger';
+import { isLeader, getWorkerId } from './lib/process-role';
 import {
   createMetrics,
   metricsMiddleware,
@@ -149,53 +151,23 @@ import createHealthRoutes from './routes/health';
 import createSocketHandlers from './routes/socket';
 import createDeepLinkRoutes from './routes/deep-links';
 
-import type { Request, Response, NextFunction } from 'express';
+import type { Express, Request, Response, NextFunction } from 'express';
+import type { AppContext, RouteDeps } from './lib/types/app-context';
 
 const metrics = createMetrics();
-const workerId =
-  process.env.NODE_APP_INSTANCE !== undefined
-    ? Number(process.env.NODE_APP_INSTANCE)
-    : process.env.PM_ID !== undefined
-      ? Number(process.env.PM_ID)
-      : 0;
+const workerId = getWorkerId();
 
 const log = createLogger();
 
-async function createFestieApp(overrides: any = {}) {
-  // 1. Create application context (config, DB, Redis, state, all utility functions)
-  const ctx = await createAppContext({ ...overrides, promMetrics: metrics });
-  const { config, state, pool, redis, cacheBus, avatarPool } = ctx;
+type SocketSetup = ReturnType<typeof configureSocketIO>;
 
-  // Re-run startup validation against the fully-resolved app-context config
-  // (overrides from tests/harness may have changed what the boot-time check saw).
-  validateStartupConfig(config);
-
-  // 2. Create Express app + configure all middleware
-  const app = express();
-  app.use(metricsMiddleware(metrics));
-  app.get('/metrics', metricsHandler(metrics));
-  const { inFlightRequests } = configureMiddleware(app, ctx);
-
-  // 3. Build deps object for route modules
-  const deps: any = {
-    express,
-    ...ctx,
-    io: null, // Set after Socket.IO creation
-    metrics: state.metrics,
-    promMetrics: metrics,
-  };
-
-  // 4. Create HTTP server + Socket.IO
-  const { server, io, emitter, notificationService } = configureSocketIO(app, ctx);
-  ctx.setIO(io);
-  deps.io = io;
-  deps.redis = redis;
-  deps.redisCircuitBreaker = ctx.redisCircuitBreaker;
-  deps.redisPresence = ctx.redisPresence;
-  deps.redisRateLimiter = ctx.redisRateLimiter;
-  deps.setSocketPresence = ctx.setSocketPresence;
-  deps.cacheBus = cacheBus;
-  deps.notificationService = notificationService;
+/**
+ * Builds the services that sit on top of Socket.IO (re-engagement, reminders, crew
+ * notifications, poll closing, check-ins, announcements) and registers each one on
+ * `ctx` (read by background tasks and shutdown) and on `deps` (read by route modules).
+ */
+function wireServices(ctx: AppContext, deps: RouteDeps, { emitter, notificationService }: SocketSetup) {
+  const { config, pool, redis } = ctx;
 
   // M3 re-engagement triggers (event-gated push+email): lineup_drop / crew_reformed / wrap_ready.
   // The executor does the real fan-out (deduped, opt-out/DND-respecting). When Redis
@@ -244,7 +216,6 @@ async function createFestieApp(overrides: any = {}) {
   const crewNotify = createCrewNotifier({ stores: ctx.stores, notificationService, log });
   const pollCloser = createPollCloser({
     stores: ctx.stores,
-    io,
     emitter,
     crewNotify,
     createOpaqueId: ctx.createOpaqueId,
@@ -270,7 +241,11 @@ async function createFestieApp(overrides: any = {}) {
   // Venue geocoding (OpenStreetMap Nominatim). Off under test so suites make no network calls.
   if (config.NODE_ENV !== 'test') deps.geocodeVenue = createVenueGeocoder({ log }).geocodeVenue;
 
-  // 5. Mount route modules
+  return { crewNotify, reengagementQueue };
+}
+
+/** Constructs every route module from `deps` and mounts it on the app. Returns the health readiness setter. */
+function mountRoutes(app: Express, ctx: AppContext, deps: RouteDeps) {
   const authRoutes = createAuthRoutes(deps);
   const emailAuthRoutes = createEmailAuthRoutes(deps);
   const oauthRoutes = createOAuthRoutes(deps);
@@ -345,8 +320,20 @@ async function createFestieApp(overrides: any = {}) {
   // Page routes (join, reset, static pages, SPA catch-all)
   app.use(createPageRoutes(deps));
 
-  // 6. Error handler with deduplication
-  const _errorFingerprints = new Map<string, any>();
+  return { setHealthReady };
+}
+
+interface ErrorFingerprint {
+  count: number;
+  firstSeen: number;
+  message: string;
+  path: string;
+}
+
+/** Installs the Sentry handler and the final Express error handler, with 5xx log deduplication. */
+function installErrorHandling(app: Express, ctx: AppContext) {
+  const { config, state } = ctx;
+  const _errorFingerprints = new Map<string, ErrorFingerprint>();
   const ERROR_DEDUP_WINDOW = config.ERROR_DEDUP_WINDOW;
   const ERROR_DEDUP_MAX = config.ERROR_DEDUP_MAX;
   const _errorDedupCleanup = setInterval(() => {
@@ -441,16 +428,18 @@ async function createFestieApp(overrides: any = {}) {
     ctx.sendError(res, status, message, code, details);
   }) as any);
 
-  // 7. Mount socket handlers
-  createSocketHandlers(deps);
+}
+
+/** Boot-time DB housekeeping: expired-token purge and venue coordinate backfill (leader instance only). */
+function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
+  const { pool } = ctx;
 
   // ── Startup token purge ──────────────────────────────────────────
   // Same leader-election guard as the periodic token cleanup in
-  // createBackgroundTasks (lib/shutdown.ts): PM2 sets NODE_APP_INSTANCE to
+  // createBackgroundTasks (lib/background-tasks.ts): PM2 sets NODE_APP_INSTANCE to
   // '0'..'N-1', so only instance 0 (or non-cluster mode where it's undefined)
   // runs the boot-time purge — avoids N workers issuing identical DELETEs.
-  const _purgeInstance = process.env.NODE_APP_INSTANCE;
-  const _isPurgeLeader = _purgeInstance === undefined || _purgeInstance === '0';
+  const _isPurgeLeader = isLeader();
   if (_isPurgeLeader) {
     Promise.all([
       pool.query('DELETE FROM password_reset_tokens WHERE expires_at < NOW()'),
@@ -489,11 +478,51 @@ async function createFestieApp(overrides: any = {}) {
       .catch((err: any) => log.warn('venue backfill failed', { error: err.message }));
   }
 
-  // 8. Background tasks (session/avatar/token cleanup, memory monitoring)
+}
+
+async function createFestieApp(overrides: any = {}) {
+  // 1. Create application context (config, DB, Redis, state, all utility functions)
+  const ctx = await createAppContext({ ...overrides, promMetrics: metrics });
+  const { config, state, pool, redis, cacheBus, avatarPool } = ctx;
+
+  // Re-run startup validation against the fully-resolved app-context config
+  // (overrides from tests/harness may have changed what the boot-time check saw).
+  validateStartupConfig(config);
+
+  // 2. Create Express app + configure all middleware
+  const app = express();
+  app.use(metricsMiddleware(metrics));
+  app.get('/metrics', metricsHandler(metrics));
+  const { inFlightRequests } = configureMiddleware(app, ctx);
+
+  // 3. Create HTTP server + Socket.IO
+  const socketSetup = configureSocketIO(app, ctx);
+  const { server, io, emitter, notificationService } = socketSetup;
+  ctx.setIO(io);
+
+  // 4. Build deps object for route modules
+  const deps: RouteDeps = {
+    express,
+    ...ctx,
+    io,
+    emitter,
+    metrics: state.metrics,
+    promMetrics: metrics,
+    notificationService,
+  };
+
+  // 5. Services, routes, error handling, socket handlers, startup jobs
+  const { crewNotify, reengagementQueue } = wireServices(ctx, deps, socketSetup);
+  const { setHealthReady } = mountRoutes(app, ctx, deps);
+  installErrorHandling(app, ctx);
+  createSocketHandlers(deps);
+  runStartupJobs(ctx, deps);
+
+  // 6. Background tasks (session/avatar/token cleanup, memory monitoring)
   createBackgroundTasks(ctx, { io });
   startMetricsSampler(metrics, { pool, io }, 10_000);
 
-  // 9. Graceful shutdown handler
+  // 7. Graceful shutdown handler
   const close = createCloseHandler({
     server,
     io,

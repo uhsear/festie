@@ -11,7 +11,7 @@ import { io as createSocketClient, type Socket } from 'socket.io-client';
 import { Pool } from 'pg';
 
 import { createFestivalPlanner } from '../server';
-import { ensureTestSchema as ensureTestSchemaFor } from './_test-schema';
+import { ensureTestSchema as ensureTestSchemaFor, requireTestDatabaseUrl } from './_test-schema';
 import { bootServer } from './_boot-server';
 import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
@@ -29,9 +29,7 @@ const AVATAR_FIXTURE = Buffer.from(
 );
 
 // SAFETY: Only use TEST_DATABASE_URL — never fall back to DATABASE_URL to protect production data
-const TEST_DATABASE_URL: string = process.env.TEST_DATABASE_URL!;
-if (!TEST_DATABASE_URL) { console.error('ERROR: TEST_DATABASE_URL env var required. Set it in .env. (Never falls back to DATABASE_URL to protect production data.)'); process.exit(1); }
-if (!TEST_DATABASE_URL.includes('_test')) { console.error('SAFETY: TEST_DATABASE_URL must contain "_test" in the database name to prevent accidental production wipe.'); process.exit(1); }
+const TEST_DATABASE_URL: string = requireTestDatabaseUrl();
 
 let testDbReady = false;
 

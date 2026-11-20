@@ -7,11 +7,10 @@ import { after, before, beforeEach, describe, test } from 'node:test';
 import { Pool } from 'pg';
 
 import { createAnnouncementsStore } from '../lib/db/stores/announcements.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // SQL of the festival announcements store (migration 091). Needs the Docker test DB.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '091_festival_announcements.sql'),
   'utf8',

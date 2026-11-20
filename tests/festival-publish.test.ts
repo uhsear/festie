@@ -17,9 +17,8 @@ import { after, afterEach, describe, mock, test } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import createFestivalsRoutes from '../routes/festivals.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const h: any = skip ? null : await import('./_integration-helpers');
 
 const servers: any[] = [];
@@ -105,12 +104,12 @@ describe('set times: PUT and publish send no festival-wide alert', () => {
       rateLimit: pass,
       stores: {
         festivals: {
+          countOnSets: async () => 0,
           update: mock.fn(async (id: string, data: any) => ({ ...existing, id, ...data })),
           publish: mock.fn(async () => ({ publishedAt: '2026-11-01T00:00:00.000Z', slug: 'fest-2026' })),
         },
         profiles: { pickersBySet },
         timeReleases: { releasedDates: mock.fn(async () => new Set(released)) },
-        pool: { query: async () => ({ rows: [{ count: '0' }] }) },
       },
       emitter: { festivalCreated: mock.fn(), festivalUpdated: mock.fn(), scheduleChanged: mock.fn() },
       schemas: {},

@@ -10,10 +10,15 @@
 
 import http from 'http';
 
+import { loadConfig } from './config.js';
 import { timingSafeEqualString } from './crypto-auth.js';
 import { createLogger } from './logger.js';
+import { getWorkerId } from './process-role.js';
 
 const log = createLogger('metrics');
+
+let _loaded: ReturnType<typeof loadConfig> | undefined;
+const cfg = () => (_loaded ??= loadConfig());
 
 let client: any = null;
 let available = false;
@@ -50,10 +55,7 @@ function createMetrics() {
   }
 
   const registry = new client.Registry();
-  const workerId = process.env.NODE_APP_INSTANCE !== undefined
-    ? String(process.env.NODE_APP_INSTANCE)
-    : (process.env.PM_ID !== undefined ? String(process.env.PM_ID) : '0');
-  registry.setDefaultLabels({ service: 'festie', worker: workerId });
+  registry.setDefaultLabels({ service: 'festie', worker: String(getWorkerId()) });
   client.collectDefaultMetrics({ register: registry, prefix: 'festie_' });
 
   const httpHistogram = new client.Histogram({
@@ -160,7 +162,7 @@ function createMetrics() {
   });
   registry.registerMetric(reengagementQueueDepthGauge);
 
-  // --- in-process background jobs (lib/shutdown.ts leader timers), via recordJobRun ---
+  // --- in-process background jobs (lib/background-tasks.ts leader timers), via recordJobRun ---
 
   const jobRunsCounter = new client.Counter({
     name: 'festie_job_runs_total',
@@ -262,7 +264,7 @@ function metricsHandler(metrics: any) {
  * reachable through the tunnel.
  */
 function hasValidMetricsToken(req: any) {
-  const configured = process.env.METRICS_TOKEN;
+  const configured = cfg().METRICS_TOKEN;
   if (!configured) return false;
   const header = req?.headers?.authorization;
   if (typeof header !== 'string' || !header.startsWith('Bearer ')) return false;
@@ -284,7 +286,9 @@ function startMetricsSampler(metrics: any, { pool, io }: any = {}, intervalMs = 
       if (io && io.engine && typeof io.engine.clientsCount === 'number') {
         metrics.socketGauge.set(io.engine.clientsCount);
       }
-    } catch { /* ignore sampler errors */ }
+    } catch (err: any) {
+      log.warn('pg/socket gauge sampler failed', { error: err?.message });
+    }
   };
   sample();
   const handle = setInterval(sample, intervalMs);
@@ -352,13 +356,19 @@ async function startReengagementQueueSampler(
         bullQueue.getDelayedCount(),
       ]);
       metrics.reengagementQueueDepthGauge.set(waiting + delayed);
-    } catch { /* ignore sampler errors */ }
+    } catch (err: any) {
+      log.warn('reengagement queue depth sampler failed', { error: err?.message });
+    }
   };
   await sample();
   const handle = setInterval(sample, intervalMs);
   if (typeof handle.unref === 'function') handle.unref();
   return () => clearInterval(handle);
 }
+
+const __resetMetricsConfigForTests = () => {
+  _loaded = undefined;
+};
 
 export {
   createMetrics,
@@ -368,4 +378,5 @@ export {
   startReengagementQueueSampler,
   recordJobRun,
   startMetricsListener,
+  __resetMetricsConfigForTests,
 };

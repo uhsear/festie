@@ -2,9 +2,10 @@ import { Router } from 'express';
 import { getToken } from '../lib/spotify.js';
 
 export default function createSpotifyRoutes(deps: any) {
-  const { config, log, rateLimit, sendSuccess, sendError, ErrorCodes } = deps;
+  const { config, log, rateLimit, sendSuccess, sendError, ErrorCodes, schemas, validateParams } = deps;
   const router = Router();
 
+  // shortcut: per-process cache, so N instances fetch up to N times per TTL; move to Redis if the app scales out.
   const previewCache = new Map();
   const CACHE_TTL = config.SPOTIFY_CACHE_TTL_MS;
   const MAX_CACHE_SIZE = config.SPOTIFY_CACHE_MAX;
@@ -48,29 +49,16 @@ export default function createSpotifyRoutes(deps: any) {
   }
 
   // PUBLIC — no userAuth; rate-limited 60/min per IP.
-  router.get('/spotify/preview/:setId', rateLimit(60, 'spotify-preview'), async (req: any, res: any) => {
+  router.get('/spotify/preview/:setId', rateLimit(60, 'spotify-preview'), validateParams(schemas.setIdParams), async (req: any, res: any) => {
     try {
-      const { setId } = req.params;
-      const { pool } = deps.stores;
-
+      const { setId } = req.validatedParams;
       const cached = getCachedPreview(setId);
       if (cached) return sendSuccess(res, cached);
 
-      const result = await pool.query(
-        `
-  SELECT
-    fs.id,
-    fs.artists
-  FROM
-    festival_sets fs
-    JOIN festivals f ON fs.festival_id = f.id
-    AND f.deleted_at IS NULL
-  WHERE
-    fs.id = $1
-`, [setId]);
-      if (!result.rows.length) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
+      const found = await deps.stores.festivals.getSetArtists(setId);
+      if (!found) return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
 
-      const artists = result.rows[0].artists || [];
+      const artists = found.artists || [];
       if (!artists.length) {
         const r = { embedType: null };
         setCachedPreview(setId, r);

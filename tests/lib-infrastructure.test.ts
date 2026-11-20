@@ -9,6 +9,7 @@ import {
   propagateTraceId,
   augmentWithTraceId,
 } from '../lib/tracing.js';
+import { isLeader, getWorkerId } from '../lib/process-role.js';
 
 // ---------------------------------------------------------------------------
 // 1. lib/tracing.js — pure functions, no mocking needed
@@ -393,9 +394,10 @@ describe('lib/sentry.js', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. lib/shutdown.js — createBackgroundTasks + createCloseHandler
+// 3. lib/background-tasks.js + lib/shutdown.js — createBackgroundTasks + createCloseHandler
 // ---------------------------------------------------------------------------
-import { createBackgroundTasks, createCloseHandler } from '../lib/shutdown.js';
+import { createBackgroundTasks } from '../lib/background-tasks.js';
+import { createCloseHandler } from '../lib/shutdown.js';
 
 describe('lib/shutdown.js', () => {
 
@@ -517,7 +519,7 @@ describe('lib/shutdown.js', () => {
         pool: { end: mock.fn(async () => {}) },
         redis: { disconnect: mock.fn() },
         cacheBus: { close: mock.fn(async () => {}) },
-        emitter: { flushAll: mock.fn() },
+        emitter: { flushAll: mock.fn(), broadcast: (event: string, payload: unknown) => deps.io.emit(event, payload) },
         clearPresenceTimers: mock.fn(),
         avatarPool: { terminate: mock.fn(async () => {}) },
         inFlightRequests: { count: 0 },
@@ -823,5 +825,36 @@ describe('lib/socket-setup.js', async () => {
       (c: any) => typeof c.arguments[0] === 'string' && c.arguments[0].includes('redis adapter')
     );
     assert.ok(hasAdapterWarn, 'expected warning about redis adapter failure');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// lib/process-role.ts — leader election and worker id, env only
+// ---------------------------------------------------------------------------
+
+describe('lib/process-role.ts', () => {
+  it('leads when NODE_APP_INSTANCE is unset or 0', () => {
+    assert.equal(isLeader({}), true);
+    assert.equal(isLeader({ NODE_APP_INSTANCE: '0' }), true);
+  });
+
+  it('does not lead on instance 1 or higher', () => {
+    assert.equal(isLeader({ NODE_APP_INSTANCE: '1' }), false);
+    assert.equal(isLeader({ NODE_APP_INSTANCE: '3' }), false);
+  });
+
+  it('still leads with Redis disabled', () => {
+    assert.equal(isLeader({ REDIS_ENABLED: 'false' }), true);
+    assert.equal(isLeader({ REDIS_ENABLED: '0', NODE_APP_INSTANCE: '0' }), true);
+  });
+
+  it('still leads when Redis is unreachable', () => {
+    assert.equal(isLeader({ REDIS_ENABLED: 'true', REDIS_URL: 'redis://127.0.0.1:1' }), true);
+  });
+
+  it('derives worker id from NODE_APP_INSTANCE, then PM_ID, then 0', () => {
+    assert.equal(getWorkerId({ NODE_APP_INSTANCE: '2', PM_ID: '5' }), 2);
+    assert.equal(getWorkerId({ PM_ID: '5' }), 5);
+    assert.equal(getWorkerId({}), 0);
   });
 });

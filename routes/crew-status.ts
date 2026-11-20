@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 
 /**
  * Crew member status (M5: last-synced "on my way / ETA to [meeting point]").
@@ -29,8 +30,9 @@ export default function createCrewStatusRoutes(deps: any) {
     schemas,
     validate,
     validateParams,
-    io,
+    emitter,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
 
@@ -40,12 +42,10 @@ export default function createCrewStatusRoutes(deps: any) {
     userAuth,
     rateLimit(120, 'crew-status-list'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const userId = req.user.userId;
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const statuses = await stores.crewStatus.listByCrew(crewId);
         return sendSuccess(res, { statuses });
       } catch (err: any) {
@@ -65,14 +65,13 @@ export default function createCrewStatusRoutes(deps: any) {
     rateLimit(60, 'crew-status-update'),
     validateParams(schemas.crewIdParams),
     validate(schemas.crewStatus),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const userId = req.user.userId;
         const { status, targetMeetingPointId, etaMinutes, note, position, capturedAt } = req.validatedBody;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         // 055: optional offline presence breadcrumb. NOT live GPS — a last-known
         // coord the member captured (often offline) that syncs on the next blip.
@@ -96,7 +95,7 @@ export default function createCrewStatusRoutes(deps: any) {
         // Broadcast to the crew room so any open client patches in place. The
         // payload IS the upserted row (snake_case) so the client can render it
         // with honest staleness from `updated_at`.
-        io.to('crew:' + crewId).emit('crew:status-updated', { status: row });
+        emitter.toCrew(crewId, 'crew:status-updated', { status: row });
         return sendSuccess(res, { status: row });
       } catch (err: any) {
         log.error('update crew status error', { error: err.message });

@@ -1,4 +1,8 @@
 import type { Crew, CrewMember } from '../lib/types';
+import type { Request, Response } from 'express';
+import type { z } from 'zod';
+import type { RouteDeps } from '../lib/types';
+import type { Params, Query } from '../lib/types/app-context';
 
 import { DEFAULT_CREW_MAX_MEMBERS, MAX_CREWS_PER_FESTIVAL } from '../lib/constants.js';
 import { planReformRoster } from '../lib/crew-reform.js';
@@ -49,7 +53,7 @@ type SerializedCrewMember = Pick<CrewMember, 'userId' | 'username' | 'name' | 'r
   joinedAt?: string;
 };
 
-export default function createCrewRoutes(deps: any) {
+export default function createCrewRoutes(deps: RouteDeps) {
   const {
     express,
     log,
@@ -72,6 +76,7 @@ export default function createCrewRoutes(deps: any) {
     validateQuery,
     validateParams,
     io,
+    emitter,
     crewNotify,
   } = deps;
 
@@ -84,7 +89,7 @@ export default function createCrewRoutes(deps: any) {
    * Resolve a crew by ID and verify the requesting user is the owner.
    * Returns { crew, membership } on success, or null if an error response was already sent.
    */
-  async function resolveCrewOwnership(res: any, crewId: any, userId: any, actionLabel: any) {
+  async function resolveCrewOwnership(res: Response, crewId: any, userId: any, actionLabel: any) {
     const crew = await stores.crews.getById(crewId);
     if (!crew) {
       sendError(res, 404, 'Crew not found', ErrorCodes.NOT_FOUND);
@@ -123,8 +128,8 @@ export default function createCrewRoutes(deps: any) {
         delete s.data.crewMembershipUpdateCount;
         s.leave(room);
       }
-    } catch (error: any) {
-      log.warn('crew room full eviction failed', { error: error?.message, crewId });
+    } catch (error) {
+      log.warn('crew room full eviction failed', { error: (error as NodeJS.ErrnoException)?.message, crewId });
     }
   }
 
@@ -198,17 +203,17 @@ export default function createCrewRoutes(deps: any) {
     '/join-preview/:inviteCode',
     rateLimit(30, 'crew-join-preview'),
     validateParams(schemas.crewInviteCodeParams),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const result = await loadInvitePreview({ stores, getFestivalById }, req.validatedParams.inviteCode);
+        const result = await loadInvitePreview({ stores, getFestivalById }, (req.validatedParams as Params).inviteCode);
         if (result.status === 'expired') return sendError(res, 410, 'Invite code has expired', ErrorCodes.NOT_FOUND);
         if (result.status === 'invalid') return sendError(res, 404, 'Invalid invite code', ErrorCodes.NOT_FOUND);
         if (result.status === 'locked')
           return sendError(res, 403, "This crew isn't taking new members.", ErrorCodes.CREW_LOCKED);
         res.setHeader('Cache-Control', 'no-store');
         return sendSuccess(res, result.preview);
-      } catch (error: any) {
-        log.error('crew join preview failed', { error: error.message });
+      } catch (error) {
+        log.error('crew join preview failed', { error: (error as NodeJS.ErrnoException).message });
         return sendError(res, 500, 'Failed to load invite', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -245,7 +250,7 @@ export default function createCrewRoutes(deps: any) {
   // Returns the refusal to send, or null when the create may go ahead. The
   // caller's festival profile is not checked here: POST / creates it after this.
   async function validateCrewCreation(
-    req: any,
+    req: Request,
     cleanFestivalId: any,
   ): Promise<{ status: number; code: string; message: string } | null> {
     const { rows: festivalRows } = await pool.query('SELECT 1 FROM festivals WHERE id = $1 AND deleted_at IS NULL', [
@@ -270,9 +275,9 @@ export default function createCrewRoutes(deps: any) {
   }
 
   // ── POST / — Create a crew ──────────────────────────────────────
-  router.post('/', userAuth, rateLimit(10, 'crew-create'), validate(schemas.crewCreate), async (req: any, res: any) => {
+  router.post('/', userAuth, rateLimit(10, 'crew-create'), validate(schemas.crewCreate), async (req: Request, res: Response) => {
     try {
-      const { name, festivalId, totemName, totemEmoji } = req.validatedBody;
+      const { name, festivalId, totemName, totemEmoji } = req.validatedBody as z.infer<typeof schemas.crewCreate>;
       const cleanName = sanitizeString(name, 60);
       const cleanFestivalId = sanitizeIdentifier(festivalId, 100);
       const cleanTotemName = totemName !== undefined ? sanitizeString(totemName, 40) : undefined;
@@ -327,8 +332,8 @@ export default function createCrewRoutes(deps: any) {
         // via ON DELETE CASCADE). Cleanup failure still returns 500.
         try {
           await stores.crews.delete(crewId);
-        } catch (cleanupError: any) {
-          log.error('crew creation cleanup failed', { crewId, error: cleanupError.message });
+        } catch (cleanupError) {
+          log.error('crew creation cleanup failed', { crewId, error: (cleanupError as NodeJS.ErrnoException).message });
         }
         return sendError(res, 500, 'Failed to create crew', ErrorCodes.INTERNAL_ERROR);
       }
@@ -336,8 +341,8 @@ export default function createCrewRoutes(deps: any) {
       log.info('crew:created', { crewId, festivalId: cleanFestivalId, userId: req.user.userId });
       res.status(201);
       return sendSuccess(res, serializeCrewWithMembers(crew, members, req.user.userId));
-    } catch (error: any) {
-      log.error('crew create failed', { error: error.message, userId: req.user.userId });
+    } catch (error) {
+      log.error('crew create failed', { error: (error as NodeJS.ErrnoException).message, userId: req.user.userId });
       return sendError(res, 500, 'Failed to create crew', ErrorCodes.INTERNAL_ERROR);
     }
   });
@@ -363,10 +368,10 @@ export default function createCrewRoutes(deps: any) {
     rateLimit(10, 'crew-reform'),
     validateParams(schemas.crewIdParams),
     validate(schemas.crewReform),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const sourceCrewId = sanitizeIdentifier(req.validatedParams.crewId, 100);
-        const targetFestivalId = sanitizeIdentifier(req.validatedBody.targetFestivalId, 100);
+        const sourceCrewId = sanitizeIdentifier((req.validatedParams as Params).crewId, 100);
+        const targetFestivalId = sanitizeIdentifier((req.validatedBody as z.infer<typeof schemas.crewReform>).targetFestivalId, 100);
         if (!sourceCrewId) return sendError(res, 400, 'Invalid crew ID', ErrorCodes.INVALID_INPUT);
         if (!targetFestivalId) return sendError(res, 400, 'Target festival ID required', ErrorCodes.MISSING_FIELD);
 
@@ -432,7 +437,7 @@ export default function createCrewRoutes(deps: any) {
               reformedFrom: sourceCrewId,
             });
             newCrew = await stores.crews.getById(newCrewId);
-          } catch (persistErr: any) {
+          } catch (persistErr) {
             // Lost the reform race: a concurrent/retried request already inserted
             // the crew for this (createdBy, festivalId, reformedFrom) and won the
             // unique key on crews_reform_idem_uidx (migration 061), so our INSERT
@@ -442,7 +447,7 @@ export default function createCrewRoutes(deps: any) {
             // 500ing. Any non-23505 error (or a 23505 with no matching winner,
             // e.g. an unrelated unique collision) is unexpected — rethrow to the
             // outer 500 handler.
-            if (persistErr?.code !== '23505') throw persistErr;
+            if ((persistErr as NodeJS.ErrnoException)?.code !== '23505') throw persistErr;
             const raced = await stores.crews.listByUserAndFestival(req.user.userId, targetFestivalId);
             newCrew = (raced || []).find(
               (c: any) => c.reformedFrom === sourceCrewId && c.createdBy === req.user.userId,
@@ -483,8 +488,8 @@ export default function createCrewRoutes(deps: any) {
             const result = await stores.crews.addMember({ crewId: newCrew.id, userId: uid, role: 'member' }, memberCap);
             if (result === 'full') skippedFull.push(uid);
             else added.push(uid);
-          } catch (addErr: any) {
-            log.warn('crew reform auto-add skipped', { crewId: newCrew.id, userId: uid, error: addErr?.message });
+          } catch (addErr) {
+            log.warn('crew reform auto-add skipped', { crewId: newCrew.id, userId: uid, error: (addErr as Error)?.message });
           }
         }
 
@@ -493,8 +498,8 @@ export default function createCrewRoutes(deps: any) {
 
         // Members are still in the SOURCE crew room (nobody can have joined the
         // brand-new room yet), so target both; the new room covers a re-run.
-        if (io) {
-          io.to(`crew:${sourceCrewId}`).to(`crew:${newCrew.id}`).emit('crew:reformed', {
+        if (emitter) {
+          emitter.toRoom([`crew:${sourceCrewId}`, `crew:${newCrew.id}`], 'crew:reformed', {
             crewId: newCrew.id,
             reformedFrom: sourceCrewId,
             festivalId: targetFestivalId,
@@ -534,7 +539,7 @@ export default function createCrewRoutes(deps: any) {
               invitedUserIds: toInvite,
               inviteUrl,
             })
-            .catch((err: any) => log.warn('crew_reformed notify failed', { error: err?.message }));
+            .catch((err: Error) => log.warn('crew_reformed notify failed', { error: err?.message }));
         }
 
         const serialized = serializeCrewWithMembers(finalCrew, finalMembers, req.user.userId);
@@ -549,8 +554,8 @@ export default function createCrewRoutes(deps: any) {
             skippedFull,
           },
         });
-      } catch (error: any) {
-        log.error('crew reform failed', { error: error.message, crewId: req.validatedParams?.crewId });
+      } catch (error) {
+        log.error('crew reform failed', { error: (error as NodeJS.ErrnoException).message, crewId: (req.validatedParams as Params)?.crewId });
         return sendError(res, 500, 'Failed to reform crew', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -562,11 +567,11 @@ export default function createCrewRoutes(deps: any) {
     userAuth,
     rateLimit(120, 'crew-list'),
     validateQuery(schemas.crewListQuery),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
         setNoStore(res);
-        const festivalId = req.validatedQuery.festivalId
-          ? sanitizeIdentifier(req.validatedQuery.festivalId, 100)
+        const festivalId = (req.validatedQuery as Query).festivalId
+          ? sanitizeIdentifier((req.validatedQuery as Query).festivalId, 100)
           : null;
 
         let crews;
@@ -585,8 +590,8 @@ export default function createCrewRoutes(deps: any) {
           return serializeCrewWithMembers(crew, members, req.user.userId);
         });
         return sendSuccess(res, result);
-      } catch (error: any) {
-        log.error('crew list failed', { error: error.message, userId: req.user.userId });
+      } catch (error) {
+        log.error('crew list failed', { error: (error as NodeJS.ErrnoException).message, userId: req.user.userId });
         return sendError(res, 500, 'Failed to list crews', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -598,10 +603,10 @@ export default function createCrewRoutes(deps: any) {
     userAuth,
     rateLimit(120, 'crew-get'),
     validateParams(schemas.crewIdParams),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
         setNoStore(res);
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId, 100);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId, 100);
         if (!crewId) return sendError(res, 400, 'Invalid crew ID', ErrorCodes.INVALID_INPUT);
 
         const crew = await stores.crews.getById(crewId);
@@ -612,8 +617,8 @@ export default function createCrewRoutes(deps: any) {
 
         const members = await stores.crews.getMembers(crewId);
         return sendSuccess(res, serializeCrewWithMembers(crew, members, req.user.userId));
-      } catch (error: any) {
-        log.error('crew get failed', { error: error.message, crewId: req.validatedParams?.crewId });
+      } catch (error) {
+        log.error('crew get failed', { error: (error as NodeJS.ErrnoException).message, crewId: (req.validatedParams as Params)?.crewId });
         return sendError(res, 500, 'Failed to get crew', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -626,41 +631,42 @@ export default function createCrewRoutes(deps: any) {
     rateLimit(10, 'crew-update'),
     validateParams(schemas.crewIdParams),
     validate(schemas.crewUpdate),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId, 100);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId, 100);
         if (!crewId) return sendError(res, 400, 'Invalid crew ID', ErrorCodes.INVALID_INPUT);
 
         const resolved = await resolveCrewOwnership(res, crewId, req.user.userId, 'update');
         if (!resolved) return;
         const { crew } = resolved;
 
+        const body = req.validatedBody as z.infer<typeof schemas.crewUpdate>;
         const updateData: any = { id: crewId };
-        if (req.validatedBody.name !== undefined) {
-          updateData.name = sanitizeString(req.validatedBody.name, 60);
+        if (body.name !== undefined) {
+          updateData.name = sanitizeString(body.name, 60);
         } else {
           updateData.name = crew.name;
         }
-        if (req.validatedBody.maxMembers !== undefined) {
-          updateData.maxMembers = req.validatedBody.maxMembers;
+        if (body.maxMembers !== undefined) {
+          updateData.maxMembers = body.maxMembers;
         } else {
           updateData.maxMembers = crew.maxMembers;
         }
         // Totem: keep existing when the field is omitted (undefined → unchanged),
         // mirroring name/maxMembers above. The store only writes a column when
         // its value is supplied, so passing the prior value is a harmless no-op.
-        if (req.validatedBody.totemName !== undefined) {
-          updateData.totemName = sanitizeString(req.validatedBody.totemName, 40);
+        if (body.totemName !== undefined) {
+          updateData.totemName = sanitizeString(body.totemName, 40);
         } else {
-          updateData.totemName = crew.totemName ?? null;
+          updateData.totemName = (crew as { totemName?: string | null }).totemName ?? null;
         }
-        if (req.validatedBody.totemEmoji !== undefined) {
-          updateData.totemEmoji = sanitizeString(req.validatedBody.totemEmoji, 16);
+        if (body.totemEmoji !== undefined) {
+          updateData.totemEmoji = sanitizeString(body.totemEmoji, 16);
         } else {
-          updateData.totemEmoji = crew.totemEmoji ?? null;
+          updateData.totemEmoji = (crew as { totemEmoji?: string | null }).totemEmoji ?? null;
         }
         // Lock: only written when sent. It never touches invite_code or invite_expires_at.
-        const inviteLocked = req.validatedBody.inviteLocked;
+        const inviteLocked = body.inviteLocked;
         if (inviteLocked !== undefined) updateData.inviteLocked = inviteLocked;
 
         await stores.crews.update(updateData);
@@ -670,16 +676,16 @@ export default function createCrewRoutes(deps: any) {
         const updated = await stores.crews.getById(crewId);
         const members = await stores.crews.getMembers(crewId);
 
-        if (io) {
+        if (emitter) {
           const broadcastData = serializeCrewWithMembers(updated, members, null);
           delete broadcastData.inviteCode;
-          io.to(`crew:${crewId}`).emit('crew:updated', broadcastData);
+          emitter.toCrew(crewId, 'crew:updated', broadcastData);
         }
 
         log.info('crew:updated', { crewId, userId: req.user.userId });
         return sendSuccess(res, serializeCrewWithMembers(updated, members, req.user.userId));
-      } catch (error: any) {
-        log.error('crew update failed', { error: error.message, crewId: req.validatedParams?.crewId });
+      } catch (error) {
+        log.error('crew update failed', { error: (error as NodeJS.ErrnoException).message, crewId: (req.validatedParams as Params)?.crewId });
         return sendError(res, 500, 'Failed to update crew', ErrorCodes.INTERNAL_ERROR);
       }
     },
@@ -691,9 +697,9 @@ export default function createCrewRoutes(deps: any) {
     userAuth,
     rateLimit(5, 'crew-delete'),
     validateParams(schemas.crewIdParams),
-    async (req: any, res: any) => {
+    async (req: Request, res: Response) => {
       try {
-        const crewId = sanitizeIdentifier(req.validatedParams.crewId, 100);
+        const crewId = sanitizeIdentifier((req.validatedParams as Params).crewId, 100);
         if (!crewId) return sendError(res, 400, 'Invalid crew ID', ErrorCodes.INVALID_INPUT);
 
         const resolved = await resolveCrewOwnership(res, crewId, req.user.userId, 'delete');
@@ -701,8 +707,8 @@ export default function createCrewRoutes(deps: any) {
         const { crew } = resolved;
 
         const members = await stores.crews.getMembers(crewId);
-        if (io)
-          io.to(`crew:${crewId}`).emit('crew:deleted', {
+        if (emitter)
+          emitter.toCrew(crewId, 'crew:deleted', {
             crewId,
             festivalId: crew.festivalId,
             deletedBy: req.user.userId,
@@ -727,8 +733,8 @@ export default function createCrewRoutes(deps: any) {
 
         log.info('crew:deleted', { crewId, festivalId: crew.festivalId, userId: req.user.userId });
         return sendSuccess(res, { success: true });
-      } catch (error: any) {
-        log.error('crew delete failed', { error: error.message, crewId: req.validatedParams?.crewId });
+      } catch (error) {
+        log.error('crew delete failed', { error: (error as NodeJS.ErrnoException).message, crewId: (req.validatedParams as Params)?.crewId });
         return sendError(res, 500, 'Failed to delete crew', ErrorCodes.INTERNAL_ERROR);
       }
     },

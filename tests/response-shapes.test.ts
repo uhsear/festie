@@ -3,11 +3,9 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import request from 'supertest';
 import { createFestivalPlanner } from '../server';
-import { ensureTestSchema } from './_test-schema';
+import { ensureTestSchema, requireTestDatabaseUrl } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-if (!TEST_DATABASE_URL) { console.error('ERROR: TEST_DATABASE_URL required'); process.exit(1); }
-if (!TEST_DATABASE_URL.includes('_test')) { console.error('SAFETY: TEST_DATABASE_URL must contain "_test"'); process.exit(1); }
+const TEST_DATABASE_URL = requireTestDatabaseUrl();
 
 // Shape validators — assert field names and types, not values
 function assertEnvelopeSuccess(body: any) {

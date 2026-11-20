@@ -100,3 +100,31 @@ export function canQueueOnEdgeError(status: number | undefined, method: string):
   if (verb === 'POST') return EDGE_NOT_PROCESSED.has(status as number);
   return verb === 'PUT' || verb === 'PATCH' || verb === 'DELETE';
 }
+
+/** Cap on transient-failure replay attempts per queued write; at the cap the write is surfaced and dropped. */
+export const MAX_RETRIES = 5;
+
+/** Cap on edge-5xx replay attempts per entry; a higher bar than MAX_RETRIES because an outage is not the entry's fault, but one poison entry must not block the queue forever. */
+export const MAX_EDGE_RETRIES = 5;
+
+/**
+ * What a replay failure means for a queued write.
+ *  - hold-network / hold-edge: the origin is unreachable; keep the entry, stop the drain.
+ *  - rate-limited: transient; wait out Retry-After, no retry consumed.
+ *  - permanent: surface to the user and drop (4xx incl. 409, edge retries or MAX_RETRIES exhausted).
+ *  - transient: keep the entry, count one retry.
+ */
+export type ReplayOutcome = 'hold-network' | 'hold-edge' | 'rate-limited' | 'permanent' | 'transient';
+
+/** Classify a thrown replay error. Pure: the caller owns pacing, storage and surfacing. */
+export function classifyReplayFailure(
+  err: unknown,
+  attempts: { retries?: number; edgeRetries?: number },
+): ReplayOutcome {
+  const { status, isNetworkError } = (err ?? {}) as { status?: number; isNetworkError?: boolean };
+  if (status === 429) return 'rate-limited';
+  if (isNetworkError === true) return 'hold-network';
+  if (isEdgeUnavailable(status)) return (attempts.edgeRetries ?? 0) + 1 < MAX_EDGE_RETRIES ? 'hold-edge' : 'permanent';
+  if (typeof status === 'number' && status >= 400 && status < 500) return 'permanent';
+  return (attempts.retries ?? 0) + 1 >= MAX_RETRIES ? 'permanent' : 'transient';
+}

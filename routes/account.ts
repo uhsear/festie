@@ -18,7 +18,8 @@ import type {
 import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from '../lib/email';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user';
 import type { Identity } from '../lib/db/stores/identities';
-import { collectAuthoredRecords, isoOrNull } from '../lib/account-export-records';
+import { collectAuthoredRecords } from '../lib/account-export-records';
+import { isoOrNull } from '../lib/db/connection';
 
 /**
  * Collect all user data for GDPR export (exportVersion 1.2). Gathers the
@@ -293,6 +294,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // limit covers every PM2 process and survives restarts. The slot is reserved
   // before collecting and released if the export fails, so a failure does not
   // use up the day. Without Redis, a per-process Map applies the same rules.
+  // shortcut: the Redis-less fallback is per process; Redis is the multi-instance path and is already used when configured.
   const localExportReservations = new Map<string, number>();
   const EXPORT_RATE_LIMIT_MS = 24 * 60 * 60 * 1000; // 24 hours
   const MAX_EXPORT_RATE_ENTRIES = 1000;
@@ -722,13 +724,26 @@ export default function createAccountRoutes(deps: RouteDeps) {
         );
 
         const verifyUrl = `${deps.config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
-        await sendEmailChangeConfirmEmail({
+        const confirmSent = await sendEmailChangeConfirmEmail({
           to: cleanEmail,
           username: currentUser.username,
           verifyUrl,
           config: deps.config,
           log,
         });
+        // Outside production an unset key is the normal dev and test setup: sendEmail already logged the skip.
+        const mailOptional = !deps.config.RESEND_API_KEY && deps.config.NODE_ENV !== 'production';
+        if (!confirmSent && !mailOptional) {
+          // The caller is authenticated and supplied the address, so an error reveals nothing.
+          // A retry supersedes the stored token; the security notice is not sent for a change that has no link.
+          log.warn('account:email-change-send-failed', { userId: req.user.userId });
+          return sendError(
+            res,
+            503,
+            'Could not send the verification email. Try again in a few minutes.',
+            ErrorCodes.SERVICE_UNAVAILABLE,
+          );
+        }
 
         // Notify the address on file so a user whose session was stolen finds
         // out. The sender opts out of the idempotency guard — see lib/email.ts.
@@ -798,7 +813,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           if (stores.profiles) {
             await stores.profiles.deleteByUserId(req.user.userId, { reason: 'account-deleted', keepPicks: true });
           }
-          disconnectUserSockets(req.user.userId, io);
+          await disconnectUserSockets(req.user.userId, io);
           // Apple requires the revoke on delete. Best effort, never throws. The identity
           // rows stay, so a sign-in with Apple inside the 30 days restores the account.
           await revokeAppleForUser(req.user.userId, deps);

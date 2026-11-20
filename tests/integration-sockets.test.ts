@@ -91,6 +91,27 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     await logoutDisconnect;
   });
 
+  test('revoking all other sessions disconnects their sockets', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    await joinFestivalProfile(server, alice.token);
+    const other = await loginUser(server, 'alice');
+
+    const socket = connectSocket(server.baseUrl);
+    await waitForEvent(socket, 'connect');
+    socket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    await waitForEvent(socket, 'presence:update', (payload) => payload.online.length === 1);
+
+    const disconnected = waitForEvent(socket, 'disconnect', () => true);
+    await server.request
+      .delete('/api/v1/auth/sessions')
+      .set('x-user-token', other.token)
+      .expect(200);
+    await disconnected;
+  });
+
   test('rate limits noisy realtime join events', async () => {
     const server = await startServer({ SOCKET_JOIN_RATE_LIMIT: 2, SOCKET_EVENT_WINDOW: 10_000 });
     servers.push(server);
@@ -355,6 +376,92 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     socket.close();
   });
 
+  test('meeting-point events carry both crew_id and crewId on the wire', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    await joinFestivalProfile(server, alice.token);
+    const crewId = (
+      await server.request
+        .post('/api/v1/crews')
+        .set('x-user-token', alice.token)
+        .set('x-festie-request', '1')
+        .send({ name: 'Wire Crew', festivalId: 'fest-1' })
+        .expect(201)
+    ).body.data.id;
+
+    const socket = connectSocket(server.baseUrl);
+    await waitForEvent(socket, 'connect');
+    socket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    await waitForEvent(socket, 'presence:update', (p) => p.online.length === 1);
+    const ack: any = await new Promise((resolve) => socket.emit('join:crew', { crewId }, resolve));
+    assert.equal(ack.ok, true);
+
+    const created = waitForEvent(socket, 'crew:meeting-point-created');
+    const point = (
+      await server.request
+        .post(`/api/v1/crews/${crewId}/meeting-points`)
+        .set('x-user-token', alice.token)
+        .set('x-festie-request', '1')
+        .send({ label: 'Gate A', location: 'By the gate' })
+        .expect(201)
+    ).body.data.meetingPoint;
+    const createdPayload: any = await created;
+    assert.equal(createdPayload.crew_id, crewId);
+    assert.equal(createdPayload.crewId, crewId);
+
+    const updated = waitForEvent(socket, 'crew:meeting-point-updated');
+    await server.request
+      .put(`/api/v1/crews/${crewId}/meeting-points/${point.id}`)
+      .set('x-user-token', alice.token)
+      .set('x-festie-request', '1')
+      .send({ label: 'Gate B' })
+      .expect(200);
+    const updatedPayload: any = await updated;
+    assert.equal(updatedPayload.crew_id, crewId);
+    assert.equal(updatedPayload.crewId, crewId);
+
+    socket.close();
+  });
+
+  test('crew events routed through the emitter keep their wire shape', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    await joinFestivalProfile(server, alice.token);
+    const crewId = (
+      await server.request
+        .post('/api/v1/crews')
+        .set('x-user-token', alice.token)
+        .set('x-festie-request', '1')
+        .send({ name: 'Emitter Crew', festivalId: 'fest-1' })
+        .expect(201)
+    ).body.data.id;
+
+    const socket = connectSocket(server.baseUrl);
+    await waitForEvent(socket, 'connect');
+    socket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    await waitForEvent(socket, 'presence:update', (p) => p.online.length === 1);
+    const ack: any = await new Promise((resolve) => socket.emit('join:crew', { crewId }, resolve));
+    assert.equal(ack.ok, true);
+
+    const packed = waitForEvent(socket, 'crew:packing-created');
+    await server.request
+      .post(`/api/v1/crews/${crewId}/packing`)
+      .set('x-user-token', alice.token)
+      .set('x-festie-request', '1')
+      .send({ label: 'Tent' })
+      .expect(200);
+    const packedPayload: any = await packed;
+    assert.deepEqual(Object.keys(packedPayload).sort(), ['crewId', 'item']);
+    assert.equal(packedPayload.crewId, crewId);
+    assert.equal(packedPayload.item.label, 'Tent');
+
+    socket.close();
+  });
+
   test('leave:crew — user leaves a crew room', async () => {
     const server = await startServer();
     servers.push(server);
@@ -490,8 +597,22 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     const disconnected = waitForEvent(badSocket, 'disconnect', () => true);
     const ack = await new Promise<any>((resolve) =>
       badSocket.emit('join:festival', 'fest-1', { userToken: 'invalid-token-value' }, resolve));
-    assert.equal(ack.error, 'Authentication required');
+    assert.deepEqual(ack, { ok: false, error: 'Authentication required', code: 'AUTH_REQUIRED' });
     await disconnected;
+  });
+
+  test('failure acks for location:stop carry error and code', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const alice = await registerUser(server, 'socket-stop-fail');
+
+    const socket = connectSocket(server.baseUrl, { auth: { token: alice.token } });
+    await waitForEvent(socket, 'connect');
+    const bad = await new Promise<any>((resolve) => socket.emit('location:stop', {}, resolve));
+    assert.deepEqual(bad, { ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH' });
+    const notJoined = await new Promise<any>((resolve) => socket.emit('location:stop', { _v: 1, crewId: 'crew-x' }, resolve));
+    assert.deepEqual(notJoined, { ok: false, error: 'NOT_IN_CREW_ROOM', code: 'NOT_IN_CREW_ROOM' });
+    socket.close();
   });
 
   test('disconnects a socket that joins with an invalid token', async () => {

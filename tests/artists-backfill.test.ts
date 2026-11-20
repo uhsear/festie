@@ -14,13 +14,11 @@ import {
   verifyBackfill,
 } from '../lib/artist-backfill';
 import { lockFestivalAny } from '../lib/db/stores/lineup-imports';
-import { ensureTestSchema } from './_test-schema';
+import { ensureTestSchema, TEST_DATABASE_URL, skip } from './_test-schema';
 
 // The backfill gives every artist element an artists row and an id. These tests run it on a private
 // Postgres (port 5434 or higher), never 5432 or 5433. They empty the festival tables first.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 const SPOTIFY_A = 'AAAAAAAAAAAAAAAAAAAAAA';

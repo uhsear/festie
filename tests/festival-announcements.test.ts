@@ -111,7 +111,7 @@ describe('festival announcements admin POST', () => {
     const { app, rows } = build({ publishedAt: null });
     const res = await post(app);
     assert.equal(res.status, 409);
-    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.equal(res.body.error.code, 'DRAFT');
     assert.equal(res.body.error.message, 'Publish the festival before you send announcements.');
     assert.equal(rows.length, 0);
   });

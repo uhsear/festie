@@ -17,6 +17,7 @@ import request from 'supertest';
 
 import { createCrewNotifier } from '../lib/notifications/crew-notify.js';
 import { makeIo } from './_make-io';
+import { ioEmitter } from './_io-emitter';
 
 // ── Shared helpers ───────────────────────────────────────────────────
 
@@ -99,6 +100,7 @@ function makeDeps(overrides: any = {}) {
       NOT_FOUND: 'NOT_FOUND',
       FORBIDDEN: 'FORBIDDEN',
       VALIDATION_ERROR: 'VALIDATION_ERROR',
+      MAX_LIMIT_REACHED: 'MAX_LIMIT_REACHED',
       INTERNAL_ERROR: 'INTERNAL_ERROR',
     },
     rateLimit: overrides.rateLimit || (() => (_req: any, _res: any, next: any) => next()),
@@ -123,7 +125,7 @@ function makeDeps(overrides: any = {}) {
       meetingPointComing: {},
     },
     io: overrides.io !== undefined ? overrides.io : ioObj,
-    emitter: { crewActivityLogged: mock.fn(() => {}) },
+    emitter: { crewActivityLogged: mock.fn(() => {}), ...ioEmitter(overrides.io !== undefined ? overrides.io : ioObj) },
     crewNotify: overrides.crewNotify,
     stores,
   };
@@ -655,7 +657,7 @@ describe('routes/crew-meeting-points.js -- POST /:crewId/meeting-points', () => 
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:meeting-point-created');
     const created = (ioObj._emit.mock.calls as any[])[0].arguments[1];
     assert.equal(created.crew_id, 'crew-1');
-    assert.equal(created.crewId, undefined, 'payload is the raw row; no camelCase duplicate');
+    assert.equal(created.crewId, 'crew-1', 'camelCase crewId matches the shared payload type');
   });
 
   // ── Max limit ─────────────────────────────────────────────────────
@@ -674,7 +676,7 @@ describe('routes/crew-meeting-points.js -- POST /:crewId/meeting-points', () => 
     const res = await request(app).post('/crew-1/meeting-points').send({ label: 'One more', location: 'Nope' });
 
     assert.equal(res.status, 400);
-    assert.equal(res.body.error.code, 'VALIDATION_ERROR');
+    assert.equal(res.body.error.code, 'MAX_LIMIT_REACHED');
     assert.match(res.body.error.message, /Maximum 20/);
   });
 
@@ -878,7 +880,7 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/meeting-points/:mpId', (
     assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[0], 'crew:meeting-point-updated');
     const updatedPayload = (ioObj._emit.mock.calls as any[])[0].arguments[1];
     assert.equal(updatedPayload.crew_id, 'crew-1');
-    assert.equal(updatedPayload.crewId, undefined, 'payload is the raw row; no camelCase duplicate');
+    assert.equal(updatedPayload.crewId, 'crew-1', 'camelCase crewId matches the shared payload type');
   });
 
   // ── Not found cases ───────────────────────────────────────────────
@@ -1577,7 +1579,7 @@ describe('routes/crew-meeting-points.js -- edit trail', () => {
     assert.equal(crewNotify.now.mock.calls.length, 0);
   });
 
-  test('the response and the emit carry the store row unchanged', async () => {
+  test('the response carries the store row unchanged and the emit adds a camelCase crewId', async () => {
     const row = {
       ...DEFAULT_MEETING_POINT,
       location: 'North gate',
@@ -1602,6 +1604,6 @@ describe('routes/crew-meeting-points.js -- edit trail', () => {
     const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ location: 'North gate' });
     assert.equal(res.status, 200);
     assert.deepEqual(res.body.data.meetingPoint, row);
-    assert.equal((ioObj._emit.mock.calls as any[])[0].arguments[1], row);
+    assert.deepEqual((ioObj._emit.mock.calls as any[])[0].arguments[1], { ...row, crewId: 'crew-1' });
   });
 });

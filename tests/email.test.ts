@@ -78,6 +78,28 @@ describe('email: sendEmail', () => {
     assert.equal(result, false);
   });
 
+  it('logs email:sent at info with the Resend id and type, and never the recipient, subject or body', async () => {
+    const log = createMockLog();
+    const sendMock = mock.fn(async () => ({ data: { id: 'msg-sent-1' }, error: null }));
+    const ok = await sendPasswordResetEmail({
+      to: 'private-person@example.com',
+      username: 'privateperson',
+      resetUrl: 'https://festie.test/reset?token=secret',
+      config: createMockConfig(),
+      log,
+      _client: createMockClient(sendMock),
+    });
+    assert.equal(ok, true);
+    const sent = log.info.mock.calls.filter((c: any) => c.arguments[0] === 'email:sent');
+    assert.equal(sent.length, 1);
+    assert.deepEqual(sent[0]!.arguments[1], { id: 'msg-sent-1', type: 'password_reset' });
+    assert.equal(log.debug.mock.callCount(), 0);
+    const logged = JSON.stringify([...log.info.mock.calls, ...log.warn.mock.calls, ...log.error.mock.calls, ...log.debug.mock.calls]);
+    assert.ok(!logged.includes('private-person'), 'the address must not be logged');
+    assert.ok(!logged.includes('Reset your Festie password'), 'the subject must not be logged');
+    assert.ok(!logged.includes('secret'), 'the body must not be logged');
+  });
+
   it('suppresses duplicate sends within the idempotency window', async () => {
     const log = createMockLog();
     const sendMock = mock.fn(async () => ({ data: { id: 'msg-1' }, error: null }));
@@ -98,6 +120,34 @@ describe('email: sendEmail', () => {
     });
     assert.equal(second, true); // returns true (suppressed, not error)
     assert.equal(sendMock.mock.callCount(), 1, 'Resend.send called only once');
+  });
+
+  it('shares the idempotency guard through Redis and falls back to memory when Redis errors', async () => {
+    const store = new Map<string, string>();
+    const redis = {
+      exists: async (k: string) => (store.has(k) ? 1 : 0),
+      set: async (k: string, v: string) => { store.set(k, v); return 'OK'; },
+    };
+    const sendMock = mock.fn(async () => ({ data: { id: 'msg-1' }, error: null }));
+    const base = { to: 'redis-dup@example.com', subject: 'Redis Dup', html: '<p>x</p>', text: 'x', config: createMockConfig(), log: createMockLog(), _client: createMockClient(sendMock) };
+
+    assert.equal(await sendEmail({ ...base, redis }), true);
+    assert.equal(await sendEmail({ ...base, redis }), true);
+    assert.equal(sendMock.mock.callCount(), 1, 'second send suppressed via Redis');
+    assert.equal(store.size, 1, 'the dedupe key was written to Redis');
+    assert.ok([...store.keys()].every((k) => !k.includes('redis-dup')), 'recipient must not appear in the Redis key');
+
+    const brokenCalls = { exists: 0, set: 0 };
+    const broken = {
+      exists: async () => { brokenCalls.exists++; throw new Error('down'); },
+      set: async () => { brokenCalls.set++; throw new Error('down'); },
+    };
+    const fb = { ...base, to: 'fallback-dup@example.com', redis: broken };
+    assert.equal(await sendEmail(fb), true);
+    assert.equal(await sendEmail(fb), true);
+    assert.equal(sendMock.mock.callCount(), 2, 'memory fallback suppresses the repeat');
+    assert.equal(brokenCalls.exists, 2, 'Redis was consulted before falling back');
+    assert.equal(brokenCalls.set, 1, 'Redis write was attempted before falling back');
   });
 
   it('never suppresses a message sent with dedupe:false', async () => {

@@ -494,7 +494,7 @@ describe('emitter: festivalUpdated', () => {
 });
 
 describe('emitter: scheduleChanged', () => {
-  const slot = (startTime: string) => ({ dayLabel: 'Sat', startTime, endTime: null, stageName: 'Sahara' });
+  const slot = (startTime: string) => ({ dayLabel: 'Sat', dayKey: 'sat', startTime, endTime: null, stageName: 'Sahara', stageId: 'sahara' });
   const festival = { id: 'fest-1', name: 'EDC' };
 
   it('skips topic-muted users and links one moved set to /set/{id}', async () => {
@@ -584,6 +584,21 @@ describe('emitter: presenceUpdate', () => {
     const emitted = io._rooms['fest-1'];
     assert.equal(emitted[0][0], 'presence:update');
     assert.deepEqual(emitted[0][1].online, [{ userId: 'u1' }]);
+  });
+});
+
+describe('emitter: generic fan-out', () => {
+  it('sends the caller payload unchanged to crew rooms, explicit rooms and everyone', () => {
+    const io = makeIo();
+    const emitter = createSocketEmitter(defaultDeps({ io }));
+
+    emitter.toCrew('c1', 'crew:x', { crewId: 'c1' });
+    emitter.toRoom('fest-1', 'profile:deleted', { profileId: 'p1' });
+    emitter.broadcast('server:draining', { message: 'bye' });
+
+    assert.deepEqual(io._rooms['crew:c1'], [['crew:x', { crewId: 'c1' }]]);
+    assert.deepEqual(io._rooms['fest-1'], [['profile:deleted', { profileId: 'p1' }]]);
+    assert.deepEqual(io._globalEmits, [['server:draining', { message: 'bye' }]]);
   });
 });
 

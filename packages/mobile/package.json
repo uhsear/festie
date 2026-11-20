@@ -10,8 +10,6 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web",
-    "build:web": "expo export -p web && node scripts/build-manifest.mjs && node scripts/build-sw.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "lint": "eslint .",

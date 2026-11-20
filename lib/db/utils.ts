@@ -1,6 +1,29 @@
-import type { Pool } from 'pg';
+import type { Pool, QueryResultRow } from 'pg';
 import { parseJsonObject } from './connection';
 import { cleanLineupLinks } from '../lineup';
+
+/**
+ * Build a parameterized `UPDATE <table> SET ... WHERE id = $n` statement.
+ * `table` and every column name must come from code allowlists, never from input.
+ * `sets` entries are [column, value] or [column, value, cast] (e.g. '::jsonb').
+ * `rawSets` are appended verbatim and take no parameter (e.g. 'updated_at = NOW()').
+ */
+export function buildUpdate(
+  table: string,
+  sets: Array<[string, unknown] | [string, unknown, string]>,
+  id: string,
+  { rawSets = [], extraWhere = '', returning = '' }: { rawSets?: string[]; extraWhere?: string; returning?: string } = {},
+) {
+  const values: unknown[] = [];
+  const assignments = sets.map(([column, value, cast = '']) => {
+    values.push(value);
+    return `${column} = $${values.length}${cast}`;
+  });
+  values.push(id);
+  const where = `id = $${values.length}${extraWhere ? ` AND ${extraWhere}` : ''}`;
+  const text = `UPDATE ${table} SET ${[...assignments, ...rawSets].join(', ')} WHERE ${where}${returning ? ` RETURNING ${returning}` : ''}`;
+  return { text, values };
+}
 
 /**
  * Create utility functions that will be shared across all stores
@@ -9,12 +32,12 @@ import { cleanLineupLinks } from '../lineup';
  */
 export default function createUtils(pool: Pool) {
   // Convert PostgreSQL Date objects to ISO strings for consistent serialization
-  function toISOString(value: any): any {
+  function toISOString<T>(value: T): T | string {
     if (!value) return value;
     return value instanceof Date ? value.toISOString() : String(value);
   }
 
-  function mapProfileRow(row: any) {
+  function mapProfileRow(row: QueryResultRow) {
     return {
       id: row.id,
       festivalId: row.festivalId,
@@ -101,11 +124,11 @@ export default function createUtils(pool: Pool) {
       ORDER BY f.created_at ASC, f.id ASC
     `);
 
-    return result.rows.map((row: any) => ({ ...row, lineup: cleanLineupLinks(row.lineup) }));
+    return result.rows.map((row) => ({ ...row, lineup: cleanLineupLinks(row.lineup) }));
   }
 
-  function parseMessageRow(row: any) {
-    let reactions: any = null;
+  function parseMessageRow(row: QueryResultRow) {
+    let reactions: Record<string, unknown> | null = null;
     if (row.reactionsJson) {
       try {
         reactions = JSON.parse(row.reactionsJson);

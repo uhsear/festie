@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { describe, test, mock } from 'node:test';
 
 import { createPollCloser, pollDecisionText } from '../lib/poll-close.js';
+import { ioEmitter } from './_io-emitter';
 
 const noop = () => {};
 
@@ -26,10 +27,10 @@ function makeCloser(over: any = {}) {
     },
     activity: { log: over.activityLog ?? mock.fn(async () => 'act-1') },
   };
-  const emitter = { crewActivityLogged: mock.fn(noop) };
+  const emitter = { crewActivityLogged: mock.fn(noop), ...ioEmitter(io) };
   const crewNotify = { queue: mock.fn(noop) };
   const log = { info: noop, warn: mock.fn(noop), error: noop, debug: noop };
-  const closer = createPollCloser({ stores, io, emitter, crewNotify, createOpaqueId: (p: string) => `${p}-x`, log });
+  const closer = createPollCloser({ stores, emitter, crewNotify, createOpaqueId: (p: string) => `${p}-x`, log });
   const events = () => (emit.mock.calls as any[]).map((c) => c.arguments[0]);
   return { closer, stores, emitter, crewNotify, events };
 }

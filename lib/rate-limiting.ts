@@ -24,6 +24,7 @@
 import crypto from 'crypto';
 import { loadConfig } from './config.js';
 import { redisRateCheck as redisRateCheckFn } from './redis.js';
+import { MAX_SHARE_WINDOW_MS } from './live-location-cache.js';
 
 const FALLBACK_WARN_INTERVAL_MS = 30_000;
 // Guests behind one festival IP keep their own token buckets; one caller cycling tokens is capped per IP.
@@ -547,6 +548,40 @@ function createPasswordResetRateLimit(
   };
 }
 
+// Fixed-window counter for a per-email budget a route checks inline (it must answer
+// a specific way when over budget, so it cannot be middleware). Redis-first; the
+// in-memory map only serves while Redis is unavailable.
+function createEmailWindowLimit(config: any, { redis, scope, max, windowMs }: any) {
+  const MAX_ENTRIES = 10_000;
+  const REDIS_PREFIX = (config && config.REDIS_PREFIX) || 'fp:';
+  const buckets = new Map();
+
+  return async function check(email: string): Promise<{ limited: boolean; resetMs: number }> {
+    const emailHash = crypto.createHash('sha256').update(email.trim().toLowerCase()).digest('hex').slice(0, 32);
+    if (redis) {
+      try {
+        const result = await redisRateCheckFn(redis, `${REDIS_PREFIX}rl:${scope}:${emailHash}`, max, windowMs);
+        if (!result.fallback) return { limited: result.limited, resetMs: result.resetMs };
+      } catch {
+        // fall through to in-memory
+      }
+    }
+    const now = Date.now();
+    let entry = getAndTouch(buckets, emailHash);
+    if (!entry || now - entry.start >= windowMs) {
+      entry = { start: now, count: 0 };
+      buckets.set(emailHash, entry);
+      while (buckets.size > MAX_ENTRIES) {
+        const oldest = buckets.keys().next().value;
+        if (oldest === undefined) break;
+        buckets.delete(oldest);
+      }
+    }
+    entry.count += 1;
+    return { limited: entry.count > max, resetMs: entry.start + windowMs - now };
+  };
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Admin-write rate limiter factory
 // ─────────────────────────────────────────────────────────────────────────
@@ -685,7 +720,7 @@ const socketEventLimits = {
 // effort: when Redis is unavailable we allow (the H1/M2 membership controls and
 // the per-socket limiter still apply).
 const MAX_CONCURRENT_SHARING_SOCKETS = 3;
-const SHARING_SOCKET_TTL_MS = 5 * 60 * 1000; // refreshed on every share/update tick
+const SHARING_SOCKET_TTL_MS = 5 * 60 * 1000; // refreshed on every share and every accepted update
 
 /**
  * Register a sharing socket for a user and report whether the per-user
@@ -708,10 +743,25 @@ async function registerSharingSocket(redis: any, userId: any, socketId: any) {
     pipeline.pexpire(key, SHARING_SOCKET_TTL_MS);
     const results = await pipeline.exec();
     const count = (results?.[2]?.[1] as number) || 0;
-    return { allowed: count <= MAX_CONCURRENT_SHARING_SOCKETS, count };
+    const allowed = count <= MAX_CONCURRENT_SHARING_SOCKETS;
+    // A rejected socket must not hold a slot for the TTL.
+    if (!allowed) await redis.zrem(key, socketId);
+    return { allowed, count };
   } catch {
     return { allowed: true, count: 0 };
   }
+}
+
+// Clock-skew allowance on the far end of the share window.
+const EXPIRES_AT_SKEW_MS = 60_000;
+
+/** Time-box check shared by the HTTP and socket paths. An absent expiresAt is allowed. */
+export function shareWindowError(expiresAt: string | undefined, nowMs: number): 'ended' | 'too-long' | null {
+  if (!expiresAt) return null;
+  const exp = Date.parse(expiresAt);
+  if (exp <= nowMs) return 'ended';
+  if (exp > nowMs + MAX_SHARE_WINDOW_MS + EXPIRES_AT_SKEW_MS) return 'too-long';
+  return null;
 }
 
 /**
@@ -877,6 +927,7 @@ async function clearSosSeen(redis: any, crewId: any, raiserId: any): Promise<voi
 export {
   createRateLimiters,
   createPasswordResetRateLimit,
+  createEmailWindowLimit,
   createAdminWriteRateLimit,
   // Socket event limiters (named exports for convenience + object export for bulk wiring)
   PICK_SET_LIMIT,

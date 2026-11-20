@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
+import crypto from 'node:crypto';
 import { Resend } from 'resend';
 import { escapeHtml } from './helpers';
 
@@ -11,7 +12,9 @@ function getClient(apiKey: any) {
   return _resend;
 }
 
-// P3.4: Idempotency guard — prevents duplicate sends on retry/double-click
+// P3.4: Idempotency guard — prevents duplicate sends on retry/double-click.
+// Redis-first so the guard survives a restart and is shared across processes; the
+// in-memory map is the fallback when no client is passed or Redis errors.
 const IDEMPOTENCY_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const _recentSends = new Map(); // key → timestamp
 
@@ -19,7 +22,24 @@ function _idempotencyKey(to: any, subject: any) {
   return `${to}:${subject}`;
 }
 
-function _checkIdempotency(to: any, subject: any, log: any) {
+// The recipient is PII: hash it before it becomes a Redis key.
+function _redisDedupeKey(to: any, subject: any, config: any) {
+  const digest = crypto.createHash('sha256').update(_idempotencyKey(to, subject)).digest('hex').slice(0, 32);
+  return `${config.REDIS_PREFIX || 'fp:'}email:dedupe:${digest}`;
+}
+
+async function _checkIdempotency(to: any, subject: any, log: any, redis: any, config: any) {
+  if (redis) {
+    try {
+      if ((await redis.exists(_redisDedupeKey(to, subject, config))) === 1) {
+        log.warn('email:duplicate-suppressed', {});
+        return true;
+      }
+      return false;
+    } catch (error: any) {
+      log.warn('email:dedupe-redis-failed', { error: error.message });
+    }
+  }
   const key = _idempotencyKey(to, subject);
   const lastSent = _recentSends.get(key);
   if (lastSent && Date.now() - lastSent < IDEMPOTENCY_TTL_MS) {
@@ -29,7 +49,15 @@ function _checkIdempotency(to: any, subject: any, log: any) {
   return false;
 }
 
-function _recordSend(to: any, subject: any) {
+async function _recordSend(to: any, subject: any, log: any, redis: any, config: any) {
+  if (redis) {
+    try {
+      await redis.set(_redisDedupeKey(to, subject, config), '1', 'PX', IDEMPOTENCY_TTL_MS);
+      return;
+    } catch (error: any) {
+      log.warn('email:dedupe-redis-failed', { error: error.message });
+    }
+  }
   const key = _idempotencyKey(to, subject);
   _recentSends.set(key, Date.now());
   // Evict stale entries to prevent unbounded growth
@@ -45,13 +73,13 @@ function _recordSend(to: any, subject: any) {
  * Send a transactional email via Resend.
  * Gracefully degrades if RESEND_API_KEY is not set (logs a warning, or an error in production, and returns false).
  * Idempotent: suppresses duplicate sends to the same address+subject within 5
- * minutes. Pass `dedupe: false` for mail that must never be silently dropped —
+ * minutes, through Redis when `redis` is passed. Pass `dedupe: false` for mail that must never be silently dropped —
  * a security alert has a constant subject and a constant recipient, so the
  * guard would let an attacker suppress every alert after the first by simply
  * repeating the request. Opting out skips recording as well as checking, so an
  * exempt message neither suppresses nor is suppressed by anything else.
  */
-export async function sendEmail({ to, subject, html, text, headers, config, log, _client, dedupe = true }: any) {
+export async function sendEmail({ to, subject, html, text, headers, idempotencyKey, config, log, _client, dedupe = true, type, redis }: any) {
   const apiKey = config.RESEND_API_KEY;
   if (!apiKey) {
     // A missing key in production means every user email is silently lost; surface it as an error.
@@ -60,19 +88,22 @@ export async function sendEmail({ to, subject, html, text, headers, config, log,
     return false;
   }
 
-  if (dedupe && _checkIdempotency(to, subject, log)) return true;
+  if (dedupe && (await _checkIdempotency(to, subject, log, redis, config))) return true;
 
   const client = _client || getClient(apiKey);
   const from = config.EMAIL_FROM || 'Festie <no-reply@festie.us>';
 
   try {
-    const result = await client.emails.send({ from, to: [to], subject, html, text, ...(headers ? { headers } : {}) });
+    // The key goes to Resend as the Idempotency-Key request header (SDK options), not as a mail header.
+    const message = { from, to: [to], subject, html, text, ...(headers ? { headers } : {}) };
+    const result = await client.emails.send(message, ...(idempotencyKey ? [{ idempotencyKey }] : []));
     if (result.error) {
       log.error('email:send-error', { error: result.error.message });
       return false;
     }
-    if (dedupe) _recordSend(to, subject);
-    log.debug('email:sent', { id: result.data?.id });
+    if (dedupe) await _recordSend(to, subject, log, redis, config);
+    // Only the provider id and the template name: the recipient, subject and body are PII.
+    log.info('email:sent', { id: result.data?.id, type });
     return true;
   } catch (error: any) {
     log.error('email:send-failed', { error: error.message });
@@ -125,7 +156,7 @@ function _hoursText(config: any) {
 /**
  * Send password reset email.
  */
-export async function sendPasswordResetEmail({ to, username, resetUrl, config, log, _client }: any) {
+export async function sendPasswordResetEmail({ to, username, resetUrl, config, log, _client, redis }: any) {
   const bodyHtml = `
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username)}</strong>,</p>
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Your username is <strong style="color:#e4e4e7">${escapeHtml(username)}</strong>.</p>
@@ -136,13 +167,13 @@ export async function sendPasswordResetEmail({ to, username, resetUrl, config, l
   const html = _wrapTemplate('Password Reset Request', bodyHtml);
   const text = `Hey ${username},\n\nYour username is ${username}.\n\nWe received a request to reset your Festie password.\n\nReset your password: ${resetUrl}\n\nThis link expires in 60 minutes.\n\nIf you didn't request this, you can safely ignore this email.`;
 
-  return sendEmail({ to, subject: 'Reset your Festie password', html, text, config, log, _client });
+  return sendEmail({ to, subject: 'Reset your Festie password', html, text, config, log, _client, type: 'password_reset', redis });
 }
 
 /**
  * Send email verification email.
  */
-export async function sendVerificationEmail({ to, username, verifyUrl, config, log, _client }: any) {
+export async function sendVerificationEmail({ to, username, verifyUrl, config, log, _client, redis }: any) {
   const hours = _hoursText(config);
   const bodyHtml = `
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">Hey <strong style="color:#e4e4e7">${escapeHtml(username)}</strong>,</p>
@@ -153,7 +184,7 @@ export async function sendVerificationEmail({ to, username, verifyUrl, config, l
   const html = _wrapTemplate('Verify Your Email', bodyHtml);
   const text = `Hey ${username},\n\nThanks for signing up for Festie!\n\nVerify your email: ${verifyUrl}\n\nThis link expires in ${hours}.\n\nIf you didn't create this account, you can safely ignore this email.`;
 
-  return sendEmail({ to, subject: 'Verify your Festie email', html, text, config, log, _client });
+  return sendEmail({ to, subject: 'Verify your Festie email', html, text, config, log, _client, type: 'verify_email', redis });
 }
 
 /**
@@ -171,7 +202,7 @@ export async function sendEmailChangeConfirmEmail({ to, username, verifyUrl, con
   const footer = 'If you did not ask for this, ignore this email. Your account email stays the same.';
   const html = _wrapTemplate('Confirm New Email', bodyHtml, footer);
   const text = `Hey ${username},\n\n${intro}\n\nConfirm your new email: ${verifyUrl}\n\n${footer}`;
-  return sendEmail({ to, subject: 'Confirm your new Festie email', html, text, config, log, _client });
+  return sendEmail({ to, subject: 'Confirm your new Festie email', html, text, config, log, _client, type: 'email_change_confirm' });
 }
 
 const SECURITY_FOOTER = 'Festie will never ask you for your password by email.';
@@ -212,6 +243,7 @@ export async function sendEmailChangeNoticeEmail({ to, resetUrl, config, log, _c
     config,
     log,
     _client,
+    type: 'email_change_notice',
     dedupe: false,
   });
 }
@@ -236,6 +268,7 @@ export async function sendEmailChangedEmail({ to, config, log, _client }: any) {
     config,
     log,
     _client,
+    type: 'email_changed',
     dedupe: false,
   });
 }
@@ -284,7 +317,7 @@ export async function sendWrapReadyEmail({ to, username, festivalName, festivalI
   const footer = _reengagementFooter('Wrap-up ready', config);
   const html = _wrapTemplate('Your Festival Wrap-Up', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\n${name} wrapped up. Your recap is ready.\n\nSee your wrap-up: ${wrapUrl}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `Your ${name} wrap-up is ready`, html, text, headers: reengagementHeaders(config), config, log, _client });
+  return sendEmail({ to, subject: `Your ${name} wrap-up is ready`, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'wrap_ready' });
 }
 
 /**
@@ -307,7 +340,7 @@ export async function sendLineupDropEmail({ to, username, festivalName, festival
   const html = _wrapTemplate('New Lineup', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\nThe lineup for ${name} ${hasTimes ? 'just dropped.' : sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
   const subject = hasTimes ? `${name} lineup just dropped` : `${name} lineup is out`;
-  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client });
+  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'lineup_drop' });
 }
 
 /**
@@ -326,7 +359,7 @@ export async function sendDaysOutEmail({ to, username, festivalName, festivalId,
   const footer = _reengagementFooter('New lineups, days and set times', config);
   const html = _wrapTemplate('Days Are Out', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\nThe days for ${name} are out. ${sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `${name} days are out`, html, text, headers: reengagementHeaders(config), config, log, _client });
+  return sendEmail({ to, subject: `${name} days are out`, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'days_out' });
 }
 
 /** "Friday", "Friday and Saturday", "Fri, Sat and Sun". The set-times push and email share it. */
@@ -357,7 +390,7 @@ export async function sendSetTimesOutEmail({ to, username, festivalName, festiva
   const noteText = note ? `\n\n${note}` : '';
   const text = `Hey ${username || 'there'},\n\n${the} for ${name} are out. Pick your sets and spot clashes before the weekend.${noteText}\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
   const subject = days ? `${name}: ${days} set times are out` : `${name} set times are out`;
-  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client });
+  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'set_times_out' });
 }
 
 /**
@@ -388,5 +421,35 @@ export async function sendCrewReformEmail({
   const footer = _reengagementFooter('Crew re-forms', config);
   const html = _wrapTemplate('Your Crew Reformed', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\n${crew} is getting back together${fest}.\n\nJoin the crew: ${url}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `${crew} reformed${fest}`, html, text, headers: reengagementHeaders(config), config, log, _client });
+  return sendEmail({ to, subject: `${crew} reformed${fest}`, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'crew_reformed' });
+}
+
+const POLICY_NOTICE_LINE = 'This is a service notice about changes to the Festie Privacy Policy and Terms. We send it to every account.';
+
+/**
+ * Policy-update notice. Transactional legal mail, so the caller sends it regardless of the
+ * marketing and re-engagement opt-outs, and it carries no List-Unsubscribe header.
+ * `html` is the admin's own markup; without it the body is the escaped text, one paragraph per blank line.
+ * dedupe is off: the policy_notice_sends ledger is the idempotency guard, and the 5-minute
+ * address+subject guard would report a suppressed send as delivered.
+ */
+export async function sendPolicyNoticeEmail({ to, subject, text, html, idempotencyKey, config, log, _client }: any) {
+  const bodyHtml =
+    html ??
+    text
+      .split(/\n{2,}/)
+      .map((p: string) => `<p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 16px">${escapeHtml(p).replace(/\n/g, '<br>')}</p>`)
+      .join('');
+  return sendEmail({
+    to,
+    subject,
+    html: _wrapTemplate('Policy update', bodyHtml, POLICY_NOTICE_LINE),
+    text: `${text}\n\n${POLICY_NOTICE_LINE}`,
+    idempotencyKey,
+    config,
+    log,
+    _client,
+    dedupe: false,
+    type: 'policy_notice',
+  });
 }

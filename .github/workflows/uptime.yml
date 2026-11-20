@@ -1,5 +1,9 @@
 name: Uptime Monitor
 
+# Role: off-host reachability. scripts/health-check.sh owns liveness and
+# auto-restart; scripts/error-rate-alert.cjs owns error rate, memory, disk
+# and /api/ready.
+
 "on":
   schedule:
     # Every 10 minutes. GitHub Actions schedules may run a few minutes late

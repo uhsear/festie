@@ -1,4 +1,4 @@
-import type { OnlineUser, Priority, CrewMemberStatus, CrewExpense, CrewMemberDay } from './domain';
+import type { Priority, CrewMemberStatus, CrewExpense, CrewMemberDay } from './domain';
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket.IO Event Payload Types
@@ -58,8 +58,6 @@ export interface FestivalCreatedPayload extends VersionedPayload {
 
 export interface PresenceUpdatePayload extends VersionedPayload {
   online: PresenceUser[];
-  /** Legacy field — some code paths emit `users` instead of `online`. */
-  users?: OnlineUser[];
 }
 
 // ── Crew events (crews.js, crew-features.js) ─────────────────────────────────
@@ -248,9 +246,9 @@ export interface LocationPeerUpdatePayload extends VersionedPayload {
 }
 
 /** 'left' = member left the crew; 'kicked' = removed by an owner/admin. */
-export type LocationPeerStoppedReason = 'stop' | 'disconnect' | 'expired' | 'left' | 'kicked';
+export type LocationPeerStoppedReason = 'stop' | 'disconnect' | 'left' | 'kicked';
 
-/** server→client: a peer stopped / disconnected / TTL-expired / left / was removed. */
+/** server→client: a peer stopped / disconnected / left / was removed. */
 export interface LocationPeerStoppedPayload extends VersionedPayload {
   crewId: string;
   userId: string;
@@ -307,29 +305,15 @@ export interface ServerToClientEvents {
   'profile:created': (data: ProfileCreatedPayload) => void;
   'profile:updated': (data: ProfileUpdatedPayload) => void;
   'profile:deleted': (data: ProfileDeletedPayload) => void;
-  // Legacy alias — server emits profile:updated but old code listened to these
-  'profile:joined': (data: ProfileUpdatedPayload) => void;
-  'profile:left': (data: ProfileDeletedPayload) => void;
-
-  // Picks / notes — profile:updated is the actual event, but the client
-  // registers explicit listeners for these names for clarity.
-  'pick:updated': (data: ProfileUpdatedPayload) => void;
-  'pick:removed': (data: ProfileDeletedPayload) => void;
-  'picks:updated': (data: ProfileUpdatedPayload) => void;
-  'note:saved': (data: ProfileUpdatedPayload) => void;
 
   // Festival
   'festival:created': (data: FestivalCreatedPayload) => void;
   'festival:updated': (data: FestivalIdPayload) => void;
   'festival:deleted': (data: FestivalIdPayload) => void;
-  'festival:set-added': (data: FestivalIdPayload) => void;
-  'festival:set-updated': (data: FestivalIdPayload) => void;
   'festival:access-revoked': (data: { festivalId: string; profileId?: string }) => void;
 
   // Presence
   'presence:update': (data: PresenceUpdatePayload) => void;
-  'user:online': (user: OnlineUser) => void;
-  'user:offline': (userId: string) => void;
 
   // Crew
   'crew:updated': (data: CrewUpdatedPayload) => void;
@@ -339,8 +323,6 @@ export interface ServerToClientEvents {
   'crew:member-kicked': (data: { crewId: string; userId: string }) => void;
   /** Sent only to the evicted member's own socket(s) — tear down that crew. */
   'crew:access-revoked': (data: { crewId: string }) => void;
-  'crew:member-added': (data: CrewMemberEventPayload) => void;
-  'crew:member-removed': (data: CrewMemberEventPayload) => void;
   'crew:home-base-updated': (data: CrewHomeBaseUpdatedPayload) => void;
   'crew:meeting-point-created': (data: CrewMeetingPointPayload) => void;
   'crew:meeting-point-updated': (data: CrewMeetingPointPayload) => void;
@@ -369,12 +351,12 @@ export interface ServerToClientEvents {
   'sos:seen': (data: SosSeenPayload) => void;
 
   // Identity
-  'profile:identity': (data: { festivalId: string; profileId: string; username: string; avatarUrl?: string }) => void;
+  'profile:identity': (data: { festivalId: string; profileId: string; username: string; name?: string | null; avatarUrl?: string }) => void;
 
   // System
   'session:revoked': (data: { reason: string }) => void;
   'server:draining': (data: { message: string }) => void;
-  error: (error: { message: string; code?: string }) => void;
+  error: (error: SocketErrorPayload) => void;
   connect: () => void;
   disconnect: (reason: string) => void;
 }
@@ -383,30 +365,42 @@ export interface ServerToClientEvents {
 // Client → Server event map
 // ════════════════════════════════════════════════════════════════════════════════
 
+/** Failure fields every socket ack carries when ok is false. code is the stable machine-readable value. */
+export interface SocketAckFailure {
+  error?: string;
+  code?: string;
+}
+
+/** Async failure pushed on the 'error' event. code is the same vocabulary as SocketAckFailure.code. */
+export interface SocketErrorPayload {
+  message: string;
+  code?: string;
+}
+
 export interface ClientToServerEvents {
   'join:festival': (
     festivalId: string,
     data: { _v?: number; userToken?: string | null },
-    ack: (response: { ok: boolean; profileId?: string; error?: string }) => void,
+    ack: (response: { ok: boolean; profileId?: string } & SocketAckFailure) => void,
   ) => void;
   'leave:festival': () => void;
   'join:crew': (
     data: { _v?: number; crewId: string },
-    ack: (response: { ok: boolean; crewId?: string; error?: string }) => void,
+    ack: (response: { ok: boolean; crewId?: string } & SocketAckFailure) => void,
   ) => void;
   'leave:crew': (data: { _v?: number; crewId: string }) => void;
   'reconnect:restore': (
     data: { _v?: number; festivalId: string; userToken?: string | null },
-    ack: (response: { ok: boolean; profileId?: string; error?: string }) => void,
+    ack: (response: { ok: boolean; profileId?: string } & SocketAckFailure) => void,
   ) => void;
 
   // Live Location (ephemeral). SOS raise/clear are HTTP POSTs, not socket emits.
-  'location:share': (data: LocationSharePayload, ack: (response: { ok: boolean; code?: string }) => void) => void;
+  'location:share': (data: LocationSharePayload, ack: (response: { ok: boolean } & SocketAckFailure) => void) => void;
   'location:update': (data: LocationUpdatePayload) => void;
-  'location:stop': (data: LocationStopPayload, ack: (response: { ok: boolean }) => void) => void;
+  'location:stop': (data: LocationStopPayload, ack: (response: { ok: boolean } & SocketAckFailure) => void) => void;
   // Late-joiner snapshot request; handled by the server in routes/socket.ts.
   'location:sync': (
     data: LocationSyncPayload,
-    ack: (response: { ok: boolean; peers: LocationPeerUpdatePayload[] }) => void,
+    ack: (response: { ok: boolean; peers: LocationPeerUpdatePayload[] } & SocketAckFailure) => void,
   ) => void;
 }

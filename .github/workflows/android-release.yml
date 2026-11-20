@@ -22,7 +22,7 @@ name: Android Release (AAB)
 #   gh workflow run android-release.yml --ref <branch> -f submit=false
 #
 # One-time setup (secrets, keystore export, versionCode offset) is documented in
-# packages/mobile/.github-android-release-SETUP.md — READ IT before first run.
+# the private deploy runbook, not in this public repo — READ IT before first run.
 
 on:
   workflow_dispatch:
@@ -51,8 +51,8 @@ env:
   # and is unrelated to N, so we add this offset to keep our codes ABOVE the last
   # EAS one and monotonically increasing per run.
   #
-  # ACTION REQUIRED (user): look up the last published versionCode in Play Console
-  # (Release > Production/Internal > App bundle explorer) and set this to a value
+  # ACTION REQUIRED (owner): 100 is a placeholder, not a verified value. Look up the last published
+  # versionCode in Play Console (Release > Production/Internal > App bundle explorer) and set this to a value
   # strictly greater than (last EAS versionCode - current github.run_number) so
   # the very first GH build already exceeds it. A safe choice: set the offset to
   # (last EAS versionCode + 100). E.g. last EAS code 42 -> set 142 here.
@@ -122,7 +122,7 @@ jobs:
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 secret is empty — release would be signed with the debug key. Aborting. See packages/mobile/.github-android-release-SETUP.md"
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is empty — release would be signed with the debug key. Aborting. See the private deploy runbook."
             exit 1
           fi
           # Keep ONLY base64 alphabet chars before decoding. GNU `base64 -d`
@@ -171,6 +171,8 @@ jobs:
         working-directory: packages/mobile/android
         env:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          # Inlined into the JS bundle by Metro; unset, the release ships with Sentry off.
+          EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
           SENTRY_DISABLE_AUTO_UPLOAD: ${{ secrets.SENTRY_AUTH_TOKEN == '' && 'true' || 'false' }}
         run: ./gradlew bundleRelease --no-daemon --stacktrace
 

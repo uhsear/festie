@@ -39,15 +39,66 @@ import crypto from 'crypto';
 import { z } from 'zod';
 import { generateTraceId, propagateTraceId } from '../lib/tracing.js';
 import { schemas } from '../lib/schemas.js';
-import { LOCATION_UPDATE_LIMIT, registerSharingSocket, unregisterSharingSocket } from '../lib/rate-limiting.js';
+import {
+  LOCATION_UPDATE_LIMIT,
+  registerSharingSocket,
+  shareWindowError,
+  unregisterSharingSocket,
+} from '../lib/rate-limiting.js';
 import {
   writeLivePosition,
   dropLivePosition,
   readLiveSnapshot,
   clampCapturedAt,
+  MAX_SHARE_WINDOW_MS,
 } from '../lib/live-location-cache.js';
 import { noteBatteryLevel } from '../lib/battery-low.js';
 import type { LocationPeerStoppedReason } from '../packages/shared/src/types/socket-events.js';
+import type { AppConfig } from '../lib/config.js';
+import type { SocketEmitter } from '../lib/emitter.js';
+import type { createLogger } from '../lib/logger.js';
+import type { createPresenceManager, PresenceIo, RealtimeSocket } from '../lib/presence.js';
+import type { AppState, RouteDeps, Stores } from '../lib/types/app-context.js';
+
+type Log = ReturnType<typeof createLogger>;
+type Ack = (response: unknown) => void;
+type PresenceManager = ReturnType<typeof createPresenceManager>;
+
+/** The slice of the Socket.IO `Server` these handlers use; tests pass a fake. */
+type HandlerIo = PresenceIo & {
+  on(event: 'connection', listener: (socket: RealtimeSocket) => void): unknown;
+  sockets: { adapter: { rooms: Map<string, { size: number }> } };
+  engine?: { clientsCount: number };
+};
+
+interface SocketSession {
+  userId: string;
+  username: string;
+}
+
+type JoinResult =
+  | { ok: false; error: string; code?: string; disconnect?: boolean }
+  | { ok: true; session: SocketSession; profile: { id: string } };
+
+/** What `setupSocketHandlers` reads from the route deps. */
+interface SocketHandlerDeps
+  extends Pick<
+    PresenceManager,
+    'removeSocketPresence' | 'clearSocketSession' | 'leaveFestivalRealtime' | 'disconnectSocket' | 'emitPresence' | 'setSocketPresence'
+  > {
+  config: AppConfig;
+  log: Log;
+  state: { metrics?: AppState['metrics'] };
+  io: HandlerIo;
+  resolveSocketToken: (socket: RealtimeSocket, explicitToken: string | null | undefined, cookieName: string) => string | null;
+  validateUserSession: (token: string | null) => Promise<SocketSession | null>;
+  getFestivalById: (id: string) => Promise<unknown>;
+  getUserFestivalProfile: (userId: string, festivalId: string) => Promise<{ id: string } | null>;
+  emitter: SocketEmitter;
+  stores: Stores;
+  consumeSocketRateLimit: (key: string, limit: number) => boolean;
+  redis: any;
+}
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Socket Event Validation Schemas
@@ -113,7 +164,7 @@ _memoryRefreshTimer.unref();
  * @param timeoutMs - Timeout in milliseconds (default: 5000)
  * @returns Wrapped function that enforces timeout
  */
-function withAckTimeout(respond: any, log: any, connectionId: any, timeoutMs = 5000) {
+function withAckTimeout(respond: Ack | null, log: Log, connectionId: string, timeoutMs = 5000): Ack {
   if (typeof respond !== 'function') return () => {};
   let called = false;
   const timer = setTimeout(() => {
@@ -123,11 +174,11 @@ function withAckTimeout(respond: any, log: any, connectionId: any, timeoutMs = 5
       called = true;
     }
   }, timeoutMs);
-  return (...args: any[]) => {
+  return (response) => {
     if (called) return;
     called = true;
     clearTimeout(timer);
-    respond(...args);
+    respond(response);
   };
 }
 
@@ -147,7 +198,7 @@ const MEMBERSHIP_RECHECK_EVERY_N = 20;
  * @param deps - Dependencies injected from server.ts
  * @returns void - Attaches listeners to the io instance in deps
  */
-export default function setupSocketHandlers(deps: any) {
+export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps) {
   const {
     config,
     log,
@@ -167,7 +218,7 @@ export default function setupSocketHandlers(deps: any) {
     emitPresence,
     setSocketPresence,
     redis,
-  } = deps;
+  } = deps as SocketHandlerDeps;
 
   // ── Shared auth + room join helper ─────────────────────────────────
   // Used by both join:festival and reconnect:restore to avoid ~40 lines
@@ -176,23 +227,23 @@ export default function setupSocketHandlers(deps: any) {
    * Authenticate a socket, validate festival membership, join the room,
    * and update presence state.
    */
-  async function authenticateAndJoinRoom(socket: any, festivalId: any, userToken: any, { rateLimitScope }: any) {
+  async function authenticateAndJoinRoom(socket: RealtimeSocket, festivalId: string, userToken: string | null | undefined, { rateLimitScope }: { rateLimitScope: string }): Promise<JoinResult> {
     // Auth + rate limit BEFORE any DB lookups
     const sessionToken = resolveSocketToken(socket, userToken, config.USER_SESSION_COOKIE);
     const session = await validateUserSession(sessionToken);
     if (!session) {
       // Callers ack first, then disconnect: the disconnect closes the transport, so a later ack arrives as {}.
-      return { ok: false, error: 'Authentication required', disconnect: true };
+      return { ok: false, error: 'Authentication required', code: 'AUTH_REQUIRED', disconnect: true };
     }
     if (!consumeSocketRateLimit(`${rateLimitScope}:${session.userId}`, config.SOCKET_JOIN_RATE_LIMIT)) {
-      socket.emit('error', { message: 'Realtime rate limit exceeded' });
-      return { ok: false, error: 'Rate limited' };
+      socket.emit('error', { message: 'Realtime rate limit exceeded', code: 'RATE_LIMITED' });
+      return { ok: false, error: 'Rate limited', code: 'RATE_LIMITED' };
     }
 
     // Cheap capacity checks before DB queries
     const heapUsed = _cachedMemoryUsage.heapUsed;
     if (heapUsed > config.MAX_HEAP_BYTES * 0.75) {
-      return { ok: false, error: 'Server is at capacity' };
+      return { ok: false, error: 'Server is at capacity', code: 'SERVER_AT_CAPACITY' };
     }
     const roomSize = io.sockets.adapter.rooms.get(festivalId)?.size || 0;
     if (roomSize >= config.ROOM_CAPACITY_LIMIT) {
@@ -202,11 +253,11 @@ export default function setupSocketHandlers(deps: any) {
 
     // DB lookups
     if (!(await getFestivalById(festivalId))) {
-      return { ok: false, error: 'Festival not found' };
+      return { ok: false, error: 'Festival not found', code: 'FESTIVAL_NOT_FOUND' };
     }
     const profile = await getUserFestivalProfile(session.userId, festivalId);
     if (!profile) {
-      return { ok: false, error: 'Not a member of this festival' };
+      return { ok: false, error: 'Not a member of this festival', code: 'NOT_A_MEMBER' };
     }
 
     // Leave only the PREVIOUS festival room (leaveFestivalRealtime does the
@@ -231,7 +282,7 @@ export default function setupSocketHandlers(deps: any) {
     socket.authenticated = true;
 
     // setSocketPresence is idempotent per socket id, so a reconnect adds no duplicate.
-    setSocketPresence(festivalId, session.userId, session.username, socket.id).catch((err: any) =>
+    setSocketPresence(festivalId, session.userId, session.username, socket.id).catch((err: Error) =>
       // A failed presence write means emitPresence below runs on a stale set
       // and the user is silently absent from who's-online — warn so it's
       // visible in prod, not buried at debug.
@@ -243,11 +294,11 @@ export default function setupSocketHandlers(deps: any) {
   }
 
   // Main Socket.IO connection handler
-  io.on('connection', (socket: any) => {
+  io.on('connection', (socket) => {
     // Assign a request ID for tracking this socket connection through its lifecycle
     socket.data.connectionId = crypto.randomUUID();
     // Propagate trace ID from handshake headers or generate new one
-    propagateTraceId(socket, socket.handshake?.headers?.['x-trace-id'] || generateTraceId());
+    propagateTraceId(socket, (socket.handshake?.headers?.['x-trace-id'] as string | undefined) || generateTraceId());
     const connectionId = socket.data.connectionId;
 
     if (state.metrics) {
@@ -256,7 +307,7 @@ export default function setupSocketHandlers(deps: any) {
       if (current > state.metrics.peakConnections) state.metrics.peakConnections = current;
     }
 
-    socket.on('join:festival', async (festivalId: any, data: any = {}, ack: any) => {
+    socket.on('join:festival', async (festivalId: string, data: { _v?: number; userToken?: string | null } | Ack = {}, ack?: Ack) => {
       // Support both (festivalId, ack) and (festivalId, data, ack) signatures
       if (typeof data === 'function') {
         ack = data;
@@ -269,7 +320,7 @@ export default function setupSocketHandlers(deps: any) {
         const validation = joinFestivalEventSchema.safeParse(eventData);
         if (!validation.success) {
           log.debug('join:festival schema validation failed', { connectionId, errors: validation.error.issues });
-          return respond({ ok: false, error: 'SCHEMA_MISMATCH', requiredVersion: 1 });
+          return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH', requiredVersion: 1 });
         }
 
         const { festivalId: validatedFestivalId } = validation.data;
@@ -282,9 +333,9 @@ export default function setupSocketHandlers(deps: any) {
           return;
         }
         respond({ ok: true, profileId: result.profile.id });
-      } catch (error: any) {
-        log.error('join:festival error', { error: error && error.message, socketId: socket.id, connectionId });
-        respond({ ok: false, error: 'Server error' });
+      } catch (error) {
+        log.error('join:festival error', { error: error && (error as Error).message, socketId: socket.id, connectionId });
+        respond({ ok: false, error: 'Server error', code: 'SERVER_ERROR' });
       }
     });
 
@@ -292,7 +343,7 @@ export default function setupSocketHandlers(deps: any) {
       try {
         const scopeKey = socket.data?.userId ? `leave:${socket.data.userId}` : `leave:${socket.id}`;
         if (!consumeSocketRateLimit(scopeKey, config.SOCKET_LEAVE_RATE_LIMIT)) {
-          socket.emit('error', { message: 'Realtime rate limit exceeded' });
+          socket.emit('error', { message: 'Realtime rate limit exceeded', code: 'RATE_LIMITED' });
           return;
         }
         const festivalId = leaveFestivalRealtime(socket, io);
@@ -300,8 +351,10 @@ export default function setupSocketHandlers(deps: any) {
         const { crewId, sharingCrewId, userId } = socket.data ?? {};
         if (sharingCrewId) {
           socket.to(`crew:${sharingCrewId}`).emit('location:peer-stopped', { _v: 1, crewId: sharingCrewId, userId, reason: 'left' });
-          unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
-          void dropLivePosition(redis, sharingCrewId, userId);
+          unregisterSharingSocket(redis, userId, socket.id).catch((err: Error) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
+          void dropLivePosition(redis, sharingCrewId, userId as string);
         }
         for (const room of socket.rooms) {
           if (room !== socket.id) socket.leave(room);
@@ -313,18 +366,18 @@ export default function setupSocketHandlers(deps: any) {
         delete socket.data.crewMembershipCheckedAt;
         delete socket.data.crewMembershipUpdateCount;
         if (festivalId) emitPresence(festivalId, io);
-      } catch (error: any) {
-        log.error('leave:festival error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
-        socket.emit('error', { message: 'Failed to leave festival' });
+      } catch (error) {
+        log.error('leave:festival error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
+        socket.emit('error', { message: 'Failed to leave festival', code: 'SERVER_ERROR' });
       }
     });
 
     // ── Crew Room Management ──────────────────────────────────────────
-    socket.on('join:crew', async (data: any = {}, ack: any) => {
+    socket.on('join:crew', async (data: { _v?: number; crewId?: string } = {}, ack?: Ack) => {
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         const validation = joinCrewEventSchema.safeParse({ _v: data._v || 1, crewId: data.crewId || '' });
-        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH' });
+        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH' });
 
         const { crewId } = validation.data;
         const sessionToken =
@@ -332,7 +385,7 @@ export default function setupSocketHandlers(deps: any) {
         const session = await validateUserSession(sessionToken);
         if (!session) {
           // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
-          respond({ ok: false, error: 'Authentication required' });
+          respond({ ok: false, error: 'Authentication required', code: 'AUTH_REQUIRED' });
           disconnectSocket(socket, io);
           return;
         }
@@ -340,14 +393,14 @@ export default function setupSocketHandlers(deps: any) {
         socket.data.userSessionToken = sessionToken;
 
         if (!consumeSocketRateLimit(`crew-join:${session.userId}`, config.SOCKET_JOIN_RATE_LIMIT)) {
-          return respond({ ok: false, error: 'Rate limited' });
+          return respond({ ok: false, error: 'Rate limited', code: 'RATE_LIMITED' });
         }
 
         // Verify crew exists and user is a member
         const crew = await stores.crews.getById(crewId);
-        if (!crew) return respond({ ok: false, error: 'Crew not found' });
+        if (!crew) return respond({ ok: false, error: 'Crew not found', code: 'CREW_NOT_FOUND' });
         const membership = await stores.crews.getMember(crewId, session.userId);
-        if (!membership) return respond({ ok: false, error: 'Not a member of this crew' });
+        if (!membership) return respond({ ok: false, error: 'Not a member of this crew', code: 'NOT_A_MEMBER' });
 
         // Leave previous crew room if any
         const prevCrewId = socket.data?.crewId;
@@ -360,13 +413,13 @@ export default function setupSocketHandlers(deps: any) {
 
         log.debug('join:crew', { userId: session.userId, crewId });
         respond({ ok: true, crewId });
-      } catch (error: any) {
-        log.error('join:crew error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
-        respond({ ok: false, error: 'Server error' });
+      } catch (error) {
+        log.error('join:crew error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
+        respond({ ok: false, error: 'Server error', code: 'SERVER_ERROR' });
       }
     });
 
-    socket.on('leave:crew', async (data: any = {}) => {
+    socket.on('leave:crew', async (data: { _v?: number; crewId?: string } = {}) => {
       try {
         const validation = leaveCrewEventSchema.safeParse({ _v: data._v || 1, crewId: data.crewId || '' });
         if (!validation.success) return;
@@ -396,7 +449,9 @@ export default function setupSocketHandlers(deps: any) {
             reason: 'left',
           });
           delete socket.data.sharingCrewId;
-          unregisterSharingSocket(redis, session.userId, socket.id).catch(() => {});
+          unregisterSharingSocket(redis, session.userId, socket.id).catch((err: Error) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
           // Phase 3C: evict the cached position on crew-leave.
           void dropLivePosition(redis, crewId, session.userId);
         }
@@ -406,8 +461,8 @@ export default function setupSocketHandlers(deps: any) {
         // Reset the streaming-path membership cache so a future re-join re-checks.
         delete socket.data.crewMembershipCheckedAt;
         delete socket.data.crewMembershipUpdateCount;
-      } catch (error: any) {
-        log.error('leave:crew error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
+      } catch (error) {
+        log.error('leave:crew error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
       }
     });
 
@@ -417,20 +472,21 @@ export default function setupSocketHandlers(deps: any) {
     // gates). No Postgres writes anywhere in these handlers. Sharing is more
     // sensitive than viewing, so location:share re-verifies crew membership.
 
-    socket.on('location:share', async (data: any = {}, ack: any) => {
+    socket.on('location:share', async (data: unknown = {}, ack?: Ack) => {
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         if (config.LIVE_LOCATION_ENABLED === false) {
-          return respond({ ok: false, code: 'FEATURE_DISABLED' });
+          return respond({ ok: false, error: 'FEATURE_DISABLED', code: 'FEATURE_DISABLED' });
         }
         const validation = schemas.locationShare.safeParse(data);
-        if (!validation.success) return respond({ ok: false, code: 'SCHEMA_MISMATCH' });
+        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH' });
         const { crewId, position, expiresAt } = validation.data;
+        if (shareWindowError(expiresAt, Date.now())) return respond({ ok: false, error: 'INVALID_EXPIRY', code: 'INVALID_EXPIRY' });
 
         // The socket must already be joined to this crew room (join:crew set it).
-        if (socket.data?.crewId !== crewId) return respond({ ok: false, code: 'NOT_IN_CREW_ROOM' });
-        if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
-          return respond({ ok: false, code: 'RATE_LIMITED' });
+        if (socket.data?.crewId !== crewId) return respond({ ok: false, error: 'NOT_IN_CREW_ROOM', code: 'NOT_IN_CREW_ROOM' });
+        if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_LOCATION_SHARE_RATE_LIMIT)) {
+          return respond({ ok: false, error: 'RATE_LIMITED', code: 'RATE_LIMITED' });
         }
 
         // Re-validate session + membership: sharing live GPS is more sensitive
@@ -440,19 +496,19 @@ export default function setupSocketHandlers(deps: any) {
         const session = await validateUserSession(sessionToken);
         if (!session) {
           // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
-          respond({ ok: false, code: 'AUTH_REQUIRED' });
+          respond({ ok: false, error: 'AUTH_REQUIRED', code: 'AUTH_REQUIRED' });
           disconnectSocket(socket, io);
           return;
         }
         const membership = await stores.crews.getMember(crewId, session.userId);
-        if (!membership) return respond({ ok: false, code: 'NOT_A_MEMBER' });
+        if (!membership) return respond({ ok: false, error: 'NOT_A_MEMBER', code: 'NOT_A_MEMBER' });
 
         // M3: cluster-wide cap on concurrently-sharing sockets per user so one
         // user can't multiply the crew-room broadcast budget by opening many
         // sockets. Best-effort (fail-open when Redis is down).
         const sharingCap = await registerSharingSocket(redis, session.userId, socket.id);
         if (!sharingCap.allowed) {
-          return respond({ ok: false, code: 'TOO_MANY_SHARING_SOCKETS' });
+          return respond({ ok: false, error: 'TOO_MANY_SHARING_SOCKETS', code: 'TOO_MANY_SHARING_SOCKETS' });
         }
 
         /* eslint-disable require-atomic-updates -- socket.data is per-connection, not a shared race target */
@@ -461,6 +517,8 @@ export default function setupSocketHandlers(deps: any) {
         socket.data.username = session.username;
         socket.data.sharingCrewId = crewId;
         socket.data.sharingSince = Date.now();
+        // The accepted window end: later updates may not outlive it or claim a later one.
+        socket.data.sharingUntil = expiresAt ? Date.parse(expiresAt) : socket.data.sharingSince + MAX_SHARE_WINDOW_MS;
         // M2: seed the streaming-path membership re-check cache — membership was
         // just verified above, so the next recheck is N updates / T seconds out.
         socket.data.crewMembershipCheckedAt = Date.now();
@@ -501,13 +559,13 @@ export default function setupSocketHandlers(deps: any) {
 
         log.debug('location:share', { userId: session.userId, crewId });
         respond({ ok: true });
-      } catch (error: any) {
-        log.error('location:share error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
-        respond({ ok: false, code: 'SERVER_ERROR' });
+      } catch (error) {
+        log.error('location:share error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
+        respond({ ok: false, error: 'SERVER_ERROR', code: 'SERVER_ERROR' });
       }
     });
 
-    socket.on('location:update', async (data: any = {}) => {
+    socket.on('location:update', async (data: unknown = {}) => {
       // High-frequency fire-rate path: share already validated membership and
       // stamped socket.data. Drop silently + emit a structured error if the
       // sender isn't actively sharing this crew. A short-TTL membership re-check
@@ -526,8 +584,18 @@ export default function setupSocketHandlers(deps: any) {
           socket.emit('error', { message: 'Not sharing location to this crew', code: 'NOT_SHARING' });
           return;
         }
+        const sharingUntil = socket.data.sharingUntil;
+        if (
+          shareWindowError(expiresAt, Date.now()) ||
+          Date.now() >= sharingUntil! ||
+          (expiresAt && Date.parse(expiresAt) > sharingUntil!)
+        ) {
+          socket.emit('error', { message: 'Share window ended or too long', code: 'INVALID_EXPIRY' });
+          return;
+        }
 
-        const userId = socket.data.userId;
+        // location:share stamped userId, username and sharingUntil before sharingCrewId could match.
+        const userId = socket.data.userId as string;
 
         // M3: cluster-wide per-user fire-rate cap (Redis-backed, falls back to
         // the per-process limiter when Redis is unavailable). Caps total
@@ -535,6 +603,13 @@ export default function setupSocketHandlers(deps: any) {
         const check = await LOCATION_UPDATE_LIMIT.consumeAsync(userId, redis);
         if (!check.allowed) {
           socket.emit('error', { message: 'Location update rate limit exceeded', code: 'RATE_LIMITED' });
+          return;
+        }
+        // Refresh this socket's slot so the sharing-socket cap holds past the TTL.
+        const sharingCap = await registerSharingSocket(redis, userId, socket.id);
+        if (!sharingCap.allowed) {
+          delete socket.data.sharingCrewId;
+          socket.emit('error', { message: 'Too many sharing sockets', code: 'TOO_MANY_SHARING_SOCKETS' });
           return;
         }
 
@@ -560,7 +635,9 @@ export default function setupSocketHandlers(deps: any) {
             delete socket.data.sharingCrewId;
             socket.leave('crew:' + crewId);
             if (socket.data?.crewId === crewId) delete socket.data.crewId;
-            unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
+            unregisterSharingSocket(redis, userId, socket.id).catch((err: Error) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
             // Phase 3C: evict the cached position so the snapshot can't reveal a
             // revoked member's last-known GPS.
             void dropLivePosition(redis, crewId, userId);
@@ -574,7 +651,7 @@ export default function setupSocketHandlers(deps: any) {
           _v: 1,
           crewId,
           userId,
-          username: socket.data.username,
+          username: socket.data.username as string,
           lat,
           lng,
           accuracy,
@@ -596,16 +673,16 @@ export default function setupSocketHandlers(deps: any) {
         // Phase 3C: refresh the late-joiner snapshot cache with this fix.
         void writeLivePosition(redis, crewId, payload);
         void noteBatteryLevel({ redis, stores, emitter, log }, payload);
-      } catch (error: any) {
-        log.error('location:update error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
+      } catch (error) {
+        log.error('location:update error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
       }
     });
 
-    socket.on('location:stop', (data: any = {}, ack: any) => {
+    socket.on('location:stop', (data: unknown = {}, ack?: Ack) => {
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         const validation = schemas.locationStop.safeParse(data);
-        if (!validation.success) return respond({ ok: false });
+        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH' });
         const { crewId } = validation.data;
         const userId = socket.data?.userId;
 
@@ -619,12 +696,14 @@ export default function setupSocketHandlers(deps: any) {
         // teardown path. Both are accepted because a socket that shared to crew A
         // and later joined crew B must still be able to stop A.
         if (socket.data?.crewId !== crewId && socket.data?.sharingCrewId !== crewId) {
-          return respond({ ok: false });
+          return respond({ ok: false, error: 'NOT_IN_CREW_ROOM', code: 'NOT_IN_CREW_ROOM' });
         }
 
         if (socket.data?.sharingCrewId === crewId) {
           delete socket.data.sharingCrewId;
-          unregisterSharingSocket(redis, userId, socket.id).catch(() => {});
+          unregisterSharingSocket(redis, userId, socket.id).catch((err: Error) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
         }
         // Phase 3C: evict the cached position so a snapshot won't show a member
         // who just stopped (peer-stopped already tells currently-connected peers).
@@ -640,9 +719,9 @@ export default function setupSocketHandlers(deps: any) {
         }
         log.debug('location:stop', { userId, crewId });
         respond({ ok: true });
-      } catch (error: any) {
-        log.error('location:stop error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
-        respond({ ok: false });
+      } catch (error) {
+        log.error('location:stop error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
+        respond({ ok: false, error: 'SERVER_ERROR', code: 'SERVER_ERROR' });
       }
     });
 
@@ -654,20 +733,20 @@ export default function setupSocketHandlers(deps: any) {
     // location:share (re-validates session + membership) because it reveals
     // peers' GPS. Fail-open: any miss/Redis-hiccup returns { ok: false, peers: [] }
     // and positions still arrive on the next live tick — no regression.
-    socket.on('location:sync', async (data: any = {}, ack: any) => {
+    socket.on('location:sync', async (data: unknown = {}, ack?: Ack) => {
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         if (config.LIVE_LOCATION_ENABLED === false) {
-          return respond({ ok: false, peers: [] });
+          return respond({ ok: false, error: 'FEATURE_DISABLED', code: 'FEATURE_DISABLED', peers: [] });
         }
         const validation = schemas.locationSync.safeParse(data);
-        if (!validation.success) return respond({ ok: false, peers: [] });
+        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH', peers: [] });
         const { crewId } = validation.data;
 
         // Must already be joined to this crew room (join:crew gated membership).
-        if (socket.data?.crewId !== crewId) return respond({ ok: false, peers: [] });
-        if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_JOIN_RATE_LIMIT)) {
-          return respond({ ok: false, peers: [] });
+        if (socket.data?.crewId !== crewId) return respond({ ok: false, error: 'NOT_IN_CREW_ROOM', code: 'NOT_IN_CREW_ROOM', peers: [] });
+        if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_LOCATION_SYNC_RATE_LIMIT)) {
+          return respond({ ok: false, error: 'RATE_LIMITED', code: 'RATE_LIMITED', peers: [] });
         }
 
         // Re-validate session + membership: the snapshot reveals peers' last-known
@@ -677,12 +756,12 @@ export default function setupSocketHandlers(deps: any) {
         const session = await validateUserSession(sessionToken);
         if (!session) {
           // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
-          respond({ ok: false, peers: [] });
+          respond({ ok: false, error: 'AUTH_REQUIRED', code: 'AUTH_REQUIRED', peers: [] });
           disconnectSocket(socket, io);
           return;
         }
         const membership = await stores.crews.getMember(crewId, session.userId);
-        if (!membership) return respond({ ok: false, peers: [] });
+        if (!membership) return respond({ ok: false, error: 'NOT_A_MEMBER', code: 'NOT_A_MEMBER', peers: [] });
 
         // Serve last-known positions from the ephemeral Redis cache, excluding
         // the requester (they render their own marker locally).
@@ -692,15 +771,15 @@ export default function setupSocketHandlers(deps: any) {
         });
         log.debug('location:sync', { userId: session.userId, crewId, peerCount: peers.length });
         respond({ ok: true, peers });
-      } catch (error: any) {
-        log.error('location:sync error', { error: error.message, socketId: socket.id, userId: socket.data?.userId });
-        respond({ ok: false, peers: [] });
+      } catch (error) {
+        log.error('location:sync error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
+        respond({ ok: false, error: 'SERVER_ERROR', code: 'SERVER_ERROR', peers: [] });
       }
     });
 
-    // #17: Reconnection recovery — client sends last known state, server gap-fills
+    // #17: Reconnection recovery — re-auth and rejoin the room. No server gap-fill: the client refetches missed state.
     // Security: Always re-validate session on reconnect (not just initial connection)
-    socket.on('reconnect:restore', async (data: any = {}, ack: any) => {
+    socket.on('reconnect:restore', async (data: { _v?: number; festivalId?: string; userToken?: string | null } = {}, ack?: Ack) => {
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         // Schema validation for reconnect:restore event
@@ -708,12 +787,11 @@ export default function setupSocketHandlers(deps: any) {
           _v: data._v || 1,
           festivalId: data.festivalId || '',
           userToken: data.userToken || null,
-          lastMessageSequence: data.lastMessageSequence || null,
         };
         const validation = reconnectRestoreEventSchema.safeParse(eventData);
         if (!validation.success) {
           log.info('reconnect:restore schema validation failed', { errors: validation.error.issues });
-          return respond({ ok: false, error: 'SCHEMA_MISMATCH', requiredVersion: 1 });
+          return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH', requiredVersion: 1 });
         }
 
         const { festivalId } = validation.data;
@@ -734,17 +812,17 @@ export default function setupSocketHandlers(deps: any) {
           ok: true,
           profileId: result.profile.id,
         });
-      } catch (error: any) {
+      } catch (error) {
         log.error('reconnect:restore error', {
-          error: error.message,
+          error: (error as Error).message,
           socketId: socket.id,
           userId: socket.data?.userId,
         });
-        respond({ ok: false, error: 'Server error' });
+        respond({ ok: false, error: 'Server error', code: 'SERVER_ERROR' });
       }
     });
 
-    socket.on('disconnect', (reason: any) => {
+    socket.on('disconnect', (reason: string) => {
       try {
         if (state.metrics) state.metrics.socketDisconnections += 1;
         if (reason === 'transport error' || reason === 'transport close') {
@@ -769,7 +847,9 @@ export default function setupSocketHandlers(deps: any) {
             reason: 'disconnect',
           });
           // M3: drop the concurrent-sharing registration for this socket.
-          unregisterSharingSocket(redis, sharingUserId, socket.id).catch(() => {});
+          unregisterSharingSocket(redis, sharingUserId, socket.id).catch((err: Error) =>
+          log.warn('unregisterSharingSocket failed', { error: err.message, socketId: socket.id }),
+        );
           // Phase 3C: evict the cached position so a force-quit sharer's marker
           // isn't served in a later snapshot (the staleness filter is a backstop).
           void dropLivePosition(redis, sharingCrewId, sharingUserId);
@@ -778,9 +858,9 @@ export default function setupSocketHandlers(deps: any) {
         removeSocketPresence(socket);
         clearSocketSession(socket);
         if (festivalId) emitPresence(festivalId, io);
-      } catch (error: any) {
+      } catch (error) {
         log.error('disconnect cleanup error', {
-          error: error.message,
+          error: (error as Error).message,
           socketId: socket.id,
           userId: socket.data?.userId,
         });

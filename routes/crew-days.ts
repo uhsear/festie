@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { crewMembership } from '../lib/app-context/session';
 
 /**
  * Crew days (090): which festival days each member attends.
@@ -22,8 +23,9 @@ export default function createCrewDaysRoutes(deps: any) {
     schemas,
     validate,
     validateParams,
-    io,
+    emitter,
   } = deps;
+  const crewMember = crewMembership(deps);
 
   const router = Router({ mergeParams: true });
 
@@ -32,11 +34,10 @@ export default function createCrewDaysRoutes(deps: any) {
     userAuth,
     rateLimit(120, 'crew-days-list'),
     validateParams(schemas.crewIdParams),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
-        const membership = await stores.crews.getMember(crewId, req.user.userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
         const days = await stores.crewDays.listByCrew(crewId);
         return sendSuccess(res, { days });
       } catch (err: any) {
@@ -52,14 +53,13 @@ export default function createCrewDaysRoutes(deps: any) {
     rateLimit(30, 'crew-days-update'),
     validateParams(schemas.crewIdParams),
     validate(schemas.crewDays),
+    crewMember,
     async (req: any, res: any) => {
       try {
         const crewId = sanitizeIdentifier(req.validatedParams.crewId);
         const userId = req.user.userId;
         const { days: answers } = req.validatedBody;
 
-        const membership = await stores.crews.getMember(crewId, userId);
-        if (!membership) return sendError(res, 403, 'Not a crew member', ErrorCodes.FORBIDDEN);
 
         const dayCount = await stores.crewDays.dayCount(crewId);
         if (answers.some((d: { dayIndex: number }) => d.dayIndex >= dayCount)) {
@@ -67,7 +67,7 @@ export default function createCrewDaysRoutes(deps: any) {
         }
 
         const days = await stores.crewDays.replaceMine(crewId, userId, answers);
-        io.to('crew:' + crewId).emit('crew:days-updated', { crewId, userId, days });
+        emitter.toCrew(crewId, 'crew:days-updated', { crewId, userId, days });
         return sendSuccess(res, { days });
       } catch (err: any) {
         log.error('update crew days error', { error: err.message });

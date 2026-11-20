@@ -10,7 +10,7 @@
 import { parentPort } from 'worker_threads';
 import sharp from 'sharp';
 
-parentPort!.on('message', async (msg: any) => {
+parentPort!.on('message', async (msg: { buffer: ArrayBuffer; maxPixels: number; size: number; quality: number; fit?: 'cover' | 'inside' }) => {
   try {
     const { buffer, maxPixels, size, quality, fit } = msg;
     const buf = Buffer.from(buffer);
@@ -38,7 +38,7 @@ parentPort!.on('message', async (msg: any) => {
     // Transferable, so the transfer-list arg needs the concrete type (TS 5.9).
     const ab = result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength) as ArrayBuffer;
     parentPort!.postMessage({ result: ab }, [ab]);
-  } catch (err: any) {
-    parentPort!.postMessage({ error: err.message, statusCode: 400 });
+  } catch (err) {
+    parentPort!.postMessage({ error: (err as Error).message, statusCode: 400 });
   }
 });

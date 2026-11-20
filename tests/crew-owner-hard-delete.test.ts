@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { createStores } from '../lib/db/index.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Real-DB test (skip-gated like the other integration suites): verifies that
 // deleting a user who CREATED a crew transfers ownership to the longest-standing
@@ -10,8 +11,6 @@ import { createStores } from '../lib/db/index.js';
 // BOTH the interactive path (users.hardDelete) and the batch path
 // (retention_cleanup(), migration 060). crews.created_by is ON DELETE RESTRICT
 // (migration 031), so without this handling the user delete aborts on the FK.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
   let pool: Pool;
@@ -20,6 +19,10 @@ describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
   before(async () => {
     pool = new Pool({ connectionString: TEST_DATABASE_URL });
     stores = createStores(pool);
+    // Other suites truncate users, which removes the placeholder migration 116 seeds.
+    await pool.query(
+      "INSERT INTO users (id, username, display_name, created_at, deleted_at) VALUES ('deleted-user', '[deleted user]', 'Deleted user', NOW(), '9999-12-31T00:00:00Z') ON CONFLICT (id) DO NOTHING",
+    );
   });
 
   after(async () => {
@@ -97,6 +100,38 @@ describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
     assert.equal(rows.length, 0, 'sole-member crew is deleted with the user');
   });
 
+  test('hardDelete and retention_cleanup keep the expenses a deleted user paid', async () => {
+    await mkFestival('gdpr-test-f6');
+    await mkUser('gdpr-test-px-a');
+    await mkUser('gdpr-test-px-b');
+    await mkUser('gdpr-test-px-c');
+    await mkCrew('gdpr-test-crew6', 'gdpr-test-f6', 'gdpr-test-px-c');
+    await addMember('gdpr-test-crew6', 'gdpr-test-px-c', 'owner', '2020-01-01T00:00:00Z');
+    const mkExpense = (id: string, paidBy: string) =>
+      pool.query(
+        "INSERT INTO crew_expenses (id, crew_id, paid_by, description, amount, split_with) VALUES ($1, 'gdpr-test-crew6', $2, 'Food', 10, '[]')",
+        [id, paidBy],
+      );
+    await mkExpense('gdpr-test-exp-a', 'gdpr-test-px-a');
+    await mkExpense('gdpr-test-exp-b', 'gdpr-test-px-b');
+    await pool.query("UPDATE users SET deleted_at = now() - interval '40 days' WHERE id = 'gdpr-test-px-b'");
+
+    await stores.users.hardDelete('gdpr-test-px-a');
+    await pool.query('SELECT retention_cleanup()');
+
+    const { rows } = await pool.query(
+      "SELECT id, paid_by FROM crew_expenses WHERE id LIKE 'gdpr-test-exp-%' ORDER BY id",
+    );
+    assert.deepEqual(
+      rows.map((r: any) => r.paid_by),
+      ['deleted-user', 'deleted-user'],
+      'both paths keep the expense and re-point it at the placeholder',
+    );
+    const { rows: placeholder } = await pool.query("SELECT 1 FROM users WHERE id = 'deleted-user'");
+    assert.equal(placeholder.length, 1, 'retention_cleanup never purges the placeholder user');
+    await pool.query("DELETE FROM crews WHERE id = 'gdpr-test-crew6'");
+  });
+
   test('retention_cleanup transfers/deletes owned crews for users soft-deleted > 30 days', async () => {
     await mkFestival('gdpr-test-f3');
     await mkUser('gdpr-test-rc-owner');
@@ -126,7 +161,7 @@ describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
   });
 });
 
-// The avatar orphan sweep in lib/shutdown.ts deletes any file in the avatar
+// The avatar orphan sweep in lib/background-tasks.ts deletes any file in the avatar
 // directory whose key is not in `users.avatar_key`. It used to build that set
 // from getUsers(), which filters `WHERE deleted_at IS NULL`, so a soft-deleted
 // account lost its avatar file on the next sweep — within six hours, not at the
@@ -151,7 +186,7 @@ describe('avatar orphan sweep — soft-deleted accounts keep their file', { skip
     await stores.users.create({ id: 'avatar-sweep-1', username: 'avatar-sweep-1', passwordHash: 'x' });
     await pool.query("UPDATE users SET avatar_key = 'abc123deadbeef' WHERE id = $1", ['avatar-sweep-1']);
 
-    // Exactly the query lib/shutdown.ts runs to build the valid-key set.
+    // Exactly the query lib/background-tasks.ts runs to build the valid-key set.
     const live = await pool.query('SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL');
     assert.ok(
       live.rows.some((r: any) => r.avatar_key === 'abc123deadbeef'),

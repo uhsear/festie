@@ -17,7 +17,6 @@
 
 import crypto from 'crypto';
 import type { Request, Response, Router } from 'express';
-import { withTransaction } from '../lib/db/connection';
 import type { Identity, IdentityProvider } from '../lib/db/stores/identities';
 import {
   checkRegistrationConflicts,
@@ -94,22 +93,16 @@ export default function createOAuthRoutes(deps: any): Router {
   }
 
   async function emailInUse(email: string): Promise<boolean> {
-    const { rows } = await stores.pool.query('SELECT id FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL', [
-      email.toLowerCase(),
-    ]);
-    return rows.length > 0;
+    return stores.users.emailInUse(email);
   }
 
   // The identity's user, or the soft-deleted user inside its 30-day window (login reactivates it).
   async function loadIdentityUser(identity: Identity) {
     const active = await getUserById(identity.userId);
     if (active) return active;
-    const { rows } = await stores.pool.query(
-      "SELECT username FROM users WHERE id = $1 AND deleted_at > NOW() - INTERVAL '30 days'",
-      [identity.userId],
-    );
-    if (!rows[0]) return null;
-    const deleted = await stores.users.findDeletedByUsername(rows[0].username);
+    const username = await stores.users.findRecentlyDeletedUsername(identity.userId);
+    if (!username) return null;
+    const deleted = await stores.users.findDeletedByUsername(username);
     return deleted?.id === identity.userId ? deleted : null;
   }
 
@@ -127,10 +120,7 @@ export default function createOAuthRoutes(deps: any): Router {
   // Undo a user created by a sign-up that lost the identity race. Orphan profiles
   // it claimed go back to unclaimed, because festival_profiles.user_id is RESTRICT.
   async function discardUser(userId: string) {
-    await withTransaction(stores.pool, async (client: any) => {
-      await client.query('UPDATE festival_profiles SET user_id = NULL WHERE user_id = $1', [userId]);
-      await client.query('DELETE FROM users WHERE id = $1', [userId]);
-    });
+    await stores.users.discard(userId);
     invalidateUserCache();
   }
 

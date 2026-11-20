@@ -7,11 +7,7 @@ import { describe, it, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { Pool } from 'pg';
 import * as spotify from '../lib/spotify';
-
-// DB skip-gate: migration tests require a live Postgres database.
-// Uses TEST_DATABASE_URL only — never falls back to DATABASE_URL (production safety).
-// Set TEST_DATABASE_URL to run them (always set in CI). See tests/README.md.
-const DATABASE_URL = process.env.TEST_DATABASE_URL;
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // ── Spotify module tests ────────────────────────────────────────────
 
@@ -48,11 +44,11 @@ describe('lib/spotify.js', () => {
 
 // ── Migration 014: artists JSONB and b2b_separator ──────────────────
 
-describe('migration 014: artists JSONB and b2b_separator', { skip: !DATABASE_URL }, () => {
+describe('migration 014: artists JSONB and b2b_separator', { skip }, () => {
   let pool: any;
 
   before(() => {
-    pool = new Pool({ connectionString: DATABASE_URL, max: 2 });
+    pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 2 });
   });
   after(async () => { if (pool) await pool.end(); });
 
@@ -94,11 +90,11 @@ describe('migration 014: artists JSONB and b2b_separator', { skip: !DATABASE_URL
 
 // ── Migration 015: schema hardening ─────────────────────────────────
 
-describe('migration 015: schema hardening (post-apply)', { skip: !DATABASE_URL }, () => {
+describe('migration 015: schema hardening (post-apply)', { skip }, () => {
   let pool: any;
 
   before(() => {
-    pool = new Pool({ connectionString: DATABASE_URL, max: 2 });
+    pool = new Pool({ connectionString: TEST_DATABASE_URL, max: 2 });
   });
   after(async () => { if (pool) await pool.end(); });
 

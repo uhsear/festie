@@ -630,4 +630,29 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       await pool.end();
     }
   });
+
+  test('crew ratings and crew wrap refuse a user who is not in the crew', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const stamp = Date.now();
+    const alice = await registerUser(server, 'ratings-gate-a-' + stamp);
+    const outsider = await registerUser(server, 'ratings-gate-o-' + stamp);
+    await joinFestivalProfile(server, alice.token);
+    await joinFestivalProfile(server, outsider.token);
+    const crew = await createCrew(server, alice.token);
+
+    await server.request
+      .get(`/api/v1/ratings/crew/${crew.id}/festival/fest-1`)
+      .set('x-user-token', alice.token)
+      .expect(200);
+    await server.request
+      .get(`/api/v1/ratings/crew/${crew.id}/festival/fest-1`)
+      .set('x-user-token', outsider.token)
+      .expect(403);
+    await server.request
+      .get(`/api/v1/ratings/crew-wrap/${crew.id}/fest-1`)
+      .set('x-user-token', outsider.token)
+      .expect(403);
+  });
 });

@@ -53,6 +53,7 @@ describe('session: createUserSession', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -74,6 +75,7 @@ describe('session: createUserSession', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -99,6 +101,7 @@ describe('session: validateUserSession', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -115,6 +118,7 @@ describe('session: validateUserSession', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -134,6 +138,7 @@ describe('session: validateUserSession', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -161,6 +166,7 @@ describe('session: invalidateUserSessions', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -182,6 +188,7 @@ describe('session: userAuth', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -205,6 +212,7 @@ describe('session: userAuth', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -231,6 +239,7 @@ describe('session: adminAuth', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -255,6 +264,7 @@ describe('session: adminAuth', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });
@@ -279,6 +289,7 @@ describe('session: adminAuth', () => {
       disconnectSocket: () => {},
       emitPresence: () => {},
       disconnectUserSockets: () => {},
+      fetchRevocationSockets: async (io: any) => Array.from(io.of('/').sockets.values()),
       sendError: noopSendError,
       ErrorCodes,
     });

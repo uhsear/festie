@@ -12,6 +12,7 @@ import { describe, test, mock, beforeEach } from 'node:test';
 import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import request from 'supertest';
+import { ioEmitter } from './_io-emitter';
 
 type TestReq = Request & Record<string, unknown>;
 
@@ -35,7 +36,7 @@ const noopLog = { info: noop, warn: noop, error: noop, debug: noop };
 
 function makeCrewDeps(overrides: Record<string, unknown> = {}) {
   const ioObj = makeIo();
-  return {
+  const deps = {
     express,
     config: { NODE_ENV: 'test', PUBLIC_ORIGIN: 'http://localhost:3000', MAX_PROFILES_PER_FESTIVAL: 500 },
     log: noopLog,
@@ -43,8 +44,13 @@ function makeCrewDeps(overrides: Record<string, unknown> = {}) {
     getUserFestivalProfile: mock.fn(async () => ({ id: 'prof-1', userId: 'user-1' })),
     getUserById: mock.fn(async (id: string) => ({ id, username: 'testuser' })),
     getProfiles: mock.fn(async () => []),
-    emitter: { profileCreated: mock.fn() },
+    emitter: { profileCreated: mock.fn(), ...ioEmitter(ioObj) },
     userAuth: (req: TestReq, _res: Response, next: NextFunction) => { req.user = { userId: 'user-1', username: 'testuser' }; next(); },
+    adminAuth: async (req: TestReq, res: Response, next: NextFunction) => {
+      req.user = { userId: 'user-1', username: 'testuser' };
+      if (!(await (deps.stores as any).roles.hasRole('user-1', 'admin'))) return res.status(403).json({ data: null, error: { message: 'Admin access required', status: 403, code: 'FORBIDDEN' } });
+      return next();
+    },
     setNoStore: (_res: Response) => {},
     sanitizeString: (s: unknown, _max?: number) => (typeof s === 'string' ? s.trim() : ''),
     sanitizeIdentifier: (s: unknown, _max?: number) => (typeof s === 'string' ? s.trim() : ''),
@@ -128,12 +134,13 @@ function makeCrewDeps(overrides: Record<string, unknown> = {}) {
     },
     ...overrides,
   };
+  return deps;
 }
 
 async function buildCrewApp(overrides: Record<string, unknown> = {}) {
   const deps = makeCrewDeps(overrides);
   const { default: createCrewRoutes } = await import('../routes/crews.js');
-  const router = createCrewRoutes(deps);
+  const router = createCrewRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/crews', router);
@@ -2044,7 +2051,7 @@ function makeShareDeps(overrides: Record<string, unknown> = {}) {
 async function buildShareApp(overrides: Record<string, unknown> = {}) {
   const deps = makeShareDeps(overrides);
   const { default: createShareRoutes } = await import('../routes/share.js');
-  const router = createShareRoutes(deps);
+  const router = createShareRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/s', router);

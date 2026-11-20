@@ -10,9 +10,8 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it } from 'node:test';
 
 import createNotificationsStore from '../lib/db/stores/notifications.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 // The shared helpers exit the process without a test database, so load them only when it exists.
 const helpers = skip ? null : await import('./_integration-helpers');
 
@@ -110,6 +109,42 @@ describe('GET /notifications/history (database)', { concurrency: 1, skip }, () =
       assert.equal(counts.get(userA), 2);
       assert.equal(counts.get(userB), 1);
       assert.equal(counts.has('no-such-user'), false);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it('keeps one inbox row per user, type and eventKey but allows one push row per device', async () => {
+    const h = helpers!;
+    const server = await h.startServer();
+    servers.push(server);
+    const tag = runTag();
+    const a = await h.registerUser(server, `dedup-${tag}`);
+    const userId = a.user.id as string;
+
+    const pool = new h.Pool({ connectionString: h.TEST_DATABASE_URL });
+    try {
+      const { notificationLog } = createNotificationsStore(pool, {});
+      const row = (id: string, platform: string, status: string) => ({
+        id: `${id}-${tag}`,
+        userId,
+        type: 'wrap_ready',
+        title: 't',
+        body: 'b',
+        dataJson: JSON.stringify({ eventKey: `wrap:${tag}` }),
+        status,
+        platform,
+        errorMessage: null,
+      });
+      await Promise.all([notificationLog.insert(row('i1', 'inbox', 'inbox')), notificationLog.insert(row('i2', 'inbox', 'inbox'))]);
+      await notificationLog.insert(row('p1', 'ios', 'sent'));
+      await notificationLog.insert(row('p2', 'ios', 'sent'));
+      const { rows } = await pool.query(
+        'SELECT platform, COUNT(*)::int AS n FROM notification_log WHERE user_id = $1 GROUP BY platform',
+        [userId],
+      );
+      const byPlatform = Object.fromEntries(rows.map((r: any) => [r.platform, r.n]));
+      assert.deepEqual(byPlatform, { inbox: 1, ios: 2 });
     } finally {
       await pool.end();
     }

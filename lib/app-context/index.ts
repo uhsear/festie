@@ -93,7 +93,7 @@ import { createCookieHelpers } from './cookies';
 import { createCacheHelpers } from './cache';
 import { createSessionHelpers } from './session';
 import { createAppleClient } from '../oauth/apple';
-import type { AppContext, Stores } from '../types/app-context';
+import type { AppContext, AppState, Stores } from '../types/app-context';
 
 const log = createLogger();
 setCryptoLogger(log.child({ module: 'crypto-auth' }));
@@ -129,6 +129,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
   // correlate against. server.ts now gates readiness on it.
   const { pool, migrationsReady } = openPlannerDatabase({
     databaseUrl: config.DATABASE_URL,
+    nodeEnv: config.NODE_ENV,
     log,
     poolSize: config.PG_POOL_MAX,
     poolMin: config.PG_POOL_MIN,
@@ -207,7 +208,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
   };
 
   // ── State ─────────────────────────────────────────────────────────────
-  const state: Record<string, any> = {
+  const state: AppState = {
     userTaskQueues: new Map(),
     rateLimits: new Map(),
     routeRateLimits: new Map(),
@@ -218,14 +219,14 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     userAuthRateLimits: new Map(),
     onlineUsers: new Map(),
     sseConnections: new Map(),
-    timers: [] as any[],
-    stores,
+    timers: [],
+    stores: stores as unknown as Stores,
     metrics: {
       totalRequests: 0,
       totalErrors: 0,
       totalDuration: 0,
       requestCount: 0,
-      statusCodes: {} as Record<string, any>,
+      statusCodes: {},
       socketConnections: 0,
       socketDisconnections: 0,
       socketErrors: 0,
@@ -238,18 +239,18 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
   const _rateLimitCleanupTimer = setInterval(() => {
     const now = Date.now();
     const _rateLimitMaps = [
-      { map: state.rateLimits, window: config.RATE_LIMIT_WINDOW, tsField: 'start' },
-      { map: state.routeRateLimits, window: config.RATE_LIMIT_WINDOW, tsField: 'start' },
-      { map: state.authRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'start' },
-      { map: state.adminAuthRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'start' },
-      { map: state.socketConnectRateLimits, window: config.SOCKET_CONNECT_WINDOW, tsField: 'windowStart' },
-      { map: state.socketRateLimits, window: config.SOCKET_EVENT_WINDOW, tsField: 'windowStart' },
-      { map: state.userAuthRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'windowStart' },
+      { map: state.rateLimits, window: config.RATE_LIMIT_WINDOW, tsField: 'start' as const },
+      { map: state.routeRateLimits, window: config.RATE_LIMIT_WINDOW, tsField: 'start' as const },
+      { map: state.authRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'start' as const },
+      { map: state.adminAuthRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'start' as const },
+      { map: state.socketConnectRateLimits, window: config.SOCKET_CONNECT_WINDOW, tsField: 'windowStart' as const },
+      { map: state.socketRateLimits, window: config.SOCKET_EVENT_WINDOW, tsField: 'windowStart' as const },
+      { map: state.userAuthRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'windowStart' as const },
     ];
     for (const { map, window: win, tsField } of _rateLimitMaps) {
       const cutoff = now - win * 2;
       for (const [key, entry] of map) {
-        if ((entry[tsField] || 0) < cutoff) map.delete(key);
+        if ((entry[tsField] ?? 0) < cutoff) map.delete(key);
       }
     }
   }, 60_000);
@@ -379,6 +380,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     disconnectSessionTokens,
     removeFestivalSockets,
     removeProfileSockets,
+    fetchRevocationSockets,
   } = presenceManager;
 
   const emitProfileIdentityWrapped = (user: any, io: any) => emitProfileIdentity(user, io);
@@ -392,6 +394,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     disconnectSocket,
     emitPresence,
     disconnectUserSockets,
+    fetchRevocationSockets,
     sendError,
     ErrorCodes,
   });
@@ -539,6 +542,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     disconnectSessionTokens,
     removeFestivalSockets,
     removeProfileSockets,
+    fetchRevocationSockets,
 
     // Response helpers (re-exports)
     sendSuccess,

@@ -30,19 +30,20 @@ import { parsePageParams, paginateArray } from '../lib/pagination.js';
 import mountAdminUserRoutes from './admin-users.js';
 import mountAdminAuditRoutes from './admin-audit.js';
 import mountAdminBulkRoutes from './admin-bulk.js';
+import mountAdminPolicyNoticeRoutes from './admin-policy-notice.js';
 import * as spotify from '../lib/spotify.js';
+import { z } from 'zod';
 import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
-import { withTransactionRetry } from '../lib/db/connection.js';
-import { lockFestivalAny } from '../lib/db/stores/lineup-imports.js';
+import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { rewriteCopies, type ArtistRecord } from '../lib/db/stores/artists.js';
 import { recentRequestTotals } from '../lib/recent-requests.js';
 import type { Router } from 'express';
+import type { Request, Response } from 'express';
+import type { RouteDeps } from '../lib/types';
+import type { Query } from '../lib/types/app-context';
 
-// Re-engagement news types the growth report counts. Add a type here when it joins the news set.
-const GROWTH_NEWS_TYPES = ['lineup_drop', 'set_times_out', 'days_out'];
-
-export default function createAdminRoutes(deps: any): Router {
+export default function createAdminRoutes(deps: RouteDeps): Router {
   const {
     express,
     config,
@@ -61,8 +62,10 @@ export default function createAdminRoutes(deps: any): Router {
     _invalidateFestivalCache,
     rateLimit,
     schemas,
+    validate,
     validateQuery,
   } = deps;
+  const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const router = express.Router();
   const adminWriteLimit = rateLimit(config.ADMIN_WRITE_RATE_LIMIT_MAX, 'admin-write');
@@ -113,7 +116,7 @@ export default function createAdminRoutes(deps: any): Router {
   // POST /login, /verify, /logout removed — admin auth is role-based via user session (v2.1)
 
   // ── GET /dashboard — aggregated stats for admin dashboard ────────────
-  router.get('/dashboard', adminAuth, async (req: any, res: any) => {
+  router.get('/dashboard', adminAuth, async (req: Request, res: Response) => {
     try {
       setNoStore(res);
       const mem = process.memoryUsage();
@@ -188,8 +191,8 @@ export default function createAdminRoutes(deps: any): Router {
         recentActivity: enrichedActivity,
         groupedActivity,
       });
-    } catch (error: any) {
-      log.error('admin dashboard load failed', { error: error.message });
+    } catch (error) {
+      log.error('admin dashboard load failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load dashboard', ErrorCodes.INTERNAL_ERROR);
     }
   });
@@ -210,139 +213,63 @@ export default function createAdminRoutes(deps: any): Router {
   mountAdminUserRoutes({ router, deps, ctx }); // /users, /users/:id/*
   mountAdminAuditRoutes({ router, deps, ctx }); // /audit
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*
-
-  const REF_COUNTS_SQL = `
-  SELECT
-    to_char(day, 'YYYY-MM-DD') AS day,
-    ref,
-    signups
-  FROM
-    signup_ref_counts
-  WHERE
-    day > CURRENT_DATE - $1::int
-  ORDER BY
-    day DESC,
-    signups DESC,
-    ref ASC
-`;
+  mountAdminPolicyNoticeRoutes({ router, deps, ctx }); // /policy-notice
 
   // ── GET /ref-counts — anonymous sign-ups per ?ref= source (migration 070) ──
-  router.get('/ref-counts', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
+  router.get('/ref-counts', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const { rows } = await stores.pool.query(REF_COUNTS_SQL, [req.validatedQuery.days]);
-      return sendSuccess(res, rows);
-    } catch (error: any) {
-      log.error('admin ref counts failed', { error: error.message });
+      return sendSuccess(res, await stores.analytics.refCounts((req.validatedQuery as Query).days));
+    } catch (error) {
+      log.error('admin ref counts failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load sign-up ref counts', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
   // ── GET /growth — read-only growth report: sign-ups by ref, follows, and people reached by news pushes, emails and held pushes ──
   // Every ref count is a floor: mobile sign-ups and visitors who cleared storage carry no ref.
-  router.get('/growth', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: any, res: any) => {
+  router.get('/growth', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const days = [req.validatedQuery.days];
-      const dayOf = (column: string) => `to_char(${column}::date, 'YYYY-MM-DD')`;
-      const [signups, followsPerDay, followers, news] = await Promise.all([
-        stores.pool.query(REF_COUNTS_SQL, days),
-        stores.pool.query(
-          `SELECT ${dayOf('ff.created_at')} AS day, ff.festival_id AS "festivalId", f.name AS "festivalName", COUNT(*)::int AS follows
-           FROM festival_follows ff JOIN festivals f ON f.id = ff.festival_id
-           WHERE ff.created_at >= CURRENT_DATE - ($1::int - 1)
-           GROUP BY 1, 2, 3 ORDER BY 1 DESC, 4 DESC, 3 ASC`,
-          days,
-        ),
-        stores.pool.query(
-          `
-  SELECT
-    ff.festival_id AS "festivalId",
-    f.name AS "festivalName",
-    COUNT(*)::int AS followers
-  FROM
-    festival_follows ff
-    JOIN festivals f ON f.id = ff.festival_id
-  GROUP BY
-    1,
-    2
-  ORDER BY
-    3 DESC,
-    2 ASC
-`,
-        ),
-        // People, not rows: send.ts logs one row per device and reengagement.ts one per email.
-        stores.pool.query(
-          `
-  SELECT
-    type,
-    CASE
-      WHEN status = 'held' THEN 'held'
-      WHEN platform = 'email' THEN 'email'
-      ELSE 'push'
-    END AS channel,
-    COUNT(DISTINCT user_id)::int AS count
-  FROM
-    notification_log
-  WHERE
-    type = ANY ($2::text[])
-    AND status IN ('sent', 'held')
-    AND created_at >= CURRENT_DATE - ($1::int - 1)
-  GROUP BY
-    1,
-    2
-  ORDER BY
-    1 ASC,
-    2 ASC
-`,
-          [...days, GROWTH_NEWS_TYPES],
-        ),
-      ]);
+      const growth = await stores.analytics.growth((req.validatedQuery as Query).days);
       const newsBy = (channel: string) =>
-        news.rows.filter((row: any) => row.channel === channel).map(({ type, count }: any) => ({ type, count }));
+        growth.news.filter((row: any) => row.channel === channel).map(({ type, count }: any) => ({ type, count }));
       return sendSuccess(res, {
-        days: req.validatedQuery.days,
-        signupsByRef: signups.rows,
-        followsPerDay: followsPerDay.rows,
-        followers: followers.rows,
+        days: (req.validatedQuery as Query).days,
+        signupsByRef: growth.signups,
+        followsPerDay: growth.followsPerDay,
+        followers: growth.followers,
         newsPushes: newsBy('push'),
         newsEmails: newsBy('email'),
         newsHeld: newsBy('held'),
         generatedAt: new Date().toISOString(),
       });
-    } catch (error: any) {
-      log.error('admin growth report failed', { error: error.message });
+    } catch (error) {
+      log.error('admin growth report failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load the growth report', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
   // ── POST /festivals/:id/backfill-spotify — auto-populate link_url via Spotify ──
   // Preserves Agent E's SPOTIFY_CLIENT_ID/SPOTIFY_CLIENT_SECRET config reads.
-  router.post('/festivals/:id/backfill-spotify', adminAuth, adminWriteLimit, async (req: any, res: any) => {
+  // An absent body is an empty request, as before.
+  const spotifyBackfillBody = validate(z.preprocess((body) => body ?? {}, spotifyBackfillSchema));
+  router.post('/festivals/:id/backfill-spotify', adminAuth, adminWriteLimit, spotifyBackfillBody, async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const parsed = spotifyBackfillSchema.safeParse(req.body ?? {});
-      if (!parsed.success) {
-        const issue = parsed.error.issues[0]!;
-        const message = issue.path.length > 0 ? `${issue.path.join('.')}: ${issue.message}` : issue.message;
-        return sendError(res, 400, message, ErrorCodes.VALIDATION_ERROR);
-      }
       const spotifyClientId = config.SPOTIFY_CLIENT_ID;
       const spotifyClientSecret = config.SPOTIFY_CLIENT_SECRET;
       if (!spotifyClientId || !spotifyClientSecret) {
         return sendError(res, 400, 'Spotify API credentials not configured', ErrorCodes.INVALID_INPUT);
       }
 
-      const festivalId = req.params.id;
-      const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [
-        festivalId,
-      ]);
-      if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      const festivalId = req.params.id as string;
+      if (!(await stores.festivals.exists(festivalId))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
       // Optional body: verified overrides (artistName -> spotifyUrl) take
       // precedence over search. A guess never replaces a link, and never touches an artist that
       // other festivals list: those artists are edited on the Artists tab.
-      const body = parsed.data;
+      const body = req.validatedBody as z.infer<typeof spotifyBackfillSchema>;
       const skipSearch = body.skipSearch === true; // overrides-only, no Spotify calls
       const setIds = body.setIds;
       const normName = (s: any) =>
@@ -367,16 +294,7 @@ export default function createAdminRoutes(deps: any): Router {
           .map((s) => s.trim())
           .filter(Boolean);
 
-      const setFilter = setIds ? ' AND id = ANY($2::text[])' : '';
-      // Also pick a B2B set where only some artists are linked:
-      // link_url holds the first linked artist, so it alone hides the others.
-      const missingLink = `(link_url IS NULL OR link_url = '' OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(artists) = 'array' THEN artists ELSE '[]'::jsonb END) a
-          WHERE COALESCE(a->'links'->>'spotify', '') = ''))`;
-      const { rows: sets } = await stores.pool.query(
-        `SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1 AND ${missingLink}${setFilter}`,
-        setIds ? [festivalId, setIds] : [festivalId],
-      );
+      const sets = await stores.festivals.findSetsMissingSpotify(festivalId, setIds);
       if (sets.length === 0) {
         return sendSuccess(res, { updated: 0, skipped: 0, total: 0, unmatched: [], message: 'No sets to backfill' });
       }
@@ -462,20 +380,15 @@ export default function createAdminRoutes(deps: any): Router {
       // changed since it was read is left for the next run.
       let updated = 0;
       if (writes.length > 0) {
-        updated = await withTransactionRetry(stores.pool, async (client: any) => {
-          const locked = await lockFestivalAny(client, festivalId);
-          if (!locked || locked.deleted_at) return 0;
-          const { rows: current } = await client.query(
-            'SELECT id, artists FROM festival_sets WHERE festival_id = $1 AND id = ANY($2::text[]) FOR UPDATE',
-            [festivalId, writes.map((w) => w.id)],
-          );
+        const outcome = await stores.festivals.inLockedTransaction(festivalId, async (client: any) => {
+          const current = await stores.festivals.lockSetArtists(client, festivalId, writes.map((w) => w.id));
           const unchanged = new Set(
             current.filter((row: any) => JSON.stringify(row.artists ?? []) === writes.find((w) => w.id === row.id)?.before).map((row: any) => row.id),
           );
           const fillIds = [
             ...new Set(writes.filter((w) => unchanged.has(w.id)).flatMap((w) => w.artists.filter((e) => fills.has(e)).map((e) => e.id as string))),
           ].sort();
-          if (fillIds.length > 0) await client.query('SELECT id FROM artists WHERE id = ANY($1::text[]) ORDER BY id FOR UPDATE', [fillIds]);
+          if (fillIds.length > 0) await stores.festivals.lockArtistRows(client, fillIds);
           // Under the festival and artist locks no save can add an artist to another festival unseen, so
           // this is the check that counts. A shared artist keeps the copy the set already holds.
           const sharedNow = await stores.artists.sharedElsewhere(festivalId, fillIds, client);
@@ -502,19 +415,16 @@ export default function createAdminRoutes(deps: any): Router {
               if (filled.changed) refreshed.push(filled.artist);
             }
             const firstSpotify = write.artists.find((x) => x.links?.spotify)?.links.spotify || null;
-            await client.query('UPDATE festival_sets SET artists = $1, link_url = COALESCE($2, link_url) WHERE id = $3', [
-              JSON.stringify(write.artists),
-              firstSpotify,
-              write.id,
-            ]);
+            await stores.festivals.writeSetArtists(client, write.id, write.artists, firstSpotify);
             written++;
           }
           // The row is the truth: the artist's copy in the announced lineup and in sets this run left out follows it.
           for (const artist of refreshed) await rewriteCopies(client, [festivalId], artist);
           // Bump the festival timestamp so the list/detail cache (keyed on updated_at) invalidates.
-          if (written > 0) await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
+          if (written > 0) await stores.festivals.touch(client, festivalId);
           return written;
         });
+        updated = outcome.missing ? 0 : outcome.value;
       }
       if (_invalidateFestivalCache) _invalidateFestivalCache();
       const unmatchedList = [...unmatched]
@@ -527,25 +437,18 @@ export default function createAdminRoutes(deps: any): Router {
         skipped: sets.length - updated,
         ip: getRequestIp(req),
       });
-      if (stores.auditLog) {
-        await stores.auditLog.insert({
-          actorType: 'admin',
-          actorId: req.user?.userId,
-          action: AUDIT_ACTIONS.SPOTIFY_BACKFILLED,
-          targetType: 'festival',
-          targetId: festivalId,
-          detailsJson: JSON.stringify({
-            updated,
-            skipped: sets.length - updated,
-            total: sets.length,
-            setIds: setIds?.length ?? null,
-            unmatched: unmatchedList.length,
-          }),
-          ip: getRequestIp(req),
-        });
-        // eslint-disable-next-line require-atomic-updates -- res is request-scoped
-        res.locals.auditWritten = true;
-      }
+      await writeAdminAudit(req, res, {
+        action: AUDIT_ACTIONS.SPOTIFY_BACKFILLED,
+        targetType: 'festival',
+        targetId: festivalId,
+        details: {
+          updated,
+          skipped: sets.length - updated,
+          total: sets.length,
+          setIds: setIds?.length ?? null,
+          unmatched: unmatchedList.length,
+        },
+      });
       return sendSuccess(res, {
         updated,
         skipped: sets.length - updated,
@@ -554,62 +457,33 @@ export default function createAdminRoutes(deps: any): Router {
         // On other festivals too: add their links on the Artists tab.
         skippedShared: [...skippedShared].sort((x, y) => x.localeCompare(y)).slice(0, 200),
       });
-    } catch (error: any) {
-      if (error?.code === 'SPOTIFY_RATE_LIMITED') {
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException)?.code === 'SPOTIFY_RATE_LIMITED') {
         return sendError(res, 503, 'Spotify is busy right now. Try again in a minute.', ErrorCodes.SPOTIFY_RATE_LIMITED);
       }
-      log.error('spotify backfill failed', { error: error.message, festivalId: req.params.id });
+      log.error('spotify backfill failed', { error: (error as NodeJS.ErrnoException).message, festivalId: req.params.id });
       return sendError(res, 500, 'Spotify backfill failed', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
   // ── GET /festivals/:id/set-engagement — picks and reminders per set ──
   // Reminders live in festival_profiles.reminders_json (no table since migration 013).
-  router.get('/festivals/:id/set-engagement', adminAuth, async (req: any, res: any) => {
+  router.get('/festivals/:id/set-engagement', adminAuth, async (req: Request, res: Response) => {
     try {
       setNoStore(res);
       const festivalId = req.params.id;
-      const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [
-        festivalId,
-      ]);
-      if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      if (!(await stores.festivals.exists(festivalId as string))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
-      const [picks, reminders] = await Promise.all([
-        stores.pool.query(
-          `
-  SELECT
-    fpp.set_id AS "setId",
-    COUNT(*)::int AS picks
-  FROM
-    festival_profile_picks fpp
-    JOIN festival_profiles fp ON fp.id = fpp.profile_id
-  WHERE
-    fp.festival_id = $1
-    AND fp.deleted_at IS NULL
-  GROUP BY
-    fpp.set_id
-`,
-          [festivalId],
-        ),
-        stores.pool.query(
-          `SELECT k AS "setId", COUNT(*)::int AS reminders
-           FROM festival_profiles fp,
-                jsonb_object_keys(fp.reminders_json) AS k
-           WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL
-             AND jsonb_typeof(fp.reminders_json) = 'object'
-           GROUP BY k`,
-          [festivalId],
-        ),
-      ]);
+      const { picks, reminders } = await stores.analytics.setEngagement(festivalId as string);
       // A Map, because reminder keys come from user data and could be "__proto__".
       const engagement = new Map<string, { picks: number; reminders: number }>();
-      for (const row of picks.rows) engagement.set(row.setId, { picks: row.picks, reminders: 0 });
-      for (const row of reminders.rows) {
+      for (const row of picks) engagement.set(row.setId, { picks: row.picks, reminders: 0 });
+      for (const row of reminders) {
         engagement.set(row.setId, { picks: engagement.get(row.setId)?.picks ?? 0, reminders: row.reminders });
       }
       return sendSuccess(res, Object.fromEntries(engagement));
-    } catch (error: any) {
-      log.error('admin set engagement failed', { error: error.message, festivalId: req.params.id });
+    } catch (error) {
+      log.error('admin set engagement failed', { error: (error as NodeJS.ErrnoException).message, festivalId: req.params.id });
       return sendError(res, 500, 'Failed to load set engagement', ErrorCodes.INTERNAL_ERROR);
     }
   });

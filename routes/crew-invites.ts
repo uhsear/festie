@@ -17,7 +17,7 @@ export default function createCrewInviteRoutes(deps: any) {
     schemas,
     validate,
     validateParams,
-    io,
+    emitter,
     crewNotify,
   } = deps;
 
@@ -113,8 +113,8 @@ export default function createCrewInviteRoutes(deps: any) {
       const members = await stores.crews.getMembers(crew.id);
 
       // Broadcast new member to crew room
-      if (io) {
-        io.to(`crew:${crew.id}`).emit('crew:member-joined', {
+      if (emitter) {
+        emitter.toCrew(crew.id, 'crew:member-joined', {
           crewId: crew.id,
           userId: req.user.userId,
           username: req.user.username,
@@ -156,11 +156,11 @@ export default function createCrewInviteRoutes(deps: any) {
         await stores.crews.regenerateInviteCode(crewId, newCode, inviteExpiresAt);
 
         // Members hold the old code; the payload carries no code, so they refetch it.
-        if (io) {
+        if (emitter) {
           const crew = (await stores.crews.getById(crewId)) ?? resolved.crew;
           const broadcastData = serializeCrewWithMembers(crew, await stores.crews.getMembers(crewId), null);
           delete broadcastData.inviteCode;
-          io.to(`crew:${crewId}`).emit('crew:updated', broadcastData);
+          emitter.toCrew(crewId, 'crew:updated', broadcastData);
         }
 
         log.info('crew:invite-regenerated', { crewId, userId: req.user.userId });

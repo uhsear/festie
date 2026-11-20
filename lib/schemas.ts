@@ -27,6 +27,7 @@
  * This keeps validation rules centralized and ensures consistency.
  */
 
+import type { NextFunction, Request, Response } from 'express';
 import { z } from 'zod';
 import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, MAX_PUBLIC_PAGE_SIZE } from './pagination';
 import {
@@ -41,6 +42,7 @@ import {
 import { sanitizeLinkRecord, sanitizeString, normalizeRecordKey, sanitizeIdentifier, validateTime, validateColor } from './helpers';
 import { sendError, ErrorCodes } from './response';
 import { normalizeLineup, todayInZone } from './lineup';
+import type { AppConfig } from './config';
 
 export { sanitizeLinkRecord };
 
@@ -168,7 +170,9 @@ const pickDeltasMap = z
   .refine((d) => Object.keys(d).length > 0, { message: 'pickDeltas needs at least one set' })
   .optional();
 const notesMap = z.record(z.string().max(100), shortText).optional();
-const allowedReminderMinutes = z.union(REMINDER_MINUTE_VALUES.map((m: any) => z.literal(m)) as any);
+const allowedReminderMinutes = z.union(
+  REMINDER_MINUTE_VALUES.map((m) => z.literal(m)) as [z.ZodLiteral<number>, ...z.ZodLiteral<number>[]],
+);
 const remindersMap = z.record(z.string().max(100), allowedReminderMinutes).optional();
 
 const profileUpdateSchema = z
@@ -183,7 +187,7 @@ const profileUpdateSchema = z
     interestAdd: z.array(identifier).max(50).optional(),
     interestRemove: z.array(identifier).max(50).optional(),
   })
-  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
+  .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), {
     message: 'At least one field required',
   })
   .refine((d) => d.picks === undefined || d.pickDeltas === undefined, {
@@ -357,9 +361,9 @@ const artistLinkSchema = z.object({
     .record(z.string().max(40), z.string().url().max(500).or(z.literal('')).optional().nullable())
     .optional()
     .default({} as Record<string, string | null | undefined>)
-    .transform((obj: any) =>
+    .transform((obj) =>
       Object.fromEntries(
-        Object.entries(obj || {}).filter(([k, v]: any) => KNOWN_LINK_PLATFORMS.has(k) && v != null && v !== ''),
+        Object.entries(obj || {}).filter(([k, v]) => KNOWN_LINK_PLATFORMS.has(k) && v != null && v !== ''),
       ),
     ),
 });
@@ -561,7 +565,7 @@ const festivalUpdateSchema = festivalCreateSchema
   .partial()
   // false saves without pushing schedule alerts to people whose picks changed.
   .extend({ notify: z.boolean().optional() })
-  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), 'At least one field required')
+  .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), 'At least one field required')
   // The PUT also rewrites name, stages and map from the body, so a lineup save from a stale copy needs the token.
   .refine((d) => d.lineup === undefined || d.expectedUpdatedAt !== undefined, {
     message: 'Saving the lineup needs expectedUpdatedAt, the updatedAt you loaded.',
@@ -648,7 +652,7 @@ export const crewUpdateSchema = z
     totemEmoji: z.string().trim().max(16).optional(),
     inviteLocked: z.boolean().optional(),
   })
-  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
+  .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), {
     message: 'At least one field required',
   });
 
@@ -759,6 +763,19 @@ export const artistBackfillSchema = z.object({
   planHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 });
 
+// The policy-update notice email. `send` needs a recent re-auth; `dry-run` only counts recipients.
+// noticeId keys the idempotency ledger, so one id is one notice. html is the admin's own markup; without it the mail is built from the escaped text.
+export const policyNoticeSchema = z
+  .object({
+    noticeId: z.string().regex(/^[a-z0-9][a-z0-9._-]{2,63}$/),
+    // No CR or LF: the subject becomes a mail header, so a line break would inject headers.
+    subject: z.string().trim().min(1).max(150).regex(/^[^\r\n]+$/),
+    text: z.string().trim().min(1).max(20000),
+    html: z.string().trim().min(1).max(100000).optional(),
+    mode: z.enum(['dry-run', 'send']),
+  })
+  .strict();
+
 // "Find Spotify links": the candidates for the artists on one festival, and the editor's picks.
 const artistSpotifyCandidatesSchema = z.object({
   festivalId: identifier,
@@ -864,7 +881,7 @@ export const meetingPointUpdateSchema = z
     // 055: toggle daily recurrence on an existing point.
     recursDaily: z.boolean().optional(),
   })
-  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
+  .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), {
     message: 'At least one field required',
   });
 
@@ -888,61 +905,34 @@ export const crewDaysSchema = z
   .transform((body) => ({ days: [...new Map(body.days.map((d) => [d.dayIndex, d])).values()] }));
 
 // ── Validation middleware factory ───────────────────────────────────
-export function validate(schema: z.ZodType<any>) {
-  return (req: any, res: any, next: any) => {
-    const result = schema.safeParse(req.body);
+/** The request members the factories read and write, so a bare double can stand in for a request. */
+type ValidatedRequest = Pick<Partial<Request>, 'body' | 'query' | 'params' | 'validatedBody' | 'validatedQuery' | 'validatedParams'>;
+
+/** One middleware for all three request sources, so the 400 shape stays in one place. */
+function validateSource(source: 'body' | 'query' | 'params', target: 'validatedBody' | 'validatedQuery' | 'validatedParams', schema: z.ZodType) {
+  return (req: ValidatedRequest, res: Partial<Response>, next: NextFunction) => {
+    const result = schema.safeParse(req[source]);
     if (!result.success) {
       const firstIssue = result.error.issues[0]!;
       const message =
         firstIssue.path.length > 0 ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : firstIssue.message;
-      return sendError(res, 400, message, ErrorCodes.VALIDATION_ERROR, {
+      return sendError(res as Response, 400, message, ErrorCodes.VALIDATION_ERROR, {
         fields: result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
       });
     }
-    req.validatedBody = result.data;
+    req[target] = result.data;
     next();
   };
 }
 
-/**
- * Middleware factory for query-string validation via Zod.
- * Parses req.query and stores the result in req.validatedQuery.
- */
-export function validateQuery(schema: z.ZodType<any>) {
-  return (req: any, res: any, next: any) => {
-    const result = schema.safeParse(req.query);
-    if (!result.success) {
-      const firstIssue = result.error.issues[0]!;
-      const message =
-        firstIssue.path.length > 0 ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : firstIssue.message;
-      return sendError(res, 400, message, ErrorCodes.VALIDATION_ERROR, {
-        fields: result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-      });
-    }
-    req.validatedQuery = result.data;
-    next();
-  };
-}
+/** Parses req.body and stores the result in req.validatedBody. */
+export const validate = (schema: z.ZodType) => validateSource('body', 'validatedBody', schema);
 
-/**
- * Middleware factory for URL params validation via Zod.
- * Parses req.params and stores the result in req.validatedParams.
- */
-export function validateParams(schema: z.ZodType<any>) {
-  return (req: any, res: any, next: any) => {
-    const result = schema.safeParse(req.params);
-    if (!result.success) {
-      const firstIssue = result.error.issues[0]!;
-      const message =
-        firstIssue.path.length > 0 ? `${firstIssue.path.join('.')}: ${firstIssue.message}` : firstIssue.message;
-      return sendError(res, 400, message, ErrorCodes.VALIDATION_ERROR, {
-        fields: result.error.issues.map((i) => ({ path: i.path.join('.'), message: i.message })),
-      });
-    }
-    req.validatedParams = result.data;
-    next();
-  };
-}
+/** Parses req.query and stores the result in req.validatedQuery. */
+export const validateQuery = (schema: z.ZodType) => validateSource('query', 'validatedQuery', schema);
+
+/** Parses req.params and stores the result in req.validatedParams. */
+export const validateParams = (schema: z.ZodType) => validateSource('params', 'validatedParams', schema);
 
 // ════════════════════════════════════════════════════════════════════════════════
 // Payload Normalizers (consolidated from lib/validation.js)
@@ -950,31 +940,102 @@ export function validateParams(schema: z.ZodType<any>) {
 
 const _MAX_ARTISTS = MAX_ARTISTS_PER_SET;
 
+/** One artist element of a set or lineup entry, as a client sends it or a stored row holds it. */
+interface ArtistPayload {
+  id?: unknown;
+  name?: unknown;
+  links?: unknown;
+  photo?: unknown;
+  genres?: unknown;
+}
+
+/** An artist element after cleaning. Photo and genres are copied from the stored set only. */
+interface SavedArtist {
+  id?: string;
+  name: string;
+  links: Record<string, string>;
+  photo?: string;
+  genres?: string[];
+}
+
+/** A set as a client sends it. */
+interface SetPayload {
+  id?: string;
+  artist?: string;
+  artists?: ArtistPayload[];
+  linkUrl?: unknown;
+  displayName?: string | null;
+  stageId?: string;
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
+/** A set as the stored festival holds it. */
+interface StoredSet {
+  id?: string;
+  artist?: string;
+  artists?: ArtistPayload[];
+  linkUrl?: unknown;
+  displayName?: string | null;
+}
+
+interface StagePayload {
+  id?: string;
+  name?: string;
+  color?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+interface DayPayload {
+  label?: string;
+  date?: string;
+  sets?: SetPayload[];
+}
+
+/** A festival as a client sends it, or as the festival cache holds it. */
+interface FestivalPayload {
+  id?: string;
+  name?: string;
+  location?: string;
+  b2bSeparator?: string;
+  timeZone?: string | null;
+  mapConfig?: unknown;
+  seriesId?: string | null;
+  createdAt?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  lineup?: unknown[];
+  stages?: StagePayload[];
+  days?: DayPayload[];
+}
+
 /**
  * Derive a display name from an artists array using the festival's b2b separator.
  * @param artists - Array of { name, links } objects
  * @param separator - B2B separator string (default: 'b2b')
  * @returns Display name like "DJ Alpha b2b DJ Beta"
  */
-export function artistDisplayName(artists: any[], separator = 'b2b'): string {
+export function artistDisplayName(artists: { name?: unknown }[], separator = 'b2b'): string {
   if (!artists?.length) return 'Unknown';
-  return artists.map((a: any) => a.name).join(` ${separator} `);
+  return artists.map((a) => a.name).join(` ${separator} `);
 }
 
 /**
  * Normalize a set's artist data — accepts both old (artist+linkUrl) and new (artists[]) formats.
  * Always returns a normalized artists array.
  */
-export function normalizeSetArtists(set: any): any[] {
-  if (set.artists?.length > 0) {
+// Returns any[]: tests index the result without an undefined check.
+export function normalizeSetArtists(set: SetPayload): any[] {
+  if (set.artists && set.artists.length > 0) {
     return set.artists
       .slice(0, _MAX_ARTISTS)
-      .map((a: any) => ({
+      .map((a) => ({
         ...artistIdOf(a),
         name: sanitizeString(a.name || '', 300),
         links: sanitizeLinkRecord(a.links),
       }))
-      .filter((a: any) => a.name);
+      .filter((a) => a.name);
   }
   // Backward compat: convert old artist + linkUrl to artists[]
   const name = sanitizeString(set.artist || '', 300);
@@ -986,34 +1047,34 @@ export function normalizeSetArtists(set: any): any[] {
 }
 
 /** The artists row id of an element, as `{ id }`, or nothing. Every writer keeps it. */
-function artistIdOf(element: any): { id?: string } {
+function artistIdOf(element: ArtistPayload | null | undefined): { id?: string } {
   const id = sanitizeIdentifier(element?.id, 100);
   return id ? { id } : {};
 }
 
 const _escapeRegExp = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-function _cleanArtistList(list: any[]): any[] {
+function _cleanArtistList(list: ArtistPayload[]): SavedArtist[] {
   return list
     .slice(0, _MAX_ARTISTS)
-    .map((a: any) => ({ ...artistIdOf(a), name: sanitizeString(a?.name || '', 300), links: sanitizeLinkRecord(a?.links) }))
-    .filter((a: any) => a.name);
+    .map((a) => ({ ...artistIdOf(a), name: sanitizeString(a?.name || '', 300), links: sanitizeLinkRecord(a?.links) }))
+    .filter((a) => a.name);
 }
 
-function _findArtist(list: any[], name: string): any {
+function _findArtist<T extends ArtistPayload>(list: T[], name: string): T | undefined {
   const key = name.toLowerCase();
-  return list.find((a: any) => typeof a?.name === 'string' && a.name.trim().toLowerCase() === key);
+  return list.find((a) => typeof a?.name === 'string' && a.name.trim().toLowerCase() === key);
 }
 
 // photo and genres are server-owned (lineup import and the Spotify backfill
 // write them); clients never send them, so they are copied from the stored set.
-function _storedArtistExtras(stored: any): Record<string, any> {
-  const extras: Record<string, any> = {};
+function _storedArtistExtras(stored: ArtistPayload | undefined): Pick<SavedArtist, 'photo' | 'genres'> {
+  const extras: Pick<SavedArtist, 'photo' | 'genres'> = {};
   const photo = stored?.photo;
   if (typeof photo === 'string' && photo.length <= 500 && photo.startsWith('https://')) extras.photo = photo;
   if (Array.isArray(stored?.genres)) {
     const genres = stored.genres
-      .filter((g: any) => typeof g === 'string')
+      .filter((g: unknown) => typeof g === 'string')
       .map((g: string) => sanitizeString(g, 50))
       .filter(Boolean)
       .slice(0, 10);
@@ -1024,7 +1085,7 @@ function _storedArtistExtras(stored: any): Record<string, any> {
 
 // A client that edits only the flat linkUrl (mobile) shows spotify, then soundcloud, then the
 // stored linkUrl. Apply the field only when it differs from that shown link.
-function _applyLinkEdit(links: Record<string, string>, rawLinkUrl: any, storedLinkUrl: any): void {
+function _applyLinkEdit(links: Record<string, string>, rawLinkUrl: unknown, storedLinkUrl: unknown): void {
   const shownKey = links.spotify ? 'spotify' : links.soundcloud ? 'soundcloud' : null;
   const shown = (shownKey ? links[shownKey] : typeof storedLinkUrl === 'string' ? storedLinkUrl.trim() : '') || '';
   const next = typeof rawLinkUrl === 'string' ? rawLinkUrl.trim().slice(0, 500) : '';
@@ -1048,17 +1109,17 @@ function _applyLinkEdit(links: Record<string, string>, rawLinkUrl: any, storedLi
  * normalizeSetArtists stays for the create path.
  */
 /** A set's billed name: the sent value, or the stored one when the payload leaves it out. */
-function resolveSetDisplayName(set: any, storedSet: any): string | null {
+function resolveSetDisplayName(set: SetPayload, storedSet: StoredSet | undefined): string | null {
   if (set.displayName === undefined) return storedSet?.displayName || null;
   return sanitizeString(set.displayName || '', 300) || null;
 }
 
-export function resolveSetArtists(set: any, storedSet: any, sep = 'b2b'): any[] {
-  const stored: any[] = Array.isArray(storedSet?.artists) ? storedSet.artists : [];
+export function resolveSetArtists(set: SetPayload, storedSet: StoredSet | undefined, sep = 'b2b'): any[] {
+  const stored: ArtistPayload[] = Array.isArray(storedSet?.artists) ? storedSet.artists : [];
   const payload = Array.isArray(set.artists) ? _cleanArtistList(set.artists) : [];
   const typed = sanitizeString(set.artist || '', 300);
 
-  let result: any[];
+  let result: SavedArtist[];
   if (payload.length === 0 && stored.length > 0 && typed && typed === artistDisplayName(stored, sep)) {
     result = _cleanArtistList(stored);
     if (result[0] && 'linkUrl' in set) _applyLinkEdit(result[0].links, set.linkUrl, storedSet?.linkUrl);
@@ -1081,14 +1142,17 @@ export function resolveSetArtists(set: any, storedSet: any, sep = 'b2b'): any[] 
     }
   }
   // An element without an id takes the id of the sent or stored element with the same name.
-  return result.map((a: any) => ({
+  return result.map((a) => ({
     ...(a.id ? {} : artistIdOf(_findArtist(payload, a.name) ?? _findArtist(stored, a.name))),
     ...a,
     ..._storedArtistExtras(_findArtist(stored, a.name)),
   }));
 }
 
-export function normalizePickPayload(input: any, config: any): { error?: string; value?: any } {
+export function normalizePickPayload(
+  input: unknown,
+  config: Pick<AppConfig, 'MAX_PICKS'>,
+): { error?: string; value?: any } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { error: 'Invalid picks format' };
   }
@@ -1100,7 +1164,7 @@ export function normalizePickPayload(input: any, config: any): { error?: string;
   for (const [rawSetId, priority] of entries) {
     const setId = normalizeRecordKey(rawSetId, 100);
     if (!setId) return { error: 'Invalid pick key' };
-    if (!ALLOWED_PICK_PRIORITIES.has(priority as any)) {
+    if (!ALLOWED_PICK_PRIORITIES.has(priority)) {
       return { error: `Invalid priority: ${priority}` };
     }
     picks[setId] = priority;
@@ -1108,7 +1172,10 @@ export function normalizePickPayload(input: any, config: any): { error?: string;
   return { value: picks };
 }
 
-export function normalizeNotePayload(input: any, config: any): { error?: string; value?: any } {
+export function normalizeNotePayload(
+  input: unknown,
+  config: Pick<AppConfig, 'MAX_NOTES' | 'MAX_NOTE_LENGTH'>,
+): { error?: string; value?: any } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { error: 'Invalid notes format' };
   }
@@ -1128,7 +1195,10 @@ export function normalizeNotePayload(input: any, config: any): { error?: string;
   return { value: notes };
 }
 
-export function normalizeReminderPayload(input: any, config: any): { error?: string; value?: any } {
+export function normalizeReminderPayload(
+  input: unknown,
+  config: Pick<AppConfig, 'MAX_REMINDERS'>,
+): { error?: string; value?: any } {
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     return { error: 'Invalid reminders format' };
   }
@@ -1149,7 +1219,13 @@ export function normalizeReminderPayload(input: any, config: any): { error?: str
   return { value: reminders };
 }
 
-export function sanitizeFestivalPayload(input: any, existingFestival: any, config: any, createOpaqueId: any): any {
+export function sanitizeFestivalPayload(
+  input: FestivalPayload,
+  existingFestival: FestivalPayload | null | undefined,
+  config: Partial<Pick<AppConfig, 'MAX_STAGES' | 'MAX_DAYS' | 'MAX_SETS_PER_DAY'>>,
+  createOpaqueId: (prefix: string) => string,
+  // any: tests index the saved festival's days and sets without undefined checks.
+): any {
   const now = new Date().toISOString();
   const b2bSep = sanitizeString(input.b2bSeparator ?? existingFestival?.b2bSeparator ?? 'b2b', 10) || 'b2b';
   // Time zone: already validated as a plausible IANA id by the Zod schema. An
@@ -1160,7 +1236,7 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
   // Coordinate accepted only when it is a finite number within range; anything
   // else (string, NaN, out-of-range) collapses to null so the DB stores a clean
   // nullable double. Stages without coords keep null and render no map pin.
-  const coord = (value: any, max: number): number | null =>
+  const coord = (value: unknown, max: number): number | null =>
     typeof value === 'number' && Number.isFinite(value) && value >= -max && value <= max ? value : null;
   // map_config: already shape-validated by festivalMapConfigSchema on the way in.
   // An explicit null clears it; undefined keeps whatever the festival already had.
@@ -1173,7 +1249,7 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
   const venueValid = venueLat !== null && venueLng !== null;
   // series_id: shape-validated by festivalCreateSchema. Undefined keeps the stored value; null clears it.
   const seriesId = input.seriesId !== undefined ? (input.seriesId ?? null) : (existingFestival?.seriesId ?? null);
-  const storedSets = new Map<string, any>();
+  const storedSets = new Map<string, SetPayload>();
   for (const day of existingFestival?.days || []) {
     for (const set of day?.sets || []) if (set?.id) storedSets.set(set.id, set);
   }
@@ -1185,17 +1261,17 @@ export function sanitizeFestivalPayload(input: any, existingFestival: any, confi
     timeZone,
     stages: (input.stages || existingFestival?.stages || [])
       .slice(0, config.MAX_STAGES)
-      .map((stage: any, index: number) => ({
+      .map((stage, index) => ({
         id: sanitizeIdentifier(stage.id, 100) || createOpaqueId(`stage-${index}`),
         name: sanitizeString(stage.name || '', 100),
         color: validateColor(stage.color) ? stage.color : '#666666',
         latitude: coord(stage.latitude, 90),
         longitude: coord(stage.longitude, 180),
       })),
-    days: (input.days || existingFestival?.days || []).slice(0, config.MAX_DAYS).map((day: any) => ({
+    days: (input.days || existingFestival?.days || []).slice(0, config.MAX_DAYS).map((day) => ({
       label: sanitizeString(day.label || '', 100),
       date: sanitizeString(day.date || '', 20),
-      sets: (day.sets || []).slice(0, config.MAX_SETS_PER_DAY).map((set: any, index: number) => {
+      sets: (day.sets || []).slice(0, config.MAX_SETS_PER_DAY).map((set, index) => {
         const setId = sanitizeIdentifier(set.id, 100);
         const artists = existingFestival
           ? resolveSetArtists(set, setId ? storedSets.get(setId) : undefined, b2bSep)
@@ -1304,7 +1380,7 @@ const packingUpdateSchema = z
     claimed: z.boolean().optional(),
     packed: z.boolean().optional(),
   })
-  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
+  .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), {
     message: 'At least one field required',
   });
 
@@ -1487,7 +1563,7 @@ const rideUpdateSchema = z
     direction: z.enum(['to_festival', 'home']).optional().nullable(),
     departTime: z.string().datetime().optional().nullable(),
   })
-  .refine((d) => Object.keys(d).some((k) => (d as any)[k] !== undefined), {
+  .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), {
     message: 'At least one field required',
   });
 
@@ -1772,6 +1848,7 @@ export const schemas = {
   artistUpdate: artistUpdateSchema,
   artistMerge: artistMergeSchema,
   artistBackfill: artistBackfillSchema,
+  policyNotice: policyNoticeSchema,
   artistListQuery: artistListQuerySchema,
   artistSpotifyCandidates: artistSpotifyCandidatesSchema,
   artistSpotifyPicks: artistSpotifyPicksSchema,

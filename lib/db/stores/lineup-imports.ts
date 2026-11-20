@@ -16,6 +16,8 @@ import type { ArtistLookup, ArtistRef, LineupImportPlan, LineupImportWrites, Set
 import { nextMoveMark, type SlotAt } from '../../set-moves';
 import { resolveArtistRefs, resolveSetValues } from '../../artist-refs';
 
+import { lockFestival } from './festival-lock';
+
 export { lockFestivalAny } from './festival-lock';
 
 /** The second argument carries the locked artist rows, so the plan copies them instead of the earlier lookup. */
@@ -40,15 +42,6 @@ type DayMove = { from: number; to: number };
 const sameText = (a: any, b: any) => (a ?? '') === (b ?? '');
 
 type MarkContext = { published: boolean; now: Date };
-
-/** The locked festival row (truthy), or null when it does not exist. */
-async function lockFestival(client: any, festivalId: string) {
-  const { rows } = await client.query(
-    'SELECT id, published_at FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
-    [festivalId],
-  );
-  return (rows[0] as { id: string; published_at: Date | null } | undefined) ?? null;
-}
 
 
 const markContext = (festival: { published_at: Date | null }): MarkContext => ({
@@ -402,12 +395,13 @@ async function restoreUpdatedSets(
   ctx: MarkContext,
 ) {
   const restoredIds: string[] = [];
+  const { rows: currentRows } = await client.query(
+    'SELECT id, stage_id, start_time, end_time, artist, artists, link_url, display_name, day_index FROM festival_sets WHERE id = ANY($1::text[]) AND festival_id = $2',
+    [updated.map((u) => u.id), festivalId],
+  );
+  const currentById = new Map<string, any>(currentRows.map((row: any) => [row.id, row]));
   for (const u of updated) {
-    const { rows } = await client.query(
-      'SELECT stage_id, start_time, end_time, artist, artists, link_url, display_name, day_index FROM festival_sets WHERE id = $1 AND festival_id = $2',
-      [u.id, festivalId],
-    );
-    const cur = rows[0];
+    const cur = currentById.get(u.id);
     const move: DayMove | undefined = u.dayMove;
     // An artist edit rewrites the flat name and link of every set that lists the artist. Those sets
     // still list the same artist ids, so the rewrite is not a hand edit of the set.
@@ -452,15 +446,19 @@ async function canonicalizeRestoredSets(client: any, festivalId: string, setIds:
     values: { artists: row.artists, artist: row.artist, linkUrl: row.link_url ?? null, displayName: row.display_name ?? null },
   }));
   await resolveSetValues(client, { festivalId, separator: festival[0]?.separator ?? 'b2b', userId: null }, targets);
-  for (const { id, values } of targets) {
-    await client.query('UPDATE festival_sets SET artists = $2::jsonb, artist = $3, link_url = $4, display_name = $5 WHERE id = $1', [
-      id,
-      JSON.stringify(values.artists),
-      values.artist,
-      values.linkUrl,
-      values.displayName ?? null,
-    ]);
-  }
+  if (targets.length === 0) return;
+  await client.query(
+    `UPDATE festival_sets s SET artists = v.artists::jsonb, artist = v.artist, link_url = v.link_url, display_name = v.display_name
+       FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[]) AS v(id, artists, artist, link_url, display_name)
+      WHERE s.id = v.id`,
+    [
+      targets.map((t: any) => t.id),
+      targets.map((t: any) => JSON.stringify(t.values.artists)),
+      targets.map((t: any) => t.values.artist),
+      targets.map((t: any) => t.values.linkUrl),
+      targets.map((t: any) => t.values.displayName ?? null),
+    ],
+  );
 }
 
 /**

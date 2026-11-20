@@ -16,19 +16,12 @@ import { bootServer } from './_boot-server';
 import { registerUser as registerSharedUser } from './_integration-helpers';
 import createProfilesRoutes from '../routes/profiles.js';
 import { serializeProfileForViewer } from '../lib/helpers/export-utils.js';
+import { requireTestDatabaseUrl } from './_test-schema';
 
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-if (!TEST_DATABASE_URL) {
-  console.error('ERROR: TEST_DATABASE_URL env var required. Set it in .env.');
-  process.exit(1);
-}
-if (!TEST_DATABASE_URL.includes('_test')) {
-  console.error('SAFETY: TEST_DATABASE_URL must contain "_test" in the database name.');
-  process.exit(1);
-}
+const TEST_DATABASE_URL = requireTestDatabaseUrl();
 
 // Unique fixture per run so we can DELETE BY EXACT ID
 const RUN_ID = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
