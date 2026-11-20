@@ -85,7 +85,7 @@ describe('socket event limits', () => {
     const members = deps.stores.crews.getMember.mock.callCount();
 
     const ack = await emit(handlers['location:sync'], { crewId: 'crew-1' });
-    assert.deepEqual(ack, { ok: false, peers: [] });
+    assert.deepEqual(ack, { ok: false, peers: [], error: 'RATE_LIMITED', code: 'RATE_LIMITED' });
     assert.equal(deps.validateUserSession.mock.callCount(), lookups);
     assert.equal(deps.stores.crews.getMember.mock.callCount(), members);
   });
@@ -100,7 +100,7 @@ describe('socket event limits', () => {
     const members = deps.stores.crews.getMember.mock.callCount();
 
     const ack = await emit(handlers['location:share'], { crewId: 'crew-1' });
-    assert.deepEqual(ack, { ok: false, code: 'RATE_LIMITED' });
+    assert.deepEqual(ack, { ok: false, error: 'RATE_LIMITED', code: 'RATE_LIMITED' });
     assert.equal(deps.stores.crews.getMember.mock.callCount(), members);
   });
 
@@ -111,7 +111,7 @@ describe('socket event limits', () => {
     const far = new Date(Date.now() + 13 * 3_600_000).toISOString();
     for (const expiresAt of [past, far]) {
       const ack = await emit(handlers['location:share'], { crewId: 'crew-1', expiresAt });
-      assert.deepEqual(ack, { ok: false, code: 'INVALID_EXPIRY' });
+      assert.deepEqual(ack, { ok: false, error: 'INVALID_EXPIRY', code: 'INVALID_EXPIRY' });
     }
     const ok = await emit(handlers['location:share'], {
       crewId: 'crew-1',
@@ -137,7 +137,7 @@ describe('socket event limits', () => {
     };
     const handlers = await connectSocket(deps);
     const ack = await emit(handlers['location:share'], { crewId: 'crew-1' });
-    assert.deepEqual(ack, { ok: false, code: 'TOO_MANY_SHARING_SOCKETS' });
+    assert.deepEqual(ack, { ok: false, error: 'TOO_MANY_SHARING_SOCKETS', code: 'TOO_MANY_SHARING_SOCKETS' });
     assert.equal(zrem.mock.callCount(), 1);
   });
 
