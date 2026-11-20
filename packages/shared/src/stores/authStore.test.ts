@@ -562,6 +562,16 @@ describe('authStore', () => {
       await useAuthStore.getState().deleteAccount('pw');
       expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: { password: 'pw' } });
     });
+
+    it('sends no password for a provider-only delete', async () => {
+      vi.mocked(api.delete).mockResolvedValue({ success: true });
+      vi.mocked(api.post).mockResolvedValue({});
+      await useAuthStore.getState().deleteAccount(undefined);
+      expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: {} });
+      const choices = [{ crewId: 'c1', newOwnerId: 'u2' }];
+      await useAuthStore.getState().deleteAccount(undefined, choices);
+      expect(api.delete).toHaveBeenLastCalledWith('/account/', { body: { crewHandover: choices } });
+    });
   });
 
   describe('accountDeletionNotice', () => {

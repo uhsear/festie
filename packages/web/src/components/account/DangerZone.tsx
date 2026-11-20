@@ -82,7 +82,7 @@ export default function DangerZone() {
       }));
       // A provider-only account sends no password; the server needs a recent provider re-auth instead.
       const outcome = providerOnly
-        ? await withReauth(() => deleteAccount(undefined as unknown as string, choices), ask)
+        ? await withReauth(() => deleteAccount(undefined, choices), ask)
         : await deleteAccount(deletePassword, choices);
       if (!outcome) return;
       toast(accountDeletionNotice(outcome.deletionDate), 'info', 10000);

@@ -137,6 +137,7 @@ describe('DangerZone', () => {
     await user.click(screen.getByText('Confirm Delete'));
 
     await waitFor(() => expect(mockDeleteAccount).toHaveBeenCalledTimes(2));
+    expect(mockDeleteAccount).toHaveBeenNthCalledWith(1, undefined, []);
     expect(mockAsk).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
   });

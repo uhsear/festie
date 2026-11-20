@@ -52,7 +52,8 @@ export interface AuthActions {
   requestEmailChange: (email: string, password?: string) => Promise<string>;
   changePassword: (request: ChangePasswordRequest) => Promise<void>;
   updateDisplayName: (displayName: string) => Promise<void>;
-  deleteAccount: (password: string, crewHandover?: CrewHandoverChoice[]) => Promise<{ deletionDate: string | null }>;
+  /** password is omitted for a provider-only account; the server then needs a recent provider re-auth. */
+  deleteAccount: (password: string | undefined, crewHandover?: CrewHandoverChoice[]) => Promise<{ deletionDate: string | null }>;
   uploadAvatar: (file: AvatarUploadFile) => Promise<AvatarResponse>;
   removeAvatar: () => Promise<void>;
   /** Like the other account actions below, these leave `isLoading` and `error` alone; the caller maps the thrown error. */
@@ -442,11 +443,14 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     }
   },
 
-  deleteAccount: async (password: string, crewHandover?: CrewHandoverChoice[]) => {
+  deleteAccount: async (password: string | undefined, crewHandover?: CrewHandoverChoice[]) => {
     set({ isLoading: true, error: null });
     try {
       const res = await api.delete<{ deletionDate?: string | null }>('/account/', {
-        body: crewHandover?.length ? { password, crewHandover } : { password },
+        body: {
+          ...(password !== undefined ? { password } : {}),
+          ...(crewHandover?.length ? { crewHandover } : {}),
+        },
       });
       // logout() clears the token and resets all stores, matching web's flow.
       await get().logout();

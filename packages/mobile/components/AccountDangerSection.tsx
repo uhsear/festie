@@ -10,7 +10,7 @@ import {
 } from '@festie/shared/stores';
 import type { CrewMember } from '@festie/shared/types';
 import { crewCopy, ownedCrewsForDeletion, type OwnedCrewHandover } from '@festie/shared/utils';
-import { api, exportErrorMessage, mapErrorToUserMessage, withReauth } from '@festie/shared/services';
+import { exportErrorMessage, mapErrorToUserMessage, withReauth } from '@festie/shared/services';
 import { ACCOUNT_COPY, DATA_COPY } from '@festie/shared/constants';
 import { useReauthPrompt } from './admin';
 import { ModalSelect } from './admin/AdminFields';
@@ -125,20 +125,13 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
     setError(null);
     try {
       const crewHandover = handover.map((h) => ({ crewId: h.crew.id, newOwnerId: ownerFor(h) }));
-      let deletionDate: string | null;
-      if (hasPassword) {
-        ({ deletionDate } = await deleteAccount(password, crewHandover));
-      } else {
-        const res = await withReauth(
-          () => api.delete<{ deletionDate?: string | null }>('/account/', { body: crewHandover.length ? { crewHandover } : {} }),
-          ask,
-        );
-        if (res === null) return;
-        await useAuthStore.getState().logout();
-        deletionDate = res?.deletionDate ?? null;
-      }
+      // A provider-only account sends no password; the server needs a recent provider re-auth instead.
+      const outcome = hasPassword
+        ? await deleteAccount(password, crewHandover)
+        : await withReauth(() => deleteAccount(undefined, crewHandover), ask);
+      if (!outcome) return;
       // deleteAccount → logout already cleared token + reset stores.
-      Alert.alert('Account deletion scheduled', accountDeletionNotice(deletionDate));
+      Alert.alert('Account deletion scheduled', accountDeletionNotice(outcome.deletionDate));
       onDeleted();
     } catch (err) {
       haptics.warning();
