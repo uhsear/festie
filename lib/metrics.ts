@@ -13,6 +13,7 @@ import http from 'http';
 import { loadConfig } from './config.js';
 import { timingSafeEqualString } from './crypto-auth.js';
 import { createLogger } from './logger.js';
+import { getWorkerId } from './process-role.js';
 
 const log = createLogger('metrics');
 
@@ -54,10 +55,7 @@ function createMetrics() {
   }
 
   const registry = new client.Registry();
-  const workerId = process.env.NODE_APP_INSTANCE !== undefined
-    ? String(process.env.NODE_APP_INSTANCE)
-    : (process.env.PM_ID !== undefined ? String(process.env.PM_ID) : '0');
-  registry.setDefaultLabels({ service: 'festie', worker: workerId });
+  registry.setDefaultLabels({ service: 'festie', worker: String(getWorkerId()) });
   client.collectDefaultMetrics({ register: registry, prefix: 'festie_' });
 
   const httpHistogram = new client.Histogram({

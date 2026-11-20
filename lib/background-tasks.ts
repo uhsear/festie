@@ -7,6 +7,7 @@ import path from 'path';
 
 import { JOB_INTERVALS_MS } from './config.js';
 import { recordJobRun } from './metrics.js';
+import { isLeader } from './process-role.js';
 
 /**
  * Create background periodic timers — session cleanup, avatar orphan removal,
@@ -50,11 +51,8 @@ export function createBackgroundTasks(ctx: any, { io }: any) {
   // PM2 sets NODE_APP_INSTANCE to '0'..'N-1'. Only instance 0 runs periodic
   // cleanup tasks to avoid redundant work across workers. In non-cluster mode
   // (NODE_APP_INSTANCE undefined), all tasks run normally.
-  const instance = process.env.NODE_APP_INSTANCE;
-  const isLeader = instance === undefined || instance === '0';
-
-  if (!isLeader) {
-    log.info('background tasks: not leader (instance !== 0), skipping cleanup timers', { instance });
+  if (!isLeader()) {
+    log.info('background tasks: not leader (instance !== 0), skipping cleanup timers', { instance: process.env.NODE_APP_INSTANCE });
     // Still register memory monitor on every worker (it is per-process)
     registerMemoryMonitor();
     return;
