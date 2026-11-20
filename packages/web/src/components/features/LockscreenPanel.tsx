@@ -80,7 +80,7 @@ function spanLabel(pageSets: FestivalSet[]): string {
 }
 
 export const optionClass = (active: boolean) =>
-  `rounded-full border px-3 min-h-9 text-xs font-semibold cursor-pointer transition-colors ${
+  `rounded-full border px-3 min-h-11 text-xs font-semibold cursor-pointer transition-colors ${
     active ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover' : 'border-border text-text-secondary'
   }`;
 
@@ -365,7 +365,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
             setDayChoice(e.target.value === 'all' ? 'all' : Number(e.target.value));
             setPageIndex(0);
           }}
-          className="min-h-9 rounded-lg border border-border bg-bg-card px-2 text-sm text-text-primary"
+          className="min-h-11 rounded-lg border border-border-input bg-bg-card px-2 text-sm text-text-primary"
         >
           {Array.from({ length: dayCount }, (_, i) => (
             <option key={i} value={i} disabled={!dayHasSets.has(i)}>
@@ -443,7 +443,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
         <select
           value={presetId}
           onChange={(e) => setPresetId(e.target.value)}
-          className="min-h-9 min-w-0 rounded-lg border border-border bg-bg-card px-2 text-sm text-text-primary"
+          className="min-h-11 min-w-0 rounded-lg border border-border-input bg-bg-card px-2 text-sm text-text-primary"
         >
           <option value="auto">{`This phone${deviceEstimated ? ' (estimated)' : ''} (${device.width} × ${device.height})`}</option>
           {LOCKSCREEN_PRESETS.map((p) => (
