@@ -10,7 +10,7 @@ import type { RouteDeps } from '../lib/types';
 import type { crewIdParams, liveLocationFixSchema } from '../lib/schemas';
 import { LOCATION_UPDATE_LIMIT, shareWindowError } from '../lib/rate-limiting.js';
 import {
-  clampCapturedAt,
+  buildPeerUpdatePayload,
   dropLivePosition,
   writeLivePosition,
 } from '../lib/live-location-cache.js';
@@ -93,23 +93,12 @@ export default function createCrewLiveLocationRoutes(deps: RouteDeps) {
           return sendError(res, 429, 'Too many location updates. Try again in a minute.', ErrorCodes.RATE_LIMITED);
         }
 
-        const serverAt = new Date(nowMs).toISOString();
-        const payload = {
-          _v: 1 as const,
-          crewId,
-          userId,
-          username: req.user.username,
-          lat: body.lat,
-          lng: body.lng,
-          accuracy: body.accuracy,
-          heading: body.heading,
-          speed: body.speed,
-          battery: body.battery,
-          lowPower: body.lowPower,
-          expiresAt: body.expiresAt,
-          capturedAt: clampCapturedAt(body.capturedAt, nowMs, serverAt),
-          serverAt,
-        };
+        const payload = buildPeerUpdatePayload(
+          { crewId, userId, username: req.user.username },
+          body,
+          nowMs,
+        );
+        const { serverAt } = payload;
         if (emitter) emitter.toCrew(crewId, 'location:peer-update', payload);
         void writeLivePosition(redis, crewId, payload);
         void noteBatteryLevel({ redis, stores, emitter, log }, payload);

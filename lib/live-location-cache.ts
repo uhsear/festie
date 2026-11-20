@@ -73,6 +73,48 @@ export function clampCapturedAt(capturedAt: any, serverNow: number, serverNowIso
   return new Date(t).toISOString();
 }
 
+/** The sender-supplied fields of one live fix, as validated by the socket and HTTP schemas. */
+export interface PeerUpdateFix {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  heading?: number;
+  speed?: number;
+  battery?: number;
+  lowPower?: boolean;
+  expiresAt?: string;
+  capturedAt: string;
+}
+
+/**
+ * Build the `location:peer-update` payload for one fix. The socket share,
+ * socket update and HTTP relay all call this so a new field is added once.
+ * Optional fields pass through untouched; capturedAt is clamped (L4).
+ */
+export function buildPeerUpdatePayload(
+  who: { crewId: string; userId: string; username: string },
+  fix: PeerUpdateFix,
+  nowMs: number,
+): LocationPeerUpdatePayload {
+  const serverAt = new Date(nowMs).toISOString();
+  return {
+    _v: 1,
+    crewId: who.crewId,
+    userId: who.userId,
+    username: who.username,
+    lat: fix.lat,
+    lng: fix.lng,
+    accuracy: fix.accuracy,
+    heading: fix.heading,
+    speed: fix.speed,
+    battery: fix.battery,
+    lowPower: fix.lowPower,
+    expiresAt: fix.expiresAt,
+    capturedAt: clampCapturedAt(fix.capturedAt, nowMs, serverAt),
+    serverAt,
+  };
+}
+
 function positionsKey(crewId: string): string {
   return `loc:pos:${crewId}`;
 }
