@@ -376,6 +376,55 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     socket.close();
   });
 
+  test('meeting-point events carry both crew_id and crewId on the wire', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    await joinFestivalProfile(server, alice.token);
+    const crewId = (
+      await server.request
+        .post('/api/v1/crews')
+        .set('x-user-token', alice.token)
+        .set('x-festie-request', '1')
+        .send({ name: 'Wire Crew', festivalId: 'fest-1' })
+        .expect(201)
+    ).body.data.id;
+
+    const socket = connectSocket(server.baseUrl);
+    await waitForEvent(socket, 'connect');
+    socket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    await waitForEvent(socket, 'presence:update', (p) => p.online.length === 1);
+    const ack: any = await new Promise((resolve) => socket.emit('join:crew', { crewId }, resolve));
+    assert.equal(ack.ok, true);
+
+    const created = waitForEvent(socket, 'crew:meeting-point-created');
+    const point = (
+      await server.request
+        .post(`/api/v1/crews/${crewId}/meeting-points`)
+        .set('x-user-token', alice.token)
+        .set('x-festie-request', '1')
+        .send({ label: 'Gate A', location: 'By the gate' })
+        .expect(201)
+    ).body.data.meetingPoint;
+    const createdPayload: any = await created;
+    assert.equal(createdPayload.crew_id, crewId);
+    assert.equal(createdPayload.crewId, crewId);
+
+    const updated = waitForEvent(socket, 'crew:meeting-point-updated');
+    await server.request
+      .put(`/api/v1/crews/${crewId}/meeting-points/${point.id}`)
+      .set('x-user-token', alice.token)
+      .set('x-festie-request', '1')
+      .send({ label: 'Gate B' })
+      .expect(200);
+    const updatedPayload: any = await updated;
+    assert.equal(updatedPayload.crew_id, crewId);
+    assert.equal(updatedPayload.crewId, crewId);
+
+    socket.close();
+  });
+
   test('leave:crew — user leaves a crew room', async () => {
     const server = await startServer();
     servers.push(server);
