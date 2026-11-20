@@ -98,6 +98,7 @@ export default function createCrewPollRoutes(deps: RouteDeps) {
         });
 
         emitter.toCrew(crewId, 'crew:poll-created', {
+          crewId,
           pollId: poll.id,
           question: poll.question,
           options: poll.options,
@@ -146,6 +147,7 @@ export default function createCrewPollRoutes(deps: RouteDeps) {
         if (indexes.length) await stores.polls.vote(pollId, userId, indexes);
         else await stores.polls.removeVote(pollId, userId);
         emitter.toCrew(crewId, 'crew:poll-voted', {
+          crewId,
           pollId,
           userId,
           optionIndex: indexes[0] ?? -1,

@@ -116,6 +116,7 @@ export interface CrewDaysUpdatedPayload {
 }
 
 export interface CrewPollCreatedPayload {
+  crewId: string;
   pollId: string;
   question: string;
   options: string[];
@@ -123,6 +124,7 @@ export interface CrewPollCreatedPayload {
 }
 
 export interface CrewPollVotedPayload {
+  crewId: string;
   pollId: string;
   userId: string;
   /** First choice, or -1 when the vote was taken back. */
@@ -131,6 +133,7 @@ export interface CrewPollVotedPayload {
 }
 
 export interface CrewPollClosedPayload {
+  crewId: string;
   pollId: string;
 }
 
@@ -171,10 +174,10 @@ export interface CrewActivityPayload extends VersionedPayload {
 /**
  * M5: a member's last-synced status changed. The payload carries the upserted
  * row (snake_case). NOT live GPS — the client renders `updated_at` as honest
- * staleness. The crew room scopes it, so (like poll events) it carries no
- * top-level crewId; the row's `crew_id` is authoritative.
+ * staleness. `crewId` is additive beside the row's `crew_id`.
  */
 export interface CrewStatusUpdatedPayload extends VersionedPayload {
+  crewId: string;
   status: CrewMemberStatus;
 }
 

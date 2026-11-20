@@ -32,7 +32,7 @@ function makeCloser(over: any = {}) {
   const log = { info: noop, warn: mock.fn(noop), error: noop, debug: noop };
   const closer = createPollCloser({ stores, emitter, crewNotify, createOpaqueId: (p: string) => `${p}-x`, log });
   const events = () => (emit.mock.calls as any[]).map((c) => c.arguments[0]);
-  return { closer, stores, emitter, crewNotify, events };
+  return { closer, stores, emitter, crewNotify, events, emit };
 }
 
 const SET_REFS = [
@@ -115,6 +115,13 @@ describe('createPollCloser — announce', () => {
     await closer.announce({ ...POLL, set_refs: null }, 'closer');
     assert.ok(events().includes('crew:poll-closed'));
     assert.equal(crewNotify.queue.mock.calls.length, 1);
+  });
+
+  test('crew:poll-closed carries crewId beside pollId', async () => {
+    const { closer, emit } = makeCloser({ counts: [1, 0] });
+    await closer.announce({ ...POLL, set_refs: null }, 'closer');
+    const closed = (emit.mock.calls as any[]).find((c) => c.arguments[0] === 'crew:poll-closed');
+    assert.deepEqual(closed.arguments[1], { crewId: 'crew-1', pollId: 'poll-1' });
   });
 });
 

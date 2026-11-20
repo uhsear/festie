@@ -499,6 +499,70 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     socket.close();
   });
 
+  test('poll and status events carry crewId on the wire', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    await joinFestivalProfile(server, alice.token);
+    const crewId = (
+      await server.request
+        .post('/api/v1/crews')
+        .set('x-user-token', alice.token)
+        .set('x-festie-request', '1')
+        .send({ name: 'Poll Wire Crew', festivalId: 'fest-1' })
+        .expect(201)
+    ).body.data.id;
+
+    const socket = connectSocket(server.baseUrl);
+    await waitForEvent(socket, 'connect');
+    socket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    await waitForEvent(socket, 'presence:update', (p) => p.online.length === 1);
+    const ack: any = await new Promise((resolve) => socket.emit('join:crew', { crewId }, resolve));
+    assert.equal(ack.ok, true);
+
+    const created = waitForEvent(socket, 'crew:poll-created');
+    const pollId = (
+      await server.request
+        .post(`/api/v1/crews/${crewId}/polls`)
+        .set('x-user-token', alice.token)
+        .set('x-festie-request', '1')
+        .send({ question: 'Dinner?', options: ['Pizza', 'Tacos'] })
+        .expect(200)
+    ).body.data.poll.id;
+    assert.equal(((await created) as any).crewId, crewId);
+
+    const voted = waitForEvent(socket, 'crew:poll-voted');
+    await server.request
+      .post(`/api/v1/crews/${crewId}/polls/${pollId}/vote`)
+      .set('x-user-token', alice.token)
+      .set('x-festie-request', '1')
+      .send({ optionIndexes: [0] })
+      .expect(200);
+    assert.equal(((await voted) as any).crewId, crewId);
+
+    const status = waitForEvent(socket, 'crew:status-updated');
+    await server.request
+      .put(`/api/v1/crews/${crewId}/status`)
+      .set('x-user-token', alice.token)
+      .set('x-festie-request', '1')
+      .send({ status: 'here' })
+      .expect(200);
+    const statusPayload: any = await status;
+    assert.equal(statusPayload.crewId, crewId);
+    assert.equal(statusPayload.status.crew_id, crewId);
+
+    const closed = waitForEvent(socket, 'crew:poll-closed');
+    await server.request
+      .delete(`/api/v1/crews/${crewId}/polls/${pollId}`)
+      .set('x-user-token', alice.token)
+      .set('x-festie-request', '1')
+      .expect(200);
+    assert.deepEqual(await closed, { crewId, pollId });
+
+    socket.close();
+  });
+
   test('crew events routed through the emitter keep their wire shape', async () => {
     const server = await startServer();
     servers.push(server);
