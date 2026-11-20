@@ -63,7 +63,7 @@ function appFor(stores: any) {
     getFestivalById: async () => existing,
     validateFestivalIssues,
     sanitizeFestivalPayload: (input: any, ex: any) => sanitizeFestivalPayload(input, ex, config, () => 'x'),
-    stores: { pool: { query: async () => ({ rows: [] }) }, ...stores },
+    stores: { ...stores, festivals: { countOnSets: async () => 0, ...stores.festivals } },
   };
   deps.festivalAccess = () => deps.adminAuth;
   const app = express();

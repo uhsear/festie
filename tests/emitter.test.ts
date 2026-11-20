@@ -494,7 +494,7 @@ describe('emitter: festivalUpdated', () => {
 });
 
 describe('emitter: scheduleChanged', () => {
-  const slot = (startTime: string) => ({ dayLabel: 'Sat', startTime, endTime: null, stageName: 'Sahara' });
+  const slot = (startTime: string) => ({ dayLabel: 'Sat', dayKey: 'sat', startTime, endTime: null, stageName: 'Sahara', stageId: 'sahara' });
   const festival = { id: 'fest-1', name: 'EDC' };
 
   it('skips topic-muted users and links one moved set to /set/{id}', async () => {

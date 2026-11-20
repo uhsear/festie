@@ -12,6 +12,8 @@ import request from 'supertest';
 import createAdminRoutes from '../routes/admin.js';
 import createFestivalsRoutes from '../routes/festivals.js';
 import { schemas, validate, sanitizeFestivalPayload } from '../lib/schemas.js';
+import createFestivalsStore from '../lib/db/stores/festivals.js';
+import { createAnalyticsStore } from '../lib/db/stores/analytics.js';
 
 const ErrorCodes = {
   INVALID_INPUT: 'INVALID_INPUT',
@@ -64,7 +66,10 @@ function baseDeps(overrides: any = {}) {
     state: { onlineUsers: new Map() },
     ...overrides,
   };
-  deps.festivalAccess = () => deps.adminAuth;
+  deps.festivalAccess = ({ param = 'id' }: any = {}) => (req: any, res: any, next: any) => {
+    req.festivalId = req.params[param];
+    return deps.adminAuth(req, res, next);
+  };
   return deps;
 }
 
@@ -83,6 +88,10 @@ function txPool(answer: (sql: string, params?: unknown[]) => any) {
   const query = mock.fn(async (sql: string, params?: unknown[]) => answer(sql, params) ?? { rows: [], rowCount: 0 });
   const pool = { query, connect: async () => ({ query, release: noop }) };
   return { pool, query };
+}
+/** The real festival and analytics stores over a mock pool, so a test sees the SQL the routes now reach through them. */
+function withDb(pool: any, rest: any = {}) {
+  return { pool, festivals: createFestivalsStore(pool, {}), analytics: createAnalyticsStore(pool), ...rest };
 }
 const statements = (query: any) => query.mock.calls.map((c: any) => String(c.arguments[0]));
 
@@ -129,7 +138,7 @@ describe('POST /festivals/:id/backfill-spotify', () => {
       ),
       fillEmpty: mock.fn(extra.fill ?? (async () => null)),
     };
-    const deps = baseDeps({ stores: { pool, auditLog: { insert: auditInsert }, artists } });
+    const deps = baseDeps({ stores: withDb(pool, { auditLog: { insert: auditInsert }, artists }) });
     return { app: appFor(createAdminRoutes(deps)), query, auditInsert, artists };
   }
 
@@ -320,7 +329,7 @@ describe('GET /festivals/:id/set-engagement', () => {
         ],
       };
     });
-    const app = appFor(createAdminRoutes(baseDeps({ stores: { pool: { query } } })));
+    const app = appFor(createAdminRoutes(baseDeps({ stores: withDb({ query }) })));
     const res = await request(app).get('/festivals/f1/set-engagement').expect(200);
     assert.deepEqual(res.body.data, {
       s1: { picks: 3, reminders: 1 },
@@ -333,7 +342,7 @@ describe('GET /festivals/:id/set-engagement', () => {
 
   test('returns 404 for a missing or deleted festival', async () => {
     const query = mock.fn(async () => ({ rows: [] }));
-    const app = appFor(createAdminRoutes(baseDeps({ stores: { pool: { query } } })));
+    const app = appFor(createAdminRoutes(baseDeps({ stores: withDb({ query }) })));
     await request(app).get('/festivals/gone/set-engagement').expect(404);
     assert.equal(query.mock.callCount(), 1);
   });
@@ -354,7 +363,7 @@ describe('PUT /:festivalId/sets/:setId/link', () => {
       getById: mock.fn(async () => ({ updated_at: new Date('2026-06-01T00:00:00.123Z') })),
       update: mock.fn(async () => ({ synced: [] })),
     };
-    const deps = baseDeps({ getFestivalById: mock.fn(async () => festival), stores: { pool, artists } });
+    const deps = baseDeps({ getFestivalById: mock.fn(async () => festival), stores: withDb(pool, { artists }) });
     return { app: appFor(createFestivalsRoutes(deps)), query, artists };
   }
   const writeOf = (query: any) => query.mock.calls.find((c: any) => String(c.arguments[0]).startsWith('UPDATE festival_sets'))!;
@@ -388,13 +397,13 @@ describe('PUT /:festivalId/sets/:setId/link', () => {
     const festival = { id: 'f1', days: [{ label: 'Day 1', sets: [{ id: 's1', artist: 'Solo', artists: [] }] }] };
     const deps = baseDeps({
       getFestivalById: mock.fn(async () => festival),
-      stores: {
-        pool: txPool((sql) => {
+      stores: withDb(
+        txPool((sql) => {
           if (sql.startsWith('SELECT id, published_at, deleted_at FROM festivals')) return { rows: [{ id: 'f1', deleted_at: null }] };
           if (sql.startsWith('SELECT artist, artists FROM festival_sets')) return { rows: [{ artist: 'Solo', artists: [] }] };
           return null;
         }).pool,
-      },
+      ),
       interestConversion: { convert },
     });
     await request(appFor(createFestivalsRoutes(deps))).put('/f1/sets/s1/link').send({ linkUrl: '' }).expect(200);

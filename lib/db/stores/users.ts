@@ -287,6 +287,31 @@ export default function createUsersStore(pool: Pool, utils: any) {
     },
 
     countActive: (...args: any[]) => users.count(...args),
+
+    /** True when a live user holds this email, compared case-insensitively. */
+    async emailInUse(email: string): Promise<boolean> {
+      const { rows } = await pool.query('SELECT id FROM users WHERE LOWER(email) = $1 AND deleted_at IS NULL', [
+        email.toLowerCase(),
+      ]);
+      return rows.length > 0;
+    },
+
+    /** Username of a user soft-deleted in the last 30 days, never the placeholder owner; null otherwise. */
+    async findRecentlyDeletedUsername(userId: string): Promise<string | null> {
+      const { rows } = await pool.query(
+        "SELECT username FROM users WHERE id = $1 AND id <> $2 AND deleted_at > NOW() - INTERVAL '30 days'",
+        [userId, DELETED_USER_ID],
+      );
+      return rows[0]?.username ?? null;
+    },
+
+    /** Hard-delete a user that just signed up. Profiles it claimed go back to unclaimed: festival_profiles.user_id is RESTRICT. */
+    async discard(userId: string) {
+      await withTransaction(pool, async (client: any) => {
+        await client.query('UPDATE festival_profiles SET user_id = NULL WHERE user_id = $1', [userId]);
+        await client.query('DELETE FROM users WHERE id = $1', [userId]);
+      });
+    },
   };
 
   return users;

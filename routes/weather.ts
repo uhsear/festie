@@ -17,11 +17,8 @@ export function createWeatherRoutes({ config, stores, userAuth, sendSuccess, sen
 
       // Check the festival before the cache, so a draft is never served from a
       // cached entry and never cached itself.
-      const result = await stores.pool.query(
-        'SELECT latitude, longitude, name FROM festivals WHERE id = $1 AND deleted_at IS NULL AND published_at IS NOT NULL',
-        [festivalId]
-      );
-      if (result.rows.length === 0) {
+      const festival = await stores.festivals.getPublishedCoordinates(festivalId);
+      if (!festival) {
         return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       }
 
@@ -30,7 +27,7 @@ export function createWeatherRoutes({ config, stores, userAuth, sendSuccess, sen
         return sendSuccess(res, cached.data);
       }
 
-      const { latitude, longitude } = result.rows[0];
+      const { latitude, longitude } = festival;
       if (typeof latitude !== 'number' || typeof longitude !== 'number' ||
           latitude < -90 || latitude > 90 || longitude < -180 || longitude > 180) {
         return sendSuccess(res, { available: false, reason: 'No coordinates set for this festival' });
