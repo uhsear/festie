@@ -50,7 +50,7 @@ export interface PresenceIo {
 }
 
 type Log = ReturnType<typeof createLogger>;
-type AvatarBuilder = (user: unknown) => string | null;
+type AvatarBuilder = (user: { avatarKey?: string | null; avatarVersion?: string | number | null; [key: string]: unknown } | null | undefined) => string | null;
 type PresenceStore = NonNullable<ReturnType<typeof createRedisPresenceStore>>;
 
 interface PresenceDeps {
