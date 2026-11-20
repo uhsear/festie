@@ -14,6 +14,7 @@ import {
   lineupReplacesEmptyState,
   lineupSetWhen,
   lineupSummary,
+  parseLineupView,
   searchLineupEntries,
   selectLineupEntries,
   setTimesBannerKind,
@@ -298,5 +299,15 @@ describe('announcedActsLine', () => {
     expect(announcedActsLine([{ status: 'cancelled' }])).toBeNull();
     expect(announcedActsLine([])).toBeNull();
     expect(announcedActsLine(undefined)).toBeNull();
+  });
+});
+
+describe('parseLineupView', () => {
+  it('keeps a known view and falls back to Poster for anything else', () => {
+    expect(parseLineupView('az')).toBe('az');
+    expect(parseLineupView('interested')).toBe('interested');
+    expect(parseLineupView('nonsense')).toBe('poster');
+    expect(parseLineupView(null)).toBe('poster');
+    expect(parseLineupView(undefined)).toBe('poster');
   });
 });

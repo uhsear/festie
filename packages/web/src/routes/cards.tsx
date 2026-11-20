@@ -17,7 +17,7 @@ import {
   SCHEDULE_GROUP_BYS,
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
-import { useAnnouncedLineup } from '../hooks/useAnnouncedLineup';
+import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import { useMediaQuery } from '../hooks/useMediaQuery';
 import SetCard from '../components/features/SetCard';
 import PhaseHomeActions from '../components/features/PhaseHomeActions';
@@ -127,7 +127,7 @@ function CardsViewInner() {
     return map;
   }, [getDays]);
   const q = searchQuery.trim();
-  const announced = useAnnouncedLineup();
+  const announced = useAnnouncedLineup(nowMs);
 
   // Per-set badge naming the other set it clashes with and the overlap.
   const clashBadges = useMemo(

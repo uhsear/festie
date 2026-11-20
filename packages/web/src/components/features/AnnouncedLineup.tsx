@@ -4,6 +4,7 @@ import { useFestivalStore } from '@festie/shared/stores';
 import { useInterest, useInterestedRows } from '@festie/shared/hooks/useInterest';
 import type { Festival, FestivalSet, LineupEntry, Stage } from '@festie/shared/types';
 import {
+  LINEUP_VIEW_KEY,
   artistLinkEntries,
   groupLineupAlphabetically,
   groupLineupByTier,
@@ -11,19 +12,17 @@ import {
   lineupEntryBadge,
   lineupEntryName,
   lineupSetWhen,
+  parseLineupView,
   searchLineupEntries,
   selectLineupEntries,
 } from '@festie/shared/utils';
-import type { InterestRow } from '@festie/shared/utils';
-import type { AnnouncedLineupModel } from '../../hooks/useAnnouncedLineup';
+import type { AnnouncedLineupModel, InterestRow, LineupView } from '@festie/shared/utils';
 import { useNow } from '../../hooks/useSetStatus';
 import Avatar from '../ui/Avatar';
 import Sheet from '../ui/Sheet';
 import { cn } from '../../lib/utils';
 
-type LineupView = 'poster' | 'az' | 'interested';
 
-const VIEW_KEY = 'festie.lineupView';
 const COPY_SEEN_KEY = 'festie.interestCopySeen';
 const INTEREST_COPY = 'Marked acts become want-to-see picks when sets are out. Your crew sees your picks.';
 const VIEWS: { key: LineupView; label: string }[] = [
@@ -33,8 +32,7 @@ const VIEWS: { key: LineupView; label: string }[] = [
 
 function readView(): LineupView {
   try {
-    const stored = window.localStorage.getItem(VIEW_KEY);
-    return stored === 'az' || stored === 'interested' ? stored : 'poster';
+    return parseLineupView(window.localStorage.getItem(LINEUP_VIEW_KEY));
   } catch {
     // Storage can be blocked (private mode); the view then lasts for this visit only.
     return 'poster';
@@ -43,7 +41,7 @@ function readView(): LineupView {
 
 function writeView(view: LineupView) {
   try {
-    window.localStorage.setItem(VIEW_KEY, view);
+    window.localStorage.setItem(LINEUP_VIEW_KEY, view);
   } catch {
     // Same as readView: a blocked store only loses the remembered choice.
   }

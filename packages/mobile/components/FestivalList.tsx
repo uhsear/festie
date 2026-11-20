@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { COPY, DISCOVER_COPY, FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
-import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, type FestivalStatus } from '@festie/shared/utils';
+import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, partitionSeriesBlocks, splitBySeries, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
@@ -97,6 +97,10 @@ const useStyles = makeStyles((t) => ({
   cardPast: {
     backgroundColor: t.colors.bg.primary,
     borderColor: t.colors.border.light,
+  },
+  seriesHeading: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
   },
   skeletonCard: {
     backgroundColor: t.colors.bg.card,
@@ -294,6 +298,10 @@ function ListSeparator() {
   return <View style={styles.separator} />;
 }
 
+type ListRow =
+  | { kind: 'series'; key: string; label: string }
+  | { kind: 'festival'; key: string; festival: Festival };
+
 interface FestivalListProps {
   /** Called after selectFestival resolves, so a picker overlay can close itself. */
   onSelected?: () => void;
@@ -312,9 +320,28 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
 
   // Order: live first, then upcoming (soonest first), then past (most recent
   // first), so the festivals a user is most likely choosing sit at the top.
-  const sortedFestivals = useMemo(() => {
+  // Editions of one recurring festival sit together under the series name. A series with an edition
+  // that has not ended goes ahead of the rest, under an "Other festivals" heading for the rest; a series
+  // whose editions are all over goes last.
+  const listRows = useMemo<ListRow[]>(() => {
     const g = groupFestivalsByStatus(festivals);
-    return [...g.live, ...g.upcoming, ...g.past, ...g.undated];
+    const { series, standalone } = splitBySeries([...g.live, ...g.upcoming, ...g.past, ...g.undated]);
+    const { current, ended } = partitionSeriesBlocks(series);
+    const rest = groupFestivalsByStatus(standalone);
+    const festivalRow = (festival: Festival): ListRow => ({ kind: 'festival', key: festival.id, festival });
+    const blockRows = (block: (typeof series)[number]): ListRow[] => [
+      { kind: 'series', key: `series-${block.key}`, label: block.label },
+      ...block.editions.map(festivalRow),
+    ];
+    const standaloneRows = [...rest.live, ...rest.upcoming, ...rest.past, ...rest.undated].map(festivalRow);
+    return [
+      ...current.flatMap(blockRows),
+      ...(current.length > 0 && standaloneRows.length > 0
+        ? [{ kind: 'series' as const, key: 'heading-other-festivals', label: 'Other festivals' }]
+        : []),
+      ...standaloneRows,
+      ...ended.flatMap(blockRows),
+    ];
   }, [festivals]);
 
   const handleRefresh = useCallback(() => {
@@ -338,11 +365,18 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: Festival }) => <FestivalCard festival={item} onPress={handleSelect} isSelecting={isLoading} />,
-    [handleSelect, isLoading],
+    ({ item }: { item: ListRow }) =>
+      item.kind === 'series' ? (
+        <Text style={styles.seriesHeading} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {item.label}
+        </Text>
+      ) : (
+        <FestivalCard festival={item.festival} onPress={handleSelect} isSelecting={isLoading} />
+      ),
+    [handleSelect, isLoading, styles],
   );
 
-  const keyExtractor = useCallback((item: Festival) => item.id, []);
+  const keyExtractor = useCallback((item: ListRow) => item.key, []);
 
   const refreshControl = (
     <RefreshControl
@@ -401,7 +435,7 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
 
   return (
     <FlatList
-      data={sortedFestivals}
+      data={listRows}
       renderItem={renderItem}
       keyExtractor={keyExtractor}
       contentContainerStyle={styles.listContent}

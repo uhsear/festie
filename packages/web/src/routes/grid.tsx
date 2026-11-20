@@ -28,7 +28,6 @@ import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import OtherDayMatches from '../components/features/OtherDayMatches';
 import TBASection from '../components/timeline/TBASection';
 import AnnouncedLineup from '../components/features/AnnouncedLineup';
-import { useAnnouncedLineup } from '../hooks/useAnnouncedLineup';
 import TimelineLegend from '../components/timeline/TimelineLegend';
 import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
@@ -40,6 +39,7 @@ import { useTimelineViewport } from '../hooks/useTimelineViewport';
 import { useNowIndicator } from '../hooks/useNowIndicator';
 import { useScrollProgress } from '../hooks/useScrollProgress';
 import { useNow } from '../hooks/useSetStatus';
+import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import { CalendarX, Music, Filter } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../lib/conceptIcons';
@@ -119,7 +119,7 @@ function GridViewInner() {
     [days],
   );
 
-  const announced = useAnnouncedLineup();
+  const announced = useAnnouncedLineup(useNow());
 
   const { vpW } = useTimelineViewport();
   const { nowIndicator, gridRef, scrollToNow } = useNowIndicator(timeBounds, selectedDay);

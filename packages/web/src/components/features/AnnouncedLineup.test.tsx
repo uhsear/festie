@@ -23,12 +23,12 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 
-import { useAnnouncedLineup } from '../../hooks/useAnnouncedLineup';
+import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import AnnouncedLineupView from './AnnouncedLineup';
 
 // The routes compute the model once and pass it in; the tests do the same.
 function AnnouncedLineup() {
-  return <AnnouncedLineupView model={useAnnouncedLineup()} />;
+  return <AnnouncedLineupView model={useAnnouncedLineup(NOW)} />;
 }
 
 const entry = (id: string, name: string, extra: Record<string, unknown> = {}) => ({

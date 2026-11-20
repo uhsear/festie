@@ -1,6 +1,9 @@
 // A series links editions of one recurring festival through festivals.series_id.
 // The server accepts /^[a-z0-9-]{1,60}$/ (lib/schemas.ts festivalCreateSchema).
 
+import type { Festival } from '../types';
+import { festivalStatus } from './festivalTime';
+
 export interface SeriesFestival {
   id: string;
   name: string;
@@ -38,4 +41,60 @@ export function otherEditions<T extends SeriesFestival>(
 ): T[] {
   if (!seriesId) return [];
   return festivals.filter((f) => f.seriesId === seriesId && f.id !== selfId);
+}
+
+export interface SeriesBlock<F> {
+  /** The series id when an edition carries one, else the slug of the name without its year. */
+  key: string;
+  /** The editions' shared name without the year, e.g. "Forbidden Kingdom". */
+  label: string;
+  /** Newest edition first. */
+  editions: F[];
+}
+
+/**
+ * Pulls the editions of one recurring festival out of a picker list. The public list hides `seriesId`
+ * (it is admin only), so editions also match on the name without its trailing year, the rule the server
+ * uses for re-engagement. A festival with no sibling stays standalone, so one-off festivals show as
+ * before. Blocks keep the order of their first edition in `festivals`, standalone keeps list order.
+ */
+export function splitBySeries<F extends SeriesFestival & { startDate?: string | null }>(
+  festivals: readonly F[],
+): { series: SeriesBlock<F>[]; standalone: F[] } {
+  const keyOf = (f: F) => f.seriesId || suggestSeriesId(f.name);
+  const byKey = new Map<string, F[]>();
+  for (const f of festivals) {
+    const key = keyOf(f);
+    if (key) byKey.set(key, [...(byKey.get(key) ?? []), f]);
+  }
+  const series: SeriesBlock<F>[] = [];
+  const seen = new Set<string>();
+  for (const f of festivals) {
+    const key = keyOf(f);
+    const editions = key ? byKey.get(key) : undefined;
+    if (!editions || editions.length < 2 || seen.has(key)) continue;
+    seen.add(key);
+    // An edition announced without dates is the newest one, so it sorts first.
+    const start = (e: F) => e.startDate ?? '9999-12-31';
+    const newestFirst = [...editions].sort((a, b) => start(b).localeCompare(start(a)));
+    series.push({ key, label: f.name.replace(TRAILING_YEAR, '').trim() || f.name, editions: newestFirst });
+  }
+  const standalone = festivals.filter((f) => {
+    const key = keyOf(f);
+    return !key || (byKey.get(key)?.length ?? 0) < 2;
+  });
+  return { series, standalone };
+}
+
+/**
+ * Splits series blocks by whether any edition is live, upcoming or undated (`current`) or every edition is over (`ended`).
+ * Pickers show `current` blocks ahead of the standalone festivals and `ended` blocks after them, so a live festival is never
+ * buried under old editions. Each list keeps the order of `blocks`.
+ */
+export function partitionSeriesBlocks<F extends Festival & { startDate?: string | null; endDate?: string | null }>(
+  blocks: readonly SeriesBlock<F>[],
+  now: Date = new Date(),
+): { current: SeriesBlock<F>[]; ended: SeriesBlock<F>[] } {
+  const isEnded = (b: SeriesBlock<F>) => b.editions.every((e) => festivalStatus(e, undefined, now) === 'past');
+  return { current: blocks.filter((b) => !isEnded(b)), ended: blocks.filter(isEnded) };
 }

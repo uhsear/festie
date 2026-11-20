@@ -41,6 +41,7 @@ import HeaderTitle from '../components/HeaderTitle';
 import { TopBannerContext } from '../components/ScreenHeader';
 import { snoozeReminder, useLocalReminders } from '../hooks/useLocalReminders';
 import { useOngoingNotification } from '../hooks/useOngoingNotification';
+import { useOtaUpdatePrompt } from '../hooks/useOtaUpdatePrompt';
 import { ensureAndroidChannels, unregisterPushOnSignOut, usePushTokenRotation } from '../hooks/useMobilePush';
 import { useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
@@ -518,6 +519,7 @@ function AuthGate() {
   // for exactly this reason — see its comment.
   const loading = (!hydrated || !uiHydrated || !fontsReady) && !bootTimedOut;
   useQueueDrain(!loading);
+  useOtaUpdatePrompt();
 
   // Dismiss the native splash as soon as loading resolves. The overlay below
   // stays as a fallback (same #080810 bg) so any frame gap is invisible. The

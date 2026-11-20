@@ -44,6 +44,7 @@ import {
   clashBadgeBySetId,
   fmtZonedClock,
   foldSearch,
+  festivalLoadState,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
 import { COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
@@ -58,6 +59,7 @@ import { priorityIconName } from '../../lib/prioritySymbol';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import ScreenHeader from '../../components/ScreenHeader';
 import EmptyState from '../../components/EmptyState';
+import LoadingState from '../../components/LoadingState';
 import GuestPicksBanner from '../../components/GuestPicksBanner';
 import { Skeleton } from '../../components/Skeleton';
 import SetCardMobile from '../../components/SetCardMobile';
@@ -66,6 +68,7 @@ import RateNightBanner from '../../components/RateNightBanner';
 import LockscreenStaleBanner from '../../components/LockscreenStaleBanner';
 import OfflineReadinessCard from '../../components/OfflineReadinessCard';
 import ClashCards from '../../components/ClashCards';
+import MarkedNoSet from '../../components/MarkedNoSet';
 import { WalkRow, GapRow, MeetRow, PlanListRow } from '../../components/PlanRows';
 
 const PRIORITY_CHOICES: readonly { value: Priority; label: string }[] = [
@@ -120,6 +123,17 @@ export default function PicksScreen() {
   const isLoading = useFestivalDataStore((s) => s.isLoading);
   const error = useFestivalDataStore((s) => s.error);
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
+  const festivals = useFestivalDataStore((s) => s.festivals);
+  const loadFestivals = useFestivalDataStore((s) => s.loadFestivals);
+
+  // A cold start can land here before any screen loaded the catalogue; without this the loading state never resolves.
+  useEffect(() => {
+    // Read the load flags at fire time: depending on them re-fires this after every load, and an empty catalogue never stops.
+    const { isLoading: loading, error: loadError } = useFestivalDataStore.getState();
+    if (!currentFestival && festivals.length === 0 && !loading && !loadError) {
+      loadFestivals().catch(() => {});
+    }
+  }, [currentFestival, festivals.length, loadFestivals]);
 
   const [exportBusy, setExportBusy] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -1062,6 +1076,7 @@ export default function PicksScreen() {
       <CrewSuggestionStrip />
       <LockscreenStaleBanner />
       <RateNightBanner />
+      <MarkedNoSet />
       <View onLayout={(e) => setClashY(e.nativeEvent.layout.y)}>
         <ClashCards groups={conflictGroups} days={days} />
       </View>
@@ -1108,13 +1123,24 @@ export default function PicksScreen() {
 
   let body: React.ReactNode;
   if (!currentFestival) {
-    body = (
-      <EmptyState
-        icon="calendar-outline"
-        title="No festival selected"
-        message="Choose a festival from the Schedule tab to start saving picks."
-      />
-    );
+    const loadState = festivalLoadState({ currentFestival, festivals, isLoading, error });
+    body =
+      loadState === 'error' ? (
+        <EmptyState
+          icon="cloud-offline-outline"
+          title={COPY.festivalLoad.errorTitle}
+          message={error ?? COPY.festivalLoad.errorBody}
+          action={{ label: COPY.festivalLoad.retry, onPress: () => void loadFestivals().catch(() => {}) }}
+        />
+      ) : loadState === 'loading' ? (
+        <LoadingState />
+      ) : (
+        <EmptyState
+          icon="calendar-outline"
+          title={COPY.festivalLoad.noneTitle}
+          message="Choose a festival from the Schedule tab to start saving picks."
+        />
+      );
   } else if (isLoading && stats.total === 0 && rows.length === 0) {
     body = <PicksSkeleton />;
   } else if (error && stats.total === 0) {

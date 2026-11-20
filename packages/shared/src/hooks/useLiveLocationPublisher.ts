@@ -35,9 +35,8 @@ export interface GeoFix {
   speed?: number;
   /**
    * Phase 4C: device battery % (0–100) at fix time. OPTIONAL — the web adapter
-   * may read the (non-standard) Battery API; the mobile adapter leaves this
-   * undefined until a native build adds expo-battery (see its TODO). When absent
-   * the peer popup simply omits the battery chip.
+   * may read the (non-standard) Battery API; the mobile adapter reads expo-battery.
+   * When absent the peer popup simply omits the battery chip.
    */
   battery?: number;
   /**
@@ -170,8 +169,7 @@ export function useLiveLocationPublisher({
           speed: fix.speed,
           // Phase 4C: relay battery (when a source supplies it) + the fixed
           // share-window expiry so peers can render direction/battery/countdown.
-          // TODO(expo-battery): mobile fix.battery is undefined until a native
-          // build adds expo-battery; this passes it through with no native read.
+          // Pure pass-through: the adapter reads the level (mobile: expo-battery).
           battery: shareBattery === false ? undefined : fix.battery,
           // Peer low-power flag (#5): relay the sharer's battery-saver state (when
           // a source supplies it) so peers see a low-power cue next to the battery
