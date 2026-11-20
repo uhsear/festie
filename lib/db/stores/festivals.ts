@@ -1,7 +1,69 @@
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { withTransaction, withTransactionRetry } from '../connection';
 import { planMoveMarks } from '../../set-moves';
 import { cleanLineupLinks } from '../../lineup';
+import type createUtils from '../utils';
+
+type FestivalUtils = Pick<ReturnType<typeof createUtils>, 'buildFestivalRecords'>;
+
+/** One VALUES row for buildMultiInsert. */
+type Row = unknown[];
+
+export interface StageInput {
+  id: string;
+  name: string;
+  color: string;
+  latitude?: number | null;
+  longitude?: number | null;
+}
+
+export interface SetInput {
+  id: string;
+  artist: string;
+  stageId: string;
+  startTime: string;
+  endTime: string;
+  linkUrl?: string | null;
+  artists?: unknown[];
+  displayName?: string | null;
+}
+
+export interface DayInput {
+  label?: string;
+  date?: string;
+  sets?: SetInput[];
+}
+
+/** The festival fields create() and update() write. */
+export interface FestivalWrite {
+  id?: string;
+  name?: string;
+  location?: string;
+  b2bSeparator?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  timeZone?: string | null;
+  mapConfig?: unknown;
+  seriesId?: string | null;
+  lineup?: unknown;
+  updatedBy?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+  publishedAt?: string | null;
+  stages?: StageInput[];
+  days?: DayInput[];
+}
+
+/** A rating of a set the save drops, as read before the delete. */
+interface DroppedRating {
+  user_id: unknown;
+  rating: unknown;
+  note: unknown;
+  created_at: unknown;
+  updated_at: unknown;
+  artist: string;
+  start_time: string;
+}
 
 /** The save found the festival changed, or gone, since the form loaded: the route answers 409 FESTIVAL_CHANGED. */
 export class FestivalChangedError extends Error {
@@ -21,7 +83,7 @@ export interface FestivalUpdateOptions {
    */
   storedSetIds?: string[];
   /** Runs after the token check and before the child rows are written; may return the days and lineup to write. */
-  beforeChildren?: (client: any, fields: any) => Promise<{ days?: any[]; lineup?: any[] } | void>;
+  beforeChildren?: (client: PoolClient, fields: FestivalWrite) => Promise<{ days?: DayInput[]; lineup?: unknown[] } | void>;
   /** False for a write that is not an admin edit of the form (the venue geocode), so an open form stays current. */
   touchEdited?: boolean;
 }
@@ -32,8 +94,8 @@ export interface FestivalUpdateOptions {
  * @param startIdx - Starting $N index (1-based)
  * @returns { clause, params }
  */
-export function buildMultiInsert(rows: any[][], startIdx: number = 1): { clause: string; params: any[] } {
-  const params: any[] = [];
+export function buildMultiInsert(rows: Row[], startIdx: number = 1): { clause: string; params: unknown[] } {
+  const params: unknown[] = [];
   let idx = startIdx;
   const tuples = rows.map((row) => {
     const placeholders = row.map((val) => {
@@ -49,8 +111,8 @@ export function buildMultiInsert(rows: any[][], startIdx: number = 1): { clause:
  * Collect stages, days, and sets from a festival into flat row arrays
  * ready for batch INSERT. Returns { stageRows, dayRows, setRows, newSetIds, setIdentityMap }.
  */
-function collectFestivalChildren(festivalId: string, festival: any) {
-  const stageRows = (festival.stages || []).map((stage: any, sortOrder: number) => [
+function collectFestivalChildren(festivalId: string, festival: Pick<FestivalWrite, 'stages' | 'days'>) {
+  const stageRows = (festival.stages || []).map((stage, sortOrder) => [
     festivalId,
     stage.id,
     stage.name,
@@ -60,8 +122,8 @@ function collectFestivalChildren(festivalId: string, festival: any) {
     stage.longitude ?? null,
   ]);
 
-  const dayRows: any[][] = [];
-  const setRows: any[][] = [];
+  const dayRows: Row[] = [];
+  const setRows: Row[] = [];
   const newSetIds = new Set<string>();
   const setIdentityMap = new Map<string, string>();
 
@@ -92,7 +154,7 @@ function collectFestivalChildren(festivalId: string, festival: any) {
 }
 
 /** Batch-insert stages in a single multi-row query. */
-async function insertStagesBatch(client: any, rows: any[][]) {
+async function insertStagesBatch(client: PoolClient, rows: Row[]) {
   if (rows.length === 0) return;
   const { clause, params } = buildMultiInsert(rows);
   await client.query(
@@ -102,7 +164,7 @@ async function insertStagesBatch(client: any, rows: any[][]) {
 }
 
 /** Batch-upsert stages by (festival_id, id), so existing stage rows (and their sets) survive. */
-async function upsertStagesBatch(client: any, rows: any[][]) {
+async function upsertStagesBatch(client: PoolClient, rows: Row[]) {
   if (rows.length === 0) return;
   const { clause, params } = buildMultiInsert(rows);
   await client.query(
@@ -118,14 +180,14 @@ async function upsertStagesBatch(client: any, rows: any[][]) {
 }
 
 /** Batch-insert days in a single multi-row query. */
-async function insertDaysBatch(client: any, rows: any[][]) {
+async function insertDaysBatch(client: PoolClient, rows: Row[]) {
   if (rows.length === 0) return;
   const { clause, params } = buildMultiInsert(rows);
   await client.query(`INSERT INTO festival_days (festival_id, day_index, label, date) VALUES ${clause}`, params);
 }
 
 /** Batch-insert sets in a single multi-row query. */
-export async function insertSetsBatch(client: any, rows: any[][]) {
+export async function insertSetsBatch(client: PoolClient, rows: Row[]) {
   if (rows.length === 0) return;
   const { clause, params } = buildMultiInsert(rows);
   await client.query(
@@ -138,7 +200,7 @@ export async function insertSetsBatch(client: any, rows: any[][]) {
  * Batch-upsert sets by id so a set that survives the save keeps its row, and with it every pick,
  * rating, note and caught mark. The move marks are cleared here and rewritten by writeMoveMarks.
  */
-async function upsertSetsBatch(client: any, festivalId: string, rows: any[][]) {
+async function upsertSetsBatch(client: PoolClient, festivalId: string, rows: Row[]) {
   if (rows.length === 0) return;
   const { clause, params } = buildMultiInsert(rows);
   const result = await client.query(
@@ -165,8 +227,8 @@ async function upsertSetsBatch(client: any, festivalId: string, rows: any[][]) {
  * Re-point the ratings of sets the save removes onto a new set with the same (artist, start_time),
  * so a set re-created under a new id keeps its ratings. Runs after the new sets exist.
  */
-async function restoreRatingsBatch(client: any, ratingRows: any[], setIdentityMap: Map<string, string>) {
-  const mapped: any[][] = [];
+async function restoreRatingsBatch(client: PoolClient, ratingRows: DroppedRating[], setIdentityMap: Map<string, string>) {
+  const mapped: Row[] = [];
   for (const r of ratingRows) {
     const newSetId = setIdentityMap.get(`${r.artist}|${r.start_time}`);
     if (newSetId) mapped.push([r.user_id, newSetId, r.rating, r.note, r.created_at, r.updated_at]);
@@ -180,7 +242,7 @@ async function restoreRatingsBatch(client: any, ratingRows: any[], setIdentityMa
 }
 
 /** Old days and set slots with their marks, read before the delete. Null for a draft, which gets no marks. */
-async function readPriorSlots(client: any, festivalId: string) {
+async function readPriorSlots(client: PoolClient, festivalId: string) {
   const fest = await client.query('SELECT published_at FROM festivals WHERE id = $1', [festivalId]);
   if (!fest.rows[0]?.published_at) return null;
   const days = await client.query(
@@ -208,15 +270,20 @@ async function readPriorSlots(client: any, festivalId: string) {
 }
 
 /** Compute and write the "moved" marks for sets that survive the save, in one statement. */
-async function writeMoveMarks(client: any, festivalId: string, prior: any, children: any) {
+async function writeMoveMarks(
+  client: PoolClient,
+  festivalId: string,
+  prior: Awaited<ReturnType<typeof readPriorSlots>>,
+  children: ReturnType<typeof collectFestivalChildren>,
+) {
   if (!prior) return;
-  const newDays = children.dayRows.map((r: any[]) => ({ dayIndex: r[1], label: r[2], date: r[3] }));
-  const newSets = children.setRows.map((r: any[]) => ({
-    id: r[0],
-    dayIndex: r[2],
-    stageId: r[4],
-    start: r[5],
-    end: r[6],
+  const newDays = children.dayRows.map((r) => ({ dayIndex: r[1] as number, label: r[2] as string, date: r[3] as string }));
+  const newSets = children.setRows.map((r) => ({
+    id: r[0] as string,
+    dayIndex: r[2] as number,
+    stageId: r[4] as string,
+    start: r[5] as string,
+    end: r[6] as string,
   }));
   const marks = planMoveMarks(prior.days, prior.sets, newDays, newSets, new Date());
   if (marks.length === 0) return;
@@ -246,7 +313,11 @@ async function writeMoveMarks(client: any, festivalId: string, prior: any, child
  * Surviving sets keep their row, so picks, ratings, notes and caught marks stay attached.
  * Used by update.
  */
-async function replaceChildRows(client: any, festivalId: string, children: any) {
+async function replaceChildRows(
+  client: PoolClient,
+  festivalId: string,
+  children: ReturnType<typeof collectFestivalChildren>,
+) {
   const { dayRows, setRows, newSetIds, setIdentityMap } = children;
   const priorSlots = await readPriorSlots(client, festivalId);
   const keptIds = [...newSetIds];
@@ -292,7 +363,7 @@ async function replaceChildRows(client: any, festivalId: string, children: any) 
 }
 
 /** Deletes one festival and every row that references it. Runs inside the caller's transaction. */
-async function deleteFestivalRows(client: any, festivalId: string) {
+async function deleteFestivalRows(client: PoolClient, festivalId: string) {
   // Crew grandchild rows (FK CASCADE from crews, but crews FK is RESTRICT from festivals)
   await client.query(
     'DELETE FROM crew_poll_votes WHERE poll_id IN (SELECT id FROM crew_polls WHERE crew_id IN (SELECT id FROM crews WHERE festival_id = $1))',
@@ -341,8 +412,8 @@ async function deleteFestivalRows(client: any, festivalId: string) {
   await client.query('DELETE FROM festivals WHERE id = $1', [festivalId]);
 }
 
-export default function createFestivalsStore(pool: Pool, utils: any) {
-  const { buildFestivalRecords } = utils;
+export default function createFestivalsStore(pool: Pool, utils: Partial<FestivalUtils>) {
+  const { buildFestivalRecords } = utils as FestivalUtils;
 
   const festivals = {
     async readAll() {
@@ -399,9 +470,9 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       let result;
       try {
         result = await run();
-      } catch (error: any) {
+      } catch (error) {
         // Two publishes raced to one free slug; the retry sees the winner's row.
-        if (error?.code !== '23505') throw error;
+        if ((error as { code?: string })?.code !== '23505') throw error;
         result = await run();
       }
       return result.rows[0] || null;
@@ -436,7 +507,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
     5000
 `,
       );
-      return result.rows.map((row: any) => ({ slug: row.slug, updatedAt: new Date(row.updatedAt).toISOString() }));
+      return result.rows.map((row) => ({ slug: row.slug, updatedAt: new Date(row.updatedAt).toISOString() }));
     },
 
     async listDeleted() {
@@ -558,7 +629,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       return withTransaction(pool, (client) => deleteFestivalRows(client, festivalId));
     },
 
-    async create(festival: any) {
+    async create(festival: FestivalWrite & { id: string }) {
       // Insert festival with stages, days, sets (wrapped in transaction for consistency)
       return withTransaction(pool, async (client) => {
         const createdAt = festival.createdAt || new Date().toISOString();
@@ -623,11 +694,11 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
       });
     },
 
-    async update(festivalId: string, fields: any, options: FestivalUpdateOptions = {}) {
+    async update(festivalId: string, fields: FestivalWrite, options: FestivalUpdateOptions = {}) {
       // fields: name, location, stages, days (wrapped in transaction for consistency)
       return withTransactionRetry(pool, async (client) => {
         const sets: string[] = [];
-        const values: any[] = [];
+        const values: unknown[] = [];
         let idx = 1;
 
         if (fields.name !== undefined) {
@@ -704,7 +775,7 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         if (options.storedSetIds) {
           const { rows: current } = await client.query('SELECT id FROM festival_sets WHERE festival_id = $1', [festivalId]);
           const known = new Set(options.storedSetIds);
-          if (current.length !== known.size || current.some((row: any) => !known.has(row.id))) throw new FestivalChangedError();
+          if (current.length !== known.size || current.some((row: { id: string }) => !known.has(row.id))) throw new FestivalChangedError();
         }
         const prepared = await options.beforeChildren?.(client, fields);
         const days = prepared?.days ?? fields.days;
@@ -717,9 +788,9 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
 
         // Upsert stages instead of delete-and-reinsert: festival_sets_stage_fkey is ON DELETE
         // CASCADE, so deleting a stage row would delete (or, with picks, fail on) its sets.
-        const stageIds: string[] = (fields.stages || []).map((stage: any) => stage.id);
+        const stageIds: string[] = (fields.stages || []).map((stage) => stage.id);
         if (fields.stages !== undefined) {
-          const stageRows = (fields.stages || []).map((stage: any, sortOrder: number) => [
+          const stageRows = (fields.stages || []).map((stage, sortOrder) => [
             festivalId,
             stage.id,
             stage.name,
