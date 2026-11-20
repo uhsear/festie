@@ -37,6 +37,7 @@ vi.mock('@festie/shared/hooks/useInterest', () => ({
   useInterest: () => ({ mark: undefined, marked: false, toggle: () => Promise.resolve() }),
   useInterestedRows: () => [],
 }));
+vi.mock('../components/ui/Avatar', () => ({ default: () => null }));
 vi.mock('../components/features/SetCard', () => ({
   default: ({ set }: { set: { id: string } }) => <div data-testid="set-card" data-id={set.id} />,
 }));

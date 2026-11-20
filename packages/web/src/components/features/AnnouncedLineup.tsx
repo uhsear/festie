@@ -4,6 +4,7 @@ import { useFestivalStore } from '@festie/shared/stores';
 import { useInterest, useInterestedRows } from '@festie/shared/hooks/useInterest';
 import type { Festival, FestivalSet, LineupEntry, Stage } from '@festie/shared/types';
 import {
+  artistLinkEntries,
   groupLineupAlphabetically,
   groupLineupByTier,
   lineupCoveringSets,
@@ -16,6 +17,8 @@ import {
 import type { InterestRow } from '@festie/shared/utils';
 import type { AnnouncedLineupModel } from '../../hooks/useAnnouncedLineup';
 import { useNow } from '../../hooks/useSetStatus';
+import Avatar from '../ui/Avatar';
+import Sheet from '../ui/Sheet';
 import { cn } from '../../lib/utils';
 
 type LineupView = 'poster' | 'az' | 'interested';
@@ -100,6 +103,43 @@ function InterestToggle({ entryId, name, onMarked }: { entryId: string; name: st
   );
 }
 
+/** An announced act with no linked set: each artist's photo, genres and links, plus the Interested toggle. */
+function ArtistSheet({ entry, name, open, onOpenChange }: { entry: LineupEntry; name: string; open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange} title={name}>
+      <div className="flex flex-col gap-4">
+        {entry.artists.map((artist, i) => (
+          <div key={artist.id ?? i} className="flex items-start gap-3">
+            <Avatar name={artist.name} image={artist.photo} size="lg" />
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="text-base font-semibold text-text-primary">{artist.name}</span>
+              {artist.genres && artist.genres.length > 0 && (
+                <span className="text-sm text-text-secondary">{artist.genres.join(' · ')}</span>
+              )}
+              <div className="flex flex-wrap gap-2">
+                {artistLinkEntries(artist.links).map((link) => (
+                  <a
+                    key={link.key}
+                    href={link.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={cn(buttonClass, 'inline-flex items-center border border-border text-text-primary')}
+                  >
+                    {link.label}
+                  </a>
+                ))}
+              </div>
+            </div>
+          </div>
+        ))}
+        <div>
+          <InterestToggle entryId={entry.id} name={name} />
+        </div>
+      </div>
+    </Sheet>
+  );
+}
+
 /** What a row needs to describe an act, read once by the component instead of once per row. */
 interface RowContext {
   cover: AnnouncedLineupModel['cover'];
@@ -115,6 +155,7 @@ interface RowContext {
 /** One act: the poster name, its badges and, for a scheduled act, where it plays. */
 function LineupRow({ entry, textClass, ctx }: { entry: LineupEntry; textClass: string; ctx: RowContext }) {
   const entryCover = ctx.cover[entry.id];
+  const [sheetOpen, setSheetOpen] = useState(false);
   if (!entryCover) return null;
 
   const name = lineupEntryName(entry, ctx.festival?.b2bSeparator);
@@ -135,6 +176,18 @@ function LineupRow({ entry, textClass, ctx }: { entry: LineupEntry; textClass: s
           {nameNode}
           <span className="text-sm text-text-secondary">{lineupSetWhen(first, ctx.days, ctx.stages)}</span>
         </Link>
+      ) : entryCover.state === 'announced' ? (
+        <>
+          <button
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            aria-label={`${name} details`}
+            className="min-h-11 inline-flex items-baseline text-left text-text-primary cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+          >
+            {nameNode}
+          </button>
+          <ArtistSheet entry={entry} name={name} open={sheetOpen} onOpenChange={setSheetOpen} />
+        </>
       ) : (
         nameNode
       )}
