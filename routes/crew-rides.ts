@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
 import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
+import { MAX_CREW_LIST_ITEMS } from '../lib/helpers/crew-list-cap';
 import { randomUUID } from 'crypto';
 
 /**
@@ -61,9 +62,9 @@ export default function createCrewRidesRoutes(deps: any) {
         const { driver, seats, departFrom, departAt, note, direction, departTime } = req.validatedBody;
         const userId = req.user.userId;
 
-
         const count = await stores.crewRides.countByCrew(crewId);
-        if (count >= 200) return sendError(res, 409, 'Max 200 ride offers per crew', ErrorCodes.CONFLICT);
+        if (count >= MAX_CREW_LIST_ITEMS)
+          return sendError(res, 409, `Max ${MAX_CREW_LIST_ITEMS} ride offers per crew`, ErrorCodes.CONFLICT);
 
         const offer = await stores.crewRides.create({
           id: 'ride-' + randomUUID(),
@@ -111,7 +112,6 @@ export default function createCrewRidesRoutes(deps: any) {
         const itemId = sanitizeIdentifier(req.validatedParams.itemId);
         const userId = req.user.userId;
 
-
         const existing = await stores.crewRides.getById(itemId);
         if (!existing || existing.crew_id !== crewId) {
           return sendError(res, 404, 'Ride offer not found', ErrorCodes.NOT_FOUND);
@@ -157,7 +157,6 @@ export default function createCrewRidesRoutes(deps: any) {
         const itemId = sanitizeIdentifier(req.validatedParams.itemId);
         const userId = req.user.userId;
 
-
         const existing = await stores.crewRides.getById(itemId);
         if (!existing || existing.crew_id !== crewId) {
           return sendError(res, 404, 'Ride offer not found', ErrorCodes.NOT_FOUND);
@@ -185,7 +184,6 @@ export default function createCrewRidesRoutes(deps: any) {
       const itemId = sanitizeIdentifier(req.validatedParams.itemId);
       const userId = req.user.userId;
 
-
       const existing = await stores.crewRides.getById(itemId);
       if (!existing || existing.crew_id !== crewId) {
         return sendError(res, 404, 'Ride offer not found', ErrorCodes.NOT_FOUND);
@@ -202,7 +200,12 @@ export default function createCrewRidesRoutes(deps: any) {
       return sendError(res, 500, 'Failed to update your seat', ErrorCodes.INTERNAL_ERROR);
     }
   };
-  const seatGuards = [userAuth, rateLimit(30, 'crew-rides-seat'), validateParams(schemas.crewIdItemIdParams), crewMember];
+  const seatGuards = [
+    userAuth,
+    rateLimit(30, 'crew-rides-seat'),
+    validateParams(schemas.crewIdItemIdParams),
+    crewMember,
+  ];
   router.post('/:crewId/rides/:itemId/seat', ...seatGuards, seatHandler(true));
   router.delete('/:crewId/rides/:itemId/seat', ...seatGuards, seatHandler(false));
 
