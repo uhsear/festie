@@ -18,6 +18,7 @@ import createStatusRoutes from './crew-status.js';
 import createCrewDaysRoutes from './crew-days.js';
 import createSosRoutes from './crew-sos.js';
 import createLiveLocationRoutes from './crew-live-location.js';
+import { evictCrewRoomSockets } from '../lib/presence.js';
 import createCheckinRoutes from './crew-checkin.js';
 import createCrewNudgeRoutes from './crew-nudge.js';
 import createCrewMemberRoutes from './crew-members.js';
@@ -110,8 +111,7 @@ export default function createCrewRoutes(deps: RouteDeps) {
    * Without this, a member who was live-location-sharing when the owner deleted
    * the crew keeps receiving live location/SOS/status broadcasts for a crew that
    * no longer exists, and keeps a stamped sharingCrewId they could inject from,
-   * until they happen to disconnect. Mirrors evictAllFromCrewRoom in
-   * routes/admin-bulk.ts. The crew:deleted event is already emitted by the delete
+   * until they happen to disconnect. Uses evictCrewRoomSockets from lib/presence.ts. The crew:deleted event is already emitted by the delete
    * handler (with festivalId), so it is not re-emitted here.
    *
    * Best-effort: a failure must never fail the HTTP delete (the DB rows are
@@ -119,15 +119,8 @@ export default function createCrewRoutes(deps: RouteDeps) {
    */
   async function evictAllFromCrewRoom(crewId: string) {
     if (!io || typeof io.in !== 'function') return;
-    const room = `crew:${crewId}`;
     try {
-      const sockets = await io.in(room).fetchSockets();
-      for (const s of sockets) {
-        if (s.data?.sharingCrewId === crewId) delete s.data.sharingCrewId;
-        delete s.data.crewMembershipCheckedAt;
-        delete s.data.crewMembershipUpdateCount;
-        s.leave(room);
-      }
+      await evictCrewRoomSockets(io, crewId);
     } catch (error) {
       log.warn('crew room full eviction failed', { error: (error as NodeJS.ErrnoException)?.message, crewId });
     }
