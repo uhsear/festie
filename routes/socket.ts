@@ -57,6 +57,7 @@ import type { LocationPeerStoppedReason } from '../packages/shared/src/types/soc
 import type { AppConfig } from '../lib/config.js';
 import type { SocketEmitter } from '../lib/emitter.js';
 import type { createLogger } from '../lib/logger.js';
+import { resetCrewMembershipCache } from '../lib/presence.js';
 import type { createPresenceManager, PresenceIo, RealtimeSocket } from '../lib/presence.js';
 import type { AppState, RouteDeps, Stores } from '../lib/types/app-context.js';
 
@@ -363,8 +364,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         // socket.data.crewId) must refuse until join:crew runs again.
         if (crewId) delete socket.data.crewId;
         delete socket.data.sharingCrewId;
-        delete socket.data.crewMembershipCheckedAt;
-        delete socket.data.crewMembershipUpdateCount;
+        resetCrewMembershipCache(socket.data);
         if (festivalId) emitPresence(festivalId, io);
       } catch (error) {
         log.error('leave:festival error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
@@ -459,8 +459,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         socket.leave(`crew:${crewId}`);
         if (socket.data?.crewId === crewId) delete socket.data.crewId;
         // Reset the streaming-path membership cache so a future re-join re-checks.
-        delete socket.data.crewMembershipCheckedAt;
-        delete socket.data.crewMembershipUpdateCount;
+        resetCrewMembershipCache(socket.data);
       } catch (error) {
         log.error('leave:crew error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
       }

@@ -9,6 +9,7 @@
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { dropLivePosition } from '../lib/live-location-cache.js';
+import { evictCrewRoomSockets } from '../lib/presence.js';
 
 export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
   const {
@@ -34,7 +35,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
 
   /**
    * H1 (admin path): evict an admin-removed user's live socket(s) from the crew
-   * room server-side. Mirrors evictUserFromCrewRoom in routes/crew-members.ts —
+   * room server-side. Shares evictCrewRoomSockets (lib/presence.ts) with routes/crew-members.ts —
    * Socket.IO only drops a socket from a room on disconnect, never on an
    * application-level authz change, so without this an admin-removed member
    * keeps receiving every sos:raised / crew:status-updated / location:peer-update
@@ -55,21 +56,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
         userId: removedUserId,
         reason: 'kicked',
       });
-      // Bounded: fetchSockets() can hang for a Redis outage; mirrors crew-members.ts.
-      const sockets: any[] = await Promise.race([
-        io.in(room).fetchSockets(),
-        new Promise((_resolve, reject) =>
-          setTimeout(() => reject(new Error('fetchSockets timed out')), 3_000).unref?.(),
-        ),
-      ]);
-      for (const s of sockets) {
-        if (s.data?.userId !== removedUserId) continue;
-        s.emit('crew:access-revoked', { crewId });
-        delete s.data.sharingCrewId;
-        delete s.data.crewMembershipCheckedAt;
-        delete s.data.crewMembershipUpdateCount;
-        s.leave(room);
-      }
+      await evictCrewRoomSockets(io, crewId, removedUserId);
     } catch (error: any) {
       log.warn('admin crew room eviction failed', { error: error?.message, crewId, removedUserId });
     }
@@ -80,7 +67,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
    * room before the crew row + its members are cascaded away. Without this, all
    * connected members keep receiving live location/SOS/status broadcasts for a
    * crew that no longer exists, and keep a stamped sharingCrewId they could
-   * inject from, until they happen to disconnect. Mirrors evictUserFromCrewRoom
+   * inject from, until they happen to disconnect. Uses evictCrewRoomSockets
    * but applies to all sockets in the room (no per-user filter) and emits a
    * crew-deleted event so clients tear down the crew + SOS UI immediately.
    *
@@ -94,13 +81,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
       // Tell every client in the room the crew is gone, then drop their stamps
       // and force their socket(s) out of the room so broadcasts stop.
       io.to(room).emit('crew:deleted', { crewId, festivalId });
-      const sockets = await io.in(room).fetchSockets();
-      for (const s of sockets) {
-        if (s.data?.sharingCrewId === crewId) delete s.data.sharingCrewId;
-        delete s.data.crewMembershipCheckedAt;
-        delete s.data.crewMembershipUpdateCount;
-        s.leave(room);
-      }
+      await evictCrewRoomSockets(io, crewId);
     } catch (error: any) {
       log.warn('admin crew room full eviction failed', { error: error?.message, crewId });
     }

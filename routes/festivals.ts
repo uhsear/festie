@@ -14,6 +14,7 @@ import type { Request, Response } from 'express';
 import type { z } from 'zod';
 import type { RouteDeps } from '../lib/types';
 import type { Params, Query } from '../lib/types/app-context';
+import { evictCrewRoomSockets } from '../lib/presence.js';
 
 export default function createFestivalsRoutes(deps: RouteDeps) {
   const {
@@ -129,7 +130,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
    * it does NOT touch the crew rooms, so without this every connected crew
    * member keeps receiving live location/SOS/status broadcasts for a crew whose
    * festival no longer exists, and keeps a stamped sharingCrewId, until they
-   * disconnect. Mirrors the whole-crew-delete eviction in routes/admin-bulk.ts.
+   * disconnect. Uses evictCrewRoomSockets from lib/presence.ts.
    *
    * Best-effort: a failure must never fail the HTTP delete (DB rows are already
    * gone / about to go); io may be absent in some test/CLI contexts.
@@ -141,15 +142,8 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
       for (const crew of crews) {
         const crewId = crew?.id;
         if (!crewId) continue;
-        const room = `crew:${crewId}`;
-        io.to(room).emit('crew:deleted', { crewId, festivalId });
-        const sockets = await io.in(room).fetchSockets();
-        for (const s of sockets) {
-          if (s.data?.sharingCrewId === crewId) delete s.data.sharingCrewId;
-          delete s.data.crewMembershipCheckedAt;
-          delete s.data.crewMembershipUpdateCount;
-          s.leave(room);
-        }
+        io.to(`crew:${crewId}`).emit('crew:deleted', { crewId, festivalId });
+        await evictCrewRoomSockets(io, crewId);
       }
     } catch (error) {
       log.warn('festival crew room eviction failed', { error: (error as NodeJS.ErrnoException)?.message, festivalId });

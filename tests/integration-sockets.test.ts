@@ -276,6 +276,56 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     bobSocket.close();
   });
 
+  test('crew leave and owner delete evict sockets from the crew room', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    const bob = await registerUser(server, 'bob');
+    await joinFestivalProfile(server, alice.token);
+    await joinFestivalProfile(server, bob.token);
+
+    const aliceSocket = connectSocket(server.baseUrl);
+    const bobSocket = connectSocket(server.baseUrl);
+    await Promise.all([waitForEvent(aliceSocket, 'connect'), waitForEvent(bobSocket, 'connect')]);
+    const join = (socket: any, token: string) =>
+      new Promise<any>((resolve) => socket.emit('join:festival', 'fest-1', { userToken: token }, resolve));
+    await Promise.all([join(aliceSocket, alice.token), join(bobSocket, bob.token)]);
+
+    const crew = (
+      await server.request
+        .post('/api/v1/crews')
+        .set('x-user-token', alice.token)
+        .send({ name: 'Alpha', festivalId: 'fest-1' })
+        .expect(201)
+    ).body.data;
+    await server.request
+      .post('/api/v1/crews/join')
+      .set('x-user-token', bob.token)
+      .send({ inviteCode: crew.inviteCode })
+      .expect(200);
+    const joinCrew = (socket: any) =>
+      new Promise<any>((resolve) => socket.emit('join:crew', { _v: 1, crewId: crew.id }, resolve));
+    assert.equal((await joinCrew(aliceSocket)).ok, true);
+    assert.equal((await joinCrew(bobSocket)).ok, true);
+
+    // Member leave: only the leaver's socket is told, and it stops receiving crew room traffic.
+    const revoked = waitForEvent(bobSocket, 'crew:access-revoked', (payload) => payload.crewId === crew.id);
+    await server.request.delete(`/api/v1/crews/${crew.id}/leave`).set('x-user-token', bob.token).expect(200);
+    await revoked;
+    const members = await server.planner.io.in(`crew:${crew.id}`).fetchSockets();
+    assert.deepEqual(members.map((s: any) => s.data.userId), [alice.user.id]);
+
+    // Owner delete: the remaining socket is told and leaves the room.
+    const deleted = waitForEvent(aliceSocket, 'crew:deleted', (payload) => payload.crewId === crew.id);
+    await server.request.delete(`/api/v1/crews/${crew.id}`).set('x-user-token', alice.token).expect(200);
+    await deleted;
+    assert.equal((await server.planner.io.in(`crew:${crew.id}`).fetchSockets()).length, 0);
+
+    aliceSocket.close();
+    bobSocket.close();
+  });
+
   test('profile:updated reaches the author other device without a crew, never an outsider', async () => {
     const server = await startServer();
     servers.push(server);
