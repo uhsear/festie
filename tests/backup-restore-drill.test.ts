@@ -111,8 +111,20 @@ describe('scripts/backup-restore-drill.sh', { skip }, () => {
     assert.equal(seen.PORT, '4199');
     assert.equal(seen.NODE_ENV, 'production');
     assert.equal(seen.REDIS_ENABLED, 'false');
+    assert.equal(seen.DOTENV_CONFIG_PATH, '/nonexistent/festie-drill-no-dotenv');
+    assert.equal(seen.DOTENV_CONFIG_QUIET, 'true');
     assert.equal(seen.LEAKED_SECRET, undefined);
     for (const key of SERVICE_KEYS) assert.equal(seen[key], undefined, key);
+  });
+
+  it('boot step refuses a database that is not a festie_drill_ copy and starts nothing', () => {
+    const r = runScript('scripts/backup-drill-boot.sh', [], {
+      ...env,
+      DRILL_BOOT_DATABASE_URL: 'postgresql://festie:x@127.0.0.1:5433/festival_planner',
+    });
+    assert.equal(r.status, 1);
+    assert.match(r.stderr, /does not start with festie_drill_/);
+    assert.equal(existsSync(path.join(work, 'app', 'seen.json')), false);
   });
 
   it('fails the drill, and still drops the restore DB, when /api/ready never returns 200', () => {

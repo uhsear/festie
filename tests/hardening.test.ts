@@ -129,7 +129,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
           newPassword: 'newpass123',
           confirmPassword: 'newpass123',
         });
-        assert(res.status >= 400);
+        assert.equal(res.status, 400);
       } finally {
         await pool.end();
       }
@@ -154,7 +154,7 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
         newPassword: 'newpass123',
         confirmPassword: 'newpass123',
       });
-      assert(res.status >= 400);
+      assert.equal(res.status, 400);
     });
 
     test('POST /api/v1/auth/forgot-password rate limits per email', async () => {
