@@ -28,7 +28,8 @@ import { useUndoableRemove } from './useUndoableRemove';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
 import StaleNote from './StaleNote';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
+import { loadErrorMessage } from './loadErrorMessage';
 import {
   MapPin,
   Plus,
@@ -140,6 +141,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
   const {
     data: points = [],
+    error,
     isLoading,
     isError,
     refetch,
@@ -344,10 +346,10 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
 
   if (isLoading) {
     return (
-      <div className="px-4 space-y-2">
+      <SkeletonGroup className="px-4 space-y-2">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
-      </div>
+      </SkeletonGroup>
     );
   }
   if (isError && points.length === 0) {
@@ -359,7 +361,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         <EmptyState
           icon={<MapPin className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load meeting points"
-          description="Something went wrong loading meeting points."
+          description={loadErrorMessage(error, 'Something went wrong loading meeting points.')}
           cta={{ label: 'Retry', onClick: () => refetch() }}
         />
       </div>

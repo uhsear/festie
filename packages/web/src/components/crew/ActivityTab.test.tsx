@@ -27,7 +27,34 @@ const row = (id: string, type: string, detail: string | null = null) => ({
   created_at: new Date().toISOString(),
 });
 
+const offlineError = () =>
+  Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true });
+const serverError = () => Object.assign(new Error('upstream exploded'), { name: 'ApiClientError', status: 503 });
+const OFFLINE_COPY = "You're offline. Check your connection and try again.";
+const SERVER_COPY = 'Something went wrong on our side. Try again in a minute.';
+
 describe('ActivityTab', () => {
+  it('renders exactly one loading status while the first page loads', () => {
+    apiGet.mockReturnValue(new Promise(() => {}));
+    renderTab();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+    expect(screen.getByRole('status')).toHaveAccessibleName('Loading');
+  });
+
+  it('says the device is offline when the load fails offline', async () => {
+    apiGet.mockRejectedValue(offlineError());
+    renderTab();
+    expect(await screen.findByText("Couldn't load activity")).toBeInTheDocument();
+    expect(screen.getByText(OFFLINE_COPY)).toBeInTheDocument();
+  });
+
+  it('says the server failed when the load fails with a 5xx', async () => {
+    apiGet.mockRejectedValue(serverError());
+    renderTab();
+    expect(await screen.findByText(SERVER_COPY)).toBeInTheDocument();
+    expect(screen.queryByText(/upstream exploded/)).not.toBeInTheDocument();
+  });
+
   it('renders entries from the { items, nextCursor } page the server returns', async () => {
     apiGet.mockResolvedValue({
       items: [

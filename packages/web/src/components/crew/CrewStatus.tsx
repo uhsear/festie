@@ -25,7 +25,8 @@ import { CREW_STATUS_HONESTY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
+import { loadErrorMessage } from './loadErrorMessage';
 import Avatar from '../ui/Avatar';
 import {
   Navigation,
@@ -49,6 +50,8 @@ interface Props {
   /** Meeting points (for the ETA-target picker + coord-based ETA). */
   meetingPoints: CrewMeetingPoint[];
 }
+
+const STATUS_LOAD_FAILED = 'Something went wrong loading crew status.';
 
 // Status key → lucide icon. Labels come from crewStatusLabel (shared).
 // Icons (not emoji) keep the crew UI on the app's single icon vocabulary.
@@ -110,7 +113,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
   // error is shared across every crew tab), so real isLoading/isError needs to be
   // tracked here rather than pulled from the store.
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   // Load once per crew. Offline this resolves from the persisted read-cache.
   useEffect(() => {
@@ -120,10 +123,10 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
     }
     let cancelled = false;
     setLoading(true);
-    setLoadError(false);
+    setLoadError(null);
     loadStatuses(crewId)
-      .catch(() => {
-        if (!cancelled) setLoadError(true);
+      .catch((err) => {
+        if (!cancelled) setLoadError(loadErrorMessage(err, STATUS_LOAD_FAILED));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -411,22 +414,22 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
 
       {/* Crew status list with HONEST staleness. */}
       {loading ? (
-        <div className="space-y-2">
+        <SkeletonGroup className="space-y-2">
           <Skeleton variant="card" />
           <Skeleton variant="card" />
-        </div>
+        </SkeletonGroup>
       ) : loadError ? (
         <EmptyState
           icon={<Navigation className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load crew status"
-          description="Something went wrong loading crew status."
+          description={loadError}
           cta={{
             label: 'Retry',
             onClick: () => {
               setLoading(true);
-              setLoadError(false);
+              setLoadError(null);
               loadStatuses(crewId)
-                .catch(() => setLoadError(true))
+                .catch((err) => setLoadError(loadErrorMessage(err, STATUS_LOAD_FAILED)))
                 .finally(() => setLoading(false));
             },
           }}

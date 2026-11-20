@@ -13,12 +13,15 @@ import { useHaptics } from '../../hooks/useHaptics';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import EmptyState from '../ui/EmptyState';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
+import { loadErrorMessage } from './loadErrorMessage';
 import IconButton from '../ui/IconButton';
 import Avatar from '../ui/Avatar';
 import SyncMarker from './SyncMarker';
 import { useUndoableRemove } from './useUndoableRemove';
 import { Backpack, Check, Plus, Trash2, X } from 'lucide-react';
+
+const PACKING_LOAD_FAILED = 'Something went wrong loading the packing list.';
 
 interface Props {
   crewId: string;
@@ -60,7 +63,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
   // error is shared across every crew tab), so real isLoading/isError needs to be
   // tracked here rather than pulled from the store.
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { hiddenIds, remove } = useUndoableRemove(
     (itemId) => deletePackingItem(crewId, itemId),
     "Couldn't remove item. Try again.",
@@ -74,10 +77,10 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
     }
     let cancelled = false;
     setLoading(true);
-    setLoadError(false);
+    setLoadError(null);
     loadPacking(crewId)
-      .catch(() => {
-        if (!cancelled) setLoadError(true);
+      .catch((err) => {
+        if (!cancelled) setLoadError(loadErrorMessage(err, PACKING_LOAD_FAILED));
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -181,22 +184,22 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
       )}
 
       {loading ? (
-        <div className="space-y-2">
+        <SkeletonGroup className="space-y-2">
           <Skeleton variant="card" />
           <Skeleton variant="card" />
-        </div>
+        </SkeletonGroup>
       ) : loadError ? (
         <EmptyState
           icon={<Backpack className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load packing list"
-          description="Something went wrong loading the packing list."
+          description={loadError}
           cta={{
             label: 'Retry',
             onClick: () => {
               setLoading(true);
-              setLoadError(false);
+              setLoadError(null);
               loadPacking(crewId)
-                .catch(() => setLoadError(true))
+                .catch((err) => setLoadError(loadErrorMessage(err, PACKING_LOAD_FAILED)))
                 .finally(() => setLoading(false));
             },
           }}

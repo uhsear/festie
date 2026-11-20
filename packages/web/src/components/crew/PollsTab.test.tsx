@@ -46,6 +46,34 @@ function renderTab() {
   return renderWithQueryClient(<PollsTab crewId="c1" currentUserId="u1" isOwner />);
 }
 
+const offlineError = () =>
+  Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true });
+const serverError = () => Object.assign(new Error('upstream exploded'), { name: 'ApiClientError', status: 503 });
+const OFFLINE_COPY = "You're offline. Check your connection and try again.";
+const SERVER_COPY = 'Something went wrong on our side. Try again in a minute.';
+
+describe('PollsTab load failure', () => {
+  it('renders one loading status while polls load', () => {
+    apiGet.mockReturnValue(new Promise(() => {}));
+    renderTab();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
+  it('says the device is offline when the load fails offline', async () => {
+    apiGet.mockRejectedValue(offlineError());
+    renderTab();
+    expect(await screen.findByText("Couldn't load polls")).toBeInTheDocument();
+    expect(screen.getByText(OFFLINE_COPY)).toBeInTheDocument();
+  });
+
+  it('says the server failed when the load fails with a 5xx', async () => {
+    apiGet.mockRejectedValue(serverError());
+    renderTab();
+    expect(await screen.findByText(SERVER_COPY)).toBeInTheDocument();
+    expect(screen.queryByText(/upstream exploded/)).not.toBeInTheDocument();
+  });
+});
+
 describe('PollsTab cap', () => {
   it('disables every create button at 3 open polls and shows the cap text', async () => {
     apiGet.mockResolvedValue({ polls: [poll('1'), poll('2'), poll('3')] });

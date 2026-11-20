@@ -152,7 +152,7 @@ const { mockInvalidateQueries, updateMutate, mockRefetch, rq } = vi.hoisted(() =
   };
 });
 
-let queryState: { data: unknown; isLoading: boolean; isError: boolean };
+let queryState: { data: unknown; isLoading: boolean; isError: boolean; error?: unknown };
 let pastData: unknown[] = [];
 
 vi.mock('@tanstack/react-query', () => ({
@@ -216,6 +216,31 @@ describe('MeetingPointsTab', () => {
     expect(screen.getByText("Couldn't load meeting points")).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(mockRefetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('says the device is offline when the list fails to load offline', () => {
+    setQuery({
+      isError: true,
+      error: Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true }),
+    });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText("You're offline. Check your connection and try again.")).toBeInTheDocument();
+  });
+
+  it('says the server failed when the list fails with a 5xx', () => {
+    setQuery({
+      isError: true,
+      error: Object.assign(new Error('upstream exploded'), { name: 'ApiClientError', status: 503 }),
+    });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getByText('Something went wrong on our side. Try again in a minute.')).toBeInTheDocument();
+    expect(screen.queryByText(/upstream exploded/)).not.toBeInTheDocument();
+  });
+
+  it('renders one loading status while the list loads', () => {
+    setQuery({ isLoading: true });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
   });
 
   it('keeps the live-location and SOS controls when the list fails to load', () => {
