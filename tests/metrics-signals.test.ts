@@ -11,7 +11,7 @@ import request from 'supertest';
 
 import { createMetrics, metricsHandler, recordJobRun, startMetricsListener } from '../lib/metrics.js';
 import { createRateLimiters } from '../lib/rate-limiting.js';
-import { createBackgroundTasks } from '../lib/shutdown.js';
+import { createBackgroundTasks } from '../lib/background-tasks.js';
 
 const execFileAsync = promisify(execFile);
 

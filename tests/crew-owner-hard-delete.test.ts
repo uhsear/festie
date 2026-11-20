@@ -125,7 +125,7 @@ describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
   });
 });
 
-// The avatar orphan sweep in lib/shutdown.ts deletes any file in the avatar
+// The avatar orphan sweep in lib/background-tasks.ts deletes any file in the avatar
 // directory whose key is not in `users.avatar_key`. It used to build that set
 // from getUsers(), which filters `WHERE deleted_at IS NULL`, so a soft-deleted
 // account lost its avatar file on the next sweep — within six hours, not at the
@@ -150,7 +150,7 @@ describe('avatar orphan sweep — soft-deleted accounts keep their file', { skip
     await stores.users.create({ id: 'avatar-sweep-1', username: 'avatar-sweep-1', passwordHash: 'x' });
     await pool.query("UPDATE users SET avatar_key = 'abc123deadbeef' WHERE id = $1", ['avatar-sweep-1']);
 
-    // Exactly the query lib/shutdown.ts runs to build the valid-key set.
+    // Exactly the query lib/background-tasks.ts runs to build the valid-key set.
     const live = await pool.query('SELECT avatar_key FROM users WHERE avatar_key IS NOT NULL');
     assert.ok(
       live.rows.some((r: any) => r.avatar_key === 'abc123deadbeef'),

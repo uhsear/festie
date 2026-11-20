@@ -164,7 +164,7 @@ function createMetrics() {
   });
   registry.registerMetric(reengagementQueueDepthGauge);
 
-  // --- in-process background jobs (lib/shutdown.ts leader timers), via recordJobRun ---
+  // --- in-process background jobs (lib/background-tasks.ts leader timers), via recordJobRun ---
 
   const jobRunsCounter = new client.Counter({
     name: 'festie_job_runs_total',

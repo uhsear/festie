@@ -22,6 +22,20 @@ export const ANDROID_APP_SIGNING_CERTS = [
   '0C:49:FB:87:94:C5:D4:39:F8:BE:BD:D1:D3:78:B9:CD:B8:40:7E:4E:4C:A3:73:96:73:57:13:79:B8:92:6D:01',
 ] as const;
 
+// Fixed schedule of the leader-only background sweeps (lib/background-tasks.ts).
+// One key per job so tuning one never moves another.
+export const JOB_INTERVALS_MS = {
+  AVATAR_CLEANUP: 6 * 60 * 60 * 1000,
+  TOKEN_CLEANUP: 6 * 60 * 60 * 1000,
+  AUDIT_CLEANUP: 6 * 60 * 60 * 1000,
+  RETENTION: 24 * 60 * 60 * 1000,
+  RETENTION_FIRST_RUN: 10 * 60 * 1000,
+  POLL_EXPIRY: 5 * 1000,
+  ANNOUNCEMENTS: 60 * 1000,
+  WRAP_READY: 60 * 60 * 1000,
+  RATE_PROMPT: 60 * 60 * 1000,
+} as const;
+
 export const DEFAULTS = {
   PORT: 4000,
   RATE_LIMIT_WINDOW: 60_000,

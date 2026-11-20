@@ -256,7 +256,7 @@ describe('avatar characterization: the stale .tmp sweep', () => {
 
 describe('avatar: orphan cleanup timer', () => {
   it('removes only files without a users row and queries by page', async () => {
-    const { createBackgroundTasks } = await import('../lib/shutdown.js');
+    const { createBackgroundTasks } = await import('../lib/background-tasks.js');
     fs.writeFileSync(path.join(tmpDir, 'keep.webp'), 'x');
     fs.writeFileSync(path.join(tmpDir, 'orphan.webp'), 'x');
     fs.writeFileSync(path.join(tmpDir, 'note.txt'), 'x');
