@@ -41,6 +41,8 @@ export interface ArtistRef {
   photo: string | null;
   genres: string[];
   mergedInto: string | null;
+  /** An organizer's lookup: a visible artist it may not link by name, so even a single one needs a pick. */
+  pickOnly?: boolean;
 }
 
 /** byKey holds live artists only. byId also holds merged ones, so a stale id gets a clear message. */
@@ -591,15 +593,18 @@ function resolveArtists(ctx: Ctx, names: string[], ids: string[], opts: ResolveO
       return;
     }
     const hits = lookup?.byKey.get(artistNameKey(name)) ?? [];
-    if (hits.length === 1) {
+    if (hits.length === 1 && !hits[0]!.pickOnly) {
       ctx.lookedUpIds.add(hits[0]!.id);
       artists.push(artistFromRef(name, hits[0]!));
       resolutions.push({ name, outcome: 'existing', artistId: hits[0]!.id });
-    } else if (hits.length > 1) {
+    } else if (hits.length > 0) {
       errors.push({
         field: 'artist',
         code: 'needs_choice',
-        message: `Which "${name}"? ${hits.length} artists have this name. Pick one.`,
+        message:
+          hits.length > 1
+            ? `Which "${name}"? ${hits.length} artists have this name. Pick one.`
+            : `Is "${name}" this artist? Pick it to use it, or add a note to create a new one.`,
       });
       artists.push({ name, links: {} });
       resolutions.push({ name, outcome: 'needs_choice', candidates: hits.map(candidateOf) });

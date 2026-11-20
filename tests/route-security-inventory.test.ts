@@ -180,10 +180,11 @@ const adminMounted = new Set(files.filter((f) => {
 }));
 // lib/festival-mounts.ts mounts these two files; tests/festival-access-matrix.test.ts calls every route in them.
 // organizations.ts sits behind adminGuard. manage.ts sits behind userAuth and grants roles only through
-// festivalAccess and orgAccess, which refuse a caller without a role.
+// festivalAccess and orgAccess, which refuse a caller without a role. manage-artists.ts is mounted whole by manage.ts
+// and checks the caller's organizations itself (access() in that file); the artist tests below pin its routes.
 const mountsSrc = stripComments(readFileSync(join(root, 'lib/festival-mounts.ts'), 'utf8'));
 const festivalMountsAdmin = new Set(files.filter((f) => f === 'organizations.ts' && /guards:\s*adminGuard,\s*router:\s*organizationsRoutes\b/.test(mountsSrc)));
-const festivalMountsUser = new Set(files.filter((f) => f === 'manage.ts' && /guards:\s*\[deps\.userAuth\],\s*router:\s*createManageRoutes\(/.test(mountsSrc)));
+const festivalMountsUser = new Set(files.filter((f) => (f === 'manage.ts' && /guards:\s*\[deps\.userAuth\],\s*router:\s*createManageRoutes\(/.test(mountsSrc)) || (f === 'manage-artists.ts' && /artistRoutes:\s*createManageArtistsRoutes\(deps\)/.test(mountsSrc))));
 const has = (r: Route, re: RegExp) => re.test(r.mw);
 // festivalAccess refuses a non-admin off the /manage mount, and the manage router refuses a caller with no role, so both count as gates.
 const isAdmin = (r: Route) => adminMounted.has(r.file) || festivalMountsAdmin.has(r.file) || has(r, /(^|[\s.|])(adminAuth|festivalAccess)\b/);
@@ -244,19 +245,23 @@ test('artist routes stay admin only, validated and rate limited', () => {
     [
       'artists.ts GET /',
       'artists.ts GET /:id/impact',
+      'artists.ts GET /suggestions',
       'artists.ts PATCH /:id',
       'artists.ts POST /',
       'artists.ts POST /:id/merge',
+      'artists.ts POST /:id/verify',
       'artists.ts POST /backfill',
       'artists.ts POST /match',
       'artists.ts POST /spotify-candidates',
       'artists.ts POST /spotify-picks',
       'artists.ts POST /spotify-refresh',
+      'artists.ts POST /suggestions/:id/decision',
     ],
   );
   for (const r of artistRoutes) {
     assert.ok(isAdmin(r), `${r.key} must be mounted behind adminAuth in server.ts`);
-    if (r.verb !== 'GET') assert.ok(has(r, /\bvalidate\(/), `${r.key} must validate its body`);
+    // Verify takes no body: the artist id is the whole request.
+    if (r.verb !== 'GET' && r.key !== 'artists.ts POST /:id/verify') assert.ok(has(r, /\bvalidate\(/), `${r.key} must validate its body`);
   }
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts PATCH /:id')!, /rateLimit\(60, 'artist-update'\)/));
   const mergeRoute = artistRoutes.find((r) => r.key === 'artists.ts POST /:id/merge')!;
@@ -269,4 +274,28 @@ test('artist routes stay admin only, validated and rate limited', () => {
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-candidates')!, /rateLimit\(6, 'artist-spotify-search'\)/));
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-picks')!, /rateLimit\(20, 'artist-spotify-pick'\)/));
   assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /spotify-refresh')!, /rateLimit\(6, 'artist-spotify-refresh'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /suggestions/:id/decision')!, /rateLimit\(60, 'artist-suggestion-decide'\)/));
+  assert.ok(has(artistRoutes.find((r) => r.key === 'artists.ts POST /:id/verify')!, /rateLimit\(60, 'artist-verify'\)/));
+});
+
+test('organizer artist routes check the caller organizations, validate and rate limit writes', () => {
+  const mine = routes.filter((r) => r.file === 'manage-artists.ts');
+  assert.deepEqual(
+    mine.map((r) => r.key).sort(),
+    [
+      'manage-artists.ts GET /',
+      'manage-artists.ts GET /:id/impact',
+      'manage-artists.ts GET /suggestions',
+      'manage-artists.ts PATCH /:id',
+      'manage-artists.ts POST /',
+      'manage-artists.ts POST /match',
+    ],
+  );
+  for (const r of mine) {
+    assert.ok(has(r, /\baccess\((true|false)\)/), `${r.key} must run the access() gate that builds the artist viewer`);
+    if (r.verb !== 'GET') assert.ok(has(r, /\bvalidate\(/), `${r.key} must validate its body`);
+    // A route that changes data needs a role that may write; a read needs any role.
+    assert.equal(has(r, /\baccess\(true\)/), r.verb !== 'GET' && r.key !== 'manage-artists.ts POST /match', `${r.key}: access(true) exactly on the writes`);
+  }
+  assert.ok(has(mine.find((r) => r.key === 'manage-artists.ts POST /')!, /rateLimit\(10, 'manage-artist-create'\)/));
 });

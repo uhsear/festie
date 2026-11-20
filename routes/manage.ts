@@ -6,7 +6,7 @@
  *
  * It is the only place where an organization member is granted a role (festivalAccess reads
  * req.organizerMount, which only this file sets). Own handlers: GET /me, GET /festivals, POST /festivals, and
- * POST|DELETE /festivals/:id/publish-request (submit for review and withdraw).
+ * POST|DELETE /festivals/:id/publish-request (submit for review and withdraw). The /artists router is mounted whole.
  * Every other path is forwarded to an existing router, and only when it is on MANAGE_WHITELIST. A path
  * that is not listed answers 404 and never reaches those routers, so a route added to them later stays
  * admin-only until someone lists it here and the access-matrix test covers it.
@@ -71,7 +71,7 @@ function pathPattern(entry: ManageEntry): RegExp {
 
 export default function createManageRoutes(
   deps: any,
-  forwarded: { festivalRoutes: any; lineupImportRoutes: any; siteplanRoutes: any },
+  forwarded: { festivalRoutes: any; lineupImportRoutes: any; siteplanRoutes: any; artistRoutes: any },
 ) {
   const {
     express,
@@ -209,9 +209,16 @@ export default function createManageRoutes(
           const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
           return sendError(res, 400, `${issues[0].message}${more}`, ErrorCodes.INVALID_INPUT, { issues });
         }
+        // Artist ids from the client are dropped too: a foreign id would put this draft on another tenant's artist.
+        // The first save resolves each name through resolveArtistRefs, which only sees artists the member may see.
+        const withoutIds = (artists: any[] | undefined) => artists?.map(({ id: _artistId, ...artist }: any) => artist);
         const festival = sanitizeFestivalPayload({
           ...input,
-          days: input.days?.map((day: any) => ({ ...day, sets: day.sets?.map(({ id: _id, ...set }: any) => set) })),
+          days: input.days?.map((day: any) => ({
+            ...day,
+            sets: day.sets?.map(({ id: _id, ...set }: any) => ({ ...set, ...(set.artists ? { artists: withoutIds(set.artists) } : {}) })),
+          })),
+          ...(input.lineup ? { lineup: input.lineup.map((entry: any) => ({ ...entry, ...(entry.artists ? { artists: withoutIds(entry.artists) } : {}) })) } : {}),
         });
         await stores.festivals.create({
           ...festival,
@@ -281,6 +288,9 @@ export default function createManageRoutes(
       }
     },
   );
+
+  // The artist routes of a member (routes/manage-artists.ts) guard themselves: they are not festival-scoped.
+  router.use('/artists', forwarded.artistRoutes);
 
   // Everything else: forward a listed route, 404 the rest.
   router.use(async (req: any, res: any, next: any) => {

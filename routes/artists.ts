@@ -429,6 +429,55 @@ export default function createArtistsRoutes(deps: RouteDeps) {
     }
   });
 
+  /**
+   * The organizer suggestions (artist plan 8.3). Pending ones first, oldest first. An organizer's change to an artist
+   * that other tenants or the platform also use waits here, and so does every organizer Spotify change.
+   */
+  router.get('/suggestions', validateQuery(schemas.artistSuggestionListQuery), async (req: Request, res: Response) => {
+    try {
+      const { status, limit } = req.validatedQuery as Query;
+      return sendSuccess(res, { suggestions: await stores.artists.listSuggestions({ status: status ?? 'pending', limit: limit ?? 100 }) });
+    } catch (error) {
+      return sendArtistError(res, error, 'load the suggestions');
+    }
+  });
+
+  router.post(
+    '/suggestions/:id/decision',
+    rateLimit(60, 'artist-suggestion-decide'),
+    validateParams(schemas.genericIdParams),
+    validate(schemas.artistSuggestionDecision),
+    async (req: Request, res: Response) => {
+      try {
+        const { decision, note } = req.validatedBody as z.infer<typeof schemas.artistSuggestionDecision>;
+        const result = await stores.artists.decideSuggestion((req.validatedParams as Params).id, {
+          decision,
+          note: note ?? null,
+          userId: req.user?.userId ?? null,
+          ip: getRequestIp(req),
+        });
+        await afterSync(result.synced);
+        // The store wrote the audit rows in the decision's transaction.
+        if (req.res?.locals) req.res.locals.auditWritten = true;
+        log.info('artist:suggestion-decided', { suggestionId: (req.validatedParams as Params).id, decision, festivals: result.synced.length });
+        return sendSuccess(res, { status: result.status, artistId: result.artistId, festivalsUpdated: result.synced.length });
+      } catch (error) {
+        return sendArtistError(res, error, 'decide the suggestion');
+      }
+    },
+  );
+
+  // An organizer's artist stays unverified until an admin says otherwise; another tenant never gets it linked by name until then.
+  router.post('/:id/verify', rateLimit(60, 'artist-verify'), validateParams(schemas.genericIdParams), async (req: Request, res: Response) => {
+    try {
+      const artist = await stores.artists.verify((req.validatedParams as Params).id, { userId: req.user?.userId ?? null, ip: getRequestIp(req) });
+      if (req.res?.locals) req.res.locals.auditWritten = true;
+      return sendSuccess(res, { artist: publicArtist(artist) });
+    } catch (error) {
+      return sendArtistError(res, error, 'verify the artist');
+    }
+  });
+
   router.get('/:id/impact',validateParams(schemas.genericIdParams), async (req: Request, res: Response) => {
     try {
       return sendSuccess(res, await stores.artists.impact((req.validatedParams as Params).id));

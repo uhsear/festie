@@ -16,8 +16,9 @@ import { INPUT_CLASS } from './adminStyles';
 import { adminKeys, useOrganizations, useReviewQueue } from './adminQueries';
 import AdminOrganizationDetail from './AdminOrganizationDetail';
 import AdminReviewQueue from './AdminReviewQueue';
+import AdminArtistSuggestions from './AdminArtistSuggestions';
 
-type Section = 'organizations' | 'review' | 'held';
+type Section = 'organizations' | 'review' | 'held' | 'artists';
 
 const STATUS_FILTERS = [
   { value: '', label: 'All organizations' },
@@ -112,9 +113,13 @@ export default function AdminOrganizations() {
         <button type="button" aria-pressed={section === 'held'} onClick={() => setSection('held')} className={tabClass(section === 'held')}>
           Held alerts{heldCount ? ` (${heldCount})` : ''}
         </button>
+        <button type="button" aria-pressed={section === 'artists'} onClick={() => setSection('artists')} className={tabClass(section === 'artists')}>
+          Artist suggestions
+        </button>
       </div>
 
-      {section !== 'organizations' && <AdminReviewQueue section={section} queue={queue} />}
+      {(section === 'review' || section === 'held') && <AdminReviewQueue section={section} queue={queue} />}
+      {section === 'artists' && <AdminArtistSuggestions />}
 
       {section === 'organizations' && (
         <>

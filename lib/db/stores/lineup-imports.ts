@@ -15,6 +15,7 @@ import { buildMultiInsert, insertSetsBatch } from './festivals';
 import type { ArtistLookup, ArtistRef, LineupImportPlan, LineupImportWrites, SetValues } from '../../lineup-import-plan';
 import { nextMoveMark, type SlotAt } from '../../set-moves';
 import { resolveArtistRefs, resolveSetValues } from '../../artist-refs';
+import { type ArtistViewer, viewerMask } from './artist-visibility';
 
 import { lockFestival } from './festival-lock';
 
@@ -550,7 +551,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
      * Re-plans against the locked festival and writes the plan in one transaction.
      * Writes nothing when the fresh plan has errors or problems.
      */
-    async commit(festivalId: string, buildPlan: BuildPlan, meta: { createdBy: string | null }) {
+    async commit(festivalId: string, buildPlan: BuildPlan, meta: { createdBy: string | null; viewer?: ArtistViewer }) {
       return withTransactionRetry(pool, async (client) => {
         const locked = await lockFestival(client, festivalId);
         if (!locked) return { notFound: true as const };
@@ -571,7 +572,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         // Every artist element gets the artists row's name and links, and the flat name and link follow.
         const refs = await resolveSetValues(
           client,
-          { festivalId, separator: festival.b2bSeparator || 'b2b', userId: meta.createdBy, fillEmptyLinks: true },
+          { festivalId, separator: festival.b2bSeparator || 'b2b', userId: meta.createdBy, fillEmptyLinks: true, viewer: meta.viewer },
           [
             ...writes.inserts.map((s) => ({ id: s.id, values: s })),
             ...writes.updates.map((u) => ({ id: u.setId, values: u.after })),
@@ -586,6 +587,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
             separator: festival.b2bSeparator || 'b2b',
             userId: meta.createdBy,
             fillEmptyLinks: true,
+            viewer: meta.viewer,
           });
           resolved.lineup!.forEach((entry: any, i: number) => {
             entries[i]!.artists = entry.artists;
@@ -658,7 +660,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
      * The live artists whose key is in keys, and every artist whose id is in ids (merged ones too, so a
      * stale id gets a clear message). Read before the plan runs; commit checks the ids again under lock.
      */
-    async lookupArtists(keys: string[], ids: string[]): Promise<ArtistLookup> {
+    async lookupArtists(keys: string[], ids: string[], viewer?: ArtistViewer): Promise<ArtistLookup> {
       const lookup: ArtistLookup = { byKey: new Map(), byId: new Map() };
       if (keys.length === 0 && ids.length === 0) return lookup;
       const { rows } = await pool.query(
@@ -686,8 +688,12 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
 `,
         [keys, ids],
       );
+      // An organizer sees only visible artists, and may link by name only the ones it owns or that are verified.
+      const mask = viewer ? await viewerMask(pool, viewer, rows.map((r: { id: string }) => r.id)) : null;
       for (const r of rows) {
+        if (mask && !mask.has(r.id)) continue;
         const ref = artistRefOf(r);
+        if (mask && !mask.get(r.id)!.linkable) ref.pickOnly = true;
         lookup.byId.set(ref.id, ref);
         if (!ref.mergedInto) lookup.byKey.set(r.name_key, [...(lookup.byKey.get(r.name_key) ?? []), ref]);
       }

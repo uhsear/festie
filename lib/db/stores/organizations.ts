@@ -338,16 +338,6 @@ export function createOrganizationsStore(pool: Pool) {
       return `${String(rows[0].displayName ?? '').trim() || 'A teammate'} at ${rows[0].organizationName}`;
     },
 
-    /** True when any of the festivals (archived ones included) is not owned by the organization. */
-    async hasForeignFestival(festivalIds: string[], organizationId: string) {
-      if (festivalIds.length === 0) return false;
-      const { rows } = await pool.query(
-        'SELECT 1 FROM festivals WHERE id = ANY($1::text[]) AND organization_id IS DISTINCT FROM $2 LIMIT 1',
-        [festivalIds, organizationId],
-      );
-      return rows.length > 0;
-    },
-
     /** Confirmed email addresses of the organization's active owners, for decision emails. */
     async ownerEmails(organizationId: string): Promise<string[]> {
       const { rows } = await pool.query(

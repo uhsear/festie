@@ -17,6 +17,11 @@
  *      does not fail. The publish checklist asks the editor to pick one.
  * The key and a new artist's name come from the name without a trailing set tag, such as "(Live)".
  * A set or lineup entry that loses a tag and has no displayName keeps the name it showed as one.
+ * With a `viewer` (an organizer's save, artist plan 8.3 and 8.5) only artists the viewer may see exist: a sent id of
+ * a hidden artist counts as unknown, steps 4 and 5 link only an artist the viewer may link (verified, or its own),
+ * any other visible artist with the key is left for the editor to pick, and a new artist that clashes with a hidden
+ * one takes a neutral automatic note, so no result differs because a hidden artist exists. A new artist is
+ * unverified and takes no Spotify link, and an empty Spotify link of a linked artist is never filled.
  * The flat `artist` and `link_url` of every set are rebuilt from the resolved elements.
  * With `fillEmptyLinks` (the import's Link column) a sent link for a platform the artist
  * has no link for is returned in `linkFills`; the caller writes it after commit through the artist
@@ -28,7 +33,9 @@ import { artistNameKey, shownSetName, stripSetTag } from './artist-key';
 import { detectPlatform, normalizeArtistLink } from './artist-links';
 import { ALLOWED_LINK_PLATFORMS } from './constants';
 import { createLogger } from './logger';
-import { liveArtistsByKey, liveArtistsBySpotifyId, lockArtistRows, resolveArtistIds, type ArtistRecord } from './db/stores/artists';
+import { liveArtistsByKey, liveArtistsBySpotifyId, lockArtistRows, resolveArtistIds, type ArtistRecord, type ArtistViewer } from './db/stores/artists';
+import { viewerMask } from './db/stores/artist-visibility';
+import { nextAutoLabel } from './db/stores/artists-helpers';
 
 const log = createLogger('artist-refs');
 
@@ -50,6 +57,8 @@ interface NewArtist {
   id: string;
   name: string;
   key: string;
+  label: string;
+  labelAuto: boolean;
   links: Links;
   spotifyId: string | null;
   photo: string | null;
@@ -64,6 +73,8 @@ export interface RefsInput {
   separator: string;
   userId: string | null;
   fillEmptyLinks?: boolean;
+  /** An organizer's save. Undefined for an admin and for the system, which see every artist. */
+  viewer?: ArtistViewer;
 }
 
 export interface RefsResult {
@@ -168,20 +179,25 @@ function storedIdFor(slot: Slot, stored: Awaited<ReturnType<typeof loadStored>>)
 }
 
 /** Inserts the new artists in one statement, sorted by key so two saves never deadlock on each other's index entries. */
-async function insertNewArtists(client: any, fresh: NewArtist[], userId: string | null): Promise<Map<NewArtist, ArtistRecord | null>> {
+async function insertNewArtists(
+  client: any,
+  fresh: NewArtist[],
+  userId: string | null,
+  organizer: boolean,
+): Promise<Map<NewArtist, ArtistRecord | null>> {
   const placed = new Map<NewArtist, ArtistRecord | null>();
   if (fresh.length === 0) return placed;
   const sorted = [...fresh].sort((a, b) => (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
   const params: any[] = [];
   const tuples = sorted.map((artist) => {
     const base = params.length;
-    params.push(artist.id, artist.name, artist.key, artist.spotifyId, JSON.stringify(artist.links), artist.photo, JSON.stringify(artist.genres), userId);
-    return `($${base + 1}, $${base + 2}, $${base + 3}, '', $${base + 4}, $${base + 5}::jsonb, $${base + 6}, $${base + 7}::jsonb, $${base + 8}, $${base + 8})`;
+    params.push(artist.id, artist.name, artist.key, artist.label, artist.spotifyId, JSON.stringify(artist.links), artist.photo, JSON.stringify(artist.genres), userId, !organizer, artist.labelAuto);
+    return `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}::jsonb, $${base + 7}, $${base + 8}::jsonb, $${base + 9}, $${base + 9}, $${base + 10}, $${base + 11})`;
   });
   const { rows } = await client.query(
-    `INSERT INTO artists (id, name, name_key, label, spotify_id, links, photo, genres, created_by, updated_by)
+    `INSERT INTO artists (id, name, name_key, label, spotify_id, links, photo, genres, created_by, updated_by, verified, label_auto)
      VALUES ${tuples.join(', ')} ON CONFLICT DO NOTHING
-     RETURNING id, name, name_key, label, spotify_id, links, photo, genres, merged_into, updated_at`,
+     RETURNING id, name, name_key, label, spotify_id, links, photo, genres, merged_into, updated_at, verified, label_auto`,
     params,
   );
   const inserted = new Map<string, ArtistRecord>(rows.map((row: ArtistRecord) => [row.id, row]));
@@ -191,6 +207,11 @@ async function insertNewArtists(client: any, fresh: NewArtist[], userId: string 
     if (row) placed.set(artist, row);
   }
   if (lost.length === 0) return placed;
+  // An organizer never adopts the winner: it may be an artist the organizer cannot see. The slot stays unlinked.
+  if (organizer) {
+    for (const artist of lost) placed.set(artist, null);
+    return placed;
+  }
   // A name that returned nothing lost a race. Use the winner only when its Spotify id agrees.
   const winners = await liveArtistsByKey(client, lost.map((a) => a.key));
   const winnersBySpotify = await liveArtistsBySpotifyId(client, lost.map((a) => a.spotifyId).filter((id): id is string => !!id));
@@ -214,6 +235,7 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
   for (const slot of slots) if (!slot.sentId) slot.candidateId = storedIdFor(slot, stored);
   const asked = [...new Set(slots.map((s) => s.sentId ?? s.candidateId).filter((id): id is string => !!id))];
   const live = await resolveArtistIds(client, asked);
+  const sentMask = input.viewer ? await viewerMask(client, input.viewer, [...live.values()].map((row) => row.id)) : null;
 
   const linked = new Map<Slot, ArtistRecord>();
   const open: Slot[] = [];
@@ -226,6 +248,7 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
       const checked = checkSentLink(platform, raw);
       const have = checked ? row.links?.[checked.platform] : undefined;
       if (!checked || (have && have !== checked.url)) ignored = true;
+      else if (!have && input.viewer && checked.platform === 'spotify') ignored = true;
       else if (!have && !result.linkFills.some((f) => f.artistId === row.id && f.platform === checked.platform)) {
         result.linkFills.push({ artistId: row.id, platform: checked.platform, url: checked.url });
       }
@@ -236,7 +259,8 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
   };
   for (const slot of slots) {
     const id = slot.sentId ?? slot.candidateId;
-    const row = id ? live.get(id) : undefined;
+    const found = id ? live.get(id) : undefined;
+    const row = found && (!sentMask || sentMask.has(found.id)) ? found : undefined;
     if (row) {
       linked.set(slot, row);
       noteIgnoredLinks(slot, row);
@@ -253,28 +277,42 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
   };
   const bySpotify = await liveArtistsBySpotifyId(client, [...new Set(open.map(spotifyOf).filter((id): id is string => !!id))]);
   const byKey = await liveArtistsByKey(client, [...new Set(open.map((s) => s.key))]);
+  const openMask = input.viewer
+    ? await viewerMask(client, input.viewer, [...new Set([...bySpotify.values(), ...[...byKey.values()].flat()].map((row) => row.id))])
+    : null;
   const fresh = new Map<string, NewArtist>();
   for (const slot of open) {
-    const spotifyHit = bySpotify.get(spotifyOf(slot) ?? '');
-    const sameKey = byKey.get(slot.key) ?? [];
-    if (spotifyHit || sameKey.length === 1) {
+    const spotifyRow = bySpotify.get(spotifyOf(slot) ?? '');
+    const spotifyHit = spotifyRow && (!openMask || openMask.get(spotifyRow.id)?.linkable) ? spotifyRow : undefined;
+    const sameKey = (byKey.get(slot.key) ?? []).filter((row) => !openMask || openMask.has(row.id));
+    const onlyOne = sameKey.length === 1 && (!openMask || openMask.get(sameKey[0]!.id)?.linkable === true);
+    if (spotifyHit || onlyOne) {
       const row = spotifyHit ?? sameKey[0];
       if (!row) continue;
       linked.set(slot, row);
       noteIgnoredLinks(slot, row);
-    } else if (sameKey.length > 1) {
+    } else if (sameKey.length > 0) {
       // An unknown sent id must not dangle on the saved copy: the slot stays unlinked.
       delete slot.element.id;
       result.ambiguous.push(String(slot.element.name).trim());
     } else {
       const cleaned = cleanNewLinks(slot.element.links);
       result.droppedLinks += cleaned.dropped;
+      if (input.viewer && cleaned.links.spotify) {
+        delete cleaned.links.spotify;
+        result.droppedLinks++;
+      }
+      // Every same-name artist is hidden from an organizer: when one holds the empty note, take a neutral one.
+      const hidden = byKey.get(slot.key) ?? [];
+      const autoNote = !!input.viewer && hidden.some((row) => row.label === '');
       const group =
         fresh.get(slot.key) ??
         ({
           id: createOpaqueId('art'),
           name: slot.name,
           key: slot.key,
+          label: autoNote ? nextAutoLabel(hidden.map((row) => row.label)) : '',
+          labelAuto: autoNote,
           links: {},
           spotifyId: null,
           photo: null,
@@ -293,7 +331,7 @@ export async function resolveArtistRefs(client: any, input: RefsInput): Promise<
     const checked = group.links.spotify ? normalizeArtistLink('spotify', group.links.spotify) : null;
     group.spotifyId = checked?.ok ? (checked.spotifyId ?? null) : null;
   }
-  const placed = await insertNewArtists(client, [...fresh.values()], input.userId);
+  const placed = await insertNewArtists(client, [...fresh.values()], input.userId, !!input.viewer);
   for (const [group, row] of placed) {
     if (row) for (const slot of group.slots) linked.set(slot, row);
     else {
@@ -358,7 +396,7 @@ export interface SetValuesTarget {
  */
 export async function resolveSetValues(
   client: any,
-  input: { festivalId: string; separator: string; userId: string | null; fillEmptyLinks?: boolean },
+  input: { festivalId: string; separator: string; userId: string | null; fillEmptyLinks?: boolean; viewer?: ArtistViewer },
   sets: Array<{ id: string; values: SetValuesTarget }>,
 ): Promise<RefsResult> {
   const days = [{ sets: sets.map((s) => ({ id: s.id, artists: s.values.artists, displayName: s.values.displayName })) }];

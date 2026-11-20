@@ -16,6 +16,7 @@ export * from './adminOrganizations';
 export * from './caught';
 export * from './adminFestivalTools';
 export * from './adminArtists';
+export * from './adminArtistSuggestions';
 export * from './checkin';
 export * from './ratings';
 export * from './announcements';

@@ -62,6 +62,8 @@ function buildPut(actor: Actor) {
       profiles: { pickersBySet: async () => new Map([['s0', ['u1']]]) },
       timeReleases: { releasedDates: async () => new Set<string>() },
       festivalReview: { hold },
+      // The artist viewer of a member request reads the member's organizations.
+      organizations: { listForUser: async () => [{ id: 'org-a' }] },
       auditLog: { insert: async (row: any) => audits.push(row) },
     },
     emitter: { festivalCreated() {}, festivalUpdated() {}, scheduleChanged },
@@ -183,6 +185,7 @@ describe('a lineup import that gives a set its first time on a released date', (
           }),
         },
         festivalReview: { hold },
+        organizations: { listForUser: async () => [{ id: 'org-a' }] },
         auditLog: { insert: async (row: any) => audits.push(row) },
       },
       invalidateFestivalCache: () => {},

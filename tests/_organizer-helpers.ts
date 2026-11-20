@@ -63,7 +63,7 @@ export async function reauth(server: any, token: string, password = DEFAULT_PASS
 
 /** A request builder for one signed-in caller. Mutations carry the trusted-request header. */
 export function as(server: any, token?: string) {
-  const call = (method: 'get' | 'put' | 'post' | 'delete', url: string, body?: unknown) => {
+  const call = (method: 'get' | 'put' | 'post' | 'patch' | 'delete', url: string, body?: unknown) => {
     let req = (server.request as any)[method](url).set(TRUSTED_MUTATION_HEADER, '1');
     if (token) req = req.set('x-user-token', token);
     return body === undefined ? req : req.send(body);
@@ -72,6 +72,7 @@ export function as(server: any, token?: string) {
     get: (url: string) => call('get', url),
     put: (url: string, body: unknown = {}) => call('put', url, body),
     post: (url: string, body: unknown = {}) => call('post', url, body),
+    patch: (url: string, body: unknown = {}) => call('patch', url, body),
     delete: (url: string) => call('delete', url),
   };
 }

@@ -14,6 +14,7 @@ import { appOrigin } from '../lib/notifications/links.js';
 import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organizer-rules.js';
 import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
+import { artistViewerOf } from '../lib/artist-viewer.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
 import { ArtistError } from '../lib/db/stores/artists.js';
 import type { Request, Response } from 'express';
@@ -93,6 +94,14 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     festival && (festival.publishedAt || isAdminReq(req) || isMemberReq(req)) ? festival : null;
   const refusal = (message: string) => ({ status: 403, code: 'FORBIDDEN' as const, message });
 
+  // What artists a request may see (artist plan 8.5): everything for an admin, the member's view for a member.
+  async function memberViewer(req: Request) {
+    if (!isMemberReq(req)) return undefined;
+    const viewer = await artistViewerOf(stores as any, req as any);
+    if (!viewer) throw new Error('a member request without an organization');
+    return viewer;
+  }
+
   // A member's save keeps a set id only when the festival already holds it: set ids are global primary keys, so
   // a foreign id would clash with another tenant's row. Alerts the save would send are held (lib/alert-hold.ts).
   function memberBody<T extends { days?: any[] }>(req: Request, sent: T, existing: any): T {
@@ -107,9 +116,9 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
 
   // 400 with one issue per problem; `message` stays one sentence for old clients.
   // Names that fit two artists. The checklist only warns, so a failed lookup never blocks the page.
-  async function ambiguousNamesOf(festival: any): Promise<number> {
+  async function ambiguousNamesOf(festival: any, req: Request): Promise<number> {
     try {
-      return (await stores.artists?.countAmbiguousNames(festival)) ?? 0;
+      return (await stores.artists?.countAmbiguousNames(festival, await memberViewer(req))) ?? 0;
     } catch (error) {
       log.warn('ambiguous artist names lookup failed', { error: (error as NodeJS.ErrnoException)?.message });
       return 0;
@@ -486,7 +495,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             publishedAt: festival.publishedAt ?? null,
             updatedByUsername,
             ...(review ? { publishRequestedAt: review.requestedAt, publishReviewNote: review.note } : {}),
-            checklist: publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival) }),
+            checklist: publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival, req) }),
           });
         }
         const { seriesId: _seriesId, ...publicFestival } = festival;
@@ -656,6 +665,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         // Sets and lineup entries get an artist id inside the save transaction (resolveArtistRefs).
         const refsSeen: { value: RefsResult | null } = { value: null };
         const refsNeeded = daysSent || body.lineup !== undefined;
+        const artistViewer = refsNeeded ? await memberViewer(req) : undefined;
         const festival = await stores.festivals.update(
           (req.validatedParams as Params).id,
           {
@@ -684,6 +694,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
                     lineup: body.lineup !== undefined ? fields.lineup : undefined,
                     separator: nextFestival.b2bSeparator,
                     userId: req.user?.userId ?? null,
+                    viewer: artistViewer,
                   });
                   return { days: refsSeen.value.days, lineup: refsSeen.value.lineup };
                 }
@@ -828,7 +839,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
       try {
         const festival = await getFestivalById((req.validatedParams as Params).id);
         if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-        const checklist = publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival) });
+        const checklist = publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival, req) });
         if (festival.publishedAt) return sendSuccess(res, { publishedAt: festival.publishedAt, checklist });
         if (checklist.some((item: any) => item.status === 'todo')) {
           return sendError(res, 409, 'Finish the checklist before you publish.', ErrorCodes.PUBLISH_BLOCKED, {
@@ -1005,16 +1016,16 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         if (outcome.missing) return sendError(res, 404, outcome.missing, ErrorCodes.NOT_FOUND);
         if (outcome.badIndex) return sendError(res, 400, 'That artist is not on this set.', ErrorCodes.INVALID_INPUT);
         if (outcome.artistId) {
-          // An artist row is shared by every festival that lists it. A member writes it only while all of them are the
-          // organization's own, so a link never changes another tenant's festival (plan-v3 6.7 rule 3).
-          // shortcut: read before the write, not under the artist's row lock; the artist rules slice makes it atomic.
-          if (isMemberReq(req)) {
-            const usedBy = (await stores.artists.impact(outcome.artistId)).festivals.map((used: { id: string }) => used.id);
-            if (await stores.organizations.hasForeignFestival(usedBy, (req as any).organizationId)) {
-              return sendError(res, 403, 'This artist is also on festivals that are not yours. Ask Festie to change the link.', ErrorCodes.FORBIDDEN);
-            }
-          }
           const current = await stores.artists.getById(outcome.artistId);
+          // A member never writes a Spotify link: it is a suggestion that an admin decides (artist plan 8.3).
+          if (isMemberReq(req)) {
+            const suggested = await stores.artists.organizerUpdate(
+              outcome.artistId,
+              { expectedUpdatedAt: new Date(current.updated_at).toISOString(), changes: { spotifyLink: cleanUrl }, festivalId, ip: getRequestIp(req) },
+              await memberViewer(req),
+            );
+            return sendSuccess(res, { setId, artistIndex, linkUrl: current.links?.spotify ?? null, suggested: suggested.status === 'suggested' });
+          }
           const result = await stores.artists.update(outcome.artistId, {
             expectedUpdatedAt: new Date(current.updated_at).toISOString(),
             changes: { spotifyLink: cleanUrl },

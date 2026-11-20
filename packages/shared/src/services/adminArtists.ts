@@ -20,6 +20,10 @@ export interface AdminArtist {
   spotifyId: string | null;
   /** The edit token: send it back as `expectedUpdatedAt`. */
   updatedAt: string;
+  /** An artist an organizer created stays unverified until an admin verifies it (POST /admin/artists/:id/verify). */
+  verified?: boolean;
+  /** The server chose the note ("unnamed 1") because the name and note clashed with an artist the creator could not see. */
+  labelAuto?: boolean;
 }
 
 export interface AdminArtistRow extends AdminArtist {

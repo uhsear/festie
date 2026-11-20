@@ -3,6 +3,7 @@ import { fetchAdminFestivals } from '@festie/shared/services/festivalAdmin';
 import { fetchAdminCrews } from '@festie/shared/services/admin';
 import { fetchManageFestivals } from '@festie/shared/services/organizer';
 import { fetchOrganizations, fetchOrganization, fetchReviewQueue } from '@festie/shared/services/adminOrganizations';
+import { fetchArtistSuggestions } from '@festie/shared/services/adminArtistSuggestions';
 
 export const adminKeys = {
   dashboard: ['admin', 'dashboard'] as const,
@@ -12,6 +13,7 @@ export const adminKeys = {
   organizations: ['admin', 'organizations'] as const,
   organization: (id: string) => ['admin', 'organization', id] as const,
   reviewQueue: ['admin', 'review-queue'] as const,
+  artistSuggestions: ['admin', 'artist-suggestions'] as const,
   crews: ['admin', 'crews'] as const,
   audit: (filters: unknown, cursor: unknown) => ['admin', 'audit', filters, cursor] as const,
   analytics: (festivalId?: string | null) => ['admin', 'analytics', festivalId ?? 'all'] as const,
@@ -46,6 +48,11 @@ export function useOrganization(id: string | null) {
 
 export function useReviewQueue() {
   return useQuery({ queryKey: adminKeys.reviewQueue, queryFn: fetchReviewQueue, ...ADMIN_QUERY_OPTIONS });
+}
+
+/** The pending organizer suggestions for artists (GET /admin/artists/suggestions). */
+export function useArtistSuggestions() {
+  return useQuery({ queryKey: adminKeys.artistSuggestions, queryFn: () => fetchArtistSuggestions('pending'), ...ADMIN_QUERY_OPTIONS });
 }
 
 export function useAdminCrews(enabled = true) {

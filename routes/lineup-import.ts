@@ -34,6 +34,8 @@ import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
 import { planPickerAlerts } from '../lib/picker-alerts.js';
 import { deliverScheduleAlert, isOrganizerRequest } from '../lib/alert-hold.js';
+import { artistViewerOf } from '../lib/artist-viewer.js';
+import type { ArtistViewer } from '../lib/db/stores/artists.js';
 import {
   artistLookupKeys,
   planLineupImport,
@@ -148,15 +150,23 @@ export default function createLineupImportRoute(deps: any) {
   // A Link column value for an empty platform of an artist that exists: written after the import
   // commits, through the artist's own locks (festivals first, then the artist), so every festival that
   // lists the artist gets it. A failure is logged and never fails the import.
-  async function applyLinkFills(fills: Array<{ artistId: string; url: string }>, userId: string | null, ip: string | null) {
+  async function applyLinkFills(fills: Array<{ artistId: string; url: string }>, userId: string | null, ip: string | null, viewer?: ArtistViewer) {
     for (const fill of fills) {
       try {
-        const result = await stores.artists.fillLink(fill.artistId, { link: fill.url, userId, ip });
+        const result = await stores.artists.fillLink(fill.artistId, { link: fill.url, userId, ip, viewer });
         await deps.afterArtistSync?.(result.synced);
       } catch (error: any) {
         log.warn('import link not added to the artist', { artistId: fill.artistId, error: error?.message });
       }
     }
+  }
+
+  // What artists the request may see: an organization member sees the visible ones only, an admin all of them.
+  async function viewerOf(req: any): Promise<ArtistViewer | undefined> {
+    if (!isOrganizerRequest(req)) return undefined;
+    const viewer = await artistViewerOf(stores, req);
+    if (!viewer) throw new Error('a member request without an organization');
+    return viewer;
   }
 
   // Validates the body and loads the festival. Sends the error response and returns null on failure.
@@ -181,14 +191,15 @@ export default function createLineupImportRoute(deps: any) {
     const body = validation.data;
     // One lookup serves the preview and the commit's re-plan. Commit checks the ids again under lock.
     const { keys, ids } = artistLookupKeys(festival, body.rows);
-    const artists = await stores.lineupImports.lookupArtists(keys, ids);
+    const viewer = await viewerOf(req);
+    const artists = await stores.lineupImports.lookupArtists(keys, ids, viewer);
     const base = {
       rows: body.rows,
       options: { updateExisting: body.updateExisting, createMissing: body.createMissing, moveDays: body.moveDays },
       config,
       artists,
     };
-    return { festivalId, festival, body, base };
+    return { festivalId, festival, body, base, viewer };
   }
 
   router.post(
@@ -213,21 +224,21 @@ export default function createLineupImportRoute(deps: any) {
       setNoStore(res);
       const loaded = await loadRequest(req, res);
       if (!loaded) return;
-      const { festivalId, festival, base } = loaded;
+      const { festivalId, festival, base, viewer } = loaded;
 
       const warnings: string[] = [];
       const outcome = await stores.lineupImports.commit(
         festivalId,
         (current: any, locked?: Map<string, ArtistRef>) =>
           planLineupImport({ festival: current, ...base, artists: locked ? withLockedArtists(base.artists, locked) : base.artists, makeId }),
-        { createdBy: req.user?.userId ?? null },
+        { createdBy: req.user?.userId ?? null, viewer },
       );
       if ('notFound' in outcome) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       if (!outcome.committed) return sendSuccess(res, { committed: false, plan: outcome.plan });
 
       invalidateFestivalCache();
       announceSetsChanged(festival);
-      await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null, getRequestIp(req));
+      await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null, getRequestIp(req), viewer);
       if (outcome.refs?.ignoredLinkEdits) {
         warnings.push(
           `${outcome.refs.ignoredLinkEdits} ${outcome.refs.ignoredLinkEdits === 1 ? 'link differs' : 'links differ'} from the artist's links and ${outcome.refs.ignoredLinkEdits === 1 ? 'was' : 'were'} not used. Change them on the Artists tab.`,

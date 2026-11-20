@@ -54,7 +54,11 @@ import {
   moveRefs,
   type MatchItem,
   type MatchOutcome,
+  viewerArtist,
+  nextAutoLabel,
 } from './artists-helpers';
+import { adminSuggestion, insertSuggestion, organizerVerdict, ownSuggestion } from './artist-suggestions';
+import { type ArtistViewer, viewerMask, visibleCondition, useIsVisible, useIsForeign } from './artist-visibility';
 
 export {
   rewriteCopies,
@@ -73,19 +77,37 @@ export {
   type ArtistChanges,
   type MergePick,
   type MatchItem,
+  viewerArtist,
 } from './artists-helpers';
+export type { ArtistViewer } from './artist-visibility';
+
+interface UpdateInput {
+  expectedUpdatedAt?: string;
+  changes: ArtistChanges;
+  userId: string | null;
+  ip?: string | null;
+  viewer?: ArtistViewer;
+  festivalId?: string | null;
+  /** More audit details, for the edit an accepted suggestion makes. */
+  via?: Record<string, unknown>;
+}
+
+export type UpdateOutcome =
+  | { status: 'updated'; artist: ArtistRecord; synced: SyncedFestival[]; before: ArtistRecord; fill: boolean }
+  | { status: 'suggested'; suggestionId: string };
 
 /** An artist entry on a set or lineup row, as a festival payload carries it. */
 type NamedArtist = { id?: string | null; name?: string } | null | undefined;
 
 export function createArtistsStore(pool: Pool) {
-  const candidatesOf = (rows: ArtistRecord[], uses: Map<string, ArtistUse[]>) => {
+  const candidatesOf = (rows: ArtistRecord[], uses: Map<string, ArtistUse[]>, viewer?: ArtistViewer) => {
     return rows.slice(0, MAX_CANDIDATES).map((row) => {
-      const live = (uses.get(row.id) ?? []).filter((u) => !u.deleted);
+      // A viewer is never told the name of a festival it may not see.
+      const live = (uses.get(row.id) ?? []).filter((u) => !u.deleted && (!viewer || useIsVisible(u, viewer)));
       return {
         id: row.id,
         name: row.name,
-        label: row.label,
+        label: viewer && row.label_auto ? '' : row.label,
         photo: row.photo,
         platforms: Object.keys(row.links ?? {}),
         lastFestival: live[0] ? { id: live[0].festivalId, name: live[0].name } : null,
@@ -93,12 +115,101 @@ export function createArtistsStore(pool: Pool) {
     });
   };
 
+  /**
+   * One artist edit inside the caller's transaction: lock the festivals that list the artist, lock the artist,
+   * check the token, then save it or (for an organizer, see organizerVerdict) store a suggestion instead.
+   * `expectedUpdatedAt` is left out only when an admin applies a stored suggestion to the current row.
+   */
+  async function updateWithin(client: PoolClient, id: string, input: UpdateInput): Promise<UpdateOutcome> {
+    const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
+    const { rows } = await client.query(`SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 FOR UPDATE`, [id]);
+    const before = rows[0] as ArtistRecord | undefined;
+    if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
+    if (before.merged_into) {
+      const survivor = (await client.query('SELECT name, label FROM artists WHERE id = $1', [before.merged_into])).rows[0];
+      throw new ArtistError(
+        409,
+        'ARTIST_CHANGED',
+        `This artist was already merged into ${survivor ? artistTitle(survivor) : 'another artist'}.`,
+      );
+    }
+    // A viewer that cannot see the artist gets the 404 before any other answer, so a token check never confirms it exists.
+    const verdict = input.viewer ? await organizerVerdict(client, before, input.viewer, input.changes) : 'direct';
+    if (input.expectedUpdatedAt !== undefined) await assertFreshToken(client, before, input.expectedUpdatedAt);
+    if (verdict === 'suggest' && input.viewer) {
+      applyChanges(before, input.changes); // a change that cannot apply is refused now, not when an admin reads it
+      const suggestionId = await insertSuggestion(client, before, input.viewer, input.changes, input.festivalId ?? null, input.ip);
+      return { status: 'suggested', suggestionId };
+    }
+    const applied = applyChanges(before, input.changes);
+    let label = applied.label;
+    let autoPicked = false;
+    if (input.viewer) {
+      // A new name or note that a hidden artist holds gets a neutral automatic note, so nothing shows it exists.
+      const { rows: others } = await client.query(
+        `SELECT ${ARTIST_COLUMNS} FROM artists WHERE name_key = $1 AND merged_into IS NULL AND id <> $2`,
+        [applied.key, id],
+      );
+      const holder = (others as ArtistRecord[]).find((row) => row.label.toLowerCase() === label.toLowerCase());
+      if (holder && !(await viewerMask(client, input.viewer, [holder.id])).has(holder.id)) {
+        label = nextAutoLabel((others as ArtistRecord[]).map((row) => row.label));
+        autoPicked = true;
+      }
+    }
+    const next = { ...applied, label };
+    await assertNoClash(client, id, next);
+    const labelAuto = autoPicked || (input.changes.label === undefined && before.label_auto);
+    // A Spotify photo and the genres belong to the Spotify artist, so they leave with its link. Another photo stays.
+    const spotifyReplaced = !!before.spotify_id && before.spotify_id !== next.spotifyId;
+    const { rows: updated } = await client.query(
+      `UPDATE artists SET name = $2, name_key = $3, label = $4, spotify_id = $5, links = $6::jsonb,
+              photo = CASE WHEN $8 AND photo LIKE 'https://i.scdn.co/%' THEN NULL ELSE photo END,
+              genres = CASE WHEN $8 THEN '[]'::jsonb ELSE genres END,
+              label_auto = $9, updated_by = $7, updated_at = now()
+        WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
+      [id, next.name, next.key, next.label, next.spotifyId, JSON.stringify(next.links), input.userId, spotifyReplaced, labelAuto],
+    );
+    const artist = updated[0] as ArtistRecord;
+    // A save may have put the artist on a festival after the first read, before it could lock the artist.
+    await assertUnchanged();
+    const copyChanged =
+      before.name !== artist.name ||
+      before.photo !== artist.photo ||
+      JSON.stringify(before.links ?? {}) !== JSON.stringify(artist.links ?? {});
+    const synced = copyChanged ? await rewriteCopies(client, festivalIds, artist) : [];
+    const fill = verdict === 'fill';
+    await insertArtistAudit(
+      client,
+      id,
+      {
+        userId: input.userId,
+        ip: input.ip,
+        ...(input.viewer ? { actorType: 'organizer' as const, organizationId: input.viewer.organizationId } : {}),
+      },
+      {
+        name: artist.name,
+        ...(before.name !== artist.name ? { renamedFrom: before.name } : {}),
+        fields: Object.keys(input.changes).filter((key) => (input.changes as Record<string, unknown>)[key] !== undefined),
+        festivalsUpdated: synced.length,
+        // Enough to see what changed and where: the festival ids are capped so one row stays small.
+        before: { name: before.name, label: before.label, links: before.links ?? {} },
+        after: { name: artist.name, label: artist.label, links: artist.links ?? {} },
+        festivalIds: synced.slice(0, 200).map((festival) => festival.id),
+        ...(fill ? { via: 'organizer-fill', flagged: true } : {}),
+        ...input.via,
+      },
+    );
+    return { status: 'updated', artist, synced, before, fill };
+  }
+
   return {
     /**
      * For each name, the live artists it could be. A Spotify artist link whose id belongs to a live
      * artist, or exactly one live artist with the same key, is "linked". Two or more is "pick".
+     * With a `viewer` (an organizer) only visible artists count, so a hidden artist never changes an answer, and an
+     * artist the viewer may not link by name or Spotify id is "pick" even when it is the only one.
      */
-    async match(items: MatchItem[]) {
+    async match(items: MatchItem[], viewer?: ArtistViewer) {
       const prepared = items.map((item) => {
         const name = cleanArtistName(item.name);
         const result = item.spotify ? normalizeArtistLink('spotify', item.spotify) : null;
@@ -112,9 +223,14 @@ export function createArtistsStore(pool: Pool) {
         liveArtistsByKey(pool, [...new Set(prepared.map((p) => p.key).filter(Boolean))]),
         liveArtistsBySpotifyId(pool, [...new Set(prepared.map((p) => p.spotifyId).filter((id): id is string => !!id))]),
       ]);
+      const mask = viewer
+        ? await viewerMask(pool, viewer, [...new Set([...byKey.values(), ...bySpotify.values()].flat().map((row) => row.id))])
+        : null;
       const rowsOf = (p: (typeof prepared)[number]) => {
         const spotifyHit = p.spotifyId ? bySpotify.get(p.spotifyId) : undefined;
-        return spotifyHit ? [spotifyHit] : (byKey.get(p.key) ?? []);
+        if (spotifyHit && (!mask || mask.get(spotifyHit.id)?.linkable)) return [spotifyHit];
+        const rows = byKey.get(p.key) ?? [];
+        return mask ? rows.filter((row) => mask.has(row.id)) : rows;
       };
       // One scan of the sets and lineups for the whole paste, not one per name.
       const candidateIds = new Set(
@@ -127,8 +243,9 @@ export function createArtistsStore(pool: Pool) {
       const uses = await artistUses(pool, [...candidateIds]);
       return prepared.map((p) => {
         const rows = rowsOf(p);
-        const outcome: MatchOutcome = rows.length === 1 ? 'linked' : rows.length > 1 ? 'pick' : 'new';
-        return { name: p.name, outcome, candidates: candidatesOf(rows, uses) };
+        const linkable = rows.length === 1 && (!mask || mask.get(rows[0]!.id)?.linkable === true);
+        const outcome: MatchOutcome = linkable ? 'linked' : rows.length > 0 ? 'pick' : 'new';
+        return { name: p.name, outcome, candidates: candidatesOf(rows, uses, viewer) };
       });
     },
 
@@ -140,8 +257,11 @@ export function createArtistsStore(pool: Pool) {
     /**
      * A new artist. When a live artist has the same key, the editor must add a note to tell them apart.
      * A clash on key and note, or on the Spotify id, is a 409 that names the other artist.
+     * With a `viewer` (an organizer) the artist starts unverified, takes no Spotify link (that goes to review),
+     * and a clash with an artist the viewer cannot see gets a neutral automatic note instead of an error, so
+     * the answer is the same whether or not a hidden artist exists.
      */
-    async create(input: { name: string; label?: string; link?: string; userId: string | null }) {
+    async create(input: { name: string; label?: string; link?: string; userId: string | null }, viewer?: ArtistViewer) {
       const name = cleanArtistName(input.name);
       if (!name) throw new ArtistError(400, 'INVALID_INPUT', 'The name cannot be empty.');
       const label = cleanLabel(input.label ?? '');
@@ -151,6 +271,9 @@ export function createArtistsStore(pool: Pool) {
       let spotifyId: string | null = null;
       if (input.link) {
         const platform = detectPlatform(input.link) ?? 'website';
+        if (viewer && platform === 'spotify') {
+          throw new ArtistError(400, 'INVALID_INPUT', 'Festie checks Spotify links first. Create the artist, then suggest the link.');
+        }
         const result = normalizeArtistLink(platform, input.link);
         if (!result.ok) throw new ArtistError(400, 'INVALID_INPUT', result.message);
         links[platform] = result.url;
@@ -164,21 +287,37 @@ export function createArtistsStore(pool: Pool) {
             `SELECT ${ARTIST_COLUMNS} FROM artists WHERE name_key = $1 AND merged_into IS NULL`,
             [key],
           );
-          if (same.length > 0 && !label) {
+          const mask = viewer ? await viewerMask(client, viewer, same.map((row: { id: string }) => row.id)) : null;
+          const seen = mask ? same.filter((row: { id: string }) => mask.has(row.id)) : same;
+          if (seen.length > 0 && !label) {
             throw new ArtistError(
               400,
               'INVALID_INPUT',
-              `There is already an artist named ${same[0].name}. Add a note to tell them apart, for example UK or Berlin.`,
-              { existingIds: same.map((row: { id: string }) => row.id) },
+              `There is already an artist named ${seen[0].name}. Add a note to tell them apart, for example UK or Berlin.`,
+              { existingIds: seen.map((row: { id: string }) => row.id) },
             );
           }
-          await assertNoClash(client, id, { key, label, spotifyId });
-          const { rows } = await client.query(
-            `INSERT INTO artists (id, name, name_key, label, spotify_id, links, created_by, updated_by)
-             VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $7) RETURNING ${ARTIST_COLUMNS}`,
-            [id, name, key, label, spotifyId, JSON.stringify(links), input.userId],
-          );
-          return rows[0] as ArtistRecord;
+          // A hidden artist that holds this name and note: take the next neutral note, so nothing shows it exists.
+          let finalLabel = label;
+          let labelAuto = false;
+          const holder = mask ? same.find((row: ArtistRecord) => row.label.toLowerCase() === label.toLowerCase()) : undefined;
+          if (holder && !mask!.has(holder.id)) {
+            finalLabel = nextAutoLabel(same.map((row: ArtistRecord) => row.label));
+            labelAuto = true;
+          }
+          await assertNoClash(client, id, { key, label: finalLabel, spotifyId });
+          try {
+            const { rows } = await client.query(
+              `INSERT INTO artists (id, name, name_key, label, spotify_id, links, created_by, updated_by, verified, label_auto)
+               VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $7, $8, $9) RETURNING ${ARTIST_COLUMNS}`,
+              [id, name, key, finalLabel, spotifyId, JSON.stringify(links), input.userId, !viewer, labelAuto],
+            );
+            return rows[0] as ArtistRecord;
+          } catch (error) {
+            // A concurrent create took the note. Start over, so the next read sees the holder and answers as usual.
+            if (viewer && (error as { code?: string })?.code === '23505') throw retryTransaction('the note was taken');
+            throw error;
+          }
         });
       } catch (error) {
         throw artistConflict(error) ?? error;
@@ -195,63 +334,198 @@ export function createArtistsStore(pool: Pool) {
       input: { expectedUpdatedAt: string; changes: ArtistChanges; userId: string | null; ip?: string | null },
     ): Promise<{ artist: ArtistRecord; synced: SyncedFestival[]; before: ArtistRecord }> {
       try {
+        const outcome = await withTransactionRetry(pool, (client) => updateWithin(client, id, input));
+        if (outcome.status !== 'updated') throw new Error('an admin edit never becomes a suggestion');
+        return outcome;
+      } catch (error) {
+        throw artistConflict(error) ?? error;
+      }
+    },
+
+    /**
+     * An organizer's edit (artist plan 8.3). Under the same locks as `update` it decides whether the change
+     * saves at once (`updated`, with `fill` set for the flagged carve-out that fills an empty non-Spotify link of
+     * a shared artist) or becomes a pending suggestion for an admin (`suggested`). `festivalId` records where the
+     * organizer was working. An artist the viewer cannot see is a 404.
+     */
+    async organizerUpdate(
+      id: string,
+      input: {
+        expectedUpdatedAt: string;
+        changes: ArtistChanges;
+        festivalId?: string | null;
+        ip?: string | null;
+      },
+      viewer: ArtistViewer,
+    ): Promise<UpdateOutcome> {
+      try {
+        return await withTransactionRetry(pool, (client) =>
+          updateWithin(client, id, { ...input, userId: viewer.userId, viewer }),
+        );
+      } catch (error) {
+        throw artistConflict(error) ?? error;
+      }
+    },
+
+    /** Pending suggestions are listed oldest first; decided ones newest first. */
+    async listSuggestions(opts: { status: 'pending' | 'accepted' | 'rejected' | 'all'; limit: number }) {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    s.id,
+    s.artist_id,
+    s.festival_id,
+    s.organization_id,
+    s.changes,
+    s.status,
+    s.note,
+    s.created_at,
+    s.decided_at,
+    a.name AS artist_name,
+    a.label AS artist_label,
+    a.links AS artist_links,
+    a.merged_into,
+    o.name AS organization_name,
+    u.username AS created_by_name,
+    f.name AS festival_name
+  FROM
+    artist_suggestions s
+    JOIN artists a ON a.id = s.artist_id
+    LEFT JOIN organizations o ON o.id = s.organization_id
+    LEFT JOIN users u ON u.id = s.created_by
+    LEFT JOIN festivals f ON f.id = s.festival_id
+  WHERE
+    $1 = 'all'
+    OR s.status = $1
+  ORDER BY
+    CASE
+      WHEN s.status = 'pending' THEN 0
+      ELSE 1
+    END,
+    CASE
+      WHEN s.status = 'pending' THEN s.created_at
+    END ASC,
+    s.created_at DESC
+  LIMIT
+    $2
+`,
+        [opts.status, opts.limit],
+      );
+      const uses = await artistUses(pool, [...new Set(rows.map((row: { artist_id: string }) => row.artist_id))] as string[]);
+      return rows.map((row: any) => adminSuggestion(row, (uses.get(row.artist_id) ?? []).length));
+    },
+
+    /** The suggestions of the viewer's organizations, newest first, so a row can show "Pending review" and the decision. */
+    async ownSuggestions(viewer: ArtistViewer) {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    s.id,
+    s.artist_id,
+    s.changes,
+    s.status,
+    s.note,
+    s.created_at,
+    s.decided_at,
+    a.name AS artist_name
+  FROM
+    artist_suggestions s
+    JOIN artists a ON a.id = s.artist_id
+  WHERE
+    s.organization_id = ANY ($1::text[])
+  ORDER BY
+    s.created_at DESC
+  LIMIT
+    100
+`,
+        [viewer.organizationIds],
+      );
+      return rows.map(ownSuggestion);
+    },
+
+    /**
+     * An admin decides a pending suggestion. Accepting applies the stored change to the artist's current row in the
+     * same transaction, under the usual festival then artist locks, and rewrites every festival copy. The change
+     * can still fail on a clash that appeared since (a 409 that names the other artist). Rejecting only closes it.
+     */
+    async decideSuggestion(
+      suggestionId: string,
+      input: { decision: 'accept' | 'reject'; note?: string | null; userId: string | null; ip?: string | null },
+    ): Promise<{ status: 'accepted' | 'rejected'; artistId: string; synced: SyncedFestival[] }> {
+      const { rows: found } = await pool.query('SELECT artist_id FROM artist_suggestions WHERE id = $1', [suggestionId]);
+      if (!found[0]) throw new ArtistError(404, 'NOT_FOUND', 'Suggestion not found.');
+      const artistId = found[0].artist_id as string;
+      const alreadyDecided = () => new ArtistError(409, 'ARTIST_CHANGED', 'Someone already decided this suggestion.');
+      try {
         return await withTransactionRetry(pool, async (client) => {
-          const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
-          const { rows } = await client.query(`SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 FOR UPDATE`, [id]);
-          const before = rows[0] as ArtistRecord | undefined;
-          if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
-          if (before.merged_into) {
-            const survivor = (await client.query('SELECT name, label FROM artists WHERE id = $1', [before.merged_into]))
-              .rows[0];
-            throw new ArtistError(
-              409,
-              'ARTIST_CHANGED',
-              `This artist was already merged into ${survivor ? artistTitle(survivor) : 'another artist'}.`,
+          let synced: SyncedFestival[] = [];
+          if (input.decision === 'accept') {
+            const { rows } = await client.query(
+              `SELECT changes FROM artist_suggestions WHERE id = $1 AND status = 'pending'`,
+              [suggestionId],
             );
+            if (!rows[0]) throw alreadyDecided();
+            // The artist and its festivals lock first (the one lock order); the suggestion row locks when it is updated.
+            const outcome = await updateWithin(client, artistId, {
+              changes: rows[0].changes as ArtistChanges,
+              userId: input.userId,
+              ip: input.ip,
+              via: { suggestionId },
+            });
+            if (outcome.status === 'updated') synced = outcome.synced;
           }
-          await assertFreshToken(client, before, input.expectedUpdatedAt);
-          const next = applyChanges(before, input.changes);
-          await assertNoClash(client, id, next);
-          // A Spotify photo and the genres belong to the Spotify artist, so they leave with its link. Another photo stays.
-          const spotifyReplaced = !!before.spotify_id && before.spotify_id !== next.spotifyId;
-          const { rows: updated } = await client.query(
-            `UPDATE artists SET name = $2, name_key = $3, label = $4, spotify_id = $5, links = $6::jsonb,
-                    photo = CASE WHEN $8 AND photo LIKE 'https://i.scdn.co/%' THEN NULL ELSE photo END,
-                    genres = CASE WHEN $8 THEN '[]'::jsonb ELSE genres END,
-                    updated_by = $7, updated_at = now()
-              WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
-            [id, next.name, next.key, next.label, next.spotifyId, JSON.stringify(next.links), input.userId, spotifyReplaced],
+          const status = input.decision === 'accept' ? 'accepted' : 'rejected';
+          const { rowCount } = await client.query(
+            `
+  UPDATE artist_suggestions
+  SET
+    status = $2,
+    note = $3,
+    decided_by = $4,
+    decided_at = now()
+  WHERE
+    id = $1
+    AND status = 'pending'
+`,
+            [suggestionId, status, input.note ? input.note.slice(0, 500) : null, input.userId],
           );
-          const artist = updated[0] as ArtistRecord;
-          // A save may have put the artist on a festival after the first read, before it could lock the artist.
-          await assertUnchanged();
-          const copyChanged =
-            before.name !== artist.name ||
-            before.photo !== artist.photo ||
-            JSON.stringify(before.links ?? {}) !== JSON.stringify(artist.links ?? {});
-          const synced = copyChanged ? await rewriteCopies(client, festivalIds, artist) : [];
+          if (!rowCount) throw alreadyDecided();
           await insertArtistAudit(
             client,
-            id,
+            artistId,
             { userId: input.userId, ip: input.ip },
-            {
-              name: artist.name,
-              ...(before.name !== artist.name ? { renamedFrom: before.name } : {}),
-              fields: Object.keys(input.changes).filter(
-                (key) => (input.changes as Record<string, unknown>)[key] !== undefined,
-              ),
-              festivalsUpdated: synced.length,
-              // Enough to see what changed and where: the festival ids are capped so one row stays small.
-              before: { name: before.name, label: before.label, links: before.links ?? {} },
-              after: { name: artist.name, label: artist.label, links: artist.links ?? {} },
-              festivalIds: synced.slice(0, 200).map((festival) => festival.id),
-            },
+            { suggestionId, decision: status, note: input.note ?? null },
+            AUDIT_ACTIONS.ARTIST_SUGGESTION_DECIDED,
           );
-          return { artist, synced, before };
+          return { status, artistId, synced } as const;
         });
       } catch (error) {
         throw artistConflict(error) ?? error;
       }
+    },
+
+    /** An admin marks an artist verified. The edit token and the festival copies are untouched. */
+    async verify(id: string, input: { userId: string | null; ip?: string | null }) {
+      return withTransactionRetry(pool, async (client) => {
+        const { rows } = await client.query(
+          `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 AND merged_into IS NULL FOR UPDATE`,
+          [id],
+        );
+        const row = rows[0] as ArtistRecord | undefined;
+        if (!row) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
+        if (row.verified) return row;
+        const { rows: updated } = await client.query(
+          `UPDATE artists SET verified = true, updated_by = $2 WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
+          [id, input.userId],
+        );
+        await insertArtistAudit(
+          client,
+          id,
+          { userId: input.userId, ip: input.ip },
+          { name: row.name, fields: ['verified'], before: { verified: false }, after: { verified: true } },
+        );
+        return updated[0] as ArtistRecord;
+      });
     },
 
     /**
@@ -503,6 +777,21 @@ export function createArtistsStore(pool: Pool) {
             [loserId, survivorId, JSON.stringify(mergeRefs), takesSpotify, input.userId],
           );
           await client.query('UPDATE artists SET merged_into = $2 WHERE merged_into = $1', [loserId, survivorId]);
+          // A pending suggestion on the tombstone can no longer apply: close it so the review list stays honest.
+          await client.query(
+            `
+  UPDATE artist_suggestions
+  SET
+    status = 'rejected',
+    note = 'The artist was merged into another artist.',
+    decided_by = $2,
+    decided_at = now()
+  WHERE
+    artist_id = $1
+    AND status = 'pending'
+`,
+            [loserId, input.userId],
+          );
           const { rows: updated } = await client.query(
             `UPDATE artists SET name = $2, name_key = $3, label = $4, spotify_id = $5, links = $6::jsonb, photo = $7, genres = $8::jsonb,
                     updated_by = $9, updated_at = now()
@@ -561,15 +850,25 @@ export function createArtistsStore(pool: Pool) {
     /**
      * Fills one raw link into an artist that has none for its platform, under the festival and artist
      * locks, and rewrites every copy. A link that is already there stays: a concurrent edit wins.
+     * For an organizer (`viewer`) the artist must be visible, a Spotify link is never filled (it goes to review),
+     * and the audit row names the organization and flags a fill of an artist that other tenants use.
      */
     async fillLink(
       id: string,
-      input: { link: string; userId: string | null; ip?: string | null },
+      input: { link: string; userId: string | null; ip?: string | null; viewer?: ArtistViewer },
     ): Promise<{ synced: SyncedFestival[] }> {
       try {
         return await withTransactionRetry(pool, async (client) => {
           const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
-          const filled = await this.fillEmpty(client, id, { link: input.link }, { userId: input.userId, ip: input.ip });
+          const { viewer } = input;
+          let actor: ArtistActor = { userId: input.userId, ip: input.ip };
+          if (viewer) {
+            if (detectPlatform(input.link) === 'spotify') return { synced: [] };
+            if (!(await viewerMask(client, viewer, [id])).has(id)) return { synced: [] };
+            const uses = (await artistUses(client, [id])).get(id) ?? [];
+            actor = { ...actor, actorType: 'organizer', organizationId: viewer.organizationId, flagged: uses.some((use) => useIsForeign(use, viewer)) };
+          }
+          const filled = await this.fillEmpty(client, id, { link: input.link }, actor);
           await assertUnchanged();
           if (!filled?.changed) return { synced: [] };
           return { synced: await rewriteCopies(client, festivalIds, filled.artist) };
@@ -583,8 +882,14 @@ export function createArtistsStore(pool: Pool) {
      * The festivals that list an artist, archived ones marked, newest first, with the counts an editor
      * weighs before a change: festivals by time (archived ones apart) and the copies a change rewrites.
      */
-    async impact(id: string, now: Date = new Date()) {
-      const uses = (await artistUses(pool, [id])).get(id) ?? [];
+    async impact(id: string, now: Date = new Date(), viewer?: ArtistViewer) {
+      let uses = (await artistUses(pool, [id])).get(id) ?? [];
+      if (viewer) {
+        // An organizer is told only about festivals it may see: its own and published ones. A stranger's draft is left out of the counts.
+        if (!(await viewerMask(pool, viewer, [id])).has(id)) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
+        uses = uses.filter((use) => useIsVisible(use, viewer));
+      }
+      const shownIds = uses.map((use) => use.festivalId);
       const counts = { past: 0, current: 0, upcoming: 0, archived: 0, sets: 0, lineupEntries: 0 };
       for (const u of uses) {
         if (u.deleted) counts.archived++;
@@ -594,11 +899,13 @@ export function createArtistsStore(pool: Pool) {
       }
       const { rows } = await pool.query(
         `SELECT
-           (SELECT count(*) FROM festival_sets WHERE jsonb_typeof(artists) = 'array' AND artists @> $1::jsonb)::int AS sets,
+           (SELECT count(*) FROM festival_sets WHERE jsonb_typeof(artists) = 'array' AND artists @> $1::jsonb
+              AND ($3::text[] IS NULL OR festival_id = ANY($3::text[])))::int AS sets,
            (SELECT count(*) FROM festivals f,
               jsonb_array_elements(CASE WHEN jsonb_typeof(f.lineup) = 'array' THEN f.lineup ELSE '[]'::jsonb END) e
-              WHERE f.lineup @> $2::jsonb AND jsonb_typeof(e->'artists') = 'array' AND e->'artists' @> $1::jsonb)::int AS "lineupEntries"`,
-        [JSON.stringify([{ id }]), JSON.stringify([{ artists: [{ id }] }])],
+              WHERE f.lineup @> $2::jsonb AND jsonb_typeof(e->'artists') = 'array' AND e->'artists' @> $1::jsonb
+              AND ($3::text[] IS NULL OR f.id = ANY($3::text[])))::int AS "lineupEntries"`,
+        [JSON.stringify([{ id }]), JSON.stringify([{ artists: [{ id }] }]), viewer ? shownIds : null],
       );
       counts.sets = rows[0].sets;
       counts.lineupEntries = rows[0].lineupEntries;
@@ -619,7 +926,7 @@ export function createArtistsStore(pool: Pool) {
      * Rows with no links come first. `alsoOn` counts the other festivals, archived ones left out.
      * With `duplicates`, only artists that have a possible duplicate: pairs stay together and `duplicateOf` lists each partner's id.
      */
-    async list(opts: { festivalId?: string; query?: string; limit: number; duplicates?: boolean }) {
+    async list(opts: { festivalId?: string; query?: string; limit: number; duplicates?: boolean }, viewer?: ArtistViewer) {
       let rows: ArtistRecord[];
       let partners = new Map<string, string[]>();
       if (opts.duplicates) {
@@ -656,10 +963,12 @@ export function createArtistsStore(pool: Pool) {
         ));
       } else {
         const key = opts.query ? artistNameKey(opts.query) : '';
+        const params: unknown[] = [key, `%${key.replace(/[\\%_]/g, '\\$&')}%`, opts.limit];
+        const seen = viewer ? ` AND ${visibleCondition('artists', viewer, params)}` : '';
         ({ rows } = await pool.query(
-          `SELECT ${ARTIST_COLUMNS} FROM artists WHERE merged_into IS NULL AND ($1 = '' OR name_key LIKE $2)
+          `SELECT ${ARTIST_COLUMNS} FROM artists WHERE merged_into IS NULL AND ($1 = '' OR name_key LIKE $2)${seen}
             ORDER BY name_key, lower(label), id LIMIT $3`,
-          [key, `%${key.replace(/[\\%_]/g, '\\$&')}%`, opts.limit],
+          params,
         ));
       }
       const uses = await artistUses(
@@ -669,12 +978,41 @@ export function createArtistsStore(pool: Pool) {
       const sameKey = new Map<string, number>();
       for (const row of rows) sameKey.set(row.name_key, (sameKey.get(row.name_key) ?? 0) + 1);
       const keysAcross = await liveArtistsByKey(pool, [...sameKey.keys()]);
+      // For an organizer a same-name artist it cannot see does not count, and neither does a stranger's draft.
+      const seenAcross = viewer
+        ? await viewerMask(pool, viewer, [...keysAcross.values()].flat().map((row) => row.id))
+        : null;
+      const pending = viewer
+        ? new Set<string>(
+            (
+              await pool.query(
+                `
+  SELECT DISTINCT
+    artist_id
+  FROM
+    artist_suggestions
+  WHERE
+    status = 'pending'
+    AND organization_id = ANY ($1::text[])
+    AND artist_id = ANY ($2::text[])
+`,
+                [viewer.organizationIds, rows.map((r) => r.id)],
+              )
+            ).rows.map((r: { artist_id: string }) => r.artist_id),
+          )
+        : null;
       const items = rows.map((row) => {
-        const others = (uses.get(row.id) ?? []).filter((u) => u.festivalId !== opts.festivalId && !u.deleted);
+        const others = (uses.get(row.id) ?? []).filter(
+          (u) => u.festivalId !== opts.festivalId && !u.deleted && (!viewer || useIsVisible(u, viewer)),
+        );
+        const sameName = seenAcross
+          ? (keysAcross.get(row.name_key) ?? []).filter((other) => seenAcross.has(other.id)).length > 1
+          : (keysAcross.get(row.name_key)?.length ?? 1) > 1;
         return {
-          ...publicArtist(row),
+          ...(viewer ? viewerArtist(row) : publicArtist(row)),
           alsoOn: others.length,
-          sameName: (keysAcross.get(row.name_key)?.length ?? 1) > 1,
+          sameName,
+          ...(pending ? { pendingReview: pending.has(row.id) } : {}),
           linkCount: Object.keys(row.links ?? {}).length,
           ...(opts.duplicates ? { duplicateOf: partners.get(row.id) ?? [] } : {}),
         };
@@ -687,10 +1025,13 @@ export function createArtistsStore(pool: Pool) {
      * How many distinct names on a festival have no artist id and fit two or more live artists. The
      * save keeps such a name without an id, so the publish checklist asks the editor to pick one.
      */
-    async countAmbiguousNames(festival: {
-      days?: ({ sets?: ({ artists?: NamedArtist[] } | null)[] } | null)[];
-      lineup?: ({ artists?: NamedArtist[] } | null)[];
-    } | null | undefined): Promise<number> {
+    async countAmbiguousNames(
+      festival: {
+        days?: ({ sets?: ({ artists?: NamedArtist[] } | null)[] } | null)[];
+        lineup?: ({ artists?: NamedArtist[] } | null)[];
+      } | null | undefined,
+      viewer?: ArtistViewer,
+    ): Promise<number> {
       const elements = [
         ...(festival?.days ?? []).flatMap((day) => (day?.sets ?? []).flatMap((set) => set?.artists ?? [])),
         ...(festival?.lineup ?? []).flatMap((entry) => entry?.artists ?? []),
@@ -703,7 +1044,13 @@ export function createArtistsStore(pool: Pool) {
         ),
       ];
       const byKey = await liveArtistsByKey(pool, keys);
-      return keys.filter((key) => (byKey.get(key)?.length ?? 0) > 1).length;
+      if (!viewer) return keys.filter((key) => (byKey.get(key)?.length ?? 0) > 1).length;
+      // The same rule as a save: hidden artists do not count, and one the viewer may not link by name must be picked.
+      const mask = await viewerMask(pool, viewer, [...byKey.values()].flat().map((row) => row.id));
+      return keys.filter((key) => {
+        const seen = (byKey.get(key) ?? []).filter((row) => mask.has(row.id));
+        return seen.length > 1 || (seen.length === 1 && !mask.get(seen[0]!.id)!.linkable);
+      }).length;
     },
 
     /** Ids of the artists in `ids` that sit on a festival other than `festivalId`, archived ones included. */
@@ -776,6 +1123,7 @@ export function createArtistsStore(pool: Pool) {
       if (!actor.skipAudit) {
         await insertArtistAudit(client, id, actor, {
           source: 'fill',
+          ...(actor.flagged ? { flagged: true } : {}),
           name: row.name,
           before: { links: row.links ?? {}, photo: row.photo, genres: row.genres ?? [] },
           after: { links, photo, genres },

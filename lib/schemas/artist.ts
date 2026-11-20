@@ -48,6 +48,26 @@ export const artistUpdateSchema = z.object({
     .refine((c) => Object.values(c).some((v) => v !== undefined), 'At least one change required'),
 });
 
+// Organizer artist routes (/manage/artists). `organizationId` names which of the caller's organizations a write is for;
+// it defaults to the first one the caller may write for.
+export const organizerArtistCreateSchema = artistCreateSchema.extend({ organizationId: identifier.optional() });
+export const organizerArtistUpdateSchema = artistUpdateSchema.extend({ organizationId: identifier.optional() });
+export const organizerArtistListQuerySchema = z.object({
+  q: z.string().max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
+// Admin: the organizer suggestions that wait for a decision.
+export const artistSuggestionListQuerySchema = z.object({
+  status: z.enum(['pending', 'accepted', 'rejected', 'all']).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+});
+export const artistSuggestionDecisionSchema = z.object({
+  decision: z.enum(['accept', 'reject']),
+  // Shown to the organization that sent the suggestion.
+  note: z.string().trim().max(500).optional(),
+});
+
 export const artistListQuerySchema = z.object({
   festivalId: z.string().max(100).optional(),
   q: z.string().max(100).optional(),

@@ -8,6 +8,7 @@ import createLineupAnnounceRoutes from '../routes/lineup-announce';
 import createTimeReleasesRoutes from '../routes/time-releases';
 import createLineupInterestRoutes from '../routes/lineup-interest';
 import createManageRoutes from '../routes/manage';
+import createManageArtistsRoutes from '../routes/manage-artists';
 import createOrganizationsRoutes from '../routes/organizations';
 import { createAdminAnnouncementRoutes, createPublicAnnouncementRoutes } from '../routes/festival-announcements';
 import { createFestivalDiscoveryRoutes } from '../routes/festival-discovery';
@@ -48,6 +49,7 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
               festivalRoutes,
               lineupImportRoutes,
               siteplanRoutes: adminSiteplanRoutes,
+              artistRoutes: createManageArtistsRoutes(deps),
             }),
             forwarded,
           },

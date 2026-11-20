@@ -561,6 +561,8 @@ describe('festival access: organization cells', { skip }, () => {
   });
 
   const MANAGE = '/api/v1/manage/festivals';
+  const ARTISTS = '/api/v1/manage/artists';
+  const ADMIN_ARTISTS = '/api/v1/admin/artists';
 
   async function boot(overrides: Record<string, any> = {}) {
     const server = await h.startServer({ AUTH_RATE_LIMIT_MAX: 1000, ...overrides });
@@ -838,12 +840,68 @@ describe('festival access: organization cells', { skip }, () => {
       ['ownerA', `DELETE ${MANAGE}/f-a/publish-request`, 404],
       ['ownerA', `POST ${MANAGE}/f-a/publish`, 404],
       ['admin', 'GET /api/v1/manage/me', 404],
+      ['ownerA', `GET ${ARTISTS}?q=a`, 404],
+      ['ownerA', `POST ${ARTISTS}`, 404],
       ['anon', `GET ${MANAGE}/f-a`, 404],
       ['editorA', 'PUT /api/v1/festivals/f-a', 403],
       ['editorA', 'PUT /api/v1/festivals/f-a/sets/x1/link', 403],
       ['admin', 'PUT /api/v1/festivals/f-a', 400],
     ];
     assert.deepEqual(await runCells(server, tokensOf(users, adminToken), cells), []);
+  });
+
+  // The artist routes (routes/manage-artists.ts) are not festival-scoped: a read needs any role in an organization that
+  // belongs to an active user, a write needs an owner or editor of one that is not suspended. A pending organization
+  // may write. Admin-only suggestion routes keep the admin gate.
+  test('artist routes: reads, writes, suspended and pending organizations, strangers and anonymous callers', async () => {
+    const { server, users, adminToken } = await boot();
+    let n = 0;
+    const body = (url: string) => (url.endsWith('/match') ? { items: [{ name: 'Matrix Name' }] } : { name: `Matrix Artist ${Date.now()}-${++n}` });
+    const reads: Cell[] = [];
+    for (const who of ['viewerA', 'editorA', 'ownerA', 'ownerB', 'ownerS', 'ownerP']) {
+      reads.push([who, `GET ${ARTISTS}?q=matrix`, 200], [who, `GET ${ARTISTS}/suggestions`, 200], [who, `POST ${ARTISTS}/match`, 200]);
+    }
+    for (const who of ['stranger', 'unconfirmed', 'admin']) {
+      reads.push([who, `GET ${ARTISTS}?q=matrix`, 403], [who, `POST ${ARTISTS}/match`, 403], [who, `GET ${ARTISTS}/x1/impact`, 403]);
+    }
+    reads.push(['anon', `GET ${ARTISTS}?q=matrix`, 401], ['anon', `GET ${ARTISTS}/suggestions`, 401], ['anon', `POST ${ARTISTS}/match`, 401]);
+    reads.push(['editorA', `GET ${ARTISTS}/x1/impact`, 404], ['viewerA', `GET ${ARTISTS}/x1/impact`, 404]);
+    const writes: Cell[] = [
+      ['ownerA', `POST ${ARTISTS}`, 201],
+      ['editorA', `POST ${ARTISTS}`, 201],
+      ['ownerB', `POST ${ARTISTS}`, 201],
+      ['ownerP', `POST ${ARTISTS}`, 201],
+      ['viewerA', `POST ${ARTISTS}`, 403],
+      ['ownerS', `POST ${ARTISTS}`, 403],
+      ['stranger', `POST ${ARTISTS}`, 403],
+      ['unconfirmed', `POST ${ARTISTS}`, 403],
+      ['anon', `POST ${ARTISTS}`, 401],
+    ];
+    assert.deepEqual(await runCells(server, tokensOf(users, adminToken), [...reads, ...writes], body), []);
+
+    const update = { expectedUpdatedAt: '2999-01-01T00:00:00.000Z', changes: { label: 'x' } };
+    const edits: Cell[] = [
+      ['editorA', `PATCH ${ARTISTS}/x1`, 404],
+      ['ownerA', `PATCH ${ARTISTS}/x1`, 404],
+      ['viewerA', `PATCH ${ARTISTS}/x1`, 403],
+      ['ownerS', `PATCH ${ARTISTS}/x1`, 403],
+      ['stranger', `PATCH ${ARTISTS}/x1`, 403],
+      ['anon', `PATCH ${ARTISTS}/x1`, 401],
+    ];
+    assert.deepEqual(await runCells(server, tokensOf(users, adminToken), edits, () => update), []);
+
+    // Admin-only: the suggestion list, the decision and verify. A member of an organization gets the admin answer.
+    const adminOnly: Cell[] = [
+      ['anon', `GET ${ADMIN_ARTISTS}/suggestions`, 401],
+      ['stranger', `GET ${ADMIN_ARTISTS}/suggestions`, 403],
+      ['ownerA', `GET ${ADMIN_ARTISTS}/suggestions`, 403],
+      ['admin', `GET ${ADMIN_ARTISTS}/suggestions`, 200],
+      ['ownerA', `POST ${ADMIN_ARTISTS}/suggestions/x1/decision`, 403],
+      ['admin', `POST ${ADMIN_ARTISTS}/suggestions/x1/decision`, 404],
+      ['ownerA', `POST ${ADMIN_ARTISTS}/x1/verify`, 403],
+      ['admin', `POST ${ADMIN_ARTISTS}/x1/verify`, 404],
+    ];
+    assert.deepEqual(await runCells(server, tokensOf(users, adminToken), adminOnly, () => ({ decision: 'accept' })), []);
   });
 
   test('with the flag on, an editor of A is 403 on PUT /festivals/:id and its set-link route', async () => {

@@ -37,6 +37,8 @@ export const AUDIT_ACTIONS = {
   ARTIST_UPDATED: 'artist.updated',
   ARTIST_MERGED: 'artist.merged',
   ARTIST_BACKFILL_RUN: 'artist.backfill.run',
+  ARTIST_SUGGESTED: 'artist.suggested',
+  ARTIST_SUGGESTION_DECIDED: 'artist.suggestion.decided',
   POLICY_NOTICE_STARTED: 'policy_notice.started',
   POLICY_NOTICE_SENT: 'policy_notice.sent',
   USER_ROLE_GRANTED: 'user.role.granted',

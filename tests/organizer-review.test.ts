@@ -323,7 +323,7 @@ describe('links, hosting and live edits', { skip }, () => {
     assert.equal((await link('https://open.spotify.com/artist/0TnOYISbd1XYRBk9myaseg')).status, 404, 'past the rule, the set does not exist');
   });
 
-  test('an organizer cannot write an artist that a festival of another tenant also lists', async () => {
+  test('an organizer Spotify link on a set artist is a suggestion, whoever else lists the artist', async () => {
     const { server, users, adminToken } = await boot();
     const festival = (setId: string, artist: string) => ({
       stages: [{ id: 'main', name: 'Main' }],
@@ -335,15 +335,21 @@ describe('links, hosting and live edits', { skip }, () => {
     await o.as(server, adminToken).put(`${ADMIN}/f-b`, festival('sb-shared', 'Shared Act')).expect(200);
     const ids = await o.sql(server, "SELECT DISTINCT artists->0->>'id' AS id FROM festival_sets WHERE id = ANY($1)", [['sa-shared', 'sb-shared']]);
     assert.equal(ids.rows.length, 1, 'both sets carry the same artist id');
+    const artistId = ids.rows[0].id;
 
-    const blocked = await o.as(server, users.editorA.token).put(`${MANAGE}/f-a/sets/sa-shared/link`, link);
-    assert.equal(blocked.status, 403, JSON.stringify(blocked.body));
-    assert.match(blocked.body.error.message, /not yours/);
+    const shared = await o.as(server, users.editorA.token).put(`${MANAGE}/f-a/sets/sa-shared/link`, link);
+    assert.equal(shared.status, 200, JSON.stringify(shared.body));
+    assert.equal(shared.body.data.suggested, true);
 
-    // Once only festivals of A list the artist, the same edit goes through.
+    // Once only festivals of A list the artist, the Spotify link is still a suggestion: only an admin writes it.
     await o.as(server, adminToken).put(`${ADMIN}/f-b`, festival('sb-other', 'Other Act')).expect(200);
     const sole = await o.as(server, users.editorA.token).put(`${MANAGE}/f-a/sets/sa-shared/link`, link);
     assert.equal(sole.status, 200, JSON.stringify(sole.body));
+    assert.equal(sole.body.data.suggested, true);
+    const stored = await o.sql(server, 'SELECT links, spotify_id FROM artists WHERE id = $1', [artistId]);
+    assert.deepEqual([stored.rows[0].links, stored.rows[0].spotify_id], [{}, null], 'the artist row is untouched');
+    const pending = await o.sql(server, "SELECT organization_id FROM artist_suggestions WHERE artist_id = $1 AND status = 'pending'", [artistId]);
+    assert.deepEqual(pending.rows.map((r: any) => r.organization_id), ['org-a']);
   });
 
   test('a live festival keeps its name and place until the organization is verified', async () => {
