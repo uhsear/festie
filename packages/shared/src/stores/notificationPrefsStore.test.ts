@@ -89,6 +89,16 @@ describe('notificationPrefsStore quiet-hours zone', () => {
     expect(mockApi.put).toHaveBeenCalledWith('/notifications/prefs', { dndTimeZone: real });
   });
 
+  it('a failed background zone sync reverts the zone and sets no error', async () => {
+    mockApi.get.mockResolvedValue({ dndStart: '23:00', dndEnd: '08:00', dndTimeZone: 'Stale/Zone' });
+    mockApi.put.mockRejectedValue(new Error('offline'));
+    await useNotificationPrefsStore.getState().loadPrefs();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const state = useNotificationPrefsStore.getState();
+    expect(state.prefs.dndTimeZone).toBe('Stale/Zone');
+    expect(state.error).toBeNull();
+  });
+
   it('defaults the new prefs and maps an unsupported must-see lead to null', async () => {
     mockApi.get.mockResolvedValue({ mustSeeReminderMinutes: 20 });
     await useNotificationPrefsStore.getState().loadPrefs();

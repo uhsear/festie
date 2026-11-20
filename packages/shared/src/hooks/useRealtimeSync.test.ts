@@ -7,6 +7,7 @@ import { useCrewStore } from '../stores/crewStore';
 import { useNotificationPrefsStore, DEFAULT_NOTIFICATION_PREFS } from '../stores/notificationPrefsStore';
 import type { Socket } from '../services/socket';
 import { useRealtimeStoreSync } from './useRealtimeSync';
+import { api } from '../services/api';
 
 type Handler = (...args: never[]) => void;
 
@@ -201,27 +202,25 @@ describe('useRealtimeStoreSync: quiet-hours time zone on foreground', () => {
   });
 
   it('a zone change plus a backfill updates dndTimeZone', () => {
-    const updatePrefs = vi.fn().mockResolvedValue(undefined);
-    useNotificationPrefsStore.setState({ updatePrefs });
+    const put = vi.spyOn(api, 'put').mockResolvedValue({});
     const { result } = mount();
     act(() => result.current.backfill());
-    expect(updatePrefs).toHaveBeenCalledWith({ dndTimeZone: real });
+    expect(put).toHaveBeenCalledWith('/notifications/prefs', { dndTimeZone: real });
   });
 
   it('a zone change plus a visibilitychange to visible updates dndTimeZone', () => {
-    const updatePrefs = vi.fn().mockResolvedValue(undefined);
-    useNotificationPrefsStore.setState({ updatePrefs });
+    const put = vi.spyOn(api, 'put').mockResolvedValue({});
     mount();
     act(() => void document.dispatchEvent(new Event('visibilitychange')));
-    expect(updatePrefs).toHaveBeenCalledWith({ dndTimeZone: real });
+    expect(put).toHaveBeenCalledWith('/notifications/prefs', { dndTimeZone: real });
   });
 
   it('does nothing when the zone is unchanged', () => {
-    const updatePrefs = vi.fn().mockResolvedValue(undefined);
-    useNotificationPrefsStore.setState({ updatePrefs, prefs: { ...useNotificationPrefsStore.getState().prefs, dndTimeZone: real } });
+    const put = vi.spyOn(api, 'put').mockResolvedValue({});
+    useNotificationPrefsStore.setState({ prefs: { ...useNotificationPrefsStore.getState().prefs, dndTimeZone: real } });
     const { result } = mount();
     act(() => result.current.backfill());
-    expect(updatePrefs).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
   });
 });
 

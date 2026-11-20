@@ -129,9 +129,17 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>((set, ge
     const { prefs, loaded } = get();
     const device = deviceTimeZone();
     if (!loaded || !prefs.dndStart || !device || device === prefs.dndTimeZone) return;
-    get()
-      .updatePrefs({ dndTimeZone: device })
-      .catch(() => {});
+    // Not updatePrefs: a failed background sync must not show a save error the user never caused.
+    const previous = prefs.dndTimeZone;
+    set({ prefs: { ...prefs, dndTimeZone: device } });
+    void (async () => {
+      try {
+        await api.put('/notifications/prefs', { dndTimeZone: device });
+      } catch {
+        // Revert quietly; the next foreground return retries.
+        if (get().prefs.dndTimeZone === device) set({ prefs: { ...get().prefs, dndTimeZone: previous } });
+      }
+    })();
   },
 
   updatePrefs: async (patch: Partial<NotificationPreferences>) => {
