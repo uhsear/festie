@@ -31,26 +31,18 @@
 
 import type { LocationPeerUpdatePayload } from './types/contracts.js';
 import { createLogger } from './logger.js';
+import { LIVE_LOCATION, LIVE_SHARE_MAX_MS } from '../packages/shared/src/constants/config.js';
 
 const log = createLogger('live-location-cache');
 
-/**
- * Whole-key TTL on the crew hash (PEXPIRE, refreshed on every write). Mirrors `LIVE_LOCATION.STALE_MS`
- * (120s) in @festie/shared — the same window after which the client sweeps a
- * peer from the map. The backend can't import the shared constant (different
- * package manager), so it is mirrored here; keep the two in sync.
- */
-export const POSITION_TTL_MS = 120_000;
+/** Whole-key TTL on the crew hash (PEXPIRE, refreshed on every write). */
+export const POSITION_TTL_MS = LIVE_LOCATION.STALE_MS;
 
-/** Default freshness window for what a snapshot returns (mirrors STALE_MS). */
+/** Default freshness window for what a snapshot returns. */
 const SNAPSHOT_FRESH_MS = POSITION_TTL_MS;
 
-/**
- * Longest share window a client may claim (12 h). Mirrors `LIVE_SHARE_MAX_MS`
- * in @festie/shared, mirrored for the same reason as POSITION_TTL_MS; keep the
- * two in sync.
- */
-export const MAX_SHARE_WINDOW_MS = 12 * 3_600_000;
+/** Longest share window a client may claim. */
+export const MAX_SHARE_WINDOW_MS = LIVE_SHARE_MAX_MS;
 
 /** capturedAt may not be more than this far in the past relative to server time. */
 const CAPTURED_AT_MAX_AGE_MS = 60_000;
@@ -71,6 +63,48 @@ export function clampCapturedAt(capturedAt: any, serverNow: number, serverNowIso
   if (t < lo) return new Date(lo).toISOString();
   if (t > hi) return new Date(hi).toISOString();
   return new Date(t).toISOString();
+}
+
+/** The sender-supplied fields of one live fix, as validated by the socket and HTTP schemas. */
+export interface PeerUpdateFix {
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  heading?: number;
+  speed?: number;
+  battery?: number;
+  lowPower?: boolean;
+  expiresAt?: string;
+  capturedAt: string;
+}
+
+/**
+ * Build the `location:peer-update` payload for one fix. The socket share,
+ * socket update and HTTP relay all call this so a new field is added once.
+ * Optional fields pass through untouched; capturedAt is clamped (L4).
+ */
+export function buildPeerUpdatePayload(
+  who: { crewId: string; userId: string; username: string },
+  fix: PeerUpdateFix,
+  nowMs: number,
+): LocationPeerUpdatePayload {
+  const serverAt = new Date(nowMs).toISOString();
+  return {
+    _v: 1,
+    crewId: who.crewId,
+    userId: who.userId,
+    username: who.username,
+    lat: fix.lat,
+    lng: fix.lng,
+    accuracy: fix.accuracy,
+    heading: fix.heading,
+    speed: fix.speed,
+    battery: fix.battery,
+    lowPower: fix.lowPower,
+    expiresAt: fix.expiresAt,
+    capturedAt: clampCapturedAt(fix.capturedAt, nowMs, serverAt),
+    serverAt,
+  };
 }
 
 function positionsKey(crewId: string): string {
