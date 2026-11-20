@@ -4,7 +4,7 @@ import { describe, test, beforeEach, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import { createNotificationService } from '../lib/notifications';
-import { createBackgroundTasks } from '../lib/shutdown';
+import { createBackgroundTasks } from '../lib/background-tasks.js';
 import createNotificationRoutes from '../routes/notifications';
 import { schemas, validate } from '../lib/schemas';
 

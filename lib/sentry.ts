@@ -8,7 +8,8 @@
 import { createRequire } from 'module';
 import { loadConfig } from './config.js';
 
-const _cfg = loadConfig();
+let _loaded: ReturnType<typeof loadConfig> | undefined;
+const cfg = () => (_loaded ??= loadConfig());
 const _require = createRequire(import.meta.url);
 
 let Sentry: any = null;
@@ -19,7 +20,7 @@ function initSentry(options: any = {}) {
   if (initialized) return Sentry;
   initialized = true;
 
-  const dsn = options.dsn || _cfg.SENTRY_DSN;
+  const dsn = options.dsn || cfg().SENTRY_DSN;
   if (!dsn) {
 
     console.warn('[sentry] SENTRY_DSN not set — Sentry disabled (no-op mode)');
@@ -49,12 +50,12 @@ function initSentry(options: any = {}) {
   try {
     Sentry.init({
       dsn,
-      environment: options.environment || _cfg.NODE_ENV || 'production',
-      release: options.release || _cfg.APP_VERSION || 'dev',
-      tracesSampleRate: Number(_cfg.SENTRY_TRACES_RATE ?? 0.05),
+      environment: options.environment || cfg().NODE_ENV || 'production',
+      release: options.release || cfg().APP_VERSION || 'dev',
+      tracesSampleRate: Number(cfg().SENTRY_TRACES_RATE ?? 0.05),
       // SDK 11 defaults to streamed v2 spans, which Performance and Transactions do not show.
       traceLifecycle: 'static',
-      profilesSampleRate: Number(_cfg.SENTRY_PROFILES_RATE ?? 0),
+      profilesSampleRate: Number(cfg().SENTRY_PROFILES_RATE ?? 0),
       // @sentry/node 11 replaced sendDefaultPii with dataCollection, and an unset
       // dataCollection now collects cookies, request/response bodies and query data.
       // This is the v10 sendDefaultPii:false baseline from the Sentry migration guide.
@@ -83,7 +84,7 @@ function initSentry(options: any = {}) {
       ...options.extra,
     });
     noop = false;
-    console.debug('[sentry] initialized', { env: options.environment || _cfg.NODE_ENV, release: options.release || _cfg.APP_VERSION });
+    console.debug('[sentry] initialized', { env: options.environment || cfg().NODE_ENV, release: options.release || cfg().APP_VERSION });
     return Sentry;
   } catch (err: any) {
 

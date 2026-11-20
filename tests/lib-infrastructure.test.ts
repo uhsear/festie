@@ -393,9 +393,10 @@ describe('lib/sentry.js', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. lib/shutdown.js — createBackgroundTasks + createCloseHandler
+// 3. lib/background-tasks.js + lib/shutdown.js — createBackgroundTasks + createCloseHandler
 // ---------------------------------------------------------------------------
-import { createBackgroundTasks, createCloseHandler } from '../lib/shutdown.js';
+import { createBackgroundTasks } from '../lib/background-tasks.js';
+import { createCloseHandler } from '../lib/shutdown.js';
 
 describe('lib/shutdown.js', () => {
 

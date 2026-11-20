@@ -249,7 +249,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
   // ── rate_prompt ─────────────────────────────────────────────────────────
   //
-  // Fires from the hourly leader-only sweep (lib/shutdown.ts). On the morning
+  // Fires from the hourly leader-only sweep (lib/background-tasks.ts). On the morning
   // after a festival day, pushes each person who picked sets on that day and has
   // not rated all of them. Deduped per user on eventKey `rate:<festivalId>:<day>`,
   // so the hourly sweep sends once per day. Push only, gated by the wrapReady pref.

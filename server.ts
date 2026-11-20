@@ -13,7 +13,7 @@
  *   lib/app-context/index.ts ─── config, DB, Redis, caches, auth, sessions, utilities
  *   lib/middleware.ts ──── Express middleware (security, CORS, parsing, metrics, rate limits)
  *   lib/socket-setup.ts ─ Socket.IO server, Redis adapter, push notifications
- *   lib/shutdown.ts ───── background tasks (cleanup timers) + graceful shutdown
+ *   lib/background-tasks.ts + lib/shutdown.ts ── cleanup timers; graceful shutdown
  *   routes/pages.ts ───── static pages, password reset forms, SPA catch-all
  *   routes/*.ts ────────── API route modules (auth, profiles, crews, etc.)
  */
@@ -103,7 +103,8 @@ import { createAppContext, buildContentSecurityPolicy, collectInlineHashes, load
 import { configureMiddleware } from './lib/middleware';
 import { buildFestivalMounts } from './lib/festival-mounts';
 import { configureSocketIO } from './lib/socket-setup';
-import { createBackgroundTasks, createCloseHandler } from './lib/shutdown';
+import { createBackgroundTasks } from './lib/background-tasks';
+import { createCloseHandler } from './lib/shutdown';
 import { createVenueGeocoder, backfillVenueCoords } from './lib/geocode';
 import { createReminderScheduler } from './lib/reminder-scheduler';
 import { createCrewNotifier } from './lib/notifications/crew-notify';
@@ -446,7 +447,7 @@ async function createFestieApp(overrides: any = {}) {
 
   // ── Startup token purge ──────────────────────────────────────────
   // Same leader-election guard as the periodic token cleanup in
-  // createBackgroundTasks (lib/shutdown.ts): PM2 sets NODE_APP_INSTANCE to
+  // createBackgroundTasks (lib/background-tasks.ts): PM2 sets NODE_APP_INSTANCE to
   // '0'..'N-1', so only instance 0 (or non-cluster mode where it's undefined)
   // runs the boot-time purge — avoids N workers issuing identical DELETEs.
   const _purgeInstance = process.env.NODE_APP_INSTANCE;
