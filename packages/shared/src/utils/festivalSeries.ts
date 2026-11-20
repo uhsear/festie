@@ -1,6 +1,9 @@
 // A series links editions of one recurring festival through festivals.series_id.
 // The server accepts /^[a-z0-9-]{1,60}$/ (lib/schemas.ts festivalCreateSchema).
 
+import type { Festival } from '../types';
+import { festivalStatus } from './festivalTime';
+
 export interface SeriesFestival {
   id: string;
   name: string;
@@ -71,7 +74,9 @@ export function splitBySeries<F extends SeriesFestival & { startDate?: string | 
     const editions = key ? byKey.get(key) : undefined;
     if (!editions || editions.length < 2 || seen.has(key)) continue;
     seen.add(key);
-    const newestFirst = [...editions].sort((a, b) => (b.startDate ?? '').localeCompare(a.startDate ?? ''));
+    // An edition announced without dates is the newest one, so it sorts first.
+    const start = (e: F) => e.startDate ?? '9999-12-31';
+    const newestFirst = [...editions].sort((a, b) => start(b).localeCompare(start(a)));
     series.push({ key, label: f.name.replace(TRAILING_YEAR, '').trim() || f.name, editions: newestFirst });
   }
   const standalone = festivals.filter((f) => {
@@ -79,4 +84,17 @@ export function splitBySeries<F extends SeriesFestival & { startDate?: string | 
     return !key || (byKey.get(key)?.length ?? 0) < 2;
   });
   return { series, standalone };
+}
+
+/**
+ * Splits series blocks by whether any edition is live, upcoming or undated (`current`) or every edition is over (`ended`).
+ * Pickers show `current` blocks ahead of the standalone festivals and `ended` blocks after them, so a live festival is never
+ * buried under old editions. Each list keeps the order of `blocks`.
+ */
+export function partitionSeriesBlocks<F extends Festival & { startDate?: string | null; endDate?: string | null }>(
+  blocks: readonly SeriesBlock<F>[],
+  now: Date = new Date(),
+): { current: SeriesBlock<F>[]; ended: SeriesBlock<F>[] } {
+  const isEnded = (b: SeriesBlock<F>) => b.editions.every((e) => festivalStatus(e, undefined, now) === 'past');
+  return { current: blocks.filter((b) => !isEnded(b)), ended: blocks.filter(isEnded) };
 }

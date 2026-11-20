@@ -128,10 +128,12 @@ export default function PicksScreen() {
 
   // A cold start can land here before any screen loaded the catalogue; without this the loading state never resolves.
   useEffect(() => {
-    if (!currentFestival && festivals.length === 0 && !isLoading && !error) {
+    // Read the load flags at fire time: depending on them re-fires this after every load, and an empty catalogue never stops.
+    const { isLoading: loading, error: loadError } = useFestivalDataStore.getState();
+    if (!currentFestival && festivals.length === 0 && !loading && !loadError) {
       loadFestivals().catch(() => {});
     }
-  }, [currentFestival, festivals.length, isLoading, error, loadFestivals]);
+  }, [currentFestival, festivals.length, loadFestivals]);
 
   const [exportBusy, setExportBusy] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);

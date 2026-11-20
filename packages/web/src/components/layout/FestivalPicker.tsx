@@ -6,6 +6,7 @@ import {
   festivalStatus,
   formatFestivalDateRange,
   groupFestivalsByStatus,
+  partitionSeriesBlocks,
   splitBySeries,
 } from '@festie/shared/utils';
 import { DISCOVER_COPY, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
@@ -41,16 +42,25 @@ export default function FestivalPicker() {
     const matches = q
       ? festivals.filter((f) => f.name.toLowerCase().includes(q) || (f.location ?? '').toLowerCase().includes(q))
       : festivals;
-    // Editions of one recurring festival sit together under the series name, ahead of the status groups.
+    // Editions of one recurring festival sit together under the series name. A series with an edition that has not
+    // ended goes ahead of the status groups, a series whose editions are all over goes after them.
     const ordered = groupFestivalsByStatus(matches);
     const { series, standalone } = splitBySeries([...ordered.live, ...ordered.upcoming, ...ordered.past, ...ordered.undated]);
+    const { current, ended } = partitionSeriesBlocks(series);
     const g = groupFestivalsByStatus(standalone);
+    const seriesGroup = (block: (typeof series)[number]) => ({
+      key: `series-${block.key}`,
+      heading: block.label,
+      items: block.editions,
+      followable: null,
+    });
     return [
-      ...series.map((block) => ({ heading: block.label, items: block.editions, followable: null })),
-      { heading: 'Live now', items: g.live, followable: false },
-      { heading: 'Upcoming', items: g.upcoming, followable: true },
-      { heading: 'Past', items: g.past, followable: false },
-      { heading: 'Dates to come', items: g.undated, followable: true },
+      ...current.map(seriesGroup),
+      { key: 'live', heading: 'Live now', items: g.live, followable: false },
+      { key: 'upcoming', heading: 'Upcoming', items: g.upcoming, followable: true },
+      { key: 'past', heading: 'Past', items: g.past, followable: false },
+      { key: 'undated', heading: 'Dates to come', items: g.undated, followable: true },
+      ...ended.map(seriesGroup),
     ].filter((group) => group.items.length > 0);
   }, [festivals, q]);
 
@@ -203,7 +213,7 @@ export default function FestivalPicker() {
           <p className="text-sm text-text-muted">{`No festival matches "${query.trim()}".`}</p>
         ) : (
           groups.map((group) => (
-            <section key={group.heading}>
+            <section key={group.key}>
               <h3 className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-text-secondary">
                 {group.heading}
               </h3>

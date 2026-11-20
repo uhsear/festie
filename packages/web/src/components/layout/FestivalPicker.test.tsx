@@ -118,6 +118,18 @@ describe('FestivalPicker dialog', () => {
     expect(options).toEqual(['festival-option-fk-2027', 'festival-option-fk-2026']);
   });
 
+  it('keeps a live festival ahead of a series whose editions are all over', () => {
+    state.festivals = [
+      fest('x-2025', 'Old Fest 2025', -400, -398),
+      fest('x-2026', 'Old Fest 2026', -30, -28),
+      fest('now', 'Live Fest', -1, 1),
+    ];
+    render(<FestivalPicker />);
+    fireEvent.click(screen.getByTestId('festival-select'));
+    const headings = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+    expect(headings).toEqual(['Live now', 'Old Fest']);
+  });
+
   it('badges how far each festival\'s schedule has come, and none when no acts are out', () => {
     state.festivals = [
       { ...fest('t', 'Times Fest', 10, 12), scheduleProgress: 'times' },

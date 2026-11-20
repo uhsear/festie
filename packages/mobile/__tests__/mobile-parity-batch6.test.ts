@@ -56,6 +56,12 @@ describe('shared load state and chips', () => {
     expect(read('app/(tabs)/picks.tsx')).toContain('festivalLoadState(');
   });
 
+  it('the picks cold-start load reads the load flags at fire time, so an empty catalogue cannot loop', () => {
+    const picks = read('app/(tabs)/picks.tsx');
+    expect(picks).toContain('useFestivalDataStore.getState()');
+    expect(picks).toContain('}, [currentFestival, festivals.length, loadFestivals]);');
+  });
+
   it('the grid shows the schedule freshness chip', () => {
     const grid = read('app/grid.tsx');
     expect(grid).toContain("import FreshnessChip from '../components/FreshnessChip';");
@@ -89,6 +95,8 @@ describe('festival picker series', () => {
     const list = read('components/FestivalList.tsx');
     expect(list).toContain('splitBySeries(');
     expect(list).toContain("kind: 'series'");
+    expect(list).toContain('partitionSeriesBlocks(');
+    expect(list).toContain('Other festivals');
   });
 });
 

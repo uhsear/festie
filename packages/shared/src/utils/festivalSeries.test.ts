@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { otherEditions, seriesIdsIn, slugifySeriesInput, splitBySeries, suggestSeriesId } from './festivalSeries';
+import { otherEditions, partitionSeriesBlocks, seriesIdsIn, slugifySeriesInput, splitBySeries, suggestSeriesId } from './festivalSeries';
 
 describe('suggestSeriesId', () => {
   it('strips a trailing year and slugifies', () => {
@@ -94,5 +94,40 @@ describe('splitBySeries', () => {
     const { series, standalone } = splitBySeries(list);
     expect(series.map((s) => s.label)).toEqual(['X Fest', 'Y Fest']);
     expect(standalone.map((f) => f.id)).toEqual(['solo']);
+  });
+});
+
+describe('splitBySeries edition order', () => {
+  it('lists an edition with no dates first, as the newest', () => {
+    const { series } = splitBySeries([
+      { id: 'a', name: 'FK 2026', startDate: '2026-08-01' },
+      { id: 'b', name: 'FK 2028', startDate: null },
+      { id: 'c', name: 'FK 2027', startDate: '2027-08-01' },
+    ]);
+    expect(series[0]!.editions.map((f) => f.id)).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('partitionSeriesBlocks', () => {
+  const now = new Date('2026-09-01T12:00:00Z');
+  const fest = (id: string, name: string, startDate: string | null, endDate: string | null) => ({
+    id,
+    name,
+    startDate,
+    endDate,
+  });
+
+  it('puts a block with an edition that has not ended in current, and an all-past block in ended', () => {
+    const { series } = splitBySeries([
+      fest('o1', 'Old 2024', '2024-05-01', '2024-05-03'),
+      fest('o2', 'Old 2025', '2025-05-01', '2025-05-03'),
+      fest('k1', 'Kept 2026', '2026-05-01', '2026-05-03'),
+      fest('k2', 'Kept 2027', '2027-05-01', '2027-05-03'),
+      fest('u1', 'Undated 2026', null, null),
+      fest('u2', 'Undated 2027', null, null),
+    ]);
+    const { current, ended } = partitionSeriesBlocks(series, now);
+    expect(current.map((b) => b.label)).toEqual(['Kept', 'Undated']);
+    expect(ended.map((b) => b.label)).toEqual(['Old']);
   });
 });

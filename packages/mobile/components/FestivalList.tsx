@@ -5,7 +5,7 @@ import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { COPY, DISCOVER_COPY, FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
-import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, splitBySeries, type FestivalStatus } from '@festie/shared/utils';
+import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, partitionSeriesBlocks, splitBySeries, type FestivalStatus } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import Button from './Button';
@@ -320,21 +320,27 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
 
   // Order: live first, then upcoming (soonest first), then past (most recent
   // first), so the festivals a user is most likely choosing sit at the top.
-  // Editions of one recurring festival sit together under the series name, ahead of the rest.
+  // Editions of one recurring festival sit together under the series name. A series with an edition
+  // that has not ended goes ahead of the rest, under an "Other festivals" heading for the rest; a series
+  // whose editions are all over goes last.
   const listRows = useMemo<ListRow[]>(() => {
     const g = groupFestivalsByStatus(festivals);
     const { series, standalone } = splitBySeries([...g.live, ...g.upcoming, ...g.past, ...g.undated]);
+    const { current, ended } = partitionSeriesBlocks(series);
     const rest = groupFestivalsByStatus(standalone);
+    const festivalRow = (festival: Festival): ListRow => ({ kind: 'festival', key: festival.id, festival });
+    const blockRows = (block: (typeof series)[number]): ListRow[] => [
+      { kind: 'series', key: `series-${block.key}`, label: block.label },
+      ...block.editions.map(festivalRow),
+    ];
+    const standaloneRows = [...rest.live, ...rest.upcoming, ...rest.past, ...rest.undated].map(festivalRow);
     return [
-      ...series.flatMap((block) => [
-        { kind: 'series' as const, key: `series-${block.key}`, label: block.label },
-        ...block.editions.map((festival) => ({ kind: 'festival' as const, key: festival.id, festival })),
-      ]),
-      ...[...rest.live, ...rest.upcoming, ...rest.past, ...rest.undated].map((festival) => ({
-        kind: 'festival' as const,
-        key: festival.id,
-        festival,
-      })),
+      ...current.flatMap(blockRows),
+      ...(current.length > 0 && standaloneRows.length > 0
+        ? [{ kind: 'series' as const, key: 'heading-other-festivals', label: 'Other festivals' }]
+        : []),
+      ...standaloneRows,
+      ...ended.flatMap(blockRows),
     ];
   }, [festivals]);
 
