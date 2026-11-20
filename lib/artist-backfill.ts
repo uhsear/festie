@@ -913,7 +913,7 @@ export async function applyBackfillPlan(pool: Pool, plan: BackfillPlan, options:
   const festivalIds = new Set(plan.changedOwners.map((o) => o.festival.id));
   for (const festival of plan.festivals.filter((f) => festivalIds.has(f.id))) {
     const outcome = await withTransactionRetry(pool, (client) => writeFestival(client, plan, festival, runId));
-    if ('skipped' in outcome) {
+    if (outcome.skipped) {
       result.festivalsSkipped.push({ festivalId: festival.id, reason: outcome.skipped });
       continue;
     }
