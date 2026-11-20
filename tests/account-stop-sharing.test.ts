@@ -79,6 +79,7 @@ describe('account stop-sharing (stub deps, no database)', () => {
       ],
     );
     assert.ok(emits.every((e) => !('still_member' in e.payload.status)), 'membership flag stays server-side');
+    assert.deepEqual(emits.map((e) => e.payload.crewId), ['c1', 'c2']);
   });
 
   test('404 when the user is gone, 500 with the contract message on a store error', async () => {
@@ -229,6 +230,7 @@ describe('account stop-sharing (database)', { concurrency: 1, skip }, () => {
       const statusEmits = emits.filter((e) => e.event === 'crew:status-updated');
       assert.deepEqual(statusEmits.map((e) => e.room).sort(), ['crew:s1', 'crew:s2']);
       for (const e of statusEmits) {
+        assert.equal(e.payload.crewId, e.room.slice('crew:'.length));
         assert.equal(e.payload.status.user_id, userId);
         assert.equal(e.payload.status.latitude, null);
         assert.equal(e.payload.status.longitude, null);
