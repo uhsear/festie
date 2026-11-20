@@ -13,6 +13,15 @@ import { test, expect, createCrewViaApi, loginAdminUi, openUserContext, register
  */
 
 test.describe('critical flows', () => {
+  // The auth limiter keeps its counters in Redis, outside the per-test server, so the whole
+  // run shares one budget per address. Under the default 10 per 5 minutes the browser
+  // matrix starved its later tests with "Too many tries" (nightly issue 190).
+  test('the e2e server does not throttle repeated sign-ups from one address', async ({ app, page }) => {
+    for (let i = 0; i < 15; i++) {
+      await registerViaApi(page.context(), app, `burst_${i}_${Date.now()}`);
+    }
+  });
+
   test('sign in with an existing account shows the profile badge', async ({ app, page }) => {
     const username = `signin_${Date.now()}`;
     await registerViaApi(page.context(), app, username);

@@ -1,9 +1,11 @@
-import { test, expect } from './fixtures.js';
+import { test, expect, createCrewViaApi, registerViaApi, signIn } from './fixtures.js';
 import AxeBuilder from '@axe-core/playwright';
 import type { Page } from '@playwright/test';
 
 /**
- * Automated accessibility scan (axe-core) over the key guest-reachable routes.
+ * Automated accessibility scan (axe-core) over the key guest-reachable routes,
+ * then over the signed-in surfaces: crew tabs, account, inbox, wrap and the set
+ * detail panel.
  *
  * Runs the real WCAG rule engine against the in-process, Postgres-seeded app
  * from ./fixtures (same harness as festival-planner.spec). This is the
@@ -30,30 +32,100 @@ async function waitForShell(page: Page) {
   await page.waitForLoadState('networkidle');
 }
 
+// Scan the page as rendered right now and fail on serious/critical violations.
+// `baseline` lists known, documented defects on this page: a rule id plus a pattern that the failing
+// node's HTML must match. Matching nodes are still logged but do not fail the run; the rule stays
+// active for every other node. Every entry needs a reason at its call site and leaves the list
+// when the defect is fixed.
+type BaselineEntry = { rule: string; nodeHtml: RegExp };
+
+async function expectNoGatingViolations(page: Page, label: string, baseline: readonly BaselineEntry[] = []) {
+  const results = await new AxeBuilder({ page })
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+
+  // Surface everything axe found for this route (helps triage the tail).
+  if (results.violations.length) {
+    const summary = results.violations.map((v) => ({
+      id: v.id,
+      impact: v.impact,
+      nodes: v.nodes.map((n) => ({ target: n.target, html: n.html })),
+      help: v.helpUrl,
+    }));
+    // eslint-disable-next-line no-console
+    console.log(`axe violations on ${label}:
+${JSON.stringify(summary, null, 2)}`);
+  }
+
+  const gating = results.violations
+    .filter((v) => GATE_IMPACTS.has(v.impact ?? ''))
+    .map((v) => ({
+      ...v,
+      nodes: v.nodes.filter((n) => !baseline.some((b) => b.rule === v.id && b.nodeHtml.test(n.html))),
+    }))
+    .filter((v) => v.nodes.length > 0);
+  expect(gating, `serious/critical a11y violations on ${label}`).toEqual([]);
+}
+
 test.describe('accessibility (axe) — key routes', () => {
   for (const route of ROUTES) {
     test(`no serious/critical a11y violations on ${route}`, async ({ app, page }) => {
       await page.goto(`${app.baseUrl}${route}`);
       await waitForShell(page);
-
-      const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
-        .analyze();
-
-      // Surface everything axe found for this route (helps triage the tail).
-      if (results.violations.length) {
-        const summary = results.violations.map((v) => ({
-          id: v.id,
-          impact: v.impact,
-          nodes: v.nodes.map((n) => ({ target: n.target, html: n.html })),
-          help: v.helpUrl,
-        }));
-        // eslint-disable-next-line no-console
-        console.log(`axe violations on ${route}:\n${JSON.stringify(summary, null, 2)}`);
-      }
-
-      const gating = results.violations.filter((v) => GATE_IMPACTS.has(v.impact ?? ''));
-      expect(gating, `serious/critical a11y violations on ${route}`).toEqual([]);
+      await expectNoGatingViolations(page, route);
     });
   }
+});
+
+// Signed-in surfaces. The user owns a crew so the crew tabs render their real content, not the empty state.
+const SIGNED_IN_ROUTES = [
+  '/crew?tab=find',
+  '/crew?tab=members',
+  '/crew?tab=plan',
+  '/crew?tab=money',
+  '/account',
+  '/inbox',
+  '/wrap',
+] as const;
+
+test.describe('accessibility (axe) — signed-in routes', () => {
+  test.beforeEach(async ({ app, page }) => {
+    const username = `a11y_${Date.now()}`;
+    await registerViaApi(page.context(), app, username);
+    await createCrewViaApi(page.context(), app, `A11y Crew ${Date.now()}`);
+    await signIn(page, app, username);
+  });
+
+  for (const route of SIGNED_IN_ROUTES) {
+    test(`no serious/critical a11y violations on ${route}`, async ({ app, page }) => {
+      await page.goto(`${app.baseUrl}${route}`);
+      await waitForShell(page);
+      await expectNoGatingViolations(page, route);
+    });
+  }
+
+  test('no serious/critical a11y violations in the set detail panel', async ({ page }) => {
+    const card = page.locator('[data-testid="set-card"][data-artist="Alpha"]');
+    await expect(card).toBeVisible();
+    await card.getByRole('button', { name: /^Alpha — / }).click();
+    await expect(page.locator('[aria-label="Set detail panel"]')).toBeVisible();
+    await page.waitForLoadState('networkidle');
+    // Baseline: the related-set buttons ("Gamma", "Beta") use an aria-label that starts with the
+    // artist but does not contain the visible text as one phrase (WCAG 2.5.3 label in name).
+    // Only nodes with that aria-label ending are ignored. Fix in
+    // packages/web/src/components/features/AlsoPlaysSection.tsx, then drop this entry.
+    await expectNoGatingViolations(page, 'the set detail panel', [
+      { rule: 'label-content-name-mismatch', nodeHtml: /aria-label="[^"]*Open this set\./ },
+    ]);
+  });
+});
+
+test.describe('accessibility (axe) — open dialog', () => {
+  test('no serious/critical a11y violations in the Create Crew dialog', async ({ app, page }) => {
+    await registerViaApi(page.context(), app, `a11ydialog_${Date.now()}`);
+    await page.goto(`${app.baseUrl}/crew`);
+    await page.getByRole('button', { name: 'Create Crew' }).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expectNoGatingViolations(page, 'the Create Crew dialog');
+  });
 });

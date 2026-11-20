@@ -342,6 +342,9 @@ function startMetricsListener(metrics: any, { basePort = 9400, workerId = 0 }: a
  * Periodically sample the re-engagement BullMQ queue depth (waiting + delayed).
  * Call this after the queue is created; returns a stop() function.
  * `bullQueue` must expose `.getWaitingCount()` and `.getDelayedCount()` (standard BullMQ Queue API).
+ * The sampler stops by itself once the queue is closing (BullMQ sets `closing`), because nothing
+ * else owns its timer: a closed queue connection would otherwise warn on every tick for the rest
+ * of the process, once per server that was ever created (tests and E2E build many).
  */
 async function startReengagementQueueSampler(
   metrics: any,
@@ -357,11 +360,14 @@ async function startReengagementQueueSampler(
       ]);
       metrics.reengagementQueueDepthGauge.set(waiting + delayed);
     } catch (err: any) {
-      log.warn('reengagement queue depth sampler failed', { error: err?.message });
+      if (!bullQueue.closing) log.warn('reengagement queue depth sampler failed', { error: err?.message });
     }
   };
   await sample();
-  const handle = setInterval(sample, intervalMs);
+  const handle = setInterval(() => {
+    if (bullQueue.closing) clearInterval(handle);
+    else void sample();
+  }, intervalMs);
   if (typeof handle.unref === 'function') handle.unref();
   return () => clearInterval(handle);
 }
