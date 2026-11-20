@@ -11,5 +11,5 @@
   "project": ["lib/**/*.ts", "routes/**/*.ts", "server.ts", "scripts/**/*.{ts,mjs,js}"],
   "ignore": ["packages/**", "dist/**", "coverage/**", "migrations/**"],
   "ignoreDependencies": ["@sentry/node", "syncpack", "papaparse", "@types/papaparse"],
-  "ignoreBinaries": ["depcruise", "lhci", "psql", "pmtiles", "build-storybook", "bundlemon"]
+  "ignoreBinaries": ["depcruise", "lhci", "psql", "pmtiles", "build-storybook", "bundlemon", "report"]
 }
