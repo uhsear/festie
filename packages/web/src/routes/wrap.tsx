@@ -1,10 +1,10 @@
 import { useMemo, useRef, useState, useCallback } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate, useSearch } from '@tanstack/react-router';
-import { api } from '@festie/shared/services';
+import { fetchCrewWrap, fetchWrap } from '@festie/shared/services';
 import { useFestivalStore, useAuthStore, useCrewStore, useUIStore } from '@festie/shared/stores';
 import { COPY } from '@festie/shared/constants';
-import type { WrapResponse } from '@festie/shared/types';
+import type { CrewWrapResponse, WrapResponse } from '@festie/shared/types';
 import {
   buildWrapCards,
   formatAmount,
@@ -18,11 +18,12 @@ import {
 import GuestTeaser from '../components/features/GuestTeaser';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
-import Skeleton from '../components/ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../components/ui/Skeleton';
+import { loadErrorMessage } from '../components/crew/loadErrorMessage';
 import WrapSkeleton from '../components/ui/skeletons/WrapSkeleton';
 import Button from '../components/ui/Button';
 import Switch from '../components/ui/Switch';
-import CrewWrapPoster, { type CrewWrapData } from '../components/features/CrewWrapPoster';
+import CrewWrapPoster from '../components/features/CrewWrapPoster';
 import CrewPhotosCard from '../components/crew/CrewPhotosCard';
 import { useToast } from '../lib/toastContext';
 import { sharePoster, wrapShareLink } from '../lib/sharePoster';
@@ -64,10 +65,10 @@ function WrapPageInner() {
   // The active crew belongs to one festival; only send it for that festival's wrap.
   const crewParam = activeCrew && activeCrew.festivalId === festivalId ? activeCrew.id : null;
 
-  const { data, isLoading, isError, refetch } = useQuery<WrapResponse>({
+  const { data, isLoading, isError, error, refetch } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId, crewParam],
     queryFn: () =>
-      api.get<WrapResponse>(`/ratings/wrap/${festivalId}${crewParam ? `?crewId=${encodeURIComponent(crewParam)}` : ''}`),
+      fetchWrap(festivalId!, crewParam),
     enabled: !!festivalId && !!user,
   });
 
@@ -125,7 +126,7 @@ function WrapPageInner() {
           <EmptyState
             icon={<Sparkles className="w-12 h-12" aria-hidden="true" />}
             title={`Couldn't load your ${COPY.wrap.name}`}
-            description={`Something went wrong loading your ${COPY.wrap.name}.`}
+            description={loadErrorMessage(error, `Something went wrong loading your ${COPY.wrap.name}.`)}
             cta={{ label: 'Try again', onClick: () => refetch() }}
           />
         </Card>
@@ -314,10 +315,6 @@ function RatingTag({ rating, compact = false }: { rating: number; compact?: bool
   );
 }
 
-interface CrewWrapResponse {
-  wrap: CrewWrapData;
-}
-
 // Crew wrap tab — fetches GET /ratings/crew-wrap/:crewId/:festivalId and renders
 // the shared recap, sharing the poster through the same sharePoster pipeline as the personal wrap.
 function CrewWrapTab({
@@ -343,9 +340,9 @@ function CrewWrapTab({
   const [sharing, setSharing] = useState(false);
   const [showMoney, setShowMoney] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery<CrewWrapResponse>({
+  const { data, isLoading, isError, error, refetch } = useQuery<CrewWrapResponse>({
     queryKey: ['crew-wrap', crewId, festivalId],
-    queryFn: async () => api.get<CrewWrapResponse>(`/ratings/crew-wrap/${crewId}/${festivalId}`),
+    queryFn: () => fetchCrewWrap(crewId!, festivalId),
     enabled: !!crewId,
   });
 
@@ -385,10 +382,10 @@ function CrewWrapTab({
   }
   if (isLoading) {
     return (
-      <div className="max-w-lg mx-auto pt-4 space-y-3">
+      <SkeletonGroup className="max-w-lg mx-auto pt-4 space-y-3">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
-      </div>
+      </SkeletonGroup>
     );
   }
   if (isError || !wrap) {
@@ -398,7 +395,7 @@ function CrewWrapTab({
           <EmptyState
             icon={<Users className="w-12 h-12" aria-hidden="true" />}
             title={`Couldn't load your ${COPY.wrap.crewName}`}
-            description={`Something went wrong loading the ${COPY.wrap.crewName}.`}
+            description={loadErrorMessage(error, `Something went wrong loading the ${COPY.wrap.crewName}.`)}
             cta={{ label: 'Try again', onClick: () => refetch() }}
           />
         </Card>

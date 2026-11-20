@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { renderWithQueryClient } from '../../test-utils';
+import { fetchLifetime } from '@festie/shared/services';
 import HistorySection from './HistorySection';
 
 const mocks = vi.hoisted(() => ({
@@ -26,7 +27,7 @@ vi.mock('@tanstack/react-router', () => ({
     </a>
   ),
 }));
-vi.mock('@festie/shared/services', () => ({ api: { get: vi.fn(async () => mocks.lifetime) } }));
+vi.mock('@festie/shared/services', () => ({ fetchLifetime: vi.fn(async () => mocks.lifetime) }));
 vi.mock('@festie/shared/stores', () => ({
   useAuthStore: (sel: (s: unknown) => unknown) => sel({ user: { id: 'u1' } }),
   useFestivalStore: (sel: (s: unknown) => unknown) =>
@@ -37,9 +38,18 @@ vi.mock('@festie/shared/utils', async (importOriginal) => ({
   festivalPhase: () => mocks.phase,
 }));
 vi.mock('../ui/EmptyState', () => ({
-  default: ({ title, cta }: { title: string; cta?: { label: string; onClick: () => void } }) => (
+  default: ({
+    title,
+    description,
+    cta,
+  }: {
+    title: string;
+    description?: string;
+    cta?: { label: string; onClick: () => void };
+  }) => (
     <div>
       <h3>{title}</h3>
+      {description && <p>{description}</p>}
       {cta && <button onClick={cta.onClick}>{cta.label}</button>}
     </div>
   ),
@@ -93,6 +103,14 @@ describe('HistorySection', () => {
     renderSection();
     await screen.findByText('No festival history yet');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('says the device is offline when the history fails to load on a network error', async () => {
+    vi.mocked(fetchLifetime).mockRejectedValueOnce(
+      Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true }),
+    );
+    renderSection();
+    expect(await screen.findByText("You're offline. Check your connection and try again.")).toBeInTheDocument();
   });
 
   describe('seen most', () => {

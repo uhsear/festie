@@ -12,15 +12,13 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@tanstack/react-router', () => ({ useSearch: () => mocks.search }));
-vi.mock('@festie/shared/services', () => ({
-  api: {
-    get: vi.fn(async () => {
-      if (mocks.fail) throw new Error('boom');
-      return JSON.parse(JSON.stringify(mocks.wrap));
-    }),
-  },
-  markCaught: mocks.markCaught,
-}));
+vi.mock('@festie/shared/services', () => {
+  const load = async () => {
+    if (mocks.fail) throw new Error('boom');
+    return JSON.parse(JSON.stringify(mocks.wrap));
+  };
+  return { api: { get: vi.fn(load) }, fetchWrap: vi.fn(load), markCaught: mocks.markCaught };
+});
 vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toastError: vi.fn() }) }));
 vi.mock('@festie/shared/stores', () => {
   const state = {

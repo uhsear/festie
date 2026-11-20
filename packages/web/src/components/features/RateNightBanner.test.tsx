@@ -22,7 +22,7 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 vi.mock('@festie/shared/services', () => ({
-  api: { get: vi.fn(async () => ({ planned: [], festival: { id: 'f1', days: [] } })) },
+  fetchWrap: vi.fn(async () => ({ planned: [], festival: { id: 'f1', days: [] } })),
 }));
 vi.mock('@festie/shared/stores', () => ({
   useAuthStore: (sel: (s: unknown) => unknown) => sel({ user: { id: 'u1' } }),

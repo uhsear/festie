@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { api } from '@festie/shared/services';
+import { fetchWrap } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { WrapResponse } from '@festie/shared/types';
 import { festivalPhase, selectSetsToRate } from '@festie/shared/utils';
@@ -15,7 +15,7 @@ export default function RateNightBanner() {
 
   const { data } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId],
-    queryFn: () => api.get<WrapResponse>(`/ratings/wrap/${festivalId}`),
+    queryFn: () => fetchWrap(festivalId!),
     enabled: !!festivalId && !!user && (phase === 'live' || phase === 'post'),
   });
 

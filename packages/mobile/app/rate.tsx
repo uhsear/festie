@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { api, markCaught } from '@festie/shared/services';
+import { fetchWrap, markCaught } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { formatTime, isWrapUnlocked, selectSetsToRate } from '@festie/shared/utils';
-import type { WrapFestival, WrapPlannedSet, WrapResponse } from '@festie/shared/types';
+import type { WrapFestival, WrapPlannedSet } from '@festie/shared/types';
 import EmptyState from '../components/EmptyState';
 import Button from '../components/Button';
 import RatingButtons from '../components/RatingButtons';
@@ -45,8 +45,7 @@ export default function RateScreen() {
   useEffect(() => {
     if (!festivalId) return;
     let cancelled = false;
-    api
-      .get<WrapResponse>(`/ratings/wrap/${festivalId}`)
+    fetchWrap(festivalId)
       .then((res) => {
         if (cancelled) return;
         setData({ festival: res.festival, sets: selectSetsToRate(res.planned, res.festival) });

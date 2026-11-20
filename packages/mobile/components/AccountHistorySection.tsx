@@ -3,47 +3,14 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
-import { api, mapErrorToUserMessage } from '@festie/shared/services';
+import { fetchLifetime, mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
+import type { LifetimeResponse } from '@festie/shared/types';
 import { festivalPhase, formatDateSpan } from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
-
-// Server shape from GET /ratings/lifetime (M3 cross-festival YoY history).
-interface LifetimeTotals {
-  totalRated: number;
-  avgRating: number | null;
-  festivalsAttended: number;
-  stagesVisited: number;
-  daysAttended: number;
-  totalHours: number | null;
-}
-interface FestivalRow {
-  festivalId: string;
-  festivalName: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  totalRated: number;
-  avgRating: number | null;
-  stagesVisited: number;
-  daysAttended: number;
-  totalHours: number | null;
-}
-interface TopArtist {
-  artist: string;
-  timesRated: number;
-  bestRating: number;
-  avgRating: number | null;
-}
-interface LifetimeResponse {
-  totals: LifetimeTotals;
-  byFestival: FestivalRow[];
-  topArtists: TopArtist[];
-  /** Absent on an older server. */
-  seenMost?: { artist: string; festivals: number }[];
-}
 
 interface AccountHistorySectionProps {
   /** Bumping this (from the screen's pull-to-refresh) re-fetches the history. */
@@ -81,8 +48,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
     // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: flip loading on before the async GET /ratings/lifetime; loading tracks the in-flight request, not render inputs.
     setLoading(true);
     setError(null);
-    api
-      .get<LifetimeResponse>('/ratings/lifetime')
+    fetchLifetime()
       .then((res) => {
         if (!cancelled) setData(res);
       })

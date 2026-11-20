@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
-import { api, markCaught } from '@festie/shared/services';
+import { api, fetchWrap, markCaught } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { FestivalDay, FestivalSet, Stage } from '@festie/shared/types';
 import type { WrapResponse } from '@festie/shared/types';
@@ -66,7 +66,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
 
   const { data, isLoading, isError, refetch } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId],
-    queryFn: () => api.get<WrapResponse>(`/ratings/wrap/${festivalId}`),
+    queryFn: () => fetchWrap(festivalId),
   });
 
   useEffect(

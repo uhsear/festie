@@ -42,3 +42,8 @@ export interface CrewWrapData {
   /** The crew's currency label (ISO 4217). Absent on old servers: treat as USD. */
   currency?: string;
 }
+
+/** Response envelope of GET /ratings/crew-wrap/:crewId/:festivalId. */
+export interface CrewWrapResponse {
+  wrap: CrewWrapData;
+}
