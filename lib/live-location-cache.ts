@@ -31,26 +31,18 @@
 
 import type { LocationPeerUpdatePayload } from './types/contracts.js';
 import { createLogger } from './logger.js';
+import { LIVE_LOCATION, LIVE_SHARE_MAX_MS } from '../packages/shared/src/constants/config.js';
 
 const log = createLogger('live-location-cache');
 
-/**
- * Whole-key TTL on the crew hash (PEXPIRE, refreshed on every write). Mirrors `LIVE_LOCATION.STALE_MS`
- * (120s) in @festie/shared — the same window after which the client sweeps a
- * peer from the map. The backend can't import the shared constant (different
- * package manager), so it is mirrored here; keep the two in sync.
- */
-export const POSITION_TTL_MS = 120_000;
+/** Whole-key TTL on the crew hash (PEXPIRE, refreshed on every write). */
+export const POSITION_TTL_MS = LIVE_LOCATION.STALE_MS;
 
-/** Default freshness window for what a snapshot returns (mirrors STALE_MS). */
+/** Default freshness window for what a snapshot returns. */
 const SNAPSHOT_FRESH_MS = POSITION_TTL_MS;
 
-/**
- * Longest share window a client may claim (12 h). Mirrors `LIVE_SHARE_MAX_MS`
- * in @festie/shared, mirrored for the same reason as POSITION_TTL_MS; keep the
- * two in sync.
- */
-export const MAX_SHARE_WINDOW_MS = 12 * 3_600_000;
+/** Longest share window a client may claim. */
+export const MAX_SHARE_WINDOW_MS = LIVE_SHARE_MAX_MS;
 
 /** capturedAt may not be more than this far in the past relative to server time. */
 const CAPTURED_AT_MAX_AGE_MS = 60_000;

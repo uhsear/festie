@@ -270,7 +270,7 @@ export const LIVE_LOCATION = {
  * festival ends" preset: sharing is foreground-only on mobile, so it cannot
  * honestly promise that. "Rest of today" is built per call by liveShareOptions.
  * LIVE_SHARE_MAX_MS caps every share, including background shares. The server
- * mirrors it as MAX_SHARE_WINDOW_MS.
+ * re-exports it as MAX_SHARE_WINDOW_MS.
  */
 export const LIVE_SHARE_MAX_MS = 12 * 3_600_000;
 
