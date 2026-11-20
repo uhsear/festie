@@ -349,6 +349,35 @@ describe('createRatingsStore.getLifetimeStats — SQL wiring', () => {
     assert.deepStrictEqual(result.seenMost, []);
   });
 
+  it('runs its queries one at a time on the checked-out client', async () => {
+    // pg warns (and pg 9 throws) when a client gets a query while one is still running.
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const client = {
+      query: async () => {
+        maxInFlight = Math.max(maxInFlight, ++inFlight);
+        await new Promise((resolve) => setImmediate(resolve));
+        inFlight--;
+        return { rows: [] };
+      },
+      release: () => {},
+    };
+    const warnings: string[] = [];
+    const onWarning = (w: Error) => warnings.push(w.message);
+    process.on('warning', onWarning);
+    try {
+      await createRatingsStore({ query: client.query, connect: async () => client } as any).getLifetimeStats('user-1');
+      await new Promise((resolve) => setImmediate(resolve));
+    } finally {
+      process.off('warning', onWarning);
+    }
+    assert.strictEqual(maxInFlight, 1);
+    assert.deepStrictEqual(
+      warnings.filter((m) => m.includes('client is already executing a query')),
+      [],
+    );
+  });
+
   it('handles a totally empty totals result set without throwing', async () => {
     const pool = mockPool([{ rows: [] }, { rows: [] }, { rows: [] }, { rows: [] }]);
     const store = createRatingsStore(pool);

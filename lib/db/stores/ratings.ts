@@ -246,14 +246,13 @@ export function createRatingsStore(pool: Pool) {
       // numbers sum to the lifetime total with no timezone drift.
       const HOURS_EXPR = `SUM(${SET_HOURS_EXPR})::float`;
 
-      // One client for all four queries: a History load holds one pool slot, not four.
+      // One client for all four queries, run in sequence: a History load holds one pool slot, not four.
       const client = await pool.connect();
       let totalsRes, byFestivalRes, topArtistsRes, seenMostRes;
       try {
-        [totalsRes, byFestivalRes, topArtistsRes, seenMostRes] = await Promise.all([
-          // Lifetime totals across every (non-deleted) festival the user rated in.
-          client.query(
-            `
+        // Lifetime totals across every (non-deleted) festival the user rated in.
+        totalsRes = await client.query(
+          `
           SELECT
             COUNT(*)::int AS "totalRated",
             ROUND(AVG(r.rating), 1)::float AS "avgRating",
@@ -266,13 +265,13 @@ export function createRatingsStore(pool: Pool) {
           JOIN festivals f ON f.id = s.festival_id AND f.deleted_at IS NULL
           WHERE r.user_id = $1
         `,
-            [userId],
-          ),
-          // Per-festival (per-year) breakdown, newest span first. Dates come from
-          // festival_days (the only date source); a festival with no days sorts
-          // last via NULLS LAST.
-          client.query(
-            `
+          [userId],
+        );
+        // Per-festival (per-year) breakdown, newest span first. Dates come from
+        // festival_days (the only date source); a festival with no days sorts
+        // last via NULLS LAST.
+        byFestivalRes = await client.query(
+          `
           SELECT
             f.id AS "festivalId",
             f.name AS "festivalName",
@@ -290,13 +289,13 @@ export function createRatingsStore(pool: Pool) {
           GROUP BY f.id, f.name
           ORDER BY "startDate" DESC NULLS LAST, f.name ASC
         `,
-            [userId],
-          ),
-          // Top artists across ALL festivals — by best rating, then how many times
-          // loved. Capped for display. A b2b set counts once per performer, and
-          // performers group by id (name when no id).
-          client.query(
-            `
+          [userId],
+        );
+        // Top artists across ALL festivals — by best rating, then how many times
+        // loved. Capped for display. A b2b set counts once per performer, and
+        // performers group by id (name when no id).
+        topArtistsRes = await client.query(
+          `
           WITH rated AS (
             SELECT n.key, n.name, r.rating
             FROM set_ratings r
@@ -315,20 +314,20 @@ export function createRatingsStore(pool: Pool) {
           ORDER BY "bestRating" DESC, "timesRated" DESC, MIN(name) ASC
           LIMIT 10
         `,
-            [userId],
-          ),
-          // Artists seen at 2+ festivals. Groups by lower-cased name, not id: the
-          // artist-id backfill is incomplete, so one performer can have an id at
-          // one festival and none at another, and an id/name split would drop them.
-          client.query(
-            `
+          [userId],
+        );
+        // Artists seen at 2+ festivals. Groups by lower-cased name, not id: the
+        // artist-id backfill is incomplete, so one performer can have an id at
+        // one festival and none at another, and an id/name split would drop them.
+        seenMostRes = await client.query(
+          `
           WITH seen AS (
             SELECT c.set_id FROM set_caught c WHERE c.user_id = $1 AND c.caught
             UNION
             SELECT r.set_id FROM set_ratings r
             WHERE r.user_id = $1
               AND NOT EXISTS (SELECT 1 FROM set_caught c2 WHERE c2.user_id = $1 AND c2.set_id = r.set_id AND NOT c2.caught)
-          ),
+        );
           names AS (
             SELECT s.festival_id, n.key, n.name
             FROM seen
@@ -343,9 +342,8 @@ export function createRatingsStore(pool: Pool) {
           ORDER BY "festivals" DESC, MIN(name) ASC
           LIMIT 10
         `,
-            [userId],
-          ),
-        ]);
+          [userId],
+        );
       } finally {
         client.release();
       }
