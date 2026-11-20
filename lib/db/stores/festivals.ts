@@ -2,6 +2,7 @@ import type { Pool } from 'pg';
 import { withTransaction, withTransactionRetry } from '../connection';
 import { planMoveMarks } from '../../set-moves';
 import { cleanLineupLinks } from '../../lineup';
+import { lockFestivalAny } from './festival-lock';
 
 /** The save found the festival changed, or gone, since the form loaded: the route answers 409 FESTIVAL_CHANGED. */
 export class FestivalChangedError extends Error {
@@ -773,6 +774,167 @@ export default function createFestivalsStore(pool: Pool, utils: any) {
         );
         return result.rows[0] || null;
       });
+    },
+
+    /** True when the festival exists and is not soft-deleted. */
+    async exists(festivalId: string): Promise<boolean> {
+      const result = await pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
+      return result.rows.length > 0;
+    },
+
+    /** Rows in picks or ratings on these sets. `table` is one of two fixed names, never user input. */
+    async countOnSets(table: 'festival_profile_picks' | 'set_ratings', setIds: string[]): Promise<number> {
+      if (setIds.length === 0) return 0;
+      const result = await pool.query(`SELECT COUNT(*) AS count FROM ${table} WHERE set_id = ANY($1)`, [setIds]);
+      return Number.parseInt(result.rows[0]?.count ?? '0', 10) || 0;
+    },
+
+    /** The festival a set belongs to. A draft festival shows only when `includeDrafts` is true. */
+    async locateSet(setId: string, includeDrafts: boolean): Promise<{ festivalId: string; published: boolean } | null> {
+      const result = await pool.query(
+        `SELECT fs.festival_id, (f.published_at IS NOT NULL) AS published FROM festival_sets fs JOIN festivals f ON f.id = fs.festival_id
+         WHERE fs.id = $1 AND f.deleted_at IS NULL AND (f.published_at IS NOT NULL OR $2::boolean) LIMIT 1`,
+        [setId, includeDrafts],
+      );
+      const row = result.rows[0];
+      return row ? { festivalId: row.festival_id, published: row.published } : null;
+    },
+
+    /** The artists array of a set whose festival is not soft-deleted, or null when there is no such set. */
+    async getSetArtists(setId: string): Promise<{ id: string; artists: any[] | null } | null> {
+      const result = await pool.query(
+        `
+  SELECT
+    fs.id,
+    fs.artists
+  FROM
+    festival_sets fs
+    JOIN festivals f ON fs.festival_id = f.id
+    AND f.deleted_at IS NULL
+  WHERE
+    fs.id = $1
+`,
+        [setId],
+      );
+      return result.rows[0] ?? null;
+    },
+
+    /** Coordinates of a published, live festival, or null. */
+    async getPublishedCoordinates(festivalId: string) {
+      const result = await pool.query(
+        'SELECT latitude, longitude, name FROM festivals WHERE id = $1 AND deleted_at IS NULL AND published_at IS NOT NULL',
+        [festivalId],
+      );
+      return result.rows[0] ?? null;
+    },
+
+    /** Sets of a festival that hold a link or an artists array, for the admin link list. */
+    async listSetLinks(festivalId: string) {
+      const result = await pool.query(
+        'SELECT id, artist, link_url AS "linkUrl", artists FROM festival_sets WHERE festival_id = $1 AND (link_url IS NOT NULL OR artists != \'[]\'::jsonb) ORDER BY artist',
+        [festivalId],
+      );
+      return result.rows;
+    },
+
+    /**
+     * Set or clear the Spotify link of one artist on a set, under the festival lock. An artist that has a
+     * row owns its link, so the result names it and writes nothing.
+     */
+    async setSpotifyLink(
+      festivalId: string,
+      setId: string,
+      artistIndex: number,
+      cleanUrl: string | null,
+    ): Promise<{ missing?: string; badIndex?: boolean; artistId?: string }> {
+      return withTransactionRetry(pool, async (client: any) => {
+        const locked = await lockFestivalAny(client, festivalId);
+        if (!locked || locked.deleted_at) return { missing: 'Festival not found' };
+        const { rows } = await client.query(
+          'SELECT artist, artists FROM festival_sets WHERE id = $1 AND festival_id = $2 FOR UPDATE',
+          [setId, festivalId],
+        );
+        if (!rows[0]) return { missing: 'Set not found' };
+        // A set saved before the artists array existed has only its display name.
+        const artists: any[] = rows[0].artists?.length
+          ? rows[0].artists.map((a: any) => ({ ...a, links: { ...(a?.links || {}) } }))
+          : [{ name: rows[0].artist, links: {} }];
+        if (artistIndex >= artists.length) return { badIndex: true };
+        const artistId = artists[artistIndex].id;
+        // An artist that has a row owns its link: the caller writes the row, which rewrites every copy.
+        if (artistId && (await client.query('SELECT 1 FROM artists WHERE id = $1 AND merged_into IS NULL', [artistId])).rowCount) {
+          return { artistId };
+        }
+        if (cleanUrl) artists[artistIndex].links.spotify = cleanUrl;
+        else delete artists[artistIndex].links.spotify;
+        // link_url mirrors the first artist's Spotify link (backward compat).
+        const firstLink = artists[0].links.spotify || null;
+        await client.query('UPDATE festival_sets SET artists = $1, link_url = $2 WHERE id = $3 AND festival_id = $4', [
+          JSON.stringify(artists),
+          firstLink,
+          setId,
+          festivalId,
+        ]);
+        await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
+        return {};
+      });
+    },
+
+    /** Sets that have no link, or a B2B set where only some artists are linked; optionally limited to `setIds`. */
+    async findSetsMissingSpotify(festivalId: string, setIds?: string[]) {
+      const setFilter = setIds ? ' AND id = ANY($2::text[])' : '';
+      // link_url holds the first linked artist, so it alone hides the others.
+      const missingLink = `(link_url IS NULL OR link_url = '' OR EXISTS (
+          SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(artists) = 'array' THEN artists ELSE '[]'::jsonb END) a
+          WHERE COALESCE(a->'links'->>'spotify', '') = ''))`;
+      const { rows } = await pool.query(
+        `SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1 AND ${missingLink}${setFilter}`,
+        setIds ? [festivalId, setIds] : [festivalId],
+      );
+      return rows;
+    },
+
+    /**
+     * Run `fn` in a transaction that holds the festival lock, soft-deleted festivals included.
+     * Returns `missing` when the festival is gone or soft-deleted, without calling `fn`.
+     */
+    async inLockedTransaction<T>(
+      festivalId: string,
+      fn: (client: any) => Promise<T>,
+    ): Promise<{ missing: true } | { missing: false; value: T }> {
+      return withTransactionRetry(pool, async (client: any) => {
+        const locked = await lockFestivalAny(client, festivalId);
+        if (!locked || locked.deleted_at) return { missing: true };
+        return { missing: false, value: await fn(client) };
+      });
+    },
+
+    /** Lock the named sets of a festival and return their current artists. Call inside inLockedTransaction. */
+    async lockSetArtists(client: any, festivalId: string, setIds: string[]) {
+      const { rows } = await client.query(
+        'SELECT id, artists FROM festival_sets WHERE festival_id = $1 AND id = ANY($2::text[]) FOR UPDATE',
+        [festivalId, setIds],
+      );
+      return rows;
+    },
+
+    /** Lock artist rows in id order, so two writers never lock them in opposite orders. */
+    async lockArtistRows(client: any, artistIds: string[]) {
+      await client.query('SELECT id FROM artists WHERE id = ANY($1::text[]) ORDER BY id FOR UPDATE', [artistIds]);
+    },
+
+    /** Write a set's artists. A null `firstSpotify` keeps the stored link_url. */
+    async writeSetArtists(client: any, setId: string, artists: any[], firstSpotify: string | null) {
+      await client.query('UPDATE festival_sets SET artists = $1, link_url = COALESCE($2, link_url) WHERE id = $3', [
+        JSON.stringify(artists),
+        firstSpotify,
+        setId,
+      ]);
+    },
+
+    /** Bump the festival timestamps so the list and detail caches, keyed on updated_at, invalidate. */
+    async touch(client: any, festivalId: string) {
+      await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
     },
   };
 

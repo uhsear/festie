@@ -35,17 +35,12 @@ import * as spotify from '../lib/spotify.js';
 import { sanitizeLinkRecord, spotifyBackfillSchema } from '../lib/schemas.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
-import { withTransactionRetry } from '../lib/db/connection.js';
-import { lockFestivalAny } from '../lib/db/stores/festival-lock.js';
 import { rewriteCopies, type ArtistRecord } from '../lib/db/stores/artists.js';
 import { recentRequestTotals } from '../lib/recent-requests.js';
 import type { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { RouteDeps } from '../lib/types';
 import type { Query } from '../lib/types/app-context';
-
-// Re-engagement news types the growth report counts. Add a type here when it joins the news set.
-const GROWTH_NEWS_TYPES = ['lineup_drop', 'set_times_out', 'days_out'];
 
 export default function createAdminRoutes(deps: RouteDeps): Router {
   const {
@@ -218,27 +213,11 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
   mountAdminBulkRoutes({ router, deps, ctx }); // /bulk/*, /crews*
   mountAdminPolicyNoticeRoutes({ router, deps, ctx }); // /policy-notice
 
-  const REF_COUNTS_SQL = `
-  SELECT
-    to_char(day, 'YYYY-MM-DD') AS day,
-    ref,
-    signups
-  FROM
-    signup_ref_counts
-  WHERE
-    day > CURRENT_DATE - $1::int
-  ORDER BY
-    day DESC,
-    signups DESC,
-    ref ASC
-`;
-
   // ── GET /ref-counts — anonymous sign-ups per ?ref= source (migration 070) ──
   router.get('/ref-counts', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const { rows } = await stores.pool.query(REF_COUNTS_SQL, [(req.validatedQuery as Query).days]);
-      return sendSuccess(res, rows);
+      return sendSuccess(res, await stores.analytics.refCounts((req.validatedQuery as Query).days));
     } catch (error) {
       log.error('admin ref counts failed', { error: (error as NodeJS.ErrnoException).message });
       return sendError(res, 500, 'Failed to load sign-up ref counts', ErrorCodes.INTERNAL_ERROR);
@@ -250,68 +229,14 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
   router.get('/growth', adminAuth, validateQuery(schemas.adminRefCountsQuery), async (req: Request, res: Response) => {
     try {
       setNoStore(res);
-      const days = [(req.validatedQuery as Query).days];
-      const dayOf = (column: string) => `to_char(${column}::date, 'YYYY-MM-DD')`;
-      const [signups, followsPerDay, followers, news] = await Promise.all([
-        stores.pool.query(REF_COUNTS_SQL, days),
-        stores.pool.query(
-          `SELECT ${dayOf('ff.created_at')} AS day, ff.festival_id AS "festivalId", f.name AS "festivalName", COUNT(*)::int AS follows
-           FROM festival_follows ff JOIN festivals f ON f.id = ff.festival_id
-           WHERE ff.created_at >= CURRENT_DATE - ($1::int - 1)
-           GROUP BY 1, 2, 3 ORDER BY 1 DESC, 4 DESC, 3 ASC`,
-          days,
-        ),
-        stores.pool.query(
-          `
-  SELECT
-    ff.festival_id AS "festivalId",
-    f.name AS "festivalName",
-    COUNT(*)::int AS followers
-  FROM
-    festival_follows ff
-    JOIN festivals f ON f.id = ff.festival_id
-  GROUP BY
-    1,
-    2
-  ORDER BY
-    3 DESC,
-    2 ASC
-`,
-        ),
-        // People, not rows: send.ts logs one row per device and reengagement.ts one per email.
-        stores.pool.query(
-          `
-  SELECT
-    type,
-    CASE
-      WHEN status = 'held' THEN 'held'
-      WHEN platform = 'email' THEN 'email'
-      ELSE 'push'
-    END AS channel,
-    COUNT(DISTINCT user_id)::int AS count
-  FROM
-    notification_log
-  WHERE
-    type = ANY ($2::text[])
-    AND status IN ('sent', 'held')
-    AND created_at >= CURRENT_DATE - ($1::int - 1)
-  GROUP BY
-    1,
-    2
-  ORDER BY
-    1 ASC,
-    2 ASC
-`,
-          [...days, GROWTH_NEWS_TYPES],
-        ),
-      ]);
+      const growth = await stores.analytics.growth((req.validatedQuery as Query).days);
       const newsBy = (channel: string) =>
-        news.rows.filter((row: any) => row.channel === channel).map(({ type, count }: any) => ({ type, count }));
+        growth.news.filter((row: any) => row.channel === channel).map(({ type, count }: any) => ({ type, count }));
       return sendSuccess(res, {
         days: (req.validatedQuery as Query).days,
-        signupsByRef: signups.rows,
-        followsPerDay: followsPerDay.rows,
-        followers: followers.rows,
+        signupsByRef: growth.signups,
+        followsPerDay: growth.followsPerDay,
+        followers: growth.followers,
         newsPushes: newsBy('push'),
         newsEmails: newsBy('email'),
         newsHeld: newsBy('held'),
@@ -341,10 +266,7 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
       }
 
       const festivalId = req.params.id as string;
-      const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [
-        festivalId,
-      ]);
-      if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      if (!(await stores.festivals.exists(festivalId))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
       // Optional body: verified overrides (artistName -> spotifyUrl) take
       // precedence over search. A guess never replaces a link, and never touches an artist that
@@ -374,16 +296,7 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
           .map((s) => s.trim())
           .filter(Boolean);
 
-      const setFilter = setIds ? ' AND id = ANY($2::text[])' : '';
-      // Also pick a B2B set where only some artists are linked:
-      // link_url holds the first linked artist, so it alone hides the others.
-      const missingLink = `(link_url IS NULL OR link_url = '' OR EXISTS (
-          SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(artists) = 'array' THEN artists ELSE '[]'::jsonb END) a
-          WHERE COALESCE(a->'links'->>'spotify', '') = ''))`;
-      const { rows: sets } = await stores.pool.query(
-        `SELECT id, artist, artists FROM festival_sets WHERE festival_id = $1 AND ${missingLink}${setFilter}`,
-        setIds ? [festivalId, setIds] : [festivalId],
-      );
+      const sets = await stores.festivals.findSetsMissingSpotify(festivalId, setIds);
       if (sets.length === 0) {
         return sendSuccess(res, { updated: 0, skipped: 0, total: 0, unmatched: [], message: 'No sets to backfill' });
       }
@@ -469,20 +382,15 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
       // changed since it was read is left for the next run.
       let updated = 0;
       if (writes.length > 0) {
-        updated = await withTransactionRetry(stores.pool, async (client: any) => {
-          const locked = await lockFestivalAny(client, festivalId);
-          if (!locked || locked.deleted_at) return 0;
-          const { rows: current } = await client.query(
-            'SELECT id, artists FROM festival_sets WHERE festival_id = $1 AND id = ANY($2::text[]) FOR UPDATE',
-            [festivalId, writes.map((w) => w.id)],
-          );
+        const outcome = await stores.festivals.inLockedTransaction(festivalId, async (client: any) => {
+          const current = await stores.festivals.lockSetArtists(client, festivalId, writes.map((w) => w.id));
           const unchanged = new Set(
             current.filter((row: any) => JSON.stringify(row.artists ?? []) === writes.find((w) => w.id === row.id)?.before).map((row: any) => row.id),
           );
           const fillIds = [
             ...new Set(writes.filter((w) => unchanged.has(w.id)).flatMap((w) => w.artists.filter((e) => fills.has(e)).map((e) => e.id as string))),
           ].sort();
-          if (fillIds.length > 0) await client.query('SELECT id FROM artists WHERE id = ANY($1::text[]) ORDER BY id FOR UPDATE', [fillIds]);
+          if (fillIds.length > 0) await stores.festivals.lockArtistRows(client, fillIds);
           // Under the festival and artist locks no save can add an artist to another festival unseen, so
           // this is the check that counts. A shared artist keeps the copy the set already holds.
           const sharedNow = await stores.artists.sharedElsewhere(festivalId, fillIds, client);
@@ -509,19 +417,16 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
               if (filled.changed) refreshed.push(filled.artist);
             }
             const firstSpotify = write.artists.find((x) => x.links?.spotify)?.links.spotify || null;
-            await client.query('UPDATE festival_sets SET artists = $1, link_url = COALESCE($2, link_url) WHERE id = $3', [
-              JSON.stringify(write.artists),
-              firstSpotify,
-              write.id,
-            ]);
+            await stores.festivals.writeSetArtists(client, write.id, write.artists, firstSpotify);
             written++;
           }
           // The row is the truth: the artist's copy in the announced lineup and in sets this run left out follows it.
           for (const artist of refreshed) await rewriteCopies(client, [festivalId], artist);
           // Bump the festival timestamp so the list/detail cache (keyed on updated_at) invalidates.
-          if (written > 0) await client.query('UPDATE festivals SET updated_at = NOW(), edited_at = NOW() WHERE id = $1', [festivalId]);
+          if (written > 0) await stores.festivals.touch(client, festivalId);
           return written;
         });
+        updated = outcome.missing ? 0 : outcome.value;
       }
       if (_invalidateFestivalCache) _invalidateFestivalCache();
       const unmatchedList = [...unmatched]
@@ -569,42 +474,13 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
     try {
       setNoStore(res);
       const festivalId = req.params.id;
-      const festival = await stores.pool.query('SELECT id FROM festivals WHERE id = $1 AND deleted_at IS NULL', [
-        festivalId,
-      ]);
-      if (festival.rows.length === 0) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      if (!(await stores.festivals.exists(festivalId as string))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
 
-      const [picks, reminders] = await Promise.all([
-        stores.pool.query(
-          `
-  SELECT
-    fpp.set_id AS "setId",
-    COUNT(*)::int AS picks
-  FROM
-    festival_profile_picks fpp
-    JOIN festival_profiles fp ON fp.id = fpp.profile_id
-  WHERE
-    fp.festival_id = $1
-    AND fp.deleted_at IS NULL
-  GROUP BY
-    fpp.set_id
-`,
-          [festivalId],
-        ),
-        stores.pool.query(
-          `SELECT k AS "setId", COUNT(*)::int AS reminders
-           FROM festival_profiles fp,
-                jsonb_object_keys(fp.reminders_json) AS k
-           WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL
-             AND jsonb_typeof(fp.reminders_json) = 'object'
-           GROUP BY k`,
-          [festivalId],
-        ),
-      ]);
+      const { picks, reminders } = await stores.analytics.setEngagement(festivalId as string);
       // A Map, because reminder keys come from user data and could be "__proto__".
       const engagement = new Map<string, { picks: number; reminders: number }>();
-      for (const row of picks.rows) engagement.set(row.setId, { picks: row.picks, reminders: 0 });
-      for (const row of reminders.rows) {
+      for (const row of picks) engagement.set(row.setId, { picks: row.picks, reminders: 0 });
+      for (const row of reminders) {
         engagement.set(row.setId, { picks: engagement.get(row.setId)?.picks ?? 0, reminders: row.reminders });
       }
       return sendSuccess(res, Object.fromEntries(engagement));
