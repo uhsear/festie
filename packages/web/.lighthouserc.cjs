@@ -32,7 +32,7 @@ module.exports = {
         'http://localhost/login',
         'http://localhost/register',
         'http://localhost/forgot-password',
-        'http://localhost/reset-password',
+        'http://localhost/reset-password?token=lhci',
       ],
       numberOfRuns: 3,
       settings: {
