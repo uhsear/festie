@@ -68,6 +68,7 @@ export function createSessionHelpers({
   disconnectSocket,
   emitPresence,
   disconnectUserSockets,
+  fetchRevocationSockets,
   sendError,
   ErrorCodes,
 }: {
@@ -78,6 +79,7 @@ export function createSessionHelpers({
   disconnectSocket: any;
   emitPresence: any;
   disconnectUserSockets: any;
+  fetchRevocationSockets: any;
   sendError: any;
   ErrorCodes: any;
 }) {
@@ -97,7 +99,7 @@ export function createSessionHelpers({
     if (evictedHashes && evictedHashes.length > 0 && io) {
       const hashSet = new Set(evictedHashes);
       const presenceTargets = new Set<any>();
-      for (const socket of io.of('/').sockets.values()) {
+      for (const socket of await fetchRevocationSockets(io)) {
         if (!socket.data?.userSessionToken) continue;
         if (hashSet.has(hashSessionToken(socket.data.userSessionToken))) {
           disconnectSocket(socket, io, presenceTargets);
@@ -116,7 +118,7 @@ export function createSessionHelpers({
   async function invalidateUserSessions(userId: any, exceptToken: any = null) {
     await stores.sessions.deleteUserSessions(userId, exceptToken ? hashSessionToken(exceptToken) : null);
     const io = getIO();
-    if (io) disconnectUserSockets(userId, io, exceptToken);
+    if (io) await disconnectUserSockets(userId, io, exceptToken);
   }
 
   async function resolveUserRequestSession(req: any) {

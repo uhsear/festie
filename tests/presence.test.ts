@@ -433,7 +433,7 @@ describe('presence: disconnectUserSockets', () => {
     await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
     await pm.setSocketPresence('fest-2', 'user-1', 'alice', 'sock-2');
 
-    pm.disconnectUserSockets('user-1', io);
+    await pm.disconnectUserSockets('user-1', io);
 
     assert.equal(s1.disconnect.mock.callCount(), 1);
     assert.equal(s2.disconnect.mock.callCount(), 1);
@@ -441,15 +441,42 @@ describe('presence: disconnectUserSockets', () => {
   });
 });
 
+describe('presence: revocation across the adapter', () => {
+  it('disconnects sockets that only fetchSockets() returns', async () => {
+    const pm = createPresenceManager(defaultDeps());
+    const remote = makeSocket({ id: 'remote-1', userId: 'user-1' });
+    const io: any = makeIo();
+    io.of = mock.fn(() => ({ sockets: new Map(), fetchSockets: async () => [remote] }));
+
+    await pm.disconnectUserSockets('user-1', io);
+
+    assert.equal(remote.disconnect.mock.callCount(), 1);
+  });
+
+  it('falls back to local sockets when fetchSockets fails', async () => {
+    const pm = createPresenceManager(defaultDeps());
+    const local = makeSocket({ id: 'local-1', userId: 'user-1' });
+    const io: any = makeIo([local]);
+    io.of = mock.fn(() => ({
+      sockets: new Map([[local.id, local]]),
+      fetchSockets: async () => { throw new Error('redis down'); },
+    }));
+
+    await pm.disconnectUserSockets('user-1', io);
+
+    assert.equal(local.disconnect.mock.callCount(), 1);
+  });
+});
+
 describe('presence: disconnectUserSockets exceptToken', () => {
-  it('spares the socket holding the excepted session token', () => {
+  it('spares the socket holding the excepted session token', async () => {
     const pm = createPresenceManager(defaultDeps());
     const keep = makeSocket({ id: 'sock-1', userId: 'user-1', festivalId: 'fest-1' });
     const drop = makeSocket({ id: 'sock-2', userId: 'user-1', festivalId: 'fest-1' });
     keep.data.userSessionToken = 'keep-token';
     drop.data.userSessionToken = 'other-token';
 
-    pm.disconnectUserSockets('user-1', makeIo([keep, drop]), 'keep-token');
+    await pm.disconnectUserSockets('user-1', makeIo([keep, drop]), 'keep-token');
 
     assert.equal(keep.disconnect.mock.callCount(), 0);
     assert.equal(drop.disconnect.mock.callCount(), 1);
@@ -465,31 +492,31 @@ describe('presence: disconnectSessionTokens', () => {
     const s2 = makeSocket({ id: 'sock-2', userId: 'user-1', userSessionToken: 'tok-b', festivalId: 'fest-1' });
     const io = makeIo([s1, s2]);
 
-    pm.disconnectSessionTokens(['tok-a'], io);
+    await pm.disconnectSessionTokens(['tok-a'], io);
 
     assert.equal(s1.disconnect.mock.callCount(), 1);
     assert.equal(s2.disconnect.mock.callCount(), 0);
   });
 
-  it('no-ops when tokens array is empty', () => {
+  it('no-ops when tokens array is empty', async () => {
     const deps = defaultDeps();
     const pm = createPresenceManager(deps);
 
     const s1 = makeSocket({ id: 'sock-1', userSessionToken: 'tok-a' });
     const io = makeIo([s1]);
 
-    pm.disconnectSessionTokens([], io);
+    await pm.disconnectSessionTokens([], io);
     assert.equal(s1.disconnect.mock.callCount(), 0);
   });
 
-  it('no-ops when tokens is null', () => {
+  it('no-ops when tokens is null', async () => {
     const deps = defaultDeps();
     const pm = createPresenceManager(deps);
 
     const s1 = makeSocket({ id: 'sock-1', userSessionToken: 'tok-a' });
     const io = makeIo([s1]);
 
-    pm.disconnectSessionTokens(null, io);
+    await pm.disconnectSessionTokens(null, io);
     assert.equal(s1.disconnect.mock.callCount(), 0);
   });
 });
@@ -507,7 +534,7 @@ describe('presence: removeFestivalSockets', () => {
     await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
     await pm.setSocketPresence('fest-1', 'user-2', 'bob', 'sock-2');
 
-    pm.removeFestivalSockets('fest-1', io);
+    await pm.removeFestivalSockets('fest-1', io);
 
     // Both fest-1 sockets should have received the revoked event
     assert.equal(s1.emit.mock.callCount(), 1);
@@ -526,7 +553,7 @@ describe('presence: removeFestivalSockets', () => {
     const pm = createPresenceManager(deps);
 
     const io = makeIo([]);
-    pm.removeFestivalSockets('fest-1', io);
+    await pm.removeFestivalSockets('fest-1', io);
 
     assert.equal(redis.del.mock.callCount(), 1);
     assert.deepEqual(redis.del.mock.calls[0]!.arguments, ['presence:fest-1']);
@@ -544,21 +571,21 @@ describe('presence: removeProfileSockets', () => {
 
     await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
 
-    pm.removeProfileSockets({ userId: 'user-1', festivalId: 'fest-1', id: 'prof-1' }, io);
+    await pm.removeProfileSockets({ userId: 'user-1', festivalId: 'fest-1', id: 'prof-1' }, io);
 
     assert.equal(s1.emit.mock.callCount(), 1);
     assert.deepEqual(s1.emit.mock.calls[0].arguments[0], 'festival:access-revoked');
     assert.equal(s2.emit.mock.callCount(), 0, 'other festival socket should not be affected');
   });
 
-  it('no-ops when profile is null', () => {
+  it('no-ops when profile is null', async () => {
     const deps = defaultDeps();
     const pm = createPresenceManager(deps);
     const io = makeIo([]);
 
     // Should not throw
-    pm.removeProfileSockets(null, io);
-    pm.removeProfileSockets({}, io);
+    await pm.removeProfileSockets(null, io);
+    await pm.removeProfileSockets({}, io);
   });
 });
 

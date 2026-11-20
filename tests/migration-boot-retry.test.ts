@@ -126,3 +126,41 @@ describe('migration statement_timeout', () => {
     assert.equal(events[events.length - 1], 'release');
   });
 });
+
+describe('openPlannerDatabase migration gating', () => {
+  const withEnv = async (nodeEnv: string, run: () => Promise<void>) => {
+    const previousEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = nodeEnv;
+    __resetMigrationCacheForTests();
+    try {
+      await run();
+    } finally {
+      if (previousEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousEnv;
+      __resetMigrationCacheForTests();
+    }
+  };
+
+  test('skips the runner for a database whose name ends in _test', async () => {
+    await withEnv('production', async () => {
+      const { pool, migrationsReady } = openPlannerDatabase({ databaseUrl: 'postgresql://u:p@127.0.0.1:1/gate_test' });
+      assert.deepEqual(await migrationsReady, { applied: [], current: 0, gap: [] });
+      await pool.end();
+    });
+  });
+
+  test('forgets a failed run so the next open retries the migrations', async () => {
+    await withEnv('production', async () => {
+      const databaseUrl = 'postgresql://u:p@127.0.0.1:1/gate_probe';
+      const first = openPlannerDatabase({ databaseUrl });
+      assert.equal(openPlannerDatabase({ databaseUrl }).migrationsReady, first.migrationsReady);
+      // A closed pool fails the run with a non-retryable error.
+      await first.pool.end();
+      await assert.rejects(first.migrationsReady as Promise<unknown>);
+      const second = openPlannerDatabase({ databaseUrl });
+      assert.notEqual(second.migrationsReady, first.migrationsReady);
+      await second.pool.end();
+      await assert.rejects(second.migrationsReady as Promise<unknown>);
+    });
+  });
+});

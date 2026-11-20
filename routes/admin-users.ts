@@ -386,7 +386,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         // Revoke long-lived refresh tokens so a held token chain cannot
         // mint new sessions after the admin password reset (H2).
         if (stores.refreshTokens) await stores.refreshTokens.revokeAll(targetUserId);
-        disconnectUserSockets(targetUserId, io);
+        await disconnectUserSockets(targetUserId, io);
         const auditLog = createAuditLog('admin_reset_password', 'admin', {
           targetUserId,
           targetUsername: username,
@@ -447,14 +447,14 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
 
         await removeAvatarFile(removedUser.avatarKey).catch(() => {});
         for (const profile of removedProfiles || []) {
-          removeProfileSockets(profile, io);
+          await removeProfileSockets(profile, io);
           io.to(profile.festivalId).emit('profile:deleted', { festivalId: profile.festivalId, profileId: profile.id });
         }
         await invalidateUserSessions(targetUserId);
         // Revoke long-lived refresh tokens so a held token chain cannot
         // mint new sessions after the account is deleted (H2).
         if (stores.refreshTokens) await stores.refreshTokens.revokeAll(targetUserId);
-        disconnectUserSockets(targetUserId, io);
+        await disconnectUserSockets(targetUserId, io);
         return sendSuccess(res, { success: true });
       } catch (error: any) {
         log.error('admin delete-user failed', { error: error.message, targetUserId: req.validatedParams?.id });
