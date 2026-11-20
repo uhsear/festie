@@ -150,7 +150,8 @@ import createHealthRoutes from './routes/health';
 import createSocketHandlers from './routes/socket';
 import createDeepLinkRoutes from './routes/deep-links';
 
-import type { Request, Response, NextFunction } from 'express';
+import type { Express, Request, Response, NextFunction } from 'express';
+import type { AppContext, RouteDeps } from './lib/types/app-context';
 
 const metrics = createMetrics();
 const workerId =
@@ -162,41 +163,15 @@ const workerId =
 
 const log = createLogger();
 
-async function createFestieApp(overrides: any = {}) {
-  // 1. Create application context (config, DB, Redis, state, all utility functions)
-  const ctx = await createAppContext({ ...overrides, promMetrics: metrics });
-  const { config, state, pool, redis, cacheBus, avatarPool } = ctx;
+type SocketSetup = ReturnType<typeof configureSocketIO>;
 
-  // Re-run startup validation against the fully-resolved app-context config
-  // (overrides from tests/harness may have changed what the boot-time check saw).
-  validateStartupConfig(config);
-
-  // 2. Create Express app + configure all middleware
-  const app = express();
-  app.use(metricsMiddleware(metrics));
-  app.get('/metrics', metricsHandler(metrics));
-  const { inFlightRequests } = configureMiddleware(app, ctx);
-
-  // 3. Build deps object for route modules
-  const deps: any = {
-    express,
-    ...ctx,
-    io: null, // Set after Socket.IO creation
-    metrics: state.metrics,
-    promMetrics: metrics,
-  };
-
-  // 4. Create HTTP server + Socket.IO
-  const { server, io, emitter, notificationService } = configureSocketIO(app, ctx);
-  ctx.setIO(io);
-  deps.io = io;
-  deps.redis = redis;
-  deps.redisCircuitBreaker = ctx.redisCircuitBreaker;
-  deps.redisPresence = ctx.redisPresence;
-  deps.redisRateLimiter = ctx.redisRateLimiter;
-  deps.setSocketPresence = ctx.setSocketPresence;
-  deps.cacheBus = cacheBus;
-  deps.notificationService = notificationService;
+/**
+ * Builds the services that sit on top of Socket.IO (re-engagement, reminders, crew
+ * notifications, poll closing, check-ins, announcements) and registers each one on
+ * `ctx` (read by background tasks and shutdown) and on `deps` (read by route modules).
+ */
+function wireServices(ctx: AppContext, deps: RouteDeps, { io, emitter, notificationService }: SocketSetup) {
+  const { config, pool, redis } = ctx;
 
   // M3 re-engagement triggers (event-gated push+email): lineup_drop / crew_reformed / wrap_ready.
   // The executor does the real fan-out (deduped, opt-out/DND-respecting). When Redis
@@ -271,7 +246,11 @@ async function createFestieApp(overrides: any = {}) {
   // Venue geocoding (OpenStreetMap Nominatim). Off under test so suites make no network calls.
   if (config.NODE_ENV !== 'test') deps.geocodeVenue = createVenueGeocoder({ log }).geocodeVenue;
 
-  // 5. Mount route modules
+  return { crewNotify, reengagementQueue };
+}
+
+/** Constructs every route module from `deps` and mounts it on the app. Returns the health readiness setter. */
+function mountRoutes(app: Express, ctx: AppContext, deps: RouteDeps) {
   const authRoutes = createAuthRoutes(deps);
   const emailAuthRoutes = createEmailAuthRoutes(deps);
   const oauthRoutes = createOAuthRoutes(deps);
@@ -346,8 +325,20 @@ async function createFestieApp(overrides: any = {}) {
   // Page routes (join, reset, static pages, SPA catch-all)
   app.use(createPageRoutes(deps));
 
-  // 6. Error handler with deduplication
-  const _errorFingerprints = new Map<string, any>();
+  return { setHealthReady };
+}
+
+interface ErrorFingerprint {
+  count: number;
+  firstSeen: number;
+  message: string;
+  path: string;
+}
+
+/** Installs the Sentry handler and the final Express error handler, with 5xx log deduplication. */
+function installErrorHandling(app: Express, ctx: AppContext) {
+  const { config, state } = ctx;
+  const _errorFingerprints = new Map<string, ErrorFingerprint>();
   const ERROR_DEDUP_WINDOW = config.ERROR_DEDUP_WINDOW;
   const ERROR_DEDUP_MAX = config.ERROR_DEDUP_MAX;
   const _errorDedupCleanup = setInterval(() => {
@@ -442,8 +433,11 @@ async function createFestieApp(overrides: any = {}) {
     ctx.sendError(res, status, message, code, details);
   }) as any);
 
-  // 7. Mount socket handlers
-  createSocketHandlers(deps);
+}
+
+/** Boot-time DB housekeeping: expired-token purge and venue coordinate backfill (leader instance only). */
+function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
+  const { pool } = ctx;
 
   // ── Startup token purge ──────────────────────────────────────────
   // Same leader-election guard as the periodic token cleanup in
@@ -490,11 +484,51 @@ async function createFestieApp(overrides: any = {}) {
       .catch((err: any) => log.warn('venue backfill failed', { error: err.message }));
   }
 
-  // 8. Background tasks (session/avatar/token cleanup, memory monitoring)
+}
+
+async function createFestieApp(overrides: any = {}) {
+  // 1. Create application context (config, DB, Redis, state, all utility functions)
+  const ctx = await createAppContext({ ...overrides, promMetrics: metrics });
+  const { config, state, pool, redis, cacheBus, avatarPool } = ctx;
+
+  // Re-run startup validation against the fully-resolved app-context config
+  // (overrides from tests/harness may have changed what the boot-time check saw).
+  validateStartupConfig(config);
+
+  // 2. Create Express app + configure all middleware
+  const app = express();
+  app.use(metricsMiddleware(metrics));
+  app.get('/metrics', metricsHandler(metrics));
+  const { inFlightRequests } = configureMiddleware(app, ctx);
+
+  // 3. Create HTTP server + Socket.IO
+  const socketSetup = configureSocketIO(app, ctx);
+  const { server, io, emitter, notificationService } = socketSetup;
+  ctx.setIO(io);
+
+  // 4. Build deps object for route modules
+  const deps: RouteDeps = {
+    express,
+    ...ctx,
+    io,
+    emitter,
+    metrics: state.metrics,
+    promMetrics: metrics,
+    notificationService,
+  };
+
+  // 5. Services, routes, error handling, socket handlers, startup jobs
+  const { crewNotify, reengagementQueue } = wireServices(ctx, deps, socketSetup);
+  const { setHealthReady } = mountRoutes(app, ctx, deps);
+  installErrorHandling(app, ctx);
+  createSocketHandlers(deps);
+  runStartupJobs(ctx, deps);
+
+  // 6. Background tasks (session/avatar/token cleanup, memory monitoring)
   createBackgroundTasks(ctx, { io });
   startMetricsSampler(metrics, { pool, io }, 10_000);
 
-  // 9. Graceful shutdown handler
+  // 7. Graceful shutdown handler
   const close = createCloseHandler({
     server,
     io,

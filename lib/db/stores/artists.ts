@@ -272,9 +272,20 @@ async function festivalIdsUsingAny(client: any, artistIds: string[]): Promise<st
   return rows.map((row: any) => row.festival_id);
 }
 
-/** Ids of the festivals that list one artist, archived ones included, in id order. Takes no locks. */
-async function festivalIdsUsing(client: any, artistId: string): Promise<string[]> {
-  return festivalIdsUsingAny(client, [artistId]);
+/**
+ * Locks every festival that lists any of the artists, in id order. `assertUnchanged` reads the ids
+ * again, after the caller locked the artist rows, and retries the transaction when a save added a festival.
+ */
+async function lockFestivalsUsing(client: any, artistIds: string[]) {
+  const festivalIds = await festivalIdsUsingAny(client, artistIds);
+  for (const festivalId of festivalIds) await lockFestivalAny(client, festivalId);
+  const assertUnchanged = async () => {
+    const again = await festivalIdsUsingAny(client, artistIds);
+    if (again.some((festivalId) => !festivalIds.includes(festivalId))) {
+      throw retryTransaction(artistIds.length > 1 ? 'a festival began to list an artist' : 'a festival began to list the artist');
+    }
+  };
+  return { festivalIds, assertUnchanged };
 }
 
 /** The element with the artist row's name, links, photo and genres. Other keys stay. */
@@ -733,8 +744,7 @@ export function createArtistsStore(pool: Pool) {
     ): Promise<{ artist: ArtistRecord; synced: SyncedFestival[]; before: ArtistRecord }> {
       try {
         return await withTransactionRetry(pool, async (client) => {
-          const festivalIds = await festivalIdsUsing(client, id);
-          for (const festivalId of festivalIds) await lockFestivalAny(client, festivalId);
+          const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
           const { rows } = await client.query(`SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 FOR UPDATE`, [id]);
           const before = rows[0] as ArtistRecord | undefined;
           if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
@@ -753,8 +763,7 @@ export function createArtistsStore(pool: Pool) {
           );
           const artist = updated[0] as ArtistRecord;
           // A save may have put the artist on a festival after the first read, before it could lock the artist.
-          const again = await festivalIdsUsing(client, id);
-          if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list the artist');
+          await assertUnchanged();
           const copyChanged = before.name !== artist.name || JSON.stringify(before.links ?? {}) !== JSON.stringify(artist.links ?? {});
           const synced = copyChanged ? await rewriteCopies(client, festivalIds, artist) : [];
           await insertArtistAudit(client, id, { userId: input.userId, ip: input.ip }, {
@@ -797,8 +806,7 @@ export function createArtistsStore(pool: Pool) {
     > {
       try {
         return await withTransactionRetry(pool, async (client) => {
-          const festivalIds = await festivalIdsUsing(client, id);
-          for (const festivalId of festivalIds) await lockFestivalAny(client, festivalId);
+          const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
           const { rows } = await client.query(`SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 FOR UPDATE`, [id]);
           const before = rows[0] as ArtistRecord | undefined;
           if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
@@ -817,8 +825,7 @@ export function createArtistsStore(pool: Pool) {
           if (!filled || filled.skippedSpotify) throw retryTransaction('the Spotify link could not be stored');
           const artist = filled.artist;
           // A save may have put the artist on a festival after the first read, before it could lock the artist.
-          const again = await festivalIdsUsing(client, id);
-          if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list the artist');
+          await assertUnchanged();
           const synced = await rewriteCopies(client, festivalIds, artist);
           // A pick links Spotify and also fills an empty photo or genre list: audit what really changed.
           await insertArtistAudit(client, id, { userId: input.userId, ip: input.ip }, {
@@ -882,11 +889,9 @@ export function createArtistsStore(pool: Pool) {
           };
           const pair = [survivorId, loserId];
           await loadPair(false);
-          const festivalIds = await festivalIdsUsingAny(client, pair);
-          for (const festivalId of festivalIds) await lockFestivalAny(client, festivalId);
+          const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, pair);
           const { survivor, loser } = await loadPair(true);
-          const again = await festivalIdsUsingAny(client, pair);
-          if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list an artist');
+          await assertUnchanged();
           if (!(await tokenIsFresh(client, survivor, input.survivorUpdatedAt)) || !(await tokenIsFresh(client, loser, input.loserUpdatedAt))) {
             throw new ArtistError(409, 'ARTIST_CHANGED', 'Someone changed one of these artists. Reload the pair.', {
               survivor: publicArtist(survivor),
@@ -987,11 +992,9 @@ export function createArtistsStore(pool: Pool) {
     async fillLink(id: string, input: { link: string; userId: string | null; ip?: string | null }): Promise<{ synced: SyncedFestival[] }> {
       try {
         return await withTransactionRetry(pool, async (client) => {
-          const festivalIds = await festivalIdsUsing(client, id);
-          for (const festivalId of festivalIds) await lockFestivalAny(client, festivalId);
+          const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
           const filled = await this.fillEmpty(client, id, { link: input.link }, { userId: input.userId, ip: input.ip });
-          const again = await festivalIdsUsing(client, id);
-          if (again.some((festivalId) => !festivalIds.includes(festivalId))) throw retryTransaction('a festival began to list the artist');
+          await assertUnchanged();
           if (!filled?.changed) return { synced: [] };
           return { synced: await rewriteCopies(client, festivalIds, filled.artist) };
         });

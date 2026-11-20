@@ -10,6 +10,7 @@
 
 import { sanitizeString, sanitizeIdentifier, sanitizeLinkRecord } from './helpers/sanitize';
 import { withTransaction } from './db/connection';
+import { lockFestival } from './db/stores/festival-lock';
 
 export const MAX_LINEUP_ENTRIES = 500;
 export const MAX_LINKED_SETS = 10;
@@ -346,11 +347,8 @@ export function createInterestConversion({ pool, stores, emitter, log, config }:
   }
 
   async function convertInTransaction(client: any, festivalId: string): Promise<string[]> {
-    const locked = await client.query(
-      'SELECT published_at FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
-      [festivalId],
-    );
-    if (!locked.rows[0]?.published_at) return [];
+    const locked = await lockFestival(client, festivalId);
+    if (!locked?.published_at) return [];
     const festival = await stores.festivals.getById(festivalId, client);
     if (!festival?.lineup?.length) return [];
     const days = festival.days ?? [];

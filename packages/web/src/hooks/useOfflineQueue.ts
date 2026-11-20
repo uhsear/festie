@@ -1,12 +1,11 @@
 import { useEffect, useCallback, useState } from 'react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import {
-  MAX_RETRIES,
-  MAX_EDGE_RETRIES,
-  MAX_QUEUE_AGE_MS,
+  isQueueEntryExpired,
   extractRealId,
   parseRetryAfterMs,
-  isEdgeUnavailable,
+  classifyReplayFailure,
+  rewriteChildUrl,
   hydrateFailedSync,
   surfaceFailedSync,
 } from '@festie/shared/services';
@@ -205,7 +204,7 @@ async function getAll(): Promise<QueuedMutation[]> {
       // Filter out stale mutations (older than 7 days), surfacing each dropped
       // pending write so it isn't silently lost.
       return all.filter((m) => {
-        if (Date.now() - (m.createdAt || 0) < MAX_QUEUE_AGE_MS) return true;
+        if (!isQueueEntryExpired(m.createdAt)) return true;
         surfaceStaleDrop(m);
         return false;
       });
@@ -216,7 +215,7 @@ async function getAll(): Promise<QueuedMutation[]> {
   } catch {
     const queue: QueuedMutation[] = JSON.parse(localStorage.getItem('festie-offline-queue') || '[]');
     return queue.filter((m) => {
-      if (Date.now() - (m.createdAt || 0) < MAX_QUEUE_AGE_MS) return true;
+      if (!isQueueEntryExpired(m.createdAt)) return true;
       surfaceStaleDrop(m);
       return false;
     });
@@ -300,7 +299,7 @@ async function rewritePendingUrls(fromId: string, toId: string): Promise<void> {
       const all = await idbRequest<QueuedMutation[]>(store.getAll());
       for (const m of all) {
         if (m.status === 'pending' && m.url?.includes(fromId)) {
-          await idbRequest(store.put({ ...m, url: m.url.replace(fromId, toId) }));
+          await idbRequest(store.put({ ...m, url: rewriteChildUrl(m.url, fromId, toId) }));
         }
       }
     } catch (err) {
@@ -311,7 +310,7 @@ async function rewritePendingUrls(fromId: string, toId: string): Promise<void> {
     try {
       const queue: QueuedMutation[] = JSON.parse(localStorage.getItem('festie-offline-queue') || '[]');
       const patched = queue.map((m) =>
-        m.status === 'pending' && m.url?.includes(fromId) ? { ...m, url: m.url.replace(fromId, toId) } : m,
+        m.status === 'pending' && m.url?.includes(fromId) ? { ...m, url: rewriteChildUrl(m.url, fromId, toId) } : m,
       );
       localStorage.setItem('festie-offline-queue', JSON.stringify(patched));
     } catch (err) {
@@ -340,7 +339,7 @@ async function pruneStaleEntries(): Promise<void> {
     const writeHandle = openTx('readwrite');
     try {
       for (const entry of all) {
-        if (now - (entry.createdAt || 0) > MAX_QUEUE_AGE_MS) {
+        if (isQueueEntryExpired(entry.createdAt, now)) {
           // Surface BEFORE deleting so a stale pending write is never silently
           // discarded (coalesces with any getAll surfacing by clientId).
           surfaceStaleDrop(entry);
@@ -355,7 +354,7 @@ async function pruneStaleEntries(): Promise<void> {
     const queue: QueuedMutation[] = JSON.parse(localStorage.getItem('festie-offline-queue') || '[]');
     const now = Date.now();
     const fresh = queue.filter((m) => {
-      if (now - (m.createdAt || 0) < MAX_QUEUE_AGE_MS) return true;
+      if (!isQueueEntryExpired(m.createdAt, now)) return true;
       surfaceStaleDrop(m);
       return false;
     });
@@ -585,15 +584,12 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
             // and the 7-day prune still apply) and stop. The next good response drains. An edge 5xx
             // means the origin is down, so it counts the same: otherwise a flapping origin
             // would burn MAX_RETRIES.
-            const isEdge = isEdgeUnavailable((err as { status?: number } | null)?.status);
-            const edgeRetries = (mutation.edgeRetries || 0) + 1;
-            if (
-              (err as { isNetworkError?: boolean } | null)?.isNetworkError === true ||
-              (isEdge && edgeRetries < MAX_EDGE_RETRIES)
-            ) {
+            const outcome = classifyReplayFailure(err, mutation);
+            if (outcome === 'hold-network' || outcome === 'hold-edge') {
               // One entry that always gets an edge 5xx must not block the queue forever:
               // count those attempts and surface the entry once MAX_EDGE_RETRIES is reached.
-              if (isEdge) {
+              if (outcome === 'hold-edge') {
+                const edgeRetries = (mutation.edgeRetries || 0) + 1;
                 if (mutation.id) await updateMutation(mutation.id, { edgeRetries });
                 else updateMutationByClientId(mutation.clientId, { edgeRetries });
               }
@@ -606,7 +602,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
             }
             const status =
               err instanceof Error && 'status' in err ? (err as Error & { status: number }).status : undefined;
-            if (status === 429) {
+            if (outcome === 'rate-limited') {
               // Rate limited: transient. Keep it queued, honour Retry-After (capped),
               // and do not consume a retry; the 7-day prune still bounds it.
               const waitMs = parseRetryAfterMs((err as { retryAfter?: number | string | null }).retryAfter) ?? RETRY_BACKOFF_BASE;
@@ -614,10 +610,9 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
               continue;
             }
             const retries = (mutation.retries || 0) + 1;
-            const isClientError = status !== undefined && status >= 400 && status < 500;
             const isConflict = status === 409;
 
-            if (isConflict || retries >= MAX_RETRIES || isClientError || isEdge) {
+            if (outcome === 'permanent') {
               // Permanent failure (conflict, other 4xx, or retries exhausted):
               // surface it to the user as a FailedSyncItem BEFORE removing it
               // from IndexedDB, so an offline write is never silently dropped —

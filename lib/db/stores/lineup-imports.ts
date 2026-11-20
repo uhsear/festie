@@ -16,6 +16,8 @@ import type { ArtistLookup, ArtistRef, LineupImportPlan, LineupImportWrites, Set
 import { nextMoveMark, type SlotAt } from '../../set-moves';
 import { resolveArtistRefs, resolveSetValues } from '../../artist-refs';
 
+import { lockFestival } from './festival-lock';
+
 export { lockFestivalAny } from './festival-lock';
 
 /** The second argument carries the locked artist rows, so the plan copies them instead of the earlier lookup. */
@@ -40,15 +42,6 @@ type DayMove = { from: number; to: number };
 const sameText = (a: any, b: any) => (a ?? '') === (b ?? '');
 
 type MarkContext = { published: boolean; now: Date };
-
-/** The locked festival row (truthy), or null when it does not exist. */
-async function lockFestival(client: any, festivalId: string) {
-  const { rows } = await client.query(
-    'SELECT id, published_at FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
-    [festivalId],
-  );
-  return (rows[0] as { id: string; published_at: Date | null } | undefined) ?? null;
-}
 
 
 const markContext = (festival: { published_at: Date | null }): MarkContext => ({
