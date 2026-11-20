@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { describe, it, expect, vi, beforeAll } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import Sheet from './Sheet';
 
@@ -51,6 +51,15 @@ describe('Sheet', () => {
     await user.click(screen.getByRole('button', { name: 'Open' }));
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     await user.keyboard('{Escape}');
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus());
+    // jsdom 31 applies vaul's exit animations but never fires animationend, so Radix keeps them mounted.
+    await waitFor(() => {
+      document.querySelectorAll('[data-state="closed"]').forEach((el) => {
+        const end = Object.assign(new Event('animationend', { bubbles: true }), {
+          animationName: getComputedStyle(el).animationName,
+        });
+        act(() => void el.dispatchEvent(end));
+      });
+      expect(screen.getByRole('button', { name: 'Open' })).toHaveFocus();
+    });
   });
 });
