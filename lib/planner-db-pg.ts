@@ -363,15 +363,13 @@ function stripOuterTxBoundaries(sql: string) {
 }
 
 /**
- * Module-level flag: once migrations complete successfully for ANY pool
- * in this process, skip all subsequent calls. In PM2 cluster mode each
- * worker only needs to check once; the expensive schema_migrations
- * queries (CREATE TABLE, ALTER TABLE, SELECT version) were the top 3
- * queries by total time because they ran on every process restart.
- * The flag is set AFTER successful completion so a failure still allows
- * a retry on the next call.
+ * Pools whose migrations completed successfully: later calls on the same
+ * pool skip the schema_migrations queries (CREATE TABLE, ALTER TABLE,
+ * SELECT version), which were the top 3 queries by total time. Keyed by
+ * pool, not process, so a second database is never skipped. A pool is
+ * added only AFTER success so a failure still allows a retry.
  */
-let _migrationsRan = false;
+let _migratedPools = new WeakSet<object>();
 
 /**
  * Run pending migrations against the given pg pool. Exposed as a named
@@ -379,7 +377,7 @@ let _migrationsRan = false;
  * `openPlannerDatabase`.
  */
 async function runPostgresMigrations(pool: any, opts: any = {}) {
-  if (_migrationsRan) return { applied: [], current: 0, gap: [] };
+  if (_migratedPools.has(pool)) return { applied: [], current: 0, gap: [] };
   const log = opts.log || (() => {});
   const client = await pool.connect();
   try {
@@ -452,7 +450,7 @@ async function runPostgresMigrations(pool: any, opts: any = {}) {
         totalRecorded: finalApplied.size,
       });
       const result = { applied: appliedVersions, current, gap };
-      _migrationsRan = true; // eslint-disable-line require-atomic-updates
+      _migratedPools.add(pool);
       return result;
     } finally {
       // Always release the advisory lock on the SAME client that acquired
@@ -614,7 +612,7 @@ function openPlannerDatabase(opts: any = {}): { pool: any; migrationsReady?: Pro
  */
 const __resetMigrationCacheForTests = () => {
   MIGRATED_URLS.clear();
-  _migrationsRan = false;
+  _migratedPools = new WeakSet();
 };
 
 // ── Public API ───────────────────────────────────────────────────────────
