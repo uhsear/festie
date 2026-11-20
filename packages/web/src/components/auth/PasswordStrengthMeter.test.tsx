@@ -13,6 +13,16 @@ describe('PasswordStrengthMeter', () => {
     expect(screen.getByRole('status', { name: 'Password strength: Too short' })).toBeInTheDocument();
   });
 
+  it('does not call a common password good', () => {
+    render(<PasswordStrengthMeter password="Password1" />);
+    expect(screen.getByRole('status', { name: 'Password strength: Too guessable' })).toBeInTheDocument();
+  });
+
+  it('uses the username and email to cap the score', () => {
+    render(<PasswordStrengthMeter password="Maria1234!" username="maria" email="m@example.com" />);
+    expect(screen.getByRole('status', { name: 'Password strength: Too guessable' })).toBeInTheDocument();
+  });
+
   it('fills every segment for a strong password', () => {
     render(<PasswordStrengthMeter password="Abcdefgh1!" />);
     expect(screen.getByRole('status', { name: 'Password strength: Strong' })).toBeInTheDocument();

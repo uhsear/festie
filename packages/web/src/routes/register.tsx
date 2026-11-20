@@ -176,7 +176,7 @@ function RegisterPageInner() {
             error={errors.password}
             helperText={AUTH_COPY.passwordHint}
           />
-          <PasswordStrengthMeter password={password} />
+          <PasswordStrengthMeter password={password} username={username} email={email} />
         </div>
 
         <div className="mb-3">

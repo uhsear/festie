@@ -237,7 +237,7 @@ function ChangePasswordForm() {
     }
   };
 
-  const strength = passwordStrength(next);
+  const strength = passwordStrength(next, { username: user?.username, email: user?.email });
   const matchState: 'none' | 'match' | 'mismatch' =
     confirm.length === 0 ? 'none' : confirm === next ? 'match' : 'mismatch';
   // Gate the CTA on a clean form the same way the sibling sections do, so the

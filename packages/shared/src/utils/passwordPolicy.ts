@@ -50,12 +50,17 @@ export interface PasswordStrength {
 
 /**
  * Lightweight strength heuristic for the password meter. UX guidance only: passwordPolicyError
- * is authoritative. It rewards length and character variety so a user gets a nudge as they type.
+ * is authoritative. It rewards length and character variety so a user gets a nudge as they type, and it caps a password the policy rejects.
  */
-export function passwordStrength(pw: string): PasswordStrength {
+export function passwordStrength(
+  pw: string,
+  ctx: { username?: string | null; email?: string | null } = {},
+): PasswordStrength {
   if (!pw) return { score: 0, label: '' };
   // Anything under the 8-char floor can never read above "Too short".
   if (pw.length < 8) return { score: 1, label: 'Too short' };
+  // A password the policy rejects must not read "Good" next to the policy error.
+  if (passwordPolicyError(pw, ctx)) return { score: 1, label: 'Too guessable' };
   let points = 1;
   if (pw.length >= 12) points += 1;
   if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) points += 1;

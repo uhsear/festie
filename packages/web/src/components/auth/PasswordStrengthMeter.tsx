@@ -5,8 +5,16 @@ const SEGMENT_COLORS = ['bg-accent-coral', 'bg-accent-amber', 'bg-accent-aqua', 
 const LABEL_COLORS = ['text-accent-coral', 'text-accent-amber', 'text-accent-aqua', 'text-accent-green'];
 
 /** Strength guidance while typing. The shared password policy stays authoritative. */
-export default function PasswordStrengthMeter({ password }: { password: string }) {
-  const { score, label } = passwordStrength(password);
+export default function PasswordStrengthMeter({
+  password,
+  username,
+  email,
+}: {
+  password: string;
+  username?: string | null;
+  email?: string | null;
+}) {
+  const { score, label } = passwordStrength(password, { username, email });
   if (score === 0) return null;
   return (
     <div className="mt-2 flex items-center gap-2" role="status" aria-label={`Password strength: ${label}`}>

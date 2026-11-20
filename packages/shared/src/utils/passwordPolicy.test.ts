@@ -39,4 +39,10 @@ describe('passwordStrength', () => {
     expect(passwordStrength('abcdefgh1234')).toEqual({ score: 3, label: 'Good' });
     expect(passwordStrength('Abcdefgh1!')).toEqual({ score: 4, label: 'Strong' });
   });
+  it('caps a password the policy rejects instead of reading Good', () => {
+    expect(passwordStrength('Password1')).toEqual({ score: 1, label: 'Too guessable' });
+    expect(passwordStrength('Maria1234!', { username: 'maria' })).toEqual({ score: 1, label: 'Too guessable' });
+    expect(passwordStrength('Maria1234!', { email: 'maria@example.com' })).toEqual({ score: 1, label: 'Too guessable' });
+    expect(passwordStrength('Maria1234!', { username: 'sam' }).score).toBe(4);
+  });
 });
