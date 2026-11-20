@@ -68,6 +68,7 @@ type PresenceManager = ReturnType<typeof createPresenceManager>;
 /** The slice of the Socket.IO `Server` these handlers use; tests pass a fake. */
 type HandlerIo = PresenceIo & {
   on(event: 'connection', listener: (socket: RealtimeSocket) => void): unknown;
+  in(room: string): { fetchSockets(): Promise<unknown[]> };
   sockets: { adapter: { rooms: Map<string, { size: number }> } };
   engine?: { clientsCount: number };
 };
@@ -246,7 +247,14 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
     if (heapUsed > config.MAX_HEAP_BYTES * 0.75) {
       return { ok: false, error: 'Server is at capacity', code: 'SERVER_AT_CAPACITY' };
     }
-    const roomSize = io.sockets.adapter.rooms.get(festivalId)?.size || 0;
+    // fetchSockets spans every node on the Redis adapter; the local map counts one process only.
+    const roomSize = await io.in(festivalId).fetchSockets().then(
+      (members) => members.length,
+      (err: Error) => {
+        log.warn('room capacity fetchSockets failed, using local count', { error: err.message, festivalId });
+        return io.sockets.adapter.rooms.get(festivalId)?.size || 0;
+      },
+    );
     if (roomSize >= config.ROOM_CAPACITY_LIMIT) {
       log.warn('room:full', { festivalId, roomSize });
       return { ok: false, error: 'Room is full', code: 'WS_ROOM_FULL' };

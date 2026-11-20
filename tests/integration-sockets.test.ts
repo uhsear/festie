@@ -132,6 +132,30 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     socket.close();
   });
 
+  test('rejects a festival join with WS_ROOM_FULL at the room capacity and accepts below it', async () => {
+    const server = await startServer({ ROOM_CAPACITY_LIMIT: 1 });
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    await joinFestivalProfile(server, alice.token);
+    const bob = await registerUser(server, 'bob');
+    await joinFestivalProfile(server, bob.token);
+
+    const first = connectSocket(server.baseUrl);
+    await waitForEvent(first, 'connect');
+    const joined = await new Promise<any>((resolve) => first.emit('join:festival', 'fest-1', { userToken: alice.token }, resolve));
+    assert.equal(joined.ok, true);
+
+    const second = connectSocket(server.baseUrl);
+    await waitForEvent(second, 'connect');
+    const rejected = await new Promise<any>((resolve) => second.emit('join:festival', 'fest-1', { userToken: bob.token }, resolve));
+    assert.equal(rejected.ok, false);
+    assert.equal(rejected.code, 'WS_ROOM_FULL');
+
+    first.close();
+    second.close();
+  });
+
   test('rate limits websocket connection attempts per IP', async () => {
     const server = await startServer({ SOCKET_CONNECT_RATE_LIMIT: 2, SOCKET_CONNECT_WINDOW: 10_000 });
     servers.push(server);
