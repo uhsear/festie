@@ -233,17 +233,17 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
     const session = await validateUserSession(sessionToken);
     if (!session) {
       // Callers ack first, then disconnect: the disconnect closes the transport, so a later ack arrives as {}.
-      return { ok: false, error: 'Authentication required', disconnect: true };
+      return { ok: false, error: 'Authentication required', code: 'AUTH_REQUIRED', disconnect: true };
     }
     if (!consumeSocketRateLimit(`${rateLimitScope}:${session.userId}`, config.SOCKET_JOIN_RATE_LIMIT)) {
-      socket.emit('error', { message: 'Realtime rate limit exceeded' });
-      return { ok: false, error: 'Rate limited' };
+      socket.emit('error', { message: 'Realtime rate limit exceeded', code: 'RATE_LIMITED' });
+      return { ok: false, error: 'Rate limited', code: 'RATE_LIMITED' };
     }
 
     // Cheap capacity checks before DB queries
     const heapUsed = _cachedMemoryUsage.heapUsed;
     if (heapUsed > config.MAX_HEAP_BYTES * 0.75) {
-      return { ok: false, error: 'Server is at capacity' };
+      return { ok: false, error: 'Server is at capacity', code: 'SERVER_AT_CAPACITY' };
     }
     const roomSize = io.sockets.adapter.rooms.get(festivalId)?.size || 0;
     if (roomSize >= config.ROOM_CAPACITY_LIMIT) {
@@ -253,11 +253,11 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
 
     // DB lookups
     if (!(await getFestivalById(festivalId))) {
-      return { ok: false, error: 'Festival not found' };
+      return { ok: false, error: 'Festival not found', code: 'FESTIVAL_NOT_FOUND' };
     }
     const profile = await getUserFestivalProfile(session.userId, festivalId);
     if (!profile) {
-      return { ok: false, error: 'Not a member of this festival' };
+      return { ok: false, error: 'Not a member of this festival', code: 'NOT_A_MEMBER' };
     }
 
     // Leave only the PREVIOUS festival room (leaveFestivalRealtime does the
@@ -320,7 +320,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         const validation = joinFestivalEventSchema.safeParse(eventData);
         if (!validation.success) {
           log.debug('join:festival schema validation failed', { connectionId, errors: validation.error.issues });
-          return respond({ ok: false, error: 'SCHEMA_MISMATCH', requiredVersion: 1 });
+          return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH', requiredVersion: 1 });
         }
 
         const { festivalId: validatedFestivalId } = validation.data;
@@ -335,7 +335,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         respond({ ok: true, profileId: result.profile.id });
       } catch (error) {
         log.error('join:festival error', { error: error && (error as Error).message, socketId: socket.id, connectionId });
-        respond({ ok: false, error: 'Server error' });
+        respond({ ok: false, error: 'Server error', code: 'SERVER_ERROR' });
       }
     });
 
@@ -343,7 +343,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
       try {
         const scopeKey = socket.data?.userId ? `leave:${socket.data.userId}` : `leave:${socket.id}`;
         if (!consumeSocketRateLimit(scopeKey, config.SOCKET_LEAVE_RATE_LIMIT)) {
-          socket.emit('error', { message: 'Realtime rate limit exceeded' });
+          socket.emit('error', { message: 'Realtime rate limit exceeded', code: 'RATE_LIMITED' });
           return;
         }
         const festivalId = leaveFestivalRealtime(socket, io);
@@ -368,7 +368,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         if (festivalId) emitPresence(festivalId, io);
       } catch (error) {
         log.error('leave:festival error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
-        socket.emit('error', { message: 'Failed to leave festival' });
+        socket.emit('error', { message: 'Failed to leave festival', code: 'SERVER_ERROR' });
       }
     });
 
@@ -377,7 +377,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         const validation = joinCrewEventSchema.safeParse({ _v: data._v || 1, crewId: data.crewId || '' });
-        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH' });
+        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH' });
 
         const { crewId } = validation.data;
         const sessionToken =
@@ -385,7 +385,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         const session = await validateUserSession(sessionToken);
         if (!session) {
           // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
-          respond({ ok: false, error: 'Authentication required' });
+          respond({ ok: false, error: 'Authentication required', code: 'AUTH_REQUIRED' });
           disconnectSocket(socket, io);
           return;
         }
@@ -393,14 +393,14 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         socket.data.userSessionToken = sessionToken;
 
         if (!consumeSocketRateLimit(`crew-join:${session.userId}`, config.SOCKET_JOIN_RATE_LIMIT)) {
-          return respond({ ok: false, error: 'Rate limited' });
+          return respond({ ok: false, error: 'Rate limited', code: 'RATE_LIMITED' });
         }
 
         // Verify crew exists and user is a member
         const crew = await stores.crews.getById(crewId);
-        if (!crew) return respond({ ok: false, error: 'Crew not found' });
+        if (!crew) return respond({ ok: false, error: 'Crew not found', code: 'CREW_NOT_FOUND' });
         const membership = await stores.crews.getMember(crewId, session.userId);
-        if (!membership) return respond({ ok: false, error: 'Not a member of this crew' });
+        if (!membership) return respond({ ok: false, error: 'Not a member of this crew', code: 'NOT_A_MEMBER' });
 
         // Leave previous crew room if any
         const prevCrewId = socket.data?.crewId;
@@ -415,7 +415,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         respond({ ok: true, crewId });
       } catch (error) {
         log.error('join:crew error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
-        respond({ ok: false, error: 'Server error' });
+        respond({ ok: false, error: 'Server error', code: 'SERVER_ERROR' });
       }
     });
 
@@ -476,17 +476,17 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         if (config.LIVE_LOCATION_ENABLED === false) {
-          return respond({ ok: false, code: 'FEATURE_DISABLED' });
+          return respond({ ok: false, error: 'FEATURE_DISABLED', code: 'FEATURE_DISABLED' });
         }
         const validation = schemas.locationShare.safeParse(data);
-        if (!validation.success) return respond({ ok: false, code: 'SCHEMA_MISMATCH' });
+        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH' });
         const { crewId, position, expiresAt } = validation.data;
-        if (shareWindowError(expiresAt, Date.now())) return respond({ ok: false, code: 'INVALID_EXPIRY' });
+        if (shareWindowError(expiresAt, Date.now())) return respond({ ok: false, error: 'INVALID_EXPIRY', code: 'INVALID_EXPIRY' });
 
         // The socket must already be joined to this crew room (join:crew set it).
-        if (socket.data?.crewId !== crewId) return respond({ ok: false, code: 'NOT_IN_CREW_ROOM' });
+        if (socket.data?.crewId !== crewId) return respond({ ok: false, error: 'NOT_IN_CREW_ROOM', code: 'NOT_IN_CREW_ROOM' });
         if (!consumeSocketRateLimit(`loc-share:${socket.data.userId || socket.id}`, config.SOCKET_LOCATION_SHARE_RATE_LIMIT)) {
-          return respond({ ok: false, code: 'RATE_LIMITED' });
+          return respond({ ok: false, error: 'RATE_LIMITED', code: 'RATE_LIMITED' });
         }
 
         // Re-validate session + membership: sharing live GPS is more sensitive
@@ -496,19 +496,19 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         const session = await validateUserSession(sessionToken);
         if (!session) {
           // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
-          respond({ ok: false, code: 'AUTH_REQUIRED' });
+          respond({ ok: false, error: 'AUTH_REQUIRED', code: 'AUTH_REQUIRED' });
           disconnectSocket(socket, io);
           return;
         }
         const membership = await stores.crews.getMember(crewId, session.userId);
-        if (!membership) return respond({ ok: false, code: 'NOT_A_MEMBER' });
+        if (!membership) return respond({ ok: false, error: 'NOT_A_MEMBER', code: 'NOT_A_MEMBER' });
 
         // M3: cluster-wide cap on concurrently-sharing sockets per user so one
         // user can't multiply the crew-room broadcast budget by opening many
         // sockets. Best-effort (fail-open when Redis is down).
         const sharingCap = await registerSharingSocket(redis, session.userId, socket.id);
         if (!sharingCap.allowed) {
-          return respond({ ok: false, code: 'TOO_MANY_SHARING_SOCKETS' });
+          return respond({ ok: false, error: 'TOO_MANY_SHARING_SOCKETS', code: 'TOO_MANY_SHARING_SOCKETS' });
         }
 
         /* eslint-disable require-atomic-updates -- socket.data is per-connection, not a shared race target */
@@ -561,7 +561,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         respond({ ok: true });
       } catch (error) {
         log.error('location:share error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
-        respond({ ok: false, code: 'SERVER_ERROR' });
+        respond({ ok: false, error: 'SERVER_ERROR', code: 'SERVER_ERROR' });
       }
     });
 
@@ -682,7 +682,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         const validation = schemas.locationStop.safeParse(data);
-        if (!validation.success) return respond({ ok: false });
+        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH' });
         const { crewId } = validation.data;
         const userId = socket.data?.userId;
 
@@ -696,7 +696,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         // teardown path. Both are accepted because a socket that shared to crew A
         // and later joined crew B must still be able to stop A.
         if (socket.data?.crewId !== crewId && socket.data?.sharingCrewId !== crewId) {
-          return respond({ ok: false });
+          return respond({ ok: false, error: 'NOT_IN_CREW_ROOM', code: 'NOT_IN_CREW_ROOM' });
         }
 
         if (socket.data?.sharingCrewId === crewId) {
@@ -721,7 +721,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         respond({ ok: true });
       } catch (error) {
         log.error('location:stop error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
-        respond({ ok: false });
+        respond({ ok: false, error: 'SERVER_ERROR', code: 'SERVER_ERROR' });
       }
     });
 
@@ -737,16 +737,16 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
       const respond = withAckTimeout(typeof ack === 'function' ? ack : null, log, connectionId);
       try {
         if (config.LIVE_LOCATION_ENABLED === false) {
-          return respond({ ok: false, peers: [] });
+          return respond({ ok: false, error: 'FEATURE_DISABLED', code: 'FEATURE_DISABLED', peers: [] });
         }
         const validation = schemas.locationSync.safeParse(data);
-        if (!validation.success) return respond({ ok: false, peers: [] });
+        if (!validation.success) return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH', peers: [] });
         const { crewId } = validation.data;
 
         // Must already be joined to this crew room (join:crew gated membership).
-        if (socket.data?.crewId !== crewId) return respond({ ok: false, peers: [] });
+        if (socket.data?.crewId !== crewId) return respond({ ok: false, error: 'NOT_IN_CREW_ROOM', code: 'NOT_IN_CREW_ROOM', peers: [] });
         if (!consumeSocketRateLimit(`loc-sync:${socket.data.userId || socket.id}`, config.SOCKET_LOCATION_SYNC_RATE_LIMIT)) {
-          return respond({ ok: false, peers: [] });
+          return respond({ ok: false, error: 'RATE_LIMITED', code: 'RATE_LIMITED', peers: [] });
         }
 
         // Re-validate session + membership: the snapshot reveals peers' last-known
@@ -756,12 +756,12 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         const session = await validateUserSession(sessionToken);
         if (!session) {
           // Ack first: the disconnect closes the transport, so a later ack arrives as {}.
-          respond({ ok: false, peers: [] });
+          respond({ ok: false, error: 'AUTH_REQUIRED', code: 'AUTH_REQUIRED', peers: [] });
           disconnectSocket(socket, io);
           return;
         }
         const membership = await stores.crews.getMember(crewId, session.userId);
-        if (!membership) return respond({ ok: false, peers: [] });
+        if (!membership) return respond({ ok: false, error: 'NOT_A_MEMBER', code: 'NOT_A_MEMBER', peers: [] });
 
         // Serve last-known positions from the ephemeral Redis cache, excluding
         // the requester (they render their own marker locally).
@@ -773,7 +773,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         respond({ ok: true, peers });
       } catch (error) {
         log.error('location:sync error', { error: (error as Error).message, socketId: socket.id, userId: socket.data?.userId });
-        respond({ ok: false, peers: [] });
+        respond({ ok: false, error: 'SERVER_ERROR', code: 'SERVER_ERROR', peers: [] });
       }
     });
 
@@ -791,7 +791,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
         const validation = reconnectRestoreEventSchema.safeParse(eventData);
         if (!validation.success) {
           log.info('reconnect:restore schema validation failed', { errors: validation.error.issues });
-          return respond({ ok: false, error: 'SCHEMA_MISMATCH', requiredVersion: 1 });
+          return respond({ ok: false, error: 'SCHEMA_MISMATCH', code: 'SCHEMA_MISMATCH', requiredVersion: 1 });
         }
 
         const { festivalId } = validation.data;
@@ -818,7 +818,7 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
           socketId: socket.id,
           userId: socket.data?.userId,
         });
-        respond({ ok: false, error: 'Server error' });
+        respond({ ok: false, error: 'Server error', code: 'SERVER_ERROR' });
       }
     });
 
