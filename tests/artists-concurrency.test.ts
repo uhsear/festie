@@ -8,7 +8,7 @@ import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { resolveArtistRefs } from '../lib/artist-refs';
 import { createArtistsStore } from '../lib/db/stores/artists';
-import { lockFestivalAny } from '../lib/db/stores/lineup-imports';
+import { lockFestivalAny } from '../lib/db/stores/festival-lock';
 import { TEST_DATABASE_URL } from './_integration-helpers';
 import { createArtist, dropFestivalCache, formBody, seedFestival, setRow, skip, startArtistServer, withPool, type ArtistServer } from './_artist-helpers';
 

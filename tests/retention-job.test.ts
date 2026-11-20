@@ -1,6 +1,6 @@
 import { describe, it, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { createBackgroundTasks } from '../lib/shutdown.js';
+import { createBackgroundTasks } from '../lib/background-tasks.js';
 
 // The daily retention job calls retention_cleanup() (migration 060), and a failure is logged, not thrown.
 describe('retention_cleanup job', () => {

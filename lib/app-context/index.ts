@@ -129,6 +129,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
   // correlate against. server.ts now gates readiness on it.
   const { pool, migrationsReady } = openPlannerDatabase({
     databaseUrl: config.DATABASE_URL,
+    nodeEnv: config.NODE_ENV,
     log,
     poolSize: config.PG_POOL_MAX,
     poolMin: config.PG_POOL_MIN,

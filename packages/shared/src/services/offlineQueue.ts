@@ -1,5 +1,5 @@
 import { api, ApiClientError } from './api';
-import { isEdgeUnavailable, parseRetryAfterMs } from './errors';
+import { classifyReplayFailure, parseRetryAfterMs, MAX_RETRIES, MAX_EDGE_RETRIES } from './errors';
 import { getStorage } from '../platform/storage';
 import { useUIStore, type FailedSyncItem } from '../stores/uiStore';
 
@@ -31,11 +31,12 @@ type FailedSyncRecord = FailedSyncItem & Pick<QueuedMutation, 'idempotencyKey' |
 /** Drop queued mutations older than this on read (mirrors the web queue policy). */
 export const MAX_QUEUE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days: outlasts a multi-day festival with patchy signal
 
-/** Cap on transient (5xx/network) replay attempts before surfacing (matches web). */
-export const MAX_RETRIES = 5;
+export { MAX_RETRIES, MAX_EDGE_RETRIES, classifyReplayFailure };
 
-/** Cap on edge-5xx replay attempts per entry; a higher bar than MAX_RETRIES because an outage is not the entry's fault, but one poison entry must not block the queue forever. */
-export const MAX_EDGE_RETRIES = 5;
+/** True once an entry has outlived MAX_QUEUE_AGE_MS; the web and shared queues both prune with this. */
+export function isQueueEntryExpired(createdAt: number | undefined, now = Date.now()): boolean {
+  return now - (createdAt || 0) >= MAX_QUEUE_AGE_MS;
+}
 
 export type QueuedMethod = 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -97,8 +98,8 @@ async function readQueue(): Promise<QueuedMutation[]> {
   const fresh: QueuedMutation[] = [];
   const stale: QueuedMutation[] = [];
   for (const m of all) {
-    if (now - (m.createdAt || 0) < MAX_QUEUE_AGE_MS) fresh.push(m);
-    else stale.push(m);
+    if (isQueueEntryExpired(m.createdAt, now)) stale.push(m);
+    else fresh.push(m);
   }
   if (stale.length > 0) {
     for (const m of stale) {
@@ -269,19 +270,6 @@ export function enqueueMutation(mutation: Omit<QueuedMutation, 'createdAt'> & { 
 
 const DEFAULT_RATE_LIMIT_WAIT_MS = 30_000;
 
-function isRateLimited(err: unknown): boolean {
-  return (err as { status?: number } | null)?.status === 429;
-}
-
-/** Fetch rejected or aborted (ApiClientError status 0, isNetworkError). */
-function isNetworkTimeout(err: unknown): boolean {
-  return (err as { isNetworkError?: boolean } | null)?.isNetworkError === true;
-}
-
-function isEdge(err: unknown): boolean {
-  return isEdgeUnavailable((err as { status?: number } | null)?.status);
-}
-
 /** Merge fields into a still-queued entry (no-op if it was removed meanwhile). */
 function patchQueued(clientId: string, patch: Partial<QueuedMutation>): Promise<void> {
   return withQueueLock(async () => {
@@ -292,12 +280,6 @@ function patchQueued(clientId: string, patch: Partial<QueuedMutation>): Promise<
       await writeQueue(queue);
     }
   });
-}
-
-/** True for an ApiClientError-shaped permanent client failure (4xx incl. 409; 429 is handled apart). */
-function isPermanentFailure(err: unknown): boolean {
-  const status = (err as { status?: number } | null)?.status;
-  return typeof status === 'number' && status >= 400 && status < 500;
 }
 
 /** Short user-facing reason from a thrown error. */
@@ -375,9 +357,14 @@ export function extractRealId(serverResponse: unknown): string | null {
   return null;
 }
 
+/** Point a queued child URL at a parent's real id: replaces every occurrence of the temp id. */
+export function rewriteChildUrl(url: string, tempId: string, realId: string): string {
+  return url.split(tempId).join(realId);
+}
+
 /** Replace every occurrence of the temp id in a string, or in any string inside a JSON body. */
 function remapTempId<T>(value: T, tempId: string, realId: string): T {
-  if (typeof value === 'string') return value.split(tempId).join(realId) as T;
+  if (typeof value === 'string') return rewriteChildUrl(value, tempId, realId) as T;
   if (Array.isArray(value)) return value.map((v) => remapTempId(v, tempId, realId)) as T;
   if (value && typeof value === 'object') {
     return Object.fromEntries(
@@ -449,11 +436,12 @@ export async function drainQueue(): Promise<void> {
         }
       } catch (err) {
         if (isOffline()) break;
-        if (isRateLimited(err)) {
+        const outcome = classifyReplayFailure(err, m);
+        if (outcome === 'rate-limited') {
           // Transient: wait out Retry-After, no retry consumed (7-day age-out still bounds it).
           const waitMs = parseRetryAfterMs((err as { retryAfter?: number | string | null }).retryAfter) ?? DEFAULT_RATE_LIMIT_WAIT_MS;
           await patchQueued(m.clientId, { notBefore: Date.now() + waitMs });
-        } else if (isNetworkTimeout(err) || (isEdge(err) && (m.edgeRetries ?? 0) + 1 < MAX_EDGE_RETRIES)) {
+        } else if (outcome === 'hold-network' || outcome === 'hold-edge') {
           // Weak signal, not a server verdict (an edge 5xx means the origin is down): keep the
           // entry, retry next drain, and without burning MAX_RETRIES. The attempt may have
           // reached the origin, so remember that for a replayed DELETE's 404.
@@ -461,7 +449,7 @@ export async function drainQueue(): Promise<void> {
           // response never restarts the drain.
           await patchQueued(m.clientId, {
             maybeSent: true,
-            ...(isEdge(err) ? { edgeRetries: (m.edgeRetries ?? 0) + 1 } : {}),
+            ...(outcome === 'hold-edge' ? { edgeRetries: (m.edgeRetries ?? 0) + 1 } : {}),
           });
           try {
             useUIStore.getState().setOfflineMode(true);
@@ -469,30 +457,14 @@ export async function drainQueue(): Promise<void> {
             /* store not ready */
           }
           break;
-        } else if (isPermanentFailure(err) || isEdge(err)) {
+        } else if (outcome === 'permanent') {
           await withQueueLock(async () => {
             const queue = (await readQueue()).filter((q) => q.clientId !== m.clientId);
             await writeQueue(queue);
           });
           recordFailed(m, shortError(err));
         } else {
-          const nextRetries = (m.retries ?? 0) + 1;
-          if (nextRetries >= MAX_RETRIES) {
-            await withQueueLock(async () => {
-              const queue = (await readQueue()).filter((q) => q.clientId !== m.clientId);
-              await writeQueue(queue);
-            });
-            recordFailed(m, shortError(err));
-          } else {
-            await withQueueLock(async () => {
-              const queue = await readQueue();
-              const idx = queue.findIndex((q) => q.clientId === m.clientId);
-              if (idx >= 0) {
-                queue[idx] = { ...queue[idx]!, retries: nextRetries };
-                await writeQueue(queue);
-              }
-            });
-          }
+          await patchQueued(m.clientId, { retries: (m.retries ?? 0) + 1 });
         }
       }
     }
