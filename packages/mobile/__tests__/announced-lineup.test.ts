@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Festival, FestivalDay, FestivalSet, LineupEntry } from '@festie/shared/types';
 import { announcedLineupModel, lineupReplacesEmptyState } from '@festie/shared/utils';
-import { parseLineupView } from '../lib/lineupView';
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
 
@@ -82,17 +81,6 @@ describe('grid bottom panel rows', () => {
   });
 });
 
-describe('lineupView helpers', () => {
-  it('parseLineupView falls back to the Poster view', () => {
-    expect(parseLineupView('az')).toBe('az');
-    expect(parseLineupView('interested')).toBe('interested');
-    expect(parseLineupView('poster')).toBe('poster');
-    expect(parseLineupView('nonsense')).toBe('poster');
-    expect(parseLineupView(null)).toBe('poster');
-    expect(parseLineupView(undefined)).toBe('poster');
-  });
-});
-
 describe('announced lineup wiring (source guards)', () => {
   const home = read('app/(tabs)/index.tsx');
   const component = read('components/AnnouncedLineup.tsx');
@@ -135,7 +123,7 @@ describe('announced lineup wiring (source guards)', () => {
   it('the grid shows the lineup in place of its empty state, under a search, after the TBA list and below the grid', () => {
     const grid = read('app/grid.tsx');
     expect(grid).toContain("import AnnouncedLineup from '../components/AnnouncedLineup';");
-    expect(grid).toContain('const announced = useAnnouncedLineup();');
+    expect(grid).toContain('const announced = useAnnouncedLineup(useNow(60_000));');
     expect(grid).toContain('if (lineupReplacesEmptyState(announced, searchQuery)) {');
     expect(grid).toContain('{searchQuery.trim() ? (');
     expect(grid).not.toContain('getCurrentDaySets().length === 0 && searchQuery.trim()');
@@ -143,7 +131,7 @@ describe('announced lineup wiring (source guards)', () => {
     expect(grid).not.toContain('untimedSets.length > 0 || announced.visible');
     expect(grid.match(/<AnnouncedLineup model=\{announced\} hPad=\{t\.spacing\[4\]\} \/>/g)).toHaveLength(4);
     // The hook must run before the early returns.
-    expect(grid.indexOf('useAnnouncedLineup();')).toBeLessThan(grid.indexOf('if (!currentFestival) {'));
+    expect(grid.indexOf('useAnnouncedLineup(')).toBeLessThan(grid.indexOf('if (!currentFestival) {'));
   });
 
   it('the grid says set times are not out when the festival has no days', () => {

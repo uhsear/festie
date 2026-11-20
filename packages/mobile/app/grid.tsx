@@ -51,7 +51,7 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE, type Tokens } from '.
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
-import { useAnnouncedLineup } from '../hooks/useAnnouncedLineup';
+import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
@@ -146,7 +146,7 @@ export default function GridScreen() {
   const { getMyPick, getOtherPicks } = usePicks();
   const allSets = useFestivalDataStore((s) => s.sets);
   const { getStageColor, getStageName, getDays, getFilteredSets, getCurrentDaySets } = useFestival();
-  const announced = useAnnouncedLineup();
+  const announced = useAnnouncedLineup(useNow(60_000));
   const dayLabel = getDays()[selectedDay]?.label ?? 'Grid';
   const screenTitle = `${dayLabel} · Grid`;
 
