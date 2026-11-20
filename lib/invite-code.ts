@@ -9,7 +9,7 @@ import crypto from 'crypto';
 const INVITE_CODE_LENGTH = 6;
 const INVITE_CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I/O/0/1
 
-export function generateInviteCode() {
+function generateInviteCode() {
   // Use rejection sampling to avoid modulo bias (charset length 31 doesn't divide 256 evenly)
   const limit = 256 - (256 % INVITE_CODE_CHARS.length); // largest multiple of 31 <= 256
   let code = '';

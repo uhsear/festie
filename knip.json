@@ -1,15 +1,17 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "entry": [
-    "server.ts",
     "lib/avatar-worker.ts",
     "lib/instrument.ts",
     "scripts/*.{mjs,js}",
     "scripts/artist-backfill.ts",
     "tests/**/*.test.ts"
   ],
-  "project": ["lib/**/*.ts", "routes/**/*.ts", "server.ts", "scripts/**/*.{ts,mjs,js}"],
-  "ignore": ["packages/**", "dist/**", "coverage/**", "migrations/**"],
-  "ignoreDependencies": ["@sentry/node", "syncpack", "papaparse", "@types/papaparse"],
-  "ignoreBinaries": ["depcruise", "lhci", "psql", "pmtiles", "build-storybook", "bundlemon", "report"]
+  "project": ["lib/**/*.ts", "routes/**/*.ts", "scripts/**/*.{ts,mjs,js}"],
+  "ignore": ["packages/**"],
+  "ignoreIssues": {
+    "lib/spotify.ts": ["exports"]
+  },
+  "ignoreDependencies": ["@sentry/node", "papaparse", "@types/papaparse"],
+  "ignoreBinaries": ["expo", "lhci", "psql", "pmtiles", "build-storybook", "bundlemon"]
 }

@@ -96,5 +96,3 @@ export function createAppleClient(config: AppleClientConfig, log: Log) {
 
   return { clientSecret, exchangeCode, revoke };
 }
-
-export type AppleClient = ReturnType<typeof createAppleClient>;
