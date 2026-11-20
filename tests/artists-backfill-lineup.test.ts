@@ -5,15 +5,13 @@ import { Pool } from 'pg';
 import { planBackfill, runBackfill, verifyBackfill } from '../lib/artist-backfill';
 import { normalizeLineup } from '../lib/lineup';
 import { createOpaqueId } from '../lib/helpers';
-import { ensureTestSchema } from './_test-schema';
+import { ensureTestSchema, TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Backfill on announced-lineup data (migration 104): festivals with a lineup and no sets, next to a
 // festival with sets. The entries mirror the real shapes of the Forbidden Kingdom and Wasteland
 // Orlando lineups. They are saved through normalizeLineup alone, with no artist ids. That reproduces
 // lineups written before resolveArtistRefs existed: the legacy shape the backfill must handle.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SPOTIFY_ANGERFIST = '4YkHkQb7Y4kVdYQpXJzQ1n';
 const spotifyUrl = (id: string) => `https://open.spotify.com/artist/${id}`;
 

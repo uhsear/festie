@@ -14,6 +14,7 @@ import express from 'express';
 import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
 import createAccountRoutes from '../routes/account';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
@@ -26,8 +27,6 @@ const AVATAR_FIXTURE = Buffer.from(
 
 // DB skip-gate: these integration tests require a live Postgres database.
 // Set TEST_DATABASE_URL to run them (always set in CI). See tests/README.md.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 // The shared helpers exit the process without a test database, so load them only when it exists.
 const helpers = skip ? null : await import('./_integration-helpers');
 const { registerFlatUser: registerUser } = (helpers ?? {}) as NonNullable<typeof helpers>;

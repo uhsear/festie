@@ -10,9 +10,8 @@ import 'dotenv/config';
 
 import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('GET /profiles/:festivalId crew-only picks', { skip, concurrency: 1 }, () => {
   let server: any;

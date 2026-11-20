@@ -6,13 +6,14 @@
  * Pure, no globals — safe for both web and React Native.
  */
 
+import { z } from 'zod';
+
 /**
- * UX-level email pattern: one-or-more non-space chars, an `@`, one-or-more
- * non-space chars, a dot, and a 2+ letter TLD. Anchored. This unifies the two
- * prior per-app regexes (`/^\S+@\S+\.\w{2,}$/` and `/^\S+@\S+\.[a-zA-Z]{2,}$/`)
- * onto the stricter letters-only TLD form.
+ * The pattern Zod's `.email()` applies, so a client-side pass is a server-side pass.
+ * The backend schemas in `lib/schemas.ts` use `z.string().email()`; both depend on the same
+ * zod major, so the two do not drift.
  */
-export const EMAIL_RE = /^\S+@\S+\.[a-zA-Z]{2,}$/;
+export const EMAIL_RE = z.regexes.email;
 
 /** True when `value` looks like a valid email (UX check only — not a security boundary). */
 export function isValidEmail(value: string | null | undefined): boolean {

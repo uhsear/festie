@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { createStores } from '../lib/db/index.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Real-DB test (skip-gated like the other integration suites): verifies that
 // deleting a user who CREATED a crew transfers ownership to the longest-standing
@@ -10,8 +11,6 @@ import { createStores } from '../lib/db/index.js';
 // BOTH the interactive path (users.hardDelete) and the batch path
 // (retention_cleanup(), migration 060). crews.created_by is ON DELETE RESTRICT
 // (migration 031), so without this handling the user delete aborts on the FK.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('GDPR delete — owned-crew ownership handling', { skip }, () => {
   let pool: Pool;

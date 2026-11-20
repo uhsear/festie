@@ -1,4 +1,6 @@
 import { Router } from 'express';
+import type { Request, Response } from 'express';
+import type { Params } from '../lib/types/app-context';
 
 // In-memory cache: { key: { data, expiresAt } }
 const weatherCache = new Map();
@@ -8,9 +10,9 @@ export function createWeatherRoutes({ config, stores, userAuth, sendSuccess, sen
   const router = Router();
 
   // GET /weather/:festivalId — returns weather for festival's coordinates
-  router.get('/:festivalId', userAuth, rateLimit(30, 'weather'), validateParams(schemas.festivalIdParams), async (req: any, res: any) => {
+  router.get('/:festivalId', userAuth, rateLimit(30, 'weather'), validateParams(schemas.festivalIdParams), async (req: Request, res: Response) => {
     try {
-      const { festivalId } = req.validatedParams;
+      const { festivalId } = req.validatedParams as Params;
 
       // Check the festival before the cache, so a draft is never served from a
       // cached entry and never cached itself.
@@ -80,8 +82,8 @@ export function createWeatherRoutes({ config, stores, userAuth, sendSuccess, sen
       }
 
       return sendSuccess(res, data);
-    } catch (err: any) {
-      if (err.name === 'AbortError') {
+    } catch (err) {
+      if ((err as Error).name === 'AbortError') {
         return sendSuccess(res, { available: false, reason: 'Weather request timed out' });
       }
       return sendError(res, 500, 'Failed to fetch weather data', ErrorCodes.INTERNAL_ERROR);

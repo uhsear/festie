@@ -5,12 +5,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Migration 082 renames old audit action values to the dotted names in
 // lib/audit-actions.ts. Running it again changes nothing.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '082_audit_action_names.sql'),
   'utf8',

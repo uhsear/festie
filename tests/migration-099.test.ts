@@ -5,14 +5,13 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Migration 099 (T58) adds two crew history indexes: every poll of a crew by
 // age, and the inactive meeting points of a crew by expiry. It runs twice
 // without error and leaves each index once, valid.
 // Run it only on a private Postgres (port 5434 or higher), never 5432 or 5433.
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 const SQL = fs.readFileSync(
   path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '099_crew_history_indexes.sql'),
   'utf8',

@@ -3,10 +3,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { Pool } from 'pg';
-import { ensureTestSchema } from './_test-schema';
+import { ensureTestSchema, TEST_DATABASE_URL } from './_test-schema';
 
 // SAFETY: only TEST_DATABASE_URL, never DATABASE_URL (ensureTestSchema also requires a _test name).
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
 const sql = readFileSync(path.resolve(import.meta.dirname, '..', 'scripts', 'sql', 'backup-counts.sql'), 'utf8');
 
 const TABLES = [

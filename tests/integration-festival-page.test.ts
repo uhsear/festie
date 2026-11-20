@@ -3,14 +3,13 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { createStores } from '../lib/db/index.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
 // Public festival page /f/:slug against a real server and DB: the route, the
 // store filter and express.static order together. Skip-gated like
 // integration-festival-slug; the helpers are imported lazily because
 // _integration-helpers exits the process without a test DB. Run it only against
 // a private test database on port 5434+.
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 describe('Integration — public festival page', { skip, concurrency: 1 }, () => {
   let helpers: any;

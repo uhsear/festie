@@ -11,9 +11,8 @@ import assert from 'node:assert/strict';
 import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import createProfilesStore from '../lib/db/stores/profiles.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const RUN_ID = `tsp${Date.now().toString(36)}`;
 const FEST_ID = `fest-${RUN_ID}`;

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import { z } from 'zod';
 import { isValidEmail, EMAIL_RE } from './email';
 
 describe('EMAIL_RE / isValidEmail', () => {
@@ -33,5 +34,12 @@ describe('EMAIL_RE / isValidEmail', () => {
     expect(isValidEmail('')).toBe(false);
     expect(isValidEmail(undefined)).toBe(false);
     expect(isValidEmail(null)).toBe(false);
+  });
+
+  it('agrees with the backend z.string().email() check', () => {
+    const samples = ['a@b.com', 'a@b.co.uk', 'a@@b.com', 'a@b..com', 'a@-b.com', '.a@b.com', 'a.@b.com', 'a,b@c.com', 'a@b_c.com', 'a b@c.com', 'a@b.12', 'a@b.c-m'];
+    for (const s of samples) {
+      expect(isValidEmail(s), s).toBe(z.string().email().safeParse(s).success);
+    }
   });
 });

@@ -72,7 +72,7 @@ function makeDeps(overrides: any = {}) {
 async function buildApp(overrides: any = {}) {
   const { default: createShareRoutes } = await import('../routes/share.js');
   const app = express();
-  app.use('/s', createShareRoutes(makeDeps(overrides)));
+  app.use('/s', createShareRoutes(makeDeps(overrides) as any));
   return app;
 }
 

@@ -17,9 +17,8 @@ import { sanitizeIdentifier } from '../lib/helpers/sanitize.js';
 import { ErrorCodes, sendError, sendSuccess } from '../lib/response.js';
 import { schemas, validate } from '../lib/schemas.js';
 import { createReengagementTriggers } from '../lib/notifications/reengagement.js';
+import { TEST_DATABASE_URL, skip } from './_test-schema';
 
-const TEST_DATABASE_URL = process.env.TEST_DATABASE_URL;
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
 
 const FRI = '2099-02-05';
 const SAT = '2099-02-06';

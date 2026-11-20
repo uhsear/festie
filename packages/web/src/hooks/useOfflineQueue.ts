@@ -147,7 +147,7 @@ function deriveFailedLabel(method: string | undefined, url: string | undefined):
 }
 
 /**
- * Surface a stale offline write that is being discarded (older than 24h) so it
+ * Surface a stale offline write that is being discarded (older than 7 days) so it
  * is NEVER silently dropped — the "no silent drops" contract. Routes the entry
  * to the PendingSyncSheet via surfaceFailedSync (coalesced by clientId, so the
  * getAll + pruneStaleEntries double-pass is harmless) and logs a warning with
@@ -156,7 +156,7 @@ function deriveFailedLabel(method: string | undefined, url: string | undefined):
  */
 function surfaceStaleDrop(entry: QueuedMutation): void {
   if (entry.status !== 'pending') return;
-  console.warn('Offline queue: discarding stale mutation (older than 24h)', {
+  console.warn('Offline queue: discarding stale mutation (older than 7 days)', {
     clientId: entry.clientId,
     url: entry.url,
     method: entry.method,
@@ -170,7 +170,7 @@ function surfaceStaleDrop(entry: QueuedMutation): void {
       method: entry.method ?? entry.event ?? 'POST',
       url: entry.url ?? '',
       body: entry.body ?? entry.data,
-      error: 'Could not sync (older than 24h)',
+      error: 'Could not sync (older than 7 days)',
       at: Date.now(),
     });
   } catch {
@@ -202,7 +202,7 @@ async function getAll(): Promise<QueuedMutation[]> {
     const { tx, store } = openTx('readonly');
     try {
       const all = await idbRequest<QueuedMutation[]>(store.getAll());
-      // Filter out stale mutations (older than 24h), surfacing each dropped
+      // Filter out stale mutations (older than 7 days), surfacing each dropped
       // pending write so it isn't silently lost.
       return all.filter((m) => {
         if (Date.now() - (m.createdAt || 0) < MAX_QUEUE_AGE_MS) return true;
@@ -582,7 +582,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
           } catch (err: unknown) {
             // Dead network: keep the entry untouched (same clientId, so the same
             // Idempotency-Key next time; same retries and createdAt, so MAX_RETRIES
-            // and the 24h prune still apply) and stop. The next good response drains. An edge 5xx
+            // and the 7-day prune still apply) and stop. The next good response drains. An edge 5xx
             // means the origin is down, so it counts the same: otherwise a flapping origin
             // would burn MAX_RETRIES.
             const isEdge = isEdgeUnavailable((err as { status?: number } | null)?.status);
@@ -608,7 +608,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
               err instanceof Error && 'status' in err ? (err as Error & { status: number }).status : undefined;
             if (status === 429) {
               // Rate limited: transient. Keep it queued, honour Retry-After (capped),
-              // and do not consume a retry; the 24h prune still bounds it.
+              // and do not consume a retry; the 7-day prune still bounds it.
               const waitMs = parseRetryAfterMs((err as { retryAfter?: number | string | null }).retryAfter) ?? RETRY_BACKOFF_BASE;
               await new Promise((r) => setTimeout(r, Math.min(waitMs, 30_000)));
               continue;
