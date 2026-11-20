@@ -566,7 +566,7 @@ describe('lib/socket-setup.js — allowRequest coverage', async () => {
     toClose.length = 0;
   });
 
-  function makeCtx(overrides: { config?: Record<string, unknown>; [key: string]: unknown } = {}) {
+  function makeCtx(overrides: { config?: Record<string, unknown>; [key: string]: unknown } = {}): any {
     return {
       config: { ALLOWED_ORIGINS: ['https://example.com'], ...overrides.config },
       log: { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() },

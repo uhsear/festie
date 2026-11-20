@@ -7,7 +7,8 @@ import fs from 'fs';
 import path from 'path';
 import compression from 'compression';
 import helmet from 'helmet';
-import type { Application } from 'express';
+import type { Application, NextFunction, Request, RequestHandler, Response } from 'express';
+import type { ServerResponse } from 'http';
 import type { Redis } from 'ioredis';
 
 import { createTracingMiddleware } from './tracing.js';
@@ -16,6 +17,8 @@ import { default as createAuditMiddleware } from './audit-middleware.js';
 import { recordRecentRequest } from './recent-requests.js';
 import { sentry } from './sentry.js';
 import { runWithRequestContext } from './logger.js';
+import type { AppConfig } from './config.js';
+import type { AppContext } from './types/app-context.js';
 
 /**
  * Idempotency-Key middleware: caches the JSON response per
@@ -37,20 +40,39 @@ import { runWithRequestContext } from './logger.js';
  * re-executing. Redis errors fall back to the in-process cache. The in-flight
  * reservation stays per-process.
  */
+/** The request and response members the idempotency middleware reads, so it runs on a bare double. */
+type IdempotencyRequest = Pick<Request, 'method' | 'headers'> & Partial<Pick<Request, 'ip' | 'baseUrl' | 'path'>>;
+type IdempotencyResponse = Pick<Response, 'json' | 'statusCode' | 'on' | 'setHeader' | 'status'>;
+
+/** A finished response, kept for replay. */
+interface IdempotencyRecord {
+  pending?: false;
+  status: number;
+  body: unknown;
+  ts: number;
+}
+
+/** A request still running: duplicates wait on `settled`, which resolves to its record or null. */
+interface IdempotencyReservation {
+  pending: true;
+  ts: number;
+  settled: Promise<IdempotencyRecord | null>;
+}
+
 function createIdempotencyMiddleware({
   ttl,
   maxEntries,
   resolveUserId,
-  clientIp = (req: any) => req.ip,
+  clientIp = (req: IdempotencyRequest) => req.ip as string,
   redis = null,
 }: {
   ttl: number;
   maxEntries: number;
   redis?: Redis | null;
-  resolveUserId?: (req: any) => Promise<string | null>;
-  clientIp?: (req: any) => string;
+  resolveUserId?: (req: IdempotencyRequest) => Promise<string | null>;
+  clientIp?: (req: IdempotencyRequest) => string;
 }) {
-  const cache = new Map<string, any>();
+  const cache = new Map<string, IdempotencyRecord | IdempotencyReservation>();
   const timer = setInterval(() => {
     const now = Date.now();
     for (const [key, entry] of cache) {
@@ -59,7 +81,8 @@ function createIdempotencyMiddleware({
   }, 60_000);
   timer.unref();
 
-  function middleware(req: any, res: any, next: any) {
+  function middleware(req: IdempotencyRequest, looseRes: Partial<IdempotencyResponse>, next: NextFunction) {
+    const res = looseRes as IdempotencyResponse;
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
     const key = req.headers['idempotency-key'];
     if (!key || typeof key !== 'string' || key.length > 128) return next();
@@ -78,22 +101,22 @@ function createIdempotencyMiddleware({
         // Reserve the slot synchronously, before next(): a concurrent duplicate
         // that arrives while this request's handler is still running finds a
         // pending reservation and waits on `settled` instead of re-executing.
-        let resolveSettled: (v: any) => void;
-        const settled = new Promise<any>((r) => {
+        let resolveSettled: (v: IdempotencyRecord | null) => void;
+        const settled = new Promise<IdempotencyRecord | null>((r) => {
           resolveSettled = r;
         });
-        const reservation = { pending: true, ts: Date.now(), settled };
+        const reservation: IdempotencyReservation = { pending: true, ts: Date.now(), settled };
         cache.set(cacheKey, reservation);
 
         let done = false;
-        const release = (value: any) => {
+        const release = (value: IdempotencyRecord | null) => {
           if (done) return;
           done = true;
           resolveSettled(value);
         };
 
         const originalJson = res.json.bind(res);
-        res.json = (body: any) => {
+        res.json = (body: unknown) => {
           if (res.statusCode >= 500) {
             if (cache.get(cacheKey) === reservation) cache.delete(cacheKey);
             release(null);
@@ -103,7 +126,7 @@ function createIdempotencyMiddleware({
             const oldestKey = cache.keys().next().value;
             if (oldestKey) cache.delete(oldestKey);
           }
-          const record = { status: res.statusCode, body, ts: Date.now() };
+          const record: IdempotencyRecord = { status: res.statusCode, body, ts: Date.now() };
           cache.set(cacheKey, record);
           redis?.set(`idem:${cacheKey}`, JSON.stringify(record), 'PX', ttl).catch(() => {});
           release(record);
@@ -128,7 +151,7 @@ function createIdempotencyMiddleware({
           .get(`idem:${cacheKey}`)
           .catch(() => null)
           .then((raw) => {
-            const stored = raw ? JSON.parse(raw) : null;
+            const stored: IdempotencyRecord | null = raw ? JSON.parse(raw) : null;
             if (!stored) return next();
             cache.set(cacheKey, stored);
             release(stored);
@@ -156,7 +179,7 @@ function createIdempotencyMiddleware({
 
       // A same-key request is still in flight -> wait for its outcome, then
       // replay it. If it ended without a response, this request executes now.
-      cached.settled.then((value: any) => {
+      cached.settled.then((value) => {
         if (value) {
           res.setHeader('X-Idempotency-Replayed', 'true');
           return res.status(value.status).json(value.body);
@@ -173,10 +196,12 @@ function createIdempotencyMiddleware({
  * Configure all Express middleware on the app instance.
  * @returns {{ inFlightRequests: { count: number } }} References needed by shutdown
  */
-function configureMiddleware(app: Application, ctx: any) {
+function configureMiddleware(app: Application, ctx: AppContext) {
+  const config: AppConfig = ctx.config;
+  // The factory defaults every argument; the context type declares them required.
+  const rateLimit = ctx.rateLimit as (max?: number, key?: string, opts?: { anonIpCap?: boolean }) => RequestHandler;
   const {
     express,
-    config,
     log,
     state,
     contentSecurityPolicy,
@@ -187,7 +212,6 @@ function configureMiddleware(app: Application, ctx: any) {
     getRequestIp,
     validateUserSession,
     resolveRequestToken,
-    rateLimit,
     authRateLimit,
     sendError,
     ErrorCodes,
@@ -199,7 +223,7 @@ function configureMiddleware(app: Application, ctx: any) {
   app.set('trust proxy', config.TRUST_PROXY);
 
   // Sentry tracing adds per-layer finish/close listeners on top of ours; raise the cap so Node's MaxListenersExceededWarning stays quiet.
-  app.use((_req: any, res: any, next: any) => {
+  app.use((_req: Request, res: Response, next: NextFunction) => {
     res.setMaxListeners(20);
     next();
   });
@@ -215,7 +239,7 @@ function configureMiddleware(app: Application, ctx: any) {
     compression({
       level: 6,
       threshold: 1024,
-      filter(req: any, res: any) {
+      filter(req: Request, res: Response) {
         const contentType = res.getHeader('content-type') || '';
         if (/image\/(webp|png|jpeg|gif)/.test(contentType as string)) return false;
         return compression.filter(req, res);
@@ -255,20 +279,20 @@ function configureMiddleware(app: Application, ctx: any) {
   );
 
   // ── Request ID ────────────────────────────────────────────────────────
-  app.use((req: any, res: any, next: any) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     req.id = crypto.randomUUID();
     res.setHeader('X-Request-Id', req.id);
     next();
   });
 
   // ── Distributed tracing ───────────────────────────────────────────────
-  app.use(createTracingMiddleware() as any);
+  app.use(createTracingMiddleware());
 
   // ── Request context for log lines (reqId/traceId via AsyncLocalStorage) ──
-  app.use((req: any, _res: any, next: any) => runWithRequestContext({ reqId: req.id, traceId: req.traceId }, next));
+  app.use((req: Request, _res: Response, next: NextFunction) => runWithRequestContext({ reqId: req.id, traceId: req.traceId }, next));
 
   // ── CSP + security headers ────────────────────────────────────────────
-  app.use((req: any, res: any, next: any) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     res.setHeader('Content-Security-Policy', contentSecurityPolicy);
     // Report-To header defines the reporting group referenced by CSP report-to directive.
     // Forward-compat: browsers that support Reporting API v1 use this; older ones fall back to report-uri.
@@ -288,7 +312,7 @@ function configureMiddleware(app: Application, ctx: any) {
   // Basemap archives are public, credential-free files. The phone map reads them
   // from an opaque origin, and WebKit preflights its Range reads; the CORS gate
   // below refuses any preflight from an unlisted origin, so answer it here.
-  app.use('/uploads/basemaps', (req: any, res: any, next: any) => {
+  app.use('/uploads/basemaps', (req: Request, res: Response, next: NextFunction) => {
     if (req.method !== 'OPTIONS') return next();
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
@@ -298,11 +322,11 @@ function configureMiddleware(app: Application, ctx: any) {
   });
 
   // ── CORS ──────────────────────────────────────────────────────────────
-  app.use((req: any, res: any, next: any) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin;
     if (!origin) return next();
     const isAllowed =
-      isAllowedOrigin(origin, req.get('host')) || config.MOBILE_ORIGINS.some((mo: any) => origin === mo);
+      isAllowedOrigin(origin, req.get('host')) || config.MOBILE_ORIGINS.some((mo) => origin === mo);
     if (isAllowed) {
       res.setHeader('Access-Control-Allow-Origin', origin);
       res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -327,8 +351,8 @@ function configureMiddleware(app: Application, ctx: any) {
   app.use(enforceAllowedOrigin);
 
   // ── JSON body parser ──────────────────────────────────────────────────
-  app.use((req: any, res: any, next: any) => {
-    express.json({ limit: config.JSON_LIMIT, strict: true })(req, res, (err: any) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    express.json({ limit: config.JSON_LIMIT, strict: true })(req, res, (err?: Error & { type?: string }) => {
       if (err) {
         if (err.type === 'entity.parse.failed') {
           return sendError(res, 400, 'Invalid JSON in request body', ErrorCodes.INVALID_INPUT);
@@ -349,7 +373,7 @@ function configureMiddleware(app: Application, ctx: any) {
       immutable: true,
       maxAge: '365d',
       fallthrough: true,
-      setHeaders(res: any, filePath: any) {
+      setHeaders(res: ServerResponse, filePath: string) {
         if (filePath.endsWith('.webp')) res.setHeader('Content-Type', 'image/webp');
         res.setHeader('X-Content-Type-Options', 'nosniff');
         res.setHeader(
@@ -370,7 +394,7 @@ function configureMiddleware(app: Application, ctx: any) {
       immutable: true,
       maxAge: '365d',
       fallthrough: true,
-      setHeaders(res: any, filePath: any) {
+      setHeaders(res: ServerResponse, filePath: string) {
         if (!filePath.endsWith('.webp')) return;
         res.setHeader('Content-Type', 'image/webp');
         res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -401,7 +425,7 @@ function configureMiddleware(app: Application, ctx: any) {
       fallthrough: true,
       // Only ever serve .pmtiles archives from here; anything else 404s into the
       // SPA catch-all (which already rejects /uploads/* with a 404).
-      setHeaders(res: any, filePath: any) {
+      setHeaders(res: ServerResponse, filePath: string) {
         if (!filePath.endsWith('.pmtiles')) return;
         // PMTiles is an application/octet-stream container; the client reads it by
         // byte range, not by content type, but set an explicit type + nosniff.
@@ -427,13 +451,13 @@ function configureMiddleware(app: Application, ctx: any) {
   );
 
   // ── Liveness probe ────────────────────────────────────────────────────
-  app.get('/health/live', (req: any, res: any) => {
+  app.get('/health/live', (req: Request, res: Response) => {
     res.status(200).json({ status: 'alive', uptime: process.uptime() });
   });
 
   // ── OpenAPI spec + Swagger UI (dev/staging only) ─────────────────────
   if (config.NODE_ENV !== 'production') {
-    app.get('/api/docs/openapi.json', (req: any, res: any) => {
+    app.get('/api/docs/openapi.json', (req: Request, res: Response) => {
       res.json(generateOpenAPISpec(config));
     });
     mountSwaggerUI(app, config);
@@ -443,9 +467,9 @@ function configureMiddleware(app: Application, ctx: any) {
   // Serve the Workbox-generated SW from the React dist/ build.
   const webDist = config.WEB_DIST;
   const _reactSwPath = path.join(webDist, 'sw.js');
-  app.get('/sw.js', (req: any, res: any) => {
+  app.get('/sw.js', (req: Request, res: Response) => {
     setNoStore(res);
-    res.sendFile(_reactSwPath, (err: any) => {
+    res.sendFile(_reactSwPath, (err?: Error) => {
       if (err && !res.headersSent) {
         res.status(404).json({
           ok: false,
@@ -456,8 +480,8 @@ function configureMiddleware(app: Application, ctx: any) {
     });
   });
   const _reactManifestPath = path.join(webDist, 'manifest.webmanifest');
-  app.get('/manifest.json', (req: any, res: any, next: any) => {
-    res.sendFile(_reactManifestPath, (err: any) => {
+  app.get('/manifest.json', (req: Request, res: Response, next: NextFunction) => {
+    res.sendFile(_reactManifestPath, (err?: Error) => {
       if (err && !res.headersSent) next(err);
     });
   });
@@ -473,7 +497,7 @@ function configureMiddleware(app: Application, ctx: any) {
         maxAge: '7d',
         dotfiles: 'deny',
         index: false, // SPA catch-all in routes/pages.js handles /
-        setHeaders(res: any, filePath: any) {
+        setHeaders(res: ServerResponse, filePath: string) {
           if (filePath.endsWith('.html')) setNoStore(res);
           // Vite hashed assets are safe to cache immutably
           if (/\.[0-9a-f]{8,}\.(js|css)$/i.test(filePath) || /assets\//.test(filePath)) {
@@ -509,7 +533,7 @@ function configureMiddleware(app: Application, ctx: any) {
       maxAge: '7d',
       dotfiles: 'deny',
       index: false, // SPA catch-all serves React index.html for /
-      setHeaders(res: any, filePath: any) {
+      setHeaders(res: ServerResponse, filePath: string) {
         if (filePath.endsWith('.html')) setNoStore(res);
         if (filePath.endsWith('.js') || filePath.endsWith('.css')) {
           res.setHeader('Cache-Control', 'public, max-age=0, must-revalidate');
@@ -522,7 +546,7 @@ function configureMiddleware(app: Application, ctx: any) {
   );
 
   // ── Request timeout ───────────────────────────────────────────────────
-  app.use('/api', (req: any, res: any, next: any) => {
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
     const timeout = setTimeout(() => {
       if (!res.headersSent) {
         log.warn('request timeout', { method: req.method, path: req.path, reqId: req.id });
@@ -536,20 +560,20 @@ function configureMiddleware(app: Application, ctx: any) {
   });
 
   // ── API version header ────────────────────────────────────────────────
-  app.use('/api', (req: any, res: any, next: any) => {
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
     res.setHeader('X-API-Version', config.API_VERSION);
     next();
   });
 
   // ── API request metrics ───────────────────────────────────────────────
-  app.use('/api', (req: any, res: any, next: any) => {
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
     const start = Date.now();
     let recorded = false;
     function recordMetrics() {
       if (recorded) return;
       recorded = true;
       const duration = Date.now() - start;
-      const meta: any = {
+      const meta: Record<string, unknown> = {
         method: req.method,
         path: (req.originalUrl || req.path || '').split('?')[0],
         status: res.statusCode,
@@ -598,7 +622,7 @@ function configureMiddleware(app: Application, ctx: any) {
   // ── Rate limiting ─────────────────────────────────────────────────────
   // The web-vitals beacon has its own scoped limiter (routes/client-metrics.ts); keep it out of the shared bucket so it cannot starve crew calls.
   const globalLimiter = rateLimit();
-  app.use('/api', (req: any, res: any, next: any) =>
+  app.use('/api', (req: Request, res: Response, next: NextFunction) =>
     req.method === 'POST' && req.path === '/v1/metrics/web-vitals' ? next() : globalLimiter(req, res, next));
   app.use('/api/v1/auth/login', authRateLimit);
   app.use('/api/v1/auth/register', authRateLimit);
@@ -611,7 +635,7 @@ function configureMiddleware(app: Application, ctx: any) {
   // Writes only: opening a crew screen fires ~10 parallel GETs, which would burn the
   // whole budget and 429 the SOS / crew writes. Reads stay under the global limit above.
   const crewWriteLimit = rateLimit(config.OVERLAP_RATE_LIMIT_MAX, 'crews', { anonIpCap: false });
-  app.use('/api/v1/crews', (req: any, res: any, next: any) =>
+  app.use('/api/v1/crews', (req: Request, res: Response, next: NextFunction) =>
     req.method === 'GET' || req.method === 'HEAD' ? next() : crewWriteLimit(req, res, next),
   );
 
@@ -621,7 +645,7 @@ function configureMiddleware(app: Application, ctx: any) {
   // key by IP only.
   const resolveUserId =
     validateUserSession && resolveRequestToken
-      ? async (req: any) =>
+      ? async (req: IdempotencyRequest) =>
           (await validateUserSession(resolveRequestToken(req, 'x-user-token', config.USER_SESSION_COOKIE).token))
             ?.userId ?? null
       : undefined;
@@ -637,7 +661,7 @@ function configureMiddleware(app: Application, ctx: any) {
 
   // ── In-flight request tracking ────────────────────────────────────────
   const inFlightRequests = { count: 0 };
-  app.use((req: any, res: any, next: any) => {
+  app.use((req: Request, res: Response, next: NextFunction) => {
     inFlightRequests.count += 1;
     // Guard against double-decrement: both 'finish' and 'close' can fire for
     // the same response, so only the first one counts (mirrors the `recorded`

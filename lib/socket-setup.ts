@@ -2,18 +2,40 @@
  * Socket.IO server creation, Redis adapter, notification service, event emitter.
  */
 import http from 'http';
+import type { IncomingMessage } from 'http';
 import { Server } from 'socket.io';
 import type { Application } from 'express';
+import type { Redis } from 'ioredis';
 
+import type { AppConfig } from './config.js';
+import type { createLogger } from './logger.js';
+import type { RealtimeSocket } from './presence.js';
+import type { AppContext } from './types/app-context.js';
 import { createNotificationService } from './notifications/index.js';
 import { createSocketEmitter } from './emitter.js';
+import type { EmitterStores } from './emitter.js';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { duplicateClient } from './redis.js';
+
+/** The slice of the app context that Socket.IO setup reads. */
+interface SocketSetupContext {
+  config: AppConfig;
+  log: ReturnType<typeof createLogger>;
+  redis: Redis | null;
+  stores: EmitterStores;
+  getSocketRequestIp: (req: IncomingMessage) => string;
+  isAllowedOrigin: (origin: string | undefined, host: string | undefined) => boolean;
+  consumeSocketConnectRateLimitAsync: (ip: string) => Promise<boolean>;
+  buildAvatarUrl: (user: unknown) => string | null;
+  validateUserSession: (token: string) => Promise<unknown>;
+  promMetrics: unknown;
+}
 
 /**
  * Create HTTP server, configure Socket.IO with Redis adapter, init push notifications.
  */
-function configureSocketIO(app: Application, ctx: any) {
+// AppContext is accepted too: its index signature types every key `any`, so the cast below only narrows.
+function configureSocketIO(app: Application, ctx: SocketSetupContext | AppContext) {
   const {
     config, log, redis, stores,
     getSocketRequestIp, isAllowedOrigin,
@@ -21,7 +43,7 @@ function configureSocketIO(app: Application, ctx: any) {
     buildAvatarUrl,
     validateUserSession,
     promMetrics,
-  } = ctx;
+  } = ctx as SocketSetupContext;
 
   const server = http.createServer(app);
   server.keepAliveTimeout = config.SOCKET_KEEPALIVE_TIMEOUT;
@@ -36,7 +58,7 @@ function configureSocketIO(app: Application, ctx: any) {
       methods: ['GET', 'POST'],
       credentials: true,
     },
-    allowRequest: async (req: any, callback: any) => {
+    allowRequest: async (req, callback) => {
       // getSocketRequestIp, NOT getRawRequestIp: behind the Cloudflare Tunnel the
       // raw socket peer is 127.0.0.1 for every user, which collapsed this per-IP
       // limiter into a single shared bucket and capped the WHOLE app at
@@ -78,7 +100,7 @@ function configureSocketIO(app: Application, ctx: any) {
   // Handshake token check. Runs after the upgrade so a rejection carries
   // data.status (401 = bad token, client refreshes once; 503 = lookup failed,
   // client keeps its normal reconnect backoff). Fails closed on lookup errors.
-  io.use(async (socket: any, next: any) => {
+  io.use(async (socket, next) => {
     const { auth, query, headers } = socket.handshake;
     const bearer = typeof headers?.authorization === 'string' && headers.authorization.startsWith('Bearer ')
       ? headers.authorization.slice(7).trim()
@@ -91,8 +113,8 @@ function configureSocketIO(app: Application, ctx: any) {
     try {
       const session = await validateUserSession(rawToken.trim());
       if (!session) return reject('Invalid session token', 401);
-    } catch (err: any) {
-      log.warn('socket:session-check-failed', { error: err.message });
+    } catch (err) {
+      log.warn('socket:session-check-failed', { error: (err as Error).message });
       return reject('Session check unavailable', 503);
     }
     next();
@@ -119,14 +141,14 @@ function configureSocketIO(app: Application, ctx: any) {
       // The publish connection gets a REAL error logger rather than
       // duplicateClient's default swallow: it carries all outbound broadcast
       // traffic, so silent failure there is indistinguishable from silence.
-      const pubClient = duplicateClient(redis, (err: any) => {
+      const pubClient = duplicateClient(redis, (err: Error & { code?: string }) => {
         log.warn('socket.io redis pub client error', { error: err?.message, code: err?.code });
       });
       const subClient = duplicateClient(redis);
       io.adapter(createAdapter(pubClient, subClient, { key: 'fp-sio' }));
       log.info('socket.io redis adapter attached');
-    } catch (err: any) {
-      log.warn('socket.io redis adapter failed, using in-memory', { error: err.message });
+    } catch (err) {
+      log.warn('socket.io redis adapter failed, using in-memory', { error: (err as Error).message });
     }
   }
 
@@ -142,7 +164,7 @@ function configureSocketIO(app: Application, ctx: any) {
   // room) within 5 seconds or get disconnected. This prevents unauthenticated
   // sockets from lingering and consuming server resources.
   const AUTH_TIMEOUT_MS = 5_000;
-  io.on('connection', (socket: any) => {
+  io.on('connection', (socket: RealtimeSocket) => {
     const authTimer = setTimeout(() => {
       if (!socket.authenticated) {
         log.warn('socket:auth-timeout', { socketId: socket.id, reason: 'No join:festival within 5s' });

@@ -10,6 +10,7 @@ export default function createCrewMemberRoutes(deps: any) {
     log,
     pool,
     userAuth,
+    adminAuth,
     setNoStore,
     sanitizeIdentifier,
     sendSuccess,
@@ -115,14 +116,11 @@ export default function createCrewMemberRoutes(deps: any) {
   // ── GET /search-users — Admin: search users for crew add ──────
   router.get(
     '/search-users',
-    userAuth,
+    adminAuth,
     rateLimit(30, 'crew-user-search'),
     validateQuery(schemas.crewUserSearchQuery),
     async (req: any, res: any) => {
       try {
-        const isAdmin = await stores.roles.hasRole(req.user.userId, 'admin');
-        if (!isAdmin) return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
-
         setNoStore(res);
         const q = (req.validatedQuery.q || '').trim();
         if (!q || q.length < 1) return sendSuccess(res, []);
@@ -367,15 +365,12 @@ export default function createCrewMemberRoutes(deps: any) {
   // ── POST /:crewId/members — Admin: add any user to a crew ─────
   router.post(
     '/:crewId/members',
-    userAuth,
+    adminAuth,
     rateLimit(10, 'crew-add-member'),
     validateParams(schemas.crewIdParams),
     validate(schemas.crewAddMember),
     async (req: any, res: any) => {
       try {
-        const isAdmin = await stores.roles.hasRole(req.user.userId, 'admin');
-        if (!isAdmin) return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
-
         const crewId = sanitizeIdentifier(req.validatedParams.crewId, 100);
         if (!crewId) return sendError(res, 400, 'Invalid crew ID', ErrorCodes.INVALID_INPUT);
 

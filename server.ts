@@ -116,6 +116,7 @@ import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
 import createPageRoutes from './routes/pages';
 import { createLogger } from './lib/logger';
+import { isLeader, getWorkerId } from './lib/process-role';
 import {
   createMetrics,
   metricsMiddleware,
@@ -154,12 +155,7 @@ import type { Express, Request, Response, NextFunction } from 'express';
 import type { AppContext, RouteDeps } from './lib/types/app-context';
 
 const metrics = createMetrics();
-const workerId =
-  process.env.NODE_APP_INSTANCE !== undefined
-    ? Number(process.env.NODE_APP_INSTANCE)
-    : process.env.PM_ID !== undefined
-      ? Number(process.env.PM_ID)
-      : 0;
+const workerId = getWorkerId();
 
 const log = createLogger();
 
@@ -444,8 +440,7 @@ function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
   // createBackgroundTasks (lib/background-tasks.ts): PM2 sets NODE_APP_INSTANCE to
   // '0'..'N-1', so only instance 0 (or non-cluster mode where it's undefined)
   // runs the boot-time purge — avoids N workers issuing identical DELETEs.
-  const _purgeInstance = process.env.NODE_APP_INSTANCE;
-  const _isPurgeLeader = _purgeInstance === undefined || _purgeInstance === '0';
+  const _isPurgeLeader = isLeader();
   if (_isPurgeLeader) {
     Promise.all([
       pool.query('DELETE FROM password_reset_tokens WHERE expires_at < NOW()'),

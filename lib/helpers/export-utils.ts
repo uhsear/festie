@@ -6,8 +6,71 @@
  */
 
 import { escapeHtml } from './sanitize';
+import type { Profile } from '../types/contracts';
 
-export function getAvatarColor(name: any) {
+interface FestivalSet {
+  id: string;
+  artist: string;
+  stageId?: string;
+  startTime?: string | null;
+  endTime?: string | null;
+}
+
+interface FestivalDay {
+  id?: string;
+  label?: string;
+  date?: string;
+  sets?: FestivalSet[];
+}
+
+interface ExportFestival {
+  name?: string;
+  location?: string;
+  stages?: { id: string; name: string; color?: string }[];
+  days?: FestivalDay[];
+}
+
+/** A set with its day, as buildFestivalSetList flattens it. */
+export interface ExportSet extends FestivalSet {
+  dayIndex: number;
+  dayLabel: string;
+  dayDate: string;
+}
+
+interface ExportProfile {
+  id?: string;
+  name: string;
+  picks?: Record<string, string>;
+  notes?: Record<string, string>;
+  reminders?: Record<string, number | string>;
+}
+
+type StageMap = Map<string, { name: string; color?: string }>;
+
+/** What pickTimedFestivalSet answers: the set to show and why. */
+interface TimedChoice<T> {
+  mode: string;
+  set: T;
+}
+
+interface AvatarUser {
+  avatarKey?: string | null;
+  avatarVersion?: string | number | null;
+  [key: string]: unknown;
+}
+
+interface ProfileRecord extends ExportProfile {
+  id: string;
+  festivalId: string;
+  userId: string;
+  picks?: Profile['picks'];
+  reminders?: Profile['reminders'];
+  interests?: Profile['interests'];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export function getAvatarColor(name: string) {
   const colors = ['#ff3366', '#00e8d0', '#ffb020', '#39ff14', '#ff8c00', '#4488ff', '#ff4444', '#e040fb', '#00e5ff', '#ffab00'];
   let hash = 0;
   for (let index = 0; index < name.length; index += 1) {
@@ -16,7 +79,7 @@ export function getAvatarColor(name: any) {
   return colors[Math.abs(hash) % colors.length];
 }
 
-export function getInitials(name: any) {
+export function getInitials(name: unknown) {
   return String(name)
     .split(' ')
     .map((word) => word[0] || '')
@@ -25,9 +88,9 @@ export function getInitials(name: any) {
     .slice(0, 2);
 }
 
-export function formatTime(value: any) {
+export function formatTime(value: string | null | undefined) {
   if (!value) return '';
-  const [hours, minutes] = value.split(':').map((part: any) => Number.parseInt(part, 10));
+  const [hours, minutes] = value.split(':').map((part) => Number.parseInt(part, 10)) as [number, number];
   let hour = hours;
   const amPm = hour >= 12 ? 'PM' : 'AM';
   hour = hour % 12 || 12;
@@ -46,41 +109,42 @@ export function formatMoney(cents: number, currency: string) {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency }).format(cents / 100);
 }
 
-export function formatExportTimestamp(value: any) {
+export function formatExportTimestamp(value: string | number | Date | null | undefined) {
   if (!value) return '';
   const stamp = new Date(value);
   if (Number.isNaN(stamp.getTime())) return '';
   return stamp.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
 }
 
-export function timeToMinutes(value: any) {
+export function timeToMinutes(value: string | null | undefined) {
   if (!value) return 0;
-  const [hours, minutes] = value.split(':').map((part: any) => Number.parseInt(part, 10));
+  const [hours, minutes] = value.split(':').map((part) => Number.parseInt(part, 10)) as [number, number];
   return (hours * 60) + minutes;
 }
 
-export function buildSetDateStamp(dayDate: any, timeValue: any) {
+export function buildSetDateStamp(dayDate: string | null | undefined, timeValue: string | null | undefined) {
   if (!dayDate || !timeValue) return null;
   const stamp = new Date(`${dayDate}T${timeValue}:00`);
   return Number.isNaN(stamp.getTime()) ? null : stamp;
 }
 
-export function getSetTiming(set: any) {
+export function getSetTiming(set: Pick<ExportSet, 'dayDate' | 'startTime' | 'endTime'>) {
   const start = buildSetDateStamp(set.dayDate, set.startTime);
   let end = buildSetDateStamp(set.dayDate, set.endTime);
   if (start && end && end <= start) end = new Date(end.getTime() + (24 * 60 * 60 * 1000));
   return { start, end };
 }
 
-export function buildFestivalSetList(festival: any) {
+// any[]: tests index the list and its entries without an undefined check.
+export function buildFestivalSetList(festival: ExportFestival): any[] {
   return (festival.days || [])
-    .flatMap((day: any, dayIndex: any) => (day.sets || []).map((set: any) => ({
+    .flatMap((day, dayIndex) => (day.sets || []).map((set) => ({
       ...set,
       dayIndex,
       dayLabel: day.label || day.date || 'Day',
       dayDate: day.date || '',
     })))
-    .sort((left: any, right: any) => {
+    .sort((left, right) => {
       if (left.dayIndex !== right.dayIndex) return left.dayIndex - right.dayIndex;
       const lT = left.startTime || '';
       const rT = right.startTime || '';
@@ -91,43 +155,47 @@ export function buildFestivalSetList(festival: any) {
     });
 }
 
-export function pickTimedFestivalSet(items: any, exportedAt: any) {
+export function pickTimedFestivalSet<T extends Pick<ExportSet, 'dayDate' | 'startTime' | 'endTime'>>(
+  items: T[],
+  exportedAt: string | number | Date | undefined,
+): TimedChoice<T> | null {
   if (items.length === 0) return null;
-  const exportedTime = new Date(exportedAt);
-  if (Number.isNaN(exportedTime.getTime())) return items[0];
+  const exportedTime = new Date(exportedAt as string);
+  // An unparseable exportedAt returns the first set itself, not a { mode, set } choice (pre-existing; the callers then read both as undefined).
+  if (Number.isNaN(exportedTime.getTime())) return items[0] as unknown as TimedChoice<T>;
 
-  const current = items.find((entry: any) => {
+  const current = items.find((entry) => {
     const { start, end } = getSetTiming(entry);
     return start && end && start <= exportedTime && exportedTime < end;
   });
   if (current) return { mode: 'Live now', set: current };
 
-  const next = items.find((entry: any) => {
+  const next = items.find((entry) => {
     const { end } = getSetTiming(entry);
     return !end || end > exportedTime;
   });
   if (next) return { mode: 'Next move', set: next };
 
-  return { mode: 'Next move', set: items[0] };
+  return { mode: 'Next move', set: items[0] as T };
 }
 
-export function getExportPickLabel(priority: any) {
+export function getExportPickLabel(priority: string | undefined) {
   return ({
     must: 'Must See',
     'want-to-see': 'Want to See',
     maybe: 'Maybe',
-  } as Record<string, string>)[priority] || 'Saved';
+  } as Record<string, string>)[priority as string] || 'Saved';
 }
 
-export function getExportPickChipClass(priority: any) {
+export function getExportPickChipClass(priority: string | undefined) {
   return ({
     must: 'chip-must',
     'want-to-see': 'chip-want',
     maybe: 'chip-maybe',
-  } as Record<string, string>)[priority] || 'chip-accent';
+  } as Record<string, string>)[priority as string] || 'chip-accent';
 }
 
-export function formatSetRangeLabel(set: any) {
+export function formatSetRangeLabel(set: Pick<ExportSet, 'dayLabel' | 'startTime' | 'endTime'>) {
   if (!set.startTime) return `${set.dayLabel} · TBA`;
   const timeLabel = set.endTime
     ? `${formatTime(set.startTime)} - ${formatTime(set.endTime)}`
@@ -135,48 +203,54 @@ export function formatSetRangeLabel(set: any) {
   return `${set.dayLabel} · ${timeLabel}`;
 }
 
-export function formatSetLocationLabel(set: any, stageMap: any) {
-  const stage = stageMap.get(set.stageId) || { name: 'Unknown' };
+export function formatSetLocationLabel(set: Pick<ExportSet, 'dayLabel' | 'startTime' | 'endTime' | 'stageId'>, stageMap: StageMap) {
+  const stage = stageMap.get(set.stageId as string) || { name: 'Unknown' };
   return `${formatSetRangeLabel(set)} · ${stage.name}`;
 }
 
-export function getExportCurrentOrNextPickedSet(sets: any, profile: any, exportedAt: any) {
-  const picked = sets.filter((set: any) => profile.picks?.[set.id]);
+export function getExportCurrentOrNextPickedSet(sets: ExportSet[], profile: Partial<ExportProfile>, exportedAt: string | number | Date | undefined) {
+  const picked = sets.filter((set) => profile.picks?.[set.id]);
   return pickTimedFestivalSet(picked, exportedAt);
 }
 
-export function getExportReminderItems(sets: any, profile: any) {
+// any[]: tests index the items without an undefined check.
+export function getExportReminderItems(sets: ExportSet[], profile: Partial<ExportProfile>): any[] {
   return sets
-    .map((set: any) => ({
+    .map((set) => ({
       set,
       lead: Number(profile.reminders?.[set.id] || 0) || 0,
       startsAt: buildSetDateStamp(set.dayDate, set.startTime),
     }))
-    .filter((entry: any) => entry.lead > 0)
-    .sort((left: any, right: any) => (
+    .filter((entry) => entry.lead > 0)
+    .sort((left, right) => (
       (left.startsAt?.getTime() || Number.MAX_SAFE_INTEGER)
       - (right.startsAt?.getTime() || Number.MAX_SAFE_INTEGER)
     ));
 }
 
-export function formatCrewOverlapLabel(names: any) {
+export function formatCrewOverlapLabel(names: string[]) {
   if (names.length === 0) return 'No shared set yet';
   if (names.length === 1) return `${names[0]} also saved this`;
   if (names.length === 2) return `${names[0]} and ${names[1]} also saved this`;
   return `${names[0]} + ${names.length - 1} others also saved this`;
 }
 
-export function getExportNextCrewOverlap(sets: any, profile: any, allProfiles: any, exportedAt: any) {
+export function getExportNextCrewOverlap(
+  sets: ExportSet[],
+  profile: Partial<ExportProfile>,
+  allProfiles: ExportProfile[],
+  exportedAt: string | number | Date | undefined,
+) {
   const overlapEntries = sets
-    .map((set: any) => {
+    .map((set) => {
       if (!profile.picks?.[set.id]) return null;
       const others = allProfiles
-        .filter((otherProfile: any) => otherProfile.id !== profile.id && otherProfile.picks?.[set.id])
-        .map((otherProfile: any) => otherProfile.name);
+        .filter((otherProfile) => otherProfile.id !== profile.id && otherProfile.picks?.[set.id])
+        .map((otherProfile) => otherProfile.name);
       if (others.length === 0) return null;
       return { ...set, otherNames: others };
     })
-    .filter(Boolean);
+    .filter((entry) => entry !== null);
 
   const choice = pickTimedFestivalSet(overlapEntries, exportedAt);
   if (!choice) return null;
@@ -188,14 +262,14 @@ export function getExportNextCrewOverlap(sets: any, profile: any, allProfiles: a
 }
 
 
-export function buildAvatarUrl(user: any) {
+export function buildAvatarUrl(user: AvatarUser | null | undefined) {
   if (!user?.avatarKey || !user?.avatarVersion) return null;
   return `/uploads/avatars/${user.avatarKey}.webp?v=${encodeURIComponent(user.avatarVersion)}`;
 }
 
 
 
-export function serializeOwnProfile(profile: any, user: any = null) {
+export function serializeOwnProfile(profile: ProfileRecord, user: AvatarUser | null = null) {
   return {
     id: profile.id,
     festivalId: profile.festivalId,
@@ -212,8 +286,9 @@ export function serializeOwnProfile(profile: any, user: any = null) {
   };
 }
 
-export function serializeProfileForViewer(profile: any, viewerUserId: any, user: any = null) {
-  const result: Record<string, any> = {
+/** An unclaimed imported profile has no user. */
+export function serializeProfileForViewer(profile: Omit<ProfileRecord, 'userId'> & { userId: string | null }, viewerUserId: string | undefined, user: AvatarUser | null = null) {
+  const result: Record<string, unknown> = {
     id: profile.id,
     festivalId: profile.festivalId,
     name: profile.name,
@@ -233,18 +308,24 @@ export function serializeProfileForViewer(profile: any, viewerUserId: any, user:
   return result;
 }
 
-export function buildExportHtml(template: any, festival: any, profile: any, allProfiles: any, exportedAt: any) {
-  const stageMap: Map<string, any> = new Map((festival.stages || []).map((stage: any) => [stage.id, stage]));
+export function buildExportHtml(
+  template: string,
+  festival: ExportFestival,
+  profile: Partial<ExportProfile>,
+  allProfiles: ExportProfile[],
+  exportedAt: string | number | Date | undefined,
+) {
+  const stageMap: StageMap = new Map((festival.stages || []).map((stage) => [stage.id, stage]));
   const sets = buildFestivalSetList(festival);
   const reminders = getExportReminderItems(sets, profile);
-  const reminderMap = new Map(reminders.map((entry: any) => [entry.set.id, entry.lead]));
+  const reminderMap = new Map(reminders.map((entry) => [entry.set.id, entry.lead]));
   const nextMove = getExportCurrentOrNextPickedSet(sets, profile, exportedAt);
   const crewOverlap = getExportNextCrewOverlap(sets, profile, allProfiles, exportedAt);
   const picks = profile.picks || {};
   const notes = profile.notes || {};
   const overviewMarkup = `<div class="overview-grid">
     <div class="overview-card"><span class="overview-label">Total picks</span><strong>${escapeHtml(String(Object.keys(picks).length))}</strong><div class="overview-meta">${escapeHtml(`${festival.days?.length || 0} festival days loaded`)}</div></div>
-    <div class="overview-card"><span class="overview-label">Must see</span><strong>${escapeHtml(String(Object.values(picks).filter((value: any) => value === 'must').length))}</strong><div class="overview-meta">Highest-priority saves</div></div>
+    <div class="overview-card"><span class="overview-label">Must see</span><strong>${escapeHtml(String(Object.values(picks).filter((value) => value === 'must').length))}</strong><div class="overview-meta">Highest-priority saves</div></div>
     <div class="overview-card"><span class="overview-label">Private notes</span><strong>${escapeHtml(String(Object.keys(notes).length))}</strong><div class="overview-meta">Only included in your export</div></div>
     <div class="overview-card"><span class="overview-label">Reminders</span><strong>${escapeHtml(String(reminders.length))}</strong><div class="overview-meta">Timed alerts on this device</div></div>
   </div>`;
@@ -260,7 +341,7 @@ export function buildExportHtml(template: any, festival: any, profile: any, allP
   const liveMarkup = `<section class="section"><div class="section-title"><div class="dot" style="background:${escapeHtml('#39ff14')}"></div>Live Snapshot</div><div class="snapshot-grid">${nextMoveMarkup}${overlapMarkup}</div></section>`;
 
   const remindersMarkup = reminders.length > 0
-    ? `<section class="section"><div class="section-title"><div class="dot" style="background:${escapeHtml('#ffb020')}"></div>Upcoming Reminders</div><div class="reminder-list">${reminders.slice(0, 4).map((entry: any) => `<div class="reminder-item"><div class="reminder-copy"><strong>${escapeHtml(entry.set.artist)}</strong><span>${escapeHtml(formatSetLocationLabel(entry.set, stageMap))}</span></div><span class="chip chip-reminder">${escapeHtml(`${entry.lead}m alert`)}</span></div>`).join('')}</div></section>`
+    ? `<section class="section"><div class="section-title"><div class="dot" style="background:${escapeHtml('#ffb020')}"></div>Upcoming Reminders</div><div class="reminder-list">${reminders.slice(0, 4).map((entry) => `<div class="reminder-item"><div class="reminder-copy"><strong>${escapeHtml(entry.set.artist)}</strong><span>${escapeHtml(formatSetLocationLabel(entry.set, stageMap))}</span></div><span class="chip chip-reminder">${escapeHtml(`${entry.lead}m alert`)}</span></div>`).join('')}</div></section>`
     : '';
 
   const categories: [string, string, string][] = [
@@ -272,18 +353,18 @@ export function buildExportHtml(template: any, festival: any, profile: any, allP
   const sections = categories
     .map(([priority, label, color]) => {
       const items = sets
-        .filter((set: any) => profile.picks?.[set.id] === priority)
-        .sort((left: any, right: any) => `${left.dayLabel}${left.startTime}`.localeCompare(`${right.dayLabel}${right.startTime}`));
+        .filter((set) => profile.picks?.[set.id] === priority)
+        .sort((left, right) => `${left.dayLabel}${left.startTime}`.localeCompare(`${right.dayLabel}${right.startTime}`));
 
       if (items.length === 0) return '';
 
       const rows = items
-        .map((set: any) => {
+        .map((set) => {
           const stage = stageMap.get(set.stageId) || { name: 'Unknown', color: '#666666' };
-          const others = allProfiles.filter((otherProfile: any) => otherProfile.id !== profile.id && otherProfile.picks?.[set.id]);
+          const others = allProfiles.filter((otherProfile) => otherProfile.id !== profile.id && otherProfile.picks?.[set.id]);
           const friendMarkup = others.length > 0
             ? `<span class="friends">${others
-                .map((otherProfile: any) => {
+                .map((otherProfile) => {
                   const colorValue = getAvatarColor(otherProfile.name);
                   const initials = getInitials(otherProfile.name);
                   return `<span class="mini-avatar" style="background:${escapeHtml(colorValue)}" title="${escapeHtml(otherProfile.name)}">${escapeHtml(initials)}</span>`;
@@ -307,20 +388,20 @@ export function buildExportHtml(template: any, festival: any, profile: any, allP
 
   const content = sections || '<div class="empty-state"><div class="empty-icon">&#127914;</div><p>No sets picked yet.</p></div>';
 
-  const crewMembers = allProfiles.filter((p: any) => p.id !== profile.id && Object.keys(p.picks || {}).length > 0);
+  const crewMembers = allProfiles.filter((p) => p.id !== profile.id && Object.keys(p.picks || {}).length > 0);
   let crewMarkup = '';
   if (crewMembers.length > 0) {
-    const crewRows = crewMembers.map((member: any) => {
+    const crewRows = crewMembers.map((member) => {
       const memberPicks = member.picks || {};
       const memberSets = sets
-        .filter((s: any) => memberPicks[s.id])
-        .sort((a: any, b: any) => `${a.dayLabel}${a.startTime}`.localeCompare(`${b.dayLabel}${b.startTime}`));
+        .filter((s) => memberPicks[s.id])
+        .sort((a, b) => `${a.dayLabel}${a.startTime}`.localeCompare(`${b.dayLabel}${b.startTime}`));
       const myPicks = profile.picks || {};
-      const shared = memberSets.filter((s: any) => myPicks[s.id]).length;
+      const shared = memberSets.filter((s) => myPicks[s.id]).length;
       const colorValue = getAvatarColor(member.name);
       const initials = getInitials(member.name);
 
-      const setRows = memberSets.map((set: any) => {
+      const setRows = memberSets.map((set) => {
         const stage = stageMap.get(set.stageId) || { name: 'Unknown', color: '#666666' };
         const pri = memberPicks[set.id];
         const priClass = pri === 'must' ? 'chip-must' : pri === 'want-to-see' ? 'chip-want' : 'chip-maybe';
@@ -342,10 +423,10 @@ export function buildExportHtml(template: any, festival: any, profile: any, allP
     .replace(/__LIVE__/g, liveMarkup)
     .replace(/__REMINDERS__/g, remindersMarkup)
     .replace(/__SECTIONS__/g, content + crewMarkup)
-    .replace(/__EXPORTED_AT__/g, escapeHtml(new Date(exportedAt).toLocaleString()));
+    .replace(/__EXPORTED_AT__/g, escapeHtml(new Date(exportedAt as string).toLocaleString()));
 }
 
-export function serializeExportCrewProfile(profile: any) {
+export function serializeExportCrewProfile(profile: ExportProfile) {
   return {
     id: profile.id,
     name: profile.name,

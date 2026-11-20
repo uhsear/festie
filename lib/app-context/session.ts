@@ -128,15 +128,25 @@ export function createSessionHelpers({
     return { token, source, session };
   }
 
-  async function adminAuth(req: any, res: any, next: any) {
+  // Sends the 401 and returns null when there is no valid session; otherwise sets req.user and friends.
+  async function attachUserSession(req: any, res: any) {
     const resolved = await resolveUserRequestSession(req);
-    if (!resolved) return sendError(res, 401, 'Please log in', ErrorCodes.AUTH_REQUIRED);
+    if (!resolved) {
+      sendError(res, 401, 'Please log in', ErrorCodes.AUTH_REQUIRED);
+      return null;
+    }
     // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
     req.user = resolved.session;
     // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
     req.userToken = resolved.token;
     // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
     req.userAuthSource = resolved.source;
+    return resolved;
+  }
+
+  async function adminAuth(req: any, res: any, next: any) {
+    const resolved = await attachUserSession(req, res);
+    if (!resolved) return;
     const isAdmin = await stores.roles.hasRole(resolved.session.userId, 'admin');
     if (!isAdmin) return sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
     // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
@@ -178,14 +188,8 @@ export function createSessionHelpers({
   }
 
   async function userAuth(req: any, res: any, next: any) {
-    const resolved = await resolveUserRequestSession(req);
-    if (!resolved) return sendError(res, 401, 'Please log in', ErrorCodes.AUTH_REQUIRED);
-    // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
-    req.user = resolved.session;
-    // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
-    req.userToken = resolved.token;
-    // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
-    req.userAuthSource = resolved.source;
+    const resolved = await attachUserSession(req, res);
+    if (!resolved) return;
     res.setHeader('Vary', 'Cookie');
     return next();
   }
