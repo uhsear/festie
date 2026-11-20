@@ -6,7 +6,7 @@
 # Appends PASS/FAIL with timestamp to VERIFY_LOG.
 #
 # Cron (weekly, Sunday 04:00):
-#   0 4 * * 0 /home/asir/festival-planner/scripts/backup-verify.sh
+#   0 4 * * 0 <app dir>/scripts/backup-verify.sh
 #
 # Healthcheck heartbeat (optional):
 #   Set HEALTHCHECK_URL=https://hc-ping.com/<uuid> in .env or environment

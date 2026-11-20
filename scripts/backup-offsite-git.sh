@@ -12,7 +12,7 @@ set -euo pipefail
 #      a corrupt dump is renamed *.dump.bad.
 #   2. Encrypts it with GPG symmetric AES256 using $BACKUP_GPG_PASSPHRASE
 #      (read from ../.env). The passphrase NEVER leaves the server.
-#   3. Pushes the encrypted blob to a PRIVATE GitHub repo (uhsear/festie-backups)
+#   3. Pushes the encrypted blob to a PRIVATE GitHub repo ($BACKUP_GIT_REPO)
 #      over SSH using a dedicated, write-only deploy key. The repo is the
 #      off-site store -- no third-party cloud account required.
 #      The dump's .counts row-count sidecar is pushed next to it (counts and
@@ -34,18 +34,18 @@ set -euo pipefail
 # is non-empty, a short message is POSTed to https://ntfy.sh/<topic>. The topic
 # is never logged or echoed.
 #
-# Deploy key:  /home/asir/.ssh/festie_backups_deploy   (ed25519, no passphrase)
-# Local clone: /home/asir/festie-backups-git           (shallow)
-# Repo:        git@github.com:uhsear/festie-backups.git
+# Deploy key:  $BACKUP_DEPLOY_KEY (default ~/.ssh/festie_backups_deploy; ed25519, no passphrase)
+# Local clone: $BACKUP_GIT_CLONE   (default ~/festie-backups-git; shallow)
+# Repo:        $BACKUP_GIT_REPO    (required, set in ../.env or the environment)
 #
 # -----------------------------------------------------------------------------
 # RESTORE PROCEDURE
 # -----------------------------------------------------------------------------
 #   On any trusted machine with git, gpg and Postgres client tools:
 #
-#   1. Clone the private backups repo (needs read access to uhsear/festie-backups):
-#        git clone git@github.com:uhsear/festie-backups.git
-#        cd festie-backups/dumps
+#   1. Clone the private backups repo (needs read access to it):
+#        git clone <the BACKUP_GIT_REPO address>
+#        cd <cloned repo>/dumps
 #
 #   2. Pick the dump you want (filenames carry the original timestamp), then
 #      decrypt it. You will be prompted for BACKUP_GPG_PASSPHRASE
@@ -77,7 +77,7 @@ source "$SCRIPT_DIR/../.env" 2>/dev/null || true
 BACKUP_DIR="${CALLER_BACKUP_DIR:-$HOME/backups/festie}"
 LOG_FILE="$BACKUP_DIR/offsite-git.log"
 DEPLOY_KEY="${BACKUP_DEPLOY_KEY:-$HOME/.ssh/festie_backups_deploy}"
-REPO_SSH="git@github.com:uhsear/festie-backups.git"
+REPO_SSH="${BACKUP_GIT_REPO:?BACKUP_GIT_REPO is required: set it in .env or the environment to the private backups repo SSH address}"
 CLONE_DIR="${BACKUP_GIT_CLONE:-$HOME/festie-backups-git}"
 DUMPS_SUBDIR="dumps"
 LOCK_WAIT="${BACKUP_LOCK_WAIT:-120}"

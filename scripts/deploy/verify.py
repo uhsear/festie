@@ -28,11 +28,18 @@ except ImportError:
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-HOST = os.environ.get("FESTIE_SSH_HOST", "192.168.0.150")
-USER = os.environ.get("FESTIE_SSH_USER", "asir")
+def _required(name):
+    value = os.environ.get(name)
+    if not value:
+        sys.exit(f"{name} is required: set it in the environment (see scripts/deploy/deploy.py).")
+    return value
+
+
+HOST = _required("FESTIE_SSH_HOST")
+USER = _required("FESTIE_SSH_USER")
 KEY = os.environ.get("FESTIE_SSH_KEY")
 KNOWN_HOSTS = os.environ.get("FESTIE_SSH_KNOWN_HOSTS")  # optional extra known_hosts file
-APP = os.environ.get("FESTIE_APP_DIR", "/home/asir/festival-planner")
+APP = _required("FESTIE_APP_DIR")
 PM2_NAME = os.environ.get("FESTIE_PM2_NAME", "festie")
 READY_URL = os.environ.get("FESTIE_READY_URL", "http://localhost:4000/api/ready")
 LOGIN_URL = os.environ.get("FESTIE_LOGIN_URL", "http://localhost:4000/api/v1/auth/login")

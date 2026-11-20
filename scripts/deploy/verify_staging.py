@@ -29,10 +29,17 @@ import paramiko
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-HOST = os.environ.get("FESTIE_SSH_HOST", "192.168.0.150")
-USER = os.environ.get("FESTIE_SSH_USER", "asir")
+def _required(name):
+    value = os.environ.get(name)
+    if not value:
+        sys.exit(f"{name} is required: set it in the environment (see scripts/deploy/deploy.py).")
+    return value
+
+
+HOST = _required("FESTIE_SSH_HOST")
+USER = _required("FESTIE_SSH_USER")
 KNOWN_HOSTS = os.environ.get("FESTIE_SSH_KNOWN_HOSTS")  # optional extra known_hosts file
-STAGE = os.environ.get("FESTIE_STAGE_DIR", "/home/asir/festie-staging")
+STAGE = _required("FESTIE_STAGE_DIR")
 STAGE_PORT = int(os.environ.get("FESTIE_STAGE_PORT", "4001"))
 PROD_PORT = int(os.environ.get("FESTIE_PROD_PORT", "4000"))
 
