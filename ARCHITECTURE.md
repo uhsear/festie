@@ -241,7 +241,7 @@ Workbox service worker for offline support. localStorage snapshots of festival a
 
 ## Mobile: `packages/mobile/`
 
-Expo SDK 58 app (React Native 0.88) with expo-router file-based routes in `packages/mobile/app/`. The app version is 1.5.0, and `runtimeVersion` uses the `appVersion` policy in `app.json`, so an OTA update only reaches builds with the same app version. Business logic lives in `@festie/shared`. The mobile package imports only its own dependencies or `@festie/shared`.
+Expo SDK 58 app (React Native 0.88) with expo-router file-based routes in `packages/mobile/app/`. The app version is 1.6.0, and `runtimeVersion` uses the `appVersion` policy in `app.json`, so an OTA update only reaches builds with the same app version. Business logic lives in `@festie/shared`. The mobile package imports only its own dependencies or `@festie/shared`.
 
 ---
 

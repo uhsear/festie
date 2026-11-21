@@ -6,9 +6,9 @@ describe('t41 native config source guards', () => {
   const raw = read('app.json');
   const expo = JSON.parse(raw).expo;
 
-  it('app.json declares version 1.5.0 and the /join app link', () => {
-    // runtimeVersion follows this version, so OTAs from main reach only 1.5.0 builds.
-    expect(expo.version).toBe('1.5.0');
+  it('app.json declares version 1.6.0 and the /join app link', () => {
+    // runtimeVersion follows this version, so OTAs from main reach only 1.6.0 builds.
+    expect(expo.version).toBe('1.6.0');
     const prefixes = expo.android.intentFilters[0].data.map((d: { pathPrefix: string }) => d.pathPrefix);
     expect(prefixes).toEqual(expect.arrayContaining(['/set', '/reset-password', '/join', '/crew']));
   });
