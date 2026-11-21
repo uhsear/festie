@@ -146,7 +146,8 @@ describe('organizer isolation', { skip }, () => {
     });
     const member = await o.as(server, users.ownerA.token).put(`${MANAGE}/festivals/f-a-live`, move('12:00', '13:00'));
     assert.equal(member.status, 200, JSON.stringify(member.body));
-    assert.deepEqual(member.body.data.scheduleNotice, { changes: 1, people: 1, notified: false, held: true });
+    // One picker is under the 20-person floor, so the organizer's notice carries no count.
+    assert.deepEqual(member.body.data.scheduleNotice, { changes: 1, notified: false, held: true });
     // The alert waits in the review queue: one held row, with the picker, until an admin releases it.
     const held = (await o.sql(server, "SELECT set_id, kind, picker_ids FROM festival_held_schedule_changes WHERE festival_id = 'f-a-live'")).rows;
     assert.deepEqual(held.map((r: any) => [r.set_id, r.kind, r.picker_ids.length]), [['s-live', 'moved', 1]]);
