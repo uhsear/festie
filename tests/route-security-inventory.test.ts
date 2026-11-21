@@ -260,6 +260,7 @@ test('artist routes stay admin only, validated and rate limited', () => {
       'artists.ts POST /spotify-candidates',
       'artists.ts POST /spotify-picks',
       'artists.ts POST /spotify-refresh',
+      'artists.ts POST /spotify-refresh-stale',
       'artists.ts POST /suggestions/:id/decision',
     ],
   );

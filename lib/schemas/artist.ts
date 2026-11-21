@@ -144,6 +144,9 @@ export const artistSpotifyPicksSchema = z.object({
 
 export const artistSpotifyRefreshSchema = z.object({ festivalId: identifier });
 
+// The stale-data refresh reads every artist older than 30 days; `limit` caps one run (default 1000).
+export const artistSpotifyRefreshStaleSchema = z.object({ limit: z.number().int().min(1).max(1000).optional() });
+
 // Spotify backfill body. All optional: old mobile bundles post no body.
 export const spotifyBackfillSchema = z
   .object({

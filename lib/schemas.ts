@@ -34,7 +34,7 @@ import { accountDeleteSchema, deleteTokenSchema, displayNameChangeSchema, forgot
 import { festivalAnnouncementSchema, festivalCreateSchema, festivalMapConfigSchema, festivalUpdateSchema, timeReleaseSendSchema } from './schemas/festival';
 import { organizationCreateSchema, organizationFestivalParams, organizationIdParams, organizationListQuery, organizationMemberAddSchema, organizationMemberParams, organizationMemberRoleSchema, organizationPendingParams, organizationProfileSchema, organizationStatusSchema, organizationTransferSchema, organizationVerifiedSchema, organizerAuditQuery, organizerFestivalCreateSchema, heldAlertParams, publishDeclineSchema } from './schemas/organization';
 import { crewAddMemberSchema, crewCreateSchema, crewDaysSchema, crewInviteCodeParams, crewJoinSchema, crewReformSchema, crewTransferSchema, crewUpdateSchema, meetingPointComingSchema, meetingPointCreateSchema, meetingPointUpdateSchema } from './schemas/crew';
-import { artistBackfillSchema, artistCreateSchema, artistListQuerySchema, artistMatchSchema, artistMergeSchema, artistSpotifyCandidatesSchema, artistSpotifyPicksSchema, artistSpotifyRefreshSchema, artistSuggestionDecisionSchema, artistSuggestionListQuerySchema, artistUpdateSchema, organizerArtistCreateSchema, organizerArtistListQuerySchema, organizerArtistUpdateSchema, policyNoticeSchema, setLinkSchema, spotifyBackfillSchema } from './schemas/artist';
+import { artistBackfillSchema, artistCreateSchema, artistListQuerySchema, artistMatchSchema, artistMergeSchema, artistSpotifyCandidatesSchema, artistSpotifyPicksSchema, artistSpotifyRefreshSchema, artistSpotifyRefreshStaleSchema, artistSuggestionDecisionSchema, artistSuggestionListQuerySchema, artistUpdateSchema, organizerArtistCreateSchema, organizerArtistListQuerySchema, organizerArtistUpdateSchema, policyNoticeSchema, setLinkSchema, spotifyBackfillSchema } from './schemas/artist';
 import { caughtUpdateSchema, checkinStartSchema, crewHomeBaseSchema, crewPhotoAlbumSchema, crewStatusSchema, liveLocationFixSchema, locationShareSchema, locationStopSchema, locationSyncSchema, locationUpdateSchema, packingBatchSchema, packingCreateSchema, packingUpdateSchema, pollCreateSchema, pollVoteSchema, ratingCreateSchema, refreshTokenSchema, rideCreateSchema, rideUpdateSchema, sosClearSchema, sosRaiseSchema, sosSeenSchema, wrapQuery } from './schemas/crew-activity';
 import { expenseConfirmSchema, expenseCreateSchema, expenseCurrencySchema, expenseRemindSchema } from './schemas/expenses';
 import { adminAddRoleSchema, adminAnalyticsQuery, adminAuditQuery, adminBulkArchiveSchema, adminBulkDeactivateSchema, adminRefCountsQuery, adminUserSearchQuery, crewListQuery, crewUserSearchQuery, expenseSettleFullSchema, festivalDeleteQuery, festivalDepthQuery, paginationQuery } from './schemas/query';
@@ -125,6 +125,7 @@ export const schemas = {
   artistSpotifyCandidates: artistSpotifyCandidatesSchema,
   artistSpotifyPicks: artistSpotifyPicksSchema,
   artistSpotifyRefresh: artistSpotifyRefreshSchema,
+  artistSpotifyRefreshStale: artistSpotifyRefreshStaleSchema,
   spotifyBackfill: spotifyBackfillSchema,
   festivalAnnouncement: festivalAnnouncementSchema,
   timeReleaseSend: timeReleaseSendSchema,

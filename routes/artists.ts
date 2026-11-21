@@ -333,16 +333,18 @@ export default function createArtistsRoutes(deps: RouteDeps) {
    * (30 days, Spotify Developer Terms IV.3.1.1), one transaction per artist. The same work runs from cron through
    * scripts/spotify-refresh-stale.ts; this route is the admin trigger and also clears the caches.
    */
-  router.post('/spotify-refresh-stale', rateLimit(6, 'artist-spotify-refresh-stale'), async (req: Request, res: Response) => {
+  router.post('/spotify-refresh-stale', rateLimit(6, 'artist-spotify-refresh-stale'), validate(schemas.artistSpotifyRefreshStale), async (req: Request, res: Response) => {
     try {
       const missing = spotifyKeysMissing(res);
       if (missing) return missing;
+      const { limit } = req.validatedBody as z.infer<typeof schemas.artistSpotifyRefreshStale>;
       const { synced, ...counts } = await refreshStaleSpotifyArtists({
         stores: { artists: stores.artists },
         config,
         log,
         userId: req.user?.userId ?? null,
         ip: getRequestIp(req),
+        ...(limit ? { limit } : {}),
       });
       if (counts.updated > 0 && req.res?.locals) req.res.locals.auditWritten = true;
       await afterSync(synced);

@@ -500,6 +500,10 @@ describe('spotify stale refresh (30-day limit)', { skip, concurrency: 1 }, () =>
     await app.server.request.post('/api/v1/admin/artists/spotify-refresh-stale').send({}).expect(401);
   });
 
+  test('rejects a limit that is not a whole number from 1 to 1000', async () => {
+    for (const limit of [0, 1001, 1.5, 'all']) await app.post('/api/v1/admin/artists/spotify-refresh-stale', { limit }).expect(400);
+  });
+
   test('re-reads an artist never read or read 31 days ago, overwrites photo and genres, follows the festival copies and stamps it', async () => {
     const never = await createArtist(app, { name: 'Stale Never', link: link(80) });
     const old = await createArtist(app, { name: 'Stale Old', link: link(81) });
