@@ -37,10 +37,19 @@ export interface OrgPendingMember {
   createdAt: string;
 }
 
+/** What an organization used: the festivals it holds, this month's announcements and its stored images. */
+export interface OrganizationUsage {
+  festivals: number;
+  drafts: number;
+  announcementsThisMonth: number;
+  uploadedBytes: number;
+}
+
 export interface AdminOrganizationDetail extends AdminOrganization {
   members: OrgMember[];
   pending: OrgPendingMember[];
   festivals: ManageFestival[];
+  usage: OrganizationUsage;
 }
 
 export interface ReviewRequest {

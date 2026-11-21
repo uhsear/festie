@@ -60,6 +60,20 @@ export const ANNOUNCEMENT_COPY = {
         return 'Not sent: more than 30 minutes late';
     }
   },
+  // An organization's owner: a banner for everyone who joined, a push only once Festie verifies the organization.
+  organizer: {
+    intro: (festivalName: string) =>
+      `Post a short notice for everyone who joined ${festivalName}. It shows as a banner in the app for 24 hours. People see it as from Festie, not from your team.`,
+    audience: (n: number | null) =>
+      n === null ? 'Fewer than 20 people have joined this festival yet.' : `${people(n)} joined this festival.`,
+    submitNow: 'Post now',
+    noPush: 'This shows as a banner only. Festie sends a push for it after it verifies your organization.',
+    confirmText: (push: boolean) =>
+      push
+        ? "This sends a push and shows a banner. People who turned off schedule alerts get no push. You can't unsend a push."
+        : 'This shows as a banner in the app for 24 hours. No push goes out until Festie verifies your organization.',
+    sentLine: (when: string) => `Sent ${when}`,
+  },
   rowCancel: 'Cancel',
   rowTakeDown: 'Take down banner',
   banner: {

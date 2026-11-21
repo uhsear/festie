@@ -5,6 +5,7 @@ import {
   pickShiftTargets,
   shiftSetTimes,
   countFestivalChanges,
+  describeVersionDifferences,
   festivalStatusLine,
   describeDeleteImpact,
   groupIssues,
@@ -138,5 +139,27 @@ describe('groupIssues', () => {
     ]);
     expect(g.get('set:late')).toEqual(['overlap']);
     expect(g.get('set:early')).toEqual(['overlap']);
+  });
+});
+
+describe('describeVersionDifferences', () => {
+  const base = { name: 'Fest', location: 'Orlando', timeZone: 'America/New_York', stages: [{ id: 'a', name: 'Main' }], days: [{ label: 'Fri', date: '2027-06-04', sets: [set('s1')] }] };
+
+  it('is empty when both copies match', () => {
+    expect(describeVersionDifferences(base, { ...base })).toEqual([]);
+  });
+
+  it('names each field and count that differs, theirs first', () => {
+    const mine = { ...base, name: 'Fest 2', stages: [...base.stages, { id: 'b', name: 'Pod' }], days: [{ ...base.days[0]!, sets: [set('s1'), set('s2')] }] };
+    expect(describeVersionDifferences(base, mine)).toEqual([
+      'Name: theirs "Fest", yours "Fest 2".',
+      'Stages: theirs 1, yours 2.',
+      'Sets: theirs 1, yours 2.',
+    ]);
+  });
+
+  it('still reports a change that keeps every count the same', () => {
+    const mine = { ...base, days: [{ ...base.days[0]!, sets: [set('s1', { artist: 'Renamed' })] }] };
+    expect(describeVersionDifferences(base, mine)).toEqual(['1 detail differs inside the stages, days or sets.']);
   });
 });

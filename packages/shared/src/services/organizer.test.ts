@@ -4,7 +4,22 @@ const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn(), put: vi.fn(), delet
 vi.mock('./api', () => ({ api }));
 
 import {
+  addManageMember,
   canEditOrgFestival,
+  changeManageMemberRole,
+  clearEditBackup,
+  describeAlertConfirm,
+  describeEngagementCount,
+  describeUpload,
+  fetchManageActivity,
+  fetchManageEngagement,
+  editBackupKey,
+  fetchManageOrganization,
+  loadEditBackup,
+  removeManageInvitation,
+  removeManageMember,
+  saveEditBackup,
+  updateManageOrganization,
   createManageFestival,
   describeStaleSave,
   fetchManageFestivals,
@@ -95,5 +110,100 @@ describe('role helpers', () => {
     expect(canEditOrgFestival('editor')).toBe(true);
     expect(canEditOrgFestival('viewer')).toBe(false);
     expect(canEditOrgFestival(null)).toBe(false);
+  });
+});
+
+describe('organization API paths', () => {
+  it('reads and writes the organization, its members and its invitations under /manage with ids encoded', async () => {
+    await fetchManageOrganization('org a');
+    await updateManageOrganization('org a', { displayName: null });
+    await addManageMember('org a', { email: 'a@b.example', role: 'editor' });
+    await changeManageMemberRole('org a', 'u/1', 'viewer');
+    await removeManageMember('org a', 'u/1');
+    await removeManageInvitation('org a', 'a+b@c.example');
+    expect(api.get).toHaveBeenCalledWith('/manage/organizations/org%20a');
+    expect(api.put).toHaveBeenNthCalledWith(1, '/manage/organizations/org%20a', { displayName: null });
+    expect(api.post).toHaveBeenCalledWith('/manage/organizations/org%20a/members', { email: 'a@b.example', role: 'editor' });
+    expect(api.put).toHaveBeenNthCalledWith(2, '/manage/organizations/org%20a/members/u%2F1', { role: 'viewer' });
+    expect(api.delete).toHaveBeenNthCalledWith(1, '/manage/organizations/org%20a/members/u%2F1');
+    expect(api.delete).toHaveBeenNthCalledWith(2, '/manage/organizations/org%20a/pending-members/a%2Bb%40c.example');
+  });
+});
+
+describe('describeUpload', () => {
+  it('shows megabytes used against the cap', () => {
+    expect(describeUpload({ usedBytes: 0, capBytes: 200 * 1024 * 1024 })).toBe('0 MB of 200 MB used for site-plan images.');
+    expect(describeUpload({ usedBytes: 12.34 * 1024 * 1024, capBytes: 200 * 1024 * 1024 })).toBe('12.3 MB of 200 MB used for site-plan images.');
+  });
+});
+
+describe('edit backup (two editors at once)', () => {
+  const memory = () => {
+    const data = new Map<string, string>();
+    return {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    };
+  };
+
+  it('keeps the form per festival, returns it after a reload and clears it', () => {
+    const storage = memory();
+    expect(saveEditBackup(storage, 'f1', { name: 'Mine' }, new Date('2026-11-20T10:00:00Z'))).toBe(true);
+    expect(loadEditBackup(storage, 'f2')).toBeNull();
+    expect(loadEditBackup(storage, 'f1')).toEqual({ savedAt: '2026-11-20T10:00:00.000Z', form: { name: 'Mine' } });
+    clearEditBackup(storage, 'f1');
+    expect(loadEditBackup(storage, 'f1')).toBeNull();
+  });
+
+  it('survives blocked or full storage and a damaged entry', () => {
+    const blocked = {
+      getItem: () => {
+        throw new Error('blocked');
+      },
+      setItem: () => {
+        throw new Error('full');
+      },
+      removeItem: () => {
+        throw new Error('blocked');
+      },
+    };
+    expect(saveEditBackup(blocked, 'f1', {})).toBe(false);
+    expect(loadEditBackup(blocked, 'f1')).toBeNull();
+    expect(() => clearEditBackup(blocked, 'f1')).not.toThrow();
+    const storage = memory();
+    storage.setItem(editBackupKey('f1'), '{not json');
+    expect(loadEditBackup(storage, 'f1')).toBeNull();
+    storage.setItem(editBackupKey('f1'), JSON.stringify({ savedAt: 'x', form: 'text' }));
+    expect(loadEditBackup(storage, 'f1')).toBeNull();
+  });
+});
+
+describe('the trust tier calls and wording', () => {
+  it('reads the organization activity, with a cursor when there is one', async () => {
+    api.get.mockResolvedValue([]);
+    await fetchManageActivity('org a');
+    expect(api.get).toHaveBeenCalledWith('/manage/organizations/org%20a/audit');
+    await fetchManageActivity('org-a', 'c1|x');
+    expect(api.get).toHaveBeenCalledWith('/manage/organizations/org-a/audit?cursor=c1%7Cx');
+  });
+
+  it('reads the interest counts of one festival', async () => {
+    api.get.mockResolvedValue({ available: false, minJoined: 20, minCount: 5, sets: {} });
+    await fetchManageEngagement('f 1');
+    expect(api.get).toHaveBeenCalledWith('/manage/festivals/f%201/engagement');
+  });
+
+  it('writes a hidden count as "fewer than 5" and a shown one as the number', () => {
+    expect(describeEngagementCount(null)).toBe('fewer than 5');
+    expect(describeEngagementCount(null, 10)).toBe('fewer than 10');
+    expect(describeEngagementCount(0)).toBe('0');
+    expect(describeEngagementCount(12)).toBe('12');
+  });
+
+  it('words the confirm for one person and for many, and says when the hour is used up', () => {
+    expect(describeAlertConfirm(1)).toBe('This save tells 1 person that a set they picked moved or was removed.');
+    expect(describeAlertConfirm(40, 2)).toBe('This save tells 40 people that a set they picked moved or was removed.');
+    expect(describeAlertConfirm(40, 0)).toContain('used its alerts for this hour');
   });
 });

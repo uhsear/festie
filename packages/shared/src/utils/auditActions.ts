@@ -56,6 +56,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'organization.member_role_changed': 'Organization member role changed',
   'organization.pending_member_added': 'Organization member invited by email',
   'organization.pending_member_removed': 'Organization invitation removed',
+  'organization.updated': 'Organization profile updated',
 };
 
 const COLON_VERBS: Record<string, string> = {

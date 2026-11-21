@@ -71,7 +71,14 @@ export function checklistFromError(err: unknown): ChecklistItem[] | null {
   return Array.isArray(checklist) ? (checklist as ChecklistItem[]) : null;
 }
 
-export interface FestivalSaveResult { scheduleNotice?: ScheduleNotice; venueGuessed?: boolean }
+export interface FestivalSaveResult {
+  scheduleNotice?: ScheduleNotice;
+  venueGuessed?: boolean;
+  /** True for a save sent with `dryRun`: nothing was written. */
+  dryRun?: boolean;
+  /** A verified organization's moved-set alert runs left this hour (dry run only). */
+  runsLeft?: number;
+}
 
 export const updateAdminFestival = (id: string, body: unknown, scope: FestivalScope = 'admin') =>
   api.put<FestivalSaveResult | undefined>(festivalPath(id, scope), body);

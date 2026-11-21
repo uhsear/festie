@@ -36,4 +36,16 @@ describe('announcementsApi', () => {
     await announcementsApi.cancel('f/1', 'a/2');
     expect(api.delete).toHaveBeenCalledWith('/admin/festivals/f%2F1/announcements/a%2F2');
   });
+
+  it('every admin call takes the manage scope for an organization owner', async () => {
+    vi.mocked(api.get).mockResolvedValueOnce({});
+    vi.mocked(api.post).mockResolvedValueOnce({});
+    vi.mocked(api.delete).mockResolvedValueOnce({});
+    await announcementsApi.adminList('f1', 'manage');
+    await announcementsApi.create('f1', { title: 't' } as never, 'manage');
+    await announcementsApi.cancel('f1', 'a1', 'manage');
+    expect(api.get).toHaveBeenCalledWith('/manage/festivals/f1/announcements');
+    expect(api.post).toHaveBeenCalledWith('/manage/festivals/f1/announcements', { title: 't' });
+    expect(api.delete).toHaveBeenCalledWith('/manage/festivals/f1/announcements/a1');
+  });
 });

@@ -29,9 +29,10 @@ export const lineupImportApi = {
     api.get<{ festivalName: string; imports: LineupImportHistoryItem[] }>(`${base(festivalId, scope)}/imports`),
   undo: (festivalId: string, importId: string, scope?: FestivalScope) =>
     api.post<LineupImportUndoResult>(`${base(festivalId, scope)}/imports/${encodeURIComponent(importId)}/undo`),
-  announcement: (festivalId: string) => api.get<LineupAnnouncementCount>(`${base(festivalId)}/lineup-announcement`),
-  announce: (festivalId: string) =>
-    api.post<{ queued: true; recipients: number }>(`${base(festivalId)}/lineup-announcement`),
+  announcement: (festivalId: string, scope?: FestivalScope) =>
+    api.get<LineupAnnouncementCount>(`${base(festivalId, scope)}/lineup-announcement`),
+  announce: (festivalId: string, scope?: FestivalScope) =>
+    api.post<{ queued: true; recipients: number }>(`${base(festivalId, scope)}/lineup-announcement`),
   daysAnnouncement: (festivalId: string) => api.get<DaysAnnouncementCount>(`${base(festivalId)}/days-announcement`),
   announceDays: (festivalId: string) =>
     api.post<{ queued: true; recipients: number; emailRecipients: number }>(`${base(festivalId)}/days-announcement`),

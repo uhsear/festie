@@ -9,6 +9,7 @@ import {
   hasSetStarted,
   isValidTimeZone,
   listTimeZones,
+  timeZoneChoices,
   pickDefaultFestival,
   resolveFestivalTimeZone,
   sortFestivalsForPicker,
@@ -318,5 +319,26 @@ describe('festivalLoadState', () => {
 
   it('a set currentFestival beats error and isLoading', () => {
     expect(festivalLoadState({ ...base, currentFestival: { id: 'a' }, isLoading: true, error: 'x' })).toBe('ready');
+  });
+});
+
+describe('timeZoneChoices', () => {
+  it('puts the six main US zones first with friendly names, and every other zone under Other', () => {
+    const { main, other } = timeZoneChoices(null);
+    expect(main.map((z) => z.value)).toEqual([
+      'America/New_York',
+      'America/Chicago',
+      'America/Denver',
+      'America/Los_Angeles',
+      'America/Anchorage',
+      'Pacific/Honolulu',
+    ]);
+    expect(main[0]!.label).toBe('Eastern Time (New York, Orlando)');
+    expect(other).toContain('Asia/Tokyo');
+    expect(other).not.toContain('America/New_York');
+  });
+
+  it('keeps a custom current zone selectable under Other', () => {
+    expect(timeZoneChoices('US/Eastern').other).toContain('US/Eastern');
   });
 });
