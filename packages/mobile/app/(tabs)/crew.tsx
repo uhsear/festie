@@ -328,7 +328,7 @@ export default function CrewScreen() {
       setError(null);
       if (sectionsFailed) reloadCrewSections();
       // Only re-run on focus, not when the error flips, or a failed retry would loop.
-      // eslint-disable-next-line react-hooks/exhaustive-deps
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run on focus only; sectionsFailed flipping would loop a failed retry
     }, [reloadCrewSections, setError]),
   );
   useEffect(() => {

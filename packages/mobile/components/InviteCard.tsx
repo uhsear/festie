@@ -51,7 +51,7 @@ export default function InviteCard({
   useEffect(() => {
     onStatus?.(status, preview);
     // onStatus is a state setter in the only caller that passes it; excluding it avoids loops on identity changes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- onStatus is a state setter in its only caller; identity changes must not re-run
   }, [status, preview]);
 
   if (!code || status === 'loading') return null;

@@ -1108,7 +1108,7 @@ export default function OfflineMap({
     webRef.current.injectJavaScript(
       `window.__festieFitBounds && window.__festieFitBounds(${west}, ${south}, ${east}, ${north}); true;`,
     );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fits bounds once per map document; boundsKey stands in for camera.bounds
   }, [phase, docGen, boundsKey]);
 
   // Push the authoring mode into the WebView whenever it (or the map phase)
