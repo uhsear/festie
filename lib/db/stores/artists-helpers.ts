@@ -49,7 +49,7 @@ export const ARTIST_COLUMNS =
 export class ArtistError extends Error {
   constructor(
     public status: number,
-    public code: 'INVALID_INPUT' | 'NOT_FOUND' | 'ARTIST_EXISTS' | 'ARTIST_CHANGED',
+    public code: 'INVALID_INPUT' | 'NOT_FOUND' | 'ARTIST_EXISTS' | 'ARTIST_CHANGED' | 'REAUTH_REQUIRED',
     message: string,
     public details?: Record<string, unknown>,
   ) {
