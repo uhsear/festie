@@ -41,6 +41,7 @@ function stubApp(stores: Record<string, unknown>) {
       res.status(status).json({ data: null, error: { message, code } }),
     ErrorCodes: { NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
     io: { to: (room: string) => ({ emit: (event: string, payload: any) => emits.push({ room, event, payload }) }) },
+    emitter: { toCrew: (crewId: string, event: string, payload: any) => emits.push({ room: 'crew:' + crewId, event, payload }) },
     stores,
   };
   const app = express();

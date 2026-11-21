@@ -1495,7 +1495,8 @@ describe('routes/admin-bulk.js', () => {
       in: mock.fn((..._args: any[]) => ({ fetchSockets: async () => [] })),
     };
     const redis: any = { hdel: mock.fn(async () => 1) };
-    const { app } = await buildBulkRouter({ io, redis });
+    const emitter = { toCrew: (id: string, ...a: any[]) => io.to('crew:' + id).emit(...a), toRoom: (room: string, ...a: any[]) => io.to(room).emit(...a) };
+    const { app } = await buildBulkRouter({ io, redis, emitter });
 
     await request(app).delete('/crews/crew-1/members/user-2').expect(200);
 
@@ -1563,7 +1564,8 @@ describe('routes/admin-bulk.js', () => {
       to: mock.fn((..._args: any[]) => ({ emit: emitFn })),
       in: mock.fn((..._args: any[]) => ({ fetchSockets: async () => [] })),
     };
-    const { app } = await buildBulkRouter({ io });
+    const emitter = { toCrew: (id: string, ...a: any[]) => io.to('crew:' + id).emit(...a), toRoom: (room: string, ...a: any[]) => io.to(room).emit(...a) };
+    const { app } = await buildBulkRouter({ io, emitter });
 
     await request(app).delete('/crews/crew-1').expect(200);
 
