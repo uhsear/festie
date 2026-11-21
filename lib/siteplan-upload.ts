@@ -21,7 +21,7 @@ export const SITEPLAN_MAX_EDGE = 4096;
 export const SITEPLAN_WEBP_QUALITY = 80;
 
 // An upload is saved into map_config in a later request, so a young file may be unsaved yet.
-const SITEPLAN_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
+export const SITEPLAN_ORPHAN_MIN_AGE_MS = 24 * 60 * 60 * 1000;
 const SITEPLAN_FILE_PATTERN = /^[a-f0-9]{32}\.webp$/;
 
 const ALLOWED_SITEPLAN_MIME_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -68,6 +68,11 @@ export function createSiteplanUpload({ config, sendError, ErrorCodes }: { config
     return key;
   }
 
+  // Deletes one stored image, for an upload the organization's cap refused.
+  async function removeSiteplan(key: string) {
+    await avatarStorage.removeFile(path.join(siteplanDirPath(), `${key}.webp`));
+  }
+
   // Removes site-plan files that no map_config references and that are older than minAgeMs.
   // Never removes a referenced key, however old. Returns the number of files removed.
   async function sweepOrphanSiteplans(referencedKeys: Set<string>, minAgeMs = SITEPLAN_ORPHAN_MIN_AGE_MS, now = Date.now()) {
@@ -84,5 +89,5 @@ export function createSiteplanUpload({ config, sendError, ErrorCodes }: { config
     return removed;
   }
 
-  return { siteplanDirPath, handleSiteplanUpload, writeSiteplan, sweepOrphanSiteplans };
+  return { siteplanDirPath, handleSiteplanUpload, writeSiteplan, removeSiteplan, sweepOrphanSiteplans };
 }

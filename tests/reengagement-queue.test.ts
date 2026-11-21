@@ -17,8 +17,8 @@ function makeExecutor() {
       calls.push(['wrap', festivalId]);
       return { sent: 1, eventKey: `wrap:${festivalId}` };
     },
-    sendLineupDrop: async (festivalId: string) => {
-      calls.push(['lineup', festivalId]);
+    sendLineupDrop: async (festivalId: string, organizationId?: string) => {
+      calls.push(organizationId ? ['lineup', festivalId, organizationId] : ['lineup', festivalId]);
       return { sent: 2, eventKey: `lineup:${festivalId}` };
     },
     sendCrewReformed: async (args: any) => {
@@ -139,6 +139,24 @@ describe('createReengagementQueue', () => {
     assert.equal(fakes.added[2].name, 'crew_reformed');
     assert.equal(fakes.added[2].jobOpts.jobId, 'reform-crew-9');
     assert.equal(fakes.added[2].data.crewName, 'Wolves');
+  });
+
+  it('a lineup drop of an organization carries its id in the job, so a replay stays scoped and email-free', async () => {
+    const fakes = makeFakes();
+    const executor = makeExecutor();
+    const q = createReengagementQueue({ executor: executor as any, log, ...fakes });
+    await q!.sendLineupDrop('nc-2026', 'org-a');
+    assert.deepEqual(fakes.added[0], {
+      name: 'lineup_drop',
+      data: { festivalId: 'nc-2026', organizationId: 'org-a' },
+      jobOpts: { jobId: 'lineup-nc-2026' },
+    });
+    await fakes.getProcessor()({ name: 'lineup_drop', data: fakes.added[0].data, id: 'lineup-nc-2026', attemptsMade: 0 });
+    assert.deepEqual(executor.calls, [['lineup', 'nc-2026', 'org-a']]);
+    const inline = makeFakes({ addThrows: true });
+    const inlineExecutor = makeExecutor();
+    await createReengagementQueue({ executor: inlineExecutor as any, log, ...inline })!.sendLineupDrop('nc-2026', 'org-a');
+    assert.deepEqual(inlineExecutor.calls, [['lineup', 'nc-2026', 'org-a']]);
   });
 
   it('enqueues rate_prompt with job id rate-<festivalId> and the worker routes it to the executor', async () => {

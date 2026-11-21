@@ -45,6 +45,8 @@ export const adminAuditQuery = z.object({
   scope: z.enum(['admin', 'user', 'all']).default('admin'),
   actor: z.string().trim().max(100).optional(),
   user: z.string().trim().max(100).optional(),
+  // Rows written for one organization's festivals and members (audit_log.organization_id).
+  organization_id: z.string().trim().max(100).optional(),
 });
 
 // ── Admin analytics query schema ──────────────────────────────

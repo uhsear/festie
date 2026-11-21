@@ -44,14 +44,24 @@ export const FESTIVAL_ACTIONS = {
   'lineup.import': { role: 'editor', write: true },
   'lineup.history': { role: 'viewer', write: false },
   'lineup.drop': { role: 'admin', write: true },
+  // The lineup drop of a verified organization's own festival (see verifiedOrganizationOnly).
+  'lineup.announce': { role: 'owner', write: true, activeOnly: true },
   'map.edit': { role: 'editor', write: true, activeOnly: true },
-  'announcement.manage': { role: 'admin', write: true },
+  // A banner: any organization's owner. Its push needs a verified organization, which the route decides.
+  'announcement.manage': { role: 'owner', write: true, activeOnly: true },
+  // Aggregate interest in an organization's own festival (plan-v3 6.6). A verified organization only.
+  'festival.engagement': { role: 'owner', write: false },
 } as const satisfies Record<string, ActionSpec>;
 export type FestivalAction = keyof typeof FESTIVAL_ACTIONS;
 
-// Actions on a body that names an organization instead of a festival (a create).
+// Actions on an organization instead of a festival: a create (the body names it) or an organization route (the
+// path names it). A pending organization may edit its profile but not add members (plan-v3 6.6).
 export const ORG_ACTIONS = {
   'festival.create': { role: 'owner', write: true },
+  'org.view': { role: 'viewer', write: false },
+  'org.edit': { role: 'owner', write: true },
+  'org.audit': { role: 'owner', write: false },
+  'org.member.manage': { role: 'owner', write: true, activeOnly: true },
 } as const satisfies Record<string, ActionSpec>;
 export type OrgAction = keyof typeof ORG_ACTIONS;
 
@@ -61,6 +71,12 @@ export type FestivalAllow = (
   festival: { id: string; organizationId: string | null; publishedAt: Date | null },
   membership: { role: FestivalRole; status: string; verified: boolean; name: string },
 ) => true | Refusal;
+
+// A route that only a verified organization's members may use (an admin always passes). Plan-v3 section 6.1.
+export const verifiedOrganizationOnly: FestivalAllow = (_req, _festival, membership) =>
+  membership.verified
+    ? true
+    : { status: 403, code: 'FORBIDDEN', message: 'Festie has not verified your organization yet. Contact Festie to unlock this.' };
 
 // Gate for a route scoped to one crew. Mount after userAuth and validateParams(crewIdParams). Handlers
 // read the caller's membership row (for example `role`) from `req.membership`.
@@ -265,16 +281,17 @@ export function createSessionHelpers({
     return guard;
   }
 
-  // Gate for a route whose body names the organization (a create). Same caller rules as festivalAccess:
-  // an admin needs the organization to exist, a member needs a role in it, and a stranger sees 404.
-  function orgAccess({ action }: { action: OrgAction }) {
+  // Gate for a route that names the organization in its body (a create) or, with `param`, in its path. Same
+  // caller rules as festivalAccess: an admin needs the organization to exist, a member needs a role in it, and a
+  // stranger sees 404.
+  function orgAccess({ action, param }: { action: OrgAction; param?: string }) {
     const spec: ActionSpec = ORG_ACTIONS[action];
     if (!spec) throw new Error(`Unknown organization action "${action}"`);
     const guard = async (req: any, res: any, next: any) => {
       const caller = await resolveCaller(req, res);
       if (!caller) return;
       if (caller === 'member') res.setHeader('Cache-Control', 'private, no-store');
-      const organizationId = identifierOf(req.body?.organizationId);
+      const organizationId = identifierOf(param ? req.params[param] : req.body?.organizationId);
       if (!organizationId) return sendError(res, 400, 'Choose an organization.', ErrorCodes.INVALID_INPUT);
       const notFound = () => sendError(res, 404, 'Organization not found', ErrorCodes.NOT_FOUND);
       if (caller === 'admin') {
@@ -294,6 +311,7 @@ export function createSessionHelpers({
       return next();
     };
     guard.orgAction = action;
+    guard.param = param;
     return guard;
   }
   /* eslint-enable require-atomic-updates */

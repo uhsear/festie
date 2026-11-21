@@ -16,6 +16,7 @@ import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import {
   createSiteplanUpload,
   SITEPLAN_MAX_EDGE,
+  SITEPLAN_ORPHAN_MIN_AGE_MS,
   SITEPLAN_MAX_PIXELS,
   SITEPLAN_WEBP_QUALITY,
 } from '../lib/siteplan-upload.js';
@@ -41,7 +42,7 @@ export default function createAdminSiteplanRoutes(deps: any) {
   const writeAdminAudit = createAdminAuditWriter({ stores, log, getRequestIp });
 
   const router = express.Router();
-  const { handleSiteplanUpload, writeSiteplan, sweepOrphanSiteplans } = createSiteplanUpload({ config, sendError, ErrorCodes });
+  const { handleSiteplanUpload, writeSiteplan, removeSiteplan, sweepOrphanSiteplans } = createSiteplanUpload({ config, sendError, ErrorCodes });
 
   // Deleted festivals count as referencing: a restore must not find its image gone.
   async function sweepUnreferencedSiteplans() {
@@ -54,6 +55,7 @@ export default function createAdminSiteplanRoutes(deps: any) {
       }
       const removed = await sweepOrphanSiteplans(referencedKeys);
       if (removed > 0) log.info('siteplan orphan sweep', { removed });
+      await stores.organizations.forgetUnreferencedUploads([...referencedKeys], SITEPLAN_ORPHAN_MIN_AGE_MS);
     } catch (error: any) {
       log.warn('siteplan orphan sweep failed', { error: error.message });
     }
@@ -93,6 +95,19 @@ export default function createAdminSiteplanRoutes(deps: any) {
         }
 
         const key = await writeSiteplan(webp);
+        // An organization's festival counts its stored bytes against ORGANIZER_UPLOAD_MB_CAP. Festie staff are counted
+        // but never refused, and a platform festival has no organization.
+        if (req.organizationId) {
+          const capMb = config.ORGANIZER_UPLOAD_MB_CAP;
+          const counted = await stores.organizations.recordUpload(
+            { key, organizationId: req.organizationId, festivalId, bytes: webp.length },
+            req.festivalRole === 'admin' ? undefined : capMb * 1024 * 1024,
+          );
+          if (!counted) {
+            await removeSiteplan(key);
+            return sendError(res, 413, `Your organization has used its ${capMb} MB of image uploads. Remove an old image or contact Festie.`, ErrorCodes.INVALID_INPUT);
+          }
+        }
         void sweepUnreferencedSiteplans();
         setNoStore(res);
         // The response must not wait on the row, so claim the generic middleware's slot before it finishes.

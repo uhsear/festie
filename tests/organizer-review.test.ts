@@ -251,8 +251,8 @@ describe('held alerts: the review queue, release and discard', { skip }, () => {
   });
 });
 
-describe('no organizer action reaches a route that sends to attendees', { skip }, () => {
-  test('announcements, lineup drop, days announcement, time releases: 403 on the admin mount, 404 on manage', async () => {
+describe('which routes that send to attendees an organizer reaches', { skip }, () => {
+  test('no organizer key to the admin mount, the days alert or the set-time releases; the trust-tier routes follow role and verification', async () => {
     const { server, users } = await boot();
     await o.sql(server, "UPDATE organizations SET verified_at = NOW() WHERE id = 'org-a'");
     const routes: Array<[string, string]> = [
@@ -263,16 +263,21 @@ describe('no organizer action reaches a route that sends to attendees', { skip }
       ['POST', 'time-releases'],
       ['GET', 'time-releases'],
     ];
+    // The set-time and days alerts are Festie's alone: 404 on manage for everyone, verified or not.
+    const staysAdmin = new Set(['days-announcement', 'time-releases']);
+    // A verified owner reaches the rest: an empty announcement is a 400, the lineup count is a 200 and a send with
+    // nobody to tell is a 400. An editor has the role for none of them.
+    const ownerOnManage: Record<string, number> = { 'POST announcements': 400, 'POST lineup-announcement': 400, 'GET lineup-announcement': 200 };
     const problems: string[] = [];
-    // Verified or not, an owner has no key to these: verification lifts the publish rule only.
     for (const who of ['ownerA', 'editorA']) {
       const caller = o.as(server, (users as any)[who].token);
       for (const [method, path] of routes) {
         const call = (url: string) => (method === 'GET' ? caller.get(url) : caller.post(url, {}));
         const onAdmin = await call(`${ADMIN}/f-a-live/${path}`);
         const onManage = await call(`${MANAGE}/f-a-live/${path}`);
+        const want = staysAdmin.has(path) ? 404 : who === 'editorA' ? 403 : ownerOnManage[`${method} ${path}`];
         if (onAdmin.status !== 403) problems.push(`${who} ${method} admin ${path}: ${onAdmin.status}`);
-        if (onManage.status !== 404) problems.push(`${who} ${method} manage ${path}: ${onManage.status}`);
+        if (onManage.status !== want) problems.push(`${who} ${method} manage ${path}: ${onManage.status}, want ${want}`);
       }
     }
     assert.deepEqual(problems, []);

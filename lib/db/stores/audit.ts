@@ -87,7 +87,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
 
     // A row matches when its action equals any of `actions` or starts with any of
     // `actionPrefixes` (`festival.`). Both null or empty means no action filter.
-    async query({ actorId, actorType, actions, actionPrefixes, targetId, resourceType, from, to, limit = 50, cursor = null }: any = {}) {
+    async query({ actorId, actorType, actions, actionPrefixes, targetId, resourceType, organizationId, from, to, limit = 50, cursor = null }: any = {}) {
       const maxLimit = 200;
       const finalLimit = Math.min(Math.max(1, limit || 50), maxLimit);
 
@@ -113,6 +113,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         actorType || null,
         actionPrefixes?.length ? actionPrefixes : null,
         targetId || null,
+        organizationId || null,
       ];
 
       const result = await pool.query(`
@@ -130,6 +131,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
           AND ($6::TIMESTAMPTZ IS NULL OR (created_at, id) < ($6::TIMESTAMPTZ, $7::TEXT))
           AND ($9::TEXT IS NULL OR actor_type = $9::TEXT)
           AND ($11::TEXT IS NULL OR target_id = $11::TEXT)
+          AND ($12::TEXT IS NULL OR organization_id = $12::TEXT)
         ORDER BY created_at DESC, id DESC
         LIMIT $8
       `, params);
@@ -143,7 +145,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
       return { rows, nextCursor };
     },
 
-    async count({ actorId, actorType, actions, actionPrefixes, targetId, resourceType, from, to }: any = {}) {
+    async count({ actorId, actorType, actions, actionPrefixes, targetId, resourceType, organizationId, from, to }: any = {}) {
       const params: any[] = [
         actorId || null,
         actions?.length ? actions : null,
@@ -153,6 +155,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
         actorType || null,
         actionPrefixes?.length ? actionPrefixes : null,
         targetId || null,
+        organizationId || null,
       ];
 
       const result = await pool.query(`
@@ -169,6 +172,7 @@ export default function createAuditStore(pool: Pool, _utils: any) {
           AND ($5::TIMESTAMPTZ IS NULL OR created_at <= $5::TIMESTAMPTZ)
           AND ($6::TEXT IS NULL OR actor_type = $6::TEXT)
           AND ($8::TEXT IS NULL OR target_id = $8::TEXT)
+          AND ($9::TEXT IS NULL OR organization_id = $9::TEXT)
       `, params);
 
       return parseInt(result.rows[0]?.total || 0, 10);

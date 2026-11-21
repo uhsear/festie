@@ -60,7 +60,7 @@ const WORKER_CLOSE_TIMEOUT_MS = 10_000;
 
 export interface ReengagementExecutor {
   sendWrapReady: (festivalId: string) => Promise<any>;
-  sendLineupDrop: (festivalId: string) => Promise<any>;
+  sendLineupDrop: (festivalId: string, organizationId?: string) => Promise<any>;
   sendCrewReformed: (args: any) => Promise<any>;
   sendRatePrompt: (festivalId: string) => Promise<any>;
   sendTimeRelease: (festivalId: string, eventKey: string) => Promise<any>;
@@ -157,7 +157,7 @@ export function createReengagementQueue(deps: ReengagementQueueDeps) {
         const data = job.data || {};
         log?.info?.('reengagement-queue: processing', { name, jobId: job.id, attempt: job.attemptsMade + 1 });
         if (name === 'wrap_ready') return executor.sendWrapReady(data.festivalId);
-        if (name === 'lineup_drop') return executor.sendLineupDrop(data.festivalId);
+        if (name === 'lineup_drop') return executor.sendLineupDrop(data.festivalId, data.organizationId);
         if (name === 'crew_reformed') return executor.sendCrewReformed(data);
         if (name === 'rate_prompt') return executor.sendRatePrompt(data.festivalId);
         if (name === 'set_times_out') return executor.sendTimeRelease(data.festivalId, data.eventKey);
@@ -210,8 +210,11 @@ export function createReengagementQueue(deps: ReengagementQueueDeps) {
   return {
     sendWrapReady: (festivalId: string) =>
       enqueue('wrap_ready', `wrap-${festivalId}`, { festivalId }, () => executor.sendWrapReady(festivalId)),
-    sendLineupDrop: (festivalId: string) =>
-      enqueue('lineup_drop', `lineup-${festivalId}`, { festivalId }, () => executor.sendLineupDrop(festivalId)),
+    // organizationId scopes the prior-edition audience and turns the email off; the job data carries it so a replay keeps it.
+    sendLineupDrop: (festivalId: string, organizationId?: string) =>
+      enqueue('lineup_drop', `lineup-${festivalId}`, organizationId ? { festivalId, organizationId } : { festivalId }, () =>
+        executor.sendLineupDrop(festivalId, organizationId),
+      ),
     sendCrewReformed: (args: any) =>
       enqueue('crew_reformed', `reform-${args?.newCrewId}`, args, () => executor.sendCrewReformed(args)),
     sendRatePrompt: (festivalId: string) =>

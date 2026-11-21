@@ -449,9 +449,24 @@ async function canonicalizeRestoredSets(client: any, festivalId: string, setIds:
   await resolveSetValues(client, { festivalId, separator: festival[0]?.separator ?? 'b2b', userId: null }, targets);
   if (targets.length === 0) return;
   await client.query(
-    `UPDATE festival_sets s SET artists = v.artists::jsonb, artist = v.artist, link_url = v.link_url, display_name = v.display_name
-       FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[]) AS v(id, artists, artist, link_url, display_name)
-      WHERE s.id = v.id`,
+    `
+  UPDATE festival_sets s
+  SET
+    artists = v.artists::jsonb,
+    artist = v.artist,
+    link_url = v.link_url,
+    display_name = v.display_name
+  FROM
+    unnest(
+      $1::text[],
+      $2::text[],
+      $3::text[],
+      $4::text[],
+      $5::text[]
+    ) AS v (id, artists, artist, link_url, display_name)
+  WHERE
+    s.id = v.id
+`,
     [
       targets.map((t: any) => t.id),
       targets.map((t: any) => JSON.stringify(t.values.artists)),

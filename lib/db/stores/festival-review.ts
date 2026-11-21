@@ -2,7 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 /**
- * The review of an organizer's publish request and the hold on attendee alerts (migration 121).
+ * The review of an organizer's publish request and the hold on attendee alerts (migration 108).
  *
  * A publish request is two columns on the festival. A held alert is a row per set in
  * festival_held_schedule_changes: an organizer's save that would push to attendees writes its changes
@@ -211,6 +211,48 @@ export function createFestivalReviewStore(pool: Pool) {
     },
 
     /** Festivals with held alerts, with the sets held and the people who would hear. */
+    /**
+     * Takes one moved-set alert run for a festival, for a verified organization: false when `cap` runs already went
+     * out in the last hour. The advisory lock makes two saves at once count each other.
+     */
+    async takeAlertRun(festivalId: string, cap: number): Promise<boolean> {
+      return withTransaction(pool, async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`schedule-alert:${festivalId}`]);
+        const { rows } = await client.query(
+          `
+  SELECT
+    COUNT(*)::int AS n
+  FROM
+    festival_schedule_alert_runs
+  WHERE
+    festival_id = $1
+    AND created_at > NOW() - INTERVAL '1 hour'
+`,
+          [festivalId],
+        );
+        if (rows[0].n >= cap) return false;
+        await client.query('INSERT INTO festival_schedule_alert_runs (festival_id) VALUES ($1)', [festivalId]);
+        return true;
+      });
+    },
+
+    /** How many more runs a verified organization's festival may send this hour. */
+    async alertRunsLeft(festivalId: string, cap: number): Promise<number> {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    COUNT(*)::int AS n
+  FROM
+    festival_schedule_alert_runs
+  WHERE
+    festival_id = $1
+    AND created_at > NOW() - INTERVAL '1 hour'
+`,
+        [festivalId],
+      );
+      return Math.max(0, cap - rows[0].n);
+    },
+
     async listHeld() {
       const { rows } = await pool.query(
         `

@@ -306,6 +306,33 @@ export async function sendPublishDecisionEmail({ to, organizationName, festivalN
   });
 }
 
+/**
+ * Tells a person that an organization added them. The text is fixed: only the organization name and the role are
+ * filled in, and the name is escaped. It carries nothing the person who added them typed (plan-v3 5.7).
+ */
+export async function sendOrganizationMemberEmail({ to, organizationName, role, config, log, _client }: any) {
+  const lines = [
+    `You were added to ${organizationName} on Festie as ${role === 'viewer' ? 'a viewer' : `an ${role}`}.`,
+    'Sign in with this email address, or create an account with it and confirm it. Then open Manage to see the festivals of your team.',
+    'Manage your festival at festie.us/manage on a laptop or phone browser.',
+  ];
+  const url = `${_origin(config)}/manage`;
+  const bodyHtml = `${lines.map((line) => `<p style="${ALERT_P}">${escapeHtml(line)}</p>`).join('\n    ')}
+    ${_buttonHtml(url, 'Open Manage')}`;
+  const footer = `You get this email because ${escapeHtml(organizationName)} added this address on Festie. If this is a mistake, ignore it.`;
+  return sendEmail({
+    to,
+    subject: `You were added to ${String(organizationName).replace(/[\r\n]+/g, ' ')} on Festie`,
+    html: _wrapTemplate('Added to a team', bodyHtml, footer),
+    text: `${lines.join('\n\n')}\n\nOpen Manage: ${url}\n\nYou get this email because ${organizationName} added this address on Festie. If this is a mistake, ignore it.`,
+    config,
+    log,
+    _client,
+    type: 'organization_member_added',
+    dedupe: false,
+  });
+}
+
 // ── M3 re-engagement emails ─────────────────────────────────────────────
 // All three follow the _wrapTemplate + _buttonHtml pattern and deep-link to the
 // relevant surface. They degrade gracefully when RESEND_API_KEY is unset

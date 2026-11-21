@@ -33,16 +33,22 @@ const sets = (shift: number) =>
 const day = (shift: number) => [{ label: 'Sat', date: '2026-04-11', sets: sets(shift) }];
 
 type Actor = 'admin' | 'editor';
+type PutOptions = { verified?: boolean; runAvailable?: boolean; geocodeVenue?: (location: string) => Promise<unknown> };
 
-// The festival router with a member or an admin behind festivalAccess, one picker on set s0.
-function buildPut(actor: Actor) {
+// The festival router with a member or an admin behind festivalAccess, one picker on set s0. A verified member
+// sends at once while a run is available this hour (takeAlertRun), and is held past the cap.
+function buildPut(actor: Actor, { verified = false, runAvailable = true, geocodeVenue }: PutOptions = {}) {
   const existing: any = { id: 'f-1', name: 'Fest', publishedAt: '2026-01-01T00:00:00.000Z', location: 'Field', latitude: 1, longitude: 1, stages, days: day(0) };
   const hold = mock.fn(async (_id: string, alert: any) => ({ held: alert.changes.length, people: 1 }));
   const scheduleChanged = mock.fn(async (_arg: any) => {});
+  const takeAlertRun = mock.fn(async (_id: string, _cap: number) => runAvailable);
+  const alertRunsLeft = mock.fn(async (_id: string, _cap: number) => (runAvailable ? 2 : 0));
+  const update = mock.fn(async (id: string, data: any) => ({ ...existing, id, ...data }));
   const audits: any[] = [];
   const deps: any = {
     express,
-    config: {},
+    config: { ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP: 3 },
+    geocodeVenue,
     log: { info() {}, warn() {}, error() {}, debug() {} },
     adminAuth: pass(),
     hasRecentAuth: () => true,
@@ -58,10 +64,10 @@ function buildPut(actor: Actor) {
     ErrorCodes: { NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR', INVALID_INPUT: 'INVALID_INPUT', FORBIDDEN: 'FORBIDDEN' },
     rateLimit: pass,
     stores: {
-      festivals: { countOnSets: async () => 0, update: async (id: string, data: any) => ({ ...existing, id, ...data }) },
+      festivals: { countOnSets: async () => 0, update },
       profiles: { pickersBySet: async () => new Map([['s0', ['u1']]]) },
       timeReleases: { releasedDates: async () => new Set<string>() },
-      festivalReview: { hold },
+      festivalReview: { hold, takeAlertRun, alertRunsLeft },
       // The artist viewer of a member request reads the member's organizations.
       organizations: { listForUser: async () => [{ id: 'org-a' }] },
       auditLog: { insert: async (row: any) => audits.push(row) },
@@ -78,17 +84,51 @@ function buildPut(actor: Actor) {
     req.festivalRole = actor;
     if (actor === 'admin') req.isAdmin = true;
     req.organizationId = actor === 'editor' ? 'org-a' : null;
-    req.orgVerified = false;
+    req.orgVerified = verified;
     next();
   };
   const app = express();
   app.use(express.json());
   app.use(createFestivalsRoutes(deps));
-  return { app, hold, scheduleChanged, audits };
+  return { app, hold, scheduleChanged, takeAlertRun, update, audits };
 }
 
 describe('a save that moves a picked set', () => {
   const move = { days: day(30), expectedUpdatedAt: FAR_FUTURE };
+
+  test('by a verified organization sends at once, counts the run against the hourly cap and holds nothing', async () => {
+    const { app, hold, scheduleChanged, takeAlertRun } = buildPut('editor', { verified: true });
+    const res = await request(app).put('/f-1').send(move).expect(200);
+    assert.equal(scheduleChanged.mock.callCount(), 1);
+    assert.equal(hold.mock.callCount(), 0);
+    assert.deepEqual(takeAlertRun.mock.calls[0]!.arguments, ['f-1', 3]);
+    assert.deepEqual(res.body.data.scheduleNotice, { changes: 2, people: 1, notified: true });
+  });
+
+  test('by a verified organization past the hourly cap is held for an admin like an unverified one', async () => {
+    const { app, hold, scheduleChanged, audits } = buildPut('editor', { verified: true, runAvailable: false });
+    const res = await request(app).put('/f-1').send(move).expect(200);
+    assert.equal(scheduleChanged.mock.callCount(), 0);
+    assert.equal(hold.mock.callCount(), 1);
+    assert.deepEqual(res.body.data.scheduleNotice, { changes: 2, people: 1, notified: false, held: true });
+    assert.ok(audits.some((row) => row.action === 'festival.alert_held'));
+  });
+
+  test('a dry run reports the count a save would tell and writes nothing', async () => {
+    const verified = buildPut('editor', { verified: true });
+    const sent = await request(verified.app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
+    assert.deepEqual(sent.body.data, { dryRun: true, scheduleNotice: { changes: 2, people: 1, notified: true }, runsLeft: 2 });
+    const unverified = buildPut('editor');
+    const held = await request(unverified.app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
+    assert.deepEqual(held.body.data, { dryRun: true, scheduleNotice: { changes: 2, people: 1, notified: false, held: true } });
+    const admin = buildPut('admin');
+    const adminRun = await request(admin.app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
+    assert.deepEqual(adminRun.body.data, { dryRun: true, scheduleNotice: { changes: 2, people: 1, notified: true } });
+    for (const run of [verified, unverified, admin]) {
+      assert.equal(run.update.mock.callCount(), 0, 'a dry run never saves');
+      assert.equal(run.scheduleChanged.mock.callCount() + run.hold.mock.callCount(), 0, 'a dry run never alerts or holds');
+    }
+  });
 
   test('by an organization member is held: one hold, no alert, the response says so', async () => {
     const { app, hold, scheduleChanged, audits } = buildPut('editor');
@@ -124,6 +164,29 @@ describe('a save that moves a picked set', () => {
       throw new Error('db blip');
     });
     await request(app).put('/f-1').send(move).expect(200);
+  });
+});
+
+describe('the venue geocode of a member save', () => {
+  const rename = (place: string) => ({ location: place, notify: false, expectedUpdatedAt: FAR_FUTURE });
+
+  test('runs after the response, and a request past five waiting ones is dropped', async () => {
+    const release: Array<() => void> = [];
+    const geocodeVenue = mock.fn(() => new Promise((resolve) => release.push(() => resolve({ latitude: 2, longitude: 2, guessed: true }))));
+    const { app } = buildPut('editor', { verified: true, geocodeVenue });
+    for (let i = 0; i < 6; i++) {
+      const res = await request(app).put('/f-1').send(rename(`Place ${i}`)).expect(200);
+      assert.equal('venueGuessed' in res.body.data, false, 'the save did not wait for the geocoder');
+    }
+    assert.equal(geocodeVenue.mock.callCount(), 5, 'the sixth waiting request is dropped');
+    for (const done of release) done();
+  });
+
+  test('an admin save still waits for the geocoder and reports a weak match', async () => {
+    const geocodeVenue = mock.fn(async () => ({ latitude: 2, longitude: 2, guessed: true }));
+    const { app } = buildPut('admin', { geocodeVenue });
+    const res = await request(app).put('/f-1').send(rename('Elsewhere')).expect(200);
+    assert.equal(res.body.data.venueGuessed, true);
   });
 });
 

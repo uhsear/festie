@@ -19,6 +19,19 @@ export const organizationListQuery = z.object({
   ownerless: z.enum(['true', 'false']).optional(),
 });
 
+// An owner edits the profile of its own organization. A key that is absent stays as it is; null clears a field
+// that may be empty. The kind and the status are Festie's to set.
+export const organizationProfileSchema = z
+  .object({
+    name: z.string().trim().min(2).max(80),
+    displayName: z.string().trim().min(2).max(80).nullable(),
+    contactEmail: z.string().trim().toLowerCase().email().max(254).nullable(),
+    website: z.string().url().max(2048).startsWith('https://', 'Website must be https').nullable(),
+  })
+  .partial()
+  .strict()
+  .refine((profile) => Object.keys(profile).length > 0, 'Change at least one field.');
+
 // Only an admin moves an organization between active and suspended. A new organization starts pending.
 export const organizationStatusSchema = z.object({ status: z.enum(['active', 'suspended']) });
 export const organizationVerifiedSchema = z.object({ verified: z.boolean() });
@@ -32,6 +45,12 @@ export const organizationMemberRoleSchema = z.object({ role: orgRole });
 // An admin declines a publish request with a note the owners read, so it is required and bounded.
 export const publishDeclineSchema = z.object({ note: z.string().trim().min(1).max(500) }).strict();
 export const heldAlertParams = z.object({ festivalId: identifier });
+
+// An owner reads the audit rows of its organization, newest first.
+export const organizerAuditQuery = z.object({
+  cursor: z.string().trim().max(200).optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+});
 
 export const organizationIdParams = z.object({ id: identifier });
 export const organizationMemberParams = z.object({ id: identifier, userId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/, 'Invalid user ID') });

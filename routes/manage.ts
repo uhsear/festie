@@ -6,7 +6,8 @@
  *
  * It is the only place where an organization member is granted a role (festivalAccess reads
  * req.organizerMount, which only this file sets). Own handlers: GET /me, GET /festivals, POST /festivals, and
- * POST|DELETE /festivals/:id/publish-request (submit for review and withdraw). The /artists router is mounted whole.
+ * POST|DELETE /festivals/:id/publish-request (submit for review and withdraw), and /organizations/:id: the profile,
+ * the team and the owner-run members (plan-v3 5.7). The /artists router is mounted whole.
  * Every other path is forwarded to an existing router, and only when it is on MANAGE_WHITELIST. A path
  * that is not listed answers 404 and never reaches those routers, so a route added to them later stays
  * admin-only until someone lists it here and the access-matrix test covers it.
@@ -14,12 +15,15 @@
 
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { auditContext } from '../lib/audit-middleware.js';
+import { OrganizationError } from '../lib/db/stores/organizations.js';
+import { sendOrganizationMemberEmail } from '../lib/email.js';
 import { publishChecklist, submitBlockers } from '../lib/helpers/validation.js';
 import { appOrigin } from '../lib/notifications/links.js';
+import { ENGAGEMENT_MIN_JOINED, organizerEngagement } from '../lib/organizer-engagement.js';
 import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organizer-rules.js';
-import type { FestivalAction } from '../lib/app-context/session.js';
+import { verifiedOrganizationOnly, type FestivalAction } from '../lib/app-context/session.js';
 
-type ForwardTarget = 'festivals' | 'lineupImport' | 'siteplan';
+type ForwardTarget = 'festivals' | 'lineupImport' | 'siteplan' | 'announcements' | 'lineupAnnounce';
 
 export type ManageEntry = {
   method: 'GET' | 'PUT' | 'POST' | 'DELETE';
@@ -52,6 +56,12 @@ export const MANAGE_WHITELIST: ManageEntry[] = [
   { method: 'PUT', mount: '/festivals', path: '/:festivalId/sets/:setId/link', target: 'festivals' },
   { method: 'GET', mount: '/festivals', path: '/:festivalId/sets/links', target: 'festivals' },
   { method: 'POST', mount: '', path: '/festivals/:id/siteplan-image', target: 'siteplan' },
+  // Banners for every organization, with a push only for a verified one; the lineup drop for a verified one.
+  { method: 'GET', mount: '/festivals', path: '/:id/announcements', target: 'announcements' },
+  { method: 'POST', mount: '/festivals', path: '/:id/announcements', target: 'announcements' },
+  { method: 'DELETE', mount: '/festivals', path: '/:id/announcements/:announcementId', target: 'announcements' },
+  { method: 'GET', mount: '/festivals', path: '/:id/lineup-announcement', target: 'lineupAnnounce' },
+  { method: 'POST', mount: '/festivals', path: '/:id/lineup-announcement', target: 'lineupAnnounce' },
 ];
 
 const escapeRegex = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -71,7 +81,14 @@ function pathPattern(entry: ManageEntry): RegExp {
 
 export default function createManageRoutes(
   deps: any,
-  forwarded: { festivalRoutes: any; lineupImportRoutes: any; siteplanRoutes: any; artistRoutes: any },
+  forwarded: {
+    festivalRoutes: any;
+    lineupImportRoutes: any;
+    siteplanRoutes: any;
+    artistRoutes: any;
+    announcementRoutes: any;
+    lineupAnnounceRoutes: any;
+  },
 ) {
   const {
     express,
@@ -81,7 +98,10 @@ export default function createManageRoutes(
     festivalAccess,
     orgAccess,
     rateLimit,
+    requireRecentAuth,
     validate,
+    validateParams,
+    validateQuery,
     getRequestIp,
     sanitizeFestivalPayload,
     validateFestivalIssues,
@@ -289,6 +309,222 @@ export default function createManageRoutes(
     },
   );
 
+  // A store refusal (the last owner, an owner change, the daily cap) keeps its status; anything else is a 500.
+  function failOrganization(res: any, error: unknown, what: string) {
+    if (error instanceof OrganizationError) return sendError(res, error.status, error.message, ErrorCodes[error.code]);
+    log.error(`manage ${what} failed`, { error: (error as Error).message });
+    return sendError(res, 500, `Failed to ${what}`, ErrorCodes.INTERNAL_ERROR);
+  }
+
+  // Festie staff pass these routes too. An owner runs editors and viewers only, and the daily cap is the owner's.
+  const byOwner = (req: any) => req.festivalRole !== 'admin';
+
+  // The organization as a member sees it: profile, team and storage used. Any member reads it. Only an owner sees
+  // the addresses of teammates and of people who have not joined yet.
+  router.get(
+    '/organizations/:id',
+    orgAccess({ action: 'org.view', param: 'id' }),
+    rateLimit(60, 'manage-org'),
+    validateParams(deps.schemas.organizationIdParams),
+    async (req: any, res: any) => {
+      try {
+        const id = req.organizationId;
+        const [profile, team, usedBytes] = await Promise.all([
+          stores.organizations.profile(id),
+          stores.organizations.listTeam(id),
+          stores.organizations.uploadedBytes(id),
+        ]);
+        if (!profile) return sendError(res, 404, 'Organization not found', ErrorCodes.NOT_FOUND);
+        const owner = req.festivalRole === 'owner' || req.festivalRole === 'admin';
+        return sendSuccess(res, {
+          ...profile,
+          role: req.festivalRole,
+          members: team.members.map(({ email, ...member }: any) => (owner ? { ...member, email } : member)),
+          pending: owner ? team.pending : [],
+          upload: { usedBytes, capBytes: config.ORGANIZER_UPLOAD_MB_CAP * 1024 * 1024 },
+        });
+      } catch (error) {
+        return failOrganization(res, error, 'load the organization');
+      }
+    },
+  );
+
+  router.put(
+    '/organizations/:id',
+    orgAccess({ action: 'org.edit', param: 'id' }),
+    rateLimit(20, 'manage-org-edit'),
+    validateParams(deps.schemas.organizationIdParams),
+    validate(deps.schemas.organizationProfile),
+    async (req: any, res: any) => {
+      try {
+        const updated = await stores.organizations.updateProfile(req.organizationId, req.validatedBody);
+        if (!updated) return sendError(res, 404, 'Organization not found', ErrorCodes.NOT_FOUND);
+        await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_UPDATED, 'organization', req.organizationId, { fields: Object.keys(req.validatedBody) });
+        return sendSuccess(res, updated);
+      } catch (error) {
+        return failOrganization(res, error, 'save the organization');
+      }
+    },
+  );
+
+  // A confirmed account joins at once; any other address waits in the pending table until its owner signs in and
+  // confirms it. Either way the person gets one fixed-template email, and the organization daily cap counts it.
+  router.post(
+    '/organizations/:id/members',
+    orgAccess({ action: 'org.member.manage', param: 'id' }),
+    requireRecentAuth,
+    rateLimit(30, 'manage-org-members'),
+    validateParams(deps.schemas.organizationIdParams),
+    validate(deps.schemas.organizationMemberAdd),
+    async (req: any, res: any) => {
+      try {
+        const { email, role } = req.validatedBody;
+        if (role === 'owner' && byOwner(req)) {
+          return sendError(res, 403, 'Only Festie can add an owner. Contact Festie.', ErrorCodes.FORBIDDEN);
+        }
+        const cap = byOwner(req) ? config.ORGANIZER_MEMBER_ADD_DAILY_CAP : undefined;
+        const added = await stores.organizations.addByEmail(req.organizationId, email, role, req.user.userId, cap);
+        if (added.kind === 'member') {
+          await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_MEMBER_ADDED, 'organization', req.organizationId, { userId: added.userId, role, via: 'owner' });
+        } else {
+          await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_PENDING_MEMBER_ADDED, 'organization', req.organizationId, { email, role });
+        }
+        let emailed = false;
+        if (cap !== undefined) {
+          try {
+            const profile = await stores.organizations.profile(req.organizationId);
+            // A test seam: deps.sendOrganizationMemberEmail replaces the mail send.
+            const send = deps.sendOrganizationMemberEmail ?? sendOrganizationMemberEmail;
+            emailed = !!(await send({ to: email, organizationName: profile?.displayName || profile?.name, role, config, log }));
+          } catch (error) {
+            log.warn('manage member email failed', { error: (error as Error).message });
+          }
+        }
+        res.status(201);
+        return sendSuccess(res, { ...added, emailed });
+      } catch (error) {
+        return failOrganization(res, error, 'add the member');
+      }
+    },
+  );
+
+  router.put(
+    '/organizations/:id/members/:userId',
+    orgAccess({ action: 'org.member.manage', param: 'id' }),
+    requireRecentAuth,
+    rateLimit(30, 'manage-org-members'),
+    validateParams(deps.schemas.organizationMemberParams),
+    validate(deps.schemas.organizationMemberRole),
+    async (req: any, res: any) => {
+      try {
+        const { userId } = req.validatedParams;
+        const changed = await stores.organizations.changeRole(req.organizationId, userId, req.validatedBody.role, { byOwner: byOwner(req) });
+        await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_MEMBER_ROLE_CHANGED, 'organization', req.organizationId, changed);
+        return sendSuccess(res, changed);
+      } catch (error) {
+        return failOrganization(res, error, 'change the role');
+      }
+    },
+  );
+
+  router.delete(
+    '/organizations/:id/members/:userId',
+    orgAccess({ action: 'org.member.manage', param: 'id' }),
+    requireRecentAuth,
+    rateLimit(30, 'manage-org-members'),
+    validateParams(deps.schemas.organizationMemberParams),
+    async (req: any, res: any) => {
+      try {
+        const { userId } = req.validatedParams;
+        const removed = await stores.organizations.removeMember(req.organizationId, userId, { byOwner: byOwner(req) });
+        await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_MEMBER_REMOVED, 'organization', req.organizationId, removed);
+        return sendSuccess(res, removed);
+      } catch (error) {
+        return failOrganization(res, error, 'remove the member');
+      }
+    },
+  );
+
+  router.delete(
+    '/organizations/:id/pending-members/:email',
+    orgAccess({ action: 'org.member.manage', param: 'id' }),
+    requireRecentAuth,
+    rateLimit(30, 'manage-org-members'),
+    validateParams(deps.schemas.organizationPendingParams),
+    async (req: any, res: any) => {
+      try {
+        const { email } = req.validatedParams;
+        if (!(await stores.organizations.removePending(req.organizationId, email, { byOwner: byOwner(req) }))) {
+          return sendError(res, 404, 'No invitation for that email.', ErrorCodes.NOT_FOUND);
+        }
+        await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_PENDING_MEMBER_REMOVED, 'organization', req.organizationId, { email });
+        return sendSuccess(res, { email });
+      } catch (error) {
+        return failOrganization(res, error, 'remove the invitation');
+      }
+    },
+  );
+
+  // Aggregate interest in the organization's own festival (plan-v3 6.6): a verified organization's owner only, and
+  // only for a festival with enough joined users. Counts below the floor come back null.
+  router.get(
+    '/festivals/:id/engagement',
+    festivalAccess({ action: 'festival.engagement', allow: verifiedOrganizationOnly }),
+    rateLimit(30, 'manage-engagement'),
+    async (req: any, res: any) => {
+      try {
+        // An admin reaches here for any id, so a missing festival is a 404 and not an empty answer.
+        if (!(await stores.festivals.exists(req.festivalId))) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        const joined = (await stores.profiles.userIdsByFestival(req.festivalId)).length;
+        if (joined < ENGAGEMENT_MIN_JOINED) return sendSuccess(res, organizerEngagement(joined, [], []));
+        const { picks, reminders } = await stores.analytics.setEngagement(req.festivalId);
+        return sendSuccess(res, organizerEngagement(joined, picks, reminders));
+      } catch (error) {
+        log.error('manage engagement failed', { error: (error as Error).message });
+        return sendError(res, 500, 'Failed to load interest', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // What happened in the organization: its members' edits and Festie's actions on its festivals. Teammates show by
+  // display name (owner decision 9), Festie staff as "Festie support", and a Festie row carries no details.
+  router.get(
+    '/organizations/:id/audit',
+    orgAccess({ action: 'org.audit', param: 'id' }),
+    rateLimit(60, 'manage-org-audit'),
+    validateParams(deps.schemas.organizationIdParams),
+    validateQuery(deps.schemas.organizerAuditQuery),
+    async (req: any, res: any) => {
+      try {
+        const { cursor, limit } = req.validatedQuery;
+        const { rows, nextCursor } = await stores.auditLog.query({
+          organizationId: req.organizationId,
+          limit,
+          cursor: cursor || null,
+        });
+        const labels = new Map<string, string | null>();
+        for (const actorId of new Set<string>(rows.map((row: any) => row.actorId).filter(Boolean))) {
+          labels.set(actorId, await stores.organizations.editorLabel(req.organizationId, actorId));
+        }
+        const entries = rows.map((row: any) => {
+          const byMember = row.actorType === 'organizer';
+          return {
+            id: row.id,
+            action: row.action,
+            targetType: row.targetType,
+            targetId: row.targetId,
+            createdAt: row.createdAt,
+            actor: (byMember && row.actorId && labels.get(row.actorId)) || 'Festie support',
+            details: byMember ? (row.details ?? null) : null,
+          };
+        });
+        return sendSuccess(res, entries, { limit, nextCursor });
+      } catch (error) {
+        return failOrganization(res, error, 'load the activity');
+      }
+    },
+  );
+
   // The artist routes of a member (routes/manage-artists.ts) guard themselves: they are not festival-scoped.
   router.use('/artists', forwarded.artistRoutes);
 
@@ -306,7 +542,7 @@ export default function createManageRoutes(
     return hit.guard(req, res, next);
   });
 
-  router.use('/festivals', forwarded.festivalRoutes, forwarded.lineupImportRoutes);
+  router.use('/festivals', forwarded.festivalRoutes, forwarded.lineupImportRoutes, forwarded.announcementRoutes, forwarded.lineupAnnounceRoutes);
   router.use(forwarded.siteplanRoutes);
   // A listed route the forwarded routers did not answer (a whitelist entry with no matching route).
   router.use((_req: any, res: any) => sendError(res, 404, 'Not found', ErrorCodes.NOT_FOUND));

@@ -366,9 +366,15 @@ export interface SyncedFestival {
 async function writeLineups(client: any, writes: Array<{ id: string; lineup: string }>) {
   if (writes.length === 0) return;
   await client.query(
-    `UPDATE festivals f SET lineup = v.lineup::jsonb
-       FROM unnest($1::text[], $2::text[]) AS v(id, lineup)
-      WHERE f.id = v.id`,
+    `
+  UPDATE festivals f
+  SET
+    lineup = v.lineup::jsonb
+  FROM
+    unnest($1::text[], $2::text[]) AS v (id, lineup)
+  WHERE
+    f.id = v.id
+`,
     [writes.map((w) => w.id), writes.map((w) => w.lineup)],
   );
 }
@@ -434,9 +440,17 @@ export async function rewriteCopies(
   }
   if (writes.length > 0) {
     await client.query(
-      `UPDATE festival_sets s SET artists = v.artists::jsonb, artist = v.artist, link_url = v.link_url
-         FROM unnest($1::text[], $2::text[], $3::text[], $4::text[]) AS v(id, artists, artist, link_url)
-        WHERE s.id = v.id`,
+      `
+  UPDATE festival_sets s
+  SET
+    artists = v.artists::jsonb,
+    artist = v.artist,
+    link_url = v.link_url
+  FROM
+    unnest($1::text[], $2::text[], $3::text[], $4::text[]) AS v (id, artists, artist, link_url)
+  WHERE
+    s.id = v.id
+`,
       [
         writes.map((w) => w.id),
         writes.map((w) => w.artists),
@@ -704,9 +718,15 @@ export async function moveRefs(
   const moved = found.sets.filter((set) => idsOf(set.artists).includes(loserId));
   if (moved.length > 0) {
     await client.query(
-      `UPDATE festival_sets s SET artists = v.artists::jsonb
-         FROM unnest($1::text[], $2::text[]) AS v(id, artists)
-        WHERE s.id = v.id`,
+      `
+  UPDATE festival_sets s
+  SET
+    artists = v.artists::jsonb
+  FROM
+    unnest($1::text[], $2::text[]) AS v (id, artists)
+  WHERE
+    s.id = v.id
+`,
       [moved.map((set) => set.id), moved.map((set) => JSON.stringify(repoint(set.artists)))],
     );
   }

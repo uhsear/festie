@@ -18,7 +18,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { after, afterEach, describe, test } from 'node:test';
 import express from 'express';
-import { createSessionHelpers, FESTIVAL_ACTIONS, ORG_ACTIONS } from '../lib/app-context/session';
+import { createSessionHelpers, FESTIVAL_ACTIONS, ORG_ACTIONS, verifiedOrganizationOnly } from '../lib/app-context/session';
 import { buildFestivalMounts } from '../lib/festival-mounts';
 import { MANAGE_WHITELIST } from '../routes/manage';
 import { TEST_DATABASE_URL, skip } from './_test-schema';
@@ -168,13 +168,18 @@ describe('festival access: route inventory', () => {
     const listed = MANAGE_WHITELIST.map((e) => `${e.method} ${e.mount}${e.path}`).sort();
     assert.deepEqual(listed, [
       'DELETE /festivals/:id',
+      'DELETE /festivals/:id/announcements/:announcementId',
       'GET /festivals/:festivalId/sets/links',
       'GET /festivals/:id',
+      'GET /festivals/:id/announcements',
       'GET /festivals/:id/impact',
       'GET /festivals/:id/imports',
+      'GET /festivals/:id/lineup-announcement',
+      'POST /festivals/:id/announcements',
       'POST /festivals/:id/import-lineup',
       'POST /festivals/:id/import-lineup/preview',
       'POST /festivals/:id/imports/:importId/undo',
+      'POST /festivals/:id/lineup-announcement',
       'POST /festivals/:id/publish',
       'POST /festivals/:id/siteplan-image',
       'PUT /festivals/:festivalId/sets/:setId/link',
@@ -349,11 +354,21 @@ describe('festival access: the guard', () => {
     });
 
     test('never passes an admin-only action', async () => {
-      for (const action of ['publish.decide', 'festival.restore', 'lineup.drop', 'announcement.manage', 'alert.release']) {
+      for (const action of ['publish.decide', 'festival.restore', 'lineup.drop', 'alert.release']) {
         const { res, nexted } = await call({ memberships: member('owner') }, action, 'draft');
         assert.equal(res.statusCode, 403, action);
         assert.equal(nexted, false, action);
       }
+    });
+
+    test('a verified-only route refuses an unverified owner and passes a verified one, an admin always passes', async () => {
+      const refused = await call({ memberships: member('owner') }, 'lineup.announce', 'live', { allow: verifiedOrganizationOnly });
+      assert.equal(refused.res.statusCode, 403);
+      assert.match(refused.res.body.message, /not verified/);
+      const verified = await call({ memberships: { 'org-a': { role: 'owner', status: 'active', verified: true, name: 'Org A' } } }, 'lineup.announce', 'live', { allow: verifiedOrganizationOnly });
+      assert.equal(verified.nexted, true);
+      assert.equal((await call({ memberships: member('editor') }, 'lineup.announce', 'live', { allow: verifiedOrganizationOnly })).res.statusCode, 403);
+      assert.equal((await call({ admin: true }, 'lineup.announce', 'live', { allow: verifiedOrganizationOnly })).nexted, true);
     });
 
     test('suspended: reads pass, every write is 403', async () => {
@@ -493,7 +508,21 @@ const BASELINE: Record<string, [number, number, number]> = {
   'POST /api/v1/manage/festivals/:id/siteplan-image': [401, 404, 404],
   'POST /api/v1/manage/festivals/:id/publish-request': [401, 404, 404],
   'DELETE /api/v1/manage/festivals/:id/publish-request': [401, 404, 404],
+  'GET /api/v1/manage/organizations/:id': [401, 404, 404],
+  'PUT /api/v1/manage/organizations/:id': [401, 404, 404],
+  'POST /api/v1/manage/organizations/:id/members': [401, 404, 404],
+  'PUT /api/v1/manage/organizations/:id/members/:userId': [401, 404, 404],
+  'DELETE /api/v1/manage/organizations/:id/members/:userId': [401, 404, 404],
+  'DELETE /api/v1/manage/organizations/:id/pending-members/:email': [401, 404, 404],
   'POST /api/v1/manage/festivals/:id/publish': [401, 404, 404],
+  // Phase 3: banners for every organization, the lineup drop and the interest counts for a verified one, the audit view.
+  'GET /api/v1/manage/festivals/:id/engagement': [401, 404, 404],
+  'GET /api/v1/manage/festivals/:id/announcements': [401, 404, 404],
+  'POST /api/v1/manage/festivals/:id/announcements': [401, 404, 400],
+  'DELETE /api/v1/manage/festivals/:id/announcements/:announcementId': [401, 404, 404],
+  'GET /api/v1/manage/festivals/:id/lineup-announcement': [401, 404, 404],
+  'POST /api/v1/manage/festivals/:id/lineup-announcement': [401, 404, 404],
+  'GET /api/v1/manage/organizations/:id/audit': [401, 404, 404],
 };
 
 describe('festival access: every route through the real app', { skip }, () => {
@@ -660,6 +689,58 @@ describe('festival access: organization cells', { skip }, () => {
     assert.deepEqual(await runCells(server, tokensOf(users, adminToken), cells, body), []);
   });
 
+  // The viewer role is read only on the API: every write row of the manage mount refuses a viewer, whatever the
+  // body, and an editor is refused the owner rows. The reads of the same rows stay open to a viewer.
+  test('a viewer is read only: every write row of the manage mount is 403, the reads stay open', async () => {
+    const { server, users } = await boot();
+    const ORGS = '/api/v1/manage/organizations/org-a';
+    const writes: Array<[string, unknown]> = [
+      [`PUT ${MANAGE}/f-a`, { name: 'x', expectedUpdatedAt: '2999-01-01T00:00:00Z' }],
+      [`DELETE ${MANAGE}/f-a`, {}],
+      [`POST ${MANAGE}`, { organizationId: 'org-a', name: 'x' }],
+      [`POST ${MANAGE}/f-a/publish-request`, {}],
+      [`DELETE ${MANAGE}/f-a/publish-request`, {}],
+      [`POST ${MANAGE}/f-a/publish`, {}],
+      [`POST ${MANAGE}/f-a/import-lineup/preview`, { rows: [] }],
+      [`POST ${MANAGE}/f-a/import-lineup`, { rows: [] }],
+      [`POST ${MANAGE}/f-a/imports/x1/undo`, {}],
+      [`PUT ${MANAGE}/f-a/sets/x1/link`, {}],
+      [`POST ${MANAGE}/f-a/siteplan-image`, {}],
+      [`PUT ${ORGS}`, { name: 'Renamed' }],
+      [`POST ${ORGS}/members`, { email: 'x@example.com', role: 'viewer' }],
+      [`PUT ${ORGS}/members/${users.editorA.id}`, { role: 'viewer' }],
+      [`DELETE ${ORGS}/members/${users.editorA.id}`, {}],
+      [`DELETE ${ORGS}/pending-members/x@example.com`, {}],
+      [`POST ${ARTISTS}`, { name: 'Viewer Artist' }],
+    ];
+    const problems: string[] = [];
+    for (const [request, body] of writes) {
+      const [method, url] = request.split(' ') as [string, string];
+      const caller = o.as(server, users.viewerA.token);
+      const res = await (method === 'DELETE' ? caller.delete(url) : (caller as any)[method.toLowerCase()](url, body));
+      if (res.status !== 403) problems.push(`viewerA ${request}: got ${res.status}, want 403 (${res.body?.error?.message ?? ''})`);
+    }
+    // Owner-only rows are also closed to an editor.
+    for (const request of [`PUT ${ORGS}`, `POST ${ORGS}/members`, `DELETE ${ORGS}/members/${users.viewerA.id}`, `DELETE ${MANAGE}/f-a`, `GET ${MANAGE}/f-a/impact`]) {
+      const [method, url] = request.split(' ') as [string, string];
+      const caller = o.as(server, users.editorA.token);
+      const res = await (method === 'GET' || method === 'DELETE' ? (caller as any)[method.toLowerCase()](url) : (caller as any)[method.toLowerCase()](url, { name: 'x', email: 'x@example.com', role: 'viewer' }));
+      if (res.status !== 403) problems.push(`editorA ${request}: got ${res.status}, want 403`);
+    }
+    assert.deepEqual(problems, []);
+
+    const reads: Cell[] = [
+      ['viewerA', `GET ${MANAGE}/f-a`, 200],
+      ['viewerA', `GET ${MANAGE}/f-a/imports`, 200],
+      ['viewerA', `GET ${MANAGE}`, 200],
+      ['viewerA', `GET ${ORGS}`, 200],
+      ['viewerA', 'GET /api/v1/manage/me', 200],
+      ['viewerA', `GET ${ARTISTS}?q=a`, 200],
+      ['viewerA', 'GET /api/v1/manage/organizations/org-b', 404],
+    ];
+    assert.deepEqual(await runCells(server, tokensOf(users, ''), reads), []);
+  });
+
   test('dropping picked sets, live delete and hard delete are not organizer decisions', async () => {
     const { server, users } = await boot();
     const editor = await o.as(server, users.editorA.token).put(`${MANAGE}/f-a`, { name: 'x', confirmRemovals: true, expectedUpdatedAt: '2999-01-01T00:00:00Z' });
@@ -792,9 +873,6 @@ describe('festival access: organization cells', { skip }, () => {
       'GET /follows',
       'GET /locate-set/x1',
       'GET /f-a/basemap',
-      'GET /f-a/announcements',
-      'POST /f-a/announcements',
-      'POST /f-a/lineup-announcement',
       'GET /f-a/time-releases',
       'GET /f-a/lineup-interest',
       'PUT /f-a/follow',

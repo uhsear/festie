@@ -60,6 +60,11 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   // Fill a festival's venue coordinates from its free-text location (lib/geocode.ts),
   // during the admin save, so the response can flag a weak match. The map centres on them when nothing is
   // pinned, and the weather route needs them. Tests do not inject geocodeVenue.
+  // A member's geocode runs after the response, and a request past this many waiting ones is dropped with a log line
+  // (plan-v3 6.6): the Nominatim queue is one request per 1.1 seconds for everyone, so an organization cannot fill it.
+  const MEMBER_GEOCODE_QUEUE = 5;
+  let memberGeocodesWaiting = 0;
+
   // Resolves true when the stored venue was a weak match. The flag is not stored (no column),
   // so the save response is the only place the admin sees it.
   async function fillVenueCoords(festivalId: string, location: string): Promise<boolean> {
@@ -273,6 +278,13 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
 
   async function countOnSets(table: 'festival_profile_picks' | 'set_ratings', setIds: string[]) {
     return stores.festivals.countOnSets(table, setIds);
+  }
+
+  // Who an alert would reach: every picker of a changed set, and the people with an open mark on a cancelled act who did not pick.
+  function alertAudience(pickersBySet: Map<string, string[]>, interestedByEntry: Map<string, string[]>) {
+    const pickers = new Set([...pickersBySet.values()].flat());
+    const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
+    return { people: pickers.size + marked, marked };
   }
 
   // The cancel line of the removal confirm: what cancelling these acts takes away and who hears about it.
@@ -625,6 +637,26 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
           : undefined;
         // A cancel that alerts anyone needs the admin to see the count first, even when no pick or rating is lost.
         const cancelTellsPeople = !!cancel && cancel.picked + cancel.marked > 0 && body.notify !== false;
+        // A dry run answers what this save would tell people, so an owner can confirm the count. Nothing is written.
+        if (body.dryRun === true) {
+          const audience = alertAudience(pickersBySet, interestedByEntry);
+          const asMember = isMemberReq(req);
+          const verifiedMember = asMember && (req as any).orgVerified === true;
+          const wanted = body.notify !== false && audience.people > 0;
+          return sendSuccess(res, {
+            dryRun: true,
+            scheduleNotice: {
+              changes: changes.length + cancelled.length,
+              people: audience.people,
+              notified: wanted && (!asMember || verifiedMember),
+              ...(wanted && asMember && !verifiedMember ? { held: true } : {}),
+              ...(audience.marked > 0 ? { marked: audience.marked } : {}),
+            },
+            ...(verifiedMember
+              ? { runsLeft: await stores.festivalReview.alertRunsLeft(existingFestival.id, config.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP) }
+              : {}),
+          });
+        }
         if ((picks + ratings > 0 || cancelTellsPeople) && body.confirmRemovals !== true) {
           const removal = {
             days: daysSent ? Math.max(0, (existingFestival.days || []).length - nextFestival.days.length) : 0,
@@ -705,32 +737,22 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         invalidateFestivalCache();
 
         invalidateFestivalListCache();
-        const pickers = new Set([...pickersBySet.values()].flat());
         // A person who picked a changed set gets that alert only, so marks are counted once.
-        const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
-        const people = pickers.size + marked;
+        const { people, marked } = alertAudience(pickersBySet, interestedByEntry);
         const notified = body.notify !== false && people > 0;
-        // An organizer's alerts are held for an admin, so the save reports them as held and not as sent.
+        // An unverified organization's alerts are held for an admin. A verified one's go out, at most the hourly cap per
+        // festival, and a save past the cap is held, so the notice is settled after the delivery below.
         const organizer = isMemberReq(req);
+        const verified = organizer && (req as any).orgVerified === true;
         const scheduleNotice = {
           changes: changes.length + cancelled.length,
           people,
-          notified: notified && !organizer,
-          ...(notified && organizer ? { held: true } : {}),
+          notified: notified && (!organizer || verified),
+          ...(notified && organizer && !verified ? { held: true } : {}),
           ...(marked > 0 ? { marked } : {}),
         };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
-        // The saved row lacks stages and days, so those come from the payload that was written.
-        const fieldChanges = festivalAuditChanges(existingFestival, { ...nextFestival, ...festival }, daysSent);
-        audit(AUDIT_ACTIONS.FESTIVAL_UPDATED, 'festival', festival.id, req, {
-          name: festival.name,
-          ...stats,
-          scheduleChanges: changes.length + cancelled.length,
-          notifiedPeople: notified && !organizer ? people : 0,
-          ...(Object.keys(fieldChanges).length > 0 ? { changes: fieldChanges } : {}),
-        });
-        // A draft has no attendees, and the event goes to every socket.
-        if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
+        let alertHeld = false;
         if (notified) {
           const sending = deliverScheduleAlert({
             stores,
@@ -738,18 +760,36 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             festival,
             alert: { changes: [...changes, ...cancelled], pickersBySet, interestedByEntry },
             organizer,
+            verified,
+            hourlyCap: config.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP,
           });
           if (!organizer) void sending.catch((err: Error) => log.warn('schedule alert failed', { festivalId: festival.id, error: err.message }));
           else {
             // The save is committed, so a failed hold is logged for an admin to find, and the save still succeeds.
             try {
               const result = await sending;
-              audit(AUDIT_ACTIONS.FESTIVAL_ALERT_HELD, 'festival', festival.id, req, { changes: result.changes, people: result.people });
+              if (result.held) {
+                alertHeld = true;
+                audit(AUDIT_ACTIONS.FESTIVAL_ALERT_HELD, 'festival', festival.id, req, { changes: result.changes, people: result.people });
+              }
             } catch (err) {
               log.error('schedule alert hold failed', { festivalId: festival.id, error: (err as Error).message });
             }
           }
         }
+        // A verified organization's save past the hourly cap went to the held queue instead of out.
+        if (alertHeld && scheduleNotice.notified) Object.assign(scheduleNotice, { notified: false, held: true });
+        // The saved row lacks stages and days, so those come from the payload that was written.
+        const fieldChanges = festivalAuditChanges(existingFestival, { ...nextFestival, ...festival }, daysSent);
+        audit(AUDIT_ACTIONS.FESTIVAL_UPDATED, 'festival', festival.id, req, {
+          name: festival.name,
+          ...stats,
+          scheduleChanges: changes.length + cancelled.length,
+          notifiedPeople: scheduleNotice.notified ? people : 0,
+          ...(Object.keys(fieldChanges).length > 0 ? { changes: fieldChanges } : {}),
+        });
+        // A draft has no attendees, and the event goes to every socket.
+        if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
         // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
         if (daysSent || body.lineup !== undefined || body.b2bSeparator !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
@@ -758,10 +798,17 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
           venueSent &&
           (nextFestival.latitude !== existingFestival.latitude ||
             nextFestival.longitude !== existingFestival.longitude);
-        const venueGuessed =
-          !venueSetByAdmin &&
-          (venueMissing || nextFestival.location !== existingFestival.location) &&
-          (await fillVenueCoords(festival.id, nextFestival.location));
+        const wantsVenue = !venueSetByAdmin && (venueMissing || nextFestival.location !== existingFestival.location);
+        let venueGuessed = false;
+        if (wantsVenue && !organizer) venueGuessed = await fillVenueCoords(festival.id, nextFestival.location);
+        else if (wantsVenue && memberGeocodesWaiting >= MEMBER_GEOCODE_QUEUE) {
+          log.warn('member venue geocode dropped: queue full', { festivalId: festival.id });
+        } else if (wantsVenue) {
+          memberGeocodesWaiting += 1;
+          void fillVenueCoords(festival.id, nextFestival.location).finally(() => {
+            memberGeocodesWaiting -= 1;
+          });
+        }
         const refs = refsSeen.value;
         return sendSuccess(res, {
           ...festival,

@@ -18,7 +18,7 @@ export type FestivalMount = {
   guards: any[];
   router: any;
   /** Set on the /manage mount: the routers it forwards to, which the matrix test reads for its rows. */
-  forwarded?: Record<'festivals' | 'lineupImport' | 'siteplan', any>;
+  forwarded?: Record<'festivals' | 'lineupImport' | 'siteplan' | 'announcements' | 'lineupAnnounce', any>;
 };
 
 /**
@@ -38,7 +38,13 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
   const adminSiteplanRoutes = createAdminSiteplanRoutes(deps);
   const organizationsRoutes = createOrganizationsRoutes(deps);
   const adminGuard = [deps.adminAuth];
-  const forwarded = { festivals: festivalRoutes, lineupImport: lineupImportRoutes, siteplan: adminSiteplanRoutes };
+  const forwarded = {
+    festivals: festivalRoutes,
+    lineupImport: lineupImportRoutes,
+    siteplan: adminSiteplanRoutes,
+    announcements: adminAnnouncementRoutes,
+    lineupAnnounce: lineupAnnounceRoutes,
+  };
   const manage: FestivalMount[] =
     deps.config.ORGANIZER_PLATFORM_ENABLED === true
       ? [
@@ -49,6 +55,8 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
               festivalRoutes,
               lineupImportRoutes,
               siteplanRoutes: adminSiteplanRoutes,
+              announcementRoutes: adminAnnouncementRoutes,
+              lineupAnnounceRoutes,
               artistRoutes: createManageArtistsRoutes(deps),
             }),
             forwarded,

@@ -61,6 +61,7 @@ export const AUDIT_ACTIONS = {
   ORGANIZATION_MEMBER_ROLE_CHANGED: 'organization.member_role_changed',
   ORGANIZATION_PENDING_MEMBER_ADDED: 'organization.pending_member_added',
   ORGANIZATION_PENDING_MEMBER_REMOVED: 'organization.pending_member_removed',
+  ORGANIZATION_UPDATED: 'organization.updated',
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];

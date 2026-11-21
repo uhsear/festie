@@ -22,6 +22,10 @@ export interface AnnouncementRow {
   recipientCount: number | null;
   createdBy: string | null;
   createdAt: string;
+  /** False for a banner with no push: an unverified organization's announcement. */
+  push: boolean;
+  /** Set on an announcement an organization's member sent. */
+  organizationId: string | null;
 }
 
 function mapRow(r: any): AnnouncementRow {
@@ -38,6 +42,8 @@ function mapRow(r: any): AnnouncementRow {
     recipientCount: r.recipient_count ?? null,
     createdBy: r.created_by ?? null,
     createdAt: isoOrNull(r.created_at)!,
+    push: r.push !== false,
+    organizationId: r.organization_id ?? null,
   };
 }
 
@@ -52,14 +58,33 @@ export function createAnnouncementsStore(pool: Pool) {
       screen: string;
       sendAt: string;
       createdBy: string | null;
+      push?: boolean;
+      organizationId?: string | null;
     }): Promise<AnnouncementRow> {
       const { rows } = await pool.query(
-        `INSERT INTO festival_announcements (id, festival_id, severity, title, body, screen, send_at, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO festival_announcements (id, festival_id, severity, title, body, screen, send_at, created_by, push, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
-        [a.id, a.festivalId, a.severity, a.title, a.body, a.screen, a.sendAt, a.createdBy],
+        [a.id, a.festivalId, a.severity, a.title, a.body, a.screen, a.sendAt, a.createdBy, a.push ?? true, a.organizationId ?? null],
       );
       return mapRow(rows[0]);
+    },
+
+    /** Announcements an organization's members created in the last 24 hours, cancelled ones included. */
+    async countByOrganizationToday(organizationId: string): Promise<number> {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    COUNT(*)::int AS n
+  FROM
+    festival_announcements
+  WHERE
+    organization_id = $1
+    AND created_at > NOW() - INTERVAL '24 hours'
+`,
+        [organizationId],
+      );
+      return rows[0].n;
     },
 
     /** Non-cancelled rows whose send_at is less than an hour from sendAt (the per-festival limit). */

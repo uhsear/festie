@@ -170,6 +170,12 @@ export const DEFAULTS = {
   // Festivals an organization may hold: drafts while it is pending, and live (not deleted) festivals once active.
   ORGANIZER_PENDING_FESTIVAL_CAP: 2,
   ORGANIZER_ACTIVE_FESTIVAL_CAP: 20,
+  // Membership emails an organization's owners trigger per rolling day, and the megabytes of site-plan images it may store.
+  ORGANIZER_MEMBER_ADD_DAILY_CAP: 10,
+  ORGANIZER_UPLOAD_MB_CAP: 200,
+  // Verified organizations: announcements per organization per rolling day, and moved-set alert runs per festival per hour.
+  ORGANIZER_ANNOUNCEMENT_DAILY_CAP: 3,
+  ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP: 3,
   REMINDER_TICK_INTERVAL_MS: 60_000,
   REMINDER_FIRE_WINDOW_MS: 65_000,
   REMINDER_DEDUP_TTL_MS: 7_200_000,
@@ -440,6 +446,10 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   ORGANIZER_PLATFORM_ENABLED: boolean;
   ORGANIZER_PENDING_FESTIVAL_CAP: number;
   ORGANIZER_ACTIVE_FESTIVAL_CAP: number;
+  ORGANIZER_MEMBER_ADD_DAILY_CAP: number;
+  ORGANIZER_UPLOAD_MB_CAP: number;
+  ORGANIZER_ANNOUNCEMENT_DAILY_CAP: number;
+  ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP: number;
   LOG_LEVEL: string;
   SENTRY_DSN: string;
   METRICS_TOKEN: string;
@@ -745,6 +755,26 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     ORGANIZER_ACTIVE_FESTIVAL_CAP: readInt(
       overrides.ORGANIZER_ACTIVE_FESTIVAL_CAP || process.env.ORGANIZER_ACTIVE_FESTIVAL_CAP,
       DEFAULTS.ORGANIZER_ACTIVE_FESTIVAL_CAP,
+      1,
+    ),
+    ORGANIZER_MEMBER_ADD_DAILY_CAP: readInt(
+      overrides.ORGANIZER_MEMBER_ADD_DAILY_CAP || process.env.ORGANIZER_MEMBER_ADD_DAILY_CAP,
+      DEFAULTS.ORGANIZER_MEMBER_ADD_DAILY_CAP,
+      1,
+    ),
+    ORGANIZER_UPLOAD_MB_CAP: readInt(
+      overrides.ORGANIZER_UPLOAD_MB_CAP || process.env.ORGANIZER_UPLOAD_MB_CAP,
+      DEFAULTS.ORGANIZER_UPLOAD_MB_CAP,
+      1,
+    ),
+    ORGANIZER_ANNOUNCEMENT_DAILY_CAP: readInt(
+      overrides.ORGANIZER_ANNOUNCEMENT_DAILY_CAP || process.env.ORGANIZER_ANNOUNCEMENT_DAILY_CAP,
+      DEFAULTS.ORGANIZER_ANNOUNCEMENT_DAILY_CAP,
+      1,
+    ),
+    ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP: readInt(
+      overrides.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP || process.env.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP,
+      DEFAULTS.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP,
       1,
     ),
 

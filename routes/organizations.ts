@@ -143,12 +143,13 @@ export default function createOrganizationsRoutes(deps: any) {
       const { id } = req.validatedParams;
       const organization = await stores.organizations.getById(id);
       if (!organization) return notFound(res);
-      const [members, pending, festivals] = await Promise.all([
+      const [members, pending, festivals, usage] = await Promise.all([
         stores.organizations.listMembers(id),
         stores.organizations.listPending(id),
         stores.organizations.listFestivals([id]),
+        stores.organizations.usage(id),
       ]);
-      return sendSuccess(res, { ...organization, members, pending, festivals });
+      return sendSuccess(res, { ...organization, members, pending, festivals, usage });
     } catch (error) {
       return fail(res, error, 'load organization');
     }

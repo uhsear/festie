@@ -68,6 +68,8 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | `requireRecentAuth` | `lib/app-context/session.ts:152` | 403 REAUTH_REQUIRED unless password re-entered recently. | `routes/admin-bulk.ts:131` |
 | `festivalAccess({ action, param, allow })` | `lib/app-context/session.ts:129` | Admin passes everywhere. An organization member passes only on the /manage mount, by role, organization status and `allow`; others get 403 (404 on /manage). Sets req.festivalRole, req.festivalId and req.organizationId; tagged for the access-matrix test. | `routes/lineup-announce.ts:47` |
 | `orgAccess({ action })` | `lib/app-context/session.ts:129` | The same rules for a create that names `organizationId` in the body. | `routes/manage.ts:140` |
+| `verifiedOrganizationOnly` | `lib/app-context/session.ts` | An `allow` rule for festivalAccess: only a member of a verified organization passes. An admin always does. | `routes/lineup-announce.ts` |
+| `organizerAudience / organizerEngagement` | `lib/organizer-engagement.ts` | The floor on what an organizer learns about attendees: nothing under 20 joined users, counts under 5 hidden. | `routes/manage.ts` |
 | `createFestivalMounts adminGuard` | `lib/festival-mounts.ts:29` | Admin festival routers mount behind adminGuard = [deps.adminAuth]. | `lib/festival-mounts.ts:32` |
 | `setNoStore` | `lib/app-context/cookies.ts:23` | Sets no-store cache headers; call on admin reads and writes. | `routes/admin-users.ts:69` |
 
