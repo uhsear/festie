@@ -1,0 +1,75 @@
+# Guest-level artist sheet check: tapping an artist name opens the artist sheet and the
+# scrim closes it. Covers a timed set card (TIMED_FESTIVAL_ID) and an announced-lineup
+# act (ANNOUNCED_FESTIVAL_ID). Read-only: it never taps Interested, Must, Want or Maybe.
+# The tap label is "Open <name>" on main and "<name> details" on older builds.
+appId: us.festie.app
+tags:
+  - smoke
+  - nightly
+env:
+  TIMED_FESTIVAL_ID: ${TIMED_FESTIVAL_ID || 'fk-2026'}
+  ANNOUNCED_FESTIVAL_ID: ${ANNOUNCED_FESTIVAL_ID || 'fk-2027'}
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Plan.your.weekend|Choose.a.festival"
+    timeout: 120000
+- runFlow:
+    when:
+      visible: "Plan.your.weekend"
+    commands:
+      - tapOn:
+          id: "intro-skip"
+- extendedWaitUntil:
+    visible: "Choose.a.festival"
+    timeout: 30000
+
+# Timed festival: artist name on a set card.
+- tapOn:
+    id: "festival-card-${TIMED_FESTIVAL_ID}"
+- extendedWaitUntil:
+    visible:
+      id: "schedule-screen"
+    timeout: 150000
+- waitForAnimationToEnd:
+    timeout: 6000
+- tapOn:
+    text: "Open (?!Now and Next).*|.* details"
+    index: 0
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 10000
+- takeScreenshot: artist-sheet-01-set-card
+# The scrim is full-screen, so tap its top strip: the middle of a small screen is inside the sheet.
+- tapOn:
+    point: "50%,12%"
+- assertNotVisible: "Close"
+
+# Announced lineup: act name before set times exist.
+- tapOn:
+    text: ".*Switch festival"
+- extendedWaitUntil:
+    visible: "Choose.a.festival"
+    timeout: 30000
+- tapOn:
+    id: "festival-card-${ANNOUNCED_FESTIVAL_ID}"
+- extendedWaitUntil:
+    visible:
+      id: "schedule-screen"
+    timeout: 150000
+- scrollUntilVisible:
+    element:
+      text: "Open (?!Now and Next).*|.* details"
+- tapOn:
+    text: "Open (?!Now and Next).*|.* details"
+    index: 0
+- extendedWaitUntil:
+    visible: "Close"
+    timeout: 10000
+- takeScreenshot: artist-sheet-02-announced
+# The scrim is full-screen, so tap its top strip: the middle of a small screen is inside the sheet.
+- tapOn:
+    point: "50%,12%"
+- assertNotVisible: "Close"

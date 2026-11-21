@@ -1,0 +1,34 @@
+# Guest-level theme smoke (#310). The "Match system" control lives on the signed-in
+# Account tab, so a guest flow cannot switch it. This flow covers what a guest can
+# reach: the app paints a real screen on a cold launch and on a relaunch with the
+# theme state it persisted, with no blank first frame. Drive the OS side by hand with
+# the rig: `theme.sh dark|light` while this flow's screenshots are compared.
+appId: us.festie.app
+tags:
+  - smoke
+  - nightly
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Plan.your.weekend|Choose.a.festival"
+    timeout: 120000
+- takeScreenshot: theme-01-cold-launch
+- runFlow:
+    when:
+      visible: "Plan.your.weekend"
+    commands:
+      - tapOn:
+          id: "intro-skip"
+- extendedWaitUntil:
+    visible: "Choose.a.festival"
+    timeout: 30000
+- takeScreenshot: theme-02-picker
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible: "Choose.a.festival"
+    timeout: 60000
+- assertNotVisible: "Plan.your.weekend"
+- takeScreenshot: theme-03-relaunch

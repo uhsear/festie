@@ -8,26 +8,26 @@ tags:
 env:
   TEST_USERNAME: ${TEST_USERNAME}
   TEST_PASSWORD: ${TEST_PASSWORD}
-  FESTIVAL_ID: ${FESTIVAL_ID || 'nc-2026'}
+  FESTIVAL_ID: ${FESTIVAL_ID || 'fk-2026'}
 ---
 - launchApp:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Plan your weekend|Choose a festival"
+      text: "Plan.your.weekend|Choose.a.festival"
     timeout: 120000
 - takeScreenshot: 01-launch
 - runFlow:
     when:
-      visible: "Plan your weekend"
+      visible: "Plan.your.weekend"
     commands:
-      - assertVisible: "Plan your weekend"
+      - assertVisible: "Plan.your.weekend"
       - tapOn:
           id: "intro-skip"
 - extendedWaitUntil:
-    visible: "Choose a festival"
+    visible: "Choose.a.festival"
     timeout: 30000
-- assertVisible: "Choose a festival"
+- assertVisible: "Choose.a.festival"
 - takeScreenshot: 02-festival-picker
 - tapOn:
     id: "festival-card-${FESTIVAL_ID}"
@@ -37,7 +37,7 @@ env:
     timeout: 150000
 - waitForAnimationToEnd:
     timeout: 6000
-- assertNotVisible: "Choose a festival"
+- assertNotVisible: "Choose.a.festival"
 - takeScreenshot: 03-schedule-guest
 
 - openLink: "festie://register"
