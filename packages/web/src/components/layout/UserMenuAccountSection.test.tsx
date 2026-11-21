@@ -29,6 +29,18 @@ describe('UserMenuAccountSection', () => {
     expect(screen.getByRole('button', { name: 'Admin' })).toBeInTheDocument();
   });
 
+  it('links to /manage only for a member of an organization', () => {
+    const onClose = vi.fn();
+    const { rerender } = render(<UserMenuAccountSection user={{}} onClose={onClose} onLogout={vi.fn()} />);
+    expect(screen.queryByTestId('user-menu-manage-link')).toBeNull();
+    rerender(<UserMenuAccountSection user={{ organizations: [] }} onClose={onClose} onLogout={vi.fn()} />);
+    expect(screen.queryByTestId('user-menu-manage-link')).toBeNull();
+    rerender(<UserMenuAccountSection user={{ organizations: [{ id: 'o1' }] }} onClose={onClose} onLogout={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Manage your festivals' }));
+    expect(onClose).toHaveBeenCalled();
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/manage' });
+  });
+
   it('labels the sign-out button "Sign out" and calls onLogout', () => {
     const onLogout = vi.fn();
     render(<UserMenuAccountSection user={{}} onClose={vi.fn()} onLogout={onLogout} />);

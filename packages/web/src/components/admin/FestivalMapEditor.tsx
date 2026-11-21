@@ -86,9 +86,11 @@ export interface FestivalMapEditorProps {
   onClose: () => void;
   /** Leave the map for the festival editor (shown when the festival has no stages). */
   onEditFestival?: () => void;
+  /** `manage` is an organizer: the festival loads and saves through /manage, and the site-plan overlay is left out (C17). */
+  scope?: 'admin' | 'manage';
 }
 
-export default function FestivalMapEditor({ festivalId, onClose, onEditFestival }: FestivalMapEditorProps) {
+export default function FestivalMapEditor({ festivalId, onClose, onEditFestival, scope = 'admin' }: FestivalMapEditorProps) {
   const { toast, toastError } = useToast();
 
   const [name, setName] = useState('');
@@ -133,7 +135,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival 
     setLoadError(false);
     setLoading(true);
     try {
-      const full = await api.get<FestivalDetail>(`/admin/festivals/${festivalId}`);
+      const full = await api.get<FestivalDetail>(`/${scope}/festivals/${festivalId}`);
       setDetail(full);
       setName(full.name || '');
       const loadedStages: StageEdit[] = (full.stages || []).map((s) => ({
@@ -162,7 +164,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival 
     } finally {
       setLoading(false);
     }
-  }, [festivalId]);
+  }, [festivalId, scope]);
 
   useEffect(() => {
     void load();
@@ -414,7 +416,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival 
 
     setSaving(true);
     try {
-      await api.put<void>(`/admin/festivals/${festivalId}`, payload);
+      await api.put<void>(`/${scope}/festivals/${festivalId}`, payload);
       toast('Festival map saved', 'success');
       setSnapshot(JSON.stringify({ stages, mapConfig }));
       setVenueDirty(false);
@@ -528,7 +530,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival 
 
       {/* Stage locations */}
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
-        <h3 className="type-label text-text-primary mb-3">Stage locations</h3>
+        <h3 className="type-label text-text-primary mb-3">{scope === 'manage' ? 'Drop a pin where each stage is' : 'Stage locations'}</h3>
         {stages.length === 0 ? (
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-text-muted">This festival has no stages yet.</p>
@@ -608,8 +610,8 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival 
         onRemove={removeZoneById}
       />
 
-      {/* Site plan overlay */}
-      <MapSiteplanPanel
+      {/* Site plan overlay. Organizations cannot upload site plans yet (master plan C17). */}
+      {scope === 'admin' && <MapSiteplanPanel
         url={siteplanUrl}
         opacity={siteplanOpacity}
         committed={!!committedSiteplan}
@@ -625,7 +627,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival 
         onApplyCorners={applySiteplanCorners}
         onCancelCorners={cancelSiteplanCorners}
         onRemoveOverlay={removeSiteplanOverlay}
-      />
+      />}
 
       {/* Amenities */}
       <MapAmenitiesPanel

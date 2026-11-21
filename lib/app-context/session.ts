@@ -21,23 +21,62 @@ import { sanitizeIdentifier } from '../helpers/sanitize';
 
 export const REAUTH_WINDOW_MS = 15 * 60 * 1000;
 
-// Every festival-scoped route names one action here. `role` is the lowest role that may call it and
-// `write` marks a change. Only admins pass today: organizations do not exist yet, so the role and
-// write fields are not read until organizer access arrives with its per-action predicates.
+export type FestivalRole = 'viewer' | 'editor' | 'owner' | 'admin';
+const ROLE_RANK: Record<FestivalRole, number> = { viewer: 1, editor: 2, owner: 3, admin: 4 };
+type ActionSpec = { role: FestivalRole; write: boolean; activeOnly?: boolean };
+
+// Every festival-scoped route names one action here. `role` is the lowest role that may call it, `write`
+// marks a change, and `activeOnly` marks a write that a pending organization may not make even on a draft.
+// A platform admin passes every action. A member passes only on the /manage mount (see festivalAccess).
 export const FESTIVAL_ACTIONS = {
+  'festival.view': { role: 'viewer', write: false },
   'festival.edit': { role: 'editor', write: true },
   'festival.impact': { role: 'owner', write: false },
-  'festival.delete': { role: 'admin', write: true },
+  'festival.delete': { role: 'owner', write: true },
   'festival.restore': { role: 'admin', write: true },
   'publish.decide': { role: 'admin', write: true },
+  // An owner asks for a review, takes the request back, or (verified organizations only, see the route) publishes.
+  'publish.request': { role: 'owner', write: true, activeOnly: true },
+  'publish.withdraw': { role: 'owner', write: true },
+  'publish.direct': { role: 'owner', write: true, activeOnly: true },
+  'alert.release': { role: 'admin', write: true },
   'links.edit': { role: 'editor', write: true },
   'lineup.import': { role: 'editor', write: true },
   'lineup.history': { role: 'viewer', write: false },
   'lineup.drop': { role: 'admin', write: true },
-  'map.edit': { role: 'editor', write: true },
-  'announcement.manage': { role: 'admin', write: true },
-} as const;
+  // The lineup drop of a verified organization's own festival (see verifiedOrganizationOnly).
+  'lineup.announce': { role: 'owner', write: true, activeOnly: true },
+  'map.edit': { role: 'editor', write: true, activeOnly: true },
+  // A banner: any organization's owner. Its push needs a verified organization, which the route decides.
+  'announcement.manage': { role: 'owner', write: true, activeOnly: true },
+  // Aggregate interest in an organization's own festival (plan-v3 6.6). A verified organization only.
+  'festival.engagement': { role: 'owner', write: false },
+} as const satisfies Record<string, ActionSpec>;
 export type FestivalAction = keyof typeof FESTIVAL_ACTIONS;
+
+// Actions on an organization instead of a festival: a create (the body names it) or an organization route (the
+// path names it). A pending organization may edit its profile but not add members (plan-v3 6.6).
+export const ORG_ACTIONS = {
+  'festival.create': { role: 'owner', write: true },
+  'org.view': { role: 'viewer', write: false },
+  'org.edit': { role: 'owner', write: true },
+  'org.audit': { role: 'owner', write: false },
+  'org.member.manage': { role: 'owner', write: true, activeOnly: true },
+} as const satisfies Record<string, ActionSpec>;
+export type OrgAction = keyof typeof ORG_ACTIONS;
+
+type Refusal = { status: number; code: 'FORBIDDEN'; message: string };
+export type FestivalAllow = (
+  req: any,
+  festival: { id: string; organizationId: string | null; publishedAt: Date | null },
+  membership: { role: FestivalRole; status: string; verified: boolean; name: string },
+) => true | Refusal;
+
+// A route that only a verified organization's members may use (an admin always passes). Plan-v3 section 6.1.
+export const verifiedOrganizationOnly: FestivalAllow = (_req, _festival, membership) =>
+  membership.verified
+    ? true
+    : { status: 403, code: 'FORBIDDEN', message: 'Festie has not verified your organization yet. Contact Festie to unlock this.' };
 
 // Gate for a route scoped to one crew. Mount after userAuth and validateParams(crewIdParams). Handlers
 // read the caller's membership row (for example `role`) from `req.membership`.
@@ -155,22 +194,127 @@ export function createSessionHelpers({
     return next();
   }
 
-  // Gate for a route scoped to one festival. A non-admin gets adminAuth's 403 on every mount:
-  // organizer roles are not granted anywhere yet. The tags let the access-matrix test find it.
-  function festivalAccess({ action, param = 'id' }: { action: FestivalAction; param?: string }) {
-    if (!FESTIVAL_ACTIONS[action]) throw new Error(`Unknown festival action "${action}"`);
-    const guard = (req: any, res: any, next: any) =>
-      adminAuth(req, res, () => {
+  // Only the manage router sets req.organizerMount, and the flag can switch every organizer role off.
+  const organizerMountOn = (req: any) => req.organizerMount === true && config.ORGANIZER_PLATFORM_ENABLED === true;
+
+  // Signed-in caller: 'admin', 'member' (a non-admin on the /manage mount), or null after the response went out.
+  // A non-admin anywhere else gets adminAuth's 403, so organization roles grant nothing outside /manage.
+  async function resolveCaller(req: any, res: any): Promise<'admin' | 'member' | null> {
+    const resolved = await attachUserSession(req, res);
+    if (!resolved) return null;
+    const isAdmin = await stores.roles.hasRole(resolved.session.userId, 'admin');
+    if (!isAdmin && !organizerMountOn(req)) {
+      sendError(res, 403, 'Admin access required', ErrorCodes.FORBIDDEN);
+      return null;
+    }
+    res.setHeader('Vary', 'Cookie');
+    if (!isAdmin) return 'member';
+    // eslint-disable-next-line require-atomic-updates -- req is request-scoped, not shared
+    req.isAdmin = true;
+    return 'admin';
+  }
+
+  // The role and organization-status rules of a member. Returns the refusal text, or null when allowed.
+  function memberRefusal(
+    spec: ActionSpec,
+    membership: { role: FestivalRole; status: string; name: string },
+    published: boolean,
+  ): string | null {
+    if (ROLE_RANK[membership.role] < ROLE_RANK[spec.role]) {
+      if (spec.role === 'owner') return `Only an owner of ${membership.name} can do this.`;
+      if (spec.role === 'editor') return `Only an owner or editor of ${membership.name} can do this.`;
+      return 'Admin access required';
+    }
+    if (!spec.write) return null;
+    if (membership.status === 'suspended') {
+      return "Your organization's access is paused. Your live festivals stay visible to attendees.";
+    }
+    if (membership.status === 'pending' && (published || spec.activeOnly)) {
+      return 'Festie is checking your organization. You can edit drafts now. Live festivals and uploads unlock when we approve you.';
+    }
+    return null;
+  }
+
+  const identifierOf = (raw: unknown) => (typeof raw === 'string' && sanitizeIdentifier(raw, 100) === raw ? raw : undefined);
+
+  /* eslint-disable require-atomic-updates -- both guards write only to req, which is request-scoped, not shared */
+  // Gate for a route scoped to one festival. A platform admin passes on every mount. A confirmed member of the
+  // festival's organization passes only on the /manage mount, with the role of the action. Anyone else is
+  // refused: 403 off /manage, and 404 on it so another tenant's festival looks missing. The tags let the
+  // access-matrix test find it. `allow` adds per-route rules that a member must also pass.
+  function festivalAccess({ action, param = 'id', allow }: { action: FestivalAction; param?: string; allow?: FestivalAllow }) {
+    const spec: ActionSpec = FESTIVAL_ACTIONS[action];
+    if (!spec) throw new Error(`Unknown festival action "${action}"`);
+    const guard = async (req: any, res: any, next: any) => {
+      const caller = await resolveCaller(req, res);
+      if (!caller) return;
+      const festivalId = identifierOf(req.params[param]);
+      if (caller === 'admin') {
         req.festivalRole = 'admin';
-        const raw = req.params[param];
         // Handlers may trust req.festivalId, so it stays unset for an id that fails validation.
-        req.festivalId = sanitizeIdentifier(raw, 100) === raw ? raw : undefined;
+        req.festivalId = festivalId;
+        // Audit rows of an organization's festival carry its id, whoever acts.
+        req.organizationId = festivalId ? ((await stores.organizations.festivalAccessRow(festivalId))?.organizationId ?? null) : null;
         return next();
-      });
+      }
+      res.setHeader('Cache-Control', 'private, no-store');
+      if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
+      const festival = await stores.organizations.festivalAccessRow(festivalId);
+      const notFound = () => sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+      if (!festival || festival.deletedAt || !festival.organizationId) return notFound();
+      const membership = await stores.organizations.membership(req.user.userId, festival.organizationId);
+      if (!membership) return notFound();
+      const refusal = memberRefusal(spec, membership, !!festival.publishedAt);
+      if (refusal) return sendError(res, 403, refusal, ErrorCodes.FORBIDDEN);
+      const verdict = allow?.(req, festival, membership);
+      if (verdict && verdict !== true) return sendError(res, verdict.status, verdict.message, ErrorCodes[verdict.code]);
+      req.festivalId = festivalId;
+      req.festival = festival;
+      req.festivalRole = membership.role;
+      req.organizationId = festival.organizationId;
+      req.orgStatus = membership.status;
+      req.orgVerified = membership.verified;
+      return next();
+    };
     guard.action = action;
     guard.param = param;
     return guard;
   }
+
+  // Gate for a route that names the organization in its body (a create) or, with `param`, in its path. Same
+  // caller rules as festivalAccess: an admin needs the organization to exist, a member needs a role in it, and a
+  // stranger sees 404.
+  function orgAccess({ action, param }: { action: OrgAction; param?: string }) {
+    const spec: ActionSpec = ORG_ACTIONS[action];
+    if (!spec) throw new Error(`Unknown organization action "${action}"`);
+    const guard = async (req: any, res: any, next: any) => {
+      const caller = await resolveCaller(req, res);
+      if (!caller) return;
+      if (caller === 'member') res.setHeader('Cache-Control', 'private, no-store');
+      const organizationId = identifierOf(param ? req.params[param] : req.body?.organizationId);
+      if (!organizationId) return sendError(res, 400, 'Choose an organization.', ErrorCodes.INVALID_INPUT);
+      const notFound = () => sendError(res, 404, 'Organization not found', ErrorCodes.NOT_FOUND);
+      if (caller === 'admin') {
+        if (!(await stores.organizations.getById(organizationId))) return notFound();
+        req.festivalRole = 'admin';
+        req.orgStatus = 'active';
+      } else {
+        const membership = await stores.organizations.membership(req.user.userId, organizationId);
+        if (!membership) return notFound();
+        const refusal = memberRefusal(spec, membership, false);
+        if (refusal) return sendError(res, 403, refusal, ErrorCodes.FORBIDDEN);
+        req.festivalRole = membership.role;
+        req.orgStatus = membership.status;
+        req.orgVerified = membership.verified;
+      }
+      req.organizationId = organizationId;
+      return next();
+    };
+    guard.orgAction = action;
+    guard.param = param;
+    return guard;
+  }
+  /* eslint-enable require-atomic-updates */
 
   // True when the session's password was re-entered (POST /auth/reauth) within
   // REAUTH_WINDOW_MS. Reads the reauthAt that validateUserSession loaded.
@@ -201,6 +345,7 @@ export function createSessionHelpers({
     resolveUserRequestSession,
     adminAuth,
     festivalAccess,
+    orgAccess,
     userAuth,
     hasRecentAuth,
     requireRecentAuth,

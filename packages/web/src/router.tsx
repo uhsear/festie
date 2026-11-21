@@ -44,6 +44,7 @@ const loadWrap = () => import('./routes/wrap');
 const loadRate = () => import('./routes/rate');
 const loadCaught = () => import('./routes/caught');
 const loadAdmin = () => import('./routes/admin');
+const loadManage = () => import('./routes/manage');
 const loadLogin = () => import('./routes/login');
 const loadRegister = () => import('./routes/register');
 const loadFinishSignup = () => import('./routes/finish-signup');
@@ -101,6 +102,7 @@ const SetDeepLinkView = withSkeleton(lazyRouteComponent(loadSet), CardsSkeleton)
 const PlanSnapshotView = withSkeleton(lazyRouteComponent(loadPlanSnapshot), MinimalFallback);
 const MapView = withSkeleton(lazyRouteComponent(loadMap), MinimalFallback);
 const AdminPanel = withSkeleton(lazyRouteComponent(loadAdmin), MinimalFallback);
+const ManagePage = withSkeleton(lazyRouteComponent(loadManage), MinimalFallback);
 const LoginPage = withSkeleton(lazyRouteComponent(loadLogin), MinimalFallback);
 const RegisterPage = withSkeleton(lazyRouteComponent(loadRegister), MinimalFallback);
 const FinishSignupPage = withSkeleton(lazyRouteComponent(loadFinishSignup), MinimalFallback);
@@ -377,6 +379,19 @@ const adminRoute = new Route({
   },
 });
 
+// /manage: the festivals of the signed-in user's organizations. Any signed-in user may open it; the server
+// answers with their organizations only, and a user with none sees the plain "not part of an organization" text.
+const manageRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/manage',
+  component: ManagePage,
+  validateSearch: parseAdminSearch,
+  beforeLoad: async ({ location }) => {
+    await authReady();
+    if (!isAuthenticated()) throw redirect({ to: '/login', search: { next: location.href } });
+  },
+});
+
 // Route tree
 const routeTree = rootRoute.addChildren([
   indexRoute,
@@ -404,6 +419,7 @@ const routeTree = rootRoute.addChildren([
   planSnapshotRoute,
   friendPicksRoute,
   adminRoute,
+  manageRoute,
 ]);
 
 // Router instance

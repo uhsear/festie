@@ -66,7 +66,10 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | `adminAuth` | `lib/app-context/session.ts:110` | Session check then hasRole admin or 403; sets req.isAdmin used by audit middleware. | `routes/admin-users.ts:67` |
 | `adminWriteLimit` | `routes/admin.ts:68` | Per-router const rateLimit(config.ADMIN_WRITE_RATE_LIMIT_MAX, 'admin-write'). Other route files get it from ctx. | `routes/admin-bulk.ts:132` |
 | `requireRecentAuth` | `lib/app-context/session.ts:152` | 403 REAUTH_REQUIRED unless password re-entered recently. | `routes/admin-bulk.ts:131` |
-| `festivalAccess({ action, param })` | `lib/app-context/session.ts:129` | Wraps adminAuth, sets req.festivalRole and req.festivalId; tagged for the access-matrix test. | `routes/lineup-announce.ts:47` |
+| `festivalAccess({ action, param, allow })` | `lib/app-context/session.ts:129` | Admin passes everywhere. An organization member passes only on the /manage mount, by role, organization status and `allow`; others get 403 (404 on /manage). Sets req.festivalRole, req.festivalId and req.organizationId; tagged for the access-matrix test. | `routes/lineup-announce.ts:47` |
+| `orgAccess({ action })` | `lib/app-context/session.ts:129` | The same rules for a create that names `organizationId` in the body. | `routes/manage.ts:140` |
+| `verifiedOrganizationOnly` | `lib/app-context/session.ts` | An `allow` rule for festivalAccess: only a member of a verified organization passes. An admin always does. | `routes/lineup-announce.ts` |
+| `organizerAudience / organizerEngagement` | `lib/organizer-engagement.ts` | The floor on what an organizer learns about attendees: nothing under 20 joined users, counts under 5 hidden. | `routes/manage.ts` |
 | `createFestivalMounts adminGuard` | `lib/festival-mounts.ts:29` | Admin festival routers mount behind adminGuard = [deps.adminAuth]. | `lib/festival-mounts.ts:32` |
 | `setNoStore` | `lib/app-context/cookies.ts:23` | Sets no-store cache headers; call on admin reads and writes. | `routes/admin-users.ts:69` |
 
@@ -246,6 +249,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | `useRovingTabs` | `packages/web/src/hooks/useRovingTabs.ts` | Arrow-key roving focus for a role=tablist element. | `packages/web/src/components/crew/CrewTabBar.tsx:26` |
 | `useMediaQuery` | `packages/web/src/hooks/useMediaQuery.ts` | useSyncExternalStore over matchMedia with a window guard; use for min-width and prefers-reduced-motion. | `packages/web/src/components/features/DetailPanel.tsx:43` |
 | `adminKeys / ADMIN_QUERY_OPTIONS / useAdminSearch` | `packages/web/src/components/admin/adminQueries.ts, packages/web/src/components/admin/useAdminSearch.ts` | Query-key factory, shared react-query options and URL-backed search state. | `packages/web/src/components/admin/AdminDashboard.tsx:15` |
+| `AdminFestivals mode='organizer' / FestivalScope` | `packages/web/src/components/admin/AdminFestivals.tsx, packages/shared/src/services/festivalAdmin.ts` | The /manage festival editor. It reuses the admin editor over the organizer API (scope `manage`) and leaves out the admin-only panels. | `packages/web/src/routes/manage.tsx:63` |
 
 ## Add a form on web
 

@@ -1,7 +1,7 @@
 import { useCallback } from 'react';
 import { useNavigate, useSearch } from '@tanstack/react-router';
 
-export const ADMIN_TABS = ['dashboard', 'festivals', 'users', 'crews', 'audit', 'analytics', 'backfill'] as const;
+export const ADMIN_TABS = ['dashboard', 'festivals', 'users', 'crews', 'audit', 'analytics', 'backfill', 'organizations'] as const;
 export type AdminTab = (typeof ADMIN_TABS)[number];
 
 const ADMIN_VIEWS = ['edit', 'map', 'import'] as const;
@@ -38,15 +38,25 @@ export function parseAdminSearch(raw: Record<string, unknown>): AdminSearch {
   };
 }
 
-/** Admin URL state. `setAdminSearch` navigates to exactly `next` (not merged); push by default. */
-export function useAdminSearch(): [AdminSearch, (next: AdminSearch, opts?: { replace?: boolean }) => void] {
-  const search = useSearch({ from: '/admin' }) as AdminSearch;
+/**
+ * Admin URL state. `setAdminSearch` navigates to exactly `next` (not merged); push by default.
+ * The festival editor also runs under /manage for organizers, where the same params apply and `tab` does not.
+ */
+export function useAdminSearch(
+  route: '/admin' | '/manage' = '/admin',
+): [AdminSearch, (next: AdminSearch, opts?: { replace?: boolean }) => void] {
+  const search = useSearch({ from: route }) as AdminSearch;
   const navigate = useNavigate();
   const setAdminSearch = useCallback(
     (next: AdminSearch, { replace = false }: { replace?: boolean } = {}) => {
+      if (route === '/manage') {
+        const { tab: _tab, ...rest } = next;
+        void navigate({ to: '/manage', search: rest, replace });
+        return;
+      }
       void navigate({ to: '/admin', search: next, replace });
     },
-    [navigate],
+    [navigate, route],
   );
   return [search, setAdminSearch];
 }

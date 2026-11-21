@@ -51,7 +51,7 @@ describe('AdminFestivalPreview', () => {
     const artists = screen.getAllByText(/Act$/).map((el) => el.textContent);
     expect(artists).toEqual(['First Act', 'Second Act']);
     expect(screen.getByText('No map pin')).toBeInTheDocument();
-    expect(mockPreview).toHaveBeenCalledWith('f1');
+    expect(mockPreview).toHaveBeenCalledWith('f1', 'admin');
     expect(spy).not.toHaveBeenCalled();
   });
 

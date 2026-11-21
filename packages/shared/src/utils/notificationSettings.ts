@@ -65,21 +65,27 @@ export const TOPIC_GLOBAL_KEY = { crew: 'crewUpdates', schedule: 'scheduleChange
 
 export interface ScheduleNotice {
   changes: number;
-  people: number;
+  /** Absent in an organizer's answer while fewer than 20 people would be told: no count may point at a few people. */
+  people?: number;
   notified: boolean;
   /** People told about a cancelled act because their mark on it was still open. Absent when none. */
   marked?: number;
+  /** An organizer's save: the alert waits for an admin instead of going out (plan-v3 6.2). */
+  held?: boolean;
 }
 
 export function describeScheduleNotice(notice: ScheduleNotice): string {
+  if (notice.held) return 'Changes are saved. Festie will alert attendees after a quick check.';
   if (notice.notified) {
-    const noun = notice.people === 1 ? 'person' : 'people';
+    const { people } = notice;
+    if (people === undefined) return 'Saved. People who picked or set a reminder on the changed sets will get an alert, unless they turned schedule alerts off.';
+    const noun = people === 1 ? 'person' : 'people';
     if (notice.marked) {
-      const picked = notice.people - notice.marked;
+      const picked = people - notice.marked;
       const alsoPicked = picked > 0 ? ` and ${picked} picked or set a reminder on the changed sets` : '';
-      return `Saved. ${notice.people} ${noun} will get an alert: ${notice.marked} marked a cancelled act${alsoPicked}, unless they turned schedule alerts off.`;
+      return `Saved. ${people} ${noun} will get an alert: ${notice.marked} marked a cancelled act${alsoPicked}, unless they turned schedule alerts off.`;
     }
-    return `Saved. ${notice.people} ${noun} picked or set a reminder on the changed sets and will get an alert, unless they turned schedule alerts off.`;
+    return `Saved. ${people} ${noun} picked or set a reminder on the changed sets and will get an alert, unless they turned schedule alerts off.`;
   }
   if (notice.changes > 0 && notice.people === 0) return 'Saved. No one had picked, set a reminder on or marked what changed, so no alerts were sent.';
   if (notice.changes > 0) return 'Saved without alerts.';

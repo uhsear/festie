@@ -123,7 +123,8 @@ Push notification subsystem (FCM for Android, APNs for iOS, Web Push for browser
 | `identities.ts` | `user_identities`, `auth_oauth_states` -- Google and Apple sign-in |
 | `lineup-imports.ts` | `lineup_imports` -- import history and undo |
 | `share-links.ts` | Revocable picks share tokens (`/s/<token>`) |
-| `artists.ts` | `artists` -- the artist repository and the copies that sets and announced lineups hold |
+| `artists.ts` | `artists`, `artist_suggestions` -- the artist repository, the copies that sets and announced lineups hold, and organizer suggestions |
+| `artist-visibility.ts` | Which artists an organizer may see: published, own festivals, or created by its organization |
 | `festival-lock.ts` | Festival row locks shared by the artist and lineup-import stores |
 | `time-releases.ts` | `festival_time_releases` -- per-date "set times are out" claims |
 
@@ -192,7 +193,8 @@ export function createFeatureRoutes({ stores, log, sendSuccess, sendError }: Rou
 | `identities.ts` | Linked sign-in identities |
 | `lineup-announce.ts` | Admin lineup announcement |
 | `oauth.ts` | Google and Apple sign-in |
-| `artists.ts` | Admin artist repository: match, create, edit, merge |
+| `artists.ts` | Admin artist repository: match, create, edit, merge, verify, and the organizer suggestions an admin decides |
+| `manage-artists.ts` | Organizer artist routes under `/api/v1/manage/artists`: visible artists only, create, direct edit or suggestion |
 | `lineup-interest.ts` | Admin demand view of lineup interest counts |
 | `time-releases.ts` | Admin "set times are out" release for one festival date |
 

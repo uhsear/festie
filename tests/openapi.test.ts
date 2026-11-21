@@ -22,6 +22,7 @@ import createHealthRoutes from '../routes/health';
 import createIdentityRoutes from '../routes/identities';
 import createNotificationRoutes from '../routes/notifications';
 import createOAuthRoutes from '../routes/oauth';
+import createOrganizationsRoutes from '../routes/organizations';
 import createProfileRoutes from '../routes/profiles';
 import { createRatingsRoutes } from '../routes/ratings';
 import createSpotifyRoutes from '../routes/spotify';
@@ -224,6 +225,8 @@ function collectRoutes(): string[] {
     ['/api/v1/admin', createAdminRoutes(deps)],
     ['/api/v1/admin/artists', createArtistsRoutes(deps)],
     ...buildFestivalMounts(deps).map(({ prefix, router }): [string, any] => [prefix, router]),
+    // The admin organizations router is mounted only while ORGANIZER_PLATFORM_ENABLED is on, which this test leaves unset.
+    ['/api/v1/admin/organizations', createOrganizationsRoutes(deps)],
     ['/api/v1/profiles', createProfileRoutes(deps)],
     ['/api/v1', createExportRoutes(deps)],
     ['/api/v1/notifications', createNotificationRoutes(deps)],
@@ -261,6 +264,10 @@ const ALLOWLIST: Record<string, string> = {
   'DELETE /api/v1/admin/crews/{id}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/crews/{id}/members/{userId}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/festivals/{id}': 'admin: out of the public spec on purpose',
+  'DELETE /api/v1/admin/organizations/held-alerts/{festivalId}': 'admin: out of the public spec on purpose',
+  'DELETE /api/v1/admin/organizations/{id}/festivals/{festivalId}': 'admin: out of the public spec on purpose',
+  'DELETE /api/v1/admin/organizations/{id}/members/{userId}': 'admin: out of the public spec on purpose',
+  'DELETE /api/v1/admin/organizations/{id}/pending-members/{email}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/users/{id}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/users/{id}/roles/{role}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/auth/identities/{provider}': 'undocumented: public route not yet in the spec',
@@ -286,6 +293,7 @@ const ALLOWLIST: Record<string, string> = {
   'GET /api/v1/admin/analytics/festivals/{festivalId}/picks': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/artists': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/artists/{id}/impact': 'admin: out of the public spec on purpose',
+  'GET /api/v1/admin/artists/suggestions': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/audit': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/crews': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/crews/{id}/members': 'admin: out of the public spec on purpose',
@@ -296,6 +304,9 @@ const ALLOWLIST: Record<string, string> = {
   'GET /api/v1/admin/festivals/{id}/lineup-interest': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/festivals/{id}/set-engagement': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/growth': 'admin: out of the public spec on purpose',
+  'GET /api/v1/admin/organizations': 'admin: out of the public spec on purpose',
+  'GET /api/v1/admin/organizations/review-queue': 'admin: out of the public spec on purpose',
+  'GET /api/v1/admin/organizations/{id}': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/health': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/ref-counts': 'admin: out of the public spec on purpose',
   'GET /api/v1/admin/status': 'admin: out of the public spec on purpose',
@@ -356,9 +367,16 @@ const ALLOWLIST: Record<string, string> = {
   'POST /api/v1/admin/artists/spotify-picks': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/artists/spotify-refresh': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/artists/{id}/merge': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/artists/{id}/verify': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/artists/suggestions/{id}/decision': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/festivals': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/festivals/{id}/backfill-spotify': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/festivals/{id}/siteplan-image': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/festivals/{id}/publish/decline': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/organizations': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/organizations/held-alerts/{festivalId}/release': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/organizations/{id}/festivals': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/organizations/{id}/members': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/policy-notice': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/users/{id}/reset-link': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/users/{id}/roles': 'admin: out of the public spec on purpose',
@@ -397,6 +415,7 @@ const ALLOWLIST: Record<string, string> = {
   'POST /api/v1/csp-report': 'internal: out of the public spec on purpose',
   'POST /api/v1/festivals': 'undocumented: public route not yet in the spec',
   'POST /api/v1/festivals/{id}/publish': 'undocumented: public route not yet in the spec',
+  'POST /api/v1/festivals/{id}/publish/decline': 'admin: out of the public spec on purpose',
   'POST /api/v1/festivals/{id}/restore': 'undocumented: public route not yet in the spec',
   'POST /api/v1/metrics/client': 'internal: out of the public spec on purpose',
   'POST /api/v1/metrics/web-vitals': 'internal: out of the public spec on purpose',
@@ -409,6 +428,9 @@ const ALLOWLIST: Record<string, string> = {
   'PUT /api/v1/account/public-schedule': 'undocumented: public route not yet in the spec',
   'PUT /api/v1/admin/festivals/{festivalId}/sets/{setId}/link': 'admin: out of the public spec on purpose',
   'PUT /api/v1/admin/festivals/{id}': 'admin: out of the public spec on purpose',
+  'PUT /api/v1/admin/organizations/{id}/members/{userId}': 'admin: out of the public spec on purpose',
+  'PUT /api/v1/admin/organizations/{id}/status': 'admin: out of the public spec on purpose',
+  'PUT /api/v1/admin/organizations/{id}/verified': 'admin: out of the public spec on purpose',
   'PUT /api/v1/admin/users/{id}/reset-password': 'admin: out of the public spec on purpose',
   'PUT /api/v1/crews/{crewId}': 'undocumented: public route not yet in the spec',
   'PUT /api/v1/crews/{crewId}/expenses/currency': 'undocumented: public route not yet in the spec',

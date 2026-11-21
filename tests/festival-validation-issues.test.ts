@@ -6,7 +6,7 @@
 import assert from 'node:assert/strict';
 import { describe, test } from 'node:test';
 import { schemas } from '../lib/schemas';
-import { validateFestival, validateFestivalIssues, publishChecklist } from '../lib/helpers/validation';
+import { validateFestival, validateFestivalIssues, publishChecklist, submitBlockers } from '../lib/helpers/validation';
 
 const config = { MAX_STAGES: 50, MAX_DAYS: 10, MAX_SETS_PER_DAY: 200 };
 
@@ -478,5 +478,25 @@ describe('publishChecklist data-quality warnings', () => {
       festival.days.forEach((d: any) => delete d.date);
       assert.equal(byKey(publishChecklist(config, festival)).artist_double_booked.status, 'warn');
     });
+  });
+});
+
+describe('submitBlockers: what stops a submit for review (master plan C10)', () => {
+  const base = { name: 'Fest', location: 'Field', timeZone: 'America/New_York', stages: [], days: [], lineup: [{ id: 'e1', artists: [{ name: 'Alpha', links: {} }], status: 'announced' }] };
+  const blockers = (festival: any) => submitBlockers(festival, publishChecklist(config, festival)).map((item) => item.key);
+
+  test('a festival with names only and no days can be submitted, though publish still needs the days', () => {
+    assert.deepEqual(blockers(base), []);
+    assert.equal(publishChecklist(config, base).find((item) => item.key === 'days')!.status, 'todo');
+  });
+
+  test('a festival with no time zone, or nothing at all, is still blocked', () => {
+    assert.deepEqual(blockers({ ...base, timeZone: null }), ['timeZone']);
+    assert.deepEqual(blockers({ ...base, lineup: [] }), ['stages', 'sets'], 'no names and no days: the days item is ignored, the rest is not');
+  });
+
+  test('once there are days, the sets item counts again', () => {
+    assert.deepEqual(blockers({ ...base, days: [{ label: 'Fri', date: '2027-06-04', sets: [] }] }), []);
+    assert.deepEqual(blockers({ ...base, lineup: [], days: [{ label: 'Fri', date: '2027-06-04', sets: [] }] }), ['stages', 'sets']);
   });
 });

@@ -25,6 +25,7 @@ import type { TimeReleasePanelData } from '@festie/shared/utils/timeReleases';
 import { useToast } from '../../lib/toastContext';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import LineupImportHistory from './LineupImportHistory';
+import type { FestivalScope } from '@festie/shared/services/festivalAdmin';
 import SetTimeReleasePanel from './SetTimeReleasePanel';
 import LineupImportMap from './LineupImportMap';
 import LineupImportResult from './LineupImportResult';
@@ -35,6 +36,10 @@ interface LineupImportProps {
   festivalId: string;
   festivalName: string;
   onDone?: () => void;
+  /** `manage` runs the import through the organizer API and leaves out the admin-only panels. */
+  scope?: FestivalScope;
+  /** An owner of a verified organization may announce the lineup of its own festival. */
+  canAnnounce?: boolean;
 }
 
 type Step = 'source' | 'map' | 'preview' | 'result';
@@ -46,7 +51,7 @@ const TOO_BIG = 'This is larger than 200 KB. Split it and import it in parts.';
  * The server plans every check; the admin approves the plan, then commits the
  * same rows.
  */
-export default function LineupImport({ festivalId, festivalName, onDone }: LineupImportProps) {
+export default function LineupImport({ festivalId, festivalName, onDone, scope = 'admin', canAnnounce = false }: LineupImportProps) {
   const [step, setStep] = useState<Step>('source');
   const [text, setText] = useState('');
   const [table, setTable] = useState<string[][]>([]);
@@ -107,7 +112,8 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
   const checkNames = async (checked: LineupImportPlan) => {
     const names = [...new Set(checked.rows.flatMap((r) => r.artists).map((n) => n.trim()).filter(Boolean))];
     setNameMatches(null);
-    if (names.length === 0) return;
+    // The match route is admin-only. The server resolves the names when the import commits.
+    if (names.length === 0 || scope === 'manage') return;
     try {
       const found = [];
       for (let i = 0; i < names.length; i += 500) found.push(...(await matchArtists(names.slice(i, i + 500).map((name) => ({ name })))));
@@ -135,7 +141,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
         createMissing: create,
         skipSpotify: false,
         ...(move ? { moveDays: true } : {}),
-      });
+      }, scope);
       setPlan(checked);
       setStep('preview');
       void checkNames(checked);
@@ -203,7 +209,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
   const handleCommit = async () => {
     setLoading(true);
     try {
-      const res = await lineupImportApi.commit(festivalId, { rows, updateExisting, createMissing, skipSpotify: false, ...(moveDays ? { moveDays: true } : {}) });
+      const res = await lineupImportApi.commit(festivalId, { rows, updateExisting, createMissing, skipSpotify: false, ...(moveDays ? { moveDays: true } : {}) }, scope);
       setConfirmOpen(false);
       if (res.committed) {
         setResult(res.result);
@@ -224,7 +230,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
 
   const handleExport = async () => {
     try {
-      downloadText(`${slug(festivalName)}-lineup.csv`, await lineupImportApi.exportCsv(festivalId));
+      downloadText(`${slug(festivalName)}-lineup.csv`, await lineupImportApi.exportCsv(festivalId, scope));
     } catch (err: unknown) {
       toastError(err, "Couldn't export the lineup. Try again.");
     }
@@ -528,6 +534,7 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
             onExport={() => void handleExport()}
             onNext={handleNext}
             onCheckList={handleCheckList}
+            organizer={scope === 'manage'}
           />
         )}
         {step === 'map' && (
@@ -547,8 +554,15 @@ export default function LineupImport({ festivalId, festivalName, onDone }: Lineu
           <LineupImportResult result={result} festivalName={festivalName} onReset={reset} onDone={onDone} />
         )}
       </div>
-      <SetTimeReleasePanel festivalId={festivalId} refreshKey={historyKey} onLoaded={setReleases} />
-      <LineupImportHistory festivalId={festivalId} festivalName={festivalName} refreshKey={historyKey} releases={releases} />
+      {scope === 'admin' && <SetTimeReleasePanel festivalId={festivalId} refreshKey={historyKey} onLoaded={setReleases} />}
+      <LineupImportHistory
+        festivalId={festivalId}
+        festivalName={festivalName}
+        refreshKey={historyKey}
+        releases={releases}
+        scope={scope}
+        canAnnounce={canAnnounce}
+      />
       <ConfirmDialog
         open={confirmOpen}
         onOpenChange={setConfirmOpen}

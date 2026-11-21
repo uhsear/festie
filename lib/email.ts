@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import { Resend } from 'resend';
 import { escapeHtml } from './helpers';
+import { isSafeOrganizationName } from './schemas/organization';
 
 let _resend: any = null;
 
@@ -269,6 +270,69 @@ export async function sendEmailChangedEmail({ to, config, log, _client }: any) {
     log,
     _client,
     type: 'email_changed',
+    dedupe: false,
+  });
+}
+
+/**
+ * The decision on an organizer's publish request, sent to the organization's owners. The text is fixed: only
+ * the organization name, the festival name and the admin's note are filled in, and each is escaped.
+ */
+export async function sendPublishDecisionEmail({ to, organizationName, festivalName, decision, note, config, log, _client }: any) {
+  const approved = decision === 'approved';
+  const lines = approved
+    ? [
+        `Festie reviewed ${festivalName} for ${organizationName}, and it is live.`,
+        'Attendees can find it now. Open your festivals to copy the public link.',
+      ]
+    : [
+        `Festie asked for changes to ${festivalName} before it goes live.`,
+        `Festie asked for changes: ${note}.`,
+        'Edit your festival, then submit it again.',
+      ];
+  const bodyHtml = `${lines.map((line) => `<p style="${ALERT_P}">${escapeHtml(line)}</p>`).join('\n    ')}
+    ${_buttonHtml(`${_origin(config)}/manage`, 'Open your festivals')}`;
+  const footer = `You get this email because you are an owner of ${escapeHtml(organizationName)} on Festie.`;
+  const subjectName = String(festivalName).replace(/[\r\n]+/g, ' ');
+  return sendEmail({
+    to,
+    subject: approved ? `${subjectName} is live on Festie` : `Festie asked for changes to ${subjectName}`,
+    html: _wrapTemplate(approved ? 'Festival live' : 'Changes requested', bodyHtml, footer),
+    text: `${lines.join('\n\n')}\n\nOpen your festivals: ${_origin(config)}/manage\n\nYou get this email because you are an owner of ${organizationName} on Festie.`,
+    config,
+    log,
+    _client,
+    type: approved ? 'publish_approved' : 'publish_declined',
+    dedupe: false,
+  });
+}
+
+/**
+ * Tells a person that an organization added them. The text is fixed: only the organization name and the role are
+ * filled in, and the name is escaped. It carries nothing the person who added them typed (plan-v3 5.7). A name that
+ * is not a plain name (a row from before the rule, or a link) is replaced by fixed words, so this mail never
+ * carries a link to an address that may have no account.
+ */
+export async function sendOrganizationMemberEmail({ to, organizationName: storedName, role, config, log, _client }: any) {
+  const organizationName = isSafeOrganizationName(String(storedName ?? '')) ? storedName : 'a team';
+  const lines = [
+    `You were added to ${organizationName} on Festie as ${role === 'viewer' ? 'a viewer' : `an ${role}`}.`,
+    'Sign in with this email address, or create an account with it and confirm it. Then open Manage to see the festivals of your team.',
+    'Manage your festival at festie.us/manage on a laptop or phone browser.',
+  ];
+  const url = `${_origin(config)}/manage`;
+  const bodyHtml = `${lines.map((line) => `<p style="${ALERT_P}">${escapeHtml(line)}</p>`).join('\n    ')}
+    ${_buttonHtml(url, 'Open Manage')}`;
+  const footer = `You get this email because ${escapeHtml(organizationName)} added this address on Festie. If this is a mistake, ignore it.`;
+  return sendEmail({
+    to,
+    subject: `You were added to ${String(organizationName).replace(/[\r\n]+/g, ' ')} on Festie`,
+    html: _wrapTemplate('Added to a team', bodyHtml, footer),
+    text: `${lines.join('\n\n')}\n\nOpen Manage: ${url}\n\nYou get this email because ${organizationName} added this address on Festie. If this is a mistake, ignore it.`,
+    config,
+    log,
+    _client,
+    type: 'organization_member_added',
     dedupe: false,
   });
 }

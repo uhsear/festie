@@ -1,0 +1,658 @@
+// Copyright (c) 2026 Asir Khan. All rights reserved.
+// All Rights Reserved. See the LICENSE file.
+
+/**
+ * Organizations, their members and pending (by-email) members (migration 108).
+ * A member counts only while the user is not deleted and has a confirmed email, so every lookup
+ * here joins `users` with that rule. Nothing is cached: a removal takes effect on the next request.
+ */
+
+import type { Pool, PoolClient } from 'pg';
+import { withTransaction } from '../connection.js';
+
+export type OrgRole = 'owner' | 'editor' | 'viewer';
+export type OrgStatus = 'pending' | 'active' | 'suspended';
+
+/** A refusal the route maps to a status code. `code` is a key of ErrorCodes. */
+export class OrganizationError extends Error {
+  constructor(
+    public status: number,
+    message: string,
+    public code: 'NOT_FOUND' | 'ALREADY_EXISTS' | 'INVALID_INPUT' | 'FORBIDDEN' | 'RATE_LIMITED',
+  ) {
+    super(message);
+    this.name = 'OrganizationError';
+  }
+}
+
+const ORG_COLUMNS = `
+  o.id,
+  o.name,
+  o.kind,
+  o.website,
+  o.status,
+  o.verified_at AS "verifiedAt",
+  o.display_name AS "displayName",
+  o.contact_email AS "contactEmail",
+  o.created_by AS "createdBy",
+  o.created_at AS "createdAt",
+  o.updated_at AS "updatedAt"
+`;
+
+/** What an organizer sees in place of the name of a platform admin. */
+const SUPPORT_LABEL = 'Festie support';
+/** What an organizer sees in place of a former teammate, so a removed member's edits never read as Festie's. */
+const FORMER_LABEL = 'A former teammate';
+
+/** The label for a user outside the organization: Festie support for a platform admin, a neutral one for anyone else. */
+export const outsideLabelSql = (userIdExpr: string) => `CASE WHEN EXISTS (
+    SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ${userIdExpr} AND r.name = 'admin'
+  ) THEN '${SUPPORT_LABEL}' ELSE '${FORMER_LABEL}' END`;
+
+// The one rule for "this user may act as a member": not deleted, email confirmed.
+const ACTIVE_USER = 'u.deleted_at IS NULL AND u.email_verified_at IS NOT NULL';
+
+// An owner runs editors and viewers. Owners are Festie's to add, change and remove (plan-v3 3.3).
+const OWNER_CHANGE_REFUSAL = 'Only Festie can add, change or remove an owner. Contact Festie.';
+
+export type OrganizationCreate = {
+  id: string;
+  name: string;
+  kind: 'venue' | 'promoter' | 'other';
+  website?: string | null;
+  status: OrgStatus;
+  createdBy: string | null;
+};
+
+export function createOrganizationsStore(pool: Pool) {
+  async function requireOrg(client: PoolClient, organizationId: string) {
+    const { rows } = await client.query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [organizationId]);
+    if (!rows[0]) throw new OrganizationError(404, 'Organization not found.', 'NOT_FOUND');
+  }
+
+  // Locks the member rows of the organization so two concurrent demotions cannot both pass the last-owner check.
+  // Returns the role of the target and how many other owners could still act.
+  async function lockOwners(client: PoolClient, organizationId: string, userId: string) {
+    const { rows } = await client.query(
+      `SELECT m.user_id, m.role, (${ACTIVE_USER}) AS active
+         FROM organization_members m JOIN users u ON u.id = m.user_id
+        WHERE m.organization_id = $1
+        FOR UPDATE OF m`,
+      [organizationId],
+    );
+    const target = rows.find((r: any) => r.user_id === userId);
+    const otherActiveOwners = rows.filter((r: any) => r.user_id !== userId && r.role === 'owner' && r.active).length;
+    return { target: target ? (target.role as OrgRole) : null, otherActiveOwners };
+  }
+
+  // The owner's membership email is what the per-day cap counts; an admin's add is not capped and not counted.
+  async function countMemberEmail(client: PoolClient, organizationId: string, email: string, dailyCap?: number) {
+    if (dailyCap === undefined) return;
+    // The cap reads the last 24 hours only, and an address here may belong to someone with no account, so older rows go.
+    await client.query("DELETE FROM organization_member_emails WHERE created_at < NOW() - INTERVAL '2 days'");
+    await client.query('INSERT INTO organization_member_emails (organization_id, email) VALUES ($1, $2)', [organizationId, email]);
+  }
+
+  return {
+    async create(org: OrganizationCreate) {
+      const { rows } = await pool.query(
+        `INSERT INTO organizations (id, name, kind, website, status, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id, name, kind, website, status, verified_at AS "verifiedAt", created_by AS "createdBy",
+                   created_at AS "createdAt", updated_at AS "updatedAt"`,
+        [org.id, org.name, org.kind, org.website ?? null, org.status, org.createdBy],
+      );
+      return rows[0];
+    },
+
+    async getById(organizationId: string) {
+      const { rows } = await pool.query(`SELECT ${ORG_COLUMNS} FROM organizations o WHERE o.id = $1`, [organizationId]);
+      return rows[0] ?? null;
+    },
+
+    /** Every organization with counts. `ownerless` keeps the ones with no active owner. */
+    async list({ status, ownerless }: { status?: OrgStatus; ownerless?: boolean } = {}) {
+      const { rows } = await pool.query(
+        `SELECT ${ORG_COLUMNS},
+           (SELECT COUNT(*)::int FROM organization_members m WHERE m.organization_id = o.id) AS "memberCount",
+           (SELECT COUNT(*)::int FROM organization_pending_members p WHERE p.organization_id = o.id) AS "pendingCount",
+           (SELECT COUNT(*)::int FROM festivals f WHERE f.organization_id = o.id AND f.deleted_at IS NULL) AS "festivalCount",
+           (SELECT COUNT(*)::int FROM organization_members m JOIN users u ON u.id = m.user_id
+             WHERE m.organization_id = o.id AND m.role = 'owner' AND ${ACTIVE_USER}) AS "ownerCount"
+         FROM organizations o
+         WHERE ($1::text IS NULL OR o.status = $1)
+         ORDER BY o.created_at DESC, o.id
+         LIMIT 500`,
+        [status ?? null],
+      );
+      return ownerless ? rows.filter((r: any) => r.ownerCount === 0) : rows;
+    },
+
+    async setStatus(organizationId: string, status: OrgStatus) {
+      const { rows } = await pool.query(
+        `UPDATE organizations o SET status = $2, updated_at = NOW() WHERE o.id = $1 RETURNING ${ORG_COLUMNS}`,
+        [organizationId, status],
+      );
+      return rows[0] ?? null;
+    },
+
+    async setVerified(organizationId: string, verified: boolean) {
+      const { rows } = await pool.query(
+        `UPDATE organizations o
+            SET verified_at = CASE WHEN $2::boolean THEN COALESCE(o.verified_at, NOW()) ELSE NULL END, updated_at = NOW()
+          WHERE o.id = $1 RETURNING ${ORG_COLUMNS}`,
+        [organizationId, verified],
+      );
+      return rows[0] ?? null;
+    },
+
+    async listMembers(organizationId: string) {
+      const { rows } = await pool.query(
+        `SELECT m.user_id AS "userId", u.username, u.email, (${ACTIVE_USER}) AS "active", m.role,
+                m.added_by AS "addedBy", m.created_at AS "createdAt"
+           FROM organization_members m JOIN users u ON u.id = m.user_id
+          WHERE m.organization_id = $1
+          ORDER BY m.created_at, m.user_id`,
+        [organizationId],
+      );
+      return rows;
+    },
+
+    async listPending(organizationId: string) {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    email,
+    role,
+    added_by AS "addedBy",
+    created_at AS "createdAt"
+  FROM
+    organization_pending_members
+  WHERE
+    organization_id = $1
+  ORDER BY
+    created_at,
+    email
+`,
+        [organizationId],
+      );
+      return rows;
+    },
+
+    /**
+     * Adds a member by email. For an admin, a confirmed, live account becomes a member at once. Any other address
+     * (no account, or an unconfirmed one) is stored as pending and claimed by GET /manage/me. An owner's add is always
+     * pending, so its answer is the same whether or not the address has an account.
+     * An owner (`byOwner`) never adds an owner and never replaces or consumes a pending owner invitation: only Festie does.
+     */
+    async addByEmail(
+      organizationId: string,
+      rawEmail: string,
+      role: OrgRole,
+      addedBy: string | null,
+      dailyCap?: number,
+      { byOwner = false } = {},
+    ) {
+      const email = rawEmail.trim().toLowerCase();
+      return withTransaction(pool, async (client) => {
+        // requireOrg locks the organization row, so two owners adding at once cannot both pass the cap.
+        await requireOrg(client, organizationId);
+        if (byOwner) {
+          if (role === 'owner') throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
+          const { rowCount: ownerInvites } = await client.query(
+            "SELECT 1 FROM organization_pending_members WHERE organization_id = $1 AND email = $2 AND role = 'owner'",
+            [organizationId, email],
+          );
+          if (ownerInvites) throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
+        }
+        if (dailyCap !== undefined) {
+          const { rows: sent } = await client.query(
+            "SELECT COUNT(*)::int AS n FROM organization_member_emails WHERE organization_id = $1 AND created_at > NOW() - INTERVAL '24 hours'",
+            [organizationId],
+          );
+          if (sent[0].n >= dailyCap) {
+            throw new OrganizationError(429, `You can add ${dailyCap} people a day. Try again tomorrow, or contact Festie.`, 'RATE_LIMITED');
+          }
+        }
+        // An owner's add never looks the address up: an account match would tell the owner who has a Festie account
+        // and hand back that account's id. The person claims the pending row at /manage/me instead.
+        const { rows: found } = byOwner
+          ? { rows: [] as Array<{ id: string }> }
+          : await client.query(`SELECT u.id FROM users u WHERE lower(u.email) = $1 AND ${ACTIVE_USER}`, [email]);
+        const userId: string | undefined = found[0]?.id;
+        if (!userId) {
+          await client.query(
+            `INSERT INTO organization_pending_members (organization_id, email, role, added_by)
+             VALUES ($1, $2, $3, $4)
+             ON CONFLICT (organization_id, email) DO UPDATE SET role = EXCLUDED.role, added_by = EXCLUDED.added_by`,
+            [organizationId, email, role, addedBy],
+          );
+          await countMemberEmail(client, organizationId, email, dailyCap);
+          return { kind: 'pending' as const, email, role };
+        }
+        const { rowCount } = await client.query(
+          `INSERT INTO organization_members (organization_id, user_id, role, added_by)
+           VALUES ($1, $2, $3, $4) ON CONFLICT (organization_id, user_id) DO NOTHING`,
+          [organizationId, userId, role, addedBy],
+        );
+        if (!rowCount) throw new OrganizationError(409, 'That person is already a member.', 'ALREADY_EXISTS');
+        await client.query('DELETE FROM organization_pending_members WHERE organization_id = $1 AND email = $2', [
+          organizationId,
+          email,
+        ]);
+        await countMemberEmail(client, organizationId, email, dailyCap);
+        return { kind: 'member' as const, userId, role };
+      });
+    },
+
+    /**
+     * Moves a festival between owners (admin only, plan-v3 3.2). `organizationId` null hands it back to the platform. The
+     * festival keeps its data and publish state; only the owner changes. A target organization must be active.
+     * `expectedFrom` makes a hand-back check the current owner. Returns where the festival came from and where it went.
+     */
+    async transferFestival(festivalId: string, organizationId: string | null, expectedFrom?: string) {
+      return withTransaction(pool, async (client) => {
+        if (organizationId) {
+          await requireOrg(client, organizationId);
+          const { rows: target } = await client.query('SELECT status FROM organizations WHERE id = $1', [organizationId]);
+          if (target[0].status !== 'active') {
+            throw new OrganizationError(409, 'Activate the organization before you move a festival into it.', 'INVALID_INPUT');
+          }
+        }
+        const { rows } = await client.query(
+          'SELECT organization_id AS "from" FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+          [festivalId],
+        );
+        if (!rows[0] || (expectedFrom !== undefined && rows[0].from !== expectedFrom)) {
+          throw new OrganizationError(404, 'Festival not found.', 'NOT_FOUND');
+        }
+        if ((rows[0].from ?? null) === organizationId) {
+          throw new OrganizationError(409, 'That festival already has this owner.', 'ALREADY_EXISTS');
+        }
+        await client.query('UPDATE festivals SET organization_id = $2 WHERE id = $1', [festivalId, organizationId]);
+        return { from: (rows[0].from as string | null) ?? null, to: organizationId };
+      });
+    },
+
+    /** Removes a member. Refuses to remove the last active owner. */
+    async removeMember(organizationId: string, userId: string, { byOwner = false } = {}) {
+      return withTransaction(pool, async (client) => {
+        await requireOrg(client, organizationId);
+        const { target, otherActiveOwners } = await lockOwners(client, organizationId, userId);
+        if (!target) throw new OrganizationError(404, 'That person is not a member.', 'NOT_FOUND');
+        if (byOwner && target === 'owner') throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
+        if (target === 'owner' && otherActiveOwners === 0) {
+          throw new OrganizationError(409, 'An organization needs at least one owner.', 'INVALID_INPUT');
+        }
+        await client.query('DELETE FROM organization_members WHERE organization_id = $1 AND user_id = $2', [
+          organizationId,
+          userId,
+        ]);
+        return { userId, role: target };
+      });
+    },
+
+    /** Changes a role. Refuses to demote the last active owner. */
+    async changeRole(organizationId: string, userId: string, role: OrgRole, { byOwner = false } = {}) {
+      return withTransaction(pool, async (client) => {
+        await requireOrg(client, organizationId);
+        const { target, otherActiveOwners } = await lockOwners(client, organizationId, userId);
+        if (!target) throw new OrganizationError(404, 'That person is not a member.', 'NOT_FOUND');
+        if (byOwner && (target === 'owner' || role === 'owner')) throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
+        if (target === 'owner' && role !== 'owner' && otherActiveOwners === 0) {
+          throw new OrganizationError(409, 'An organization needs at least one owner.', 'INVALID_INPUT');
+        }
+        await client.query('UPDATE organization_members SET role = $3 WHERE organization_id = $1 AND user_id = $2', [
+          organizationId,
+          userId,
+          role,
+        ]);
+        return { userId, from: target, role };
+      });
+    },
+
+    async removePending(organizationId: string, rawEmail: string, { byOwner = false } = {}) {
+      const email = rawEmail.trim().toLowerCase();
+      const { rowCount } = await pool.query(
+        `DELETE FROM organization_pending_members WHERE organization_id = $1 AND email = $2 AND ($3::boolean = false OR role <> 'owner')`,
+        [organizationId, email, byOwner],
+      );
+      if (rowCount) return true;
+      if (!byOwner) return false;
+      const { rows } = await pool.query('SELECT 1 FROM organization_pending_members WHERE organization_id = $1 AND email = $2', [
+        organizationId,
+        email,
+      ]);
+      if (rows.length > 0) throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
+      return false;
+    },
+
+    /**
+     * Turns every pending row that matches the user's confirmed email into a membership, then deletes
+     * the pending rows. An unconfirmed or deleted account claims nothing. An existing membership keeps its role.
+     * Returns the memberships this call created.
+     */
+    async claimPending(userId: string): Promise<Array<{ organizationId: string; role: OrgRole; addedBy: string | null }>> {
+      return withTransaction(pool, async (client) => {
+        const { rows: users } = await client.query(
+          `SELECT lower(u.email) AS email FROM users u WHERE u.id = $1 AND ${ACTIVE_USER} AND u.email IS NOT NULL`,
+          [userId],
+        );
+        const email: string | undefined = users[0]?.email;
+        if (!email) return [];
+        // The delete takes the row locks, so a second concurrent claim waits and then finds nothing.
+        const { rows: pending } = await client.query(
+          `
+  DELETE FROM organization_pending_members
+  WHERE
+    email = $1
+  RETURNING
+    organization_id AS "organizationId",
+    role,
+    added_by AS "addedBy"
+`,
+          [email],
+        );
+        const claimed = [];
+        for (const row of pending) {
+          const { rowCount } = await client.query(
+            `INSERT INTO organization_members (organization_id, user_id, role, added_by)
+             VALUES ($1, $2, $3, $4) ON CONFLICT (organization_id, user_id) DO NOTHING`,
+            [row.organizationId, userId, row.role, row.addedBy],
+          );
+          if (rowCount) claimed.push(row);
+        }
+        return claimed;
+      });
+    },
+
+    /** The user's role in one organization, or null. Applies the deleted-user and confirmed-email rules. */
+    async membership(userId: string, organizationId: string) {
+      const { rows } = await pool.query(
+        `SELECT m.role, o.status, o.name, o.verified_at IS NOT NULL AS verified
+           FROM organization_members m
+           JOIN users u ON u.id = m.user_id
+           JOIN organizations o ON o.id = m.organization_id
+          WHERE m.organization_id = $1 AND m.user_id = $2 AND ${ACTIVE_USER}`,
+        [organizationId, userId],
+      );
+      return (rows[0] as { role: OrgRole; status: OrgStatus; name: string; verified: boolean } | undefined) ?? null;
+    },
+
+    /** The organizations a user belongs to, for /auth/me and /manage/me. */
+    async listForUser(userId: string) {
+      const { rows } = await pool.query(
+        `SELECT o.id, o.name, o.kind, o.status, o.verified_at IS NOT NULL AS verified, m.role
+           FROM organization_members m
+           JOIN users u ON u.id = m.user_id
+           JOIN organizations o ON o.id = m.organization_id
+          WHERE m.user_id = $1 AND ${ACTIVE_USER}
+          ORDER BY o.name, o.id`,
+        [userId],
+      );
+      return rows as Array<{ id: string; name: string; kind: string; status: OrgStatus; verified: boolean; role: OrgRole }>;
+    },
+
+    /** Same-organization check for masking: is this user a current member? */
+    async isMember(organizationId: string, userId: string) {
+      const { rows } = await pool.query(
+        'SELECT 1 FROM organization_members WHERE organization_id = $1 AND user_id = $2',
+        [organizationId, userId],
+      );
+      return rows.length > 0;
+    },
+
+    /**
+     * How organizer-visible lists name the person behind an edit (owner decision 9): "Alex at Venue X" for a
+     * teammate, from the display name and never the attendee username, "Festie support" for a platform admin, and
+     * "A former teammate" for anyone else.
+     */
+    async editorLabel(organizationId: string, userId: string | null) {
+      if (!userId) return null;
+      const { rows } = await pool.query(
+        `
+  SELECT
+    u.display_name AS "displayName",
+    COALESCE(o.display_name, o.name) AS "organizationName"
+  FROM
+    organization_members m
+    JOIN users u ON u.id = m.user_id
+    JOIN organizations o ON o.id = m.organization_id
+  WHERE
+    m.organization_id = $1
+    AND m.user_id = $2
+`,
+        [organizationId, userId],
+      );
+      if (!rows[0]) {
+        const { rows: outside } = await pool.query(`SELECT ${outsideLabelSql('$1::text')} AS label`, [userId]);
+        return outside[0].label as string;
+      }
+      return `${String(rows[0].displayName ?? '').trim() || 'A teammate'} at ${rows[0].organizationName}`;
+    },
+
+    /** The organization as its own members see it: the profile, never the admin-only fields. */
+    async profile(organizationId: string) {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    o.id,
+    o.name,
+    o.display_name AS "displayName",
+    o.contact_email AS "contactEmail",
+    o.website,
+    o.kind,
+    o.status,
+    o.verified_at IS NOT NULL AS verified
+  FROM
+    organizations o
+  WHERE
+    o.id = $1
+`,
+        [organizationId],
+      );
+      return rows[0] ?? null;
+    },
+
+    /** Changes the profile fields that are present. `null` clears a field that may be empty. */
+    async updateProfile(
+      organizationId: string,
+      patch: { name?: string; displayName?: string | null; contactEmail?: string | null; website?: string | null },
+    ) {
+      const columns = { name: 'name', displayName: 'display_name', contactEmail: 'contact_email', website: 'website' } as const;
+      const sets: string[] = [];
+      const values: unknown[] = [organizationId];
+      for (const [key, column] of Object.entries(columns)) {
+        const value = (patch as Record<string, unknown>)[key];
+        if (value === undefined) continue;
+        values.push(value);
+        sets.push(`${column} = $${values.length}`);
+      }
+      if (sets.length === 0) return this.profile(organizationId);
+      const { rows } = await pool.query(
+        `UPDATE organizations SET ${sets.join(', ')}, updated_at = NOW() WHERE id = $1
+         RETURNING id, name, display_name AS "displayName", contact_email AS "contactEmail", website, kind, status, verified_at IS NOT NULL AS verified`,
+        values,
+      );
+      return rows[0] ?? null;
+    },
+
+    /**
+     * What the Members screen shows a teammate: the person's display name (null when unset) and email, never the attendee username,
+     * and who added them as a label ("Festie support" for a platform admin, "A former teammate" for anyone else outside the organization).
+     */
+    async listTeam(organizationId: string) {
+      const added = (alias: string) =>
+        `CASE WHEN am.user_id IS NULL THEN ${outsideLabelSql(`${alias}.added_by`)} ELSE COALESCE(NULLIF(btrim(a.display_name), ''), 'A teammate') END`;
+      const { rows: members } = await pool.query(
+        `SELECT m.user_id AS "userId", NULLIF(btrim(u.display_name), '') AS "name", u.email, m.role,
+                (${ACTIVE_USER}) AS "active", ${added('m')} AS "addedBy", m.created_at AS "createdAt"
+           FROM organization_members m
+           JOIN users u ON u.id = m.user_id
+           LEFT JOIN organization_members am ON am.organization_id = m.organization_id AND am.user_id = m.added_by
+           LEFT JOIN users a ON a.id = am.user_id
+          WHERE m.organization_id = $1
+          ORDER BY m.created_at, m.user_id`,
+        [organizationId],
+      );
+      const { rows: pending } = await pool.query(
+        `SELECT p.email, p.role, ${added('p')} AS "addedBy", p.created_at AS "createdAt"
+           FROM organization_pending_members p
+           LEFT JOIN organization_members am ON am.organization_id = p.organization_id AND am.user_id = p.added_by
+           LEFT JOIN users a ON a.id = am.user_id
+          WHERE p.organization_id = $1
+          ORDER BY p.created_at, p.email`,
+        [organizationId],
+      );
+      return { members, pending };
+    },
+
+    /** Bytes of site-plan images stored for the organization's festivals. */
+    async uploadedBytes(organizationId: string) {
+      const { rows } = await pool.query('SELECT COALESCE(SUM(bytes), 0)::bigint AS total FROM organization_uploads WHERE organization_id = $1', [
+        organizationId,
+      ]);
+      return Number(rows[0].total);
+    },
+
+    /**
+     * Counts one stored image against the organization. With `capBytes` it refuses (returns false) when the total
+     * would pass the cap; the organization row lock keeps two uploads at once from both fitting.
+     */
+    async recordUpload(upload: { key: string; organizationId: string; festivalId: string; bytes: number }, capBytes?: number) {
+      return withTransaction(pool, async (client) => {
+        await requireOrg(client, upload.organizationId);
+        if (capBytes !== undefined) {
+          const { rows } = await client.query('SELECT COALESCE(SUM(bytes), 0)::bigint AS total FROM organization_uploads WHERE organization_id = $1', [
+            upload.organizationId,
+          ]);
+          if (Number(rows[0].total) + upload.bytes > capBytes) return false;
+        }
+        await client.query(
+          'INSERT INTO organization_uploads (key, organization_id, festival_id, bytes) VALUES ($1, $2, $3, $4) ON CONFLICT (key) DO NOTHING',
+          [upload.key, upload.organizationId, upload.festivalId, upload.bytes],
+        );
+        return true;
+      });
+    },
+
+    /** Drops the rows of images the orphan sweep may have removed: unreferenced and past the sweep's minimum age. */
+    async forgetUnreferencedUploads(referencedKeys: string[], minAgeMs: number) {
+      await pool.query(
+        `DELETE FROM organization_uploads WHERE NOT (key = ANY ($1::text[])) AND created_at < NOW() - ($2::bigint * INTERVAL '1 millisecond')`,
+        [referencedKeys, minAgeMs],
+      );
+    },
+
+    /** Confirmed email addresses of the organization's active owners, for decision emails. */
+    async ownerEmails(organizationId: string): Promise<string[]> {
+      const { rows } = await pool.query(
+        `SELECT u.email FROM organization_members m JOIN users u ON u.id = m.user_id
+          WHERE m.organization_id = $1 AND m.role = 'owner' AND ${ACTIVE_USER} AND u.email IS NOT NULL
+          ORDER BY m.created_at, m.user_id`,
+        [organizationId],
+      );
+      return rows.map((row: { email: string }) => row.email);
+    },
+
+    /** What festivalAccess needs about a festival: its owner organization and whether it is live. */
+    async festivalAccessRow(festivalId: string) {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    id,
+    organization_id AS "organizationId",
+    published_at AS "publishedAt",
+    deleted_at AS "deletedAt"
+  FROM
+    festivals
+  WHERE
+    id = $1
+`,
+        [festivalId],
+      );
+      return (
+        (rows[0] as { id: string; organizationId: string | null; publishedAt: Date | null; deletedAt: Date | null } | undefined) ??
+        null
+      );
+    },
+
+    /** The festivals of the given organizations, drafts and soft-deleted ones included. Never read from a shared cache. */
+    async listFestivals(organizationIds: string[]) {
+      if (organizationIds.length === 0) return [];
+      const { rows } = await pool.query(
+        `
+  SELECT
+    id,
+    name,
+    COALESCE(location, '') AS location,
+    organization_id AS "organizationId",
+    slug,
+    (published_at IS NOT NULL) AS published,
+    (deleted_at IS NOT NULL) AS deleted,
+    publish_requested_at AS "publishRequestedAt",
+    publish_review_note AS "publishReviewNote",
+    updated_at AS "updatedAt"
+  FROM
+    festivals
+  WHERE
+    organization_id = ANY ($1::text[])
+  ORDER BY
+    updated_at DESC,
+    id
+  LIMIT
+    500
+`,
+        [organizationIds],
+      );
+      return rows;
+    },
+
+    /** Live (not soft-deleted) festivals of an organization, and how many of those are drafts. */
+    async festivalCounts(organizationId: string) {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    COUNT(*)::int AS total,
+    COUNT(*) FILTER (
+      WHERE
+        published_at IS NULL
+    )::int AS drafts
+  FROM
+    festivals
+  WHERE
+    organization_id = $1
+    AND deleted_at IS NULL
+`,
+        [organizationId],
+      );
+      return { total: rows[0].total as number, drafts: rows[0].drafts as number };
+    },
+
+    /** What an organization used so far this calendar month, and its stored images: the input for billing later. */
+    async usage(organizationId: string) {
+      const [counts, announcements, bytes] = await Promise.all([
+        this.festivalCounts(organizationId),
+        pool.query(
+          `
+  SELECT
+    COUNT(*)::int AS n
+  FROM
+    festival_announcements
+  WHERE
+    organization_id = $1
+    AND created_at >= date_trunc('month', NOW())
+`,
+          [organizationId],
+        ),
+        this.uploadedBytes(organizationId),
+      ]);
+      return {
+        festivals: counts.total,
+        drafts: counts.drafts,
+        announcementsThisMonth: announcements.rows[0].n as number,
+        uploadedBytes: bytes,
+      };
+    },
+  };
+}

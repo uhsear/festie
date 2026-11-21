@@ -341,8 +341,12 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     return { festivalName, hasTimes };
   }
 
-  /** Followers who have not joined, plus prior-edition profile rows. Returns null when a query fails. */
-  async function queryLineupDropAudience(festivalId: string) {
+  /**
+   * Followers who have not joined, plus prior-edition profile rows. Returns null when a query fails.
+   * With an organization id the prior editions are only that organization's own festivals (plan-v3 4.5), so an
+   * organizer cannot reach another tenant's attendees by naming a festival like theirs. An admin send is unscoped.
+   */
+  async function queryLineupDropAudience(festivalId: string, organizationId?: string) {
     let followerIds: string[];
     let priorRows: Array<{ userId: string; festivalName: string }>;
     try {
@@ -379,12 +383,13 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
             OR regexp_replace(lower(fp.name), '\\s*(19|20)\\d{2}\\s*$', '')
               = regexp_replace((SELECT lower(name) FROM festivals WHERE id = $1), '\\s*(19|20)\\d{2}\\s*$', '')
           )
+          AND ($2::text IS NULL OR fp.organization_id = $2)
           AND NOT EXISTS (
             SELECT 1 FROM festival_profiles cur
             WHERE cur.user_id = p.user_id AND cur.festival_id = $1 AND cur.deleted_at IS NULL
           )
         `,
-        [festivalId],
+        [festivalId, organizationId ?? null],
       );
       priorRows = prior.rows.filter((r: any) => r.userId);
     } catch (err: any) {
@@ -401,7 +406,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   // recurring festival (the inverse of getAttendedFestivals: users who attended an earlier edition
   // but NOT the new one). Both get the push and the inbox row. Only followers get the email,
   // because a name match can hit the wrong series. Deduped per user on eventKey `lineup:<festivalId>`.
-  async function resolveLineupDropRecipients(festivalId: string): Promise<
+  async function resolveLineupDropRecipients(festivalId: string, organizationId?: string): Promise<
     | {
         festivalName: string;
         hasTimes: boolean;
@@ -417,7 +422,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const { festivalName, hasTimes } = await loadLineupDropFestival(festivalId);
     if (!festivalName) return { reason: 'festival_not_found' };
 
-    const audience = await queryLineupDropAudience(festivalId);
+    const audience = await queryLineupDropAudience(festivalId, organizationId);
     if (!audience) return { reason: 'query_failed' };
     const { followerIds, priorRows } = audience;
     // A follower who also attended before is a follower: they get the email, so they leave the prior list.
@@ -431,8 +436,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
   }
 
   /** Dry run for the admin "Announce lineup" button: who would be notified, and how many get no email. */
-  async function countLineupDrop(festivalId: string) {
-    const r = await resolveLineupDropRecipients(festivalId);
+  async function countLineupDrop(festivalId: string, organizationId?: string) {
+    const r = await resolveLineupDropRecipients(festivalId, organizationId);
     if ('reason' in r) {
       return {
         festivalName: '',
@@ -453,12 +458,15 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       followers: r.followerIds.length,
       priorAttendees: r.priorEditionIds.length,
       matchedFestivalNames: r.matchedFestivalNames,
-      ...(await planAlertEmail(r.followerIds, 'lineup_drop', `lineup:${festivalId}`)),
+      // An organizer never emails attendees (owner decision 3), so its send counts no email.
+      ...(organizationId
+        ? { emailRecipients: 0, emailCut: 0, emailOff: 'organizer' as string | null }
+        : await planAlertEmail(r.followerIds, 'lineup_drop', `lineup:${festivalId}`)),
     };
   }
 
-  async function sendLineupDrop(festivalId: string) {
-    const r = await resolveLineupDropRecipients(festivalId);
+  async function sendLineupDrop(festivalId: string, organizationId?: string) {
+    const r = await resolveLineupDropRecipients(festivalId, organizationId);
     if ('reason' in r) return { sent: 0, reason: r.reason };
     const { festivalName, hasTimes, followerIds, priorEditionIds, fresh } = r;
     if (followerIds.length + priorEditionIds.length === 0) return { sent: 0, reason: 'no_recipients' };
@@ -474,9 +482,12 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       data: { festivalId, eventKey, deepLink },
     }));
 
-    const emailSent = await alertEmailFanout(followerIds, 'lineup_drop', eventKey, async (user) =>
-      sendLineupDropEmail({ to: user.email, username: user.username, festivalName, festivalId, hasTimes, config, log }),
-    );
+    // An organizer's drop is push and inbox only: no email goes to attendees on an organization's behalf.
+    const emailSent = organizationId
+      ? 0
+      : await alertEmailFanout(followerIds, 'lineup_drop', eventKey, async (user) =>
+          sendLineupDropEmail({ to: user.email, username: user.username, festivalName, festivalId, hasTimes, config, log }),
+        );
 
     log?.info?.('sendLineupDrop: done', { festivalId, followers: followerIds.length, priorEdition: priorEditionIds.length, pushSent, emailSent });
     return { sent: pushSent, emailSent, eventKey, recipients: followerIds.length + priorEditionIds.length };

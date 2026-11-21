@@ -6,8 +6,16 @@ import { planPickerAlerts } from '../lib/picker-alerts.js';
 import { diffCancelledEntries } from '../lib/schedule-diff.js';
 import { withFreshMoves } from '../lib/set-moves.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { auditContext } from '../lib/audit-middleware.js';
+import { deliverScheduleAlert } from '../lib/alert-hold.js';
+import { normalizeArtistLink } from '../lib/artist-links.js';
+import { sendPublishDecisionEmail } from '../lib/email.js';
+import { appOrigin } from '../lib/notifications/links.js';
+import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organizer-rules.js';
 import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
+import { artistViewerOf } from '../lib/artist-viewer.js';
+import { ENGAGEMENT_MIN_COUNT, organizerAudience } from '../lib/organizer-engagement.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
 import { ArtistError } from '../lib/db/stores/artists.js';
 import type { Request, Response } from 'express';
@@ -53,6 +61,11 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   // Fill a festival's venue coordinates from its free-text location (lib/geocode.ts),
   // during the admin save, so the response can flag a weak match. The map centres on them when nothing is
   // pinned, and the weather route needs them. Tests do not inject geocodeVenue.
+  // A member's geocode runs after the response, and a request past this many waiting ones is dropped with a log line
+  // (plan-v3 6.6): the Nominatim queue is one request per 1.1 seconds for everyone, so an organization cannot fill it.
+  const MEMBER_GEOCODE_QUEUE = 5;
+  let memberGeocodesWaiting = 0;
+
   // Resolves true when the stored venue was a weak match. The flag is not stored (no column),
   // so the save response is the only place the admin sees it.
   async function fillVenueCoords(festivalId: string, location: string): Promise<boolean> {
@@ -78,16 +91,40 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     }
   }
 
-  // The router is mounted at /festivals and at /admin/festivals; adminAuth and festivalAccess set
-  // req.isAdmin on the admin mount. Drafts (no publishedAt) are visible there only.
+  // The router is mounted at /festivals, at /admin/festivals and, through routes/manage.ts, at /manage.
+  // adminAuth and festivalAccess set req.isAdmin for an admin. Only festivalAccess sets req.festivalRole, and it
+  // gives an organization member a role on /manage alone, so a member sees drafts there and nowhere else.
   const isAdminReq = (req: Request) => (req as Request & { isAdmin?: boolean }).isAdmin === true;
-  const visible = (festival: any, req: Request) => (festival && (festival.publishedAt || isAdminReq(req)) ? festival : null);
+  const isMemberReq = (req: Request) => !isAdminReq(req) && (req as Request & { festivalRole?: string }).festivalRole !== undefined;
+  const visible = (festival: any, req: Request) =>
+    festival && (festival.publishedAt || isAdminReq(req) || isMemberReq(req)) ? festival : null;
+  const refusal = (message: string) => ({ status: 403, code: 'FORBIDDEN' as const, message });
+
+  // What artists a request may see (artist plan 8.5): everything for an admin, the member's view for a member.
+  async function memberViewer(req: Request) {
+    if (!isMemberReq(req)) return undefined;
+    const viewer = await artistViewerOf(stores as any, req as any);
+    if (!viewer) throw new Error('a member request without an organization');
+    return viewer;
+  }
+
+  // A member's save keeps a set id only when the festival already holds it: set ids are global primary keys, so
+  // a foreign id would clash with another tenant's row. Alerts the save would send are held (lib/alert-hold.ts).
+  function memberBody<T extends { days?: any[] }>(req: Request, sent: T, existing: any): T {
+    if (!isMemberReq(req)) return sent;
+    const own = new Set(setsOf(existing).map((set: any) => set.id));
+    const days = sent.days?.map((day: any) => ({
+      ...day,
+      sets: (day.sets || []).map((set: any) => (own.has(set.id) ? set : { ...set, id: `set-${crypto.randomUUID()}` })),
+    }));
+    return { ...sent, ...(days ? { days } : {}) };
+  }
 
   // 400 with one issue per problem; `message` stays one sentence for old clients.
   // Names that fit two artists. The checklist only warns, so a failed lookup never blocks the page.
-  async function ambiguousNamesOf(festival: any): Promise<number> {
+  async function ambiguousNamesOf(festival: any, req: Request): Promise<number> {
     try {
-      return (await stores.artists?.countAmbiguousNames(festival)) ?? 0;
+      return (await stores.artists?.countAmbiguousNames(festival, await memberViewer(req))) ?? 0;
     } catch (error) {
       log.warn('ambiguous artist names lookup failed', { error: (error as NodeJS.ErrnoException)?.message });
       return 0;
@@ -99,9 +136,35 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     return sendError(res, 400, `${issues[0].message}${more}`, ErrorCodes.INVALID_INPUT, { issues });
   }
 
+  // A 400 for a member's body that breaks the link and hosting rules, one entry per problem.
+  function sendRuleIssues(res: Response, error: z.ZodError) {
+    return sendError(res, 400, firstRuleMessage(error), ErrorCodes.INVALID_INPUT, {
+      issues: error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message })),
+    });
+  }
+
+  // Who saved first and when, for a member whose save lost the race (plan-v3 5.9). The name follows the rule of
+  // the festival page: a teammate's display name, otherwise "Festie support". An admin's 409 keeps its old body.
+  async function staleDetails(req: Request): Promise<{ updatedAt: string | null; updatedBy: string | null } | undefined> {
+    if (!isMemberReq(req)) return undefined;
+    try {
+      const info = await stores.festivalReview.editInfo((req.validatedParams as Params).id);
+      if (!info) return undefined;
+      return {
+        updatedAt: new Date(info.editedAt).toISOString(),
+        updatedBy: await stores.organizations.editorLabel((req as any).organizationId, info.updatedBy),
+      };
+    } catch (err) {
+      log.warn('stale save details failed', { error: (err as Error).message });
+      return undefined;
+    }
+  }
+
   // A primary-key clash on save (an id another festival, or another festival's set, already holds) is the caller's mistake, not a server fault.
-  function sendIdClash(res: Response, error: any) {
+  // A member never learns which id is taken, because the id may belong to another tenant.
+  function sendIdClash(res: Response, error: any, member = false) {
     if (error?.code !== '23505') return null;
+    if (member) return sendError(res, 409, 'That id is taken.', ErrorCodes.ALREADY_EXISTS);
     const clashing = /Key \(id\)=\(([^)]*)\)/.exec(error.detail ?? '')?.[1];
     const what = String(error.constraint ?? '').startsWith('festival_sets') ? 'set' : 'festival';
     const message = clashing ? `A ${what} with id "${clashing}" already exists.` : `A ${what} with that id already exists.`;
@@ -151,7 +214,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   }
 
   // Audit log helper — writes to audit_log table if available (async, fire-and-forget with error handling).
-  // Every caller sits behind adminAuth, so the actor is the signed-in admin.
+  // Every caller sits behind festivalAccess, so the actor is the signed-in admin or an organization member.
   function audit(action: any, targetType: any, targetId: any, req: Request, details: any = {}) {
     if (!stores.auditLog) return;
     // Tells the generic audit middleware this request already has its row.
@@ -161,7 +224,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
       try {
         await stores.auditLog.insert({
           id: crypto.randomUUID(),
-          actorType: 'admin',
+          ...auditContext(req),
           actorId: req.user?.userId,
           action,
           targetType,
@@ -216,6 +279,36 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
 
   async function countOnSets(table: 'festival_profile_picks' | 'set_ratings', setIds: string[]) {
     return stores.festivals.countOnSets(table, setIds);
+  }
+
+  // Who an alert would reach: every picker of a changed set, and the people with an open mark on a cancelled act who did not pick.
+  function alertAudience(pickersBySet: Map<string, string[]>, interestedByEntry: Map<string, string[]>) {
+    const pickers = new Set([...pickersBySet.values()].flat());
+    const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
+    return { people: pickers.size + marked, marked };
+  }
+
+  // What a response says about the audience. An organizer gets a size only from ENGAGEMENT_MIN_JOINED up and never
+  // a smaller one (owner decision 4), so a count cannot point at a few people. An admin sees the raw counts.
+  function audienceFields(asMember: boolean, people: number, marked: number) {
+    if (!asMember) return { people, ...(marked > 0 ? { marked } : {}) };
+    const shownPeople = organizerAudience(people);
+    const shownMarked = organizerAudience(marked);
+    return { ...(shownPeople !== null ? { people: shownPeople } : {}), ...(shownMarked !== null ? { marked: shownMarked } : {}) };
+  }
+
+  // An organizer sees a removal count only from ENGAGEMENT_MIN_JOINED up, like an audience size; a smaller one reads
+  // as 0 and drops out of the message. The save still asks for the confirm, which hidden counts alone can trigger.
+  function removalForMember<T extends { picks: number; ratings: number; cancel?: { picks: number; picked: number; marked: number } }>(removal: T): T {
+    const floor = (n: number) => organizerAudience(n) ?? 0;
+    return {
+      ...removal,
+      picks: floor(removal.picks),
+      ratings: floor(removal.ratings),
+      ...(removal.cancel
+        ? { cancel: { ...removal.cancel, picks: floor(removal.cancel.picks), picked: floor(removal.cancel.picked), marked: floor(removal.cancel.marked) } }
+        : {}),
+    };
   }
 
   // The cancel line of the removal confirm: what cancelling these acts takes away and who hears about it.
@@ -421,14 +514,24 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         }
 
         // depth=2 or omitted: full festival (backward compatible)
-        if (isAdminReq(req)) {
+        if (isAdminReq(req) || isMemberReq(req)) {
           const editorId = await stores.festivals.getEditor(festival.id);
           const editor = editorId ? await getUserById(editorId) : null;
+          // A member sees "<display name> at <organization>" for a teammate. An edit by anyone else, an admin
+          // included, reads "Festie support". The attendee username is never shown to a member.
+          const updatedByUsername = !editor
+            ? null
+            : isMemberReq(req)
+              ? await stores.organizations.editorLabel((req as any).organizationId, editor.id)
+              : editor.username;
+          // The state of a publish request, so the editor can show "Waiting for review" or the note of a decline.
+          const review = await stores.festivalReview?.reviewState?.(festival.id);
           return sendSuccess(res, {
             ...festival,
             publishedAt: festival.publishedAt ?? null,
-            updatedByUsername: editor?.username ?? null,
-            checklist: publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival) }),
+            updatedByUsername,
+            ...(review ? { publishRequestedAt: review.requestedAt, publishReviewNote: review.note } : {}),
+            checklist: publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival, req) }),
           });
         }
         const { seriesId: _seriesId, ...publicFestival } = festival;
@@ -471,15 +574,30 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
 
   router.put(
     '/:id',
-    festivalAccess({ action: 'festival.edit' }),
+    festivalAccess({
+      action: 'festival.edit',
+      // Dropping sets that attendees picked is an owner decision.
+      allow: (req, _festival, membership) =>
+        req.body?.confirmRemovals === true && membership.role !== 'owner'
+          ? refusal(`Attendees already picked these sets. An owner of ${membership.name} must confirm the removal.`)
+          : true,
+    }),
     rateLimit(10, 'festival-update'),
     validateParams(schemas.genericIdParams),
     validate(schemas.festivalUpdate),
     async (req: Request, res: Response) => {
       try {
-        const body = req.validatedBody as z.infer<typeof schemas.festivalUpdate>;
         const existingFestival = await getFestivalById((req.validatedParams as Params).id);
         if (!existingFestival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+        const body = memberBody(req, req.validatedBody as z.infer<typeof schemas.festivalUpdate>, existingFestival);
+        if (isMemberReq(req)) {
+          // Two editors at once: a member's save always names the version it was made from (plan-v3 5.9).
+          if (body.expectedUpdatedAt === undefined) {
+            return sendError(res, 400, 'Reload this festival, then save again.', ErrorCodes.INVALID_INPUT);
+          }
+          const rules = organizerFestivalRules(appOrigin(config)).safeParse(body);
+          if (!rules.success) return sendRuleIssues(res, rules.error);
+        }
         // The body is partial, so check the festival that results from the save.
         // A stored lineup is not re-checked: only a body that carries one can fail on duplicates.
         const issues = validateFestivalIssues(config, { ...existingFestival, lineup: undefined, ...body });
@@ -488,6 +606,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         // The token is checked inside the save, under the festival row lock, against the last form edit.
         // A check here would compare the cache's updatedAt, which an artist edit moves.
         const nextFestival = sanitizeFestivalPayload(body, existingFestival);
+        // Until Festie verifies the organization, the name and place of a live festival change only through Festie (plan-v3 6.3).
+        if (
+          isMemberReq(req) &&
+          existingFestival.publishedAt &&
+          !(req as any).orgVerified &&
+          (nextFestival.name !== existingFestival.name || (nextFestival.location ?? '') !== (existingFestival.location ?? ''))
+        ) {
+          return sendError(res, 403, 'Ask Festie to change the name or location of a live festival.', ErrorCodes.FORBIDDEN);
+        }
         const venueSent = body.latitude !== undefined || body.longitude !== undefined;
         // Days and sets are touched only when the payload sends them; the map
         // editors leave them out so a map save cannot rewrite the lineup.
@@ -534,6 +661,25 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
           : undefined;
         // A cancel that alerts anyone needs the admin to see the count first, even when no pick or rating is lost.
         const cancelTellsPeople = !!cancel && cancel.picked + cancel.marked > 0 && body.notify !== false;
+        // A dry run answers what this save would tell people, so an owner can confirm the count. Nothing is written.
+        if (body.dryRun === true) {
+          const audience = alertAudience(pickersBySet, interestedByEntry);
+          const asMember = isMemberReq(req);
+          const verifiedMember = asMember && (req as any).orgVerified === true;
+          const wanted = body.notify !== false && audience.people > 0;
+          return sendSuccess(res, {
+            dryRun: true,
+            scheduleNotice: {
+              changes: changes.length + cancelled.length,
+              notified: wanted && (!asMember || verifiedMember),
+              ...(wanted && asMember && !verifiedMember ? { held: true } : {}),
+              ...audienceFields(asMember, audience.people, audience.marked),
+            },
+            ...(verifiedMember
+              ? { runsLeft: await stores.festivalReview.alertRunsLeft(existingFestival.id, config.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP) }
+              : {}),
+          });
+        }
         if ((picks + ratings > 0 || cancelTellsPeople) && body.confirmRemovals !== true) {
           const removal = {
             days: daysSent ? Math.max(0, (existingFestival.days || []).length - nextFestival.days.length) : 0,
@@ -542,12 +688,13 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             ratings,
             ...(cancel ? { cancel } : {}),
           };
+          const shownRemoval = isMemberReq(req) ? removalForMember(removal) : removal;
           return sendError(
             res,
             409,
-            removalMessage(removal),
+            removalMessage(shownRemoval),
             ErrorCodes.CONFIRM_REMOVALS,
-            { removal },
+            { removal: shownRemoval },
           );
         }
         if (daysSent) {
@@ -574,6 +721,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         // Sets and lineup entries get an artist id inside the save transaction (resolveArtistRefs).
         const refsSeen: { value: RefsResult | null } = { value: null };
         const refsNeeded = daysSent || body.lineup !== undefined;
+        const artistViewer = refsNeeded ? await memberViewer(req) : undefined;
         const festival = await stores.festivals.update(
           (req.validatedParams as Params).id,
           {
@@ -602,6 +750,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
                     lineup: body.lineup !== undefined ? fields.lineup : undefined,
                     separator: nextFestival.b2bSeparator,
                     userId: req.user?.userId ?? null,
+                    viewer: artistViewer,
                   });
                   return { days: refsSeen.value.days, lineup: refsSeen.value.lineup };
                 }
@@ -612,25 +761,59 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         invalidateFestivalCache();
 
         invalidateFestivalListCache();
-        const pickers = new Set([...pickersBySet.values()].flat());
         // A person who picked a changed set gets that alert only, so marks are counted once.
-        const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
-        const people = pickers.size + marked;
+        const { people, marked } = alertAudience(pickersBySet, interestedByEntry);
         const notified = body.notify !== false && people > 0;
-        const scheduleNotice = { changes: changes.length + cancelled.length, people, notified, ...(marked > 0 ? { marked } : {}) };
+        // An unverified organization's alerts are held for an admin. A verified one's go out, at most the hourly cap per
+        // festival, and a save past the cap is held, so the notice is settled after the delivery below.
+        const organizer = isMemberReq(req);
+        const verified = organizer && (req as any).orgVerified === true;
+        const scheduleNotice = {
+          changes: changes.length + cancelled.length,
+          notified: notified && (!organizer || verified),
+          ...(notified && organizer && !verified ? { held: true } : {}),
+          ...audienceFields(organizer, people, marked),
+        };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
+        let alertHeld = false;
+        if (notified) {
+          const sending = deliverScheduleAlert({
+            stores,
+            emitter,
+            festival,
+            alert: { changes: [...changes, ...cancelled], pickersBySet, interestedByEntry },
+            organizer,
+            verified,
+            hourlyCap: config.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP,
+            log,
+          });
+          if (!organizer) void sending.catch((err: Error) => log.warn('schedule alert failed', { festivalId: festival.id, error: err.message }));
+          else {
+            // The save is committed, so a failed hold is logged for an admin to find, and the save still succeeds.
+            try {
+              const result = await sending;
+              if (result.held) {
+                alertHeld = true;
+                audit(AUDIT_ACTIONS.FESTIVAL_ALERT_HELD, 'festival', festival.id, req, { changes: result.changes, people: result.people });
+              }
+            } catch (err) {
+              log.error('schedule alert hold failed', { festivalId: festival.id, error: (err as Error).message });
+            }
+          }
+        }
+        // A verified organization's save past the hourly cap went to the held queue instead of out.
+        if (alertHeld && scheduleNotice.notified) Object.assign(scheduleNotice, { notified: false, held: true });
         // The saved row lacks stages and days, so those come from the payload that was written.
         const fieldChanges = festivalAuditChanges(existingFestival, { ...nextFestival, ...festival }, daysSent);
         audit(AUDIT_ACTIONS.FESTIVAL_UPDATED, 'festival', festival.id, req, {
           name: festival.name,
           ...stats,
           scheduleChanges: changes.length + cancelled.length,
-          notifiedPeople: notified ? people : 0,
+          notifiedPeople: scheduleNotice.notified ? people : 0,
           ...(Object.keys(fieldChanges).length > 0 ? { changes: fieldChanges } : {}),
         });
         // A draft has no attendees, and the event goes to every socket.
         if (existingFestival.publishedAt) emitter.festivalUpdated({ festival });
-        if (notified) void emitter.scheduleChanged({ festival, changes: [...changes, ...cancelled], pickersBySet, interestedByEntry });
         // New sets or new names can cover a marked act. It runs after commit and logs its own failure.
         if (daysSent || body.lineup !== undefined || body.b2bSeparator !== undefined) void deps.interestConversion?.convert(festival.id);
         const venueMissing = typeof existingFestival.latitude !== 'number';
@@ -639,10 +822,21 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
           venueSent &&
           (nextFestival.latitude !== existingFestival.latitude ||
             nextFestival.longitude !== existingFestival.longitude);
-        const venueGuessed =
+        // A pending organization may not geocode: the lookup calls an outside service on its text (plan 6.6).
+        const wantsVenue =
           !venueSetByAdmin &&
-          (venueMissing || nextFestival.location !== existingFestival.location) &&
-          (await fillVenueCoords(festival.id, nextFestival.location));
+          (req as any).orgStatus !== 'pending' &&
+          (venueMissing || nextFestival.location !== existingFestival.location);
+        let venueGuessed = false;
+        if (wantsVenue && !organizer) venueGuessed = await fillVenueCoords(festival.id, nextFestival.location);
+        else if (wantsVenue && memberGeocodesWaiting >= MEMBER_GEOCODE_QUEUE) {
+          log.warn('member venue geocode dropped: queue full', { festivalId: festival.id });
+        } else if (wantsVenue) {
+          memberGeocodesWaiting += 1;
+          void fillVenueCoords(festival.id, nextFestival.location).finally(() => {
+            memberGeocodesWaiting -= 1;
+          });
+        }
         const refs = refsSeen.value;
         return sendSuccess(res, {
           ...festival,
@@ -660,12 +854,13 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             409,
             'This festival changed since you opened it. Reload it, then make your change again.',
             ErrorCodes.FESTIVAL_CHANGED,
+            await staleDetails(req),
           );
         }
         if ((error as NodeJS.ErrnoException)?.code === '40P01' || (error as NodeJS.ErrnoException)?.code === '40001') {
           return sendError(res, 503, 'Festie is busy. Try again.', ErrorCodes.SERVICE_UNAVAILABLE);
         }
-        if (sendIdClash(res, error)) return;
+        if (sendIdClash(res, error, isMemberReq(req))) return;
         log.error('festival update failed', { error: (error as NodeJS.ErrnoException).message, festivalId: (req.validatedParams as Params)?.id });
         return sendError(res, 500, 'Failed to update festival', ErrorCodes.INTERNAL_ERROR);
       }
@@ -677,31 +872,63 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     try {
       const festival = await getFestivalById((req.validatedParams as Params).id);
       if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-      return sendSuccess(res, await stores.festivals.countImpact(festival.id));
+      const impact = await stores.festivals.countImpact(festival.id);
+      if (!isMemberReq(req)) return sendSuccess(res, impact);
+      // An organizer learns who uses a live festival only from ENGAGEMENT_MIN_JOINED joined users up, and no single
+      // count under ENGAGEMENT_MIN_COUNT (owner decision 4). A hidden count reads 0.
+      const open = organizerAudience(impact.profiles) !== null;
+      const shown = (n: number) => (open && n >= ENGAGEMENT_MIN_COUNT ? n : 0);
+      return sendSuccess(res, { profiles: open ? impact.profiles : 0, crews: shown(impact.crews), picks: shown(impact.picks) });
     } catch (error) {
       log.error('festival impact failed', { error: (error as NodeJS.ErrnoException).message, festivalId: (req.validatedParams as Params)?.id });
       return sendError(res, 500, 'Failed to count who uses this festival', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
+  // The owners of an organization hear the decision on a publish request by email. Fire and forget: the
+  // decision is already saved, so a mail failure only logs.
+  function emailDecision(organizationId: string | null | undefined, festivalName: string, decision: 'approved' | 'declined', note?: string) {
+    if (!organizationId) return;
+    void (async () => {
+      const [organization, owners] = await Promise.all([
+        stores.organizations.getById(organizationId),
+        stores.organizations.ownerEmails(organizationId),
+      ]);
+      if (!organization) return;
+      // A test seam: deps.sendPublishDecisionEmail replaces the mail send.
+      const send = deps.sendPublishDecisionEmail ?? sendPublishDecisionEmail;
+      for (const to of owners) {
+        await send({ to, organizationName: organization.name, festivalName, decision, note, config, log });
+      }
+    })().catch((err: Error) => log.warn('publish decision email failed', { organizationId, error: err.message }));
+  }
+
   // Publish a draft once the checklist has no 'todo' item. There is no unpublish:
   // it would cut off attendees with picks. Delete and Restore cover mistakes.
+  // An admin publishes any festival and so approves a request. An organization publishes its own only once Festie
+  // has verified it (owner decision 8); every other organization submits for review instead.
   router.post(
     '/:id/publish',
-    festivalAccess({ action: 'publish.decide' }),
+    festivalAccess({
+      action: 'publish.direct',
+      allow: (_req, _festival, membership) =>
+        membership.verified ? true : refusal('Festie checks the first publish of your organization. Submit this festival for review.'),
+    }),
     rateLimit(10, 'festival-publish'),
     validateParams(schemas.genericIdParams),
     async (req: Request, res: Response) => {
       try {
         const festival = await getFestivalById((req.validatedParams as Params).id);
         if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-        const checklist = publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival) });
+        const checklist = publishChecklist(config, festival, { ambiguousNames: await ambiguousNamesOf(festival, req) });
         if (festival.publishedAt) return sendSuccess(res, { publishedAt: festival.publishedAt, checklist });
         if (checklist.some((item: any) => item.status === 'todo')) {
           return sendError(res, 409, 'Finish the checklist before you publish.', ErrorCodes.PUBLISH_BLOCKED, {
             checklist,
           });
         }
+        // Read before the publish, which clears the request.
+        const waiting = !isMemberReq(req) && !!(await stores.festivalReview?.reviewState?.(festival.id))?.requestedAt;
         const row = await stores.festivals.publish(festival.id, req.user?.userId ?? null);
         if (!row) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
         invalidateFestivalCache();
@@ -712,10 +939,40 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         });
         log.info('festival:published', { festivalId: festival.id, name: festival.name });
         emitter.festivalCreated({ id: festival.id, name: festival.name });
+        if (waiting) emailDecision((req as any).organizationId, festival.name, 'approved');
         return sendSuccess(res, { publishedAt: row.publishedAt, checklist });
       } catch (error) {
         log.error('festival publish failed', { error: (error as NodeJS.ErrnoException).message, festivalId: (req.validatedParams as Params)?.id });
         return sendError(res, 500, 'Failed to publish festival', ErrorCodes.INTERNAL_ERROR);
+      }
+    },
+  );
+
+  // Decline a publish request with a note the organization's owners read. The festival stays a draft, and
+  // submitting again clears the note. Only a platform admin: the manage mount does not list this route.
+  router.post(
+    '/:id/publish/decline',
+    festivalAccess({ action: 'publish.decide' }),
+    rateLimit(10, 'festival-publish-decline'),
+    validateParams(schemas.genericIdParams),
+    validate(schemas.publishDecline),
+    async (req: Request, res: Response) => {
+      try {
+        const id = (req.validatedParams as Params).id;
+        const { note } = req.validatedBody as { note: string };
+        const declined = await stores.festivalReview.declinePublish(id, note);
+        if (!declined) {
+          const festival = await getFestivalById(id);
+          if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
+          return sendError(res, 409, 'No review request is waiting for this festival.', ErrorCodes.CONFLICT);
+        }
+        audit(AUDIT_ACTIONS.FESTIVAL_PUBLISH_DECLINED, 'festival', id, req, { name: declined.name, note });
+        log.info('festival:publish-declined', { festivalId: id });
+        emailDecision(declined.organizationId, declined.name, 'declined', note);
+        return sendSuccess(res, { declined: true });
+      } catch (error) {
+        log.error('festival publish decline failed', { error: (error as NodeJS.ErrnoException).message, festivalId: (req.validatedParams as Params)?.id });
+        return sendError(res, 500, 'Failed to decline the request', ErrorCodes.INTERNAL_ERROR);
       }
     },
   );
@@ -750,7 +1007,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
   // P3.18: Soft-delete (default). Pass ?hard=true for permanent removal.
   router.delete(
     '/:id',
-    festivalAccess({ action: 'festival.delete' }),
+    festivalAccess({
+      action: 'festival.delete',
+      // A member may delete a draft softly. A live festival and a permanent delete stay with Festie.
+      allow: (req, festival) => {
+        if (festival.publishedAt) return refusal('Only Festie can delete a festival that is live. Contact Festie.');
+        if (req.query?.hard === 'true') return refusal('Only Festie can delete a festival permanently.');
+        return true;
+      },
+    }),
     rateLimit(5, 'festival-delete'),
     requireRecentAuth,
     validateParams(schemas.genericIdParams),
@@ -820,6 +1085,11 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
 
         // Validated by Zod schema — normalize to null if empty
         const cleanUrl = linkUrl && typeof linkUrl === 'string' && linkUrl.trim() ? linkUrl.trim() : null;
+        // A member's link must be a profile on Spotify (lib/artist-links.ts); an admin's keeps the wider rule.
+        if (isMemberReq(req) && cleanUrl) {
+          const checked = normalizeArtistLink('spotify', cleanUrl);
+          if (!checked.ok) return sendError(res, 400, checked.message, ErrorCodes.INVALID_INPUT);
+        }
 
         // One transaction under the festival lock, reading the set row itself, so a link edit never
         // rebuilds a set from a cache and never races a festival save.
@@ -828,6 +1098,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         if (outcome.badIndex) return sendError(res, 400, 'That artist is not on this set.', ErrorCodes.INVALID_INPUT);
         if (outcome.artistId) {
           const current = await stores.artists.getById(outcome.artistId);
+          // A member never writes a Spotify link: it is a suggestion that an admin decides (artist plan 8.3).
+          if (isMemberReq(req)) {
+            const suggested = await stores.artists.organizerUpdate(
+              outcome.artistId,
+              { expectedUpdatedAt: new Date(current.updated_at).toISOString(), changes: { spotifyLink: cleanUrl }, festivalId, ip: getRequestIp(req) },
+              await memberViewer(req),
+            );
+            return sendSuccess(res, { setId, artistIndex, linkUrl: current.links?.spotify ?? null, suggested: suggested.status === 'suggested' });
+          }
           const result = await stores.artists.update(outcome.artistId, {
             expectedUpdatedAt: new Date(current.updated_at).toISOString(),
             changes: { spotifyLink: cleanUrl },

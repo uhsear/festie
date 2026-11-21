@@ -7,12 +7,25 @@ const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 // Telemetry beacons (web-vitals, /metrics/client, install ping) are not user actions.
 const SKIPPED_PATHS = /^\/api(?:\/v1)?\/(?:metrics|analytics)(?:\/|$)/;
 
+const ORGANIZER_ROLES = new Set(['owner', 'editor', 'viewer']);
+
+// Who acted and for which organization. festivalAccess and orgAccess set both on the request: a platform admin
+// is 'admin' even when the festival belongs to an organization, and a member is 'organizer'.
+export function auditContext(req: any): { actorType: 'admin' | 'organizer'; organizationId: string | null } {
+  return {
+    actorType: ORGANIZER_ROLES.has(req.festivalRole) ? 'organizer' : 'admin',
+    organizationId: req.organizationId ?? null,
+  };
+}
+
 interface AdminAuditEntry {
   action: string;
   targetType: string;
   targetId: string | null | undefined;
   details?: Record<string, unknown>;
   status?: 'success' | 'failure';
+  // The organization the row belongs to, when the route is not scoped to a festival (an organization route).
+  organizationId?: string;
   // Rethrow a failed insert instead of logging it. Use it when the response must not go out without the row.
   failClosed?: boolean;
 }
@@ -24,7 +37,8 @@ export function createAdminAuditWriter({ stores, log, getRequestIp }: any) {
     if (!stores.auditLog) return false;
     try {
       await stores.auditLog.insert({
-        actorType: 'admin',
+        ...auditContext(req),
+        ...(entry.organizationId ? { organizationId: entry.organizationId } : {}),
         actorId: req.user?.userId || req.userId,
         action: entry.action,
         targetType: entry.targetType,
@@ -84,6 +98,7 @@ export default function createAuditMiddleware(deps: any) {
         ip: getRequestIp(req),
         status: statusCode >= 200 && statusCode < 300 ? 'success' : 'failure',
         details_json: res.locals?.auditDetail ?? null,
+        organization_id: req.organizationId ?? null,
       };
 
       await stores.auditLog.insert(entry);
@@ -95,6 +110,9 @@ export default function createAuditMiddleware(deps: any) {
   function extractActor(req: any) {
     if (req.isAdmin && req.user?.userId) {
       return { type: 'admin', id: req.user.userId };
+    }
+    if (ORGANIZER_ROLES.has(req.festivalRole) && req.user?.userId) {
+      return { type: 'organizer', id: req.user.userId };
     }
     if (req.user?.userId) {
       return { type: 'user', id: req.user.userId };

@@ -651,6 +651,20 @@ export const authEnvelopeResponseSchema = z.object({
   refreshToken: z.string().optional(),
   reactivated: z.boolean().optional(),
   pendingEmail: z.string().nullable().optional(),
+  // GET /auth/me only: the organizations the user belongs to, read only.
+  organizations: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        role: z.enum(['owner', 'editor', 'viewer']),
+        status: z.enum(['pending', 'active', 'suspended']),
+        verified: z.boolean(),
+      }),
+    )
+    .optional(),
+  // GET /auth/me only: false while ORGANIZER_PLATFORM_ENABLED is off, so the web client hides the organizer surfaces.
+  organizerPlatform: z.boolean().optional(),
 });
 
 // ════════════════════════════════════════════════════════════════════════════

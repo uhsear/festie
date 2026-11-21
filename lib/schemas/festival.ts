@@ -233,6 +233,8 @@ export const festivalUpdateSchema = festivalCreateSchema
   .partial()
   // false saves without pushing schedule alerts to people whose picks changed.
   .extend({ notify: z.boolean().optional() })
+  // true answers with the alert notice a save would give and writes nothing, so a confirm dialog can show the count.
+  .extend({ dryRun: z.boolean().optional() })
   .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), 'At least one field required')
   // The PUT also rewrites name, stages and map from the body, so a lineup save from a stale copy needs the token.
   .refine((d) => d.lineup === undefined || d.expectedUpdatedAt !== undefined, {

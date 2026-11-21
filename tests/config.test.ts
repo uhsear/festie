@@ -382,3 +382,26 @@ describe('ANDROID_CERT_FINGERPRINTS', () => {
     assert.deepEqual(certs, [...ANDROID_APP_SIGNING_CERTS, 'AA:BB']);
   });
 });
+
+describe('organizer platform flags', () => {
+  afterEach(restoreEnv);
+
+  it('is on by default, with the owner-chosen festival caps', () => {
+    saveEnv('ORGANIZER_PLATFORM_ENABLED', 'ORGANIZER_PENDING_FESTIVAL_CAP', 'ORGANIZER_ACTIVE_FESTIVAL_CAP');
+    const config = loadConfig({ PUBLIC_ORIGIN: '' });
+    assert.equal(config.ORGANIZER_PLATFORM_ENABLED, true);
+    assert.equal(config.ORGANIZER_PENDING_FESTIVAL_CAP, 2);
+    assert.equal(config.ORGANIZER_ACTIVE_FESTIVAL_CAP, 20);
+  });
+
+  it('turns off with false, and reads the caps from the environment', () => {
+    saveEnv('ORGANIZER_PLATFORM_ENABLED', 'ORGANIZER_PENDING_FESTIVAL_CAP', 'ORGANIZER_ACTIVE_FESTIVAL_CAP');
+    process.env.ORGANIZER_PLATFORM_ENABLED = 'false';
+    process.env.ORGANIZER_PENDING_FESTIVAL_CAP = '0';
+    process.env.ORGANIZER_ACTIVE_FESTIVAL_CAP = '5';
+    const config = loadConfig({ PUBLIC_ORIGIN: '' });
+    assert.equal(config.ORGANIZER_PLATFORM_ENABLED, false);
+    assert.equal(config.ORGANIZER_PENDING_FESTIVAL_CAP, 0);
+    assert.equal(config.ORGANIZER_ACTIVE_FESTIVAL_CAP, 5);
+  });
+});

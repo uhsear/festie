@@ -20,7 +20,7 @@ import type { z } from 'zod';
 import type { Server } from 'socket.io';
 
 import type { AppConfig } from '../config';
-import type { FestivalAction } from '../app-context/session';
+import type { FestivalAction, FestivalAllow, OrgAction } from '../app-context/session';
 import type { ErrorCodes } from '../response';
 import type { schemas } from '../schemas';
 import type { Crew, Profile, User } from './contracts';
@@ -91,6 +91,13 @@ export interface Stores {
       deactivate(id: string): Promise<unknown>;
       setComing(mpId: string, crewId: string, userId: string, coming: boolean): Promise<unknown>;
     };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [k: string]: any;
+  };
+  organizations: {
+    listForUser(
+      userId: string,
+    ): Promise<Array<{ id: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'active' | 'suspended' }>>;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any;
   };
@@ -176,7 +183,8 @@ export interface AppContext {
   // Auth / rate limiting middleware
   userAuth: Middleware;
   adminAuth: Middleware;
-  festivalAccess: (opts: { action: FestivalAction; param?: string }) => Middleware;
+  festivalAccess: (opts: { action: FestivalAction; param?: string; allow?: FestivalAllow }) => Middleware;
+  orgAccess: (opts: { action: OrgAction }) => Middleware;
   rateLimit: (
     max: number,
     key: string,

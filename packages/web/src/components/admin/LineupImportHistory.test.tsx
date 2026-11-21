@@ -44,6 +44,49 @@ describe('LineupImportHistory', () => {
     api.daysAnnouncement.mockResolvedValue({ ...DAYS, actsWithDay: 118, recipients: 12 });
   });
 
+  it('in organizer mode loads the history through /manage and leaves out the announcements', async () => {
+    api.history.mockResolvedValue({
+      imports: [
+        {
+          id: 'imp-1',
+          createdAt: '2026-10-01T00:00:00.000Z',
+          source: 'paste',
+          undone: false,
+          counts: { added: 2, updated: 0, skipped: 0 },
+        },
+      ],
+    });
+    render(<LineupImportHistory festivalId="f1" festivalName="Fest" scope="manage" />);
+    await screen.findByText(/Import history|Undo/);
+    expect(api.history).toHaveBeenCalledWith('f1', 'manage');
+    expect(api.announcement).not.toHaveBeenCalled();
+    expect(api.daysAnnouncement).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /Announce/ })).not.toBeInTheDocument();
+    expect(screen.queryByText('Announce lineup')).not.toBeInTheDocument();
+    expect(screen.queryByText('Announce days')).not.toBeInTheDocument();
+  });
+
+  it('in organizer mode a verified owner (canAnnounce) announces the lineup with no email, hiding a small audience', async () => {
+    api.announcement.mockResolvedValue({
+      recipients: null,
+      followers: null,
+      priorAttendees: null,
+      matchedFestivalNames: [],
+      emailRecipients: 0,
+      emailCut: 0,
+      emailOff: 'organizer',
+    });
+    api.announce.mockResolvedValue({ queued: true, recipients: null });
+    render(<LineupImportHistory festivalId="f1" festivalName="Fest" scope="manage" canAnnounce />);
+    expect(await screen.findByText('Fewer than 20 people would hear this.')).toBeInTheDocument();
+    expect(api.announcement).toHaveBeenCalledWith('f1', 'manage');
+    expect(screen.getByText(/No email goes out/)).toBeInTheDocument();
+    expect(screen.queryByText('Announce days')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Announce the lineup' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Send' }));
+    expect(api.announce).toHaveBeenCalledWith('f1', 'manage');
+  });
+
   it('load fails, shows the error, Retry reloads', async () => {
     api.history.mockRejectedValueOnce(new Error('down'));
     render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);

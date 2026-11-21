@@ -7,7 +7,7 @@
  */
 
 import type { Pool } from 'pg';
-import { isoOrNull } from '../connection';
+import { isoOrNull, withTransaction } from '../connection';
 
 export interface AnnouncementRow {
   id: string;
@@ -22,6 +22,10 @@ export interface AnnouncementRow {
   recipientCount: number | null;
   createdBy: string | null;
   createdAt: string;
+  /** False for a banner with no push: an unverified organization's announcement. */
+  push: boolean;
+  /** Set on an announcement an organization's member sent. */
+  organizationId: string | null;
 }
 
 function mapRow(r: any): AnnouncementRow {
@@ -38,28 +42,73 @@ function mapRow(r: any): AnnouncementRow {
     recipientCount: r.recipient_count ?? null,
     createdBy: r.created_by ?? null,
     createdAt: isoOrNull(r.created_at)!,
+    push: r.push !== false,
+    organizationId: r.organization_id ?? null,
   };
 }
 
+type AnnouncementInput = {
+  id: string;
+  festivalId: string;
+  severity: string;
+  title: string;
+  body: string;
+  screen: string;
+  sendAt: string;
+  createdBy: string | null;
+  push?: boolean;
+  organizationId?: string | null;
+};
+
 export function createAnnouncementsStore(pool: Pool) {
   return {
-    async create(a: {
-      id: string;
-      festivalId: string;
-      severity: string;
-      title: string;
-      body: string;
-      screen: string;
-      sendAt: string;
-      createdBy: string | null;
-    }): Promise<AnnouncementRow> {
+    async create(a: AnnouncementInput): Promise<AnnouncementRow> {
       const { rows } = await pool.query(
-        `INSERT INTO festival_announcements (id, festival_id, severity, title, body, screen, send_at, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `INSERT INTO festival_announcements (id, festival_id, severity, title, body, screen, send_at, created_by, push, organization_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
          RETURNING *`,
-        [a.id, a.festivalId, a.severity, a.title, a.body, a.screen, a.sendAt, a.createdBy],
+        [a.id, a.festivalId, a.severity, a.title, a.body, a.screen, a.sendAt, a.createdBy, a.push ?? true, a.organizationId ?? null],
       );
       return mapRow(rows[0]);
+    },
+
+    /**
+     * Creates an organization's announcement unless it already has `cap` in the last 24 hours (null then). The count and
+     * the insert run under the organization row lock, so parallel posts cannot pass the cap together.
+     */
+    async createWithinOrganizationCap(a: AnnouncementInput & { organizationId: string }, cap: number): Promise<AnnouncementRow | null> {
+      return withTransaction(pool, async (client) => {
+        await client.query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [a.organizationId]);
+        const { rows: counted } = await client.query(
+          "SELECT COUNT(*)::int AS n FROM festival_announcements WHERE organization_id = $1 AND created_at > NOW() - INTERVAL '24 hours'",
+          [a.organizationId],
+        );
+        if (counted[0].n >= cap) return null;
+        const { rows } = await client.query(
+          `INSERT INTO festival_announcements (id, festival_id, severity, title, body, screen, send_at, created_by, push, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           RETURNING *`,
+          [a.id, a.festivalId, a.severity, a.title, a.body, a.screen, a.sendAt, a.createdBy, a.push ?? true, a.organizationId],
+        );
+        return mapRow(rows[0]);
+      });
+    },
+
+    /** Announcements an organization's members created in the last 24 hours, cancelled ones included. */
+    async countByOrganizationToday(organizationId: string): Promise<number> {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    COUNT(*)::int AS n
+  FROM
+    festival_announcements
+  WHERE
+    organization_id = $1
+    AND created_at > NOW() - INTERVAL '24 hours'
+`,
+        [organizationId],
+      );
+      return rows[0].n;
     },
 
     /** Non-cancelled rows whose send_at is less than an hour from sendAt (the per-festival limit). */
@@ -119,13 +168,30 @@ export function createAnnouncementsStore(pool: Pool) {
       return rowCount ?? 0;
     },
 
-    /** Mark due rows sent and return them. SKIP LOCKED lets parallel workers claim disjoint rows. */
+    /**
+     * Mark due rows sent and return them. SKIP LOCKED lets parallel workers claim disjoint rows. An organization's row
+     * is judged by the organization's state now, not when it was queued: a suspended organization's row stays unsent
+     * (the late sweep cancels it), and one that is no longer verified shows its banner without a push.
+     */
     async claimDue(limit = 10): Promise<AnnouncementRow[]> {
       const { rows } = await pool.query(
         `
   UPDATE festival_announcements
   SET
-    sent_at = NOW()
+    sent_at = NOW(),
+    push = push
+    AND (
+      organization_id IS NULL
+      OR EXISTS (
+        SELECT
+          1
+        FROM
+          organizations o
+        WHERE
+          o.id = festival_announcements.organization_id
+          AND o.verified_at IS NOT NULL
+      )
+    )
   WHERE
     id IN (
       SELECT
@@ -136,6 +202,18 @@ export function createAnnouncementsStore(pool: Pool) {
         sent_at IS NULL
         AND cancelled_at IS NULL
         AND send_at <= NOW()
+        AND (
+          organization_id IS NULL
+          OR NOT EXISTS (
+            SELECT
+              1
+            FROM
+              organizations o
+            WHERE
+              o.id = festival_announcements.organization_id
+              AND o.status = 'suspended'
+          )
+        )
       ORDER BY
         send_at
       LIMIT

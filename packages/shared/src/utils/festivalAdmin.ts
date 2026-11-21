@@ -245,6 +245,35 @@ export function countFestivalChanges(
   return { total, changedSetIds, newSetIds };
 }
 
+/**
+ * What differs between the festival as saved now ("their version") and a member's copy in the form, one short
+ * line per difference, for the "Show their version" panel after a 409 (plan-v3 5.9). Not a merge: it only tells
+ * the member what to look at before they make their change again.
+ */
+export function describeVersionDifferences(theirs: EditableFestival, mine: EditableFestival): string[] {
+  const lines: string[] = [];
+  const field = (label: string, a?: string | null, b?: string | null) => {
+    if (norm(a) !== norm(b)) lines.push(`${label}: theirs "${norm(a)}", yours "${norm(b)}".`);
+  };
+  field('Name', theirs.name, mine.name);
+  field('Location', theirs.location, mine.location);
+  field('Time zone', theirs.timeZone, mine.timeZone);
+  const count = (label: string, a: number, b: number) => {
+    if (a !== b) lines.push(`${label}: theirs ${a}, yours ${b}.`);
+  };
+  count('Stages', theirs.stages?.length ?? 0, mine.stages?.length ?? 0);
+  count('Days', theirs.days?.length ?? 0, mine.days?.length ?? 0);
+  const sets = (f: EditableFestival) => (f.days ?? []).reduce((n, d) => n + (d.sets?.length ?? 0), 0);
+  count('Sets', sets(theirs), sets(mine));
+  count('Announced names', theirs.lineup?.length ?? 0, mine.lineup?.length ?? 0);
+  // Same counts, different content: name the number of changed items so the list never reads as "no difference".
+  if (lines.length === 0) {
+    const { total } = countFestivalChanges(theirs, mine);
+    if (total > 0) lines.push(`${total} ${total === 1 ? 'detail differs' : 'details differ'} inside the stages, days or sets.`);
+  }
+  return lines;
+}
+
 export function festivalStatusLine(
   f: { publishedAt?: string | null; updatedAt?: string; updatedByUsername?: string | null },
   now: number = Date.now(),

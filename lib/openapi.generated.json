@@ -2802,6 +2802,50 @@
           "pendingEmail": {
             "nullable": true,
             "type": "string"
+          },
+          "organizations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "editor",
+                    "viewer"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "active",
+                    "suspended"
+                  ]
+                },
+                "verified": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "role",
+                "status",
+                "verified"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "organizerPlatform": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -2878,6 +2922,50 @@
           "pendingEmail": {
             "nullable": true,
             "type": "string"
+          },
+          "organizations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "role": {
+                  "type": "string",
+                  "enum": [
+                    "owner",
+                    "editor",
+                    "viewer"
+                  ]
+                },
+                "status": {
+                  "type": "string",
+                  "enum": [
+                    "pending",
+                    "active",
+                    "suspended"
+                  ]
+                },
+                "verified": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "role",
+                "status",
+                "verified"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "organizerPlatform": {
+            "type": "boolean"
           }
         },
         "required": [

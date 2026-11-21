@@ -38,9 +38,12 @@ export interface ArtistRecord {
   genres: string[] | null;
   merged_into: string | null;
   updated_at: Date;
+  verified: boolean;
+  label_auto: boolean;
 }
 
-export const ARTIST_COLUMNS = 'id, name, name_key, label, spotify_id, links, photo, genres, merged_into, updated_at';
+export const ARTIST_COLUMNS =
+  'id, name, name_key, label, spotify_id, links, photo, genres, merged_into, updated_at, verified, label_auto';
 
 /** A refusal the route turns into an HTTP answer. `details` is sent with it. */
 export class ArtistError extends Error {
@@ -65,6 +68,11 @@ export interface ArtistActor {
   ip?: string | null;
   /** The caller writes its own audit row for the change (pickSpotify does, with the copies it rewrote). */
   skipAudit?: boolean;
+  /** An organizer's rows read 'organizer' and carry the organization. The default is an admin. */
+  actorType?: 'admin' | 'organizer';
+  organizationId?: string | null;
+  /** A fill of an artist that other tenants or the platform also use, for the review list. */
+  flagged?: boolean;
 }
 
 /** The audit row of a global artist change, written in the change's own transaction so the two never disagree. */
@@ -88,12 +96,13 @@ export async function insertArtistAudit(
       details_json,
       ip,
       status,
-      created_at
+      created_at,
+      organization_id
     )
   VALUES
     (
       $1,
-      'admin',
+      $7,
       $2,
       $3,
       'artist',
@@ -101,10 +110,20 @@ export async function insertArtistAudit(
       $5,
       $6,
       'success',
-      NOW()
+      NOW(),
+      $8
     )
 `,
-    [createOpaqueId('aud'), actor.userId, action, artistId, JSON.stringify(details), actor.ip ?? null],
+    [
+      createOpaqueId('aud'),
+      actor.userId,
+      action,
+      artistId,
+      JSON.stringify(details),
+      actor.ip ?? null,
+      actor.actorType ?? 'admin',
+      actor.organizationId ?? null,
+    ],
   );
 }
 
@@ -118,7 +137,23 @@ export function publicArtist(row: ArtistRecord) {
     genres: row.genres ?? [],
     spotifyId: row.spotify_id,
     updatedAt: isoOrNull(row.updated_at) as string,
+    verified: row.verified,
+    labelAuto: row.label_auto,
   };
+}
+
+/** What a non-admin reads: a note the server chose reads as empty, so a hidden artist never shows through it. */
+export function viewerArtist(row: ArtistRecord) {
+  const { labelAuto: _auto, ...rest } = publicArtist(row);
+  return { ...rest, label: row.label_auto ? '' : row.label };
+}
+
+/** The next free neutral note, "unnamed 1", for a name whose note a hidden artist holds. */
+export function nextAutoLabel(takenLabels: string[]): string {
+  const taken = new Set(takenLabels.map((label) => label.toLowerCase()));
+  let n = 1;
+  while (taken.has(`unnamed ${n}`)) n++;
+  return `unnamed ${n}`;
 }
 
 /** The note: Unicode NFKC, trimmed, runs of spaces collapsed. Null when it is over the limit. */
@@ -249,6 +284,8 @@ export interface ArtistUse {
   firstDate: string | null;
   lastDate: string | null;
   timeZone: string | null;
+  /** The owner organization. Null: an admin-only festival. */
+  organizationId: string | null;
 }
 
 /** Every festival that lists each artist on a set or in its announced lineup, archived ones included. */
@@ -265,7 +302,8 @@ export async function artistUses(db: { query: Pool['query'] }, artistIds: string
     f.deleted_at IS NOT NULL AS deleted,
     (SELECT MIN(d.date) FROM festival_days d WHERE d.festival_id = f.id AND d.date <> '') AS "firstDate",
     (SELECT MAX(d.date) FROM festival_days d WHERE d.festival_id = f.id AND d.date <> '') AS "lastDate",
-    f.time_zone AS "timeZone"
+    f.time_zone AS "timeZone",
+    f.organization_id AS "organizationId"
   FROM (${ELEMENT_IDS_OF_SETS} UNION ${ELEMENT_IDS_OF_LINEUPS}) u
   JOIN festivals f ON f.id = u.festival_id
   ORDER BY "firstDate" DESC NULLS LAST, f.id
@@ -328,9 +366,15 @@ export interface SyncedFestival {
 async function writeLineups(client: any, writes: Array<{ id: string; lineup: string }>) {
   if (writes.length === 0) return;
   await client.query(
-    `UPDATE festivals f SET lineup = v.lineup::jsonb
-       FROM unnest($1::text[], $2::text[]) AS v(id, lineup)
-      WHERE f.id = v.id`,
+    `
+  UPDATE festivals f
+  SET
+    lineup = v.lineup::jsonb
+  FROM
+    unnest($1::text[], $2::text[]) AS v (id, lineup)
+  WHERE
+    f.id = v.id
+`,
     [writes.map((w) => w.id), writes.map((w) => w.lineup)],
   );
 }
@@ -396,9 +440,17 @@ export async function rewriteCopies(
   }
   if (writes.length > 0) {
     await client.query(
-      `UPDATE festival_sets s SET artists = v.artists::jsonb, artist = v.artist, link_url = v.link_url
-         FROM unnest($1::text[], $2::text[], $3::text[], $4::text[]) AS v(id, artists, artist, link_url)
-        WHERE s.id = v.id`,
+      `
+  UPDATE festival_sets s
+  SET
+    artists = v.artists::jsonb,
+    artist = v.artist,
+    link_url = v.link_url
+  FROM
+    unnest($1::text[], $2::text[], $3::text[], $4::text[]) AS v (id, artists, artist, link_url)
+  WHERE
+    s.id = v.id
+`,
       [
         writes.map((w) => w.id),
         writes.map((w) => w.artists),
@@ -666,9 +718,15 @@ export async function moveRefs(
   const moved = found.sets.filter((set) => idsOf(set.artists).includes(loserId));
   if (moved.length > 0) {
     await client.query(
-      `UPDATE festival_sets s SET artists = v.artists::jsonb
-         FROM unnest($1::text[], $2::text[]) AS v(id, artists)
-        WHERE s.id = v.id`,
+      `
+  UPDATE festival_sets s
+  SET
+    artists = v.artists::jsonb
+  FROM
+    unnest($1::text[], $2::text[]) AS v (id, artists)
+  WHERE
+    s.id = v.id
+`,
       [moved.map((set) => set.id), moved.map((set) => JSON.stringify(repoint(set.artists)))],
     );
   }

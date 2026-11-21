@@ -4,7 +4,7 @@ import { COPY } from '@festie/shared/constants';
 import Button from '../ui/Button';
 
 interface UserMenuAccountSectionProps {
-  user: { isAdmin?: boolean };
+  user: { isAdmin?: boolean; organizations?: ReadonlyArray<unknown> };
   onClose: () => void;
   onLogout: () => void;
 }
@@ -31,6 +31,20 @@ export default function UserMenuAccountSection({ user, onClose, onLogout }: User
         >
           Account settings
         </Button>
+        {!!user.organizations?.length && (
+          <Button
+            variant="secondary"
+            size="sm"
+            type="button"
+            data-testid="user-menu-manage-link"
+            onClick={() => {
+              onClose();
+              navigate({ to: '/manage' });
+            }}
+          >
+            Manage your festivals
+          </Button>
+        )}
         {user.isAdmin && (
           <Button
             variant="secondary"

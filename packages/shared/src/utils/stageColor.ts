@@ -15,6 +15,15 @@
  * Vitest unit can call it identically.
  */
 
+import { colors } from '../tokens/colors';
+
+// Stage colours for a new stage, from the brand palette. Coral is left out: it means danger.
+const DEFAULT_STAGE_COLORS = [colors.accent.aqua, colors.stage.purpleAccessible, colors.accent.amber, colors.accent.green];
+
+/** The colour a new stage starts with, so an organizer is not asked to pick one. Cycles through the palette. */
+export const defaultStageColor = (existingStageCount: number): string =>
+  DEFAULT_STAGE_COLORS[existingStageCount % DEFAULT_STAGE_COLORS.length]!;
+
 /**
  * Neutral "no stage color" identifier returned by `getStageColor` when a stage
  * carries no API color. Deliberately NOT a valid CSS color and NOT a platform

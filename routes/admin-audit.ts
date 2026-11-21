@@ -23,7 +23,7 @@ export default function mountAdminAuditRoutes({ router, deps, ctx }: AdminMountA
   router.get('/audit', adminAuth, validateQuery(schemas.adminAuditQuery), async (req: any, res: any) => {
     try {
       setNoStore(res);
-      const { actor_id: actorId, action, resource_type: resourceType, cursor, limit, scope, actor, user } = req.validatedQuery;
+      const { actor_id: actorId, action, resource_type: resourceType, cursor, limit, scope, actor, user, organization_id: organizationId } = req.validatedQuery;
       const actorType = scope === 'all' ? null : scope;
       const from = req.validatedQuery.from ? new Date(req.validatedQuery.from).toISOString() : null;
       const to = req.validatedQuery.to ? new Date(req.validatedQuery.to).toISOString() : null;
@@ -57,6 +57,7 @@ export default function mountAdminAuditRoutes({ router, deps, ctx }: AdminMountA
         actionPrefixes: actionPrefixes.length ? actionPrefixes : null,
         targetId,
         resourceType: resourceType || null,
+        organizationId: organizationId || null,
         from,
         to,
       };

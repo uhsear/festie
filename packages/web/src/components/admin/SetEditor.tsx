@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { createArtist, matchArtists } from '@festie/shared/services';
+import { useCanMatchArtists } from './festivalModeContext';
 import type { ArtistCandidate } from '@festie/shared/services';
 import {
   artistNamesOf,
@@ -82,6 +83,7 @@ export default function SetEditor({
   const [origin, setOrigin] = useState<Artist[] | undefined>(() => s.artists);
 
   const [matches, setMatches] = useState<Record<number, SlotMatch>>({});
+  const canMatch = useCanMatchArtists();
   // The match answer arrives later: it must read the newest names, not the ones at blur time.
   const latest = useRef({ drafts, origin });
   latest.current = { drafts, origin };
@@ -102,7 +104,7 @@ export default function SetEditor({
 
   const matchSlot = async (index: number) => {
     const name = drafts[index]?.trim();
-    if (!name || (origin?.[index]?.id && origin[index]?.name === name)) return;
+    if (!canMatch || !name || (origin?.[index]?.id && origin[index]?.name === name)) return;
     try {
       const [found] = await matchArtists([{ name }]);
       if (!found || latest.current.drafts[index]?.trim() !== name) return;

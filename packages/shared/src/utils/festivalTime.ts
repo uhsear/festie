@@ -268,6 +268,26 @@ export function listTimeZones(current?: string | null): string[] {
   return zones;
 }
 
+/** The six US zones that most festivals use, with a name a promoter recognizes. */
+export const MAIN_US_TIME_ZONES: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'America/New_York', label: 'Eastern Time (New York, Orlando)' },
+  { value: 'America/Chicago', label: 'Central Time (Chicago, Nashville)' },
+  { value: 'America/Denver', label: 'Mountain Time (Denver)' },
+  { value: 'America/Los_Angeles', label: 'Pacific Time (Los Angeles)' },
+  { value: 'America/Anchorage', label: 'Alaska Time (Anchorage)' },
+  { value: 'Pacific/Honolulu', label: 'Hawaii Time (Honolulu)' },
+];
+
+/**
+ * Time-zone choices for an organizer: the main US zones with friendly names first, then every other zone under
+ * "Other". The festival's current zone is always listed, whichever group it falls in.
+ */
+export function timeZoneChoices(current?: string | null): { main: Array<{ value: string; label: string }>; other: string[] } {
+  const main = MAIN_US_TIME_ZONES.map((zone) => ({ ...zone }));
+  const mainValues = new Set(main.map((zone) => zone.value));
+  return { main, other: listTimeZones(current).filter((zone) => !mainValues.has(zone)) };
+}
+
 /**
  * Group festivals for a picker. Live and upcoming: soonest start first. Past:
  * most recent start first. Undated (no usable dates): name order.

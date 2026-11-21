@@ -33,6 +33,8 @@ interface AnnouncementRow {
   screen: string;
   title: string;
   body: string;
+  /** False: the banner shows and no push goes out. */
+  push?: boolean;
 }
 
 interface AnnouncerStores {
@@ -76,7 +78,7 @@ export function createAnnouncer({ stores: looseStores, notificationService, conf
       return;
     }
     const audience: string[] = await stores.profiles.userIdsByFestival(festivalId);
-    if (notificationService?.isConfigured) {
+    if (notificationService?.isConfigured && row.push !== false) {
       const deepLink = announcementDeepLink(config, row);
       for (let i = 0; i < audience.length; i += PUSH_CHUNK) {
         await notificationService.sendToOfflineUsers({

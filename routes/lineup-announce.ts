@@ -13,7 +13,9 @@
  * No save, import or publish sends either alert; an admin sends it once the data is final.
  */
 
+import { verifiedOrganizationOnly } from '../lib/app-context/session.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import { organizerAudience } from '../lib/organizer-engagement.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import type { RouteDeps } from '../lib/types';
 
@@ -45,20 +47,30 @@ export default function createLineupAnnounceRoute(deps: RouteDeps) {
 
   const router = express.Router();
 
-  router.get('/:id/lineup-announcement', festivalAccess({ action: 'lineup.drop' }), async (req: any, res: any) => {
+  // A member of a verified organization sends the lineup drop of its own festival: push and inbox only, and the
+  // prior-edition audience is limited to the organization's own editions (plan-v3 4.5). An admin send is unscoped.
+  const lineupAccess = festivalAccess({ action: 'lineup.announce', allow: verifiedOrganizationOnly });
+  const scopeOf = (req: any): string | undefined => (req.festivalRole === 'admin' ? undefined : req.organizationId);
+
+  router.get('/:id/lineup-announcement', lineupAccess, async (req: any, res: any) => {
     try {
       const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
-      const { reason: _reason, ...count } = await reengagementExecutor.countLineupDrop(festivalId);
+      const scope = scopeOf(req);
+      const { reason: _reason, ...count } = await reengagementExecutor.countLineupDrop(festivalId, scope);
       if (!count.festivalName) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-      return sendSuccess(res, count);
+      // An organizer learns audience sizes only above the floor (owner decision 4); a small audience reads as null.
+      const shown = scope
+        ? { ...count, recipients: organizerAudience(count.recipients), followers: organizerAudience(count.followers), priorAttendees: organizerAudience(count.priorAttendees) }
+        : count;
+      return sendSuccess(res, shown);
     } catch (err: any) {
       log.error('lineup announcement count error', { error: err?.message });
       return sendError(res, 500, 'Failed to count recipients', ErrorCodes.INTERNAL_ERROR);
     }
   });
 
-  router.post('/:id/lineup-announcement', festivalAccess({ action: 'lineup.drop' }), rateLimit(3, 'lineup-announce'), async (req: any, res: any) => {
+  router.post('/:id/lineup-announcement', lineupAccess, rateLimit(3, 'lineup-announce'), async (req: any, res: any) => {
     try {
       const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
@@ -67,10 +79,13 @@ export default function createLineupAnnounceRoute(deps: RouteDeps) {
         // The push deep-links to the festival, which attendees cannot open while it is a draft.
         return sendError(res, 409, 'Publish the festival before you announce its lineup.', ErrorCodes.DRAFT);
       }
-      const { festivalName, recipients, followers, priorAttendees } = await reengagementExecutor.countLineupDrop(festivalId);
+      const scope = scopeOf(req);
+      const { festivalName, recipients, followers, priorAttendees } = await reengagementExecutor.countLineupDrop(festivalId, scope);
       if (!festivalName) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       // Push may be fully deduped while email still retries (its own dedup key), so only block when nobody is eligible.
-      if (followers + priorAttendees === 0) {
+      // An organizer is never told that the audience is exactly zero (owner decision 4), so an empty one is answered
+      // like any other and uses the day's send. Only an admin is told that nobody can be notified.
+      if (!scope && followers + priorAttendees === 0) {
         return sendError(
           res,
           400,
@@ -78,14 +93,27 @@ export default function createLineupAnnounceRoute(deps: RouteDeps) {
           ErrorCodes.INVALID_INPUT,
         );
       }
-      await reengagement.sendLineupDrop(festivalId);
+      // An organization sends the lineup drop of a festival once a day. The claim is atomic, unlike a count of audit rows.
+      let claimId: number | null = null;
+      if (scope) {
+        claimId = await stores.festivalReview.claimLineupAnnounce(festivalId);
+        if (claimId === null) {
+          return sendError(res, 429, 'This festival already sent its lineup announcement today. Try again tomorrow.', ErrorCodes.RATE_LIMITED);
+        }
+      }
+      try {
+        await reengagement.sendLineupDrop(festivalId, scope);
+      } catch (err) {
+        if (claimId !== null) await stores.festivalReview.releaseLineupAnnounce(claimId);
+        throw err;
+      }
       await writeAdminAudit(req, res, {
         action: AUDIT_ACTIONS.LINEUP_ANNOUNCED,
         targetType: 'festival',
         targetId: festivalId,
         details: { recipients },
       });
-      return sendSuccess(res, { queued: true, recipients });
+      return sendSuccess(res, { queued: true, recipients: scope ? organizerAudience(recipients) : recipients });
     } catch (err: any) {
       log.error('lineup announcement error', { error: err?.message });
       return sendError(res, 500, 'Failed to send announcement', ErrorCodes.INTERNAL_ERROR);

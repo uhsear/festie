@@ -33,6 +33,9 @@ import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { lineupImportRequestSchema } from '../lib/schemas.js';
 import { planPickerAlerts } from '../lib/picker-alerts.js';
+import { deliverScheduleAlert, isOrganizerRequest } from '../lib/alert-hold.js';
+import { artistViewerOf } from '../lib/artist-viewer.js';
+import type { ArtistViewer } from '../lib/db/stores/artists.js';
 import {
   artistLookupKeys,
   planLineupImport,
@@ -120,14 +123,34 @@ export default function createLineupImportRoute(deps: RouteDeps) {
 
   // After a commit: a set that got its first time on a released date tells the people who picked it. The
   // festival is read before and after the commit, outside its transaction, so a concurrent edit can cause
-  // one missed or extra alert. Fire and forget: the import has committed, so a failure here only logs.
-  function alertPickersOfFirstTimes(before: any) {
-    if (!before.publishedAt) return;
-    void (async () => {
+  // one missed or extra alert. The import has committed, so a failure here only logs. An organization member's
+  // alert is held for an admin instead of sent (lib/alert-hold.ts), and the caller awaits that so the hold is written.
+  function alertPickersOfFirstTimes(before: any, req: any): Promise<void> {
+    if (!before.publishedAt) return Promise.resolve();
+    return (async () => {
       const after = await stores.festivals.getById(before.id);
       if (!after) return;
       const { changes, pickersBySet } = await planPickerAlerts({ stores, before, after, tbaOnly: true });
-      if (changes.length > 0) await emitter?.scheduleChanged?.({ festival: after, changes, pickersBySet });
+      if (changes.length === 0) return;
+      const organizer = isOrganizerRequest(req);
+      const result = await deliverScheduleAlert({
+        stores,
+        emitter,
+        festival: after,
+        alert: { changes, pickersBySet },
+        organizer,
+        verified: organizer && req.orgVerified === true,
+        hourlyCap: config.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP,
+        log,
+      });
+      if (result.held) {
+        await writeAdminAudit(req, {}, {
+          action: AUDIT_ACTIONS.FESTIVAL_ALERT_HELD,
+          targetType: 'festival',
+          targetId: before.id,
+          details: { changes: result.changes, people: result.people },
+        });
+      }
     })().catch((err: any) => log.warn('import picker alerts failed', { festivalId: before.id, error: err?.message }));
   }
 
@@ -138,15 +161,23 @@ export default function createLineupImportRoute(deps: RouteDeps) {
   // A Link column value for an empty platform of an artist that exists: written after the import
   // commits, through the artist's own locks (festivals first, then the artist), so every festival that
   // lists the artist gets it. A failure is logged and never fails the import.
-  async function applyLinkFills(fills: Array<{ artistId: string; url: string }>, userId: string | null, ip: string | null) {
+  async function applyLinkFills(fills: Array<{ artistId: string; url: string }>, userId: string | null, ip: string | null, viewer?: ArtistViewer) {
     for (const fill of fills) {
       try {
-        const result = await stores.artists.fillLink(fill.artistId, { link: fill.url, userId, ip });
+        const result = await stores.artists.fillLink(fill.artistId, { link: fill.url, userId, ip, viewer });
         await deps.afterArtistSync?.(result.synced);
       } catch (error: any) {
         log.warn('import link not added to the artist', { artistId: fill.artistId, error: error?.message });
       }
     }
+  }
+
+  // What artists the request may see: an organization member sees the visible ones only, an admin all of them.
+  async function viewerOf(req: any): Promise<ArtistViewer | undefined> {
+    if (!isOrganizerRequest(req)) return undefined;
+    const viewer = await artistViewerOf(stores, req);
+    if (!viewer) throw new Error('a member request without an organization');
+    return viewer;
   }
 
   // Validates the body and loads the festival. Sends the error response and returns null on failure.
@@ -171,14 +202,15 @@ export default function createLineupImportRoute(deps: RouteDeps) {
     const body = validation.data;
     // One lookup serves the preview and the commit's re-plan. Commit checks the ids again under lock.
     const { keys, ids } = artistLookupKeys(festival, body.rows);
-    const artists = await stores.lineupImports.lookupArtists(keys, ids);
+    const viewer = await viewerOf(req);
+    const artists = await stores.lineupImports.lookupArtists(keys, ids, viewer);
     const base = {
       rows: body.rows,
       options: { updateExisting: body.updateExisting, createMissing: body.createMissing, moveDays: body.moveDays },
       config,
       artists,
     };
-    return { festivalId, festival, body, base };
+    return { festivalId, festival, body, base, viewer };
   }
 
   router.post(
@@ -203,21 +235,21 @@ export default function createLineupImportRoute(deps: RouteDeps) {
       setNoStore(res);
       const loaded = await loadRequest(req, res);
       if (!loaded) return;
-      const { festivalId, festival, base } = loaded;
+      const { festivalId, festival, base, viewer } = loaded;
 
       const warnings: string[] = [];
       const outcome = await stores.lineupImports.commit(
         festivalId,
         (current: any, locked?: Map<string, ArtistRef>) =>
           planLineupImport({ festival: current, ...base, artists: locked ? withLockedArtists(base.artists, locked) : base.artists, makeId }),
-        { createdBy: req.user?.userId ?? null },
+        { createdBy: req.user?.userId ?? null, viewer },
       );
       if ('notFound' in outcome) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       if (!outcome.committed) return sendSuccess(res, { committed: false, plan: outcome.plan });
 
       invalidateFestivalCache();
       announceSetsChanged(festival);
-      await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null, getRequestIp(req));
+      await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null, getRequestIp(req), viewer);
       if (outcome.refs?.ignoredLinkEdits) {
         warnings.push(
           `${outcome.refs.ignoredLinkEdits} ${outcome.refs.ignoredLinkEdits === 1 ? 'link differs' : 'links differ'} from the artist's links and ${outcome.refs.ignoredLinkEdits === 1 ? 'was' : 'were'} not used. Change them on the Artists tab.`,
@@ -228,7 +260,8 @@ export default function createLineupImportRoute(deps: RouteDeps) {
       }
       // After the response is built, so the save never waits. It logs its own failure.
       void deps.interestConversion?.convert(festivalId);
-      alertPickersOfFirstTimes(festival);
+      const alerting = alertPickersOfFirstTimes(festival, req);
+      if (isOrganizerRequest(req)) await alerting;
       const result = buildResult(outcome.plan, outcome.writes, outcome.importId, warnings, festival.b2bSeparator || 'b2b');
       log.info('lineup imported', {
         festivalId,
@@ -262,7 +295,9 @@ export default function createLineupImportRoute(deps: RouteDeps) {
       setNoStore(res);
       const festivalId = req.festivalId;
       if (!festivalId) return sendError(res, 400, 'Invalid festival ID', ErrorCodes.INVALID_INPUT);
-      const history = await stores.lineupImports.list(festivalId);
+      // A member sees display names of its own team only. An import by anyone else reads "Festie support".
+      const member = req.festivalRole !== undefined && req.festivalRole !== 'admin';
+      const history = await stores.lineupImports.list(festivalId, member ? req.organizationId : null);
       if (!history) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       return sendSuccess(res, history);
     } catch (error: any) {

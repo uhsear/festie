@@ -48,6 +48,9 @@ export interface FestivalWrite {
   seriesId?: string | null;
   lineup?: unknown;
   updatedBy?: string | null;
+  /** The owning organization, set when an organizer creates the festival. Null or absent: platform-owned. */
+  organizationId?: string | null;
+  createdBy?: string | null;
   createdAt?: string;
   updatedAt?: string;
   publishedAt?: string | null;
@@ -457,6 +460,8 @@ export default function createFestivalsStore(pool: Pool, utils: Partial<Festival
   SET
     published_at = COALESCE(published_at, NOW()),
     slug = COALESCE(slug, festival_next_slug (id)),
+    publish_requested_at = NULL,
+    publish_review_note = NULL,
     updated_at = NOW(),
     updated_by = $2
   WHERE
@@ -637,7 +642,7 @@ export default function createFestivalsStore(pool: Pool, utils: Partial<Festival
         const updatedAt = festival.updatedAt || createdAt;
 
         await client.query(
-          'INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, series_id, lineup) VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb)',
+          'INSERT INTO festivals (id, name, location, created_at, updated_at, edited_at, b2b_separator, latitude, longitude, time_zone, map_config, published_at, updated_by, series_id, lineup, organization_id, created_by) VALUES ($1, $2, $3, $4, $5, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14::jsonb, $15, $16)',
           [
             festival.id,
             festival.name,
@@ -654,6 +659,8 @@ export default function createFestivalsStore(pool: Pool, utils: Partial<Festival
             festival.updatedBy ?? null,
             festival.seriesId ?? null,
             JSON.stringify(festival.lineup ?? []),
+            festival.organizationId ?? null,
+            festival.createdBy ?? null,
           ],
         );
 

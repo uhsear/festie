@@ -189,6 +189,7 @@ describe('festival announcements admin POST', () => {
       scheduled: true,
       sendAt,
       recipients: 2,
+      push: true,
     });
   });
 

@@ -15,8 +15,10 @@ import { buildMultiInsert, insertSetsBatch } from './festivals';
 import type { ArtistLookup, ArtistRef, LineupImportPlan, LineupImportWrites, SetValues } from '../../lineup-import-plan';
 import { nextMoveMark, type SlotAt } from '../../set-moves';
 import { resolveArtistRefs, resolveSetValues } from '../../artist-refs';
+import { type ArtistViewer, viewerMask } from './artist-visibility';
 
 import { lockFestival } from './festival-lock';
+import { outsideLabelSql } from './organizations';
 
 export { lockFestivalAny } from './festival-lock';
 
@@ -448,9 +450,24 @@ async function canonicalizeRestoredSets(client: any, festivalId: string, setIds:
   await resolveSetValues(client, { festivalId, separator: festival[0]?.separator ?? 'b2b', userId: null }, targets);
   if (targets.length === 0) return;
   await client.query(
-    `UPDATE festival_sets s SET artists = v.artists::jsonb, artist = v.artist, link_url = v.link_url, display_name = v.display_name
-       FROM unnest($1::text[], $2::text[], $3::text[], $4::text[], $5::text[]) AS v(id, artists, artist, link_url, display_name)
-      WHERE s.id = v.id`,
+    `
+  UPDATE festival_sets s
+  SET
+    artists = v.artists::jsonb,
+    artist = v.artist,
+    link_url = v.link_url,
+    display_name = v.display_name
+  FROM
+    unnest(
+      $1::text[],
+      $2::text[],
+      $3::text[],
+      $4::text[],
+      $5::text[]
+    ) AS v (id, artists, artist, link_url, display_name)
+  WHERE
+    s.id = v.id
+`,
     [
       targets.map((t: any) => t.id),
       targets.map((t: any) => JSON.stringify(t.values.artists)),
@@ -550,7 +567,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
      * Re-plans against the locked festival and writes the plan in one transaction.
      * Writes nothing when the fresh plan has errors or problems.
      */
-    async commit(festivalId: string, buildPlan: BuildPlan, meta: { createdBy: string | null }) {
+    async commit(festivalId: string, buildPlan: BuildPlan, meta: { createdBy: string | null; viewer?: ArtistViewer }) {
       return withTransactionRetry(pool, async (client) => {
         const locked = await lockFestival(client, festivalId);
         if (!locked) return { notFound: true as const };
@@ -571,7 +588,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
         // Every artist element gets the artists row's name and links, and the flat name and link follow.
         const refs = await resolveSetValues(
           client,
-          { festivalId, separator: festival.b2bSeparator || 'b2b', userId: meta.createdBy, fillEmptyLinks: true },
+          { festivalId, separator: festival.b2bSeparator || 'b2b', userId: meta.createdBy, fillEmptyLinks: true, viewer: meta.viewer },
           [
             ...writes.inserts.map((s) => ({ id: s.id, values: s })),
             ...writes.updates.map((u) => ({ id: u.setId, values: u.after })),
@@ -586,6 +603,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
             separator: festival.b2bSeparator || 'b2b',
             userId: meta.createdBy,
             fillEmptyLinks: true,
+            viewer: meta.viewer,
           });
           resolved.lineup!.forEach((entry: any, i: number) => {
             entries[i]!.artists = entry.artists;
@@ -658,7 +676,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
      * The live artists whose key is in keys, and every artist whose id is in ids (merged ones too, so a
      * stale id gets a clear message). Read before the plan runs; commit checks the ids again under lock.
      */
-    async lookupArtists(keys: string[], ids: string[]): Promise<ArtistLookup> {
+    async lookupArtists(keys: string[], ids: string[], viewer?: ArtistViewer): Promise<ArtistLookup> {
       const lookup: ArtistLookup = { byKey: new Map(), byId: new Map() };
       if (keys.length === 0 && ids.length === 0) return lookup;
       const { rows } = await pool.query(
@@ -686,16 +704,24 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
 `,
         [keys, ids],
       );
+      // An organizer sees only visible artists, and may link by name only the ones it owns or that are verified.
+      const mask = viewer ? await viewerMask(pool, viewer, rows.map((r: { id: string }) => r.id)) : null;
       for (const r of rows) {
+        if (mask && !mask.has(r.id)) continue;
         const ref = artistRefOf(r);
+        if (mask && !mask.get(r.id)!.linkable) ref.pickOnly = true;
         lookup.byId.set(ref.id, ref);
         if (!ref.mergedInto) lookup.byKey.set(r.name_key, [...(lookup.byKey.get(r.name_key) ?? []), ref]);
       }
       return lookup;
     },
 
-    /** The newest 20 imports, or null when the festival does not exist. */
-    async list(festivalId: string) {
+    /**
+     * The newest 20 imports, or null when the festival does not exist. With `viewerOrganizationId` the creator
+     * reads as "<display name> at <organization>" for a member of that organization, as "Festie support" for
+     * a platform admin and as "A former teammate" for anyone else. An organizer never sees an attendee username.
+     */
+    async list(festivalId: string, viewerOrganizationId: string | null = null) {
       const fest = await pool.query('SELECT name FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
       if (fest.rows.length === 0) return null;
       const { rows } = await pool.query(
@@ -705,7 +731,13 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
     li.created_at,
     li.counts,
     li.undone_at,
-    u.username,
+    CASE
+      WHEN u.id IS NULL OR $2::text IS NULL THEN u.username
+      WHEN EXISTS (
+        SELECT 1 FROM organization_members m WHERE m.organization_id = $2 AND m.user_id = u.id
+      ) THEN COALESCE(NULLIF(btrim(u.display_name), ''), 'A teammate') || ' at ' || (SELECT o.name FROM organizations o WHERE o.id = $2)
+      ELSE ${outsideLabelSql('u.id')}
+    END AS username,
     (
       SELECT
         COALESCE(array_agg(DISTINCT d.date ORDER BY d.date), '{}')
@@ -737,7 +769,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
   LIMIT
     20
 `,
-        [festivalId],
+        [festivalId, viewerOrganizationId],
       );
       const newestOpen = rows.find((r: any) => r.undone_at === null)?.id ?? null;
       return {

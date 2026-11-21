@@ -286,16 +286,19 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
 
   /**
    * One alert per person who picked a set that moved or left the lineup, and one per person whose open
-   * mark is on an act that was cancelled (`interestedByEntry`). Never throws.
+   * mark is on an act that was cancelled (`interestedByEntry`). Never throws. `ok` is false when the lookup failed or
+   * every push failed (a provider outage), so a caller that must not lose the alert can hold it again.
    */
   async function scheduleChanged({ festival, changes, pickersBySet, interestedByEntry }: {
     festival: { id: string; name: string };
     changes: Parameters<typeof buildSchedulePushes>[1];
     pickersBySet: Parameters<typeof buildSchedulePushes>[2];
     interestedByEntry?: Parameters<typeof buildSchedulePushes>[3];
-  }) {
-    if (!notificationService?.isConfigured || typeof notificationService.send !== 'function') return;
+  }): Promise<{ ok: boolean }> {
+    if (!notificationService?.isConfigured || typeof notificationService.send !== 'function') return { ok: true };
     try {
+      let sent = 0;
+      let failed = 0;
       const muted = new Set<string>(
         (await stores?.topicSubscriptions?.getUnsubscribedUsers?.(festival.id, 'schedule')) || [],
       );
@@ -319,12 +322,15 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
         );
         for (const result of results) {
           if (result.status === 'rejected') {
+            failed++;
             log.warn('schedule push failed', { festivalId: festival.id, error: result.reason?.message });
-          }
+          } else sent++;
         }
       }
+      return { ok: failed === 0 || sent > 0 };
     } catch (err) {
       log.warn('schedule push failed', { festivalId: festival?.id, error: (err as Error).message });
+      return { ok: false };
     }
   }
 

@@ -546,6 +546,33 @@ describe('authStore', () => {
     });
   });
 
+  describe('checkSession organizations', () => {
+    const orgs = [{ id: 'o1', name: 'Venue A', role: 'owner' as const, status: 'active', verified: false }];
+
+    it('keeps the organizations that /auth/me lists, for the account menu link', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser, organizations: orgs });
+      await useAuthStore.getState().checkSession();
+      expect(useAuthStore.getState().user?.organizations).toEqual(orgs);
+    });
+
+    it('keeps the server flag that says the organizer platform is off, and leaves it unset when /auth/me omits it', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser, organizations: [], organizerPlatform: false });
+      await useAuthStore.getState().checkSession();
+      expect(useAuthStore.getState().user?.organizerPlatform).toBe(false);
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser });
+      await useAuthStore.getState().checkSession();
+      expect(useAuthStore.getState().user?.organizerPlatform).toBeUndefined();
+    });
+
+    it('drops them once the user has none', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser, organizations: orgs });
+      await useAuthStore.getState().checkSession();
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser, organizations: [] });
+      await useAuthStore.getState().checkSession();
+      expect(useAuthStore.getState().user?.organizations).toBeUndefined();
+    });
+  });
+
   describe('deleteAccount', () => {
     it('returns the server deletionDate', async () => {
       vi.mocked(api.delete).mockResolvedValueOnce({ success: true, deletionDate: '2026-11-30T00:00:00.000Z' });

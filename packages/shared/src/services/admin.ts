@@ -403,8 +403,8 @@ export function addCrewMember(crewId: string, userId: string): Promise<unknown> 
   return api.post(`/crews/${enc(crewId)}/members`, { userId });
 }
 
-export async function fetchFestivalPreview(festivalId: string) {
-  const detail = await api.get<FestivalPreviewInput>(`/admin/festivals/${enc(festivalId)}`);
+export async function fetchFestivalPreview(festivalId: string, scope: 'admin' | 'manage' = 'admin') {
+  const detail = await api.get<FestivalPreviewInput>(`/${scope}/festivals/${enc(festivalId)}`);
   return buildFestivalPreview(detail);
 }
 

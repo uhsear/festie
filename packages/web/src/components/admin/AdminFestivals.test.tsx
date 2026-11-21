@@ -228,7 +228,7 @@ describe('AdminFestivals', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'New festival' }));
     await userEvent.click(await screen.findByRole('button', { name: 'fill form' }));
     await userEvent.click(screen.getByRole('button', { name: 'save form' }));
-    await waitFor(() => expect(fetchAdminFestival).toHaveBeenCalledWith('new1'));
+    await waitFor(() => expect(fetchAdminFestival).toHaveBeenCalledWith('new1', 'admin'));
     expect(await screen.findByRole('button', { name: 'save form' })).toBeInTheDocument();
   });
 

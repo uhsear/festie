@@ -127,7 +127,7 @@ describe('LineupImport', () => {
     const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
     render(<LineupImport festivalId="f1" festivalName="Big Fest" />);
     await userEvent.click(screen.getByRole('button', { name: 'Export lineup CSV' }));
-    expect(api.exportCsv).toHaveBeenCalledWith('f1');
+    expect(api.exportCsv).toHaveBeenCalledWith('f1', 'admin');
     expect(createObjectURL).toHaveBeenCalledTimes(1);
     expect((click.mock.instances[0] as unknown as HTMLAnchorElement).download).toBe('big-fest-lineup.csv');
     click.mockRestore();
@@ -266,7 +266,7 @@ describe('LineupImport', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Undo import' }));
     const buttons = await screen.findAllByRole('button', { name: 'Undo import' });
     await userEvent.click(buttons[buttons.length - 1]!);
-    expect(api.undo).toHaveBeenCalledWith('f1', 'imp-9');
+    expect(api.undo).toHaveBeenCalledWith('f1', 'imp-9', 'admin');
   });
 
   it('names the announced acts that match no set, and the poster name a new set keeps', async () => {
