@@ -171,6 +171,11 @@ describe('pmtilesUrl validation and storage', () => {
     absolutizeTilesUrl(other, 'https://festie.us');
     assert.equal(other.offlineBasemap.pmtilesUrl, 'https://cdn.example.com/a.pmtiles');
     assert.doesNotThrow(() => absolutizeTilesUrl(null, 'https://festie.us'));
+    for (const origin of ['', undefined, 'http://localhost:4000']) {
+      const kept: any = { offlineBasemap: { pmtilesUrl: '/tiles/fest-2026.pmtiles' } };
+      absolutizeTilesUrl(kept, origin);
+      assert.equal(kept.offlineBasemap.pmtilesUrl, '/tiles/fest-2026.pmtiles', String(origin));
+    }
   });
 
   it('keeps the name and path patterns in step', () => {

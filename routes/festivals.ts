@@ -551,7 +551,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     validate(schemas.festivalCreate),
     async (req: Request, res: Response) => {
       try {
-        absolutizeTilesUrl((req.validatedBody as z.infer<typeof schemas.festivalCreate>).mapConfig, appOrigin(config));
+        absolutizeTilesUrl((req.validatedBody as z.infer<typeof schemas.festivalCreate>).mapConfig, config.PUBLIC_ORIGIN);
         const issues = validateFestivalIssues(config, req.validatedBody);
         if (issues.length > 0) return sendIssues(res, issues);
         const festival = sanitizeFestivalPayload(req.validatedBody);
@@ -601,7 +601,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
           if (!rules.success) return sendRuleIssues(res, rules.error);
         }
         // A member's save with a /tiles/ path already failed the rules above, so this only affects an admin.
-        absolutizeTilesUrl(body.mapConfig, appOrigin(config));
+        absolutizeTilesUrl(body.mapConfig, config.PUBLIC_ORIGIN);
         // The body is partial, so check the festival that results from the save.
         // A stored lineup is not re-checked: only a body that carries one can fail on duplicates.
         const issues = validateFestivalIssues(config, { ...existingFestival, lineup: undefined, ...body });

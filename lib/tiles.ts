@@ -11,11 +11,15 @@ import type { Application, Request, Response } from 'express';
 export const TILES_NAME_RE = /^[a-z0-9][a-z0-9_-]{0,63}\.pmtiles$/;
 export const TILES_PATH_RE = /^\/tiles\/[a-z0-9][a-z0-9_-]{0,63}\.pmtiles$/;
 
-/** Turn a same-origin /tiles/ path in a festival's map config into an absolute URL, in place. */
-export function absolutizeTilesUrl(mapConfig: any, origin: string): void {
+/**
+ * Turn a same-origin /tiles/ path in a festival's map config into an absolute URL, in place.
+ * Without a configured https origin the path stays relative: guessing the production origin would point
+ * dev and staging data at production tiles, and an http URL would fail the https rule on the next save.
+ */
+export function absolutizeTilesUrl(mapConfig: any, origin: string | undefined): void {
   const url = mapConfig?.offlineBasemap?.pmtilesUrl;
-  if (typeof url === 'string' && TILES_PATH_RE.test(url)) {
-    mapConfig.offlineBasemap.pmtilesUrl = `${origin.replace(/\/+$/, '')}${url}`;
+  if (typeof url === 'string' && TILES_PATH_RE.test(url) && /^https:\/\//i.test(origin ?? '')) {
+    mapConfig.offlineBasemap.pmtilesUrl = `${origin!.replace(/\/+$/, '')}${url}`;
   }
 }
 
