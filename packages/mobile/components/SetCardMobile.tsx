@@ -260,7 +260,13 @@ function SetCardMobileImpl({
   // R19: Apply live state styling when set status is 'live'.
   return (
     <View style={[styles.card, isLive && styles.cardLive]}>
-      <AppPressable style={styles.body} onPress={onPress} accessibilityRole="button" accessibilityLabel={a11yBody}>
+      <AppPressable
+        style={styles.body}
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={a11yBody}
+        testID={`set-card-${set.id}`}
+      >
         <View style={styles.stagePill}>
           <View style={[styles.stagePillBg, { backgroundColor: dimmed ? t.colors.overlay[3] : pillBg }]} pointerEvents="none" />
           <Text style={[styles.stageText, dimmed && styles.dimmedText]} maxFontSizeMultiplier={MAX_FONT_SCALE}>

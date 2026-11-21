@@ -1,0 +1,58 @@
+# Guest-level, read-only iOS check of the artist (set detail) sheet: open a public
+# festival, tap the first set card, wait for the sheet, close it. It needs no
+# account and mutates nothing. Selectors are testIDs only (set-card-<id>,
+# set-sheet, set-sheet-close); Maestro matches `id` as a regex.
+appId: us.festie.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Plan your weekend|Select a Festival"
+    timeout: 90000
+- runFlow:
+    when:
+      visible: "Plan your weekend"
+    commands:
+      - tapOn: "Skip intro"
+- extendedWaitUntil:
+    visible: "Select a Festival"
+    timeout: 30000
+# See ios-smoke.yaml: centre the card first so a tap cannot land on the tab bar.
+- scrollUntilVisible:
+    element:
+      id: "festival-card-nc-2026"
+    centerElement: true
+- tapOn:
+    id: "festival-card-nc-2026"
+- extendedWaitUntil:
+    visible:
+      id: "schedule-screen"
+    timeout: 150000
+- tapOn:
+    id: "segment-cards"
+- extendedWaitUntil:
+    visible:
+      id: "set-card-.*"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 01-cards
+- tapOn:
+    id: "set-card-.*"
+- extendedWaitUntil:
+    visible:
+      id: "set-sheet"
+    timeout: 30000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: 02-artist-sheet
+- tapOn:
+    id: "set-sheet-close"
+- extendedWaitUntil:
+    notVisible:
+      id: "set-sheet"
+    timeout: 30000
+- assertVisible:
+    id: "schedule-screen"
+- takeScreenshot: 03-sheet-closed
