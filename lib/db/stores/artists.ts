@@ -60,6 +60,9 @@ import {
 import { adminSuggestion, insertSuggestion, organizerVerdict, ownSuggestion } from './artist-suggestions';
 import { type ArtistViewer, viewerMask, visibleCondition, useIsVisible, useIsForeign } from './artist-visibility';
 
+/** An image on one of Spotify's image hosts, the same hosts the web attribution check accepts. */
+const SPOTIFY_IMAGE_URL = /^https:\/\/(?:[a-z0-9-]+\.)*(?:scdn\.co|spotifycdn\.com)\//i;
+
 export {
   rewriteCopies,
   ArtistError,
@@ -589,7 +592,8 @@ export function createArtistsStore(pool: Pool) {
     /**
      * Replaces an artist's photo and genres with what Spotify says now, and stamps spotify_fetched_at,
      * so Spotify content is never kept past the refresh limit (Spotify Developer Terms IV.3.1.1). Unlike
-     * refreshSpotifyDetails it overwrites: a photo Spotify no longer returns is cleared. The row is stamped
+     * refreshSpotifyDetails it overwrites: a Spotify photo that Spotify no longer returns is cleared, but a
+     * photo that did not come from Spotify is kept. The row is stamped
      * even when nothing changed, or the artist would be read again on every run. Every festival's copy follows
      * a change. Only an artist with a Spotify id qualifies.
      */
@@ -606,7 +610,9 @@ export function createArtistsStore(pool: Pool) {
           );
           const before = rows[0] as ArtistRecord | undefined;
           if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
-          const photo = input.photo?.startsWith('https://') ? input.photo.slice(0, 500) : null;
+          // A photo from a lineup import or a merge is not Spotify's to replace or clear, so it stays.
+          const keepsPhoto = !!before.photo && !SPOTIFY_IMAGE_URL.test(before.photo);
+          const photo = keepsPhoto ? before.photo : input.photo?.startsWith('https://') ? input.photo.slice(0, 500) : null;
           const genres = (input.genres ?? []).slice(0, 10);
           if (photo === (before.photo ?? null) && JSON.stringify(genres) === JSON.stringify(before.genres ?? [])) {
             await client.query('UPDATE artists SET spotify_fetched_at = now() WHERE id = $1', [id]);

@@ -10,7 +10,7 @@ process.env.SPOTIFY_CLIENT_SECRET = 'test-client-secret';
 process.env.RATE_LIMIT_WINDOW = '1000';
 
 import assert from 'node:assert/strict';
-import { after, afterEach, before, describe, test } from 'node:test';
+import { after, afterEach, before, beforeEach, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { lockFestivalAny } from '../lib/db/stores/lineup-imports';
 import { TEST_DATABASE_URL } from './_integration-helpers';
@@ -42,6 +42,7 @@ function installSpotifyMock() {
       return hits === 'fail' ? json(500, {}) : json(200, { artists: { items: hits ?? [] } });
     }
     const found = artistTable[url.split('/v1/artists/')[1] ?? ''];
+    if (found === 'fail') return json(500, {});
     return found ? json(200, found) : json(404, {});
   }) as any;
 }
@@ -495,6 +496,8 @@ describe('spotify stale refresh (30-day limit)', { skip, concurrency: 1 }, () =>
       pool.query(`UPDATE artists SET spotify_fetched_at = ${days === null ? 'NULL' : `now() - make_interval(days => ${days})`} WHERE id = $1`, [artistId]),
     );
   const asked = (n: number) => spotifyCalls.some((url) => url.includes(`/v1/artists/${id(n)}`));
+  // The route allows 6 calls per window (1 s here); every test makes one or more, so each starts in a fresh window.
+  beforeEach(() => new Promise((resolve) => setTimeout(resolve, 1100)));
 
   test('refuses a caller without an admin session', async () => {
     await app.server.request.post('/api/v1/admin/artists/spotify-refresh-stale').send({}).expect(401);
@@ -564,19 +567,53 @@ describe('spotify stale refresh (30-day limit)', { skip, concurrency: 1 }, () =>
     assert.equal(unchanged.updated_at.getTime(), before.updated_at.getTime(), 'an unchanged artist keeps its edit token');
   });
 
-  test('an artist Spotify does not answer for keeps its data and is not stamped, so it is tried again', async () => {
+  test('an artist Spotify no longer knows (404) loses its Spotify photo and genres, and is stamped', async () => {
     const ghost = await createArtist(app, { name: 'Stale Ghost', link: link(85) });
-    await withPool((pool) => pool.query(`UPDATE artists SET photo = 'https://i.scdn.co/image/ghost' WHERE id = $1`, [ghost.id]));
+    await withPool((pool) =>
+      pool.query(`UPDATE artists SET photo = 'https://i.scdn.co/image/ghost', genres = '["old"]'::jsonb WHERE id = $1`, [ghost.id]),
+    );
+    await app.post('/api/v1/admin/artists/spotify-refresh-stale', {}).expect(200);
+    const row = await state(ghost.id);
+    assert.equal(row.photo, null);
+    assert.deepEqual(row.genres, []);
+    assert.ok(row.spotify_fetched_at, 'stamped, so it is not asked for again every run');
+  });
+
+  test('a failed Spotify lookup (500) keeps the stored data and does not stamp, so it is tried again', async () => {
+    const flaky = await createArtist(app, { name: 'Stale Flaky', link: link(86) });
+    await withPool((pool) =>
+      pool.query(`UPDATE artists SET photo = 'https://i.scdn.co/image/flaky', genres = '["old"]'::jsonb WHERE id = $1`, [flaky.id]),
+    );
+    artistTable[id(86)] = 'fail';
     const res = await app.post('/api/v1/admin/artists/spotify-refresh-stale', {}).expect(200);
     assert.ok(res.body.data.unavailable >= 1);
-    const row = await state(ghost.id);
-    assert.equal(row.photo, 'https://i.scdn.co/image/ghost');
+    const row = await state(flaky.id);
+    assert.equal(row.photo, 'https://i.scdn.co/image/flaky');
+    assert.deepEqual(row.genres, ['old']);
     assert.equal(row.spotify_fetched_at, null);
+  });
+
+  test('a photo that did not come from Spotify is kept, whether Spotify has a photo or none', async () => {
+    const lineup = await createArtist(app, { name: 'Stale Lineup Photo', link: link(87) });
+    const bare = await createArtist(app, { name: 'Stale Bare', link: link(88) });
+    await withPool((pool) =>
+      pool.query(`UPDATE artists SET photo = 'https://art.festie.us/own.jpg' WHERE id = ANY($1)`, [[lineup.id, bare.id]]),
+    );
+    artistTable[id(87)] = spotifyArtist(87, 'Stale Lineup Photo');
+    artistTable[id(88)] = { ...spotifyArtist(88, 'Stale Bare'), images: [] };
+    await app.post('/api/v1/admin/artists/spotify-refresh-stale', {}).expect(200);
+    for (const artist of [lineup, bare]) {
+      const row = await state(artist.id);
+      assert.equal(row.photo, 'https://art.festie.us/own.jpg');
+      assert.deepEqual(row.genres, ['house', 'techno'], 'genres still follow Spotify');
+      assert.ok(row.spotify_fetched_at, 'stamped');
+    }
   });
 
   test('the cron function stops at the limit and reports a missing Spotify key without reading anything', async () => {
     const { refreshStaleSpotifyArtists } = await import('../lib/spotify-refresh');
     const { createArtistsStore } = await import('../lib/db/stores/artists');
+    for (const [n, name] of [[201, 'Stale Cron One'], [202, 'Stale Cron Two'], [203, 'Stale Cron Three']] as const) await createArtist(app, { name, link: link(n) });
     await withPool(async (pool) => {
       const stores = { artists: createArtistsStore(pool) };
       const log = { info() {}, warn() {}, error() {} };

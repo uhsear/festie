@@ -6,6 +6,9 @@
  * content indefinitely, so every artist with a Spotify id gets its photo and genres re-read once the
  * stored copy is older than SPOTIFY_MAX_AGE_DAYS (artists.spotify_fetched_at, migration 121).
  *
+ * An artist that Spotify answers for as unknown (404) loses its Spotify photo and genres at that age; a lookup that
+ * fails keeps them and is tried again. A photo that did not come from Spotify is never replaced or cleared.
+ *
  * It uses the same Spotify lookup (getArtistsByIds) and the same festival-copy rewrite as the admin
  * "fill photos from Spotify" route. Two callers: the admin route POST /api/v1/admin/artists/spotify-refresh-stale,
  * and scripts/spotify-refresh-stale.ts, which a cron runs. Crontab line (documented, not installed):
@@ -27,7 +30,7 @@ export interface SpotifyRefreshResult {
   checked: number;
   updated: number;
   unchanged: number;
-  /** Spotify did not answer for the artist: its stored data is left as it is and it is tried again next run. */
+  /** Spotify's lookup failed for the artist: its stored data is left as it is and it is tried again next run. */
   unavailable: number;
   failed: number;
   rateLimited: boolean;
@@ -44,7 +47,7 @@ interface RefreshDeps {
   userId?: string | null;
   ip?: string | null;
   /** Replaces the Spotify lookup in tests. */
-  lookup?: (ids: string[], clientId: string, clientSecret: string, opts: { log: unknown }) => Promise<Map<string, any>>;
+  lookup?: (ids: string[], clientId: string, clientSecret: string, opts: { log: unknown; gone: Set<string> }) => Promise<Map<string, any>>;
 }
 
 export async function refreshStaleSpotifyArtists({
@@ -73,8 +76,9 @@ export async function refreshStaleSpotifyArtists({
     result.checked += rows.length;
 
     let details: Map<string, any>;
+    const gone = new Set<string>();
     try {
-      details = await lookup([...new Set(rows.map((row) => row.spotifyId))], config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET, { log });
+      details = await lookup([...new Set(rows.map((row) => row.spotifyId))], config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET, { log, gone });
     } catch (error) {
       if ((error as NodeJS.ErrnoException)?.code !== 'SPOTIFY_RATE_LIMITED') throw error;
       result.rateLimited = true;
@@ -84,14 +88,15 @@ export async function refreshStaleSpotifyArtists({
 
     for (const row of rows) {
       const spotifyArtist = details.get(row.spotifyId);
-      if (!spotifyArtist) {
+      // An artist Spotify says it does not know keeps nothing of Spotify's; a failed lookup changes nothing.
+      if (!spotifyArtist && !gone.has(row.spotifyId)) {
         result.unavailable++;
         continue;
       }
       try {
         const outcome = await stores.artists.renewSpotifyDetails(row.id, {
-          photo: spotifyArtist.imageUrl,
-          genres: spotifyArtist.genres,
+          photo: spotifyArtist?.imageUrl ?? null,
+          genres: spotifyArtist?.genres ?? [],
           userId,
           ip,
         });
