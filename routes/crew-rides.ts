@@ -3,13 +3,14 @@ import { crewMembership } from '../lib/app-context/session';
 import { isCreatorOrOwner } from '../lib/helpers/creator-or-owner';
 import { MAX_CREW_LIST_ITEMS } from '../lib/helpers/crew-list-cap';
 import { randomUUID } from 'crypto';
+import type { RouteDeps } from '../lib/types';
 
 /**
  * Crew carpool / ride board (M2 logistics) — a shared "who's driving" board.
  * A new crew sub-resource cloning routes/crew-packing.ts exactly: userAuth +
- * getMember gate + rate limit + io.to('crew:'+id).emit + activity log.
+ * getMember gate + rate limit + emitter.toCrew(id, event) + activity log.
  */
-export default function createCrewRidesRoutes(deps: any) {
+export default function createCrewRidesRoutes(deps: RouteDeps) {
   const {
     log,
     userAuth,

@@ -262,7 +262,7 @@ describe('Notification routes — web push', () => {
       ErrorCodes: { INVALID_INPUT: 'INVALID_INPUT', NOT_FOUND: 'NOT_FOUND', INTERNAL_ERROR: 'INTERNAL_ERROR' },
       schemas,
       validate,
-    });
+    } as any);
     const app = express();
     app.use(express.json());
     app.use(router);

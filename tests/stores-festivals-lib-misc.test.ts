@@ -1039,7 +1039,7 @@ describe('routes/spotify.js', () => {
 
   it('returns an Express router', () => {
     const deps = makeDeps();
-    const router = createSpotifyRoutes(deps);
+    const router = createSpotifyRoutes(deps as any);
     assert.equal(typeof router, 'function');
   });
 
@@ -1078,7 +1078,7 @@ describe('routes/spotify.js', () => {
     })) as unknown as typeof fetch;
 
     try {
-      const router = createSpotifyRoutes(deps);
+      const router = createSpotifyRoutes(deps as any);
 
       // Simulate first request
       const req1 = { params: { setId: 'set-1' } };
@@ -1120,7 +1120,7 @@ describe('routes/spotify.js', () => {
         pool: makePool([{ rows: [] }]),
       },
     });
-    const router = createSpotifyRoutes(deps);
+    const router = createSpotifyRoutes(deps as any);
 
     const handler = previewHandler(router);
 
@@ -1142,7 +1142,7 @@ describe('routes/spotify.js', () => {
         pool: makePool([{ rows: [{ id: 'set-1', artists: [] }] }]),
       },
     });
-    const router = createSpotifyRoutes(deps);
+    const router = createSpotifyRoutes(deps as any);
 
     const handler = previewHandler(router);
 
@@ -1169,7 +1169,7 @@ describe('routes/spotify.js', () => {
         ]),
       },
     });
-    const router = createSpotifyRoutes(deps);
+    const router = createSpotifyRoutes(deps as any);
 
     const handler = previewHandler(router);
 
@@ -1209,7 +1209,7 @@ describe('routes/spotify.js', () => {
     })) as unknown as typeof fetch;
 
     try {
-      const router = createSpotifyRoutes(deps);
+      const router = createSpotifyRoutes(deps as any);
       const handler = previewHandler(router);
 
       const req = { params: { setId: 'set-fb' } };
@@ -1256,7 +1256,7 @@ describe('routes/spotify.js', () => {
     }) as unknown as typeof fetch;
 
     try {
-      const router = createSpotifyRoutes(deps);
+      const router = createSpotifyRoutes(deps as any);
       const handler = previewHandler(router);
 
       const req = { params: { setId: 'set-err' } };
@@ -1297,7 +1297,7 @@ describe('routes/spotify.js', () => {
     global.fetch = mock.fn(async () => { throw new Error('fetch failed'); }) as unknown as typeof fetch;
 
     try {
-      const router = createSpotifyRoutes(deps);
+      const router = createSpotifyRoutes(deps as any);
       const handler = previewHandler(router);
       const res = { json: mock.fn(), status: mock.fn(function (this: unknown) { return this; }) };
       await handler({ params: { setId: 'set-tokfail' } }, res);
@@ -1323,7 +1323,7 @@ describe('routes/spotify.js', () => {
         },
       },
     });
-    const router = createSpotifyRoutes(deps);
+    const router = createSpotifyRoutes(deps as any);
     const handler = previewHandler(router);
 
     const req = { params: { setId: 'set-fail' } };
@@ -1348,7 +1348,7 @@ describe('routes/spotify.js', () => {
         pool: makePool([{ rows: [{ id: 'set-evict', artists: [] }] }]),
       },
     });
-    const router = createSpotifyRoutes(deps);
+    const router = createSpotifyRoutes(deps as any);
     const handler = previewHandler(router);
 
     const req = { params: { setId: 'set-evict' } };
@@ -1395,7 +1395,7 @@ describe('routes/spotify.js', () => {
     })) as unknown as typeof fetch;
 
     try {
-      const router = createSpotifyRoutes(deps);
+      const router = createSpotifyRoutes(deps as any);
       const handler = previewHandler(router);
 
       const req = { params: { setId: 'set-track' } };
@@ -1451,7 +1451,7 @@ describe('routes/spotify.js', () => {
     })) as unknown as typeof fetch;
 
     try {
-      const router = createSpotifyRoutes(deps);
+      const router = createSpotifyRoutes(deps as any);
       const handler = previewHandler(router);
 
       const req = { params: { setId: 'set-noart' } };
@@ -1498,7 +1498,7 @@ describe('routes/spotify.js', () => {
     })) as unknown as typeof fetch;
 
     try {
-      const router = createSpotifyRoutes(deps);
+      const router = createSpotifyRoutes(deps as any);
       const handler = previewHandler(router);
       const res = { json: mock.fn(), status: mock.fn(function (this: unknown) { return this; }) };
       await handler({ params: { setId: 'set-filter' } }, res);
@@ -1539,7 +1539,7 @@ describe('routes/spotify.js', () => {
     global.fetch = fetchMock as unknown as typeof fetch;
 
     try {
-      const router = createSpotifyRoutes(deps);
+      const router = createSpotifyRoutes(deps as any);
       const handler = previewHandler(router);
       const res = { json: mock.fn(), status: mock.fn(function (this: unknown) { return this; }) };
       await handler({ params: { setId: 'set-top' } }, res);

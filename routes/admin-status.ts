@@ -15,11 +15,12 @@ import { adminAnalyticsQuery, festivalIdParams, validateParams, validateQuery } 
 import { renderStatusPage } from '../lib/helpers/status-template.js';
 import { overlappingClashes } from '../lib/helpers/pick-clashes.js';
 import type { Router } from 'express';
+import type { RouteDeps } from '../lib/types';
 
 // Admin-only floor for clash pairs (T36 addendum); the public also-picked floor is stricter.
 const CLASH_PAIR_MIN_PEOPLE = 5;
 
-export default function createAdminStatusRoutes(deps: any): { router: Router } {
+export default function createAdminStatusRoutes(deps: RouteDeps): { router: Router } {
   const {
     express,
     adminAuth, setNoStore,

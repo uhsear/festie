@@ -19,8 +19,9 @@ import {
   SITEPLAN_MAX_PIXELS,
   SITEPLAN_WEBP_QUALITY,
 } from '../lib/siteplan-upload.js';
+import type { RouteDeps } from '../lib/types';
 
-export default function createAdminSiteplanRoutes(deps: any) {
+export default function createAdminSiteplanRoutes(deps: RouteDeps) {
   const {
     express,
     config,

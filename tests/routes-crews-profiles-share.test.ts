@@ -1405,7 +1405,7 @@ function makeProfileDeps(overrides: Record<string, unknown> = {}) {
 async function buildProfileApp(overrides: Record<string, unknown> = {}) {
   const deps = makeProfileDeps(overrides);
   const { default: createProfilesRoutes } = await import('../routes/profiles.js');
-  const router = createProfilesRoutes(deps);
+  const router = createProfilesRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/profiles', router);

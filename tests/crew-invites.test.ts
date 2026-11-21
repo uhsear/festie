@@ -145,7 +145,7 @@ function makeInviteDeps(overrides: any = {}) {
 async function buildInviteApp(overrides: any = {}) {
   const deps = makeInviteDeps(overrides);
   const { default: createCrewInviteRoutes } = await import('../routes/crew-invites.js');
-  const router = createCrewInviteRoutes(deps);
+  const router = createCrewInviteRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/', router);

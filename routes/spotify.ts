@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { getToken } from '../lib/spotify.js';
+import type { RouteDeps } from '../lib/types';
 
-export default function createSpotifyRoutes(deps: any) {
+export default function createSpotifyRoutes(deps: RouteDeps) {
   const { config, log, rateLimit, sendSuccess, sendError, ErrorCodes, schemas, validateParams } = deps;
   const router = Router();
 

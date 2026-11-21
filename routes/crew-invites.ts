@@ -2,8 +2,9 @@ import { Router } from 'express';
 import { generateUniqueInviteCode, inviteExpiryFor } from '../lib/invite-code.js';
 import { ensureFestivalProfile } from '../lib/festival-profile.js';
 import { logCrewActivity } from '../lib/db/stores/activity.js';
+import type { RouteDeps } from '../lib/types';
 
-export default function createCrewInviteRoutes(deps: any) {
+export default function createCrewInviteRoutes(deps: RouteDeps) {
   const {
     log,
     userAuth,

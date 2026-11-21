@@ -112,7 +112,7 @@ describe('festival page: routes', () => {
       calls.push({ max, key });
       return (_req: any, _res: any, next: any) => next();
     };
-    const paths = createPageRoutes(deps)._routes.map((r: any) => r.path);
+    const paths = createPageRoutes(deps as any)._routes.map((r: any) => r.path);
     assert.ok(paths.indexOf('/f/:slug') > paths.indexOf('/join/:code'));
     assert.ok(paths.indexOf('/f/:slug') < paths.indexOf('/{*splat}'));
     assert.ok(paths.indexOf('/f/:slug/og.png') < paths.indexOf('/{*splat}'));
