@@ -4,10 +4,10 @@ import userEvent from '@testing-library/user-event';
 import type { CrewMember } from '@festie/shared/types';
 import HandOverDialog from './HandOverDialog';
 
-const candidates = [
-  { id: 'm1', userId: 'u2', name: 'Bob', username: 'bob' },
-  { id: 'm2', userId: 'u3', name: 'Cara', username: 'cara' },
-] as CrewMember[];
+const candidates: CrewMember[] = [
+  { userId: 'u2', name: 'Bob', username: 'bob' },
+  { userId: 'u3', name: 'Cara', username: 'cara' },
+];
 
 function setup(onConfirm = vi.fn()) {
   render(

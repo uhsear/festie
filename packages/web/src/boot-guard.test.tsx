@@ -45,7 +45,7 @@ describe('boot guard (public/boot-guard.js)', () => {
   it('swaps the spinner for a still-loading message after the timeout', () => {
     const { ui, timers } = boot();
     expect(timers).toHaveLength(1);
-    timers[0]();
+    timers[0]!();
     expect(ui.getByRole('alert')).toHaveTextContent('Still loading…');
     expect(ui.queryByText('Loading Festie…')).toBeNull();
     expect(ui.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
@@ -100,7 +100,7 @@ describe('boot guard (public/boot-guard.js)', () => {
   it('does nothing once React has replaced the shell', () => {
     const { document, ui, timers, runScript } = boot();
     document.body.innerHTML = '<div id="root"><main>app</main></div>';
-    timers[0]();
+    timers[0]!();
     runScript("throw new Error('late');");
     expect(ui.queryByRole('alert')).toBeNull();
   });

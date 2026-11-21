@@ -115,7 +115,7 @@ describe('PollItem', () => {
     render(<PollItem {...makeProps({ onVote })} />);
     const buttons = screen.getAllByRole('button');
     // Click the first poll option button (not the end button)
-    await user.click(buttons[0]);
+    await user.click(buttons[0]!);
     expect(onVote).toHaveBeenCalledWith('poll-1', 0);
   });
 

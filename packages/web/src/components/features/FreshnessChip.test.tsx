@@ -20,15 +20,15 @@ vi.mock('@festie/shared/stores/festivalDataStore', () => {
 
 function setUI(state: { offlineMode?: boolean; pendingSync?: number }) {
   const full = { offlineMode: false, pendingSync: 0, ...state };
-  vi.mocked(useUIStore).mockImplementation((sel: (s: typeof full) => unknown) => sel(full) as never);
+  vi.mocked(useUIStore).mockImplementation(((sel: (s: typeof full) => unknown) => sel(full)) as never);
 }
 function setCrewCachedAt(_cachedAt: number | null) {
   const full = { _cachedAt };
-  vi.mocked(useCrewStore).mockImplementation((sel: (s: typeof full) => unknown) => sel(full) as never);
+  vi.mocked(useCrewStore).mockImplementation(((sel: (s: typeof full) => unknown) => sel(full)) as never);
 }
 function setFestivalCachedAt(_festivalCachedAt: number | null) {
   const full = { _festivalCachedAt };
-  vi.mocked(useFestivalDataStore).mockImplementation((sel: (s: typeof full) => unknown) => sel(full) as never);
+  vi.mocked(useFestivalDataStore).mockImplementation(((sel: (s: typeof full) => unknown) => sel(full)) as never);
 }
 
 describe('FreshnessChip', () => {

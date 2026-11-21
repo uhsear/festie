@@ -34,7 +34,7 @@ vi.mock('lucide-react', () => ({
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(useCrewStore).mockImplementation(
-    (sel: (s: { updateCrew: typeof updateCrewSpy }) => unknown) => sel({ updateCrew: updateCrewSpy }) as never,
+    ((sel: (s: { updateCrew: typeof updateCrewSpy }) => unknown) => sel({ updateCrew: updateCrewSpy })) as never,
   );
 });
 

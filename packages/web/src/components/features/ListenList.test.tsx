@@ -7,7 +7,7 @@ vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: mockToast }
 
 import ListenList from './ListenList';
 
-const days: FestivalDay[] = [{ id: 'd0', festivalId: 'f', date: '2026-11-07', label: 'Saturday', createdAt: '' }];
+const days: FestivalDay[] = [{ id: 'd0', festivalId: 'f', date: '2026-11-07', label: 'Saturday', createdAt: '', updatedAt: '' }];
 const mk = (id: string, artist: string, startTime: string, spotify?: string): FestivalSet => ({
   id,
   festivalId: 'f',

@@ -187,7 +187,7 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     sink.onMeetingPointUpsert(crewId, {} as never);
     sink.onMeetingPointRemoved(crewId, 'mp1');
     sink.onPollCreated(crewId, { pollId: 'p', question: 'q', options: [], createdBy: 'u' });
-    sink.onPollVoted(crewId, 'p', 'u', 0);
+    sink.onPollVoted(crewId, 'p', 'u', [0]);
     sink.onPollClosed(crewId, 'p');
     sink.onExpensesChanged(crewId);
     sink.onActivityLogged(crewId);
@@ -221,11 +221,11 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     const sink = buildCrewQuerySink(queryClient);
 
     sink.onMeetingPointUpsert('c1', {} as never);
-    sink.onPollVoted('c1', 'p', 'u', 0);
+    sink.onPollVoted('c1', 'p', 'u', [0]);
     await vi.waitFor(() => expect(useCrewStore.getState().polls).toHaveLength(1));
     await vi.waitFor(() => expect(useCrewStore.getState().meetingPoints).toHaveLength(1));
 
-    expect(useCrewStore.getState().polls[0].votes).toEqual([{ user_id: 'u1', option: 0 }]);
+    expect(useCrewStore.getState().polls[0]!.votes).toEqual([{ user_id: 'u1', option: 0 }]);
     expect(get).toHaveBeenCalledTimes(2);
     expect(get).toHaveBeenCalledWith('/crews/c1/polls');
     expect(get).toHaveBeenCalledWith('/crews/c1/meeting-points');

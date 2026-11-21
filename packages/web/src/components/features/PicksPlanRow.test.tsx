@@ -15,9 +15,9 @@ const savePick = vi.fn();
 const clearPick = vi.fn();
 const moveMock = vi.hoisted(() => ({ value: null as null | { chip: string; line: string; a11y: string } }));
 const picksApi = {
-  getMyPick: vi.fn((): string | null => 'must'),
-  getMyNote: vi.fn((): string => ''),
-  getMyReminder: vi.fn((): number | undefined => undefined),
+  getMyPick: vi.fn((_id: string): string | null => 'must'),
+  getMyNote: vi.fn((_id: string): string => ''),
+  getMyReminder: vi.fn((_id: string): number | undefined => undefined),
   savePick,
 };
 vi.mock('@festie/shared/hooks', () => ({

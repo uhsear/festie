@@ -29,7 +29,7 @@ describe('MapAmenitiesPanel', () => {
 
   it('arms a palette type', async () => {
     const props = setup();
-    await userEvent.click(screen.getAllByRole('button', { name: /^Place / })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^Place / })[0]!);
     expect(props.onArm).toHaveBeenCalledWith(AMENITY_PALETTE[0]);
   });
 

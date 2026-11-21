@@ -98,7 +98,7 @@ describe('ResetPasswordPage', () => {
     await fill(user, 'N3wStr0ng!Pw22', 'N3wStr0ng!Pw22');
     const field = screen.getByLabelText('New password');
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
-    const target = document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0]);
+    const target = document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0]!);
     expect(target).toHaveTextContent('That password is too common');
   });
 

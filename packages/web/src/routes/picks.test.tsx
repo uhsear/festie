@@ -362,7 +362,7 @@ describe('PicksView', () => {
       sets: [
         makeSet('s1', 'Daft Punk'),
         makeSet('s2', 'Justice', { dayIndex: 1 }),
-        makeSet('s3', 'Mystery', { dayIndex: null, startTime: '' }),
+        makeSet('s3', 'Mystery', { dayIndex: undefined, startTime: '' }),
       ],
       profile: picksOf({ s1: 'must', s2: 'want-to-see', s3: 'maybe' }),
     });

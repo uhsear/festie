@@ -15,8 +15,8 @@ describe('OtherDayMatches', () => {
     render(
       <OtherDayMatches
         groups={[
-          { dayIndex: 1, sets: [sets[0]] },
-          { dayIndex: 2, sets: [sets[1]] },
+          { dayIndex: 1, sets: [sets[0]!] },
+          { dayIndex: 2, sets: [sets[1]!] },
         ]}
         dayLabels={{ 1: 'Saturday', 2: 'Sunday' }}
         stages={stages}
@@ -33,7 +33,7 @@ describe('OtherDayMatches', () => {
     const onSelectDay = vi.fn();
     render(
       <OtherDayMatches
-        groups={[{ dayIndex: 1, sets: [sets[0]] }]}
+        groups={[{ dayIndex: 1, sets: [sets[0]!] }]}
         dayLabels={{ 1: 'Saturday' }}
         stages={stages}
         onSelectDay={onSelectDay}

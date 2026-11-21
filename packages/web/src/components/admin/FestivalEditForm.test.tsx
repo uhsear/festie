@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
+import type { Artist } from '@festie/shared/types';
 import FestivalEditForm from './FestivalEditForm';
 
 // The release panel loads its own data; null renders nothing here.
@@ -62,7 +63,7 @@ const renderForm = (over: Record<string, unknown> = {}) => {
 describe('FestivalEditForm B2B separator', () => {
   it('rejoins every B2B set when the separator changes', () => {
     const setFormData = vi.fn();
-    const artists = [
+    const artists: Artist[] = [
       { name: 'Kai', links: { spotify: 'https://s/kai' } },
       { name: 'Mira', links: {} },
     ];

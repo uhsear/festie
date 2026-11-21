@@ -192,6 +192,6 @@ describe('ExpenseForm', () => {
       screen.getByText('Only the payer, the person who added this, or the crew owner can change who paid.'),
     ).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Save changes' }));
-    expect(onSubmit.mock.calls[0][0]).not.toHaveProperty('paidBy');
+    expect(onSubmit.mock.calls[0]![0]).not.toHaveProperty('paidBy');
   });
 });

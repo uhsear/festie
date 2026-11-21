@@ -58,6 +58,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -184,6 +186,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -207,6 +211,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -235,6 +241,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -255,6 +263,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -263,8 +273,8 @@ describe('RegisterPage', () => {
     await fillValid(user);
     await user.click(screen.getByRole('button', { name: 'Create account' }));
     await waitFor(() => expect(mockToast).toHaveBeenCalled());
-    expect(mockToast.mock.calls[0][0]).toContain('a@b.co');
-    expect(mockToast.mock.calls[0][1]).toBe('success');
+    expect(mockToast.mock.calls[0]![0]).toContain('a@b.co');
+    expect(mockToast.mock.calls[0]![1]).toBe('success');
   });
 
   it('shows loading state when isLoading is true', () => {
@@ -276,6 +286,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: true,
       error: null,
     });
@@ -295,6 +307,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -324,6 +338,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -352,6 +368,8 @@ describe('RegisterPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });

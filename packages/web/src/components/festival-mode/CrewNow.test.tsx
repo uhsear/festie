@@ -15,6 +15,8 @@ const makeRows = (n: number): CrewWhereabout[] =>
     statusAt: null,
     live: null,
     liveAt: null,
+    battery: null,
+    lostAt: null,
     sos: false,
   }));
 

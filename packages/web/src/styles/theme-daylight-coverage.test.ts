@@ -11,8 +11,8 @@ const DAYLIGHT = ":root[data-theme='daylight']";
 function declarations(css: string, match: (selector: string) => boolean): Map<string, string> {
   const out = new Map<string, string>();
   for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    if (!match(selector.trim())) continue;
-    for (const [, name, value] of body.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) out.set(name, value.trim());
+    if (!match(selector!.trim())) continue;
+    for (const [, name, value] of body!.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)) out.set(name!, value!.trim());
   }
   return out;
 }

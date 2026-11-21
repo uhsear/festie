@@ -3,12 +3,13 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import ExpenseItem, { type ExpenseItemProps } from './ExpenseItem';
 
-const foodCategory = { key: 'food', icon: 'utensils' as const, label: 'Food' };
-const transportCategory = { key: 'transport', icon: 'car' as const, label: 'Transport' };
+const foodCategory = { id: 'food', icon: 'utensils' as const, label: 'Food' };
+const transportCategory = { id: 'transport', icon: 'car' as const, label: 'Transport' };
 
 function makeProps(overrides: Partial<ExpenseItemProps> = {}): ExpenseItemProps {
   return {
     id: 'exp-1',
+    index: 0,
     description: 'Pizza for the crew',
     amount: 45.5,
     paidByName: 'Alice',
