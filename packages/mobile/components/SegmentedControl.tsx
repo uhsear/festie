@@ -9,7 +9,8 @@ import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
 import PressableScale from './PressableScale';
 
-// "Timeline" clips at the 1.4 global cap; 1.2 leaves room in a half-width segment.
+// "Timeline" clips at the 1.4 global cap; segments size to their label, and 1.2 keeps
+// three labels in a 360dp row.
 const SEGMENT_FONT_SCALE = 1.2;
 
 export interface SegmentOption<T extends string> {

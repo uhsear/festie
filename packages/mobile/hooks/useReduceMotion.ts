@@ -11,8 +11,9 @@ function readInitial(): void {
     .then((enabled) => {
       known = enabled;
     })
-    .catch(() => {
+    .catch((error: unknown) => {
       // Query failed: `known` stays null and consumers keep treating motion as off.
+      if (__DEV__) console.warn('useReduceMotion: initial read failed, motion stays off', error);
     });
 }
 readInitial();
@@ -38,14 +39,18 @@ export function useReduceMotion(): boolean {
   useEffect(() => {
     let mounted = true;
 
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        known = enabled;
-        if (mounted) setReduceMotion(enabled);
-      })
-      .catch(() => {
-        // Query failed: keep the safe default (motion off, content visible).
-      });
+    // The module-level read covers the first answer; only ask again while it is pending.
+    if (known === null) {
+      AccessibilityInfo.isReduceMotionEnabled()
+        .then((enabled) => {
+          known = enabled;
+          if (mounted) setReduceMotion(enabled);
+        })
+        .catch((error: unknown) => {
+          // Query failed: keep the safe default (motion off, content visible).
+          if (__DEV__) console.warn('useReduceMotion: read failed, motion stays off', error);
+        });
+    }
 
     const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
       known = enabled;
