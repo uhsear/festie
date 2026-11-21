@@ -44,6 +44,12 @@ async function boot() {
 }
 
 const SECRETS = ['f-b', 'f-plat', 'Secret B Act', 'Secret Platform Act', 'org-b', 'Org org-b', 's-b1', 's-plat1'];
+// Match a secret only as a whole token: a plain substring check finds 'f-b' inside random UUIDs
+// (a segment ending in f followed by one starting with b) and fails the test by chance.
+// SECRETS hold only letters, digits, spaces and dashes, so they need no regex escaping.
+const holdsToken = (text: string, token: string) => new RegExp(`(?<![0-9A-Za-z])${token}(?![0-9A-Za-z])`).test(text);
+assert.equal(holdsToken('{"id":"1a2f-b3c4"}', 'f-b'), false);
+assert.equal(holdsToken('{"festivalId":"f-b"}', 'f-b'), true);
 
 describe('organizer isolation', { skip }, () => {
   test('an editor of A reads only A: no response of any listed GET holds B or platform data', async () => {
@@ -70,7 +76,7 @@ describe('organizer isolation', { skip }, () => {
     for (const url of gets) {
       const res = await editor.get(url);
       const text = JSON.stringify(res.body);
-      for (const secret of SECRETS) if (text.includes(secret) && !url.includes(secret)) problems.push(`${url} leaks "${secret}"`);
+      for (const secret of SECRETS) if (holdsToken(text, secret) && !url.includes(secret)) problems.push(`${url} leaks "${secret}"`);
     }
     assert.deepEqual(problems, []);
     // The admin does see them, so the check above can fail.
