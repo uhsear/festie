@@ -487,6 +487,8 @@ const BASELINE: Record<string, [number, number, number]> = {
   'DELETE /api/v1/admin/organizations/held-alerts/:festivalId': [401, 403, 404],
   'PUT /api/v1/admin/organizations/:id/status': [401, 403, 400],
   'PUT /api/v1/admin/organizations/:id/verified': [401, 403, 400],
+  'POST /api/v1/admin/organizations/:id/festivals': [401, 403, 403],
+  'DELETE /api/v1/admin/organizations/:id/festivals/:festivalId': [401, 403, 403],
   'POST /api/v1/admin/organizations/:id/members': [401, 403, 403],
   'PUT /api/v1/admin/organizations/:id/members/:userId': [401, 403, 403],
   'DELETE /api/v1/admin/organizations/:id/members/:userId': [401, 403, 403],

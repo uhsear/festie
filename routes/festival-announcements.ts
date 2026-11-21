@@ -120,10 +120,10 @@ export function createAdminAnnouncementRoutes(deps: RouteDeps) {
         if (member && severity === 'urgent') {
           return sendError(res, 403, 'Only Festie can send an urgent announcement.', ErrorCodes.FORBIDDEN);
         }
-        const capMessage = `Your organization can send ${config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP} announcements a day. Try again tomorrow.`;
+        const capMessage = () => `Your organization can send ${config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP} announcements a day. Try again tomorrow.`;
         // A cheap early answer; the insert below enforces the cap again under the organization lock.
         if (member && (await stores.announcements.countByOrganizationToday(req.organizationId)) >= config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP) {
-          return sendError(res, 429, capMessage, ErrorCodes.RATE_LIMITED);
+          return sendError(res, 429, capMessage(), ErrorCodes.RATE_LIMITED);
         }
         const push = !member || req.orgVerified === true;
         const now = Date.now();
@@ -155,7 +155,7 @@ export function createAdminAnnouncementRoutes(deps: RouteDeps) {
         const announcement = member
           ? await stores.announcements.createWithinOrganizationCap({ ...row, organizationId: req.organizationId }, config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP)
           : await stores.announcements.create({ ...row, organizationId: null });
-        if (!announcement) return sendError(res, 429, capMessage, ErrorCodes.RATE_LIMITED);
+        if (!announcement) return sendError(res, 429, capMessage(), ErrorCodes.RATE_LIMITED);
         const recipients = await countRecipients(festivalId);
         await writeAudit(req, res, festivalId, AUDIT_ACTIONS.FESTIVAL_ANNOUNCEMENT_SENT, {
           announcementId: announcement.id,

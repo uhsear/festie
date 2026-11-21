@@ -183,7 +183,7 @@ const adminMounted = new Set(files.filter((f) => {
 // festivalAccess and orgAccess, which refuse a caller without a role. manage-artists.ts is mounted whole by manage.ts
 // and checks the caller's organizations itself (access() in that file); the artist tests below pin its routes.
 const mountsSrc = stripComments(readFileSync(join(root, 'lib/festival-mounts.ts'), 'utf8'));
-const festivalMountsAdmin = new Set(files.filter((f) => f === 'organizations.ts' && /guards:\s*adminGuard,\s*router:\s*organizationsRoutes\b/.test(mountsSrc)));
+const festivalMountsAdmin = new Set(files.filter((f) => f === 'organizations.ts' && /guards:\s*adminGuard,\s*router:\s*createOrganizationsRoutes\(deps\)/.test(mountsSrc)));
 const festivalMountsUser = new Set(files.filter((f) => (f === 'manage.ts' && /guards:\s*\[deps\.userAuth\],\s*router:\s*createManageRoutes\(/.test(mountsSrc)) || (f === 'manage-artists.ts' && /artistRoutes:\s*createManageArtistsRoutes\(deps\)/.test(mountsSrc))));
 const has = (r: Route, re: RegExp) => re.test(r.mw);
 // festivalAccess refuses a non-admin off the /manage mount, and the manage router refuses a caller with no role, so both count as gates.

@@ -22,6 +22,7 @@ import createHealthRoutes from '../routes/health';
 import createIdentityRoutes from '../routes/identities';
 import createNotificationRoutes from '../routes/notifications';
 import createOAuthRoutes from '../routes/oauth';
+import createOrganizationsRoutes from '../routes/organizations';
 import createProfileRoutes from '../routes/profiles';
 import { createRatingsRoutes } from '../routes/ratings';
 import createSpotifyRoutes from '../routes/spotify';
@@ -224,6 +225,8 @@ function collectRoutes(): string[] {
     ['/api/v1/admin', createAdminRoutes(deps)],
     ['/api/v1/admin/artists', createArtistsRoutes(deps)],
     ...buildFestivalMounts(deps).map(({ prefix, router }): [string, any] => [prefix, router]),
+    // The admin organizations router is mounted only while ORGANIZER_PLATFORM_ENABLED is on, which this test leaves unset.
+    ['/api/v1/admin/organizations', createOrganizationsRoutes(deps)],
     ['/api/v1/profiles', createProfileRoutes(deps)],
     ['/api/v1', createExportRoutes(deps)],
     ['/api/v1/notifications', createNotificationRoutes(deps)],
@@ -262,6 +265,7 @@ const ALLOWLIST: Record<string, string> = {
   'DELETE /api/v1/admin/crews/{id}/members/{userId}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/festivals/{id}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/organizations/held-alerts/{festivalId}': 'admin: out of the public spec on purpose',
+  'DELETE /api/v1/admin/organizations/{id}/festivals/{festivalId}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/organizations/{id}/members/{userId}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/organizations/{id}/pending-members/{email}': 'admin: out of the public spec on purpose',
   'DELETE /api/v1/admin/users/{id}': 'admin: out of the public spec on purpose',
@@ -371,6 +375,7 @@ const ALLOWLIST: Record<string, string> = {
   'POST /api/v1/admin/festivals/{id}/publish/decline': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/organizations': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/organizations/held-alerts/{festivalId}/release': 'admin: out of the public spec on purpose',
+  'POST /api/v1/admin/organizations/{id}/festivals': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/organizations/{id}/members': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/policy-notice': 'admin: out of the public spec on purpose',
   'POST /api/v1/admin/users/{id}/reset-link': 'admin: out of the public spec on purpose',

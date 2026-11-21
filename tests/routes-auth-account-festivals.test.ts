@@ -677,8 +677,20 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.deepEqual(res.body.data.organizations, []);
     });
 
+    test('skips the organization query and reports the platform off while the flag is off', async () => {
+      const deps = makeMockDeps();
+      deps.config.ORGANIZER_PLATFORM_ENABLED = false;
+      deps.stores.organizations.listForUser = mock.fn(async () => [{ id: 'org-1', name: 'Venue', kind: 'venue', status: 'active', verified: true, role: 'owner' }]);
+      const res = await request(createApp(createAuthRoutes(deps))).get('/me');
+
+      assert.equal(res.status, 200);
+      assert.deepEqual([res.body.data.organizations, res.body.data.organizerPlatform], [[], false]);
+      assert.equal(deps.stores.organizations.listForUser.mock.callCount(), 0);
+    });
+
     test('lists the organizations of the user, read only', async () => {
       const deps = makeMockDeps();
+      deps.config.ORGANIZER_PLATFORM_ENABLED = true;
       deps.stores.organizations.listForUser = mock.fn(async () => [
         { id: 'org-1', name: 'Venue', kind: 'venue', status: 'active', verified: true, role: 'owner' },
       ]);
