@@ -16,10 +16,15 @@ import {
   type FestivalScope,
 } from '@festie/shared/services/festivalAdmin';
 import {
+  clearEditBackup,
   createManageFestival,
+  describeAlertConfirm,
   describeStaleSave,
+  loadEditBackup,
+  saveEditBackup,
   type ManageOrganization,
 } from '@festie/shared/services/organizer';
+import { describeVersionDifferences } from '@festie/shared/utils/festivalAdmin';
 import { getLineupInterest, getSetEngagement, type LineupInterestCounts, type SetEngagementMap } from '@festie/shared/services';
 import {
   updateAdminFestival,
@@ -56,6 +61,7 @@ import ArchivedFestivalRow from './ArchivedFestivalRow';
 import FestivalListRow from './FestivalListRow';
 import FestivalArtists from './FestivalArtists';
 import FestivalAnnouncements from './FestivalAnnouncements';
+import ManageInterest from '../manage/ManageInterest';
 import { cn } from '../../lib/utils';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -84,12 +90,14 @@ export interface AdminFestivalsProps {
   mode?: 'admin' | 'organizer';
   /** Organizer mode: the member's organizations from GET /manage/me. */
   organizations?: ManageOrganization[];
+  /** Organizer mode: the organization a new festival starts in, when the member picked one in the switcher. */
+  defaultOrgId?: string;
 }
 
 const NO_ORGANIZATIONS: ManageOrganization[] = [];
 const browserTimeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || '';
 
-export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGANIZATIONS }: AdminFestivalsProps = {}) {
+export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGANIZATIONS, defaultOrgId }: AdminFestivalsProps = {}) {
   const organizer = mode === 'organizer';
   const scope: FestivalScope = organizer ? 'manage' : 'admin';
   const [{ festival: festivalId, view: urlView, q, preview: previewId }, setAdminSearch] = useAdminSearch(
@@ -123,6 +131,8 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
   const [engagementError, setEngagementError] = useState(false);
   const [interestCounts, setInterestCounts] = useState<LineupInterestCounts | undefined>(undefined);
   const [pendingRemoval, setPendingRemoval] = useState<string | null>(null);
+  // A verified organization confirms the head count before a save tells people their picks changed (plan-v3 6.2).
+  const [pendingAlert, setPendingAlert] = useState<{ text: string } | null>(null);
   const [removalBusy, setRemovalBusy] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmArchive, setConfirmArchive] = useState(false);
@@ -134,7 +144,9 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
   const [pendingNav, setPendingNav] = useState<AdminSearch | null>(null);
   // Organizer mode: the organization a new festival goes to, and a banner that keeps the form on screen (409s).
   const [newOrgId, setNewOrgId] = useState('');
-  const [banner, setBanner] = useState<{ kind: 'stale' | 'owner'; text: string } | null>(null);
+  // 'stale' (409) keeps the form and offers Show their version; 'restore' offers the edits kept on this device.
+  const [banner, setBanner] = useState<{ kind: 'stale' | 'owner' | 'restore'; text: string } | null>(null);
+  const [theirVersion, setTheirVersion] = useState<string[] | null>(null);
   const { toast, toastError } = useToast();
   const { askPassword, reauthDialog } = useReauthPrompt();
 
@@ -151,7 +163,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
 
   // Organizer mode: the organization of the open festival (or of a new one) decides what the form allows.
   const eligibleOrgs = organizations.filter((o) => o.role !== 'viewer');
-  const targetOrgId = newOrgId || eligibleOrgs[0]?.id || '';
+  const targetOrgId = newOrgId || eligibleOrgs.find((o) => o.id === defaultOrgId)?.id || eligibleOrgs[0]?.id || '';
   // The festival GET does not carry its organization, so an open festival takes it from the member's festival
   // list. With one organization there is no doubt.
   const openOrgId = manageQuery.data?.find((f) => f.id === festivalId)?.organizationId;
@@ -162,6 +174,9 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
   const orgUnknown = organizer && !!festivalId && !formOrg;
   const orgMissing = orgUnknown && !manageQuery.isPending;
   const orgRole = formOrg?.role;
+  const verifiedOwner = organizer && orgRole === 'owner' && formOrg?.verified === true;
+  // A verified organization's save alerts at once, so its members get the checkbox an admin has.
+  const verifiedMember = organizer && formOrg?.verified === true;
   // A viewer, or a member of a suspended organization, reads only (plan-v3 5.5 and 5.6).
   const canWrite = !organizer || (orgRole !== 'viewer' && formOrg?.status !== 'suspended');
   const openView: OpenView | null = !canWrite && requestedView ? 'edit' : requestedView;
@@ -265,6 +280,13 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
     if (!organizer && publishedAt && Array.isArray(full.lineup) && full.lineup.length > 0) {
       getLineupInterest(festivalId).then((res) => setInterestCounts(res.counts), () => setInterestCounts(undefined));
     }
+    setTheirVersion(null);
+    const kept = organizer ? loadEditBackup(window.localStorage, festivalId) : null;
+    if (kept) {
+      const at = new Date(kept.savedAt);
+      const when = Number.isNaN(at.getTime()) ? '' : ` from ${at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+      setBanner({ kind: 'restore', text: `Your edits${when} were kept on this device when someone else saved first.` });
+    }
     setSeededId(festivalId);
   }, [festivalId, editing, seededId, detail.data, detail.isFetching, organizer]);
 
@@ -305,7 +327,10 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
     return changed ? { ...rest, lineup } : rest;
   };
 
-  const handleSave = async () => {
+  const handleSave = () => save();
+
+  // `confirmed` is a verified organization's yes to the head count of the people the save would alert.
+  const save = async (confirmed = false) => {
     if (!formData.name || !formData.location) {
       toast('Name and location are required', 'error');
       return;
@@ -324,17 +349,30 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
     setBanner(null);
     try {
       if (festivalId) {
+        if (verifiedMember && notifyPickers && !confirmed) {
+          const dry = await updateAdminFestival(
+            festivalId,
+            { ...festivalBody(), expectedUpdatedAt: formData.updatedAt, notify: true, dryRun: true },
+            scope,
+          );
+          const notice = dry?.scheduleNotice;
+          if (notice?.notified && notice.people > 0) {
+            setPendingAlert({ text: describeAlertConfirm(notice.people, dry?.runsLeft) });
+            return;
+          }
+        }
         const res = await updateAdminFestival(
           festivalId,
           {
             ...festivalBody(),
             expectedUpdatedAt: formData.updatedAt,
-            // An organizer's alert is held for an admin, so the server needs the request to hold it.
-            notify: organizer ? true : notifyPickers,
+            // An unverified organization's alert is held for an admin, so the server needs the request to hold it.
+            notify: organizer && !verifiedMember ? true : notifyPickers,
           },
           scope,
         );
         setVenueGuessedFor(res?.venueGuessed ? festivalId : null);
+        clearEditBackup(window.localStorage, festivalId);
         await afterEditSave(res?.scheduleNotice);
       } else {
         const created = organizer
@@ -352,7 +390,10 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
       }
     } catch (err: unknown) {
       // The form keeps its values: only a banner appears, and Reload is the member's choice (plan-v3 5.6, 5.9).
-      if (organizer && err instanceof ApiClientError && err.code === 'FESTIVAL_CHANGED') {
+      if (organizer && festivalId && err instanceof ApiClientError && err.code === 'FESTIVAL_CHANGED') {
+        // The edits go to local storage first, so a reload that reseeds the form cannot lose them (plan-v3 5.9).
+        saveEditBackup(window.localStorage, festivalId, formData);
+        setTheirVersion(null);
         setBanner({ kind: 'stale', text: describeStaleSave(err.details) });
         return;
       }
@@ -388,7 +429,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
             ...festivalBody(),
             expectedUpdatedAt: formData.updatedAt,
             confirmRemovals: true,
-            notify: organizer ? true : notifyPickers,
+            notify: organizer && !verifiedMember ? true : notifyPickers,
           },
           scope,
         );
@@ -520,6 +561,32 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
     void reloadEditor();
   };
 
+  // What differs between the festival as saved now and the member's copy. It changes nothing.
+  const showTheirVersion = async () => {
+    if (!festivalId) return;
+    try {
+      const latest = await fetchAdminFestival(festivalId, scope);
+      const lines = describeVersionDifferences(latest as unknown as EditableFestival, formData as EditableFestival);
+      setTheirVersion(lines.length > 0 ? lines : ['Their version matches your copy.']);
+    } catch (err: unknown) {
+      toastError(err, "Couldn't load their version. Try again.");
+    }
+  };
+
+  // Puts the kept edits back into the form, on top of the version that is saved now.
+  const restoreEdits = () => {
+    if (!festivalId) return;
+    const kept = loadEditBackup(window.localStorage, festivalId);
+    if (kept) setFormData((prev) => ({ ...(kept.form as Partial<FormFestival>), updatedAt: prev.updatedAt }));
+    clearEditBackup(window.localStorage, festivalId);
+    setBanner(null);
+  };
+
+  const dropKeptEdits = () => {
+    if (festivalId) clearEditBackup(window.localStorage, festivalId);
+    setBanner(null);
+  };
+
   const renderEditor = () => (
     <div className="space-y-4">
       {organizer && formOrg && (
@@ -558,12 +625,38 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
       {banner && (
         <div role="alert" className="rounded-lg border border-accent-coral p-3 text-sm text-text-primary space-y-2">
           <p>{banner.text}</p>
-          {banner.kind === 'stale' ? (
-            <button type="button" onClick={reloadAfterNotice} className="px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua text-bg-primary text-sm font-medium">
-              Reload
-            </button>
-          ) : (
+          {banner.kind === 'stale' && (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={reloadAfterNotice} className="px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua text-bg-primary text-sm font-medium">
+                Reload
+              </button>
+              <button type="button" onClick={() => void showTheirVersion()} className="px-3 py-1.5 min-h-11 rounded-lg border border-glass-border text-sm text-text-primary">
+                Show their version
+              </button>
+            </div>
+          )}
+          {banner.kind === 'restore' && (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={restoreEdits} className="px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua text-bg-primary text-sm font-medium">
+                Restore my edits
+              </button>
+              <button type="button" onClick={dropKeptEdits} className="px-3 py-1.5 min-h-11 rounded-lg border border-glass-border text-sm text-text-primary">
+                Discard them
+              </button>
+            </div>
+          )}
+          {banner.kind === 'owner' && (
             <p className="text-xs text-text-muted">Your edits are still in the form. Ask an owner of your organization to make this change.</p>
+          )}
+          {banner.kind === 'stale' && theirVersion && (
+            <div className="space-y-1 text-sm text-text-secondary">
+              <p className="font-medium text-text-primary">Their version compared with yours</p>
+              <ul className="list-disc list-inside">
+                {theirVersion.map((line) => (
+                  <li key={line}>{line}</li>
+                ))}
+              </ul>
+            </div>
           )}
         </div>
       )}
@@ -584,6 +677,10 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
         />
       )}
       {festivalId && !organizer && <FestivalAnnouncements festivalId={festivalId} festivalName={savedName} />}
+      {festivalId && organizer && orgRole === 'owner' && !!meta.publishedAt && formOrg?.status === 'active' && (
+        <FestivalAnnouncements festivalId={festivalId} festivalName={savedName} scope="manage" pushAllowed={formOrg.verified} />
+      )}
+      {festivalId && verifiedOwner && !!meta.publishedAt && <ManageInterest festivalId={festivalId} days={original?.days} />}
       <FestivalEditForm
         key={`${festivalId ?? 'new'}-${discardCount}`}
         formData={formData}
@@ -598,6 +695,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
         venueGuessed={!!festivalId && venueGuessedFor === festivalId}
         mode={organizer ? 'organizer' : 'admin'}
         readOnly={!canWrite}
+        alertsOn={verifiedMember}
         savedDays={original?.days}
         savedLineup={original?.lineup}
         engagement={engagement}
@@ -606,6 +704,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
         interestCounts={interestCounts}
         onSave={handleSave}
         onDiscard={() => {
+          if (festivalId) clearEditBackup(window.localStorage, festivalId);
           setFormData(original ?? {});
           setIssues([]);
           setDiscardCount((n) => n + 1);
@@ -672,6 +771,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
             festivalName={savedName}
             onDone={() => void refreshAdmin()}
             scope={scope}
+            canAnnounce={verifiedOwner && formOrg?.status === 'active'}
           />
         ) : !seeded || orgUnknown ? (
           <div className="text-center py-12 text-text-muted">Loading festival…</div>
@@ -688,6 +788,18 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
           destructive
           busy={removalBusy}
           onConfirm={confirmRemovals}
+        />
+        <ConfirmDialog
+          open={pendingAlert !== null}
+          onOpenChange={(o) => !o && setPendingAlert(null)}
+          title="Tell people about this change?"
+          description={pendingAlert?.text ?? ''}
+          confirmLabel="Save and tell them"
+          busy={saving}
+          onConfirm={() => {
+            setPendingAlert(null);
+            void save(true);
+          }}
         />
         {reauthDialog}
       </div>

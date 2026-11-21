@@ -23,8 +23,10 @@ interface Props {
   refreshKey?: number;
   /** The release panel data the sibling panel already loaded; only the undo warning reads it. */
   releases?: TimeReleasePanelData | null;
-  /** `manage` is an organizer: no announcement panels, which only an admin may send. */
+  /** `manage` is an organizer: no days panel, and the lineup announcement only when `canAnnounce`. */
   scope?: FestivalScope;
+  /** An owner of a verified organization may announce the lineup of its own festival (push only). */
+  canAnnounce?: boolean;
 }
 
 const KEPT_REASON = { picked: 'picked by someone', edited: 'edited since the import' } as const;
@@ -32,7 +34,7 @@ const KEPT_REASON = { picked: 'picked by someone', edited: 'edited since the imp
 const buttonClass =
   'px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 disabled:opacity-50 transition-colors text-sm font-medium';
 
-export default function LineupImportHistory({ festivalId, festivalName, refreshKey = 0, releases = null, scope = 'admin' }: Props) {
+export default function LineupImportHistory({ festivalId, festivalName, refreshKey = 0, releases = null, scope = 'admin', canAnnounce = false }: Props) {
   const organizer = scope === 'manage';
   const [imports, setImports] = useState<LineupImportHistoryItem[]>([]);
   const [lineupCount, setLineupCount] = useState<LineupAnnouncementCount | null>(null);
@@ -49,7 +51,12 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
     try {
       setLoadError(null);
       if (organizer) {
-        setImports((await lineupImportApi.history(festivalId, scope)).imports);
+        const [history, announcement] = await Promise.all([
+          lineupImportApi.history(festivalId, scope),
+          canAnnounce ? lineupImportApi.announcement(festivalId, scope) : Promise.resolve(null),
+        ]);
+        setImports(history.imports);
+        setLineupCount(announcement);
         return;
       }
       const [history, announcement, days] = await Promise.all([
@@ -64,7 +71,7 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
       setLoadError(err);
       toastError(err, "Couldn't load import history. Try again.");
     }
-  }, [festivalId, organizer, scope, toastError]);
+  }, [festivalId, organizer, scope, canAnnounce, toastError]);
 
   useEffect(() => {
     void reload();
@@ -94,9 +101,10 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
   };
 
   const recipients = lineupCount?.recipients ?? null;
-  const lineupEmailNote = lineupCount ? announcementEmailNote(lineupCount) : null;
+  const lineupEmailNote = lineupCount && !organizer ? announcementEmailNote(lineupCount) : null;
   // Push may be done while the daily email limit cut some followers: the server accepts another press for them.
-  const canAnnounceLineup = !!lineupCount && (lineupCount.recipients > 0 || lineupCount.emailCut > 0);
+  // An organizer's counts are hidden below 20 people, so its button stays on and the server refuses an empty audience.
+  const canAnnounceLineup = !!lineupCount && (organizer || lineupCount.recipients > 0 || lineupCount.emailCut > 0);
   const days = daysCount ? daysAnnouncementSummary(daysCount) : null;
 
   const doAnnounceDays = async () => {
@@ -117,8 +125,8 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
   const doAnnounce = async () => {
     setBusy(true);
     try {
-      const result = await lineupImportApi.announce(festivalId);
-      toast(`Announcement queued for ${result.recipients} people.`, 'success');
+      const result = await lineupImportApi.announce(festivalId, scope);
+      toast(result.recipients === null ? 'Announcement queued.' : `Announcement queued for ${result.recipients} people.`, 'success');
       setAnnounceOpen(false);
       await reload();
     } catch (err: unknown) {
@@ -184,14 +192,23 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
         )}
       </section>
 
-      {!organizer && (
+      {(!organizer || canAnnounce) && (
       <section>
         <h3 className="type-heading text-text-primary mb-3">Announce lineup</h3>
         <p className="text-sm text-text-muted mb-3">
-          Send a push and an inbox alert to people who follow {festivalName} or went to an earlier edition. Followers
-          also get an email. Editions match when the name is the same apart from the year.
+          {organizer
+            ? `Send a push and an inbox alert to people who follow ${festivalName} or went to an earlier edition of your festivals. No email goes out. You can send it once a day.`
+            : `Send a push and an inbox alert to people who follow ${festivalName} or went to an earlier edition. Followers also get an email. Editions match when the name is the same apart from the year.`}
         </p>
-        {lineupCount && <p className="text-sm text-text-muted mb-3">{lineupAudienceSummary(lineupCount)}</p>}
+        {lineupCount && (
+          <p className="text-sm text-text-muted mb-3">
+            {organizer
+              ? recipients === null
+                ? 'Fewer than 20 people would hear this.'
+                : `${recipients} people would hear this.`
+              : lineupAudienceSummary(lineupCount)}
+          </p>
+        )}
         {lineupEmailNote && <p className="text-sm text-text-muted mb-3">{lineupEmailNote}</p>}
         <button
           type="button"
@@ -199,9 +216,9 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
           disabled={!canAnnounceLineup || busy}
           onClick={() => setAnnounceOpen(true)}
         >
-          {`Announce to ${recipients ?? 0} people`}
+          {organizer ? 'Announce the lineup' : `Announce to ${recipients ?? 0} people`}
         </button>
-        {lineupCount && !canAnnounceLineup && (
+        {lineupCount && !organizer && !canAnnounceLineup && (
           <p className="text-sm text-text-muted mt-2">No one to notify right now.</p>
         )}
       </section>
@@ -252,7 +269,11 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
         open={announceOpen}
         onOpenChange={setAnnounceOpen}
         title="Announce the lineup?"
-        description={`This sends one push to ${recipients ?? 0} people. Followers also get one email. Each person gets it once for this festival.`}
+        description={
+          organizer
+            ? 'This sends one push and one inbox alert. No email goes out. Each person gets it once for this festival.'
+            : `This sends one push to ${recipients ?? 0} people. Followers also get one email. Each person gets it once for this festival.`
+        }
         confirmLabel="Send"
         busy={busy}
         onConfirm={doAnnounce}

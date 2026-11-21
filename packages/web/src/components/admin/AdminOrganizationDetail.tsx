@@ -176,6 +176,14 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
         </div>
       </div>
 
+      <section aria-label="Usage" className="space-y-1">
+        <h3 className="type-label text-text-primary">Usage</h3>
+        <p className="text-sm text-text-secondary">
+          {data.usage.festivals} festivals ({data.usage.drafts} drafts). {data.usage.announcementsThisMonth} announcements this month.{' '}
+          {Math.round((data.usage.uploadedBytes / (1024 * 1024)) * 10) / 10} MB of site-plan images stored.
+        </p>
+      </section>
+
       <section aria-label="Members" className="space-y-3">
         <h3 className="type-label text-text-primary">Members ({data.members.length})</h3>
         {data.members.length === 0 ? (

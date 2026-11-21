@@ -38,6 +38,8 @@ interface LineupImportProps {
   onDone?: () => void;
   /** `manage` runs the import through the organizer API and leaves out the admin-only panels. */
   scope?: FestivalScope;
+  /** An owner of a verified organization may announce the lineup of its own festival. */
+  canAnnounce?: boolean;
 }
 
 type Step = 'source' | 'map' | 'preview' | 'result';
@@ -49,7 +51,7 @@ const TOO_BIG = 'This is larger than 200 KB. Split it and import it in parts.';
  * The server plans every check; the admin approves the plan, then commits the
  * same rows.
  */
-export default function LineupImport({ festivalId, festivalName, onDone, scope = 'admin' }: LineupImportProps) {
+export default function LineupImport({ festivalId, festivalName, onDone, scope = 'admin', canAnnounce = false }: LineupImportProps) {
   const [step, setStep] = useState<Step>('source');
   const [text, setText] = useState('');
   const [table, setTable] = useState<string[][]>([]);
@@ -532,6 +534,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
             onExport={() => void handleExport()}
             onNext={handleNext}
             onCheckList={handleCheckList}
+            organizer={scope === 'manage'}
           />
         )}
         {step === 'map' && (
@@ -558,6 +561,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
         refreshKey={historyKey}
         releases={releases}
         scope={scope}
+        canAnnounce={canAnnounce}
       />
       <ConfirmDialog
         open={confirmOpen}

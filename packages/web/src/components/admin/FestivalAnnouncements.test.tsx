@@ -63,12 +63,16 @@ describe('FestivalAnnouncements', () => {
     expect(api.create).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('button', { name: 'Send' }));
     await waitFor(() =>
-      expect(api.create).toHaveBeenCalledWith('f1', {
-        severity: 'info',
-        title: 'Hello',
-        body: 'World',
-        screen: 'home',
-      }),
+      expect(api.create).toHaveBeenCalledWith(
+        'f1',
+        {
+          severity: 'info',
+          title: 'Hello',
+          body: 'World',
+          screen: 'home',
+        },
+        'admin',
+      ),
     );
     await waitFor(() => expect(api.adminList).toHaveBeenCalledTimes(2));
   });
@@ -84,13 +88,17 @@ describe('FestivalAnnouncements', () => {
     await user.type(input, '2030-05-06T07:08');
     await user.click(screen.getByRole('button', { name: 'Schedule' }));
     await waitFor(() =>
-      expect(api.create).toHaveBeenCalledWith('f1', {
-        severity: 'urgent',
-        title: 'Hello',
-        body: 'World',
-        screen: 'map',
-        sendAt: new Date('2030-05-06T07:08').toISOString(),
-      }),
+      expect(api.create).toHaveBeenCalledWith(
+        'f1',
+        {
+          severity: 'urgent',
+          title: 'Hello',
+          body: 'World',
+          screen: 'map',
+          sendAt: new Date('2030-05-06T07:08').toISOString(),
+        },
+        'admin',
+      ),
     );
   });
 
@@ -115,7 +123,7 @@ describe('FestivalAnnouncements', () => {
     api.adminList.mockResolvedValue({ festivalName: 'Fest', recipients: 3, announcements: [row()] });
     renderIt();
     await user.click(await screen.findByRole('button', { name: 'Cancel' }));
-    await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('f1', 'a1'));
+    await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('f1', 'a1', 'admin'));
   });
 
   it('take down asks first, then calls cancel', async () => {
@@ -129,7 +137,7 @@ describe('FestivalAnnouncements', () => {
     await user.click(await screen.findByRole('button', { name: 'Take down banner' }));
     expect(api.cancel).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('button', { name: 'Take down' }));
-    await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('f1', 'a1'));
+    await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('f1', 'a1', 'admin'));
   });
 
   it('hides take down once the banner is older than 24 hours', async () => {
@@ -156,5 +164,40 @@ describe('FestivalAnnouncements', () => {
     await waitFor(() => expect(screen.queryByText("Couldn't load announcements")).not.toBeInTheDocument());
     expect(api.adminList).toHaveBeenCalledTimes(2);
     expect(screen.getByRole('button', { name: 'Send to 3 people' })).toBeEnabled();
+  });
+});
+
+describe('FestivalAnnouncements for an organization owner', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    api.adminList.mockResolvedValue({ festivalName: 'Fest', recipients: null, announcements: [] });
+    api.create.mockResolvedValue({ announcement: row(), recipients: null });
+    api.cancel.mockResolvedValue({ announcement: row() });
+  });
+
+  it('offers no urgent choice, hides a small head count, says a banner has no push, and posts to the manage path', async () => {
+    const user = userEvent.setup();
+    render(<FestivalAnnouncements festivalId="f1" festivalName="Fest" scope="manage" />);
+    expect(await screen.findByText('Fewer than 20 people have joined this festival yet.')).toBeInTheDocument();
+    expect(screen.getByText(/banner only/)).toBeInTheDocument();
+    expect(screen.queryByLabelText('Urgent')).not.toBeInTheDocument();
+    await fill(user);
+    await user.click(screen.getByRole('button', { name: 'Post now' }));
+    expect(await screen.findByText(/No push goes out until Festie verifies your organization/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith('f1', { severity: 'info', title: 'Hello', body: 'World', screen: 'home' }, 'manage'),
+    );
+  });
+
+  it('a verified organization sees no banner-only note and its confirm says a push goes out', async () => {
+    const user = userEvent.setup();
+    api.adminList.mockResolvedValue({ festivalName: 'Fest', recipients: 40, announcements: [] });
+    render(<FestivalAnnouncements festivalId="f1" festivalName="Fest" scope="manage" pushAllowed />);
+    expect(await screen.findByText('40 people joined this festival.')).toBeInTheDocument();
+    expect(screen.queryByText(/banner only/)).not.toBeInTheDocument();
+    await fill(user);
+    await user.click(screen.getByRole('button', { name: 'Post now' }));
+    expect(await screen.findByText(/This sends a push and shows a banner/)).toBeInTheDocument();
   });
 });

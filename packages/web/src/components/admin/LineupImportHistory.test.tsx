@@ -66,6 +66,27 @@ describe('LineupImportHistory', () => {
     expect(screen.queryByText('Announce days')).not.toBeInTheDocument();
   });
 
+  it('in organizer mode a verified owner (canAnnounce) announces the lineup with no email, hiding a small audience', async () => {
+    api.announcement.mockResolvedValue({
+      recipients: null,
+      followers: null,
+      priorAttendees: null,
+      matchedFestivalNames: [],
+      emailRecipients: 0,
+      emailCut: 0,
+      emailOff: 'organizer',
+    });
+    api.announce.mockResolvedValue({ queued: true, recipients: null });
+    render(<LineupImportHistory festivalId="f1" festivalName="Fest" scope="manage" canAnnounce />);
+    expect(await screen.findByText('Fewer than 20 people would hear this.')).toBeInTheDocument();
+    expect(api.announcement).toHaveBeenCalledWith('f1', 'manage');
+    expect(screen.getByText(/No email goes out/)).toBeInTheDocument();
+    expect(screen.queryByText('Announce days')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Announce the lineup' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Send' }));
+    expect(api.announce).toHaveBeenCalledWith('f1', 'manage');
+  });
+
   it('load fails, shows the error, Retry reloads', async () => {
     api.history.mockRejectedValueOnce(new Error('down'));
     render(<LineupImportHistory festivalId="f1" festivalName="Fest" />);

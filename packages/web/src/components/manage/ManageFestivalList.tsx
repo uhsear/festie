@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Plus, SearchX } from 'lucide-react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
@@ -8,9 +8,12 @@ import {
   type ManageFestival,
   type ManageOrganization,
 } from '@festie/shared/services/organizer';
+import { LINEUP_SAMPLE_CSV } from '@festie/shared/utils/lineupImport';
 import { useToast } from '../../lib/toastContext';
 import { cn } from '../../lib/utils';
 import EmptyState from '../ui/EmptyState';
+import { downloadText } from '../admin/lineupImportShared';
+import FestivalLinkQRDialog from './FestivalLinkQRDialog';
 
 interface Props {
   query: UseQueryResult<ManageFestival[]>;
@@ -35,6 +38,7 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
   const { toast } = useToast();
   const canCreate = organizations.some((o) => o.role !== 'viewer' && o.status !== 'suspended');
   const festivals = (query.data ?? []).filter((f) => !f.deleted);
+  const [qr, setQr] = useState<{ name: string; link: string } | null>(null);
 
   const copy = async (link: string) => {
     try {
@@ -72,6 +76,9 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
               </a>
               <button type="button" onClick={() => void copy(link)} className={smallButton} aria-label={`Copy link to ${festival.name}`}>
                 Copy link
+              </button>
+              <button type="button" onClick={() => setQr({ name: festival.name, link })} className={smallButton} aria-label={`Show QR code for ${festival.name}`}>
+                QR code
               </button>
             </>
           )}
@@ -164,6 +171,16 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
         )}
       </div>
       {body}
+      {canCreate && (
+        <p className="text-sm text-text-muted">
+          Starting a lineup?{' '}
+          <button type="button" className="text-accent-aqua underline" onClick={() => downloadText('festie-lineup-sample.csv', LINEUP_SAMPLE_CSV)}>
+            Download a sample import file
+          </button>
+          .
+        </p>
+      )}
+      {qr && <FestivalLinkQRDialog open onOpenChange={(open) => !open && setQr(null)} festivalName={qr.name} link={qr.link} />}
     </div>
   );
 }

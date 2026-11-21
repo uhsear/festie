@@ -70,6 +70,7 @@ const detail = (over: Record<string, unknown> = {}) => ({
   ...org(),
   members: [{ userId: 'u1', username: 'sam', email: 'sam@venue.example', active: true, role: 'owner', addedBy: null, createdAt: '2026-11-01T00:00:00.000Z' }],
   pending: [{ email: 'kim@venue.example', role: 'editor', addedBy: null, createdAt: '2026-11-01T00:00:00.000Z' }],
+  usage: { festivals: 1, drafts: 1, announcementsThisMonth: 2, uploadedBytes: 3 * 1024 * 1024 },
   festivals: [{ id: 'f1', name: 'Venue Fest', location: '', organizationId: 'o1', slug: null, published: false, deleted: false, publishRequestedAt: null, publishReviewNote: null, updatedAt: '2026-11-01T00:00:00.000Z' }],
   ...over,
 });
@@ -114,6 +115,12 @@ describe('AdminOrganizations', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Create organization' }));
     await waitFor(() => expect(svc.createOrganization).toHaveBeenCalledWith({ name: 'New Venue', kind: 'promoter', website: null }));
     await waitFor(() => expect(svc.fetchOrganization).toHaveBeenCalledWith('o9'));
+  });
+
+  it('shows what the organization used', async () => {
+    render();
+    await userEvent.click(await screen.findByRole('button', { name: 'Venue A' }));
+    expect(await screen.findByText(/1 festivals \(1 drafts\)\. 2 announcements this month\. 3 MB of site-plan images stored\./)).toBeInTheDocument();
   });
 
   it('adds a member by email, lower-cased, with the chosen role', async () => {

@@ -30,6 +30,12 @@ describe('FestivalEditForm in organizer mode', () => {
     expect(screen.getByText('Attendees are alerted after Festie checks the change.')).toBeInTheDocument();
   });
 
+  it('gives a verified organization the alert checkbox in place of the held-alert note', () => {
+    render(<FestivalEditForm {...props} mode="organizer" alertsOn />);
+    expect(screen.getByLabelText('Tell people whose picks changed')).toBeInTheDocument();
+    expect(screen.queryByText('Attendees are alerted after Festie checks the change.')).not.toBeInTheDocument();
+  });
+
   it('keeps the admin controls in admin mode', () => {
     render(<FestivalEditForm {...props} />);
     expect(screen.getByLabelText('Series')).toBeInTheDocument();

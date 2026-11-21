@@ -5,12 +5,14 @@ import {
   groupIssues,
   issueKey,
   joinArtistNames,
+  defaultStageColor,
   listTimeZones,
   otherEditions,
   seriesIdsIn,
   shiftSetTimes,
   slugifySeriesInput,
   suggestSeriesId,
+  timeZoneChoices,
 } from '@festie/shared/utils';
 import type { FestivalIssue, SeriesFestival } from '@festie/shared/utils';
 import type { Artist } from '@festie/shared/types';
@@ -69,6 +71,8 @@ export interface FestivalEditFormProps {
    * and the alert checkbox gives way to the reason attendee alerts wait.
    */
   mode?: 'admin' | 'organizer';
+  /** A verified organization's member: the alert checkbox shows, because its save alerts at once. */
+  alertsOn?: boolean;
   /** A viewer reads the form but cannot change it: every input is disabled and the save buttons are gone. */
   readOnly?: boolean;
   onSave: () => void;
@@ -107,6 +111,7 @@ export default function FestivalEditForm({
   festivals = [],
   interestCounts,
   mode = 'admin',
+  alertsOn = false,
   readOnly = false,
   onSave,
   onDiscard,
@@ -205,7 +210,7 @@ export default function FestivalEditForm({
   const handleAddStage = () => {
     setFormData({
       ...formData,
-      stages: [...(formData.stages || []), { id: `stage-${Date.now()}`, name: '', color: '#6a6a88' }],
+      stages: [...(formData.stages || []), { id: `stage-${Date.now()}`, name: '', color: organizer ? defaultStageColor(formData.stages?.length ?? 0) : '#6a6a88' }],
     });
   };
 
@@ -362,6 +367,22 @@ export default function FestivalEditForm({
   const total = changes.total;
   const nameIssues = byKey.get('festival:name') ?? [];
 
+  const b2bField = (
+    <label className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
+      B2B separator
+      <input
+        type="text"
+        maxLength={10}
+        placeholder="b2b"
+        aria-label="B2B separator"
+        value={formData.b2bSeparator || ''}
+        onChange={(e) => handleSeparator(e.target.value)}
+        className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+      />
+      <span>Joins B2B artist names, for example b2b, vs or &amp;.</span>
+    </label>
+  );
+
   return (
     <div ref={rootRef} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6 space-y-6">
       <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-6 border-0 p-0">
@@ -400,7 +421,7 @@ export default function FestivalEditForm({
           />
           {venueGuessed && (
             <p role="status" className="mt-1 text-xs text-accent-amber">
-              Venue location was guessed from the address. Check the map pin.
+              {organizer ? 'We placed the venue from its address. Drag the pin if it is wrong.' : 'Venue location was guessed from the address. Check the map pin.'}
             </p>
           )}
         </div>
@@ -416,27 +437,41 @@ export default function FestivalEditForm({
               Choose a time zone…
             </option>
             {/* listTimeZones merges in the festival's current value so a custom zone isn't lost. */}
-            {listTimeZones(formData.timeZone).map((tz) => (
-              <option key={tz} value={tz}>
-                {tz}
-              </option>
-            ))}
+            {organizer ? (
+              <>
+                <optgroup label="Main US time zones">
+                  {timeZoneChoices(formData.timeZone).main.map((zone) => (
+                    <option key={zone.value} value={zone.value}>
+                      {zone.label}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="Other">
+                  {timeZoneChoices(formData.timeZone).other.map((tz) => (
+                    <option key={tz} value={tz}>
+                      {tz}
+                    </option>
+                  ))}
+                </optgroup>
+              </>
+            ) : (
+              listTimeZones(formData.timeZone).map((tz) => (
+                <option key={tz} value={tz}>
+                  {tz}
+                </option>
+              ))
+            )}
           </select>
           <span>Set times, countdowns and reminders use this zone.</span>
         </label>
-        <label className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
-          B2B separator
-          <input
-            type="text"
-            maxLength={10}
-            placeholder="b2b"
-            aria-label="B2B separator"
-            value={formData.b2bSeparator || ''}
-            onChange={(e) => handleSeparator(e.target.value)}
-            className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
-          />
-          <span>Joins B2B artist names, for example b2b, vs or &amp;.</span>
-        </label>
+        {organizer ? (
+          <details className="md:col-span-2">
+            <summary className="min-h-11 cursor-pointer text-sm text-text-secondary">Advanced</summary>
+            {b2bField}
+          </details>
+        ) : (
+          b2bField
+        )}
         {!organizer && (
         <div className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
           <label htmlFor="festival-series" className="flex flex-col gap-1">
@@ -656,13 +691,13 @@ export default function FestivalEditForm({
         </div>
       )}
 
-      {editingId && organizer && !readOnly && (
+      {editingId && organizer && !alertsOn && !readOnly && (
         <p className="border-t border-glass-border pt-4 text-sm text-text-secondary">
           Attendees are alerted after Festie checks the change.
         </p>
       )}
 
-      {editingId && !organizer && (
+      {editingId && (!organizer || (alertsOn && !readOnly)) && (
         <div className="flex items-start gap-3 border-t border-glass-border pt-4 text-sm text-text-primary">
           <input
             id="festival-notify-pickers"

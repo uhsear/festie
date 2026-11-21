@@ -9,6 +9,7 @@ import ManagePage from './manage';
 
 const toast = vi.fn();
 vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast, toastError: vi.fn() }) }));
+vi.mock('../components/admin/useAdminSearch', () => ({ useAdminSearch: () => [{}, vi.fn()] }));
 vi.mock('../components/admin/AdminFestivals', () => ({
   default: ({ mode, organizations }: { mode: string; organizations: Array<{ name: string; role: string }> }) => (
     <p>

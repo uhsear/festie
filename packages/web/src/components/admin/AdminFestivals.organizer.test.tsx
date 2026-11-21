@@ -105,6 +105,7 @@ const render = (organizations: ManageOrganization[]) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
   routes.length = 0;
   search = { festival: 'f1', view: 'edit' };
   mockGet.mockImplementation(async (path: string) => {
@@ -156,7 +157,11 @@ describe('AdminFestivals in organizer mode', () => {
     await waitFor(() =>
       expect(mockGet.mock.calls.filter(([p]) => p === '/manage/festivals/f1').length).toBeGreaterThan(loads),
     );
+    // The edits were written to this device first, so the reload offers them back (plan-v3 5.9).
+    expect(await screen.findByRole('alert')).toHaveTextContent('were kept on this device');
+    await userEvent.click(screen.getByRole('button', { name: 'Restore my edits' }));
     await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(screen.getByTestId('form-mode')).toHaveTextContent('name=Typed name');
   });
 
   it('tells an editor that an owner must confirm a removal, and keeps the edits', async () => {
@@ -186,6 +191,64 @@ describe('AdminFestivals in organizer mode', () => {
     await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
     expect(mockPut.mock.calls[1][0]).toBe('/manage/festivals/f1');
     expect(mockPut.mock.calls[1][1]).toMatchObject({ confirmRemovals: true });
+  });
+
+  describe('a verified organization', () => {
+    it('confirms the head count before a save that tells people, then saves with the alert', async () => {
+      mockPut.mockResolvedValueOnce({ dryRun: true, scheduleNotice: { changes: 2, people: 3, notified: true }, runsLeft: 2 });
+      mockPut.mockResolvedValueOnce({ scheduleNotice: { changes: 2, people: 3, notified: true } });
+      render([org({ verified: true })]);
+      await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
+      expect(await screen.findByText(/This save tells 3 people that a set they picked moved or was removed/)).toBeInTheDocument();
+      expect(mockPut).toHaveBeenCalledTimes(1);
+      expect(mockPut.mock.calls[0][1]).toMatchObject({ dryRun: true, notify: true });
+      await userEvent.click(screen.getByRole('button', { name: 'Save and tell them' }));
+      await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
+      expect(mockPut.mock.calls[1][1]).toMatchObject({ notify: true });
+      expect(mockPut.mock.calls[1][1]).not.toHaveProperty('dryRun');
+    });
+
+    it('saves at once when the dry run says nobody would be told', async () => {
+      mockPut.mockResolvedValueOnce({ dryRun: true, scheduleNotice: { changes: 0, people: 0, notified: false } });
+      mockPut.mockResolvedValueOnce(undefined);
+      render([org({ verified: true, role: 'editor' })]);
+      await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
+      await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
+      expect(screen.queryByText('Tell people about this change?')).not.toBeInTheDocument();
+    });
+
+    it('an unverified organization never asks for a dry run', async () => {
+      mockPut.mockResolvedValue(undefined);
+      render([org()]);
+      await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
+      await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(1));
+      expect(mockPut.mock.calls[0][1]).not.toHaveProperty('dryRun');
+    });
+  });
+
+  describe('the announcement composer', () => {
+    const live = () =>
+      mockGet.mockImplementation(async (path: string) =>
+        path === '/manage/festivals'
+          ? [{ id: 'f1', name: 'Fest', location: 'Here', organizationId: 'org-a', slug: 'fest', published: true, deleted: false, publishRequestedAt: null, publishReviewNote: null, updatedAt: FULL.updatedAt }]
+          : { ...FULL, publishedAt: '2026-10-01T00:00:00.000Z', slug: 'fest' },
+      );
+
+    it('shows for an owner of an active organization on a live festival, and for no one else', async () => {
+      live();
+      const owner = render([org()]);
+      expect(await screen.findByText('announcements panel')).toBeInTheDocument();
+      owner.unmount();
+      live();
+      const editor = render([org({ role: 'editor' })]);
+      await screen.findByTestId('form-mode');
+      expect(screen.queryByText('announcements panel')).not.toBeInTheDocument();
+      editor.unmount();
+      live();
+      render([org({ status: 'pending' })]);
+      await screen.findByTestId('form-mode');
+      expect(screen.queryByText('announcements panel')).not.toBeInTheDocument();
+    });
   });
 
   it('shows a viewer the details only, read-only', async () => {

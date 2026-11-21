@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { announcementsApi } from '@festie/shared/services/announcements';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import type { FestivalScope } from '@festie/shared/services/festivalAdmin';
 import { ANNOUNCEMENT_COPY as COPY } from '@festie/shared/constants/announcementCopy';
 import { ANNOUNCEMENT_SCREENS, announcementStatus } from '@festie/shared/utils/announcements';
 import type { AdminAnnouncement, AnnouncementScreen, AnnouncementSeverity } from '@festie/shared/types/announcement';
@@ -11,6 +12,10 @@ import EmptyState from '../ui/EmptyState';
 interface Props {
   festivalId: string;
   festivalName: string;
+  /** `manage` is an owner of the festival's organization: a banner, urgent never, a push only when `pushAllowed`. */
+  scope?: FestivalScope;
+  /** A verified organization's announcement also pushes. */
+  pushAllowed?: boolean;
 }
 
 const TITLE_MAX = 80;
@@ -23,9 +28,11 @@ const fieldClass =
 const buttonClass =
   'px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 disabled:opacity-50 transition-colors text-sm font-medium min-h-11';
 
-export default function FestivalAnnouncements({ festivalId, festivalName }: Props) {
+export default function FestivalAnnouncements({ festivalId, festivalName, scope = 'admin', pushAllowed = false }: Props) {
+  const organizer = scope === 'manage';
   const [items, setItems] = useState<AdminAnnouncement[]>([]);
-  const [recipients, setRecipients] = useState(0);
+  // An organizer gets null while fewer than 20 people joined, so a small festival never shows a head count.
+  const [recipients, setRecipients] = useState<number | null>(0);
   const [loadError, setLoadError] = useState<unknown>(null);
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
@@ -41,14 +48,14 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
   const reload = useCallback(async () => {
     try {
       setLoadError(null);
-      const res = await announcementsApi.adminList(festivalId);
+      const res = await announcementsApi.adminList(festivalId, scope);
       setItems(res.announcements ?? []);
-      setRecipients(res.recipients ?? 0);
+      setRecipients(res.recipients === undefined ? 0 : res.recipients);
     } catch (err: unknown) {
       setLoadError(err);
       toastError(err, "Couldn't load announcements. Try again.");
     }
-  }, [festivalId, toastError]);
+  }, [festivalId, scope, toastError]);
 
   useEffect(() => {
     void reload();
@@ -61,14 +68,18 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
     setBusy(true);
     try {
       const sendAt = when === 'later' ? new Date(sendAtLocal).toISOString() : undefined;
-      const res = await announcementsApi.create(festivalId, {
-        severity,
-        title: title.trim(),
-        body: message.trim(),
-        screen,
-        ...(sendAt ? { sendAt } : {}),
-      });
-      toast(sendAt ? COPY.scheduled(new Date(sendAt).toLocaleString()) : COPY.queued(res.recipients), 'success');
+      const res = await announcementsApi.create(
+        festivalId,
+        {
+          severity: organizer ? 'info' : severity,
+          title: title.trim(),
+          body: message.trim(),
+          screen,
+          ...(sendAt ? { sendAt } : {}),
+        },
+        scope,
+      );
+      toast(sendAt ? COPY.scheduled(new Date(sendAt).toLocaleString()) : COPY.queued(res.recipients ?? 0), 'success');
       setTitle('');
       setMessage('');
       setSendAtLocal('');
@@ -85,7 +96,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
   const cancel = async (a: AdminAnnouncement, wasSent: boolean) => {
     setBusy(true);
     try {
-      await announcementsApi.cancel(festivalId, a.id);
+      await announcementsApi.cancel(festivalId, a.id, scope);
       toast(wasSent ? COPY.takenDownToast : COPY.cancelledToast, 'success');
       setTakeDown(null);
       await reload();
@@ -107,8 +118,11 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
   return (
     <section className="bg-bg-card/60 border border-glass-border rounded-lg p-4 space-y-4">
       <h3 className="type-heading text-text-primary">{COPY.heading}</h3>
-      <p className="text-sm text-text-muted">{COPY.intro(festivalName)}</p>
-      <p className="text-sm text-text-muted">{COPY.audience(recipients)}</p>
+      <p className="text-sm text-text-muted">{organizer ? COPY.organizer.intro(festivalName) : COPY.intro(festivalName)}</p>
+      <p className="text-sm text-text-muted">
+        {organizer ? COPY.organizer.audience(recipients) : COPY.audience(recipients ?? 0)}
+      </p>
+      {organizer && !pushAllowed && <p className="text-sm text-text-muted">{COPY.organizer.noPush}</p>}
 
       <form onSubmit={onSubmit} className="space-y-3">
         <div>
@@ -138,6 +152,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
           />
           <p className="text-xs text-text-muted mt-1">{COPY.fields.counter(message.length, BODY_MAX)}</p>
         </div>
+        {!organizer && (
         <fieldset>
           <legend className="text-sm text-text-primary mb-1">{COPY.fields.importance}</legend>
           <div className="flex gap-4">
@@ -154,6 +169,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
             ))}
           </div>
         </fieldset>
+        )}
         <div>
           <label htmlFor="announce-screen" className="block text-sm text-text-primary mb-1">
             {COPY.fields.opens}
@@ -199,7 +215,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
           </div>
         )}
         <button type="submit" className={buttonClass} disabled={!canSubmit}>
-          {when === 'now' ? COPY.submitNow(recipients) : COPY.submitLater}
+          {when === 'now' ? (organizer ? COPY.organizer.submitNow : COPY.submitNow(recipients ?? 0)) : COPY.submitLater}
         </button>
       </form>
 
@@ -227,7 +243,9 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
                     {a.title}
                   </p>
                   <p className="text-text-muted break-words">{a.body}</p>
-                  <p className="text-text-muted">{COPY.statusLine(status, whenText, a.recipientCount)}</p>
+                  <p className="text-text-muted">
+                    {organizer && status === 'sent' ? COPY.organizer.sentLine(whenText) : COPY.statusLine(status, whenText, a.recipientCount)}
+                  </p>
                 </div>
                 {status === 'scheduled' && (
                   <button type="button" className={buttonClass} disabled={busy} onClick={() => void cancel(a, false)}>
@@ -249,7 +267,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName }: Prop
         open={confirmSend}
         onOpenChange={setConfirmSend}
         title={COPY.confirmSend.title}
-        description={COPY.confirmSend.text(recipients)}
+        description={organizer ? COPY.organizer.confirmText(pushAllowed) : COPY.confirmSend.text(recipients ?? 0)}
         confirmLabel={COPY.confirmSend.confirm}
         cancelLabel={COPY.confirmSend.cancel}
         busy={busy}

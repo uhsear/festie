@@ -530,7 +530,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
 
       {/* Stage locations */}
       <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
-        <h3 className="type-label text-text-primary mb-3">Stage locations</h3>
+        <h3 className="type-label text-text-primary mb-3">{scope === 'manage' ? 'Drop a pin where each stage is' : 'Stage locations'}</h3>
         {stages.length === 0 ? (
           <div className="flex flex-wrap items-center gap-3">
             <p className="text-sm text-text-muted">This festival has no stages yet.</p>

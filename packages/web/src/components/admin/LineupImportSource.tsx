@@ -9,6 +9,8 @@ interface LineupImportSourceProps {
   onExport: () => void;
   onNext: () => void;
   onCheckList: () => void;
+  /** An organizer reads the plain-language wording (plan-v3 5.8). */
+  organizer?: boolean;
 }
 
 export default function LineupImportSource({
@@ -18,12 +20,13 @@ export default function LineupImportSource({
   onExport,
   onNext,
   onCheckList,
+  organizer = false,
 }: LineupImportSourceProps) {
   const fileInput = useRef<HTMLInputElement>(null);
   return (
   <div className="space-y-4">
     <label className="block text-sm text-text-primary">
-      Paste cells from Google Sheets or Excel, or paste CSV
+      {organizer ? 'Upload your spreadsheet, or paste a list of names, one per line.' : 'Paste cells from Google Sheets or Excel, or paste CSV'}
       <textarea
         value={text}
         onChange={(e) => onTextChange(e.target.value)}

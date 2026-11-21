@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchAdminFestivals } from '@festie/shared/services/festivalAdmin';
 import { fetchAdminCrews } from '@festie/shared/services/admin';
-import { fetchManageFestivals } from '@festie/shared/services/organizer';
+import { fetchManageFestivals, fetchManageOrganization } from '@festie/shared/services/organizer';
 import { fetchOrganizations, fetchOrganization, fetchReviewQueue } from '@festie/shared/services/adminOrganizations';
 import { fetchArtistSuggestions } from '@festie/shared/services/adminArtistSuggestions';
 
@@ -11,6 +11,7 @@ export const adminKeys = {
   festival: (id: string) => ['admin', 'festival', id] as const,
   manageFestivals: ['admin', 'manage-festivals'] as const,
   organizations: ['admin', 'organizations'] as const,
+  manageOrganization: (id: string) => ['manage', 'organization', id] as const,
   organization: (id: string) => ['admin', 'organization', id] as const,
   reviewQueue: ['admin', 'review-queue'] as const,
   artistSuggestions: ['admin', 'artist-suggestions'] as const,
@@ -31,6 +32,16 @@ export function useAdminFestivals(enabled = true) {
 /** The festivals of the signed-in organizer's organizations (GET /manage/festivals). */
 export function useManageFestivals(enabled = true) {
   return useQuery({ queryKey: adminKeys.manageFestivals, queryFn: fetchManageFestivals, enabled, ...ADMIN_QUERY_OPTIONS });
+}
+
+/** One organization as its own member sees it: profile, team and storage (GET /manage/organizations/:id). */
+export function useManageOrganization(id: string | null) {
+  return useQuery({
+    queryKey: adminKeys.manageOrganization(id ?? ''),
+    queryFn: () => fetchManageOrganization(id!),
+    enabled: !!id,
+    ...ADMIN_QUERY_OPTIONS,
+  });
 }
 
 export function useOrganizations() {
