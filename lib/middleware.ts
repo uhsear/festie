@@ -13,6 +13,7 @@ import type { Redis } from 'ioredis';
 
 import { createTracingMiddleware } from './tracing.js';
 import { mountSwaggerUI } from './swagger-ui-setup.js';
+import { mountTiles } from './tiles.js';
 import { default as createAuditMiddleware } from './audit-middleware.js';
 import { recordRecentRequest } from './recent-requests.js';
 import { sentry } from './sentry.js';
@@ -320,6 +321,10 @@ function configureMiddleware(app: Application, ctx: AppContext) {
     res.setHeader('Access-Control-Max-Age', '86400');
     return res.status(204).end();
   });
+
+  // ── Self-hosted PMTiles (TILES_DIR) ───────────────────────────────────
+  // Off (404) until TILES_DIR is set. It answers its own CORS (own origins only), so it sits before the generic CORS block.
+  mountTiles(app, { config, isAllowedOrigin, sendError, ErrorCodes });
 
   // ── CORS ──────────────────────────────────────────────────────────────
   app.use((req: Request, res: Response, next: NextFunction) => {

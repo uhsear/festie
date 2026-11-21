@@ -148,6 +148,43 @@ describe('FestivalMapEditor', () => {
     await waitFor(() => expect(onEditFestival).toHaveBeenCalledTimes(1));
   });
 
+  it('saves a typed /tiles/ path as the offline map and keeps the amenities', async () => {
+    await renderEditor();
+    fireEvent.change(screen.getByLabelText('Offline map file'), { target: { value: '/tiles/fest-2026.pmtiles' } });
+    fireEvent.change(screen.getByLabelText('Offline map credit'), { target: { value: 'OSM' } });
+    fireEvent.click(screen.getByText('Save map'));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    const config = savedPayload().mapConfig as unknown as { offlineBasemap: unknown; amenities: unknown };
+    expect(config.offlineBasemap).toEqual({ pmtilesUrl: '/tiles/fest-2026.pmtiles', attribution: 'OSM' });
+    expect(config.amenities).toBeTruthy();
+  });
+
+  it('blocks Save while the offline map value is invalid, so the old value is not kept silently', async () => {
+    get.mockResolvedValue(festival({ mapConfig: { version: 1, offlineBasemap: { pmtilesUrl: 'https://festie.us/tiles/a.pmtiles' } } }));
+    await renderEditor();
+    for (const bad of ['http://example.com/a.pmtiles', 'https://']) {
+      fireEvent.change(screen.getByLabelText('Offline map file'), { target: { value: bad } });
+      expect(screen.getByRole('alert')).toHaveTextContent('Fix it or clear the field');
+      expect((screen.getByText('Save map') as HTMLButtonElement).disabled).toBe(true);
+    }
+    fireEvent.click(screen.getByText('Save map'));
+    expect(put).not.toHaveBeenCalled();
+  });
+
+  it('removes the offline map when the field is cleared', async () => {
+    get.mockResolvedValue(festival({ mapConfig: { version: 1, offlineBasemap: { pmtilesUrl: 'https://festie.us/tiles/a.pmtiles' } } }));
+    await renderEditor();
+    fireEvent.change(screen.getByLabelText('Offline map file'), { target: { value: '' } });
+    fireEvent.click(screen.getByText('Save map'));
+    await waitFor(() => expect(put).toHaveBeenCalled());
+    expect('offlineBasemap' in (savedPayload().mapConfig as object)).toBe(false);
+  });
+
+  it('hides the offline map panel from organization members', async () => {
+    await renderEditor({ scope: 'manage' });
+    expect(screen.queryByLabelText('Offline map file')).toBeNull();
+  });
+
   it('hides Add stages without onEditFestival', async () => {
     get.mockResolvedValue(festival({ stages: [] }));
     await renderEditor();

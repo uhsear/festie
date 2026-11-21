@@ -60,7 +60,7 @@ vi.mock('expo-file-system', () => {
   return { File, Directory, Paths: { cache: 'file:///cache' } };
 });
 
-const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, subscribeBasemapCache, readCachedBase64, MAX_INLINE_BYTES } = await import(
+const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, clearBasemapCache, subscribeBasemapCache, readCachedBase64, isBasemapRemoved, MAX_INLINE_BYTES } = await import(
   './basemapCache'
 );
 
@@ -189,5 +189,29 @@ describe('readCachedBase64', () => {
   it('keeps an image URL extension so the site plan shares the cache', () => {
     expect(basemapCacheKey('https://festie.us/uploads/siteplans/x.webp')).toMatch(/^[0-9a-f]{8}\.webp$/);
     expect(basemapCacheKey(URL_A)).toMatch(/^[0-9a-f]{8}\.pmtiles$/);
+  });
+});
+
+describe('clearBasemapCache', () => {
+  it('deletes the saved archive and tells subscribers so the card re-reads the disk', async () => {
+    await ensureBasemapCached(URL_A);
+    expect(basemapCacheInfo(URL_A).cached).toBe(true);
+    const cb = vi.fn();
+    const off = subscribeBasemapCache(cb);
+    expect(clearBasemapCache(URL_A)).toBe(true);
+    expect(basemapCacheInfo(URL_A).cached).toBe(false);
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(clearBasemapCache(URL_A)).toBe(false);
+    expect(cb).toHaveBeenCalledTimes(1);
+    off();
+  });
+
+  it('remembers a user delete until an explicit download asks for the file again', async () => {
+    await ensureBasemapCached(URL_A);
+    expect(isBasemapRemoved(URL_A)).toBe(false);
+    clearBasemapCache(URL_A);
+    expect(isBasemapRemoved(URL_A)).toBe(true);
+    await ensureBasemapCached(URL_A);
+    expect(isBasemapRemoved(URL_A)).toBe(false);
   });
 });

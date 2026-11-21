@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it, afterEach } from 'node:test';
 
 import { ANDROID_APP_SIGNING_CERTS, DEFAULTS, loadConfig } from '../lib/config.js';
@@ -410,6 +411,17 @@ describe('ANDROID_CERT_FINGERPRINTS', () => {
     process.env.ANDROID_CERT_FINGERPRINTS = ` aa:bb , ${ANDROID_APP_SIGNING_CERTS[1].toLowerCase()}`;
     const certs = loadConfig({ PUBLIC_ORIGIN: '' }).ANDROID_CERT_FINGERPRINTS.split(',');
     assert.deepEqual(certs, [...ANDROID_APP_SIGNING_CERTS, 'AA:BB']);
+  });
+});
+
+describe('TILES_DIR', () => {
+  afterEach(restoreEnv);
+
+  it('is empty (feature off) by default and resolves to an absolute path when set', () => {
+    saveEnv('TILES_DIR');
+    assert.equal(loadConfig({ PUBLIC_ORIGIN: '' }).TILES_DIR, '');
+    process.env.TILES_DIR = 'some/tiles';
+    assert.equal(path.isAbsolute(loadConfig({ PUBLIC_ORIGIN: '' }).TILES_DIR), true);
   });
 });
 

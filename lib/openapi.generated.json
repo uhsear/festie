@@ -991,10 +991,18 @@
                 "type": "object",
                 "properties": {
                   "pmtilesUrl": {
-                    "type": "string",
-                    "maxLength": 2048,
-                    "format": "starts_with",
-                    "pattern": "^https:\\/\\/.*"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\/tiles\\/[a-z0-9][a-z0-9_-]{0,63}\\.pmtiles$"
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "starts_with",
+                        "pattern": "^https:\\/\\/.*"
+                      }
+                    ]
                   },
                   "attribution": {
                     "type": "string",
@@ -1434,10 +1442,18 @@
                 "type": "object",
                 "properties": {
                   "pmtilesUrl": {
-                    "type": "string",
-                    "maxLength": 2048,
-                    "format": "starts_with",
-                    "pattern": "^https:\\/\\/.*"
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^\\/tiles\\/[a-z0-9][a-z0-9_-]{0,63}\\.pmtiles$"
+                      },
+                      {
+                        "type": "string",
+                        "maxLength": 2048,
+                        "format": "starts_with",
+                        "pattern": "^https:\\/\\/.*"
+                      }
+                    ]
                   },
                   "attribution": {
                     "type": "string",

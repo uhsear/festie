@@ -27,7 +27,7 @@ afterEach(async () => {
 });
 
 async function boot() {
-  const server = await h.startServer({ AUTH_RATE_LIMIT_MAX: 1000 });
+  const server = await h.startServer({ AUTH_RATE_LIMIT_MAX: 1000, PUBLIC_ORIGIN: 'https://festie.us' });
   servers.push(server);
   const users = await o.seedScenario(server);
   const adminToken = await h.loginAdmin(server);
@@ -327,7 +327,7 @@ describe('links, hosting and live edits', { skip }, () => {
   });
 
   test('the offline map and the site plan must be files Festie hosts', async () => {
-    const { server, users } = await boot();
+    const { server, users, adminToken } = await boot();
     const map = (extra: object) => ({ mapConfig: { version: 1, ...extra } });
     rejected(await put(server, users.editorA.token, 'f-a', map({ offlineBasemap: { pmtilesUrl: 'https://cdn.example/a.pmtiles' } })), /pmtilesUrl/);
     rejected(await put(server, users.editorA.token, 'f-a', map({ offlineBasemap: { pmtilesUrl: 'https://festie.us/uploads/basemaps/../../secret.pmtiles' } })), /pmtilesUrl/);
@@ -335,6 +335,15 @@ describe('links, hosting and live edits', { skip }, () => {
     rejected(await put(server, users.editorA.token, 'f-a', map({ siteplan: { imageUrl: 'https://evil.example/plan.webp', ...plan } })), /imageUrl/);
     const hosted = await put(server, users.editorA.token, 'f-a', map({ offlineBasemap: { pmtilesUrl: 'https://festie.us/uploads/basemaps/fest.pmtiles' }, siteplan: { imageUrl: 'https://festie.us/uploads/siteplans/p.webp', ...plan } }));
     assert.equal(hosted.status, 200, JSON.stringify(hosted.body));
+    // A /tiles/ path is for admins only, and the stored value is an absolute URL on the app origin.
+    rejected(await put(server, users.editorA.token, 'f-a', map({ offlineBasemap: { pmtilesUrl: '/tiles/fest.pmtiles' } })), /pmtilesUrl/);
+    const tiles = await o.as(server, adminToken).put('/api/v1/admin/festivals/f-a', map({ offlineBasemap: { pmtilesUrl: '/tiles/fest.pmtiles' } }));
+    assert.equal(tiles.status, 200, JSON.stringify(tiles.body));
+    const stored = await o.as(server, adminToken).get('/api/v1/admin/festivals/f-a');
+    assert.equal(stored.body.data.mapConfig.offlineBasemap.pmtilesUrl, 'https://festie.us/tiles/fest.pmtiles');
+    // A member can still save the festival while it uses that map: the editor sends mapConfig back unchanged.
+    const resave = await put(server, users.editorA.token, 'f-a', { mapConfig: stored.body.data.mapConfig });
+    assert.equal(resave.status, 200, JSON.stringify(resave.body));
   });
 
   test('create applies the same rules, and the set-link route takes only a Spotify artist link', async () => {

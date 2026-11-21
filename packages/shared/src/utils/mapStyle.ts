@@ -131,6 +131,40 @@ export function hasOfflineBasemap(
   return typeof url === 'string' && /^https:\/\//i.test(url);
 }
 
+/** A self-hosted archive path the admin may type: /tiles/<name>.pmtiles (mirrors lib/tiles.ts on the server). */
+export const PMTILES_PATH_RE = /^\/tiles\/[a-z0-9][a-z0-9_-]{0,63}\.pmtiles$/;
+
+/** True when the admin editor may save this value: an https URL or a /tiles/<name>.pmtiles path. */
+export function isPmtilesInput(value: unknown): value is string {
+  if (typeof value !== 'string') return false;
+  if (PMTILES_PATH_RE.test(value)) return true;
+  if (value.length > 2048) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Return a new FestivalMapConfig with its offline basemap set, or removed when `pmtilesUrl` is null.
+ * Everything else in the config is kept. A blank attribution is dropped. Pure: never mutates the input.
+ */
+export function setOfflineBasemap(
+  config: FestivalMapConfig | null | undefined,
+  pmtilesUrl: string | null,
+  attribution?: string,
+): FestivalMapConfig {
+  const base: FestivalMapConfig = config ? { ...config, version: 1 } : { version: 1 };
+  if (pmtilesUrl) {
+    const credit = attribution?.trim();
+    base.offlineBasemap = { pmtilesUrl, ...(credit ? { attribution: credit } : {}) };
+  } else {
+    delete base.offlineBasemap;
+  }
+  return base;
+}
+
 /**
  * Pick the MapLibre style for a festival: the PMTiles vector basemap when the
  * config carries a valid offline basemap, otherwise the themed OpenFreeMap style
