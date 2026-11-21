@@ -1,9 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { api } from '@festie/shared/services';
-import { PRIORITY_LABELS, planBLine } from '@festie/shared/constants';
-import type { Festival, FestivalDay, FestivalSet, Stage } from '@festie/shared/types';
-import { artistDisplayName, byStartTime, decodePlanSnapshot, formatTime, fromPickPriority } from '@festie/shared/utils';
+import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
+import { COPY, PRIORITY_LABELS, planBLine, signInTo } from '@festie/shared/constants';
+import type { Festival, FestivalDay, FestivalSet, Priority, Stage } from '@festie/shared/types';
+import {
+  applyPlanImport,
+  artistDisplayName,
+  byStartTime,
+  decodePlanSnapshot,
+  formatTime,
+  fromPickPriority,
+  previewPlanImport,
+  safeReturnPath,
+  type PlanSnapshot,
+} from '@festie/shared/utils';
+import { useToast } from '../lib/toastContext';
 
 /** Shape returned by GET /festivals/:id (after envelope unwrap). */
 interface FestivalDetailResponse extends Festival {
@@ -21,13 +33,144 @@ interface Row {
   priority: string;
 }
 
+// A snapshot is longer than the 512 characters a sign-in return path may carry, so a signed-out visitor's
+// hash waits here (this tab only) while they sign in, and /p reads it back.
+const PENDING_PLAN_KEY = 'fk.pendingPlanSnapshot';
+
+function readHash(): string {
+  const fromUrl = window.location.hash.slice(1);
+  if (fromUrl) return fromUrl;
+  try {
+    return sessionStorage.getItem(PENDING_PLAN_KEY) ?? '';
+  } catch {
+    return ''; // sessionStorage unavailable: the visitor opens the link again
+  }
+}
+
+const BUTTON =
+  'inline-flex items-center justify-center min-h-11 px-6 rounded-lg text-[length:var(--font-size-14)] font-semibold no-underline';
+const PRIMARY = `${BUTTON} bg-accent-aqua text-[var(--text-on-light-accent)]`;
+
+/** Add-to-my-plan for a signed-in viewer, or a sign-in prompt that returns to this same link. Nothing is written until Add. */
+function ImportPlan({ snapshot, hash }: { snapshot: PlanSnapshot; hash: string }) {
+  const { toast, toastUndo, toastError } = useToast();
+  const user = useAuthStore((s) => s.user);
+  const currentFestivalId = useFestivalStore((s) => s.currentFestivalId);
+  const currentProfile = useFestivalStore((s) => s.currentProfile);
+  const sets = useFestivalStore((s) => s.sets);
+  const [busy, setBusy] = useState(false);
+  // The full link when it fits a return path; else /p, with the hash stashed when a sign-in link is clicked.
+  const fullPath = safeReturnPath(`/p#${hash}`);
+  const next = fullPath ?? '/p';
+  const stashHash = () => {
+    if (fullPath) return;
+    try {
+      sessionStorage.setItem(PENDING_PLAN_KEY, hash);
+    } catch {
+      // Without storage the visitor lands on /p with no plan and opens the link again.
+    }
+  };
+
+  const preview = useMemo(
+    () =>
+      previewPlanImport(snapshot, {
+        currentFestivalId,
+        picks: currentProfile?.picks as Record<string, Priority> | undefined,
+        setIds: new Set(sets.map((set) => set.id)),
+      }),
+    [snapshot, currentFestivalId, currentProfile, sets],
+  );
+
+  const add = async () => {
+    if (busy || preview.toAdd.length === 0) return;
+    setBusy(true);
+    try {
+      const added = await applyPlanImport(preview, (ids, priority) => useFestivalStore.getState().bulkSavePicks(ids, priority));
+      toastUndo(`Added ${added} ${added === 1 ? 'pick' : 'picks'} to your plan.`, () => {
+        void useFestivalStore
+          .getState()
+          .restorePicks(preview.previous)
+          .then(() => toast('Undone. Your plan is back to how it was.', 'success'))
+          .catch((err: unknown) => toastError(err, "Couldn't undo. Try again."));
+      });
+    } catch (err) {
+      toastError(err, "Couldn't add the picks. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  let body: React.ReactNode;
+  if (!user) {
+    body = (
+      <>
+        <p className="text-[length:var(--font-size-14)] text-text-primary">{signInTo('add these picks to your plan')}</p>
+        <div className="flex gap-2 flex-wrap">
+          <Link to="/login" search={{ next }} onClick={stashHash} className={PRIMARY}>
+            {COPY.auth.signIn}
+          </Link>
+          <Link to="/register" search={{ next }} onClick={stashHash} className={`${BUTTON} border border-border-subtle text-text-primary`}>
+            {COPY.auth.createAccount}
+          </Link>
+        </div>
+      </>
+    );
+  } else if (currentFestivalId !== snapshot.festivalId) {
+    body = (
+      <>
+        <p className="text-[length:var(--font-size-14)] text-text-primary">These picks are for {snapshot.festivalName}.</p>
+        <button type="button" className={PRIMARY} onClick={() => void useFestivalStore.getState().selectFestival(snapshot.festivalId)}>
+          Switch to {snapshot.festivalName}
+        </button>
+      </>
+    );
+  } else if (!currentProfile) {
+    body = (
+      <>
+        <p className="text-[length:var(--font-size-14)] text-text-primary">
+          You haven&apos;t joined {snapshot.festivalName} yet. Join it to add these picks.
+        </p>
+        <Link to="/cards" className={PRIMARY}>
+          Open {snapshot.festivalName}
+        </Link>
+      </>
+    );
+  } else if (preview.toAdd.length === 0) {
+    body = <p className="text-[length:var(--font-size-14)] text-text-primary">You already have all of these picks.</p>;
+  } else {
+    body = (
+      <>
+        <p className="text-[length:var(--font-size-13)] text-text-secondary">
+          Nothing changes until you tap Add. A pick you already rated higher stays as it is.
+        </p>
+        <button type="button" disabled={busy} onClick={add} className={`${PRIMARY} disabled:opacity-50`}>
+          Add {preview.toAdd.length} to my plan
+        </button>
+      </>
+    );
+  }
+  return (
+    <section aria-label="Add to my plan" className="flex flex-col gap-2 items-start">
+      {body}
+    </section>
+  );
+}
+
 /**
- * Read-only landing page for a plan QR: festie.us/p#<snapshot>. The snapshot
- * lives in the URL hash so it never reaches the server. Public and writes to no
- * store, so opening a friend's code never changes the viewer's own plan.
+ * Landing page for a plan QR: festie.us/p#<snapshot>. The snapshot lives in the URL hash so it never reaches
+ * the server. Public: anyone can read it. A signed-in viewer may add the picks to their own plan, but only after
+ * a tap on Add (see ImportPlan), so opening a friend's code alone never changes the viewer's plan.
  */
 export default function PlanSnapshotPage() {
-  const [hash] = useState(() => window.location.hash.slice(1));
+  const [hash] = useState(readHash);
+  // The stash has done its job once the hash is in state. Clearing it here, not in readHash, keeps StrictMode's double init safe.
+  useEffect(() => {
+    try {
+      sessionStorage.removeItem(PENDING_PLAN_KEY);
+    } catch {
+      // sessionStorage unavailable: nothing was stashed
+    }
+  }, []);
   const decoded = useMemo(() => decodePlanSnapshot(hash), [hash]);
   const snapshot = decoded.ok ? decoded.data : null;
   const [festival, setFestival] = useState<FestivalDetailResponse | null>(null);
@@ -140,6 +283,8 @@ export default function PlanSnapshotPage() {
           {missing} {missing === 1 ? 'pick is' : 'picks are'} no longer in the lineup.
         </p>
       )}
+
+      <ImportPlan snapshot={snapshot} hash={hash} />
 
       <div className="flex flex-col gap-2 pt-2">
         <Link
