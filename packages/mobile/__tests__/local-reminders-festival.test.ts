@@ -39,8 +39,8 @@ describe('T3 local reminders report their festival (source-level guards)', () =>
     expect(src).toContain("'festie-push-local-festival'");
     const register = src.slice(src.indexOf('const register = '), src.indexOf('const unregister = '));
     const unregister = src.slice(src.indexOf('const unregister = '));
-    expect(register).toContain('multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
-    expect(unregister).toContain('multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
+    expect(register).toContain('removeMany([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
+    expect(unregister).toContain('removeMany([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
   });
 });
 

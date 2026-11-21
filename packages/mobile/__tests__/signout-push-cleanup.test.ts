@@ -7,7 +7,7 @@ describe('sign-out push cleanup (source-level guards)', () => {
     const src = read('hooks/useMobilePush.ts');
     const fn = src.slice(src.indexOf('export async function unregisterPushOnSignOut'), src.indexOf('Notifications.setNotificationHandler'));
     expect(fn).toContain("api.delete('/notifications/token'");
-    expect(fn).toContain('multiRemove([TOKEN_KEY, LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
+    expect(fn).toContain('removeMany([TOKEN_KEY, LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY])');
     expect(fn).toContain('cancelAllScheduledNotificationsAsync()');
   });
 
