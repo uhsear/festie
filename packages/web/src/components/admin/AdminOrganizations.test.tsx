@@ -74,7 +74,7 @@ const org = (over: Record<string, unknown> = {}) => ({
 const detail = (over: Record<string, unknown> = {}) => ({
   ...org(),
   members: [{ userId: 'u1', username: 'sam', email: 'sam@venue.example', active: true, role: 'owner', addedBy: null, createdAt: '2026-11-01T00:00:00.000Z' }],
-  pending: [{ email: 'kim@venue.example', role: 'editor', addedBy: null, createdAt: '2026-11-01T00:00:00.000Z' }],
+  pending: [{ email: 'kim@venue.example', role: 'editor', addedBy: null, createdAt: '2026-11-01T00:00:00.000Z', expiresAt: '2027-01-30T00:00:00.000Z', expired: false }],
   usage: { festivals: 1, drafts: 1, announcementsThisMonth: 2, uploadedBytes: 3 * 1024 * 1024 },
   festivals: [{ id: 'f1', name: 'Venue Fest', location: '', organizationId: 'o1', slug: null, published: false, deleted: false, publishRequestedAt: null, publishReviewNote: null, updatedAt: '2026-11-01T00:00:00.000Z' }],
   ...over,

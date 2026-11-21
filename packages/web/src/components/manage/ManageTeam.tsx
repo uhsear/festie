@@ -196,7 +196,10 @@ export default function ManageTeam({ organization }: Props) {
                   <div className="min-w-0">
                     <p className="break-all text-sm text-text-primary">{p.email}</p>
                     <p className="text-xs text-text-muted">
-                      {p.role === 'viewer' ? 'Viewer' : p.role === 'editor' ? 'Editor' : 'Owner'}. Added by {p.addedBy}. Joins when they sign in with this email and confirm it.
+                      {p.role === 'viewer' ? 'Viewer' : p.role === 'editor' ? 'Editor' : 'Owner'}. Added by {p.addedBy}.{' '}
+                      {p.expired
+                        ? 'Expired: they can no longer join with this invitation. Add them again to send a new one.'
+                        : 'Joins when they sign in with this email and confirm it.'}
                     </p>
                   </div>
                   {canManage && p.role !== 'owner' && (

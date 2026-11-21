@@ -52,6 +52,11 @@ export const outsideLabelSql = (userIdExpr: string) => `CASE WHEN EXISTS (
 // The one rule for "this user may act as a member": not deleted, email confirmed.
 const ACTIVE_USER = 'u.deleted_at IS NULL AND u.email_verified_at IS NOT NULL';
 
+// An invitation by email stops being claimable this many days after it was added (or re-added). The retention
+// job deletes it then; until it runs, the SQL below still treats it as expired. The Privacy Policy states the period.
+export const PENDING_INVITE_DAYS = 90;
+const PENDING_INVITE_TTL = `INTERVAL '${PENDING_INVITE_DAYS} days'`;
+
 // An owner runs editors and viewers. Owners are Festie's to add, change and remove (plan-v3 3.3).
 const OWNER_CHANGE_REFUSAL = 'Only Festie can add, change or remove an owner. Contact Festie.';
 
@@ -115,7 +120,7 @@ export function createOrganizationsStore(pool: Pool) {
       const { rows } = await pool.query(
         `SELECT ${ORG_COLUMNS},
            (SELECT COUNT(*)::int FROM organization_members m WHERE m.organization_id = o.id) AS "memberCount",
-           (SELECT COUNT(*)::int FROM organization_pending_members p WHERE p.organization_id = o.id) AS "pendingCount",
+           (SELECT COUNT(*)::int FROM organization_pending_members p WHERE p.organization_id = o.id AND p.created_at > NOW() - ${PENDING_INVITE_TTL}) AS "pendingCount",
            (SELECT COUNT(*)::int FROM festivals f WHERE f.organization_id = o.id AND f.deleted_at IS NULL) AS "festivalCount",
            (SELECT COUNT(*)::int FROM organization_members m JOIN users u ON u.id = m.user_id
              WHERE m.organization_id = o.id AND m.role = 'owner' AND ${ACTIVE_USER}) AS "ownerCount"
@@ -165,7 +170,9 @@ export function createOrganizationsStore(pool: Pool) {
     email,
     role,
     added_by AS "addedBy",
-    created_at AS "createdAt"
+    created_at AS "createdAt",
+    created_at + ${PENDING_INVITE_TTL} AS "expiresAt",
+    created_at <= NOW() - ${PENDING_INVITE_TTL} AS "expired"
   FROM
     organization_pending_members
   WHERE
@@ -224,7 +231,7 @@ export function createOrganizationsStore(pool: Pool) {
           await client.query(
             `INSERT INTO organization_pending_members (organization_id, email, role, added_by)
              VALUES ($1, $2, $3, $4)
-             ON CONFLICT (organization_id, email) DO UPDATE SET role = EXCLUDED.role, added_by = EXCLUDED.added_by`,
+             ON CONFLICT (organization_id, email) DO UPDATE SET role = EXCLUDED.role, added_by = EXCLUDED.added_by, created_at = NOW()`,
             [organizationId, email, role, addedBy],
           );
           await countMemberEmail(client, organizationId, email, dailyCap);
@@ -311,6 +318,12 @@ export function createOrganizationsStore(pool: Pool) {
       });
     },
 
+    /** Deletes the invitations older than PENDING_INVITE_DAYS. Returns how many. Run by the retention job. */
+    async purgeExpiredPending(): Promise<number> {
+      const { rowCount } = await pool.query(`DELETE FROM organization_pending_members WHERE created_at <= NOW() - ${PENDING_INVITE_TTL}`);
+      return rowCount ?? 0;
+    },
+
     async removePending(organizationId: string, rawEmail: string, { byOwner = false } = {}) {
       const email = rawEmail.trim().toLowerCase();
       const { rowCount } = await pool.query(
@@ -346,6 +359,7 @@ export function createOrganizationsStore(pool: Pool) {
   DELETE FROM organization_pending_members
   WHERE
     email = $1
+    AND created_at > NOW() - ${PENDING_INVITE_TTL}
   RETURNING
     organization_id AS "organizationId",
     role,
@@ -496,7 +510,8 @@ export function createOrganizationsStore(pool: Pool) {
         [organizationId],
       );
       const { rows: pending } = await pool.query(
-        `SELECT p.email, p.role, ${added('p')} AS "addedBy", p.created_at AS "createdAt"
+        `SELECT p.email, p.role, ${added('p')} AS "addedBy", p.created_at AS "createdAt",
+                p.created_at + ${PENDING_INVITE_TTL} AS "expiresAt", p.created_at <= NOW() - ${PENDING_INVITE_TTL} AS "expired"
            FROM organization_pending_members p
            LEFT JOIN organization_members am ON am.organization_id = p.organization_id AND am.user_id = p.added_by
            LEFT JOIN users a ON a.id = am.user_id
