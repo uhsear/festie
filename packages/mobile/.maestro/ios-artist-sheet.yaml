@@ -11,15 +11,18 @@ onFlowComplete:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Plan your weekend|Choose a festival"
+      id: "intro-skip|festival-card-.*"
     timeout: 90000
 - runFlow:
     when:
-      visible: "Plan your weekend"
+      visible:
+        id: "intro-skip"
     commands:
-      - tapOn: "Skip intro"
+      - tapOn:
+          id: "intro-skip"
 - extendedWaitUntil:
-    visible: "Choose a festival"
+    visible:
+      id: "festival-card-.*"
     timeout: 30000
 # See ios-smoke.yaml: centre the card first so a tap cannot land on the tab bar.
 - scrollUntilVisible:
