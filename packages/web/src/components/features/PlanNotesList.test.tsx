@@ -45,7 +45,7 @@ describe('PlanNotesList', () => {
     render(<PlanNotesList kind="notes" items={items} days={days} onOpenSet={onOpenSet} />);
     const note = screen.getByText('Bring water');
     expect(note).toHaveClass('line-clamp-3');
-    fireEvent.click(note);
+    fireEvent.click(screen.getByRole('button', { name: /^Fisher, / }));
     expect(onOpenSet).toHaveBeenCalledWith(setA);
   });
 

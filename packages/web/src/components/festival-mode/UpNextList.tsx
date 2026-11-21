@@ -1,6 +1,7 @@
 import { SkipForward } from 'lucide-react';
 import type { FestivalSet } from '@festie/shared/types';
 import { artistDisplayName, fmtStartsIn, fmtZonedClock, type DayOfSet } from '@festie/shared/utils';
+import ArtistName, { RowOpenButton } from '../features/ArtistName';
 
 interface Props {
   items: DayOfSet[];
@@ -27,20 +28,23 @@ export default function UpNextList({ items, nowMs, timeZone, b2bSeparator, getSt
           const startsIn = fmtStartsIn(start, nowMs, timeZone);
           return (
             <li key={set.id}>
-              <button
-                type="button"
+              <div
                 data-testid="fm-next-card"
-                onClick={() => onOpenSet(set)}
-                aria-label={`${name}${stage ? ` at ${stage}` : ''}, ${startsIn}. Open details`}
-                className="flex items-center gap-3 w-full text-left px-4 py-3 min-h-[56px] hover:bg-bg-card-hover transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-aqua"
+                className="relative flex items-center gap-3 w-full text-left px-4 py-3 min-h-[56px] hover:bg-bg-card-hover transition-colors motion-reduce:transition-none"
               >
+                <RowOpenButton
+                  onClick={() => onOpenSet(set)}
+                  label={`${name}${stage ? ` at ${stage}` : ''}, ${startsIn}. Open details`}
+                />
                 <span className="type-numeral text-text-primary w-18 shrink-0">{fmtZonedClock(start, timeZone)}</span>
                 <span className="min-w-0 flex-1">
-                  <span className="block type-label text-text-primary font-semibold break-words">{name}</span>
+                  <span className="block type-label text-text-primary font-semibold break-words">
+                    <ArtistName set={set} separator={b2bSeparator} />
+                  </span>
                   {stage && <span className="block type-caption text-text-secondary truncate">{stage}</span>}
                 </span>
                 <span className="type-caption text-accent-aqua tabular-nums shrink-0">{startsIn}</span>
-              </button>
+              </div>
             </li>
           );
         })}

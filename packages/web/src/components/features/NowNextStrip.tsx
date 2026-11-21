@@ -10,6 +10,7 @@ import {
   fmtTimeLeft,
 } from '@festie/shared/utils';
 import { useNow } from '../../hooks/useSetStatus';
+import ArtistName, { RowOpenButton } from './ArtistName';
 
 /**
  * Compact "Now / Up next" strip for the schedule views (Cards, Timeline, Grid).
@@ -47,13 +48,14 @@ export default function NowNextStrip() {
 
   return (
     <div className="px-6 pt-3">
-      <button
-        type="button"
-        onClick={() => navigate({ to: '/festival-mode' })}
+      <div
         data-testid="now-next-strip"
-        aria-label={`${isNow ? 'Now playing' : 'Up next'}: ${name}${stage ? ` at ${stage}` : ''}, ${timing}. Open Now and Next.`}
         className="relative flex w-full max-w-[1440px] mx-auto min-h-14 items-center gap-3 overflow-hidden rounded-lg border border-border-default bg-bg-secondary px-4 text-left"
       >
+        <RowOpenButton
+          label={`${isNow ? 'Now playing' : 'Up next'}: ${name}${stage ? ` at ${stage}` : ''}, ${timing}. Open Now and Next.`}
+          onClick={() => navigate({ to: '/festival-mode' })}
+        />
         <span
           className={
             isNow
@@ -65,7 +67,9 @@ export default function NowNextStrip() {
           {isNow ? 'NOW' : 'UP NEXT'}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold text-text-primary line-clamp-2 break-words">{name}</span>
+          <span className="block font-semibold text-text-primary line-clamp-2 break-words">
+            <ArtistName set={focus.set} separator={currentFestival?.b2bSeparator} />
+          </span>
           {stage && <span className="block truncate text-text-secondary">{stage}</span>}
         </span>
         <span className="shrink-0 text-sm text-text-secondary tabular-nums">{timing}</span>
@@ -77,7 +81,7 @@ export default function NowNextStrip() {
             style={{ width: `${progress}%` }}
           />
         )}
-      </button>
+      </div>
     </div>
   );
 }

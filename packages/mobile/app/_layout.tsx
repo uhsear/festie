@@ -48,6 +48,7 @@ import { onHydrated } from '../lib/hydrationGate';
 import { isGuestBlocked } from '../lib/authRoutes';
 import { setReturnTo, takeReturnTo } from '../lib/returnTo';
 import { routeNotification } from '../lib/routeNotification';
+import ArtistSheetHost from '../components/ArtistSheetHost';
 
 // Hold the native splash until fonts + hydration complete (NOT the session
 // check — that reconciles behind an interactive UI; see `loading` below).
@@ -653,6 +654,7 @@ function AuthGate() {
         </View>
       </TopBannerContext.Provider>
       {!loading && <Toaster />}
+      <ArtistSheetHost />
       {loading && (
         <View style={[StyleSheet.absoluteFill, styles.splash, { backgroundColor: colors.bg.primary }]} pointerEvents="auto">
           <ActivityIndicator size="large" color={colors.accent.aqua} />

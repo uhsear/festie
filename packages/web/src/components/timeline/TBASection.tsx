@@ -5,6 +5,7 @@ import { PRIORITY_SYMBOLS, COPY } from '@festie/shared/constants';
 import PriorityIcon from '../ui/PriorityIcon';
 import { cn } from '../../lib/utils';
 import { avatarInk } from '../../lib/avatarInk';
+import ArtistName from '../features/ArtistName';
 
 export interface TBASectionProps {
   sets: FestivalSet[];
@@ -114,7 +115,9 @@ export default function TBASection({
                 aria-label={`${dn}${stage ? ' at ' + stage.name : ''}, time TBA${myPick ? ', priority: ' + myPick : ''}`}
                 onClick={() => onOpenDetail(s)}
               />
-              <div className="relative z-[2] pointer-events-none font-semibold text-sm mb-1">{dn}</div>
+              <div className="relative z-[2] pointer-events-none font-semibold text-sm mb-1">
+                <ArtistName set={s} separator={currentFestival?.b2bSeparator} />
+              </div>
 
               {/* Priority pick buttons */}
               {canPick && (

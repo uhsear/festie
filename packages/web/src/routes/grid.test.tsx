@@ -297,7 +297,7 @@ describe('GridView', () => {
     setFilters({ allDaySets: [], timedSets: [], timelessSets: [], timeBounds: null });
     render(<GridView />);
     expect(screen.getByText('Also on Saturday')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /Daft Punk/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Show Daft Punk/ }));
     expect(setSelectedDay).toHaveBeenCalledWith(1);
   });
 

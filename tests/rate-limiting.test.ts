@@ -291,15 +291,15 @@ describe('rate-limiting: consumeSocketConnectRateLimit', () => {
   it('allows connections under the limit', () => {
     const deps = makeDeps();
     const rl = createRateLimiters(deps);
-    assert.ok(rl.consumeSocketConnectRateLimit('10.0.0.1'));
+    assert.ok(rl.consumeSocketConnectRateLimit('10.0.0.1')); // secret-scan: allow test address in a documentation range
   });
 
   it('blocks connections over the limit', () => {
     const deps = makeDeps({ config: { SOCKET_CONNECT_RATE_LIMIT: 2 } });
     const rl = createRateLimiters(deps);
-    rl.consumeSocketConnectRateLimit('10.0.0.1');
-    rl.consumeSocketConnectRateLimit('10.0.0.1');
-    assert.ok(!rl.consumeSocketConnectRateLimit('10.0.0.1'));
+    rl.consumeSocketConnectRateLimit('10.0.0.1'); // secret-scan: allow test address in a documentation range
+    rl.consumeSocketConnectRateLimit('10.0.0.1'); // secret-scan: allow test address in a documentation range
+    assert.ok(!rl.consumeSocketConnectRateLimit('10.0.0.1')); // secret-scan: allow test address in a documentation range
   });
 });
 

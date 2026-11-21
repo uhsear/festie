@@ -1,7 +1,6 @@
 import { View, Text } from 'react-native';
 import { useRouter } from 'expo-router';
 import {
-  artistDisplayName,
   fmtZonedClock,
   formatGapLength,
   type CrewSplit,
@@ -11,6 +10,7 @@ import {
 import type { CrewCompareColumn } from '@festie/shared/hooks';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Button from './Button';
+import { ArtistNameRuns } from './ArtistName';
 
 interface Props {
   columns: CrewCompareColumn[];
@@ -84,7 +84,8 @@ export default function CrewCompareSummary({ columns, freeTogether, split, toget
               </Text>
               {s.sides.map((side) => (
                 <Text key={side.set.id} style={styles.keyText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                  {`${artistDisplayName(side.set)}: ${names(side.memberIds)}`}
+                  <ArtistNameRuns set={side.set} />
+                  {`: ${names(side.memberIds)}`}
                 </Text>
               ))}
             </View>
@@ -101,7 +102,8 @@ export default function CrewCompareSummary({ columns, freeTogether, split, toget
           </Text>
           {together.map((t) => (
             <Text key={t.set.id} style={styles.keyText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {`${artistDisplayName(t.set)} · ${fmtZonedClock(t.startMs, timeZone)} · ${names(t.memberIds)}`}
+              <ArtistNameRuns set={t.set} />
+              {` · ${fmtZonedClock(t.startMs, timeZone)} · ${names(t.memberIds)}`}
             </Text>
           ))}
         </View>

@@ -492,6 +492,15 @@ function configureMiddleware(app: Application, ctx: AppContext) {
   // (icons, legal pages, screenshots, etc.).
   const reactDistDir = webDist;
   if (fs.existsSync(reactDistDir)) {
+    // Source maps are uploaded to Sentry, never served. Refuse them here so a map left in dist/
+    // (the deploy build writes them briefly) is neither public nor cached by the edge for a year.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (/\.map$/i.test(req.path)) {
+        res.status(404).end();
+        return;
+      }
+      next();
+    });
     app.use(
       express.static(reactDistDir, {
         maxAge: '7d',

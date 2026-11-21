@@ -51,7 +51,7 @@ function initSentry(options: any = {}) {
     Sentry.init({
       dsn,
       environment: options.environment || cfg().NODE_ENV || 'production',
-      release: options.release || cfg().APP_VERSION || 'dev',
+      release: options.release || cfg().SENTRY_RELEASE || cfg().APP_VERSION || 'dev',
       tracesSampleRate: Number(cfg().SENTRY_TRACES_RATE ?? 0.05),
       // SDK 11 defaults to streamed v2 spans, which Performance and Transactions do not show.
       traceLifecycle: 'static',
@@ -84,7 +84,7 @@ function initSentry(options: any = {}) {
       ...options.extra,
     });
     noop = false;
-    console.debug('[sentry] initialized', { env: options.environment || cfg().NODE_ENV, release: options.release || cfg().APP_VERSION });
+    console.debug('[sentry] initialized', { env: options.environment || cfg().NODE_ENV, release: options.release || cfg().SENTRY_RELEASE || cfg().APP_VERSION });
     return Sentry;
   } catch (err: any) {
 
