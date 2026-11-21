@@ -81,24 +81,29 @@ export function uses24HourClock(locale?: string): boolean {
 
 const clockFormats = new Map<string, Intl.DateTimeFormat>();
 
+// A formatter without a time zone captures the device zone when it is built, so only a named zone is cached:
+// a phone that changes zone must not keep showing the old one.
+function clockFormat(timeZone?: string, locale?: string): Intl.DateTimeFormat {
+  const key = `${locale ?? ''}|${timeZone ?? ''}`;
+  const cached = timeZone ? clockFormats.get(key) : undefined;
+  if (cached) return cached;
+  const is24 = uses24HourClock(locale);
+  const format = new Intl.DateTimeFormat(locale, {
+    hour: is24 ? '2-digit' : 'numeric',
+    minute: '2-digit',
+    ...(is24 ? { hourCycle: 'h23' as const } : {}),
+    ...(timeZone ? { timeZone } : {}),
+  });
+  if (timeZone) clockFormats.set(key, format);
+  return format;
+}
+
 /**
  * The clock time of an instant in `timeZone` (the device zone when omitted), in the locale's hour cycle:
  * "9:30 PM" for en-US, "21:30" for en-GB and de-DE. Always a plain space before AM/PM, never ICU's no-break space.
  */
 export function formatClock(ms: number, timeZone?: string, locale?: string): string {
-  const key = `${locale ?? ''}|${timeZone ?? ''}`;
-  let format = clockFormats.get(key);
-  if (!format) {
-    const is24 = uses24HourClock(locale);
-    format = new Intl.DateTimeFormat(locale, {
-      hour: is24 ? '2-digit' : 'numeric',
-      minute: '2-digit',
-      ...(is24 ? { hourCycle: 'h23' as const } : {}),
-      ...(timeZone ? { timeZone } : {}),
-    });
-    clockFormats.set(key, format);
-  }
-  return format.format(ms).replace(/\s/g, ' ');
+  return clockFormat(timeZone, locale).format(ms).replace(/\s/g, ' ');
 }
 
 /**
@@ -112,6 +117,23 @@ export function formatTime(t: string | undefined, locale?: string): string {
   const minute = parseInt(mm, 10);
   if (Number.isNaN(hour) || Number.isNaN(minute)) return t;
   return formatClock(Date.UTC(2000, 0, 1, hour, minute), 'UTC', locale);
+}
+
+/** Like formatTime, but split in the time and its AM/PM marker ("9:30" and "PM"; the marker is empty on a 24-hour clock). */
+export function formatTimeParts(t: string | undefined, locale?: string): { time: string; period: string } {
+  const whole = formatTime(t, locale);
+  const [hh = '0', mm = '00'] = (t ?? '').split(':');
+  if (!t || whole === t) return { time: whole, period: '' };
+  const parts = clockFormat('UTC', locale).formatToParts(Date.UTC(2000, 0, 1, parseInt(hh, 10), parseInt(mm, 10)));
+  const clean = (value: string) => value.replace(/\s/g, ' ');
+  const time = parts.filter((p) => p.type !== 'dayPeriod').map((p) => clean(p.value)).join('').trim();
+  return { time, period: clean(parts.find((p) => p.type === 'dayPeriod')?.value ?? '') };
+}
+
+/** The time for a tight label: on a 12-hour clock a whole hour drops its minutes ("9 PM"); 24-hour times keep them ("21:00"). */
+export function formatTimeCompact(t: string | undefined, locale?: string): string {
+  const whole = formatTime(t, locale);
+  return uses24HourClock(locale) ? whole : whole.replace(':00', '');
 }
 
 const HHMM = /^\d{2}:\d{2}$/;

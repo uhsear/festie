@@ -6,6 +6,8 @@ import {
   formatClock,
   formatTime,
   formatTimeOrRaw,
+  formatTimeCompact,
+  formatTimeParts,
   uses24HourClock,
   timeToMinutes,
   minutesToTime,
@@ -61,27 +63,27 @@ describe('formatFestivalDateRange', () => {
 
 describe('formatTime', () => {
   it('returns empty string for undefined', () => {
-    expect(formatTime(undefined)).toBe('');
+    expect(formatTime(undefined, 'en-US')).toBe('');
   });
 
   it('converts 24h morning time to 12h AM', () => {
-    expect(formatTime('09:30')).toBe('9:30 AM');
+    expect(formatTime('09:30', 'en-US')).toBe('9:30 AM');
   });
 
   it('converts noon to 12 PM', () => {
-    expect(formatTime('12:00')).toBe('12:00 PM');
+    expect(formatTime('12:00', 'en-US')).toBe('12:00 PM');
   });
 
   it('converts afternoon time to 12h PM', () => {
-    expect(formatTime('14:30')).toBe('2:30 PM');
+    expect(formatTime('14:30', 'en-US')).toBe('2:30 PM');
   });
 
   it('converts midnight to 12 AM', () => {
-    expect(formatTime('00:00')).toBe('12:00 AM');
+    expect(formatTime('00:00', 'en-US')).toBe('12:00 AM');
   });
 
   it('converts 23:59 to 11:59 PM', () => {
-    expect(formatTime('23:59')).toBe('11:59 PM');
+    expect(formatTime('23:59', 'en-US')).toBe('11:59 PM');
   });
 });
 
@@ -127,7 +129,55 @@ describe('formatTime follows the locale hour cycle', () => {
   });
 });
 
+describe('formatTimeCompact and formatTimeParts', () => {
+  it.each([
+    ['en-US', '21:00', '9 PM'],
+    ['en-US', '21:30', '9:30 PM'],
+    ['en-GB', '13:00', '13:00'],
+    ['de-DE', '00:00', '00:00'],
+  ])('%s compacts %s to %s', (locale, hhmm, expected) => {
+    expect(formatTimeCompact(hhmm, locale)).toBe(expected);
+  });
+
+  it.each([
+    ['en-US', '21:30', { time: '9:30', period: 'PM' }],
+    ['en-GB', '21:30', { time: '21:30', period: '' }],
+    ['de-DE', '00:05', { time: '00:05', period: '' }],
+  ])('%s splits %s into its clock and marker', (locale, hhmm, expected) => {
+    expect(formatTimeParts(hhmm, locale)).toEqual(expected);
+  });
+
+  it('keeps the marker apart from the clock when the locale writes it first or with dots', () => {
+    const ko = formatTimeParts('21:30', 'ko-KR');
+    expect(ko.time).toBe('9:30');
+    expect(ko.period).not.toBe('');
+    const ca = formatTimeParts('21:30', 'en-CA');
+    expect(ca.time).toBe('9:30');
+    expect(ca.period).toMatch(/^p\.?m\.?$/i);
+  });
+
+  it('passes unreadable input through with no marker', () => {
+    expect(formatTimeParts('soon', 'en-US')).toEqual({ time: 'soon', period: '' });
+    expect(formatTimeParts(undefined, 'en-US')).toEqual({ time: '', period: '' });
+  });
+});
+
 describe('formatClock', () => {
+  it('follows the device zone when none is given, even after the zone changes', () => {
+    const original = process.env.TZ;
+    const instant = Date.UTC(2026, 6, 11, 1, 30);
+    try {
+      process.env.TZ = 'America/Los_Angeles';
+      expect(formatClock(instant, undefined, 'en-US')).toBe('6:30 PM');
+      process.env.TZ = 'Asia/Tokyo';
+      expect(formatClock(instant, undefined, 'en-US')).toBe('10:30 AM');
+      expect(formatClock(instant, undefined, 'de-DE')).toBe('10:30');
+    } finally {
+      if (original === undefined) delete process.env.TZ;
+      else process.env.TZ = original;
+    }
+  });
+
   // 2026-07-11 01:30 UTC is 6:30 PM on Jul 10 in Los Angeles and 10:30 AM in Tokyo.
   const instant = Date.UTC(2026, 6, 11, 1, 30);
 
@@ -149,7 +199,7 @@ describe('uses24HourClock', () => {
 
 describe('formatTimeOrRaw', () => {
   it('formats HH:MM values', () => {
-    expect(formatTimeOrRaw('14:30')).toBe('2:30 PM');
+    expect(formatTimeOrRaw('14:30', 'en-US')).toBe('2:30 PM');
   });
 
   it('passes free text through unchanged', () => {
