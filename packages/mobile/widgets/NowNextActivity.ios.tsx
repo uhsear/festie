@@ -13,8 +13,11 @@ import { createLiveActivity, createWidget, type LiveActivityEnvironment, type Wi
  *
  * Home-screen widget: systemSmall (2×2) and systemMedium (4×2) layouts compiled
  * to SwiftUI by expo-widgets at build time. Timeline is kept current by
- * hooks/useOngoingNotification.ts calling NowNextWidget.updateSnapshot() whenever
- * the model changes — same rhythm as the Live Activity update.
+ * hooks/useOngoingNotification.ts calling lib/liveActivity.ts updateWidgetSnapshot()
+ * whenever the model changes — same rhythm as the Live Activity update.
+ *
+ * Only builds made with FESTIE_LIVE_ACTIVITY=1 carry the extension (app.config.js);
+ * lib/liveActivity.ios.ts loads this file only for those builds.
  *
  * Brand: aqua accent on the dark system surface; coral is reserved for
  * danger/SOS so it is not used here.
@@ -80,7 +83,7 @@ export default NowNextActivityFactory;
 // Home-screen widget layout (systemSmall + systemMedium).
 //
 // Uses the same NowNextProps shape as the Live Activity so a single
-// updateSnapshot({ title, subtitle, endsAt }) call in useOngoingNotification
+// updateSnapshot({ title, subtitle, endsAt }) call from lib/liveActivity.ios.ts
 // keeps both surfaces in sync. This home-screen widget name matches app.json;
 // the Live Activity uses its own runtime-only name above.
 // ---------------------------------------------------------------------------

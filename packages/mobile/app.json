@@ -257,25 +257,6 @@
       ],
       "./plugins/withAndroidUploadSigning",
       "expo-web-browser",
-      [
-        "expo-widgets",
-        {
-          "bundleIdentifier": "us.festie.app.widgets",
-          "widgets": [
-            {
-              "name": "NowNextActivity",
-              "displayName": "Now & Next",
-              "description": "Your current and upcoming festival set.",
-              "ios": {
-                "supportedFamilies": [
-                  "systemSmall",
-                  "systemMedium"
-                ]
-              }
-            }
-          ]
-        }
-      ],
       "expo-sharing",
       "@react-native-community/datetimepicker"
     ],

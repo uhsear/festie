@@ -12,8 +12,7 @@ import {
   type OngoingSetInput,
 } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
-import { startOrUpdateLiveActivity, endLiveActivity } from '../lib/liveActivity';
-import { NowNextWidgetInstance } from '../widgets/NowNextActivity';
+import { startOrUpdateLiveActivity, endLiveActivity, updateWidgetSnapshot, clearWidgetSnapshot } from '../lib/liveActivity';
 
 /**
  * M6 — Android ongoing (sticky) notification.
@@ -79,17 +78,6 @@ async function cancelOngoing(): Promise<void> {
   // Remove whether it is currently shown or (defensively) still scheduled.
   await Notifications.dismissNotificationAsync(ONGOING_ID).catch(() => {});
   await Notifications.cancelScheduledNotificationAsync(ONGOING_ID).catch(() => {});
-}
-
-// expo-widgets has no clearSnapshot/reset API (Widget only exposes
-// updateSnapshot/updateTimeline/reload) — the least-surprise way to un-stick a
-// stale "Now: X" on the home-screen widget is to push a neutral placeholder.
-function clearWidgetSnapshot(): void {
-  try {
-    NowNextWidgetInstance.updateSnapshot({ title: 'Festie', subtitle: 'Open the app to plan your sets' });
-  } catch {
-    // Never let a widget-timeline failure surface to the user.
-  }
 }
 
 /**
@@ -212,11 +200,7 @@ export function useOngoingNotification(enabled: boolean = true): void {
       // Home-screen widget: push the same model snapshot so the WidgetKit
       // timeline reflects the current set without waiting for a background
       // refresh. Widget failures remain isolated from the main app.
-      try {
-        NowNextWidgetInstance.updateSnapshot({ title: model.title, subtitle: model.body, endsAt });
-      } catch {
-        // Never let a widget-timeline failure surface to the user.
-      }
+      updateWidgetSnapshot({ title: model.title, body: model.body, endsAt });
     } else {
       endLiveActivity();
       // Covers festival end, logout, and account switch: model.active/currentFestival
