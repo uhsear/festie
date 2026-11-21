@@ -2,7 +2,8 @@
 # ─────────────────────────────────────────────────────────────────────
 # backup-verify.sh  — weekly pg_restore smoke test for Festie
 #
-# Runs pg_restore --list on the newest dump in BACKUP_DIR.
+# Runs pg_restore --list on the newest dump in BACKUP_DIR (fp_*.dump.gpg), decrypted to a
+# temporary file that is deleted at exit. Needs BACKUP_GPG_PASSPHRASE (environment or .env).
 # Appends PASS/FAIL with timestamp to VERIFY_LOG.
 #
 # Cron (weekly, Sunday 04:00):
@@ -20,6 +21,12 @@ VERIFY_LOG="${VERIFY_LOG:-${BACKUP_DIR}/verify.log}"
 log()  { printf '[%s] %s\n' "$(date -Iseconds)" "$*" | tee -a "$VERIFY_LOG"; }
 fail() { log "FAIL: $*"; exit 1; }
 
+# shellcheck source=lib/backup-gpg.sh
+source "$SCRIPT_DIR/scripts/lib/backup-gpg.sh"
+load_backup_passphrase "$SCRIPT_DIR"
+PLAIN=""
+trap 'rm -f "$PLAIN"' EXIT
+
 # ── Resolve credentials ──────────────────────────────────────────────
 if [ -z "${PGPASSWORD:-}" ]; then
   DB_URL="${DATABASE_URL:-}"
@@ -34,7 +41,7 @@ fi
 export PGPASSWORD="${PGPASSWORD:?Could not resolve database password}"
 
 # ── Find newest dump ─────────────────────────────────────────────────
-NEWEST=$(find "$BACKUP_DIR" -maxdepth 1 -name 'fp_*.dump' \
+NEWEST=$(find "$BACKUP_DIR" -maxdepth 1 -name 'fp_*.dump.gpg' \
   -printf '%T+ %p\n' 2>/dev/null | sort -r | head -1 | awk '{print $2}')
 
 [ -n "$NEWEST" ] || fail "No dump files found in ${BACKUP_DIR}"
@@ -49,7 +56,9 @@ log "Verifying: ${NEWEST} ($(du -h "$NEWEST" | cut -f1))"
 # Disable pipefail for this check: pg_restore --list can return non-zero
 # for minor warnings; we only care that it can read the dump header.
 PG_RC=0
-( set +e; pg_restore --list "$NEWEST" > /dev/null 2>&1 ) || PG_RC=$?
+PLAIN="$(mktemp "$BACKUP_DIR/.verify.XXXXXX")"
+backup_decrypt "$NEWEST" "$PLAIN" || fail "could not decrypt ${NEWEST} with BACKUP_GPG_PASSPHRASE"
+( set +e; pg_restore --list "$PLAIN" > /dev/null 2>&1 ) || PG_RC=$?
 
 if [ "$PG_RC" -eq 0 ]; then
   MSG="PASS: pg_restore --list OK — $(basename "$NEWEST") (${FSIZE} bytes)"
