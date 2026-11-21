@@ -56,9 +56,9 @@ describe('DiscoverRow', () => {
     render(<DiscoverRow />);
     expect(screen.getByRole('heading', { name: 'More like your picks' })).toBeInTheDocument();
     expect(screen.getByText('From the genres you pick most: house')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Dee/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Dee/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Eve/ })).toBeNull();
-    await userEvent.click(screen.getByRole('button', { name: /Dee/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Dee/ }));
     expect(setDetailSet).toHaveBeenCalledWith(expect.objectContaining({ id: 'd' }));
   });
 

@@ -18,6 +18,7 @@ import PriorityIcon from '../ui/PriorityIcon';
 import { useToast } from '../../lib/toastContext';
 import { useUndoNotifier } from '../../hooks/useUndoNotifier';
 import { cn } from '@/lib/utils';
+import ArtistName, { RowOpenButton } from './ArtistName';
 
 interface PicksPlanRowProps {
   set: FestivalSet;
@@ -76,15 +77,13 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
 
   return (
     <div className="flex items-center gap-2 pl-4 pr-2 py-2 w-full bg-bg-card border border-border rounded-xl mb-2">
-      <button
-        type="button"
-        className="flex flex-1 items-center gap-x-3 min-w-0 py-1 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-lg"
-        aria-label={label}
-        onClick={() => setDetailSet(set)}
-      >
+      <div className="relative flex flex-1 items-center gap-x-3 min-w-0 py-1 text-left rounded-lg">
+        <RowOpenButton label={label} onClick={() => setDetailSet(set)} />
         <div className="text-xs text-text-muted min-w-[56px] font-semibold tabular-nums">{time}</div>
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold break-words [overflow-wrap:anywhere] line-clamp-2">{artist}</div>
+          <div className="text-sm font-bold break-words [overflow-wrap:anywhere] line-clamp-2">
+            <ArtistName set={set} separator={b2bSeparator} />
+          </div>
           {(hasNote || hasReminder || hasClash || !!move) && (
             <div className="mt-0.5 flex items-center gap-2 text-xs text-text-muted">
               {hasNote && (
@@ -116,7 +115,7 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
           )}
         </div>
         <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} />
-      </button>
+      </div>
 
       <div role="group" aria-label={`Priority for ${artist}`} className="flex items-center">
         {PRIORITY_OPTIONS.map((p) => (

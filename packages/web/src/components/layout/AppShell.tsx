@@ -31,6 +31,7 @@ import { OfflineQueueContext, useOfflineQueueBridge } from '../../hooks/useOffli
 import { useFestivalLoader } from '../../hooks/useFestivalLoader';
 import { useFestivalMode } from '../../hooks/useFestivalMode';
 import { prefetchMainRoutes } from '../../router';
+import ArtistSheetHost from '../features/ArtistSheetHost';
 import { cn } from '../../lib/utils';
 import { SocketContext } from '../../lib/socketContext';
 import { useThemeSync } from '../../lib/theme';
@@ -202,6 +203,7 @@ export default function AppShell() {
         </div>
 
         <BottomNav />
+        <ArtistSheetHost />
 
         {detailSet && (
           <DetailPanel

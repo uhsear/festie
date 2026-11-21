@@ -20,6 +20,7 @@ import PriorityIcon from '../ui/PriorityIcon';
 import Button from '../ui/Button';
 import { useToast } from '../../lib/toastContext';
 import { cn } from '@/lib/utils';
+import ArtistName from './ArtistName';
 
 // Priority chip styling mirrors the Badge tint-ring roles (must=coral, want=aqua,
 // maybe=amber) but inline here so the chip can sit tight against the time row.
@@ -180,16 +181,19 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                     )}
                   >
                     <div className="flex items-center gap-2">
+                      <span className="break-words [overflow-wrap:anywhere] line-clamp-2 text-left text-sm font-bold text-text-primary">
+                        <ArtistName set={pick.set} separator={b2bSeparator} />
+                      </span>
                       <button
                         type="button"
                         className={cn(
-                          'min-h-[44px] break-words [overflow-wrap:anywhere] line-clamp-2 text-left text-sm font-bold text-text-primary hover:text-accent-aqua',
+                          'min-h-[44px] shrink-0 px-2 text-xs font-semibold text-text-secondary hover:text-accent-aqua',
                           'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                         )}
                         aria-label={`Open details for ${dn}`}
                         onClick={() => openSet(pick)}
                       >
-                        {dn}
+                        Details
                       </button>
                       <span
                         className={cn(

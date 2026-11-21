@@ -1,13 +1,13 @@
 import React from 'react';
 import { Link } from '@tanstack/react-router';
 import {
-  artistDisplayName,
   fmtZonedClock,
   formatGapLength,
   type CrewSplit,
   type CrewTogether,
   type FreeSlot,
 } from '@festie/shared/utils';
+import ArtistName from '../features/ArtistName';
 
 interface CompareSummaryProps {
   columns: Array<{ profileId: string; name: string; isMe: boolean; color: string }>;
@@ -81,7 +81,7 @@ export default function CompareSummary({ columns, freeTogether, split, together,
                 <ul className="mt-0.5">
                   {s.sides.map((side) => (
                     <li key={side.set.id}>
-                      {artistDisplayName(side.set)}: {names(side.memberIds)}
+                      <ArtistName set={side.set} />: {names(side.memberIds)}
                     </li>
                   ))}
                 </ul>
@@ -98,7 +98,9 @@ export default function CompareSummary({ columns, freeTogether, split, together,
           <ul className="mt-2 space-y-1">
             {together.map((t) => (
               <li key={t.set.id} className="text-xs text-text-secondary">
-                <span className="font-semibold text-text-primary">{artistDisplayName(t.set)}</span> ·{' '}
+                <span className="font-semibold text-text-primary">
+                  <ArtistName set={t.set} />
+                </span> ·{' '}
                 {fmtZonedClock(t.startMs, timeZone)} · {names(t.memberIds)}
               </li>
             ))}

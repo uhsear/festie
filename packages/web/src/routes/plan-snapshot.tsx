@@ -4,6 +4,7 @@ import { api } from '@festie/shared/services';
 import { PRIORITY_LABELS, planBLine } from '@festie/shared/constants';
 import type { Festival, FestivalDay, FestivalSet, Stage } from '@festie/shared/types';
 import { artistDisplayName, byStartTime, decodePlanSnapshot, formatTime, fromPickPriority } from '@festie/shared/utils';
+import { ArtistNameButton } from '../components/features/ArtistName';
 
 /** Shape returned by GET /festivals/:id (after envelope unwrap). */
 interface FestivalDetailResponse extends Festival {
@@ -125,7 +126,9 @@ export default function PlanSnapshotPage() {
           <ul className="flex flex-col gap-2 mt-2 list-none p-0">
             {g.rows.map((r) => (
               <li key={r.key} className="flex flex-col">
-                <span className="text-text-primary font-semibold">{r.artist}</span>
+                <span className="text-text-primary font-semibold">
+                  <ArtistNameButton name={r.artist} />
+                </span>
                 <span className="text-[length:var(--font-size-13)] text-text-secondary">
                   {[r.time, r.stage, r.priority].filter(Boolean).join(' · ')}
                 </span>

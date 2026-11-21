@@ -1,9 +1,10 @@
 import { describe, it, expect, vi } from 'vitest';
 import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
-import { fireEvent, render } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import type { FestivalSet } from '@festie/shared/types';
 import type { ClashMark, GridCrewAvatars } from '@festie/shared/utils';
 import TimelineGridCell from './TimelineGridCell';
+import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 
 const ROW_HEIGHT = 36;
 
@@ -49,6 +50,49 @@ function bounds(el: HTMLElement) {
   const top = rowStart * ROW_HEIGHT + parseFloat(el.style.marginTop);
   return { top, bottom: top + parseFloat(el.style.height) };
 }
+
+describe('TimelineGridCell artist name', () => {
+  function renderNamed(set: FestivalSet, onSetClick = vi.fn()) {
+    useArtistSheetStore.setState({ target: null, isOpen: false });
+    render(
+      <TimelineGridCell
+        set={set}
+        stageName="Main"
+        stageColor="#ff3366"
+        columnIndex={0}
+        topSlot={0}
+        spanSlots={4}
+        rowHeight={ROW_HEIGHT}
+        myPick={null}
+        crew={undefined}
+        compact={false}
+        tabbable
+        canPick
+        festival={null}
+        onNavKey={vi.fn()}
+        onActivate={vi.fn()}
+        onSetClick={onSetClick}
+        onSavePick={vi.fn()}
+      />,
+    );
+    return onSetClick;
+  }
+
+  it('opens the artist sheet and not the set, and the cell button still opens the set', () => {
+    const onSetClick = renderNamed(makeSet('a'));
+    fireEvent.click(screen.getByRole('button', { name: 'Open a' }));
+    expect(useArtistSheetStore.getState()).toMatchObject({ isOpen: true, target: { title: 'a' } });
+    expect(onSetClick).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^a, .* to .*, Main$/ }));
+    expect(onSetClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens each B2B artist on its own', () => {
+    renderNamed(makeFestivalSet({ id: 'b', artist: 'X b2b Y', artists: [{ name: 'X' }, { name: 'Y' }] }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Y' }));
+    expect(useArtistSheetStore.getState().target?.title).toBe('Y');
+  });
+});
 
 describe('TimelineGridCell block placement', () => {
   it('keeps back-to-back sets with fractional slots from overlapping', () => {

@@ -7,6 +7,7 @@ import { applyCaughtMark, artistDisplayName, catchableMeta, caughtFor, selectCat
 import { Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useToast } from '../../lib/toastContext';
+import ArtistName from '../features/ArtistName';
 
 interface Props {
   festivalId: string;
@@ -69,7 +70,9 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
           return (
             <li key={item.set.id} className="flex flex-wrap items-center justify-between gap-2">
               <div className="min-w-0">
-                <div className="line-clamp-2 break-words text-text-primary">{artist}</div>
+                <div className="line-clamp-2 break-words text-text-primary">
+                  <ArtistName set={item.set} separator={b2bSeparator} />
+                </div>
                 <div className="text-xs text-text-secondary">
                   {catchableMeta(item, nowMs, item.set.stageId ? getStageName(item.set.stageId) : null)}
                 </div>

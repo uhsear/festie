@@ -9,6 +9,7 @@ import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
 import { loadErrorMessage } from '../crew/loadErrorMessage';
 import { History, Trophy, CalendarDays, Clock, Music } from 'lucide-react';
 import { RATING_META } from '../../lib/ratingIcon';
+import { ArtistNameButton } from '../features/ArtistName';
 
 /**
  * History surface for the account screen (M3 — cross-festival year-over-year
@@ -160,7 +161,9 @@ export default function HistorySection() {
                   const Icon = RATING_META[a.bestRating]?.Icon ?? Music;
                   return <Icon className="w-4 h-4 text-text-secondary flex-shrink-0" aria-hidden="true" />;
                 })()}
-                <span className="flex-1 text-sm text-text-primary truncate">{a.artist}</span>
+                <span className="flex-1 text-sm text-text-primary truncate">
+                  <ArtistNameButton name={a.artist} />
+                </span>
                 <span className="text-xs text-text-muted">{a.timesRated > 1 ? `${a.timesRated}×` : ''}</span>
               </div>
             ))}
@@ -187,7 +190,9 @@ function SeenMost({ rows }: { rows: Array<{ artist: string; festivals: number }>
             aria-label={`${r.artist}, ${r.festivals} festivals`}
             className="flex items-center gap-3 py-2 border-b border-border last:border-b-0 first:pt-0 last:pb-0"
           >
-            <span className="flex-1 text-sm text-text-primary truncate">{r.artist}</span>
+            <span className="flex-1 text-sm text-text-primary truncate">
+              <ArtistNameButton name={r.artist} />
+            </span>
             <span className="text-xs text-text-muted">{r.festivals} festivals</span>
           </li>
         ))}

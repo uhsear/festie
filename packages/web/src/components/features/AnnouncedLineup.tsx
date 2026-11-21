@@ -1,11 +1,10 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
-import { useInterest, useInterestedRows } from '@festie/shared/hooks/useInterest';
+import { useInterestedRows } from '@festie/shared/hooks/useInterest';
 import type { Festival, FestivalSet, LineupEntry, Stage } from '@festie/shared/types';
 import {
   LINEUP_VIEW_KEY,
-  artistLinkEntries,
   groupLineupAlphabetically,
   groupLineupByTier,
   lineupCoveringSets,
@@ -18,8 +17,8 @@ import {
 } from '@festie/shared/utils';
 import type { AnnouncedLineupModel, InterestRow, LineupView } from '@festie/shared/utils';
 import { useNow } from '../../hooks/useSetStatus';
-import Avatar from '../ui/Avatar';
-import Sheet from '../ui/Sheet';
+import { ArtistNameButton } from './ArtistName';
+import { InterestToggle, sheetButtonClass as buttonClass } from './ArtistSheetHost';
 import { cn } from '../../lib/utils';
 
 
@@ -55,9 +54,6 @@ const TIER_TEXT: Record<number, string> = {
 const tierText = (tier: number | null) => (tier !== null && TIER_TEXT[tier]) || 'text-base font-medium';
 
 const pillClass = 'rounded-full border border-border px-2 py-0.5 text-xs text-text-secondary';
-const buttonClass =
-  'rounded-full px-3 min-h-11 text-[length:var(--font-size-14)] font-semibold cursor-pointer ' +
-  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua ';
 const chipClass = (active: boolean) =>
   buttonClass + (active ? 'bg-accent-aqua text-[var(--text-on-light-accent)]' : 'bg-transparent text-text-secondary hover:text-text-primary');
 
@@ -78,66 +74,6 @@ function writeCopySeen() {
   }
 }
 
-/** The filled or empty "Interested" toggle on one act. A guest's mark stays on the device. */
-function InterestToggle({ entryId, name, onMarked }: { entryId: string; name: string; onMarked?: () => void }) {
-  const { marked, toggle } = useInterest(entryId);
-  return (
-    <button
-      type="button"
-      aria-pressed={marked}
-      aria-label={`Interested in ${name}`}
-      onClick={() => {
-        if (!marked) onMarked?.();
-        // toggleInterest rolls the mark back and sets the store error when the write fails, so the toggle already shows the truth.
-        toggle().catch(() => {});
-      }}
-      className={cn(
-        'rounded-full border px-3 min-h-11 text-xs font-semibold cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
-        marked ? 'border-accent-aqua bg-accent-aqua text-[var(--text-on-light-accent)]' : 'border-border text-text-secondary hover:text-text-primary',
-      )}
-    >
-      Interested
-    </button>
-  );
-}
-
-/** An announced act with no linked set: each artist's photo, genres and links, plus the Interested toggle. */
-function ArtistSheet({ entry, name, open, onOpenChange }: { entry: LineupEntry; name: string; open: boolean; onOpenChange: (open: boolean) => void }) {
-  return (
-    <Sheet open={open} onOpenChange={onOpenChange} title={name}>
-      <div className="flex flex-col gap-4">
-        {entry.artists.map((artist, i) => (
-          <div key={artist.id ?? i} className="flex items-start gap-3">
-            <Avatar name={artist.name} image={artist.photo} size="lg" />
-            <div className="flex flex-col gap-1 min-w-0">
-              <span className="text-base font-semibold text-text-primary">{artist.name}</span>
-              {artist.genres && artist.genres.length > 0 && (
-                <span className="text-sm text-text-secondary">{artist.genres.join(' · ')}</span>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {artistLinkEntries(artist.links).map((link) => (
-                  <a
-                    key={link.key}
-                    href={link.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className={cn(buttonClass, 'inline-flex items-center border border-border text-text-primary')}
-                  >
-                    {link.label}
-                  </a>
-                ))}
-              </div>
-            </div>
-          </div>
-        ))}
-        <div>
-          <InterestToggle entryId={entry.id} name={name} />
-        </div>
-      </div>
-    </Sheet>
-  );
-}
-
 /** What a row needs to describe an act, read once by the component instead of once per row. */
 interface RowContext {
   cover: AnnouncedLineupModel['cover'];
@@ -153,41 +89,44 @@ interface RowContext {
 /** One act: the poster name, its badges and, for a scheduled act, where it plays. */
 function LineupRow({ entry, textClass, ctx }: { entry: LineupEntry; textClass: string; ctx: RowContext }) {
   const entryCover = ctx.cover[entry.id];
-  const [sheetOpen, setSheetOpen] = useState(false);
   if (!entryCover) return null;
 
   const name = lineupEntryName(entry, ctx.festival?.b2bSeparator);
   const badges = lineupEntryBadge(entry, entryCover, ctx.days, ctx.festival?.publishedAt, ctx.nowMs);
   const first = entryCover.state === 'scheduled' ? lineupCoveringSets(entryCover, ctx.sets)[0] : undefined;
-  const nameNode = (
-    <span className={cn(textClass, entryCover.state === 'cancelled' && 'line-through text-text-muted')}>{name}</span>
-  );
+  const nameClass = cn(textClass, entryCover.state === 'cancelled' && 'line-through text-text-muted');
+  const split = entry.artists.length > 1 && name === entry.artists.map((a) => a.name).join(` ${ctx.festival?.b2bSeparator || 'b2b'} `);
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-1">
-      {first ? (
+      <span className="inline-flex flex-wrap items-baseline gap-x-1 min-h-11 text-text-primary">
+        {split ? (
+          entry.artists.map((artist, i) => (
+            <React.Fragment key={artist.id ?? `${artist.name}-${i}`}>
+              {i > 0 && <span className={nameClass}>{ctx.festival?.b2bSeparator || 'b2b'}</span>}
+              <ArtistNameButton target={{ title: artist.name, artists: [artist] }} className={nameClass}>
+                {artist.name}
+              </ArtistNameButton>
+            </React.Fragment>
+          ))
+        ) : (
+          <ArtistNameButton
+            target={{ title: name, artists: entry.artists, entryId: entry.id }}
+            className={nameClass}
+          >
+            {name}
+          </ArtistNameButton>
+        )}
+      </span>
+      {first && (
         <Link
           to="/set/$setId"
           params={{ setId: first.id }}
-          className="min-h-11 inline-flex flex-wrap items-baseline gap-x-2 text-text-primary"
+          aria-label={`${name}, ${lineupSetWhen(first, ctx.days, ctx.stages)}`}
+          className="min-h-11 inline-flex items-center text-sm text-text-secondary"
         >
-          {nameNode}
-          <span className="text-sm text-text-secondary">{lineupSetWhen(first, ctx.days, ctx.stages)}</span>
+          {lineupSetWhen(first, ctx.days, ctx.stages)}
         </Link>
-      ) : entryCover.state === 'announced' ? (
-        <>
-          <button
-            type="button"
-            onClick={() => setSheetOpen(true)}
-            aria-label={`${name} details`}
-            className="min-h-11 inline-flex items-baseline text-left text-text-primary cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
-          >
-            {nameNode}
-          </button>
-          <ArtistSheet entry={entry} name={name} open={sheetOpen} onOpenChange={setSheetOpen} />
-        </>
-      ) : (
-        nameNode
       )}
       {badges.map((badge) => (
         <span key={badge.kind} className={cn(pillClass, badge.kind === 'new' && 'border-accent-aqua text-accent-aqua')}>
@@ -217,7 +156,12 @@ function InterestedRowView({ row, ctx }: { row: InterestRow; ctx: RowContext }) 
   };
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-1">
-      <span className={cn('text-base font-medium', row.status === 'cancelled' && 'line-through text-text-muted')}>{name}</span>
+      <ArtistNameButton
+        target={{ title: name, artists: row.entry.artists, entryId: row.status === 'cancelled' ? undefined : row.entry.id }}
+        className={cn('text-base font-medium', row.status === 'cancelled' && 'line-through text-text-muted')}
+      >
+        {name}
+      </ArtistNameButton>
       {badges.map((badge) => (
         <span key={badge.kind} className={pillClass}>
           {badge.text}
