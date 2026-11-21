@@ -43,7 +43,7 @@ describe('isPmtilesInput', () => {
   it('accepts https URLs and /tiles/ paths only', () => {
     expect(isPmtilesInput('https://festie.us/tiles/a.pmtiles')).toBe(true);
     expect(isPmtilesInput('/tiles/fest-2026.pmtiles')).toBe(true);
-    for (const bad of ['', 'http://x/a.pmtiles', '/tiles/../a.pmtiles', '/tiles/A.pmtiles', '/uploads/a.pmtiles', 'javascript:alert(1)', null, 5]) {
+    for (const bad of ['', 'http://x/a.pmtiles', '/tiles/../a.pmtiles', '/tiles/A.pmtiles', '/uploads/a.pmtiles', 'javascript:alert(1)', 'https://', 'https:// x', null, 5]) {
       expect(isPmtilesInput(bad)).toBe(false);
     }
   });

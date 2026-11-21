@@ -30,7 +30,7 @@ export default function MapBasemapPanel({ url, attribution, onChange }: MapBasem
       />
       {invalid && (
         <p className="text-xs text-[var(--color-text-danger)]" role="alert">
-          Use an https link or a /tiles/&lt;name&gt;.pmtiles path. This value is not saved.
+          Use an https link or a /tiles/&lt;name&gt;.pmtiles path. Fix it or clear the field to save the map.
         </p>
       )}
       <input

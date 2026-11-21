@@ -51,8 +51,10 @@ export function useOfflineDownload(festivalId: string) {
       if (live) setMapBytes(n);
     });
     const unsubscribe = subscribeBasemapCache(() => {
-      setMapProgress(basemapProgress(mapUrl));
-      read();
+      const running = basemapProgress(mapUrl);
+      setMapProgress(running);
+      // A running download keeps "syncing" and reports progress often, so re-read the cache only once it ends.
+      if (running === null) read();
     });
     return () => {
       live = false;

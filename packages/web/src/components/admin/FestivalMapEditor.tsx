@@ -27,6 +27,7 @@ import {
   clampOpacity,
   SITEPLAN_DEFAULT_OPACITY,
   isPmtilesInput,
+  PMTILES_PATH_RE,
   setOfflineBasemap,
   SITEPLAN_CORNER_LABELS,
   SITEPLAN_CORNER_COUNT,
@@ -204,6 +205,12 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
     if (isPlacingSiteplan && draftCorners.length === SITEPLAN_CORNER_COUNT && isHttpsUrl(siteplanUrl)) {
       const sp = buildSiteplan(siteplanUrl, draftCorners, siteplanOpacity);
       if (sp) cfg = setSiteplan(cfg, sp);
+    }
+    // A typed /tiles/ path becomes an absolute URL only when the server saves it, so resolve it here to
+    // let the preview use the file before Save.
+    const typed = cfg?.offlineBasemap?.pmtilesUrl;
+    if (cfg && typeof typed === 'string' && PMTILES_PATH_RE.test(typed)) {
+      cfg = setOfflineBasemap(cfg, `${window.location.origin}${typed}`, cfg.offlineBasemap?.attribution);
     }
     return cfg;
   }, [
@@ -409,8 +416,11 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
   // Committed zones (the draft preview is rendered separately via previewConfig).
   const placedZones = useMemo(() => extractZones(mapConfig), [mapConfig]);
 
+  // A typed value that is not valid is never put in mapConfig, so saving would silently keep the old one.
+  const basemapInvalid = scope === 'admin' && basemapUrl.trim() !== '' && !isPmtilesInput(basemapUrl.trim());
+
   const handleSave = async () => {
-    if (!detail) return;
+    if (!detail || basemapInvalid) return;
     const payload: Record<string, unknown> = {
       name: detail.name?.trim() || name.trim(),
       location: detail.location?.trim() || '',
@@ -671,7 +681,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
         </button>
         <button
           onClick={() => void handleSave()}
-          disabled={saving}
+          disabled={saving || basemapInvalid}
           className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium disabled:opacity-60"
         >
           {saving ? 'Saving…' : 'Save map'}

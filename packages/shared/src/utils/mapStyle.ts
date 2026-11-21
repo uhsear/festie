@@ -136,7 +136,14 @@ export const PMTILES_PATH_RE = /^\/tiles\/[a-z0-9][a-z0-9_-]{0,63}\.pmtiles$/;
 
 /** True when the admin editor may save this value: an https URL or a /tiles/<name>.pmtiles path. */
 export function isPmtilesInput(value: unknown): value is string {
-  return typeof value === 'string' && (PMTILES_PATH_RE.test(value) || (value.length <= 2048 && /^https:\/\//i.test(value)));
+  if (typeof value !== 'string') return false;
+  if (PMTILES_PATH_RE.test(value)) return true;
+  if (value.length > 2048) return false;
+  try {
+    return new URL(value).protocol === 'https:';
+  } catch {
+    return false;
+  }
 }
 
 /**

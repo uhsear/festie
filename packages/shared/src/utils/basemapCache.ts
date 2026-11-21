@@ -30,8 +30,11 @@ export function createBasemapEnsurer<T>(download: (url: string, report: (fractio
       const existing = inFlight.get(url);
       if (existing) return existing;
       const report = (fraction: number) => {
-        progress.set(url, Math.min(1, Math.max(0, fraction)));
-        notify();
+        const clamped = Math.min(1, Math.max(0, fraction));
+        // Subscribers re-render and re-read storage, so tell them only when a whole percent changes.
+        const changed = Math.floor(clamped * 100) !== Math.floor((progress.get(url) ?? -1) * 100);
+        progress.set(url, clamped);
+        if (changed) notify();
       };
       const run = download(url, report).finally(() => {
         inFlight.delete(url);

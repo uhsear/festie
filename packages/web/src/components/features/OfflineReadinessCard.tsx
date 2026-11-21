@@ -149,6 +149,8 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
 
   const handleDownload = () => void download();
   const mapMb = mapBytes != null ? ` The map is ${Math.max(1, Math.round(mapBytes / 1_000_000))} MB.` : '';
+  // The size is visible in the header, before the details open, so people can decide before they download.
+  const sizeNote = hasMap && !mapReady && mapBytes != null ? ` (map ${Math.max(1, Math.round(mapBytes / 1_000_000))} MB)` : '';
   const mapPercent = mapProgress != null ? ` Downloading the map: ${Math.round(mapProgress * 100)}%.` : '';
   const description = hasMap
     ? `Saves the schedule, your picks, crew plan, weather, artist art and the festival map so they work with no signal.${mapMb}${mapPercent}`
@@ -177,6 +179,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
         </span>
         <span className="flex-1 min-w-0 text-sm leading-tight font-medium text-text-primary">
           {offlineStatusLabel(summary)}
+          {sizeNote}
         </span>
         <button
           type="button"
@@ -231,7 +234,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
             <button
               type="button"
               onClick={() => void removeMap()}
-              className="mt-2 inline-flex items-center gap-1 text-xs text-text-secondary hover:text-text-primary transition-colors focus-visible:outline-1 focus-visible:outline-accent-aqua rounded"
+              className="mt-2 inline-flex min-h-11 items-center gap-1 px-2 text-xs text-text-secondary hover:text-text-primary transition-colors focus-visible:outline-1 focus-visible:outline-accent-aqua rounded"
             >
               Delete downloaded map
             </button>

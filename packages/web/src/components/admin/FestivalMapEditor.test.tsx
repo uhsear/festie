@@ -159,13 +159,16 @@ describe('FestivalMapEditor', () => {
     expect(config.amenities).toBeTruthy();
   });
 
-  it('warns about an invalid offline map value and does not save it', async () => {
+  it('blocks Save while the offline map value is invalid, so the old value is not kept silently', async () => {
+    get.mockResolvedValue(festival({ mapConfig: { version: 1, offlineBasemap: { pmtilesUrl: 'https://festie.us/tiles/a.pmtiles' } } }));
     await renderEditor();
-    fireEvent.change(screen.getByLabelText('Offline map file'), { target: { value: 'http://example.com/a.pmtiles' } });
-    expect(screen.getByRole('alert')).toHaveTextContent('This value is not saved');
+    for (const bad of ['http://example.com/a.pmtiles', 'https://']) {
+      fireEvent.change(screen.getByLabelText('Offline map file'), { target: { value: bad } });
+      expect(screen.getByRole('alert')).toHaveTextContent('Fix it or clear the field');
+      expect((screen.getByText('Save map') as HTMLButtonElement).disabled).toBe(true);
+    }
     fireEvent.click(screen.getByText('Save map'));
-    await waitFor(() => expect(put).toHaveBeenCalled());
-    expect('offlineBasemap' in (savedPayload().mapConfig as object)).toBe(false);
+    expect(put).not.toHaveBeenCalled();
   });
 
   it('removes the offline map when the field is cleared', async () => {
