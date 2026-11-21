@@ -1,8 +1,9 @@
 import { readFileSync } from 'node:fs';
+import { read as readSource } from './read-source';
 import { describe, expect, it } from 'vitest';
 
 const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
-const picks = read('app/(tabs)/picks.tsx');
+const picks = readSource('app/(tabs)/picks.tsx');
 
 describe('picks tab audit guards', () => {
   it('My day membership ignores collapsed groups and keeps no-day picks', () => {

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { read as readSource } from './read-source';
 import { join } from 'node:path';
 
 // Source-level guards: mobile tests run in plain node with no RN render harness.
@@ -7,7 +8,7 @@ const screen = read('app', 'picks-image.tsx');
 const poster = read('components', 'ScheduleImagePoster.tsx');
 const lockPoster = read('components', 'LockscreenPoster.tsx');
 const grid = read('app', 'grid.tsx');
-const picks = read('app', '(tabs)', 'picks.tsx');
+const picks = readSource('app/(tabs)/picks.tsx');
 const pkg = JSON.parse(read('package.json')) as { dependencies?: Record<string, string> };
 
 describe('T38 mobile Save image', () => {
