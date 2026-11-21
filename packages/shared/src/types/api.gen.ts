@@ -2932,7 +2932,6 @@ export type components = {
                 center?: (number)[];
                 offlineBasemap?: {
                     attribution?: string;
-                    /** Format: starts_with */
                     pmtilesUrl: string;
                 };
                 siteplan?: {
@@ -3049,7 +3048,6 @@ export type components = {
                 center?: (number)[];
                 offlineBasemap?: {
                     attribution?: string;
-                    /** Format: starts_with */
                     pmtilesUrl: string;
                 };
                 siteplan?: {

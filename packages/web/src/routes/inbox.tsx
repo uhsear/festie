@@ -1,9 +1,11 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
+import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores/inboxStore';
 import { INBOX_COPY } from '@festie/shared/constants/inboxCopy';
 import { timeAgo } from '@festie/shared/utils';
 import { openInboxItem } from '../lib/pushTargetPath';
+import ArtistName from '../components/features/ArtistName';
 
 const FOCUS_RING = 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
@@ -18,6 +20,18 @@ function ErrorLine({ onRetry }: { onRetry: () => void }) {
       >
         {INBOX_COPY.retry}
       </button>
+    </div>
+  );
+}
+
+/** The artist a notification is about, as its own button under the row. Hidden when the set is not loaded. */
+function InboxArtist({ setId }: { setId?: string }) {
+  const set = useFestivalStore((s) => (setId ? s.sets.find((x) => x.id === setId) : undefined));
+  const separator = useFestivalStore((s) => s.currentFestival?.b2bSeparator);
+  if (!set) return null;
+  return (
+    <div className="pb-2 pl-5 text-sm text-text-secondary">
+      Artist: <ArtistName set={set} separator={separator} className="font-medium text-text-primary" />
     </div>
   );
 }
@@ -74,6 +88,7 @@ export default function InboxView() {
                     <span className="block text-xs text-text-muted">{ago}</span>
                   </span>
                 </button>
+                <InboxArtist setId={item.data.setId} />
               </li>
             );
           })}

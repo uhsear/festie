@@ -196,12 +196,20 @@ function attemptToken(): string {
  */
 export function ensureBasemapCached(pmtilesUrl: string): Promise<string | null> {
   if (typeof pmtilesUrl !== 'string' || !/^https:\/\//i.test(pmtilesUrl)) return Promise.resolve(null);
+  removedByUser.delete(pmtilesUrl);
   return ensurer.ensure(pmtilesUrl);
 }
 
 // One in-flight download per URL. Both callers (map open, Download button) await
 // the same promise instead of racing two transfers for the same archive.
 const ensurer = createBasemapEnsurer(downloadOnce);
+
+// shortcut: the "user deleted this" flag lives in memory, so a restart may download the map again
+// on the next open. Persist it if that proves to cost people mobile data.
+const removedByUser = new Set<string>();
+
+/** True after the user deleted this download, until an explicit download asks for it again. */
+export const isBasemapRemoved = (url: string | null | undefined): boolean => !!url && removedByUser.has(url);
 
 /** Runs after any archive attempt settles, so every mounted download hook re-reads the disk. */
 export const subscribeBasemapCache = ensurer.subscribe;
@@ -259,10 +267,13 @@ async function downloadOnce(pmtilesUrl: string): Promise<string | null> {
  * refresh). Never throws. Returns true if a file was removed.
  */
 export function clearBasemapCache(pmtilesUrl: string): boolean {
+  removedByUser.add(pmtilesUrl);
   try {
     const file = basemapCacheFile(pmtilesUrl);
     if (file.exists) {
       file.delete();
+      // Mounted download cards re-read the disk, so the map step drops back to "not saved".
+      ensurer.notify();
       return true;
     }
   } catch {

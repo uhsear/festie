@@ -11,4 +11,5 @@ import 'dotenv/config';
 import { loadConfig } from './config';
 import { initSentry } from './sentry';
 
-initSentry({ release: loadConfig().APP_VERSION || 'dev' });
+const bootConfig = loadConfig();
+initSentry({ release: bootConfig.SENTRY_RELEASE || bootConfig.APP_VERSION || 'dev' });

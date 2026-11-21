@@ -61,7 +61,7 @@ import AppPressable from './AppPressable';
 import { useNow } from '../hooks/useNow';
 import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '../lib/webviewBridge';
 import type { AuthoringMode } from '../lib/webviewBridge';
-import { basemapCacheInfo, ensureBasemapCached, readArchiveRange, readCachedBase64 } from '../lib/basemapCache';
+import { basemapCacheInfo, ensureBasemapCached, isBasemapRemoved, readArchiveRange, readCachedBase64 } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
 import { compassHref, peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
@@ -737,6 +737,8 @@ export default function OfflineMap({
   useEffect(() => {
     let cancelled = false;
     if (!remotePmtilesUrl) return;
+    // The user deleted this download: keep the remote map instead of fetching the archive again.
+    if (isBasemapRemoved(remotePmtilesUrl)) return;
     void ensureBasemapCached(remotePmtilesUrl).then((uri) => {
       if (cancelled) return;
       if (uri) setCachedBasemap({ url: remotePmtilesUrl, uri });
@@ -1075,7 +1077,7 @@ export default function OfflineMap({
   const [cachedSiteplan, setCachedSiteplan] = useState<{ url: string; dataUrl: string } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    if (!siteplanUrl) return;
+    if (!siteplanUrl || isBasemapRemoved(siteplanUrl)) return;
     void ensureBasemapCached(siteplanUrl).then(async (uri) => {
       const base64 = uri ? await readCachedBase64(siteplanUrl) : null;
       const mime = /\.png$/i.test(siteplanUrl) ? 'image/png' : /\.jpe?g$/i.test(siteplanUrl) ? 'image/jpeg' : 'image/webp';

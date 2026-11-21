@@ -11,6 +11,7 @@ import RatingButtons from '../components/RatingButtons';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
+import { ArtistNameInline } from '../components/ArtistName';
 
 type Loaded = { festival: WrapFestival; sets: WrapPlannedSet[] };
 
@@ -189,7 +190,7 @@ export default function RateScreen() {
         {`${index + 1} of ${data.sets.length}`}
       </Text>
       <Text style={styles.artist} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityRole="header">
-        {set.artist || 'Unknown artist'}
+        <ArtistNameInline name={set.artist || 'Unknown artist'}>{set.artist || 'Unknown artist'}</ArtistNameInline>
       </Text>
       {meta ? (
         <Text style={styles.meta} maxFontSizeMultiplier={MAX_FONT_SCALE}>

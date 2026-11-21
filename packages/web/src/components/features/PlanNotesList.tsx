@@ -7,6 +7,7 @@ import type { PlanListItem, PlanListKind } from '@festie/shared/utils';
 import type { FestivalDay, FestivalSet } from '@festie/shared/types';
 import EmptyState from '../ui/EmptyState';
 import PriorityIcon from '../ui/PriorityIcon';
+import ArtistName, { RowOpenButton } from './ArtistName';
 
 interface PlanNotesListProps {
   kind: PlanListKind;
@@ -57,14 +58,15 @@ export default function PlanNotesList({ kind, items, days, onOpenSet }: PlanNote
             const stageName = getStageName(set.stageId) || '';
             const time = set.startTime ? formatTime(set.startTime) : 'TBA';
             return (
-              <button
+              <div
                 key={set.id}
-                type="button"
-                className="flex flex-col gap-1 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 cursor-pointer hover:bg-bg-card-hover focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-                onClick={() => onOpenSet(set)}
+                className="relative flex flex-col gap-1 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 hover:bg-bg-card-hover"
               >
+                <RowOpenButton label={`${name}, ${stageName ? `${time}, ${stageName}` : time}`} onClick={() => onOpenSet(set)} />
                 <span className="flex items-center gap-2">
-                  <span className="flex-1 min-w-0 break-words [overflow-wrap:anywhere] line-clamp-2 text-sm font-bold">{name}</span>
+                  <span className="flex-1 min-w-0 break-words [overflow-wrap:anywhere] line-clamp-2 text-sm font-bold">
+                    <ArtistName set={set} separator={b2bSeparator} />
+                  </span>
                   {item.priority && <PriorityIcon priority={item.priority} className="w-4 h-4" />}
                 </span>
                 <span className="text-xs text-text-muted tabular-nums">
@@ -79,7 +81,7 @@ export default function PlanNotesList({ kind, items, days, onOpenSet }: PlanNote
                 {kind === 'notes' && item.note && (
                   <span className="line-clamp-3 whitespace-pre-line text-sm text-text-secondary">{item.note}</span>
                 )}
-              </button>
+              </div>
             );
           })}
         </section>

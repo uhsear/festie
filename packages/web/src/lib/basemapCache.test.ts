@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { basemapCacheInfo, basemapSize, ensureBasemapCached } from './basemapCache';
+import { basemapCacheInfo, basemapProgress, basemapSize, ensureBasemapCached, removeBasemap, subscribeBasemapCache } from './basemapCache';
 
 const URL1 = 'https://cdn.example.com/a.pmtiles';
 
@@ -9,7 +9,7 @@ function fakeCaches(initialKeys: string[] = []) {
     match: vi.fn(async (u: string) => store.get(u)),
     put: vi.fn(async (u: string, r: Response) => void store.set(u, r)),
     keys: vi.fn(async () => [...store.keys()].map((u) => ({ url: u }))),
-    delete: vi.fn(async (req: { url: string }) => store.delete(req.url)),
+    delete: vi.fn(async (req: { url: string } | string) => store.delete(typeof req === 'string' ? req : req.url)),
   };
   vi.stubGlobal('caches', { open: vi.fn(async () => cache) });
   return { store, cache };
@@ -77,5 +77,45 @@ describe('basemapCache', () => {
     expect(a).toEqual(b);
     // one HEAD + one GET for a single download
     expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('reports download progress from the streamed body and stores every byte', async () => {
+    const { store, cache } = fakeCaches();
+    // A real cache reads the whole body while storing it; the fake must too.
+    cache.put.mockImplementationOnce(async (u: string, r: Response) => void store.set(u, new Response(await r.arrayBuffer())));
+    const seen: Array<number | null> = [];
+    const off = subscribeBasemapCache(() => seen.push(basemapProgress(URL1)));
+    const chunks = [new Uint8Array(40), new Uint8Array(60)];
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        chunks.forEach((c) => controller.enqueue(c));
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_u: string, init?: { method?: string }) =>
+        init?.method === 'HEAD'
+          ? new Response(null, { headers: { 'content-length': '100' } })
+          : new Response(body, { headers: { 'content-length': '100' } }),
+      ),
+    );
+    expect(await ensureBasemapCached(URL1)).toEqual({ ok: true });
+    off();
+    expect(seen).toContain(0.4);
+    expect(seen).toContain(1);
+    expect(basemapProgress(URL1)).toBeNull();
+    expect((await store.get(URL1)!.arrayBuffer()).byteLength).toBe(100);
+  });
+
+  it('removes a downloaded archive and tells subscribers', async () => {
+    const { store } = fakeCaches([URL1]);
+    const cb = vi.fn();
+    const off = subscribeBasemapCache(cb);
+    expect(await removeBasemap(URL1)).toBe(true);
+    expect(store.has(URL1)).toBe(false);
+    expect(cb).toHaveBeenCalled();
+    expect(await removeBasemap(URL1)).toBe(false);
+    off();
   });
 });

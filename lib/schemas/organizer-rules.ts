@@ -2,6 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { z } from 'zod';
+import { TILES_PATH_RE } from '../tiles';
 import { detectPlatform, normalizeArtistLink, type ArtistLinkPlatform } from '../artist-links';
 
 /**
@@ -67,7 +68,16 @@ export function organizerFestivalRules(origin: string) {
       );
 
       const basemap = body.mapConfig?.offlineBasemap?.pmtilesUrl;
-      if (typeof basemap === 'string' && !hostedUnder(basemap, 'basemaps')) {
+      // An admin's /tiles/ map is stored as an absolute URL on this origin. A member's save sends it back unchanged.
+      const adminTiles = (url: string) => {
+        try {
+          const parsed = new URL(url);
+          return parsed.origin === hostOrigin && TILES_PATH_RE.test(parsed.pathname);
+        } catch {
+          return false;
+        }
+      };
+      if (typeof basemap === 'string' && !hostedUnder(basemap, 'basemaps') && !adminTiles(basemap)) {
         issue(['mapConfig', 'offlineBasemap', 'pmtilesUrl'], 'The offline map must be a file hosted by Festie. Ask Festie to add it.');
       }
       const siteplan = body.mapConfig?.siteplan?.imageUrl;

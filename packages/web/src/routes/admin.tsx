@@ -5,7 +5,7 @@ import AdminLayout from '../components/admin/AdminLayout';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import AdminCommandPalette, { openAdminPalette } from '../components/admin/AdminCommandPalette';
 import { ADMIN_TABS, useAdminSearch, type AdminTab } from '../components/admin/useAdminSearch';
-import { LayoutDashboard, Tent, Users, UsersRound, ClipboardList, TrendingUp, Search, DatabaseZap, Building2 } from 'lucide-react';
+import { LayoutDashboard, Tent, Users, UsersRound, ClipboardList, TrendingUp, Search, DatabaseZap, Building2, ListChecks } from 'lucide-react';
 
 const AdminDashboard = lazy(() => import('../components/admin/AdminDashboard'));
 const AdminFestivals = lazy(() => import('../components/admin/AdminFestivals'));
@@ -14,6 +14,7 @@ const AdminCrews = lazy(() => import('../components/admin/AdminCrews'));
 const AdminAudit = lazy(() => import('../components/admin/AdminAudit'));
 const AdminAnalytics = lazy(() => import('../components/admin/AdminAnalytics'));
 const AdminArtistBackfill = lazy(() => import('../components/admin/AdminArtistBackfill'));
+const AdminArtistReview = lazy(() => import('../components/admin/AdminArtistReview'));
 const AdminOrganizations = lazy(() => import('../components/admin/AdminOrganizations'));
 
 const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
@@ -56,6 +57,7 @@ function AdminPanelInner() {
     { id: 'analytics', label: 'Analytics', icon: <TrendingUp /> },
     { id: 'organizations', label: 'Organizations', icon: <Building2 /> },
     { id: 'backfill', label: 'Artist backfill', icon: <DatabaseZap /> },
+    { id: 'review', label: 'Artist review', icon: <ListChecks /> },
   ].filter((t) => t.id !== 'organizations' || user.organizerPlatform !== false) as Array<{
     id: AdminTab;
     label: string;
@@ -78,6 +80,8 @@ function AdminPanelInner() {
         return <AdminOrganizations />;
       case 'backfill':
         return <AdminArtistBackfill />;
+      case 'review':
+        return <AdminArtistReview />;
       case 'analytics':
         return <AdminAnalytics />;
       default:

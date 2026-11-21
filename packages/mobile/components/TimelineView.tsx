@@ -15,6 +15,7 @@ import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 import {
   setMinuteRange,
   fmtShort,
+  fmtAxisHour,
   formatTime,
   artistDisplayName,
   type ClashMark,
@@ -77,14 +78,6 @@ export interface TimelineViewProps {
 function blockTop(s: FestivalSet, minMin: number): number {
   const { start } = setMinuteRange(s)!;
   return ((start - minMin) / SLOT_MINUTES) * ROW_HEIGHT;
-}
-
-function fmtHour(mins: number): string {
-  const hh = Math.floor(mins / 60) % 24;
-  const mm = mins % 60;
-  const h = hh % 12 || 12;
-  const suffix = hh < 12 ? 'a' : 'p';
-  return mm === 0 ? `${h}${suffix}` : `${h}:${String(mm).padStart(2, '0')}${suffix}`;
 }
 
 interface StageColumnProps {
@@ -155,7 +148,7 @@ function StageColumn({
         out.push({
           key: `tl-${i}`,
           top: i * ROW_HEIGHT,
-          label: fmtHour(mins),
+          label: fmtAxisHour(mins),
           hour: mm === 0,
         });
       }

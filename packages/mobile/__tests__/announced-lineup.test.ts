@@ -107,10 +107,12 @@ describe('announced lineup wiring (source guards)', () => {
   });
 
   it('an announced row with no set opens the artist sheet, and the sheet and rows carry the shared Interested toggle', () => {
-    expect(component).toContain('setSheetEntry(entry)');
-    expect(component).toContain('artistLinkEntries(artist.links)');
-    expect(component).toContain("from '@festie/shared/hooks/useInterest'");
-    expect(component).toContain('Linking.openURL(link.url)');
+    const host = read('components/ArtistSheetHost.tsx');
+    expect(component).toContain('<ArtistNameButton');
+    expect(component).toContain("lineupEntrySegments(entry, separator, cover.state === 'announced')");
+    expect(host).toContain('artistLinkEntries(artist.links)');
+    expect(host).toContain("from '@festie/shared/hooks/useInterest'");
+    expect(host).toContain('Linking.openURL(link.url)');
   });
 
   it('a scheduled row opens its set and a cancelled one is struck through', () => {

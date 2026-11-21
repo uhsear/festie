@@ -24,6 +24,7 @@ import CrewPlanSkeleton from '../components/ui/skeletons/CrewPlanSkeleton';
 import { Card } from '../components/ui/Card';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { MapPin, Home, CalendarClock, Users, ArrowLeft, Trophy, Sparkles, Radio, Vote } from 'lucide-react';
+import ArtistName from '../components/features/ArtistName';
 
 // The plan renders from the persisted cache first (useCrewHub reads the stores),
 // then refreshes statuses, meeting points and polls. A crew on another festival
@@ -246,13 +247,15 @@ function CrewPlanContent() {
             ) : (
               <ul className="list-none m-0 p-0 space-y-1">
                 {howWeDid.map((e) => (
-                  <li key={e.set.id}>
+                  <li key={e.set.id} className="flex flex-wrap items-center gap-x-1 min-h-11 text-sm">
+                    <ArtistName set={e.set} />
                     <Link
                       to="/set/$setId"
                       params={{ setId: e.set.id }}
-                      className="inline-flex items-center min-h-11 text-sm hover:underline"
+                      aria-label={`Open ${artistDisplayName(e.set)} set`}
+                      className="inline-flex items-center min-h-11 hover:underline"
                     >
-                      {artistDisplayName(e.set)} · {e.count} of {e.total} picked it
+                      · {e.count} of {e.total} picked it
                     </Link>
                   </li>
                 ))}
@@ -311,7 +314,9 @@ function CrewPlanContent() {
                               {PRIORITY_LABEL[g.priority]}
                             </span>
                             <span className="min-w-0 break-words">
-                              <span className="text-text-primary font-medium">{artistDisplayName(g.set)}</span>
+                              <span className="text-text-primary font-medium">
+                                <ArtistName set={g.set} />
+                              </span>
                               <span className="text-text-secondary tabular-nums"> · {formatSetTimeRange(g.set) || 'TBA'}</span>
                               {stageName && <span className="text-text-secondary"> · {stageName}</span>}
                               <span className="text-text-secondary"> · {memberSummary(g.names)}</span>
@@ -349,16 +354,17 @@ function CrewPlanContent() {
           <Card.Body>
             <ul className="list-none m-0 p-0 space-y-1">
               {mix.map((e) => (
-                <li key={e.set.id}>
+                <li key={e.set.id} className="flex flex-col justify-center min-h-11 text-sm">
+                  <span className="text-text-primary font-medium">
+                    <ArtistName set={e.set} />
+                  </span>
                   <Link
                     to="/set/$setId"
                     params={{ setId: e.set.id }}
-                    className="flex flex-col justify-center min-h-11 text-sm hover:underline"
+                    aria-label={`Open ${artistDisplayName(e.set)} set`}
+                    className="text-text-secondary hover:underline"
                   >
-                    <span className="text-text-primary font-medium">{artistDisplayName(e.set)}</span>
-                    <span className="text-text-secondary">
-                      {e.count} of {e.total} want this
-                    </span>
+                    {e.count} of {e.total} want this
                   </Link>
                 </li>
               ))}

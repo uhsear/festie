@@ -11,6 +11,7 @@ Merged to `main` but not yet deployed to production.
 
 ### Added
 - **Mobile**: the theme follows the OS when Match system is chosen.
+- **Admin**: an Artist review tab. Import a JSON batch of researched link, merge and rename proposals, then approve or reject each one. An approval uses the same edit and merge code as the Artists tab.
 
 ### Changed
 - Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.

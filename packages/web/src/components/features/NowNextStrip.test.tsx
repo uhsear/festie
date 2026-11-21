@@ -54,15 +54,14 @@ describe('NowNextStrip', () => {
     expect(strip).toHaveTextContent('Alpha');
     expect(strip).toHaveTextContent('Main Stage');
     expect(strip).toHaveTextContent('12m left');
-    expect(strip).toHaveAttribute('aria-label', 'Now playing: Alpha at Main Stage, 12m left. Open Now and Next.');
-    fireEvent.click(strip);
+    fireEvent.click(screen.getByRole('button', { name: 'Now playing: Alpha at Main Stage, 12m left. Open Now and Next.' }));
     expect(nav).toHaveBeenCalledWith({ to: '/festival-mode' });
   });
 
   it('wraps the artist name on two lines and truncates only the stage', () => {
     nowMs = local(2030, 5, 15, 20, 48);
     render(<NowNextStrip />);
-    expect(screen.getByText('Alpha')).toHaveClass('line-clamp-2');
+    expect(screen.getByText('Alpha').closest('.line-clamp-2')).not.toBeNull();
     expect(screen.getByText('Main Stage')).toHaveClass('truncate');
   });
 

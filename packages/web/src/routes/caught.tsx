@@ -23,6 +23,7 @@ import RatingButtons from '../components/features/RatingButtons';
 import { cn } from '../lib/utils';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useToast } from '../lib/toastContext';
+import { ArtistNameButton } from '../components/features/ArtistName';
 
 const chipClass =
   'min-h-11 px-4 rounded-full border border-border text-sm font-semibold text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
@@ -145,7 +146,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="break-words [overflow-wrap:anywhere] line-clamp-2 font-semibold text-text-primary">
-                        {name}
+                        <ArtistNameButton name={name} />
                         {row.added && (
                           <span className="ml-2 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-text-secondary">
                             Added
@@ -334,7 +335,9 @@ function AddSet({
                 return (
                   <li key={set.id} className="flex flex-wrap items-center gap-2 p-3">
                     <div className="min-w-0 flex-1">
-                      <div className="break-words [overflow-wrap:anywhere] line-clamp-2 font-semibold text-text-primary">{name}</div>
+                      <div className="break-words [overflow-wrap:anywhere] line-clamp-2 font-semibold text-text-primary">
+                        <ArtistNameButton name={name} />
+                      </div>
                       <div className="text-xs text-text-secondary">{meta}</div>
                     </div>
                     <button

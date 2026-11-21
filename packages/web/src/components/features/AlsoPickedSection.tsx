@@ -4,6 +4,7 @@ import { useAlsoPicked, useFestival } from '@festie/shared/hooks';
 import { DISCOVER_COPY } from '@festie/shared/constants';
 import { artistDisplayName, formatTime } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
+import ArtistName, { RowOpenButton } from './ArtistName';
 
 /** "People who picked this also picked": hidden until the API returns sets. */
 export default function AlsoPickedSection({ set }: { set: FestivalSet }) {
@@ -34,14 +35,13 @@ export default function AlsoPickedSection({ set }: { set: FestivalSet }) {
             .join(' · ');
           return (
             <li key={s.id}>
-              <button
-                type="button"
-                onClick={() => setDetailSet(s)}
-                className="w-full min-h-[44px] rounded-xl px-3 py-2 text-left cursor-pointer hover:bg-bg-input focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-              >
-                <span className="block truncate text-sm font-semibold text-text-primary">{artistDisplayName(s)}</span>
+              <div className="relative w-full min-h-[44px] rounded-xl px-3 py-2 text-left hover:bg-bg-input">
+                <RowOpenButton label={detail ? `${artistDisplayName(s)}, ${detail}` : artistDisplayName(s)} onClick={() => setDetailSet(s)} />
+                <span className="block truncate text-sm font-semibold text-text-primary">
+                  <ArtistName set={s} />
+                </span>
                 {detail && <span className="block truncate text-xs text-text-muted">{detail}</span>}
-              </button>
+              </div>
             </li>
           );
         })}
