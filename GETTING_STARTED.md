@@ -360,8 +360,12 @@ All workflows in `.github/workflows/`:
 - `TEST_USERNAME` / `TEST_PASSWORD` — used by E2E and Maestro flows
 - `EXPO_TOKEN` — EAS authentication
 - `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD` — Android signing
-- `SENTRY_AUTH_TOKEN` — Sentry source map upload. With `SENTRY_ORG` and `SENTRY_PROJECT` it lets `scripts/ci/sentry-sourcemaps.mjs` upload the backend and web maps (and `scripts/deploy/deploy.py` create the release marker). Without the token the web build emits no source maps and nothing is uploaded.
+- `SENTRY_AUTH_TOKEN` — Sentry source map upload for the Android build (`android-release.yml`). No workflow uploads the web or backend maps; see "Sentry source maps and release markers" below.
 - `PLAY_SERVICE_ACCOUNT_JSON` — Google Play submission
+
+**Sentry source maps and release markers (deploy time, not CI).** Both are off until the token is set, and neither needs a GitHub secret.
+- Source maps: set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` in the production host's login shell. Deploy step 5 then builds the web app with `FESTIE_WEB_SOURCEMAPS=1`, and step 5b runs `scripts/ci/sentry-sourcemaps.mjs`. The script uploads the backend and web maps, then deletes the web maps. The server also refuses to serve any `*.map` file. Without `FESTIE_WEB_SOURCEMAPS=1` the web build emits no maps.
+- Release marker: set the same three variables on the operator machine that runs `scripts/deploy/deploy.py`. After a successful deploy it creates the release and deploy marker for the deployed sha. A failure only warns.
 
 ---
 

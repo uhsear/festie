@@ -28,9 +28,10 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     target: 'es2022',
     cssCodeSplit: true,
-    // Hidden maps exist only when scripts/ci/sentry-sourcemaps.mjs will upload them and then delete
-    // them from dist/. Without the token the build is unchanged and no map reaches the public site.
-    sourcemap: process.env.SENTRY_AUTH_TOKEN ? 'hidden' : false,
+    // Hidden maps exist only for the deploy build (scripts/deploy/deploy.py sets FESTIE_WEB_SOURCEMAPS=1),
+    // which uploads them with scripts/ci/sentry-sourcemaps.mjs and then deletes them from dist/. The token
+    // alone is not enough: it lives in a login shell that rollback and staging builds share.
+    sourcemap: process.env.FESTIE_WEB_SOURCEMAPS === '1' && process.env.SENTRY_AUTH_TOKEN ? 'hidden' : false,
     rolldownOptions: {
       output: {
         // Split the vendor bundle into logical chunks so the 697 KB index chunk

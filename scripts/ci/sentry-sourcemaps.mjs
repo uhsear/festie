@@ -6,8 +6,9 @@
 // Sentry, then deletes the web .map files so they are never served from the public site.
 //
 // Runs ONLY when SENTRY_AUTH_TOKEN is set; otherwise it prints a note and exits 0 and nothing
-// changes. packages/web/vite.config.ts emits hidden source maps under the same condition, so a
-// build without the token has no maps to leak.
+// changes. packages/web/vite.config.ts emits hidden source maps only when deploy step 5 also sets
+// FESTIE_WEB_SOURCEMAPS=1, so rollback and staging builds have no maps to leak, and the static
+// handler in lib/middleware.ts refuses *.map in case one is ever left behind.
 //
 // Env: SENTRY_AUTH_TOKEN, SENTRY_ORG, SENTRY_PROJECT (backend project; also web by default),
 //      SENTRY_WEB_PROJECT (optional web project), SENTRY_RELEASE (default: git HEAD sha),
@@ -57,6 +58,16 @@ export function uploadSourceMaps({ env = process.env, root = '.', run = runCli, 
     log('[sourcemaps] SENTRY_AUTH_TOKEN not set: skipped (no source maps uploaded or published)');
     return 0;
   }
+  const webDist = path.join(root, 'packages', 'web', 'dist');
+  try {
+    return upload({ env, root, run, log, webDist });
+  } finally {
+    // Every exit path, including a missing org or a git failure: a map left in the web dist is public.
+    for (const f of findMaps(webDist)) unlinkSync(f);
+  }
+}
+
+function upload({ env, root, run, log, webDist }) {
   const missing = ['SENTRY_ORG', 'SENTRY_PROJECT'].filter((k) => !env[k]);
   if (missing.length) {
     log(`[sourcemaps] ${missing.join(' and ')} must be set with SENTRY_AUTH_TOKEN`);
@@ -64,16 +75,11 @@ export function uploadSourceMaps({ env = process.env, root = '.', run = runCli, 
   }
   const release = env.SENTRY_RELEASE || gitSha(root);
   const targets = [
-    { name: 'backend', dir: path.join(root, 'dist'), project: env.SENTRY_PROJECT, removeMaps: false },
-    {
-      name: 'web',
-      dir: path.join(root, 'packages', 'web', 'dist'),
-      project: env.SENTRY_WEB_PROJECT || env.SENTRY_PROJECT,
-      removeMaps: true,
-    },
+    { name: 'backend', dir: path.join(root, 'dist'), project: env.SENTRY_PROJECT },
+    { name: 'web', dir: webDist, project: env.SENTRY_WEB_PROJECT || env.SENTRY_PROJECT },
   ];
   let failed = 0;
-  for (const { name, dir, project, removeMaps } of targets) {
+  for (const { name, dir, project } of targets) {
     try {
       if (!findMaps(dir).length) {
         log(`[sourcemaps] ${name}: no .map files under ${path.relative(root, dir) || dir}; build first`);
@@ -86,9 +92,6 @@ export function uploadSourceMaps({ env = process.env, root = '.', run = runCli, 
     } catch (err) {
       log(`[sourcemaps] ${name}: upload failed (${err.message.split('\n')[0]})`);
       failed++;
-    } finally {
-      // Delete even after a failed upload: a map left in the web dist is public.
-      if (removeMaps) for (const f of findMaps(dir)) unlinkSync(f);
     }
   }
   return failed ? 1 : 0;

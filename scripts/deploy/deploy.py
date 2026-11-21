@@ -29,8 +29,9 @@
 #
 # Between the web build and the restart, step 5b runs scripts/ci/sentry-sourcemaps.mjs
 # on the host. It uploads source maps only when SENTRY_AUTH_TOKEN is in the host's
-# login-shell environment (the web build then also emits hidden maps); otherwise it
-# prints a note and changes nothing. A failure only warns.
+# login-shell environment; otherwise it prints a note and changes nothing. Step 5 sets
+# FESTIE_WEB_SOURCEMAPS=1 for its own web build only, so only that build emits hidden
+# maps, and the app refuses to serve *.map. A failure or timeout only warns.
 #
 # Configuration (all via environment — nothing secret is committed):
 #   FESTIE_SSH_HOST       prod host/IP                 (required)
@@ -360,7 +361,7 @@ def main():
         code, out, err = run(
             client,
             f"bash -lc 'set -o pipefail; cd {APP} && node scripts/fetch-fonts.mjs && "
-            f"cd {APP}/packages && pnpm --filter @festie/web build 2>&1 | tail -8'",
+            f"cd {APP}/packages && FESTIE_WEB_SOURCEMAPS=1 pnpm --filter @festie/web build 2>&1 | tail -8'",
             timeout=600,
         )
         print(f"[build] exit={code}\n{out}{err}")
@@ -370,12 +371,16 @@ def main():
 
         # 5b. Upload source maps (no-op without SENTRY_AUTH_TOKEN on the host). Before the
         # restart on purpose: it injects debug ids into dist/*.js, which PM2 must then load.
-        # The script also deletes the web .map files so they are never served.
-        code, out, err = run(
-            client,
-            f"bash -lc 'cd {APP} && node scripts/ci/sentry-sourcemaps.mjs 2>&1 | tail -15'",
-            timeout=600,
-        )
+        # The script also deletes the web .map files, and the static handler refuses *.map meanwhile.
+        # pipefail: without it the exit code would be tail's. A timeout only warns too.
+        try:
+            code, out, err = run(
+                client,
+                f"bash -lc 'set -o pipefail; cd {APP} && node scripts/ci/sentry-sourcemaps.mjs 2>&1 | tail -15'",
+                timeout=600,
+            )
+        except socket.timeout:
+            code, out, err = 1, "", "timed out after 600s"
         print(f"[sourcemaps] exit={code}\n{out}{err}")
         if code != 0:
             print("WARNING: source map upload failed; the deploy continues, stack traces stay minified.")

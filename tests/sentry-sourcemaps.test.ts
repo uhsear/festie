@@ -69,9 +69,20 @@ describe('sentry-sourcemaps', () => {
     assert.ok(!existsSync(path.join(root, 'packages', 'web', 'dist', 'assets', 'index-a.js.map')));
   });
 
-  it('fails when the org or project is missing', () => {
+  it('fails when the org or project is missing, and still removes the web maps', () => {
     const root = fixture();
-    const code = uploadSourceMaps({ env: { SENTRY_AUTH_TOKEN: 'x' }, root, run: () => {}, log: () => {} });
+    const calls: string[][] = [];
+    const code = uploadSourceMaps({ env: { SENTRY_AUTH_TOKEN: 'x' }, root, run: (a: string[]) => calls.push(a), log: () => {} });
     assert.equal(code, 1);
+    assert.equal(calls.length, 0);
+    assert.ok(!existsSync(path.join(root, 'packages', 'web', 'dist', 'assets', 'index-a.js.map')));
+    assert.ok(existsSync(path.join(root, 'dist', 'server.js.map')));
+  });
+
+  it('removes the web maps when the git sha lookup throws', () => {
+    const root = fixture();
+    const env = { SENTRY_AUTH_TOKEN: 'x', SENTRY_ORG: 'org', SENTRY_PROJECT: 'proj' };
+    assert.throws(() => uploadSourceMaps({ env, root, run: () => {}, log: () => {} }));
+    assert.ok(!existsSync(path.join(root, 'packages', 'web', 'dist', 'assets', 'index-a.js.map')));
   });
 });
