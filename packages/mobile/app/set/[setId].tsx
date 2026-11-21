@@ -493,7 +493,7 @@ export default function SetDetailScreen() {
   }
 
   return (
-    <View style={styles.container} accessibilityViewIsModal>
+    <View style={styles.container} accessibilityViewIsModal testID="set-sheet">
       <ArtistSheetHost inSetSheet />
       {/* Faux drag handle removed — the native formSheet (SDK 56) renders a real
           grabber (sheetGrabberVisible). Share and close sit in their own header
@@ -1028,6 +1028,7 @@ function CloseButton({ onPress, style }: { onPress: () => void; style?: StylePro
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel="Close detail"
+      testID="set-sheet-close"
       hitSlop={8}
     >
       <Ionicons name="close" size={t.iconSize.md} color={t.colors.text.secondary} />

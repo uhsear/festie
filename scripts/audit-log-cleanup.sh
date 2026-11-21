@@ -24,7 +24,7 @@ RETENTION_DAYS="${RETENTION_DAYS:-90}"
 BATCH_SIZE="${BATCH_SIZE:-5000}"
 MAX_BATCHES="${MAX_BATCHES:-200}"
 DRY_RUN="${DRY_RUN:-0}"
-PGDATABASE="${PGDATABASE:-festival_planner}"
+PGDATABASE="${PGDATABASE:-festival_planner}" # secret-scan: allow names the guarded production database on purpose
 
 log() { printf '[%s] %s\n' "$(date -Iseconds)" "$*"; }
 

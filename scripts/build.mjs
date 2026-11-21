@@ -18,10 +18,23 @@
  * All four entrypoints use identical esbuild flags:
  *   --bundle --platform=node --format=esm --target=node22 --packages=external --sourcemap
  */
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { build } from 'esbuild';
 
 const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
+
+// The deployed sha becomes the Sentry release (lib/config.ts SENTRY_RELEASE), so events match the
+// release marker scripts/deploy/deploy.py creates. Omitted outside a git checkout; Sentry then
+// falls back to the package version.
+function gitSha() {
+  try {
+    return execFileSync('git', ['rev-parse', 'HEAD'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
+  } catch {
+    return '';
+  }
+}
+const sha = gitSha();
 
 const entryPoints = ['server.ts', 'lib/instrument.ts', 'lib/avatar-worker.ts', 'lib/export-worker.ts'];
 
@@ -34,7 +47,7 @@ await build({
   packages: 'external',
   sourcemap: true,
   // lib/config.ts reads this instead of requiring ../package.json, which is absent from a dist-only deploy.
-  define: { __APP_VERSION__: JSON.stringify(version) },
+  define: { __APP_VERSION__: JSON.stringify(version), ...(sha && { __GIT_SHA__: JSON.stringify(sha) }) },
   outdir: 'dist',
   // Flatten lib/*-worker.ts -> dist/*-worker.js (sibling of dist/server.js)
   // instead of dist/lib/*-worker.js, so the runtime extension-swap resolves them.

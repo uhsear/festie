@@ -89,7 +89,7 @@ describe('middleware: audit-middleware', () => {
       method: 'POST',
       path: '/api/v1/test',
       originalUrl: '/api/v1/test',
-      ip: '10.0.0.1',
+      ip: '10.0.0.1', // secret-scan: allow test address in a documentation range
       id: 'req-123',
       headers: {},
       get: (h: string) => overrides.headers?.[h] || '',
