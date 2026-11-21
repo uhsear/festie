@@ -26,6 +26,7 @@ const svc = {
   releaseHeldAlerts: vi.fn(),
   discardHeldAlerts: vi.fn(),
   declinePublishRequest: vi.fn(),
+  transferFestival: vi.fn(),
 };
 vi.mock('@festie/shared/services/adminOrganizations', () => ({
   fetchOrganizations: (...a: unknown[]) => svc.fetchOrganizations(...a),
@@ -40,11 +41,15 @@ vi.mock('@festie/shared/services/adminOrganizations', () => ({
   releaseHeldAlerts: (...a: unknown[]) => svc.releaseHeldAlerts(...a),
   discardHeldAlerts: (...a: unknown[]) => svc.discardHeldAlerts(...a),
   declinePublishRequest: (...a: unknown[]) => svc.declinePublishRequest(...a),
+  transferFestival: (...a: unknown[]) => svc.transferFestival(...a),
 }));
 const publishFestival = vi.fn();
 vi.mock('@festie/shared/services/festivalAdmin', () => ({
   publishFestival: (...a: unknown[]) => publishFestival(...a),
-  fetchAdminFestivals: vi.fn(),
+  fetchAdminFestivals: vi.fn(async () => [
+    { id: 'f1', name: 'Venue Fest', stageCount: 1, dayCount: 1, startDate: '', endDate: '', published: false, updatedAt: '' },
+    { id: 'f9', name: 'Platform Fest', stageCount: 1, dayCount: 1, startDate: '', endDate: '', published: true, updatedAt: '' },
+  ]),
 }));
 vi.mock('@festie/shared/services/organizer', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -78,6 +83,7 @@ const detail = (over: Record<string, unknown> = {}) => ({
 const queue = (over: Record<string, unknown> = {}) => ({
   requests: [{ festivalId: 'f1', name: 'Venue Fest', organizationId: 'o1', organizationName: 'Venue A', verified: false, requestedAt: '2026-11-02T12:00:00.000Z' }],
   held: [{ festivalId: 'f2', name: 'Live Fest', organizationId: 'o1', organizationName: 'Venue A', changes: 3, people: 41, updatedAt: '2026-11-02T12:00:00.000Z' }],
+  recentEdits: [{ id: 'a1', createdAt: '2026-11-03T12:00:00.000Z', action: 'festival.updated', festivalId: 'f2', name: 'Live Fest', organizationId: 'o1', organizationName: 'Venue A', details: null }],
   ...over,
 });
 
@@ -160,8 +166,40 @@ describe('AdminOrganizations', () => {
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Verify' }));
     await waitFor(() => expect(svc.setOrganizationVerified).toHaveBeenCalledWith('o1', true));
     await userEvent.click(screen.getByRole('button', { name: 'Suspend' }));
-    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Suspend' }));
-    await waitFor(() => expect(svc.setOrganizationStatus).toHaveBeenCalledWith('o1', 'suspended'));
+    const dialog = screen.getByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Suspend' })).toBeDisabled();
+    await userEvent.type(within(dialog).getByRole('textbox'), ' Chargeback dispute ');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Suspend' }));
+    await waitFor(() => expect(svc.setOrganizationStatus).toHaveBeenCalledWith('o1', 'suspended', 'Chargeback dispute'));
+  });
+
+  it('moves a festival into the organization after confirmation, and lists only festivals it does not hold', async () => {
+    svc.transferFestival.mockResolvedValue({ festivalId: 'f9', from: null, to: 'o1' });
+    svc.setOrganizationStatus.mockResolvedValue(org());
+    svc.fetchOrganization.mockResolvedValueOnce(detail());
+    render();
+    await userEvent.click(await screen.findByRole('button', { name: 'Venue A' }));
+    expect(await screen.findByText('Activate the organization to move a festival into it.')).toBeInTheDocument();
+    svc.fetchOrganization.mockResolvedValue(detail({ status: 'active' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Activate' }));
+    const select = await screen.findByLabelText('Move a festival here');
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'Platform Fest' })).toBeInTheDocument());
+    expect(within(select).queryByRole('option', { name: 'Venue Fest' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Move festival' })).toBeDisabled();
+    await userEvent.selectOptions(select, 'f9');
+    await userEvent.click(screen.getByRole('button', { name: 'Move festival' }));
+    expect(screen.getByText(/It is live, and it stays live/)).toBeInTheDocument();
+    await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Move festival' }));
+    await waitFor(() => expect(svc.transferFestival).toHaveBeenCalledWith('o1', 'f9'));
+  });
+
+  it('lists the recent organizer edits of live festivals in the review section', async () => {
+    render();
+    await userEvent.click(await screen.findByRole('button', { name: 'Review queue (1)' }));
+    expect(await screen.findByText('Recent organizer edits on live festivals (1)')).toBeInTheDocument();
+    expect(screen.getByText('Live Fest: Festival updated')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Open Live Fest' }));
+    expect(setAdminSearch).toHaveBeenCalledWith({ tab: 'festivals', festival: 'f2' });
   });
 
   it('shows the counts on the section buttons and approves a request', async () => {

@@ -72,9 +72,22 @@ export interface HeldAlertGroup {
   updatedAt: string;
 }
 
+/** One change an organization member made to a live festival, for the admin's list of recent organizer edits. */
+export interface RecentOrganizerEdit {
+  id: string;
+  createdAt: string;
+  action: string;
+  festivalId: string;
+  name: string;
+  organizationId: string | null;
+  organizationName: string | null;
+  details: Record<string, unknown> | null;
+}
+
 export interface ReviewQueue {
   requests: ReviewRequest[];
   held: HeldAlertGroup[];
+  recentEdits: RecentOrganizerEdit[];
 }
 
 const enc = encodeURIComponent;
@@ -87,8 +100,16 @@ export const fetchOrganization = (id: string) => api.get<AdminOrganizationDetail
 export const createOrganization = (body: { name: string; kind: OrgKind; website?: string | null }) =>
   api.post<AdminOrganization>('/admin/organizations', body);
 
-export const setOrganizationStatus = (id: string, status: 'active' | 'suspended') =>
-  api.put<AdminOrganization>(`${orgPath(id)}/status`, { status });
+export const setOrganizationStatus = (id: string, status: 'active' | 'suspended', reason?: string) =>
+  api.put<AdminOrganization>(`${orgPath(id)}/status`, reason ? { status, reason } : { status });
+
+/** Moves a festival into the organization. Needs a recent password: run it through withReauth. */
+export const transferFestival = (id: string, festivalId: string) =>
+  api.post<{ festivalId: string; from: string | null; to: string }>(`${orgPath(id)}/festivals`, { festivalId });
+
+/** Hands a festival of the organization back to the platform, so only admins can edit it again. */
+export const handBackFestival = (id: string, festivalId: string) =>
+  api.delete<{ festivalId: string; from: string; to: null }>(`${orgPath(id)}/festivals/${enc(festivalId)}`);
 
 export const setOrganizationVerified = (id: string, verified: boolean) =>
   api.put<AdminOrganization>(`${orgPath(id)}/verified`, { verified });

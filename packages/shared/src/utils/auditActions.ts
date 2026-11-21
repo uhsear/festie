@@ -18,6 +18,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'festival.alert_held': 'Attendee alert held',
   'festival.alert_released': 'Held alert sent',
   'festival.alert_discarded': 'Held alert discarded',
+  'festival.transferred': 'Festival moved to an organization',
   'festival.siteplan.uploaded': 'Site plan uploaded',
   'festival.announcement.sent': 'Announcement sent',
   'festival.announcement.cancelled': 'Announcement cancelled',

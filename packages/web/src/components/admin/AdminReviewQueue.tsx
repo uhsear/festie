@@ -3,6 +3,7 @@ import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { SearchX } from 'lucide-react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { publishFestival } from '@festie/shared/services/festivalAdmin';
+import { auditActionLabel } from '@festie/shared/utils';
 import {
   declinePublishRequest,
   discardHeldAlerts,
@@ -110,7 +111,7 @@ export default function AdminReviewQueue({ section, queue }: Props) {
     );
   }
 
-  const { requests, held } = queue.data;
+  const { requests, held, recentEdits = [] } = queue.data;
 
   return (
     <div className="space-y-4">
@@ -139,6 +140,33 @@ export default function AdminReviewQueue({ section, queue }: Props) {
                       Decline
                     </button>
                   </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+
+      {section === 'review' && (
+        <section aria-label="Recent organizer edits" className="space-y-3">
+          <h2 className="type-heading text-text-primary">Recent organizer edits on live festivals ({recentEdits.length})</h2>
+          {recentEdits.length === 0 ? (
+            <p className="text-sm text-text-muted">No organizer has changed a live festival in the last 14 days.</p>
+          ) : (
+            <ul className="list-none space-y-2 p-0">
+              {recentEdits.map((edit) => (
+                <li key={edit.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
+                  <div className="min-w-0">
+                    <p className="text-sm text-text-primary">
+                      {edit.name}: {auditActionLabel(edit.action)}
+                    </p>
+                    <p className="text-xs text-text-muted">
+                      {edit.organizationName ?? 'No organization'}. {day(edit.createdAt)}.
+                    </p>
+                  </div>
+                  <button type="button" className={smallButton} aria-label={`Open ${edit.name}`} onClick={() => setAdminSearch({ tab: 'festivals', festival: edit.festivalId })}>
+                    Open
+                  </button>
                 </li>
               ))}
             </ul>

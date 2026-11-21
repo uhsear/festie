@@ -4,17 +4,20 @@ import { ArrowLeft, SearchX } from 'lucide-react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   addOrganizationMember,
+  handBackFestival,
   removeOrganizationMember,
   removePendingMember,
   setOrganizationStatus,
   setOrganizationVerified,
+  transferFestival,
 } from '@festie/shared/services/adminOrganizations';
 import { organizerFestivalStatus, type OrgRole } from '@festie/shared/services/organizer';
 import { useToast } from '../../lib/toastContext';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
+import PromptDialog from '../ui/PromptDialog';
 import { INPUT_CLASS } from './adminStyles';
-import { adminKeys, useOrganization } from './adminQueries';
+import { adminKeys, useAdminFestivals, useOrganization } from './adminQueries';
 import { useAdminSearch } from './useAdminSearch';
 
 interface Props {
@@ -45,6 +48,9 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
   const [role, setRole] = useState<OrgRole>('owner');
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<Pending>(null);
+  const [suspending, setSuspending] = useState(false);
+  const [moveId, setMoveId] = useState('');
+  const festivals = useAdminFestivals();
 
   const refresh = async () => {
     await queryClient.invalidateQueries({ queryKey: adminKeys.organization(organizationId) });
@@ -122,6 +128,9 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
   const statusText = data.status === 'pending' ? 'Waiting for activation' : data.status === 'active' ? 'Active' : 'Suspended';
 
   const setStatus = (status: 'active' | 'suspended') => () => setOrganizationStatus(organizationId, status);
+  const ownIds = new Set(data.festivals.map((f) => f.id));
+  const movable = (festivals.data ?? []).filter((f) => !ownIds.has(f.id));
+  const moving = movable.find((f) => f.id === moveId);
 
   return (
     <div className="space-y-6">
@@ -143,15 +152,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
               type="button"
               disabled={busy}
               className={smallButton}
-              onClick={() =>
-                setPending({
-                  title: `Suspend ${data.name}?`,
-                  description: 'Its members cannot save changes. Its live festivals stay visible to attendees.',
-                  label: 'Suspend',
-                  destructive: true,
-                  run: setStatus('suspended'),
-                })
-              }
+              onClick={() => setSuspending(true)}
             >
               Suspend
             </button>
@@ -286,14 +287,84 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
                   <p className="text-sm text-text-primary">{f.name}</p>
                   <p className="text-xs text-text-muted">{organizerFestivalStatus(f).chip}</p>
                 </div>
-                <button type="button" className={smallButton} aria-label={`Open ${f.name}`} onClick={() => setAdminSearch({ tab: 'festivals', festival: f.id })}>
-                  Open
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button type="button" className={smallButton} aria-label={`Open ${f.name}`} onClick={() => setAdminSearch({ tab: 'festivals', festival: f.id })}>
+                    Open
+                  </button>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={smallButton}
+                    aria-label={`Hand ${f.name} back to Festie`}
+                    onClick={() =>
+                      setPending({
+                        title: `Hand ${f.name} back to Festie?`,
+                        description: `Only Festie admins can edit it again. ${data.name} loses access to it.`,
+                        label: 'Hand back',
+                        destructive: true,
+                        run: () => reauth(() => handBackFestival(organizationId, f.id)),
+                      })
+                    }
+                  >
+                    Hand back
+                  </button>
+                </div>
               </li>
             ))}
         </ul>
+        {data.status !== 'active' ? (
+          <p className="text-sm text-text-muted">Activate the organization to move a festival into it.</p>
+        ) : (
+        <div className="grid grid-cols-1 gap-3 rounded-lg border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto] md:items-end">
+          <label className="flex flex-col gap-1 text-xs text-text-muted">
+            Move a festival here
+            <select value={moveId} onChange={(e) => setMoveId(e.target.value)} className={INPUT_CLASS}>
+              <option value="">Choose a festival</option>
+              {movable.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button
+            type="button"
+            disabled={busy || !moving}
+            className={smallButton}
+            onClick={() =>
+              moving &&
+              setPending({
+                title: `Move ${moving.name} to ${data.name}?`,
+                description: `Its members can then edit it. ${moving.published ? 'It is live, and it stays live.' : 'It is a draft.'} Nothing else changes.`,
+                label: 'Move festival',
+                run: async () => {
+                  const moved = await reauth(() => transferFestival(organizationId, moving.id));
+                  if (moved !== null) setMoveId('');
+                  return moved;
+                },
+              })
+            }
+          >
+            Move festival
+          </button>
+        </div>
+        )}
       </section>
 
+      <PromptDialog
+        open={suspending}
+        onOpenChange={setSuspending}
+        title={`Suspend ${data.name}?`}
+        description="Its members cannot save changes. Its live festivals stay visible to attendees. Write why: the reason stays in the audit log."
+        placeholder="Why is it suspended?"
+        confirmLabel="Suspend"
+        maxLength={500}
+        busy={busy}
+        onConfirm={(reason) => {
+          setSuspending(false);
+          return act(() => setOrganizationStatus(organizationId, 'suspended', reason.trim()), 'Organization is suspended.', "Couldn't suspend it. Try again.");
+        }}
+      />
       <ConfirmDialog
         open={!!pending}
         onOpenChange={(o) => !o && setPending(null)}

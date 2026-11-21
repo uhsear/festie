@@ -9,11 +9,13 @@ import {
   declinePublishRequest,
   discardHeldAlerts,
   fetchReviewQueue,
+  handBackFestival,
   releaseHeldAlerts,
   removeOrganizationMember,
   removePendingMember,
   setOrganizationStatus,
   setOrganizationVerified,
+  transferFestival,
 } from './adminOrganizations';
 import { fetchAdminFestival, publishFestival, updateAdminFestival } from './festivalAdmin';
 import { lineupImportApi } from './lineupImport';
@@ -28,6 +30,12 @@ describe('admin organization paths', () => {
     await addOrganizationMember('o 1', { email: 'a@b.example', role: 'owner' });
     await removeOrganizationMember('o 1', 'u/1');
     await removePendingMember('o 1', 'a@b.example');
+    await setOrganizationStatus('o 1', 'suspended', 'Chargeback dispute');
+    await transferFestival('o 1', 'f/1');
+    await handBackFestival('o 1', 'f/1');
+    expect(api.put).toHaveBeenCalledWith('/admin/organizations/o%201/status', { status: 'suspended', reason: 'Chargeback dispute' });
+    expect(api.post).toHaveBeenCalledWith('/admin/organizations/o%201/festivals', { festivalId: 'f/1' });
+    expect(api.delete).toHaveBeenCalledWith('/admin/organizations/o%201/festivals/f%2F1');
     expect(api.post).toHaveBeenCalledWith('/admin/organizations', { name: 'Venue', kind: 'venue' });
     expect(api.put).toHaveBeenCalledWith('/admin/organizations/o%201/status', { status: 'suspended' });
     expect(api.put).toHaveBeenCalledWith('/admin/organizations/o%201/verified', { verified: true });
