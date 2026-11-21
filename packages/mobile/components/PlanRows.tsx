@@ -6,6 +6,7 @@ import { artistDisplayName, formatTime, fmtDurationMinutes, reminderBeforeLabel 
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { priorityColor } from '../lib/priorityColor';
 import AppPressable from './AppPressable';
+import ArtistName from './ArtistName';
 
 /** "6 min walk from Main Stage", shown above the set you walk to. */
 export function WalkRow({ minutes, fromStage }: { minutes: number; fromStage: string }) {
@@ -86,9 +87,7 @@ export function PlanListRow({
     >
       <View style={styles.planHead}>
         {item.priority ? <View style={[styles.dot, { backgroundColor: priorityColor(t, item.priority) }]} /> : null}
-        <Text style={styles.rowTitle} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={2}>
-          {name}
-        </Text>
+        <ArtistName set={item.set} separator={b2bSeparator} textStyle={styles.rowTitle} numberOfLines={2} />
       </View>
       <Text style={styles.mutedText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
         {[time, stageName].filter(Boolean).join(' · ')}

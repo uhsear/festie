@@ -34,6 +34,7 @@ import { priorityIconName } from '../lib/prioritySymbol';
 import AppPressable from './AppPressable';
 import ClashHatch from './ClashHatch';
 import ClashChip from './ClashChip';
+import { ArtistNameRuns } from './ArtistName';
 
 const SLOT_MINUTES = 15;
 /**
@@ -258,7 +259,7 @@ function StageColumn({
             >
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
               <Text style={styles.setArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {name}
+                <ArtistNameRuns set={s} separator={b2bSeparator} />
               </Text>
               {height > ROW_HEIGHT * 1.5 ? (
                 <Text style={styles.setTime} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>

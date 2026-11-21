@@ -12,6 +12,7 @@ import {
 import type { FestivalSet } from '@festie/shared/types';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
+import ArtistName from './ArtistName';
 
 interface Props {
   hPad: number;
@@ -69,9 +70,7 @@ export default function DiscoverRow({ hPad, hidden }: Props) {
               accessibilityRole="button"
               accessibilityLabel={[name, when(item), stage].filter(Boolean).join(', ')}
             >
-              <Text style={styles.artist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {name}
-              </Text>
+              <ArtistName set={item} separator={festival?.b2bSeparator} textStyle={styles.artist} numberOfLines={2} />
               <Text style={styles.meta} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {when(item)}
               </Text>

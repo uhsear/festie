@@ -15,6 +15,7 @@ import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useNowNext } from '../hooks/useNowNext';
 import LiveDot from './LiveDot';
 import AppPressable from './AppPressable';
+import ArtistName from './ArtistName';
 
 interface NowNextStripProps {
   /** Opens the full Now & Next surface (festival-mode screen). */
@@ -113,9 +114,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
         )}
       </View>
       <View style={styles.info}>
-        <Text style={styles.artist} numberOfLines={2}>
-          {name}
-        </Text>
+        <ArtistName set={focus.set} separator={b2bSeparator} textStyle={styles.artist} numberOfLines={2} />
         <View style={styles.metaRow}>
           {stage ? (
             <Text style={styles.stage} numberOfLines={1}>

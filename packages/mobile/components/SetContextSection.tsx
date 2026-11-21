@@ -8,6 +8,7 @@ import type { SetContextEntry } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import AppPressable from './AppPressable';
+import { ArtistNameRuns } from './ArtistName';
 
 /** "On <stage> that night" neighbours and "Playing at the same time". Each part hides when empty. */
 export default function SetContextSection({ set }: { set: FestivalSet }) {
@@ -35,7 +36,7 @@ export default function SetContextSection({ set }: { set: FestivalSet }) {
         <View style={styles.rowText}>
           <Text style={styles.artist} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {lead ? <Text style={styles.lead}>{`${lead}: `}</Text> : null}
-            {artist}
+            <ArtistNameRuns set={e.set} separator={separator} />
           </Text>
           <Text style={styles.meta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {lead ? e.time : `${stage} · ${e.time}`}

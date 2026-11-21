@@ -9,6 +9,7 @@ import { applyCaughtMark, artistDisplayName, catchableMeta, caughtFor, selectCat
 import PressableScale from './PressableScale';
 import { useHaptics } from '../hooks/useHaptics';
 import { makeStyles, typeStyle, useLargeText, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+import ArtistName from './ArtistName';
 
 interface Props {
   festivalId: string;
@@ -99,9 +100,7 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
         return (
           <View key={item.set.id} style={[styles.row, largeText && styles.rowStacked]}>
             <View style={styles.text}>
-              <Text style={styles.artist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {artist}
-              </Text>
+              <ArtistName set={item.set} separator={b2bSeparator} textStyle={styles.artist} numberOfLines={2} />
               <Text style={styles.meta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {catchableMeta(item, nowMs, item.set.stageId ? getStageName(item.set.stageId) : null)}
               </Text>

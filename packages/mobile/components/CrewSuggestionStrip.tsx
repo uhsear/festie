@@ -13,6 +13,7 @@ import { useHaptics } from '../hooks/useHaptics';
 import { safeStageColor } from '../lib/stageColor';
 import Avatar from './Avatar';
 import Button from './Button';
+import ArtistName from './ArtistName';
 
 /**
  * "Your crew is seeing these" — the mobile port of web's CrewSuggestionStrip.
@@ -90,9 +91,7 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
             <View key={set.id} style={styles.row}>
               <View style={styles.rowMain}>
                 <View style={styles.titleRow}>
-                  <Text style={styles.artist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                    {name}
-                  </Text>
+                  <ArtistName set={set} separator={festival?.b2bSeparator} textStyle={styles.artist} numberOfLines={2} />
                   <View style={styles.stagePill}>
                     <View
                       style={[styles.stagePillBg, { backgroundColor: ensureWhiteContrast(stageColor) }]}
