@@ -15,7 +15,9 @@
 # operator machine or, via make_remote_fetch, as curl on the app host (where
 # localhost:4000 is reachable).
 
+import base64
 import json
+import os
 import re
 import shlex
 
@@ -28,7 +30,8 @@ WS_HEADERS = (
     "Connection: Upgrade",
     "Upgrade: websocket",
     "Sec-WebSocket-Version: 13",
-    "Sec-WebSocket-Key: ZmVzdGllLXNtb2tlLTAwMQ==",
+    # RFC 6455 wants a random 16-byte nonce per handshake.
+    "Sec-WebSocket-Key: " + base64.b64encode(os.urandom(16)).decode("ascii"),
 )
 JSON_HEADERS = ("Content-Type: application/json", "X-Festie-Request: 1")
 

@@ -26,7 +26,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // Pinned: npx would otherwise fetch whatever is latest on every deploy.
-export const SENTRY_CLI = '@sentry/cli@2.58.6';
+const SENTRY_CLI = '@sentry/cli@2.58.6';
 
 function runCli(args, env) {
   execFileSync('npx', ['--yes', SENTRY_CLI, ...args], {
