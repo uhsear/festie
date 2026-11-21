@@ -225,7 +225,7 @@ export function createBackgroundTasks(ctx: any, { io }: any) {
   const runRetention = async () => {
     try {
       await stores.pool.query('SELECT retention_cleanup()');
-      // Organization invitations by email lapse after 90 days (PENDING_INVITE_DAYS); the address goes with the row.
+      // Organization invitations by email expire after 90 days and are deleted after 120 (the owner sees them as expired in between); the address goes with the row.
       const expiredInvites = await stores.organizations.purgeExpiredPending();
       if (expiredInvites > 0) log.info('retention: expired organization invitations deleted', { count: expiredInvites });
       recordJobRun('retention_cleanup', true);

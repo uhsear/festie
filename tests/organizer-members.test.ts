@@ -488,12 +488,13 @@ describe('owner-run members: invitations expire after 90 days', { skip }, () => 
     assert.equal(renewed?.expired, false);
   });
 
-  test('purgeExpiredPending deletes only the invitations older than 90 days', async () => {
+  test('purgeExpiredPending keeps an invitation for 120 days, so the owner sees it as expired, then deletes it', async () => {
     const { server, users } = await boot();
     const stamp = Date.now();
-    const [old, fresh] = [`old-${stamp}@example.com`, `fresh-${stamp}@example.com`];
-    for (const email of [old, fresh]) await o.as(server, users.ownerA.token).post(`${ORG}/members`, { email, role: 'viewer' });
-    await age(server, old, 91);
+    const [gone, expired, fresh] = [`gone-${stamp}@example.com`, `expired-${stamp}@example.com`, `fresh-${stamp}@example.com`];
+    for (const email of [gone, expired, fresh]) await o.as(server, users.ownerA.token).post(`${ORG}/members`, { email, role: 'viewer' });
+    await age(server, gone, 121);
+    await age(server, expired, 100);
     await age(server, fresh, 89);
 
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });
@@ -504,7 +505,20 @@ describe('owner-run members: invitations expire after 90 days', { skip }, () => 
     } finally {
       await pool.end();
     }
-    assert.equal((await o.sql(server, 'SELECT 1 FROM organization_pending_members WHERE email = $1', [old])).rowCount, 0);
-    assert.equal((await o.sql(server, 'SELECT 1 FROM organization_pending_members WHERE email = $1', [fresh])).rowCount, 1);
+    const left = async (email: string) => (await o.sql(server, 'SELECT 1 FROM organization_pending_members WHERE email = $1', [email])).rowCount;
+    assert.equal(await left(gone), 0);
+    assert.equal(await left(expired), 1);
+    assert.equal(await left(fresh), 1);
+    assert.equal((await pendingOf(server, users.ownerA.token)).find((p) => p.email === expired)?.expired, true, 'still listed, as expired');
+  });
+
+  test('an expired owner invitation no longer blocks the owner from adding that address in another role', async () => {
+    const { server, users } = await boot();
+    const email = `old-boss-${Date.now()}@example.com`;
+    await o.sql(server, "INSERT INTO organization_pending_members (organization_id, email, role) VALUES ('org-a', $1, 'owner')", [email]);
+    const add = () => o.as(server, users.ownerA.token).post(`${ORG}/members`, { email, role: 'editor' });
+    assert.equal((await add()).status, 403, 'a live owner invitation still blocks');
+    await age(server, email, 91);
+    assert.equal((await add()).status, 201);
   });
 });

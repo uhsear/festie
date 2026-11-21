@@ -52,9 +52,11 @@ export const outsideLabelSql = (userIdExpr: string) => `CASE WHEN EXISTS (
 // The one rule for "this user may act as a member": not deleted, email confirmed.
 const ACTIVE_USER = 'u.deleted_at IS NULL AND u.email_verified_at IS NOT NULL';
 
-// An invitation by email stops being claimable this many days after it was added (or re-added). The retention
-// job deletes it then; until it runs, the SQL below still treats it as expired. The Privacy Policy states the period.
+// An invitation by email stops being claimable this many days after it was added (or re-added); the SQL below
+// treats it as expired from then on. The retention job deletes it PENDING_INVITE_PURGE_DAYS after it was added,
+// so the owner sees it as "expired" for the weeks between. The Privacy Policy states the periods.
 const PENDING_INVITE_DAYS = 90;
+const PENDING_INVITE_PURGE_DAYS = 120;
 const PENDING_INVITE_TTL = `INTERVAL '${PENDING_INVITE_DAYS} days'`;
 
 // An owner runs editors and viewers. Owners are Festie's to add, change and remove (plan-v3 3.3).
@@ -207,7 +209,8 @@ export function createOrganizationsStore(pool: Pool) {
         if (byOwner) {
           if (role === 'owner') throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
           const { rowCount: ownerInvites } = await client.query(
-            "SELECT 1 FROM organization_pending_members WHERE organization_id = $1 AND email = $2 AND role = 'owner'",
+            `SELECT 1 FROM organization_pending_members WHERE organization_id = $1 AND email = $2 AND role = 'owner'
+               AND created_at > NOW() - ${PENDING_INVITE_TTL}`,
             [organizationId, email],
           );
           if (ownerInvites) throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
@@ -318,9 +321,11 @@ export function createOrganizationsStore(pool: Pool) {
       });
     },
 
-    /** Deletes the invitations older than PENDING_INVITE_DAYS. Returns how many. Run by the retention job. */
+    /** Deletes the invitations older than PENDING_INVITE_PURGE_DAYS, which is past their expiry. Returns how many. Run by the retention job. */
     async purgeExpiredPending(): Promise<number> {
-      const { rowCount } = await pool.query(`DELETE FROM organization_pending_members WHERE created_at <= NOW() - ${PENDING_INVITE_TTL}`);
+      const { rowCount } = await pool.query(
+        `DELETE FROM organization_pending_members WHERE created_at <= NOW() - INTERVAL '${PENDING_INVITE_PURGE_DAYS} days'`,
+      );
       return rowCount ?? 0;
     },
 

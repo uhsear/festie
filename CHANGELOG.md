@@ -19,7 +19,7 @@ Merged to `main` but not yet deployed to production.
 ### Changed
 - Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.
 - Space Grotesk is self-hosted on web; no page loads fonts from Google any more.
-- Pending organization invitations expire after 90 days.
+- Pending organization invitations expire after 90 days and are deleted after 120, so an owner still sees them as expired in between.
 - On-host database dumps are GPG-encrypted with `BACKUP_GPG_PASSPHRASE`, and nothing in the backup directory outlives 13 weeks. `backup-pg.sh` refuses to run without the passphrase.
 - The accepted Terms version comes from one `TOS_VERSION` constant.
 - Festival profiles are paged in SQL, and page parameters are parsed with Zod.
