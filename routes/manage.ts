@@ -357,17 +357,21 @@ export default function createManageRoutes(
     validate(deps.schemas.organizationProfile),
     async (req: any, res: any) => {
       try {
+        const body = req.validatedBody;
+        const current = await stores.organizations.profile(req.organizationId);
+        if (!current) return sendError(res, 404, 'Organization not found', ErrorCodes.NOT_FOUND);
         // A verified name is part of the badge, so only Festie staff (the admin pass of this gate) change it.
-        // The form resends the current name with every save, so an unchanged name passes.
-        if (req.validatedBody.name !== undefined && req.orgVerified === true) {
-          const current = await stores.organizations.profile(req.organizationId);
-          if (current && current.name !== req.validatedBody.name) {
-            return sendError(res, 403, 'Verified organizations can only be renamed by Festie support. Contact Festie to change the name.', ErrorCodes.FORBIDDEN);
-          }
+        // A form that resends the unchanged name passes.
+        if (body.name !== undefined && body.name !== current.name && req.orgVerified === true) {
+          return sendError(res, 403, 'Verified organizations can only be renamed by Festie support. Contact Festie to change the name.', ErrorCodes.FORBIDDEN);
         }
-        const updated = await stores.organizations.updateProfile(req.organizationId, req.validatedBody);
+        const updated = await stores.organizations.updateProfile(req.organizationId, body);
         if (!updated) return sendError(res, 404, 'Organization not found', ErrorCodes.NOT_FOUND);
-        await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_UPDATED, 'organization', req.organizationId, { fields: Object.keys(req.validatedBody) });
+        // Only fields whose value changed are logged; a rename keeps the old and the new name.
+        const fields = Object.keys(body).filter((key) => body[key] !== (current as Record<string, unknown>)[key]);
+        const details: Record<string, unknown> = { fields };
+        if (fields.includes('name')) details.name = { from: current.name, to: body.name };
+        await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_UPDATED, 'organization', req.organizationId, details);
         return sendSuccess(res, updated);
       } catch (error) {
         return failOrganization(res, error, 'save the organization');

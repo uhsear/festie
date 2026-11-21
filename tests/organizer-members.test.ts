@@ -333,6 +333,8 @@ describe('the organization on the manage mount', { skip }, () => {
     const same = await owner.put(ORG, { name: 'Venue A', displayName: 'The Venue' });
     assert.equal(same.status, 200, JSON.stringify(same.body));
     assert.equal(same.body.data.displayName, 'The Venue');
+    const sameAudit = (await o.sql(server, "SELECT details_json FROM audit_log WHERE action = 'organization.updated' AND organization_id = 'org-a' ORDER BY created_at DESC LIMIT 1")).rows[0];
+    assert.deepEqual(JSON.parse(sameAudit.details_json), { fields: ['displayName'] }, 'a resent name is not logged as changed');
 
     const renamed = await o.as(server, adminToken).put(ORG, { name: 'Venue A Official' });
     assert.equal(renamed.status, 200, JSON.stringify(renamed.body));
@@ -340,6 +342,7 @@ describe('the organization on the manage mount', { skip }, () => {
     const audit = (await o.sql(server, "SELECT actor_type, details_json FROM audit_log WHERE action = 'organization.updated' AND organization_id = 'org-a' ORDER BY created_at DESC LIMIT 1")).rows[0];
     assert.equal(audit.actor_type, 'admin');
     assert.deepEqual(JSON.parse(audit.details_json).fields, ['name']);
+    assert.deepEqual(JSON.parse(audit.details_json).name, { from: 'Venue A', to: 'Venue A Official' });
   });
 });
 

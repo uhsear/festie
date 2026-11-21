@@ -22,7 +22,7 @@ export default function ManageOrgProfile({ organization, canEdit }: Props) {
   const [contactEmail, setContactEmail] = useState(organization.contactEmail ?? '');
   const [website, setWebsite] = useState(organization.website ?? '');
   const [busy, setBusy] = useState(false);
-  // A verified name is part of the badge: only Festie staff rename it, and they do not use this form (the server enforces the same rule).
+  // A verified name is part of the badge: only Festie staff rename it, from the admin organization page (the server enforces the same rule).
   const nameLocked = organization.verified;
 
   if (!canEdit) {
@@ -59,7 +59,8 @@ export default function ManageOrgProfile({ organization, canEdit }: Props) {
     setBusy(true);
     try {
       await updateManageOrganization(organization.id, {
-        name: name.trim(),
+        // A locked name stays out of the save: support may have renamed it since this page loaded.
+        ...(nameLocked ? {} : { name: name.trim() }),
         displayName: orNull(displayName),
         contactEmail: orNull(contactEmail),
         website: orNull(website),
