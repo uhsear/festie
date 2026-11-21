@@ -8,7 +8,10 @@ export interface LiveActivityContent {
 
 // app.config.js sets extra.liveActivity only for builds made with FESTIE_LIVE_ACTIVITY=1, the same
 // builds that carry the widget extension. The widget module loads lazily, after this check, so a
-// build without the extension never touches it.
+// build without the extension never starts or updates anything. end and the placeholder snapshot
+// ignore the flag: an OTA published without it, or turning it off later, must still clear what an
+// earlier flagged run left on the Lock Screen and home screen. expo-widgets is autolinked in every
+// build and these calls sit in try/catch, so a build without the extension fails harmlessly.
 const enabled = () => Constants.expoConfig?.extra?.liveActivity === true;
 const loadWidgets = () => import('../widgets/NowNextActivity.ios');
 
@@ -38,7 +41,6 @@ export async function startOrUpdateLiveActivity(content: LiveActivityContent): P
 
 /** End every recovered instance so relaunches cannot leave stale activities. */
 export async function endLiveActivity(): Promise<void> {
-  if (!enabled()) return;
   try {
     const { NowNextActivityFactory } = await loadWidgets();
     await Promise.all(NowNextActivityFactory.getInstances().map((activity) => activity.end('immediate')));
@@ -50,6 +52,10 @@ export async function endLiveActivity(): Promise<void> {
 /** Push the same model to the home-screen widget timeline. */
 export async function updateWidgetSnapshot(content: LiveActivityContent): Promise<void> {
   if (!enabled()) return;
+  await pushWidgetSnapshot(content);
+}
+
+async function pushWidgetSnapshot(content: LiveActivityContent): Promise<void> {
   try {
     const { NowNextWidgetInstance } = await loadWidgets();
     NowNextWidgetInstance.updateSnapshot({ title: content.title, subtitle: content.body, endsAt: content.endsAt ?? null });
@@ -62,5 +68,5 @@ export async function updateWidgetSnapshot(content: LiveActivityContent): Promis
 // updateSnapshot/updateTimeline/reload) — the least-surprise way to un-stick a
 // stale "Now: X" on the home-screen widget is to push a neutral placeholder.
 export function clearWidgetSnapshot(): Promise<void> {
-  return updateWidgetSnapshot({ title: 'Festie', body: 'Open the app to plan your sets' });
+  return pushWidgetSnapshot({ title: 'Festie', body: 'Open the app to plan your sets' });
 }

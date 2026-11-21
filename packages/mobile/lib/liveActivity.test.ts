@@ -4,11 +4,9 @@ const extra = vi.hoisted(() => ({ liveActivity: true }));
 const instance = vi.hoisted(() => ({ update: vi.fn(), end: vi.fn() }));
 const factory = vi.hoisted(() => ({ start: vi.fn(), getInstances: vi.fn() }));
 const widget = vi.hoisted(() => ({ updateSnapshot: vi.fn() }));
-const loaded = vi.hoisted(() => ({ count: 0 }));
 
 vi.mock('expo-constants', () => ({ default: { expoConfig: { extra } } }));
 vi.mock('../widgets/NowNextActivity.ios', () => {
-  loaded.count += 1;
   return { NowNextActivityFactory: factory, NowNextWidgetInstance: widget };
 });
 
@@ -21,18 +19,29 @@ beforeEach(() => {
 });
 
 describe('Live Activity flag', () => {
-  it('never loads the widget module while the flag is off', async () => {
+  it('never starts or updates while the flag is off', async () => {
     extra.liveActivity = false;
-    vi.resetModules();
-    loaded.count = 0;
+    factory.getInstances.mockReturnValue([instance]);
     const mod = await import('./liveActivity.ios');
     await mod.startOrUpdateLiveActivity(content);
-    await mod.endLiveActivity();
     await mod.updateWidgetSnapshot(content);
-    await mod.clearWidgetSnapshot();
-    expect(loaded.count).toBe(0);
     expect(factory.start).not.toHaveBeenCalled();
+    expect(instance.update).not.toHaveBeenCalled();
     expect(widget.updateSnapshot).not.toHaveBeenCalled();
+  });
+
+  it('still ends survivors and clears the snapshot while the flag is off', async () => {
+    extra.liveActivity = false;
+    factory.getInstances.mockReturnValue([instance]);
+    const mod = await import('./liveActivity.ios');
+    await mod.endLiveActivity();
+    await mod.clearWidgetSnapshot();
+    expect(instance.end).toHaveBeenCalledWith('immediate');
+    expect(widget.updateSnapshot).toHaveBeenCalledWith({
+      title: 'Festie',
+      subtitle: 'Open the app to plan your sets',
+      endsAt: null,
+    });
   });
 
   it('starts one activity when none survived a relaunch', async () => {

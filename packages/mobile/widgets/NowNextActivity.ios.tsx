@@ -84,7 +84,7 @@ export default NowNextActivityFactory;
 //
 // Uses the same NowNextProps shape as the Live Activity so a single
 // updateSnapshot({ title, subtitle, endsAt }) call from lib/liveActivity.ios.ts
-// keeps both surfaces in sync. This home-screen widget name matches app.json;
+// keeps both surfaces in sync. This home-screen widget name matches app.config.js;
 // the Live Activity uses its own runtime-only name above.
 // ---------------------------------------------------------------------------
 
