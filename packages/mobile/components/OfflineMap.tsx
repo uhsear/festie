@@ -894,6 +894,7 @@ export default function OfflineMap({
         id?: string | number;
         label?: string;
         kind?: string;
+        nonce?: string;
         offset?: number;
         length?: number;
       } = {};
@@ -962,10 +963,12 @@ export default function OfflineMap({
         // can only name an offset and a length of the one archive this map opened, and
         // readArchiveRange validates and caps both.
         const readId = msg.id;
+        const readNonce = msg.nonce;
         if (typeof readId !== 'number' || !Number.isSafeInteger(readId)) return;
+        if (typeof readNonce !== 'string' || !/^[0-9a-z]{1,64}$/.test(readNonce)) return;
         void readArchiveRange(localArchive?.url, msg.offset, msg.length).then((chunk) => {
           webRef.current?.injectJavaScript(
-            `window.__festieArchiveChunk && window.__festieArchiveChunk(${readId}, ${chunk === null ? 'null' : JSON.stringify(chunk)}); true;`,
+            `window.__festieArchiveChunk && window.__festieArchiveChunk(${readId}, "${readNonce}", ${chunk === null ? 'null' : JSON.stringify(chunk)}); true;`,
           );
         });
       } else if (msg.type === 'error') {

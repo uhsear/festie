@@ -247,20 +247,48 @@ describe('map document — saved archive read over the bridge', () => {
   it('resolves a read when React Native answers it and rejects one it reports as failed', async () => {
     const code = html.slice(html.indexOf('var ARCHIVE_READS'), html.indexOf('function post(msg)'));
     const posted: unknown[] = [];
-    const win: Record<string, (id: number, b64: string | null) => void> = {};
+    const win: Record<string, (id: number, nonce: string, b64: string | null) => void> = {};
     const source = new Function('window', 'post', `${code}; return bridgedArchiveSource('u');`)(
       win,
       (msg: unknown) => posted.push(msg),
     ) as { getBytes: (offset: number, length: number) => Promise<{ data: ArrayBuffer }> };
 
     const first = source.getBytes(10, 3);
-    expect(posted).toEqual([{ type: 'archive-range', id: 1, offset: 10, length: 3 }]);
-    win.__festieArchiveChunk!(1, 'UE1U');
+    const { nonce } = posted[0] as { nonce: string };
+    expect(nonce).toMatch(/^[0-9a-z]{8,64}$/);
+    expect(posted).toEqual([{ type: 'archive-range', id: 1, nonce, offset: 10, length: 3 }]);
+    win.__festieArchiveChunk!(1, nonce, 'UE1U');
     expect([...new Uint8Array((await first).data)]).toEqual([80, 77, 84]);
 
     const second = source.getBytes(0, 1);
-    win.__festieArchiveChunk!(2, null);
+    win.__festieArchiveChunk!(2, nonce, null);
     await expect(second).rejects.toThrow('unavailable');
+  });
+
+  it('ignores a reply that was asked by an earlier document', async () => {
+    const code = html.slice(html.indexOf('var ARCHIVE_READS'), html.indexOf('function post(msg)'));
+    const load = () => {
+      const posted: { nonce: string }[] = [];
+      const win: Record<string, (id: number, nonce: string, b64: string | null) => void> = {};
+      const source = new Function('window', 'post', `${code}; return bridgedArchiveSource('u');`)(
+        win,
+        (msg: { nonce: string }) => posted.push(msg),
+      ) as { getBytes: (offset: number, length: number) => Promise<{ data: ArrayBuffer }> };
+      return { posted, win, source };
+    };
+    const oldPage = load();
+    const newPage = load();
+    expect(newPage.posted).toEqual([]);
+    const read = newPage.source.getBytes(5, 3);
+    oldPage.source.getBytes(99, 3).catch(() => {});
+    // The old page's read had id 1 as well; its reply reaches the new page.
+    newPage.win.__festieArchiveChunk!(1, oldPage.posted[0]!.nonce, 'AAAA');
+    let settled = false;
+    read.then(() => (settled = true), () => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    newPage.win.__festieArchiveChunk!(1, newPage.posted[0]!.nonce, 'UE1U');
+    expect([...new Uint8Array((await read).data)]).toEqual([80, 77, 84]);
   });
 
   it('widens nothing: no file: scheme and no remote origin', () => {

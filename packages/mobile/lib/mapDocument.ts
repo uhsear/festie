@@ -342,7 +342,12 @@ export function buildMapHtml(
     var ARCHIVE_READS = {};
     var ARCHIVE_SEQ = 0;
     var ARCHIVE_READ_TIMEOUT_MS = 20000;
-    window.__festieArchiveChunk = function (id, b64) {
+    // A reply is injected into whichever page is loaded when RN finishes the read, and ids
+    // restart at 1 per document. The per-document nonce lets a page ignore a reply to a read
+    // that an earlier page asked for.
+    var ARCHIVE_NONCE = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    window.__festieArchiveChunk = function (id, nonce, b64) {
+      if (nonce !== ARCHIVE_NONCE) return;
       var read = ARCHIVE_READS[id];
       if (!read) return;
       delete ARCHIVE_READS[id];
@@ -364,7 +369,7 @@ export function buildMapHtml(
               reject(new Error('archive range timed out'));
             }, ARCHIVE_READ_TIMEOUT_MS);
             ARCHIVE_READS[id] = { resolve: resolve, reject: reject, timer: timer };
-            post({ type: 'archive-range', id: id, offset: offset, length: length });
+            post({ type: 'archive-range', id: id, nonce: ARCHIVE_NONCE, offset: offset, length: length });
           });
         }
       };
