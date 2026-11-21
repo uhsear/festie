@@ -101,3 +101,82 @@ test('git errors exit 2', () => {
   const result = spawnSync(process.execPath, [SCRIPT], { cwd: tmpdir(), encoding: 'utf8' });
   assert.equal(result.status, 2);
 });
+
+const uri = (userinfo: string, host: string) => ['post', 'gres://', userinfo, '@', host, '/app'].join('');
+const staged = (content: string) => {
+  stage('src/uri.txt', `${content}\n`);
+  return run().code;
+};
+
+test('database URIs on loopback hosts pass', () => {
+  for (const host of ['localhost', '127.0.0.1', '[::1]']) {
+    assert.equal(staged(uri('app:' + rand(ALNUM, 12), host)), 0, host);
+  }
+});
+
+test('database URIs on example hosts pass', () => {
+  assert.equal(staged(uri('app:' + rand(ALNUM, 12), 'example.com')), 0);
+});
+
+test('obvious placeholder passwords pass on any host', () => {
+  for (const password of ['p', 'pass', 'password', 'test_password', 'postgres', 'festie', 'x']) {
+    assert.equal(staged(uri(`user:${password}`, 'db.internal.test')), 0, password);
+  }
+});
+
+test('a real-looking password on a non-loopback host is still caught', () => {
+  assert.equal(staged(uri('app:' + rand(ALNUM, 12), 'db.internal.test')), 1);
+  assert.equal(staged(uri('app:' + rand(ALNUM, 12) + '@' + rand(ALNUM, 4), 'db.internal.test')), 1);
+});
+
+test('only real template forms count as placeholders', () => {
+  for (const password of ['${DB_PASSWORD}', '<password>', '{{db_password}}', '%(db_password)s']) {
+    assert.equal(staged(uri(`app:${password}`, 'db.internal.test')), 0, password);
+  }
+  for (const password of ['$' + rand(ALNUM, 10), '{' + rand(ALNUM, 10), '<' + rand(ALNUM, 10), '%41' + rand(ALNUM, 10)]) {
+    assert.equal(staged(uri(`app:${password}`, 'db.internal.test')), 1, password[0]);
+  }
+});
+
+test('the allow marker needs a trailing comment with a reason', () => {
+  const secret = fixtures['AWS access key'];
+  assert.equal(staged(`${secret} // secret-scan: allow docs example`), 0);
+  assert.equal(staged(`${secret} # secret-scan: allow docs example`), 0);
+  assert.equal(staged(`${secret} // secret-scan: allow`), 1);
+  assert.equal(staged(`${secret} // secret-scan: allow   `), 1);
+  assert.equal(staged(`${secret} secret-scan: allow docs example`), 1);
+});
+
+test('mirrors the gitignored secret file names', () => {
+  for (const name of ['a/server.key', 'svc-service-account-prod.json', 'a/festie-deploy.json', 'ios/GoogleService-Info.plist', 'other/google-services.json', 'a/play-store-key.json']) {
+    stage(name, 'x\n');
+    const { code, out } = run();
+    assert.equal(code, 1, name);
+    assert.ok(out.includes(`${name}: `), name);
+    git('rm', '-q', '--cached', '-f', name);
+  }
+});
+
+test('the tracked Firebase client config may still be modified', () => {
+  const name = 'packages/mobile/google-services.json';
+  git('rm', '-q', '--cached', '-f', 'src/uri.txt');
+  stage(name, '{"a":1}\n');
+  git('commit', '-q', '-m', 'Track client config');
+  stage(name, '{"a":2}\n');
+  assert.equal(run().code, 0);
+});
+
+test('--all scans tracked files and reports clean and dirty trees', () => {
+  const all = () => {
+    const result = spawnSync(process.execPath, [SCRIPT, '--all'], { cwd: repo, encoding: 'utf8' });
+    return { code: result.status, out: result.stdout + result.stderr };
+  };
+  git('commit', '-q', '-m', 'Commit staged', '--allow-empty');
+  assert.equal(all().code, 0);
+  stage('src/leak-all.txt', `${fixtures['AWS access key']}\n`);
+  git('commit', '-q', '-m', 'Add leak');
+  const { code, out } = all();
+  assert.equal(code, 1);
+  assert.match(out, /src\/leak-all\.txt:1: AWS access key/);
+  assert.ok(!out.includes(String(fixtures['AWS access key'])));
+});

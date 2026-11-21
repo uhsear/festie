@@ -34,7 +34,18 @@ blocks the common file names. The checks below block the rest.
 
 The hygiene shapes are: private network addresses, private key headers, home-directory server paths,
 absolute Windows user paths, private project paths, and the bare production database name. The
-staging and test database names are allowed.
+staging and test database names are allowed. The bare production database name is also allowed in
+files that legitimately name it: `tests/**`, `scripts/backup-*`, `lib/config.ts` and `CHANGELOG.md`.
+This exemption is by path and covers that one shape only.
+
+Database URIs are not flagged when the password is a template form (`${VAR}`, `<placeholder>`,
+`{{x}}`, `%(x)s`), when the host is loopback (`localhost`, `127.0.0.1`, `::1`) or starts with
+`example.`, or when the password is an obvious dummy (`p`, `pass`, `password`, `test_password`,
+`postgres`, `festie`, `x`).
+
+Run `node scripts/ci/scan-staged-secrets.mjs --all` to scan every tracked file. The tracked file
+`packages/mobile/google-services.json` is the one name exception: it holds a public Firebase client
+key by design.
 
 ## Allowing a false positive
 
@@ -45,7 +56,8 @@ comment:
 secret-scan: allow <reason>
 ```
 
-Write a real reason. A reviewer reads it. For a gitleaks finding on a test fixture, add a narrow
+The marker must sit in a trailing comment (`//`, `#`, `<!--` or `/*`) and needs a non-empty reason.
+A bare marker does not count. Write a real reason. A reviewer reads it. For a gitleaks finding on a test fixture, add a narrow
 entry to `.gitleaks.toml` or `.gitleaksignore` instead of a broad path rule. Never allowlist a value
 that works against a live system.
 

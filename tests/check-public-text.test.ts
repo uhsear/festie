@@ -144,3 +144,33 @@ test('usage and git errors exit 2', () => {
   assert.equal(spawnSync(process.execPath, [SCRIPT, '--base', '--head', 'x'], { cwd: repo }).status, 2);
   assert.equal(spawnSync(process.execPath, [SCRIPT, '--base', 'nope', '--head', 'HEAD'], { cwd: repo }).status, 2);
 });
+
+const prodDb = ['festival', '_planner'].join('');
+
+test('the bare production database name is allowed in tests, backup scripts, config and the changelog', () => {
+  for (const file of ['tests/db.test.ts', 'scripts/backup-run.sh', 'lib/config.ts', 'CHANGELOG.md']) {
+    assert.equal(run(commit(file, `db ${prodDb}\n`)).code, 0, file);
+  }
+});
+
+test('the bare production database name is flagged elsewhere', () => {
+  for (const file of ['src/app.ts', 'scripts/other.sh', 'docs/notes.md', 'packages/web/tests/a.ts']) {
+    const { code, out } = run(commit(file, `db ${prodDb}\n`));
+    assert.equal(code, 1, file);
+    assert.match(out, /production database name/, file);
+  }
+});
+
+test('the secret-scan allow marker needs a trailing comment with a reason', () => {
+  const addr = ip('192', '168', '0', '9');
+  assert.equal(run(commit('m1.txt', `host ${addr} // secret-scan: allow docs example\n`)).code, 0);
+  assert.equal(run(commit('m2.txt', `host ${addr} // secret-scan: allow\n`)).code, 1);
+  assert.equal(run(commit('m3.txt', `host ${addr} secret-scan: allow docs example\n`)).code, 1);
+});
+
+test('an added line that starts with "++ " is scanned, not read as a file header', () => {
+  const head = commit('plus.txt', `ok\n++ host ${ip('192', '168', '0', '9')}\n`);
+  const { code, out } = run(head);
+  assert.equal(code, 1);
+  assert.match(out, /file=plus\.txt,line=2,/);
+});
