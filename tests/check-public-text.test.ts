@@ -115,6 +115,30 @@ test('PUBLIC_TEXT_PRIVATE_TERMS flags terms case-insensitively; unset skips', ()
   assert.ok(!/secret-box/i.test(out.replace('private term', '')));
 });
 
+test('flags Windows user paths, the private project path and the production database name', () => {
+  const winUser = ['C:', 'Users', 'someone', 'app'].join('/');
+  const privatePath = ['D:', 'FESTIE-private', 'plans'].join('/');
+  const prodDb = ['festival', 'planner'].join('_');
+  const head = commit('paths.txt', `${winUser}\n${privatePath}\ndb ${prodDb}\n`);
+  const { code, out } = run(head);
+  assert.equal(code, 1);
+  assert.match(out, /absolute Windows user path/);
+  assert.match(out, /private project path/);
+  assert.match(out, /production database name/);
+  assert.ok(!out.includes('someone') && !out.includes(prodDb));
+});
+
+test('does not flag the staging or test database, a generic Users placeholder or the repo name', () => {
+  const prodDb = ['festival', 'planner'].join('_');
+  const lines = [`db ${prodDb}_staging`, `db ${prodDb}_test`, ['C:', 'Users', '...'].join('/'), 'repo festival-planner'];
+  assert.equal(run(commit('ok-paths.txt', lines.join('\n') + '\n')).code, 0);
+});
+
+test('the secret-scan allow marker also skips the line', () => {
+  const head = commit('allowed2.txt', `host ${ip('192', '168', '0', '9')} # secret-scan: allow documented example\n`);
+  assert.equal(run(head).code, 0);
+});
+
 test('usage and git errors exit 2', () => {
   assert.equal(spawnSync(process.execPath, [SCRIPT], { cwd: repo }).status, 2);
   assert.equal(spawnSync(process.execPath, [SCRIPT, '--base', '--head', 'x'], { cwd: repo }).status, 2);
