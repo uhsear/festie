@@ -28,6 +28,9 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     target: 'es2022',
     cssCodeSplit: true,
+    // Hidden maps exist only when scripts/ci/sentry-sourcemaps.mjs will upload them and then delete
+    // them from dist/. Without the token the build is unchanged and no map reaches the public site.
+    sourcemap: process.env.SENTRY_AUTH_TOKEN ? 'hidden' : false,
     rolldownOptions: {
       output: {
         // Split the vendor bundle into logical chunks so the 697 KB index chunk

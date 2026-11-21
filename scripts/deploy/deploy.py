@@ -24,6 +24,13 @@
 #      rollback command (P16).
 #   8. Smoke-tests a real login (200) if test creds are provided.
 #   9. Tags the deploy `deploy-<UTC timestamp>` and pushes the tag (P14).
+#  10. Creates a Sentry release and deploy marker for the deployed sha, only when
+#      SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT are set here. A failure only warns.
+#
+# Between the web build and the restart, step 5b runs scripts/ci/sentry-sourcemaps.mjs
+# on the host. It uploads source maps only when SENTRY_AUTH_TOKEN is in the host's
+# login-shell environment (the web build then also emits hidden maps); otherwise it
+# prints a note and changes nothing. A failure only warns.
 #
 # Configuration (all via environment — nothing secret is committed):
 #   FESTIE_SSH_HOST       prod host/IP                 (required)
@@ -44,6 +51,8 @@
 #                                                       (default origin/main)
 #   FESTIE_GH_REPO        GitHub repo for the CI check (default uhsear/festie)
 #   FESTIE_SKIP_CI_CHECK  set to 1 to skip the CI-green check (optional)
+#   SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT  release + deploy marker (optional; all three
+#                         needed, else skipped). SENTRY_URL overrides https://sentry.io.
 #
 # The deploy lock is a directory on the host (LOCK_DIR). A deploy killed before
 # it finishes leaves the lock behind: check no deploy is running, then remove it.
@@ -57,6 +66,8 @@ import socket
 import subprocess
 import sys
 import time
+import urllib.parse
+import urllib.request
 
 try:
     import paramiko
@@ -219,6 +230,45 @@ def smoke_login(client, runner=run):
     return out.strip()
 
 
+def sentry_release_marker(sha, deploy_tag, env=None, urlopen=urllib.request.urlopen):
+    """Create a Sentry release and deploy marker for sha. Never raises: a failure only warns.
+
+    Needs SENTRY_AUTH_TOKEN, SENTRY_ORG and SENTRY_PROJECT; skipped when any is unset.
+    The release name is the full sha, which the backend reports as its release
+    (lib/config.ts SENTRY_RELEASE, baked in by scripts/build.mjs).
+    """
+    env = os.environ if env is None else env
+    token, org, project = (env.get(k) for k in ("SENTRY_AUTH_TOKEN", "SENTRY_ORG", "SENTRY_PROJECT"))
+    if not (token and org and project):
+        print("[sentry] release marker skipped (SENTRY_AUTH_TOKEN / SENTRY_ORG / SENTRY_PROJECT not all set)")
+        return False
+    base = (env.get("SENTRY_URL") or "https://sentry.io").rstrip("/")
+    if not base.startswith("https://"):
+        print("WARNING: SENTRY_URL must be https; Sentry release marker skipped.")
+        return False
+    api = f"{base}/api/0/organizations/{urllib.parse.quote(org, safe='')}"
+
+    def post(path, payload):
+        request = urllib.request.Request(
+            api + path,
+            data=json.dumps(payload).encode(),
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=20) as response:
+            return response.status
+
+    try:
+        # A re-run gets 208 (release exists), which urlopen treats as success.
+        post("/releases/", {"version": sha, "projects": [project]})
+        post(f"/releases/{urllib.parse.quote(sha, safe='')}/deploys/", {"environment": "production", "name": deploy_tag})
+    except Exception as exc:  # any failure here must not fail a finished deploy
+        print(f"WARNING: Sentry release marker failed ({type(exc).__name__}: {exc}); the deploy itself is fine.")
+        return False
+    print(f"[sentry] release {sha} and deploy marker {deploy_tag} created")
+    return True
+
+
 def rollback_hint(tag=None):
     target = tag or "deploy-<previous-timestamp>"
     print("")
@@ -318,6 +368,18 @@ def main():
             rollback_hint()
             raise SystemExit("web build failed")
 
+        # 5b. Upload source maps (no-op without SENTRY_AUTH_TOKEN on the host). Before the
+        # restart on purpose: it injects debug ids into dist/*.js, which PM2 must then load.
+        # The script also deletes the web .map files so they are never served.
+        code, out, err = run(
+            client,
+            f"bash -lc 'cd {APP} && node scripts/ci/sentry-sourcemaps.mjs 2>&1 | tail -15'",
+            timeout=600,
+        )
+        print(f"[sourcemaps] exit={code}\n{out}{err}")
+        if code != 0:
+            print("WARNING: source map upload failed; the deploy continues, stack traces stay minified.")
+
         # 6. Restart the backend
         code, out, err = run(
             client,
@@ -360,6 +422,9 @@ def main():
         print(f"[tag] exit={code} tag={deploy_tag}\n{out}{err}")
         if code != 0:
             print("WARNING: deploy succeeded but tag push failed — tag manually for rollback safety.")
+
+        # 10. Sentry release + deploy marker for the pinned sha (warn-only).
+        sentry_release_marker(sha, deploy_tag)
 
         print(f"\nDeploy OK — tagged {deploy_tag}")
     finally:
