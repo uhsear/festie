@@ -124,6 +124,9 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 | `BIND_ADDRESS` | `127.0.0.1` | Interface to bind; set `0.0.0.0` in Docker |
 | `LOG_LEVEL` | `debug` (dev) / `info` (prod) | Pino log level |
 | `SENTRY_DSN` | — | Sentry error reporting (optional) |
+| `SENTRY_TRACES_RATE` | `0.05` | Fraction of backend requests Sentry traces (0 to 1). Keep it at 0.05 or lower in production. The web app reads `VITE_SENTRY_TRACES_RATE`, same default. |
+| `SENTRY_PROFILES_RATE` | `0` | Fraction of traced requests that Sentry profiles |
+| `SENTRY_RELEASE` | git sha baked into `dist/` by `npm run build` | Sentry release name. Set it only to override the sha. Falls back to the `package.json` version when neither exists. |
 
 ### Optional external integrations
 
@@ -357,7 +360,7 @@ All workflows in `.github/workflows/`:
 - `TEST_USERNAME` / `TEST_PASSWORD` — used by E2E and Maestro flows
 - `EXPO_TOKEN` — EAS authentication
 - `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD` — Android signing
-- `SENTRY_AUTH_TOKEN` — Sentry source map upload
+- `SENTRY_AUTH_TOKEN` — Sentry source map upload. With `SENTRY_ORG` and `SENTRY_PROJECT` it lets `scripts/ci/sentry-sourcemaps.mjs` upload the backend and web maps (and `scripts/deploy/deploy.py` create the release marker). Without the token the web build emits no source maps and nothing is uploaded.
 - `PLAY_SERVICE_ACCOUNT_JSON` — Google Play submission
 
 ---
