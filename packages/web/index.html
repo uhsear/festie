@@ -41,14 +41,12 @@
     <link rel="icon" href="/favicon.ico" sizes="32x32" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Preload the Google Fonts CSS so the fetch starts early, then apply it
-         from /font-loader.js (async) so it never blocks first paint. The
-         media="print"+onload swap would violate CSP script-src-attr 'none'.
-         `display=swap` + the size-adjust fallback below cover the swap. -->
-    <link rel="preload" as="style" crossorigin href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" />
-    <script src="/font-loader.js" async></script>
+    <!-- Body face (Space Grotesk, SIL OFL) is self-hosted: no visit contacts Google.
+         The stylesheet is a few hundred bytes from our own origin. Preload the latin
+         file, which covers the main weights on first paint; `display=swap` plus the
+         size-adjust fallback below cover the swap. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/space-grotesk/space-grotesk-latin.woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/space-grotesk/space-grotesk.css" />
     <!-- Display face (Clash Display) is self-hosted (font-src 'self' — no CDN/CSP
          change). Preload the Bold weight: it carries the FESTIE wordmark + every
          heading on first paint. -->
