@@ -5,7 +5,7 @@ import { useAlsoPicked } from '@festie/shared/hooks';
 import { DISCOVER_COPY } from '@festie/shared/constants';
 import { artistDisplayName, formatTime } from '@festie/shared/utils';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
-import ArtistName from './ArtistName';
+import ArtistName, { artistOpenActions } from './ArtistName';
 
 /** "People who picked this also picked". Renders nothing until the API returns sets. */
 export default function AlsoPickedSection({ setId }: { setId: string }) {
@@ -40,6 +40,7 @@ export default function AlsoPickedSection({ setId }: { setId: string }) {
             activeOpacity={0.7}
             accessibilityRole="button"
             accessibilityLabel={detail ? `${name}, ${detail}` : name}
+            {...artistOpenActions(set, festival?.b2bSeparator)}
           >
             <ArtistName set={set} separator={festival?.b2bSeparator} textStyle={styles.name} numberOfLines={1} />
             {detail ? (

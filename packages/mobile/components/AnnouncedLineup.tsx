@@ -18,6 +18,7 @@ import {
   selectLineupEntries,
 } from '@festie/shared/utils';
 import type { AnnouncedLineupModel, InterestRow, LineupView } from '@festie/shared/utils';
+import { lineupEntrySegments } from '@festie/shared/utils/artistSheet';
 import { useNow } from '../hooks/useNow';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { ArtistNameButton } from './ArtistName';
@@ -103,26 +104,18 @@ export default function AnnouncedLineup({ model, hPad = 0 }: { model: AnnouncedL
     const label = lineupEntryName(entry, separator);
     const nameStyle = [styles[tier], cover.state === 'cancelled' && styles.cancelled];
     const sep = separator || 'b2b';
-    // A B2B act whose shown name is just its artists joined splits into one button per artist.
-    const split = entry.artists.length > 1 && label === entry.artists.map((a) => a.name).join(` ${sep} `);
-    const name = split ? (
-      entry.artists.map((artist, i) => (
-        <View key={artist.id ?? `${artist.name}-${i}`} style={styles.nameRow}>
-          {i > 0 ? (
-            <Text style={nameStyle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {sep}
-            </Text>
-          ) : null}
-          <ArtistNameButton target={{ title: artist.name, artists: [artist] }} textStyle={nameStyle}>
-            {artist.name}
-          </ArtistNameButton>
-        </View>
-      ))
-    ) : (
-      <ArtistNameButton target={{ title: label, artists: entry.artists, entryId: entry.id }} textStyle={nameStyle}>
-        {label}
-      </ArtistNameButton>
-    );
+    const name = lineupEntrySegments(entry, separator, cover.state === 'announced').map((seg, i) => (
+      <View key={`${seg.label}-${i}`} style={styles.nameRow}>
+        {i > 0 ? (
+          <Text style={nameStyle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            {sep}
+          </Text>
+        ) : null}
+        <ArtistNameButton target={seg.target} textStyle={nameStyle}>
+          {seg.label}
+        </ArtistNameButton>
+      </View>
+    ));
     return (
       <View key={entry.id} style={styles.row}>
         {name}

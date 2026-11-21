@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { useSegments } from 'expo-router';
 import { Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
@@ -31,17 +33,21 @@ export function InterestToggle({ entryId, name }: { entryId: string; name: strin
 
 /**
  * The one artist sheet: each artist's photo, genres and links, plus the Interested toggle for an announced
- * act. Mounted once in the root layout. Every artist name in the app opens it through useArtistSheetStore.
+ * act. Every artist name in the app opens it through useArtistSheetStore. The root layout mounts it for
+ * ordinary screens. The set screen is a native form sheet, and iOS cannot present a second modal from the
+ * root while that sheet is up, so the set screen mounts its own copy with `inSetSheet`. Only the copy that
+ * matches the focused route shows.
  */
-export default function ArtistSheetHost() {
+export default function ArtistSheetHost({ inSetSheet = false }: { inSetSheet?: boolean }) {
   const styles = useStyles();
   const target = useArtistSheetStore((s) => s.target);
   const isOpen = useArtistSheetStore((s) => s.isOpen);
   const close = useArtistSheetStore((s) => s.close);
   const sets = useFestivalDataStore((s) => s.sets);
-  const shown = target ? enrichArtistTarget(target, sets) : null;
+  const onSetRoute = useSegments()[0] === 'set';
+  const shown = useMemo(() => (target ? enrichArtistTarget(target, sets) : null), [target, sets]);
   return (
-    <SheetShell visible={isOpen && shown !== null} onClose={close} backdropLabel="Close" maxHeight="85%">
+    <SheetShell visible={isOpen && shown !== null && onSetRoute === inSetSheet} onClose={close} backdropLabel="Close" maxHeight="85%">
       {shown ? (
         <>
           <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>

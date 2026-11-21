@@ -17,7 +17,7 @@ import FreshnessChip from '../components/FreshnessChip';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import Button from '../components/Button';
-import { ArtistNameRuns } from '../components/ArtistName';
+import { ArtistNameRuns, artistOpenActions } from '../components/ArtistName';
 
 // The plan renders from the persisted stores first (useCrewHub), then refreshes
 // statuses, meeting points and polls. Pure assembly lives in @festie/shared.
@@ -125,6 +125,7 @@ export default function CrewPlanScreen() {
       onPress={() => openSet(set)}
       accessibilityRole="button"
       accessibilityLabel={`Open ${artistDisplayName(set)}. ${text}`}
+      {...artistOpenActions(set)}
     >
       <Text style={styles.pickMember}>
         <ArtistNameRuns set={set} />
@@ -238,6 +239,7 @@ export default function CrewPlanScreen() {
                             onPress={() => openSet(g.set)}
                             accessibilityRole="button"
                             accessibilityLabel={`Open ${artist}. ${names}`}
+                            {...artistOpenActions(g.set)}
                           >
                             <View style={styles.priorityBadge}>
                               <Ionicons name={priorityIconName(g.priority)} size={iconSize.xs} color={priorityColor(t, g.priority)} />

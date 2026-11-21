@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import type { FestivalSet } from '@festie/shared/types';
 import { artistDisplayName, formatTime } from '@festie/shared/utils';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
-import { ArtistNameRuns } from './ArtistName';
+import { ArtistNameRuns, artistOpenActions } from './ArtistName';
 
 interface OtherDayMatchesProps {
   groups: { dayIndex: number; sets: FestivalSet[] }[];
@@ -39,6 +39,7 @@ export default function OtherDayMatches({ groups, days, getStageName, b2bSeparat
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel={`Show ${artist} on ${dayLabel}`}
+                  {...artistOpenActions(set, b2bSeparator)}
                 >
                   <Text style={styles.rowText} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                     <ArtistNameRuns set={set} separator={b2bSeparator} />

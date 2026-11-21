@@ -10,7 +10,6 @@ import {
   decodePlanSnapshot,
   extractPlanSnapshotText,
   previewPlanImport,
-  artistDisplayName,
   formatTime,
   type PlanSnapshot,
   type PlanImportPreview,
@@ -21,6 +20,7 @@ import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import Button from './Button';
 import EmptyState from './EmptyState';
+import { ArtistNameRuns } from './ArtistName';
 
 // ── Untrusted import with preview (offline-native) ─────────────────────────
 // A scanned QR string is fully untrusted, cross-device input. We hand it
@@ -273,7 +273,7 @@ export default function PlanQRScan() {
               return (
                 <View key={setId} style={styles.summaryRow}>
                   <Text style={styles.summaryText}>
-                    {set ? artistDisplayName(set) : setId}
+                    {set ? <ArtistNameRuns set={set} /> : setId}
                     {wasPicked ? ` (upgrade to ${PRIORITY_LABELS[priority]})` : ''}
                   </Text>
                   <Text style={[styles.summaryText, styles.summaryMuted]}>{setLine(set, dayLabels)}</Text>

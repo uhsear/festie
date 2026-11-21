@@ -276,13 +276,23 @@ function SetCardMobileImpl({
       {/* The name is its own button between two halves of the body: the halves are siblings of it, so no
           touchable nests another. The lower half repeats the body's press but hides from screen readers,
           which already get the body's accessible name from the top half. */}
-      <ArtistName
-        set={set}
-        separator={b2bSeparator}
-        textStyle={[styles.artist, dimmed && styles.dimmedText]}
-        numberOfLines={2}
-        maxFontSizeMultiplier={typeScaleCap('title')}
-      />
+      <View style={styles.nameRow}>
+        <ArtistName
+          set={set}
+          separator={b2bSeparator}
+          textStyle={[styles.artist, dimmed && styles.dimmedText]}
+          numberOfLines={2}
+          maxFontSizeMultiplier={typeScaleCap('title')}
+        />
+        {/* The space to the right of a short name opens the set, as the whole row did before the name became a button. */}
+        <AppPressable
+          style={styles.nameFill}
+          onPress={onPress}
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+      </View>
 
       <AppPressable
         style={styles.body}
@@ -572,6 +582,8 @@ const useStyles = makeStyles((t) => ({
   bodyTop: {
     alignSelf: 'stretch',
   },
+  nameRow: { flexDirection: 'row', alignItems: 'stretch' },
+  nameFill: { flex: 1 },
   body: {
     gap: t.spacing[1],
   },

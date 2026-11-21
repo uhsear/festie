@@ -39,7 +39,6 @@ describe('artist names open the shared artist sheet', () => {
 
   it.each([
     'components/SetCardMobile.tsx',
-    'components/TimelineView.tsx',
     'components/PlanRows.tsx',
     'components/CrewSuggestionStrip.tsx',
     'components/NowNextStrip.tsx',
@@ -52,12 +51,19 @@ describe('artist names open the shared artist sheet', () => {
     'components/CrewCompareSummary.tsx',
     'components/AnnouncedLineup.tsx',
     'components/AccountHistorySection.tsx',
-    'app/grid.tsx',
     'app/crew-compare.tsx',
     'app/crew-plan.tsx',
     'app/friend-picks.tsx',
     'app/caught.tsx',
     'app/rate.tsx',
+    'app/wrap.tsx',
+    'app/inbox.tsx',
+    'app/set/[setId].tsx',
+    'components/ClashCards.tsx',
+    'components/ClashPrompt.tsx',
+    'components/MarkedNoSet.tsx',
+    'components/NowSurface.tsx',
+    'components/PlanQRScan.tsx',
   ])('%s renders artist names through ArtistName', (file) => {
     expect(read(file)).toMatch(/ArtistName(Runs|Button|Inline)?\b/);
   });
@@ -66,5 +72,32 @@ describe('artist names open the shared artist sheet', () => {
     const card = read('components/SetCardMobile.tsx');
     expect(card).toContain('<ArtistName');
     expect(card).toContain('importantForAccessibility="no-hide-descendants"');
+  });
+
+  it.each(['components/TimelineView.tsx', 'app/grid.tsx'])(
+    '%s keeps the cell as the only target so tap and hold-to-pick still work',
+    (file) => {
+      expect(read(file)).not.toMatch(/ArtistName/);
+    },
+  );
+
+  it.each([
+    'components/PlanRows.tsx',
+    'components/SetContextSection.tsx',
+    'components/AlsoPickedSection.tsx',
+    'components/DiscoverRow.tsx',
+    'components/NowNextStrip.tsx',
+    'components/TBASection.tsx',
+    'components/OtherDayMatches.tsx',
+    'components/ClashCards.tsx',
+    'components/NowSurface.tsx',
+    'app/crew-compare.tsx',
+    'app/crew-plan.tsx',
+  ])('%s gives a screen reader an Open artist action on the row that holds the name', (file) => {
+    expect(read(file)).toContain('artistOpenActions(');
+  });
+
+  it('the set screen mounts its own artist host because it is a native form sheet', () => {
+    expect(read('app/set/[setId].tsx')).toContain('<ArtistSheetHost inSetSheet />');
   });
 });

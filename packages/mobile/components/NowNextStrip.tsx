@@ -15,7 +15,7 @@ import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useNowNext } from '../hooks/useNowNext';
 import LiveDot from './LiveDot';
 import AppPressable from './AppPressable';
-import ArtistName from './ArtistName';
+import ArtistName, { artistOpenActions } from './ArtistName';
 
 interface NowNextStripProps {
   /** Opens the full Now & Next surface (festival-mode screen). */
@@ -102,6 +102,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
       activeOpacity={0.85}
       accessibilityRole="button"
       accessibilityLabel={a11y}
+      {...artistOpenActions(focus.set, b2bSeparator)}
     >
       <View style={styles.labelCol}>
         {isNow ? (

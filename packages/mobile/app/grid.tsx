@@ -66,7 +66,6 @@ import AnnouncedLineup from '../components/AnnouncedLineup';
 import OtherDayMatches from '../components/OtherDayMatches';
 import ScheduleDayChips from '../components/ScheduleDayChips';
 import ScheduleResultsRow from '../components/ScheduleResultsRow';
-import { ArtistNameRuns } from '../components/ArtistName';
 
 // Vertical scale comes from the shared GRID_ZOOM_LEVELS (px per minute, three
 // steps). The screen opens at defaultZoomIndex(windowW), the middle level on a
@@ -559,7 +558,7 @@ export default function GridScreen() {
                 </View>
               ) : null}
               <Text style={styles.cellArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                <ArtistNameRuns set={set} separator={currentFestival.b2bSeparator} />
+                {dn}
               </Text>
               {height >= 48 ? (
                 <Text style={styles.cellTime} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
