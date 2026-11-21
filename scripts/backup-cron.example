@@ -49,3 +49,7 @@ APP_DIR=/opt/festie
 
 # Application log cleanup daily at 5:00 AM (rotate deploy.log, migrate.log)
 0 5 * * * cd $APP_DIR && bash scripts/log-cleanup.sh >> logs/log-cleanup.log 2>&1
+
+# Spotify data refresh daily at 3:30 AM: re-reads artist photos and genres older than 30 days
+# (Spotify Developer Terms IV.3.1.1). Needs SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env.
+30 3 * * * cd $APP_DIR && node --import tsx/esm scripts/spotify-refresh-stale.ts >> logs/spotify-refresh.log 2>&1

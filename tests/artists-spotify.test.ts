@@ -485,3 +485,107 @@ describe('spotify refresh', { skip, concurrency: 1 }, () => {
     }
   });
 });
+
+describe('spotify stale refresh (30-day limit)', { skip, concurrency: 1 }, () => {
+  const link = (n: number) => `https://open.spotify.com/artist/${id(n)}`;
+  const state = (artistId: string) =>
+    withPool(async (pool) => (await pool.query('SELECT photo, genres, spotify_fetched_at, updated_at FROM artists WHERE id = $1', [artistId])).rows[0]);
+  const ageFetched = (artistId: string, days: number | null) =>
+    withPool((pool) =>
+      pool.query(`UPDATE artists SET spotify_fetched_at = ${days === null ? 'NULL' : `now() - make_interval(days => ${days})`} WHERE id = $1`, [artistId]),
+    );
+  const asked = (n: number) => spotifyCalls.some((url) => url.includes(`/v1/artists/${id(n)}`));
+
+  test('refuses a caller without an admin session', async () => {
+    await app.server.request.post('/api/v1/admin/artists/spotify-refresh-stale').send({}).expect(401);
+  });
+
+  test('re-reads an artist never read or read 31 days ago, overwrites photo and genres, follows the festival copies and stamps it', async () => {
+    const never = await createArtist(app, { name: 'Stale Never', link: link(80) });
+    const old = await createArtist(app, { name: 'Stale Old', link: link(81) });
+    await withPool(async (pool) => {
+      await pool.query(`UPDATE artists SET photo = 'https://i.scdn.co/image/old', genres = '["old genre"]'::jsonb WHERE id = ANY($1)`, [[never.id, old.id]]);
+      await seedFestival(pool, {
+        id: 'fest-stale-1',
+        sets: [
+          { id: 'stale-1-0', artist: 'Stale Never', artists: [elementOf(never)] },
+          { id: 'stale-1-1', artist: 'Stale Old', artists: [elementOf(old)] },
+        ],
+      });
+    });
+    await ageFetched(never.id, null);
+    await ageFetched(old.id, 31);
+    artistTable[id(80)] = spotifyArtist(80, 'Stale Never');
+    artistTable[id(81)] = spotifyArtist(81, 'Stale Old');
+    const res = await app.post('/api/v1/admin/artists/spotify-refresh-stale', {}).expect(200);
+    assert.ok(res.body.data.updated >= 2);
+    for (const [artist, n] of [[never, 80], [old, 81]] as const) {
+      const row = await state(artist.id);
+      assert.equal(row.photo, `https://i.scdn.co/image/${n}`);
+      assert.deepEqual(row.genres, ['house', 'techno']);
+      assert.ok(Date.now() - new Date(row.spotify_fetched_at).getTime() < 60_000, 'stamped now');
+    }
+    assert.equal((await withPool((pool) => setRow(pool, 'stale-1-0'))).artists[0].photo, 'https://i.scdn.co/image/80');
+    assert.equal((await withPool((pool) => setRow(pool, 'stale-1-1'))).artists[0].photo, 'https://i.scdn.co/image/81');
+  });
+
+  test('leaves an artist read 5 days ago alone and never asks Spotify about it', async () => {
+    const fresh = await createArtist(app, { name: 'Stale Fresh', link: link(82) });
+    await withPool((pool) => pool.query(`UPDATE artists SET photo = 'https://i.scdn.co/image/keep' WHERE id = $1`, [fresh.id]));
+    await ageFetched(fresh.id, 5);
+    artistTable[id(82)] = spotifyArtist(82, 'Stale Fresh');
+    await app.post('/api/v1/admin/artists/spotify-refresh-stale', {}).expect(200);
+    assert.equal(asked(82), false);
+    assert.equal((await state(fresh.id)).photo, 'https://i.scdn.co/image/keep');
+  });
+
+  test('clears a photo Spotify no longer returns, and stamps an unchanged artist without touching updated_at', async () => {
+    const dropped = await createArtist(app, { name: 'Stale Dropped', link: link(83) });
+    const same = await createArtist(app, { name: 'Stale Same', link: link(84) });
+    await withPool((pool) =>
+      pool.query(`UPDATE artists SET photo = 'https://i.scdn.co/image/gone', genres = '["old"]'::jsonb WHERE id = $1`, [dropped.id]),
+    );
+    await withPool((pool) =>
+      pool.query(`UPDATE artists SET photo = 'https://i.scdn.co/image/84', genres = '["house","techno"]'::jsonb WHERE id = $1`, [same.id]),
+    );
+    const before = await state(same.id);
+    artistTable[id(83)] = { ...spotifyArtist(83, 'Stale Dropped'), images: [], genres: [] };
+    artistTable[id(84)] = spotifyArtist(84, 'Stale Same');
+    await app.post('/api/v1/admin/artists/spotify-refresh-stale', {}).expect(200);
+    const gone = await state(dropped.id);
+    assert.equal(gone.photo, null);
+    assert.deepEqual(gone.genres, []);
+    const unchanged = await state(same.id);
+    assert.ok(unchanged.spotify_fetched_at, 'stamped');
+    assert.equal(unchanged.updated_at.getTime(), before.updated_at.getTime(), 'an unchanged artist keeps its edit token');
+  });
+
+  test('an artist Spotify does not answer for keeps its data and is not stamped, so it is tried again', async () => {
+    const ghost = await createArtist(app, { name: 'Stale Ghost', link: link(85) });
+    await withPool((pool) => pool.query(`UPDATE artists SET photo = 'https://i.scdn.co/image/ghost' WHERE id = $1`, [ghost.id]));
+    const res = await app.post('/api/v1/admin/artists/spotify-refresh-stale', {}).expect(200);
+    assert.ok(res.body.data.unavailable >= 1);
+    const row = await state(ghost.id);
+    assert.equal(row.photo, 'https://i.scdn.co/image/ghost');
+    assert.equal(row.spotify_fetched_at, null);
+  });
+
+  test('the cron function stops at the limit and reports a missing Spotify key without reading anything', async () => {
+    const { refreshStaleSpotifyArtists } = await import('../lib/spotify-refresh');
+    const { createArtistsStore } = await import('../lib/db/stores/artists');
+    await withPool(async (pool) => {
+      const stores = { artists: createArtistsStore(pool) };
+      const log = { info() {}, warn() {}, error() {} };
+      const unconfigured = await refreshStaleSpotifyArtists({ stores, config: {}, log });
+      assert.equal(unconfigured.skipped, 'spotify_not_configured');
+      assert.equal(unconfigured.checked, 0);
+      const asks: string[][] = [];
+      const lookup = async (ids: string[]) => (asks.push(ids), new Map());
+      const config = { SPOTIFY_CLIENT_ID: 'x', SPOTIFY_CLIENT_SECRET: 'y' };
+      const limited = await refreshStaleSpotifyArtists({ stores, config, log, limit: 2, lookup });
+      assert.equal(limited.checked, 2);
+      assert.equal(asks.flat().length <= 2, true);
+      assert.equal(limited.unavailable, 2, 'a stub lookup that knows nobody leaves both untouched');
+    });
+  });
+});
