@@ -13,7 +13,17 @@ node_modules
 # Secrets / credentials
 *.pem
 *.key
+*.p8
+*.p12
+*.keystore
+*.jks
 credentials*.json
+# Firebase client configs. The Android one is already tracked (public by design, so this rule
+# does not untrack it); a new copy elsewhere stays out unless added with `git add -f`.
+google-services.json
+GoogleService-Info.plist
+# Saved browser sessions from the e2e login
+tests/e2e/.auth/
 # Google Play / GCP service-account keys (never commit)
 *service-account*.json
 *-service-account.json
@@ -126,6 +136,9 @@ packages/web/public/fonts/clash-display/
 /docs/adrs/*
 !/docs/adrs/README.md
 !/docs/adrs/template.md
+!/docs/security/
+/docs/security/*
+!/docs/security/secret-handling.md
 packages/*/CLAUDE.md
 packages/*/DESIGN.md
 packages/*/PRODUCT.md

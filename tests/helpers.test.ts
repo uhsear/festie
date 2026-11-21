@@ -185,7 +185,7 @@ describe('helpers/sanitize: getLogSafeRequestInfo', () => {
 
   it('excludes cookie header', () => {
     const req = {
-      method: 'POST', path: '/login', ip: '10.0.0.1',
+      method: 'POST', path: '/login', ip: '10.0.0.1', // secret-scan: allow test address in a documentation range
       headers: { cookie: 'session=abc', host: 'example.com' },
     };
     const result = getLogSafeRequestInfo(req);
