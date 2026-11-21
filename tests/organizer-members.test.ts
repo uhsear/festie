@@ -6,7 +6,7 @@ import 'dotenv/config';
  */
 
 import assert from 'node:assert/strict';
-import { afterEach, describe, test } from 'node:test';
+import { afterEach, describe, mock, test } from 'node:test';
 import { Pool } from 'pg';
 import { skip, TEST_DATABASE_URL } from './_test-schema';
 import { createOrganizationsStore } from '../lib/db/stores/organizations.js';
@@ -301,6 +301,44 @@ describe('the organization on the manage mount', { skip }, () => {
     // A pending organization edits its profile; a suspended one does not.
     assert.equal((await o.as(server, users.ownerP.token).put('/api/v1/manage/organizations/org-p', { name: 'Pending Venue' })).status, 200);
     assert.equal((await o.as(server, users.ownerS.token).put('/api/v1/manage/organizations/org-s', { name: 'Paused Venue' })).status, 403);
+  });
+});
+
+describe('the organization name goes into mail, so it carries no address or line break', { skip }, () => {
+  const unsafe = ['Free tickets http://evil.example', 'Visit evil.example now', 'Line one\nLine two', 'Name <b>bold</b>', 'Go to a/b', 'Mail me@evil.example'];
+
+  test('Festie cannot create an organization with such a name, and an owner cannot rename to one', async () => {
+    const { server, users, adminToken } = await boot();
+    for (const name of unsafe) {
+      assert.equal((await o.as(server, adminToken).post('/api/v1/admin/organizations', { name })).status, 400, `create: ${JSON.stringify(name)}`);
+      assert.equal((await o.as(server, users.ownerA.token).put(ORG, { name })).status, 400, `rename: ${JSON.stringify(name)}`);
+      assert.equal((await o.as(server, users.ownerA.token).put(ORG, { displayName: name })).status, 400, `display: ${JSON.stringify(name)}`);
+    }
+    const fine = await o.as(server, adminToken).post('/api/v1/admin/organizations', { name: "Bass & Beats, St. Louis (2nd Stage) O'Neil" });
+    assert.equal(fine.status, 201, JSON.stringify(fine.body));
+  });
+
+  test('the added-to-a-team email uses only a safe name; an unsafe stored name falls back to fixed words', async () => {
+    const { sendOrganizationMemberEmail } = await import('../lib/email.js');
+    const run = async (organizationName: string) => {
+      const send = mock.fn(async (_message: any) => ({ data: { id: 'm1' }, error: null }));
+      await sendOrganizationMemberEmail({
+        to: 'someone@example.com',
+        organizationName,
+        role: 'editor',
+        config: { RESEND_API_KEY: 'key', PUBLIC_ORIGIN: 'https://festie.example' },
+        log: { info() {}, warn() {}, error() {} },
+        _client: { emails: { send } },
+      });
+      return send.mock.calls[0]!.arguments[0] as any;
+    };
+    const ok = await run('Venue A');
+    assert.equal(ok.subject, 'You were added to Venue A on Festie');
+    for (const name of ['Click http://evil.example now', 'Two\nLines']) {
+      const message = await run(name);
+      assert.equal(message.subject, 'You were added to a team on Festie');
+      assert.doesNotMatch(`${message.text}${message.html}`, /evil|Lines/);
+    }
   });
 });
 

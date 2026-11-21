@@ -4,6 +4,7 @@
 import crypto from 'node:crypto';
 import { Resend } from 'resend';
 import { escapeHtml } from './helpers';
+import { isSafeOrganizationName } from './schemas/organization';
 
 let _resend: any = null;
 
@@ -308,9 +309,12 @@ export async function sendPublishDecisionEmail({ to, organizationName, festivalN
 
 /**
  * Tells a person that an organization added them. The text is fixed: only the organization name and the role are
- * filled in, and the name is escaped. It carries nothing the person who added them typed (plan-v3 5.7).
+ * filled in, and the name is escaped. It carries nothing the person who added them typed (plan-v3 5.7). A name that
+ * is not a plain name (a row from before the rule, or a link) is replaced by fixed words, so this mail never
+ * carries a link to an address that may have no account.
  */
-export async function sendOrganizationMemberEmail({ to, organizationName, role, config, log, _client }: any) {
+export async function sendOrganizationMemberEmail({ to, organizationName: storedName, role, config, log, _client }: any) {
+  const organizationName = isSafeOrganizationName(String(storedName ?? '')) ? storedName : 'a team';
   const lines = [
     `You were added to ${organizationName} on Festie as ${role === 'viewer' ? 'a viewer' : `an ${role}`}.`,
     'Sign in with this email address, or create an account with it and confirm it. Then open Manage to see the festivals of your team.',

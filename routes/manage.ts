@@ -395,7 +395,7 @@ export default function createManageRoutes(
             const profile = await stores.organizations.profile(req.organizationId);
             // A test seam: deps.sendOrganizationMemberEmail replaces the mail send.
             const send = deps.sendOrganizationMemberEmail ?? sendOrganizationMemberEmail;
-            emailed = !!(await send({ to: email, organizationName: profile?.displayName || profile?.name, role, config, log }));
+            emailed = !!(await send({ to: email, organizationName: profile?.name, role, config, log }));
           } catch (error) {
             log.warn('manage member email failed', { error: (error as Error).message });
           }

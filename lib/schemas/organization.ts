@@ -8,8 +8,20 @@ import { identifier } from './primitives';
 // ── Organizations (routes/organizations.ts, admin only) ─────────────
 const orgRole = z.enum(['owner', 'editor', 'viewer']);
 
+// An organization name goes into mail to addresses that may have no account, so it must not carry a link or a line
+// break: letters, digits, spaces and a few marks only, and no "word.word" that reads as a web address.
+const SAFE_NAME_CHARACTERS = /^[\p{L}\p{M}\p{N} '’&,.()+!-]+$/u;
+const LOOKS_LIKE_ADDRESS = /\p{L}\.\p{L}{2,}/u;
+export const isSafeOrganizationName = (name: string) => SAFE_NAME_CHARACTERS.test(name) && !LOOKS_LIKE_ADDRESS.test(name);
+const safeName = z
+  .string()
+  .trim()
+  .min(2)
+  .max(80)
+  .refine(isSafeOrganizationName, 'Use letters, numbers and spaces. A web address, a line break and symbols such as / : @ are not allowed.');
+
 export const organizationCreateSchema = z.object({
-  name: z.string().trim().min(2).max(80),
+  name: safeName,
   kind: z.enum(['venue', 'promoter', 'other']).default('other'),
   website: z.string().url().max(2048).startsWith('https://', 'Website must be https').nullable().optional(),
 });
@@ -23,8 +35,8 @@ export const organizationListQuery = z.object({
 // that may be empty. The kind and the status are Festie's to set.
 export const organizationProfileSchema = z
   .object({
-    name: z.string().trim().min(2).max(80),
-    displayName: z.string().trim().min(2).max(80).nullable(),
+    name: safeName,
+    displayName: safeName.nullable(),
     contactEmail: z.string().trim().toLowerCase().email().max(254).nullable(),
     website: z.string().url().max(2048).startsWith('https://', 'Website must be https').nullable(),
   })
