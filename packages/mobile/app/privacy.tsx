@@ -24,6 +24,7 @@ const OPERATOR_NAME = 'Asir Khan';
 const CONTACT_EMAIL = 'privacy@festie.us';
 const SERVICE_URL = 'https://festie.us';
 const TERMS_URL = 'https://festie.us/terms.html';
+const DELETE_ACCOUNT_URL = 'https://festie.us/delete-account';
 
 const openEmail = () => {
   void Linking.openURL(`mailto:${CONTACT_EMAIL}`);
@@ -138,7 +139,7 @@ const SECTIONS: PolicySection[] = [
         bullets: [
           'Organization details: the organization\'s name, contact email and the festivals it runs.',
           'Team members: which Festie accounts belong to the organization, their role, and a log of what each member changed. Other members of the same organization see your display name in that log.',
-          'Invitations: the email address of someone invited to join the organization, even if they do not have a Festie account yet. We delete it when the invitation is accepted or cancelled.',
+          'Invitations: the email address of someone invited to join the organization, even if they do not have a Festie account yet. The invitation expires after 90 days, and we delete it 120 days after we sent it. We also delete it when the invitation is accepted or cancelled.',
           'Uploads: files the organization uploads, such as site maps.',
         ],
       },
@@ -516,6 +517,7 @@ const SECTIONS: PolicySection[] = [
     title: 'Other documents',
     body: [
       'Our Terms of Service set the rules for using Festie.',
+      'To delete your account, use our account deletion page.',
     ],
   },
   {
@@ -641,6 +643,19 @@ export default function PrivacyScreen() {
               >
                 <Ionicons name="document-text-outline" size={18} color={t.colors.accent.aqua} />
                 <Text style={styles.linkText}>Terms of Service</Text>
+                <Ionicons name="open-outline" size={16} color={t.colors.accent.aqua} />
+              </TouchableOpacity>
+            ) : null}
+            {section.title === 'Other documents' ? (
+              <TouchableOpacity
+                style={styles.linkRow}
+                onPress={() => void Linking.openURL(DELETE_ACCOUNT_URL)}
+                activeOpacity={0.7}
+                accessibilityRole="link"
+                accessibilityLabel="Open the account deletion page"
+              >
+                <Ionicons name="trash-outline" size={18} color={t.colors.accent.aqua} />
+                <Text style={styles.linkText}>Delete your account</Text>
                 <Ionicons name="open-outline" size={16} color={t.colors.accent.aqua} />
               </TouchableOpacity>
             ) : null}

@@ -30,7 +30,7 @@ test('privacy page renders the organizer subsection and the organizer recipient'
   assert.ok(headings(html).includes('If you work with a festival organizer account'));
   assert.match(html, /<li><strong>Festival organizers:<\/strong>/);
   assert.match(html, /<li><strong>Invitations:<\/strong>[^<]*accepted or cancelled\./);
-  assert.doesNotMatch(html, /after 90 days/, 'no code expires invitations yet');
+  assert.match(html, /expires after 90 days, and we delete it 120 days after we sent it/);
 });
 
 test('mobile privacy screen mirrors the organizer subsection', () => {
