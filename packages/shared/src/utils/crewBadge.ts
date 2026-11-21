@@ -13,6 +13,16 @@ export function openPollIds(polls: ReadonlyArray<BadgePoll>): string[] {
   return polls.filter((p) => !p.closed).map((p) => p.id);
 }
 
+/** How many polls are still open. Drives the Plan tab badge on web and mobile. */
+export function openPollCount(polls: ReadonlyArray<BadgePoll>): number {
+  return polls.filter((p) => !p.closed).length;
+}
+
+/** True when a member owes or is owed more than a cent. Drives the Money tab dot. */
+export function hasUnsettledBalance(myBalance: number | null | undefined): boolean {
+  return Math.abs(myBalance ?? 0) > 0.01;
+}
+
 export function balanceCents(myBalance: number | null | undefined): number {
   return myBalance == null ? 0 : Math.round(myBalance * 100);
 }

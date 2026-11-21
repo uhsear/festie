@@ -1,6 +1,7 @@
 import React from 'react';
 import type { FestivalSet, Stage } from '@festie/shared/types';
 import { artistDisplayName, formatTime } from '@festie/shared/utils';
+import ArtistName, { RowOpenButton } from './ArtistName';
 
 interface OtherDayMatchesProps {
   groups: Array<{ dayIndex: number; sets: FestivalSet[] }>;
@@ -27,14 +28,11 @@ export default function OtherDayMatches({ groups, dayLabels, stages, b2bSeparato
                 const time = set.startTime ? formatTime(set.startTime) : 'TBA';
                 return (
                   <li key={set.id}>
-                    <button
-                      type="button"
-                      aria-label={`Show ${artist} on ${dayLabel}`}
-                      onClick={() => onSelectDay(dayIndex)}
-                      className="min-h-[44px] w-full text-left px-4 py-2 rounded-lg bg-bg-card border border-border-light text-sm text-text-primary cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-                    >
-                      {`${artist} · ${stageName} · ${time}`}
-                    </button>
+                    <div className="relative min-h-[44px] w-full text-left px-4 py-2 rounded-lg bg-bg-card border border-border-light text-sm text-text-primary">
+                      <RowOpenButton label={`Show ${artist} on ${dayLabel}`} onClick={() => onSelectDay(dayIndex)} />
+                      <ArtistName set={set} separator={b2bSeparator} />
+                      {` · ${stageName} · ${time}`}
+                    </div>
                   </li>
                 );
               })}

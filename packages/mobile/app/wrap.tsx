@@ -20,6 +20,7 @@ import EmptyState from '../components/EmptyState';
 import SectionLabel from '../components/SectionLabel';
 import { Skeleton } from '../components/Skeleton';
 import CrewPhotoLink from '../components/CrewPhotoLink';
+import { ArtistNameButton, ArtistNameInline } from '../components/ArtistName';
 import CrewWrapPoster, { type CrewWrapData } from '../components/CrewWrapPoster';
 import WrapCardPoster from '../components/wrap/WrapCardPoster';
 import ConfettiBurst from '../components/wrap/ConfettiBurst';
@@ -275,9 +276,9 @@ export default function WrapScreen() {
             {allSorted.map((s) => (
               <View key={s.setId} style={styles.allRow}>
                 <RatingTag rating={s.rating} compact />
-                <Text style={styles.allArtist} numberOfLines={2}>
-                  {artistOf(s)}
-                </Text>
+                <View style={styles.allArtistCell}>
+                  <ArtistNameButton name={artistOf(s)} textStyle={styles.allArtistText} numberOfLines={2} />
+                </View>
                 <Text style={styles.allStage} numberOfLines={1}>
                   {stageLabel(s)}
                 </Text>
@@ -673,9 +674,9 @@ function CrewWrapTab({
             <SectionLabel>Sets you saw together</SectionLabel>
             {wrap.setsSeenTogether.slice(0, 10).map((set) => (
               <View key={set.setId} style={styles.allRow}>
-                <Text style={styles.allArtist} numberOfLines={2}>
-                  {artistOf(set)}
-                </Text>
+                <View style={styles.allArtistCell}>
+                  <ArtistNameButton name={artistOf(set)} textStyle={styles.allArtistText} numberOfLines={2} />
+                </View>
                 <Text style={styles.seenCount}>{set.count} loved it</Text>
               </View>
             ))}
@@ -690,7 +691,12 @@ function CrewWrapTab({
                 <Text style={styles.memberName}>{m.name}</Text>
                 {m.topSets.length > 0 ? (
                   <Text style={styles.memberPicks} numberOfLines={2}>
-                    {m.topSets.map((set) => artistOf(set)).join(' · ')}
+                    {m.topSets.map((set, i) => (
+                      <Text key={set.setId}>
+                        {i > 0 ? ' · ' : ''}
+                        <ArtistNameInline name={artistOf(set)}>{artistOf(set)}</ArtistNameInline>
+                      </Text>
+                    ))}
                   </Text>
                 ) : (
                   <Text style={styles.memberEmpty}>No sets rated 4 or higher yet</Text>
@@ -927,10 +933,10 @@ const useStyles = makeStyles((t) => ({
     borderBottomWidth: 1,
     borderBottomColor: t.colors.border.default,
   },
-  allArtist: {
+  allArtistCell: { flex: 1 },
+  allArtistText: {
     ...typeStyle('caption'),
     color: t.colors.text.primary,
-    flex: 1,
   },
   allStage: {
     ...typeStyle('micro'),

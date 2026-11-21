@@ -3,8 +3,12 @@ import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
   formatFestivalDate,
   formatDateSpan,
+  formatClock,
   formatTime,
   formatTimeOrRaw,
+  formatTimeCompact,
+  formatTimeParts,
+  uses24HourClock,
   timeToMinutes,
   minutesToTime,
   artistDisplayName,
@@ -59,33 +63,143 @@ describe('formatFestivalDateRange', () => {
 
 describe('formatTime', () => {
   it('returns empty string for undefined', () => {
-    expect(formatTime(undefined)).toBe('');
+    expect(formatTime(undefined, 'en-US')).toBe('');
   });
 
   it('converts 24h morning time to 12h AM', () => {
-    expect(formatTime('09:30')).toBe('9:30 AM');
+    expect(formatTime('09:30', 'en-US')).toBe('9:30 AM');
   });
 
   it('converts noon to 12 PM', () => {
-    expect(formatTime('12:00')).toBe('12:00 PM');
+    expect(formatTime('12:00', 'en-US')).toBe('12:00 PM');
   });
 
   it('converts afternoon time to 12h PM', () => {
-    expect(formatTime('14:30')).toBe('2:30 PM');
+    expect(formatTime('14:30', 'en-US')).toBe('2:30 PM');
   });
 
   it('converts midnight to 12 AM', () => {
-    expect(formatTime('00:00')).toBe('12:00 AM');
+    expect(formatTime('00:00', 'en-US')).toBe('12:00 AM');
   });
 
   it('converts 23:59 to 11:59 PM', () => {
-    expect(formatTime('23:59')).toBe('11:59 PM');
+    expect(formatTime('23:59', 'en-US')).toBe('11:59 PM');
+  });
+});
+
+describe('formatTime follows the locale hour cycle', () => {
+  it.each([
+    ['en-US', '21:30', '9:30 PM'],
+    ['en-US', '00:05', '12:05 AM'],
+    ['en-US', '12:00', '12:00 PM'],
+    ['en-GB', '21:30', '21:30'],
+    ['en-GB', '09:05', '09:05'],
+    ['de-DE', '21:30', '21:30'],
+    ['de-DE', '00:05', '00:05'],
+  ])('%s shows %s as %s', (locale, hhmm, expected) => {
+    expect(formatTime(hhmm, locale)).toBe(expected);
+  });
+
+  it('reads the runtime locale when none is given', () => {
+    const runtime = new Intl.DateTimeFormat().resolvedOptions().locale;
+    expect(formatTime('21:30')).toBe(formatTime('21:30', runtime));
+  });
+
+  it('never uses a no-break space and returns non-time input unchanged', () => {
+    expect(formatTime('21:30', 'en-US')).not.toMatch(/[\u00a0\u202f]/);
+    expect(formatTime('soon', 'en-US')).toBe('soon');
+    expect(formatTimeOrRaw('21:30', 'de-DE')).toBe('21:30');
+    expect(formatTimeOrRaw('after sunset', 'de-DE')).toBe('after sunset');
+  });
+
+  it('does not move with the host time zone', () => {
+    // formatTime builds a UTC date, so no zone can shift a wall-clock time. Run the check in two zones.
+    const original = process.env.TZ;
+    try {
+      const seen = ['Pacific/Kiritimati', 'Pacific/Pago_Pago'].map((tz) => {
+        process.env.TZ = tz;
+        return [formatTime('23:30', 'en-US'), formatTime('23:30', 'de-DE')];
+      });
+      expect(seen[0]).toEqual(['11:30 PM', '23:30']);
+      expect(seen[1]).toEqual(seen[0]);
+    } finally {
+      if (original === undefined) delete process.env.TZ;
+      else process.env.TZ = original;
+    }
+  });
+});
+
+describe('formatTimeCompact and formatTimeParts', () => {
+  it.each([
+    ['en-US', '21:00', '9 PM'],
+    ['en-US', '21:30', '9:30 PM'],
+    ['en-GB', '13:00', '13:00'],
+    ['de-DE', '00:00', '00:00'],
+  ])('%s compacts %s to %s', (locale, hhmm, expected) => {
+    expect(formatTimeCompact(hhmm, locale)).toBe(expected);
+  });
+
+  it.each([
+    ['en-US', '21:30', { time: '9:30', period: 'PM' }],
+    ['en-GB', '21:30', { time: '21:30', period: '' }],
+    ['de-DE', '00:05', { time: '00:05', period: '' }],
+  ])('%s splits %s into its clock and marker', (locale, hhmm, expected) => {
+    expect(formatTimeParts(hhmm, locale)).toEqual(expected);
+  });
+
+  it('keeps the marker apart from the clock when the locale writes it first or with dots', () => {
+    const ko = formatTimeParts('21:30', 'ko-KR');
+    expect(ko.time).toBe('9:30');
+    expect(ko.period).not.toBe('');
+    const ca = formatTimeParts('21:30', 'en-CA');
+    expect(ca.time).toBe('9:30');
+    expect(ca.period).toMatch(/^p\.?m\.?$/i);
+  });
+
+  it('passes unreadable input through with no marker', () => {
+    expect(formatTimeParts('soon', 'en-US')).toEqual({ time: 'soon', period: '' });
+    expect(formatTimeParts(undefined, 'en-US')).toEqual({ time: '', period: '' });
+  });
+});
+
+describe('formatClock', () => {
+  it('follows the device zone when none is given, even after the zone changes', () => {
+    const original = process.env.TZ;
+    const instant = Date.UTC(2026, 6, 11, 1, 30);
+    try {
+      process.env.TZ = 'America/Los_Angeles';
+      expect(formatClock(instant, undefined, 'en-US')).toBe('6:30 PM');
+      process.env.TZ = 'Asia/Tokyo';
+      expect(formatClock(instant, undefined, 'en-US')).toBe('10:30 AM');
+      expect(formatClock(instant, undefined, 'de-DE')).toBe('10:30');
+    } finally {
+      if (original === undefined) delete process.env.TZ;
+      else process.env.TZ = original;
+    }
+  });
+
+  // 2026-07-11 01:30 UTC is 6:30 PM on Jul 10 in Los Angeles and 10:30 AM in Tokyo.
+  const instant = Date.UTC(2026, 6, 11, 1, 30);
+
+  it('shows the festival zone clock, not the host clock', () => {
+    expect(formatClock(instant, 'America/Los_Angeles', 'en-US')).toBe('6:30 PM');
+    expect(formatClock(instant, 'America/Los_Angeles', 'en-GB')).toBe('18:30');
+    expect(formatClock(instant, 'Asia/Tokyo', 'en-US')).toBe('10:30 AM');
+    expect(formatClock(instant, 'Asia/Tokyo', 'de-DE')).toBe('10:30');
+  });
+});
+
+describe('uses24HourClock', () => {
+  it('tells 12-hour locales from 24-hour ones', () => {
+    expect(uses24HourClock('en-US')).toBe(false);
+    expect(uses24HourClock('en-GB')).toBe(true);
+    expect(uses24HourClock('de-DE')).toBe(true);
   });
 });
 
 describe('formatTimeOrRaw', () => {
   it('formats HH:MM values', () => {
-    expect(formatTimeOrRaw('14:30')).toBe('2:30 PM');
+    expect(formatTimeOrRaw('14:30', 'en-US')).toBe('2:30 PM');
   });
 
   it('passes free text through unchanged', () => {

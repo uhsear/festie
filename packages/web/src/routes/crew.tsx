@@ -37,6 +37,8 @@ import { balancesQueryOptions, pollsQueryOptions } from '../hooks/useCrewAttenti
 import {
   DEFAULT_CREW_TAB,
   balanceCents,
+  hasUnsettledBalance as isUnsettled,
+  openPollCount as countOpenPolls,
   openPollIds,
   crewCopy,
   deleteCrewConfirmMessage,
@@ -118,11 +120,11 @@ function CrewViewInner() {
   const activeCrewId = activeCrew?.id;
   const { data: openPollCount = 0 } = useQuery({
     ...pollsQueryOptions(activeCrewId),
-    select: (list) => list.filter((p) => !p.closed).length,
+    select: countOpenPolls,
   });
   const { data: hasUnsettledBalance = false } = useQuery({
     ...balancesQueryOptions(activeCrewId),
-    select: (balances) => Math.abs(balances.find((b) => b.userId === userId)?.balance ?? 0) > 0.01,
+    select: (balances) => isUnsettled(balances.find((b) => b.userId === userId)?.balance),
   });
   // Raw lists (same cache entries, no extra request) feed the Crew tab badge's "seen" marks.
   const { data: rawPolls } = useQuery(pollsQueryOptions(activeCrewId));

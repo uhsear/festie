@@ -235,6 +235,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const emailSent = await emailFanout(attendeeIds, 'wrap_ready', eventKey, async (user) =>
       sendWrapReadyEmail({
         to: user.email,
+        userId: user.id,
         username: user.username,
         festivalName,
         festivalId,
@@ -486,7 +487,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const emailSent = organizationId
       ? 0
       : await alertEmailFanout(followerIds, 'lineup_drop', eventKey, async (user) =>
-          sendLineupDropEmail({ to: user.email, username: user.username, festivalName, festivalId, hasTimes, config, log }),
+          sendLineupDropEmail({ to: user.email, userId: user.id, username: user.username, festivalName, festivalId, hasTimes, config, log }),
         );
 
     log?.info?.('sendLineupDrop: done', { festivalId, followers: followerIds.length, priorEdition: priorEditionIds.length, pushSent, emailSent });
@@ -601,7 +602,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       data: { festivalId, eventKey, deepLink },
     }));
     const emailSent = await alertEmailFanout(userIds, 'days_out', eventKey, async (user) =>
-      sendDaysOutEmail({ to: user.email, username: user.username, festivalName, festivalId, config, log }),
+      sendDaysOutEmail({ to: user.email, userId: user.id, username: user.username, festivalName, festivalId, config, log }),
     );
 
     log?.info?.('sendDaysOut: done', { festivalId, recipients: userIds.length, pushSent, emailSent });
@@ -698,6 +699,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
       ? await alertEmailFanout(userIds, 'set_times_out', eventKey, async (user) =>
           sendSetTimesOutEmail({
             to: user.email,
+            userId: user.id,
             username: user.username,
             festivalName,
             festivalId,
@@ -757,6 +759,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const emailSent = await emailFanout(invited, 'crew_reformed', eventKey, async (user) =>
       sendCrewReformEmail({
         to: user.email,
+        userId: user.id,
         username: user.username,
         crewName,
         festivalName,
@@ -850,6 +853,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     sendFn: (user: any) => Promise<boolean>,
     { limit = Infinity, noPushFirst = false, budgetLeft }: { limit?: number; noPushFirst?: boolean; budgetLeft?: () => Promise<number> } = {},
   ): Promise<number> {
+    // CAN-SPAM: every email sent from here is marketing mail, and lib/email.ts refuses it without a postal address.
+    if (!hasPostalAddress()) return 0;
     const { ids, users } = await emailPlan(userIds, type, eventKey, { noPushFirst });
     const emailEventKey = `${eventKey}#email`;
     let sent = 0;
@@ -902,8 +907,8 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
 
   // ── announcement email rules (lineup, days) ───────────────────────────────
   //
-  // These two alerts email without a postal address never (CAN-SPAM; the push and inbox row do not
-  // depend on it) and at most EMAIL_DAILY_BUDGET emails a day across all re-engagement mail, because
+  // Every email here needs a postal address (CAN-SPAM; the push and inbox row do not depend on it). These two alerts also
+  // go out at most EMAIL_DAILY_BUDGET emails a day across all re-engagement mail, because
   // the mail provider's plan caps a day. People the budget cuts stay un-emailed; the next press reaches them.
   // The fan-out re-reads the budget before every send, so concurrent jobs overshoot by a send or two, not a batch.
   // wrap_ready and crew_reformed are not capped: each goes to one crew's or festival's own audience, so

@@ -57,8 +57,8 @@ export interface FestivalMapConfig {
    * vector basemap (read via the `pmtiles://` protocol) instead of the online OSM
    * raster tiles — so a downloaded/CDN-hosted `.pmtiles` archive can back the map
    * with little/no network. ADDITIVE + nullable: absent ⇒ the map keeps TODAY's
-   * online OSM raster style unchanged (graceful fallback). `pmtilesUrl` MUST be an
-   * https URL to a `.pmtiles` archive; `attribution` is optional basemap credit.
+   * online OSM raster style unchanged (graceful fallback). `pmtilesUrl` is always an
+   * https URL to a `.pmtiles` archive (the server stores a typed /tiles/ path as an absolute URL); `attribution` is optional basemap credit.
    */
   offlineBasemap?: {
     pmtilesUrl: string;

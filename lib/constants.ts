@@ -6,6 +6,10 @@
  * Used by both server.js (Sets) and lib/schemas.js (Zod enums)
  */
 
+// Version of the Terms of Service a new account accepts, stored in users.tos_version.
+// Bump it in the same change that edits public/terms.html.
+export const TOS_VERSION = 1;
+
 export const ALLOWED_PICK_PRIORITIES = new Set(['must', 'want-to-see', 'maybe']);
 export const PICK_PRIORITY_VALUES = ['must', 'want-to-see', 'maybe'] as const;
 

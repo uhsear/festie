@@ -55,7 +55,7 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
   // Announce once per new id, not on every re-render.
   useEffect(() => {
     if (id) AccessibilityInfo.announceForAccessibility(label);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- announce once per new id; label derives from the same announcement
   }, [id]);
 
   if (!a) return null;

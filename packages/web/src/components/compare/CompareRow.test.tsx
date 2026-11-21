@@ -100,12 +100,13 @@ describe('CompareRow', () => {
 
   it('links the artist to the set page', () => {
     renderInTable(<CompareRow {...defaultProps} />);
-    expect(screen.getByRole('link', { name: 'Open Daft Punk' })).toHaveAttribute('href', '/set/set-1');
+    expect(screen.getByRole('link', { name: 'Open Daft Punk set' })).toHaveAttribute('href', '/set/set-1');
   });
 
   it('shows both names for a B2B set', () => {
     renderInTable(<CompareRow {...defaultProps} set={makeSet({ artist: 'A b2b B', artists: [{ name: 'A' }, { name: 'B' }] } as unknown as Partial<FestivalSet>)} />);
-    expect(screen.getByText(/A b2b B/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open A' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open B' })).toBeInTheDocument();
   });
 
   it('offers Add in my cell when I have no pick, and calls onAdd with the top priority', () => {

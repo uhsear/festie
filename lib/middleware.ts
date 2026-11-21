@@ -13,6 +13,7 @@ import type { Redis } from 'ioredis';
 
 import { createTracingMiddleware } from './tracing.js';
 import { mountSwaggerUI } from './swagger-ui-setup.js';
+import { mountTiles } from './tiles.js';
 import { default as createAuditMiddleware } from './audit-middleware.js';
 import { recordRecentRequest } from './recent-requests.js';
 import { sentry } from './sentry.js';
@@ -321,6 +322,10 @@ function configureMiddleware(app: Application, ctx: AppContext) {
     return res.status(204).end();
   });
 
+  // ── Self-hosted PMTiles (TILES_DIR) ───────────────────────────────────
+  // Off (404) until TILES_DIR is set. It answers its own CORS (own origins only), so it sits before the generic CORS block.
+  mountTiles(app, { config, isAllowedOrigin, sendError, ErrorCodes });
+
   // ── CORS ──────────────────────────────────────────────────────────────
   app.use((req: Request, res: Response, next: NextFunction) => {
     const origin = req.headers.origin;
@@ -492,6 +497,15 @@ function configureMiddleware(app: Application, ctx: AppContext) {
   // (icons, legal pages, screenshots, etc.).
   const reactDistDir = webDist;
   if (fs.existsSync(reactDistDir)) {
+    // Source maps are uploaded to Sentry, never served. Refuse them here so a map left in dist/
+    // (the deploy build writes them briefly) is neither public nor cached by the edge for a year.
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (/\.map$/i.test(req.path)) {
+        res.status(404).end();
+        return;
+      }
+      next();
+    });
     app.use(
       express.static(reactDistDir, {
         maxAge: '7d',

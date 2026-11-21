@@ -124,7 +124,7 @@ export default function CompleteSignupScreen() {
   // The payload lives in memory only; after an app restart there is nothing to finish.
   useEffect(() => {
     if (!payload) backToLogin(PROVIDER_COPY.signupExpired);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; backToLogin only calls router and Alert
   }, []);
   if (!payload) return null;
 

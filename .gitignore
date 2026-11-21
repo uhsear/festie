@@ -13,7 +13,17 @@ node_modules
 # Secrets / credentials
 *.pem
 *.key
+*.p8
+*.p12
+*.keystore
+*.jks
 credentials*.json
+# Firebase client configs. The Android one is already tracked (public by design, so this rule
+# does not untrack it); a new copy elsewhere stays out unless added with `git add -f`.
+google-services.json
+GoogleService-Info.plist
+# Saved browser sessions from the e2e login
+tests/e2e/.auth/
 # Google Play / GCP service-account keys (never commit)
 *service-account*.json
 *-service-account.json
@@ -63,6 +73,8 @@ mobile-loop-capture.js
 !tests/__snapshots__/responsive-design.spec.ts/*.png
 # but DO track the mobile app icons/splash (required by EAS prebuild)
 !packages/mobile/assets/*.png
+# and the Spotify attribution logos (Spotify Developer Policy)
+!packages/mobile/assets/spotify/*.png
 # and DO track the Play Store listing assets (icon, feature graphic, screenshots)
 !packages/mobile/store/play/images/**/*.png
 # and DO track the web PWA install icons + apple-touch-icon (referenced by the
@@ -121,11 +133,17 @@ packages/web/public/fonts/clash-display/
 # Internal docs: kept on the workstation and the server, never published.
 /docs/*
 !/docs/brand/
+!/docs/runbooks/
+/docs/runbooks/*
+!/docs/runbooks/ios-testing.md
 !/docs/REUSE.md
 !/docs/adrs/
 /docs/adrs/*
 !/docs/adrs/README.md
 !/docs/adrs/template.md
+!/docs/security/
+/docs/security/*
+!/docs/security/secret-handling.md
 packages/*/CLAUDE.md
 packages/*/DESIGN.md
 packages/*/PRODUCT.md

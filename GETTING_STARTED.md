@@ -103,7 +103,7 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string, e.g. `postgresql://user:pass@localhost:5432/festie` |
 | `PUBLIC_ORIGIN` | Canonical origin of the deployed app, e.g. `https://festie.us` (required in production; startup validator enforces it) |
-| `SESSION_SECRET` | Strong random string; reserved for future HMAC session signing, enforced at startup in production |
+| `SESSION_SECRET` | Strong random string, enforced at startup in production. Signs the one-click unsubscribe links in marketing email |
 
 ### Required for integration tests
 
@@ -118,23 +118,29 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 | `REDIS_URL` | `redis://127.0.0.1:6379` | Redis connection. Falls back to in-memory when unset or `REDIS_ENABLED=false` |
 | `REDIS_ENABLED` | `true` | Set `false` to run without Redis locally |
 | `RESEND_API_KEY` | — | Transactional email (password reset, invites). Email features silently disabled when unset. |
+| `EMAIL_POSTAL_ADDRESS` | — | Postal address in the footer of marketing email (wrap-up, lineup, days, set times, crew re-form). Those emails are not sent while it is unset; the server logs this once at startup |
+| `EMAIL_UNSUBSCRIBE_SECRET` | `SESSION_SECRET` | Key that signs the unsubscribe links in marketing email. Set it so that rotating `SESSION_SECRET` does not break links already sent (they must work for 30 days) |
 | `FIREBASE_CREDENTIALS_PATH` | — | Absolute path to the Firebase service-account JSON file. Set it to enable FCM push notifications. The server starts normally when it is unset, and push delivery stays disabled. |
 | `ALLOWED_ORIGINS` | derived from `PUBLIC_ORIGIN` | Comma-separated extra CORS origins |
 | `PORT` | `4000` | HTTP port the backend listens on |
 | `BIND_ADDRESS` | `127.0.0.1` | Interface to bind; set `0.0.0.0` in Docker |
 | `LOG_LEVEL` | `debug` (dev) / `info` (prod) | Pino log level |
 | `SENTRY_DSN` | — | Sentry error reporting (optional) |
+| `SENTRY_TRACES_RATE` | `0.05` | Fraction of backend requests Sentry traces (0 to 1). Keep it at 0.05 or lower in production. The web app reads `VITE_SENTRY_TRACES_RATE`, same default. |
+| `SENTRY_PROFILES_RATE` | `0` | Fraction of traced requests that Sentry profiles |
+| `SENTRY_RELEASE` | git sha baked into `dist/` by `npm run build` | Sentry release name. Set it only to override the sha. Falls back to the `package.json` version when neither exists. |
 
 ### Optional external integrations
 
 | Variable | Purpose |
 |----------|---------|
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify artist metadata for lineup import; feature disabled when unset |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify artist metadata for lineup import, and the 30-day refresh of stored photos and genres (`scripts/spotify-refresh-stale.ts`); disabled when unset |
 | `APNS_KEY_PATH` / `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_BUNDLE_ID` | Direct APNs push for iOS tokens; APNs sender disabled when any of these are unset |
 | `APPLE_TEAM_ID` / `ANDROID_CERT_FINGERPRINTS` | Universal/deep-link asset endpoints |
 | `WEBHOOK_TOKEN_HMAC_KEY` | Required when `FCM_RETRY_WEBHOOK_URL` is set; startup validator enforces this pairing |
 | `FCM_RETRY_WEBHOOK_URL` | FCM retry webhook endpoint |
 | `MOBILE_ORIGINS` | Comma-separated TWA / custom-scheme origins for mobile CORS |
+| `TILES_DIR` | Absolute path to a directory of `.pmtiles` files. The server then serves them at `/tiles/<name>.pmtiles` with Range support. File names use `a-z`, `0-9`, `_` and `-`. Unset turns the feature off, and the route answers 404. See `scripts/maps/extract-pmtiles.md`. |
 
 ### Development minimum `.env`
 
@@ -357,8 +363,12 @@ All workflows in `.github/workflows/`:
 - `TEST_USERNAME` / `TEST_PASSWORD` — used by E2E and Maestro flows
 - `EXPO_TOKEN` — EAS authentication
 - `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEY_ALIAS`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_PASSWORD` — Android signing
-- `SENTRY_AUTH_TOKEN` — Sentry source map upload
+- `SENTRY_AUTH_TOKEN` — Sentry source map upload for the Android build (`android-release.yml`). No workflow uploads the web or backend maps; see "Sentry source maps and release markers" below.
 - `PLAY_SERVICE_ACCOUNT_JSON` — Google Play submission
+
+**Sentry source maps and release markers (deploy time, not CI).** Both are off until the token is set, and neither needs a GitHub secret.
+- Source maps: set `SENTRY_AUTH_TOKEN`, `SENTRY_ORG` and `SENTRY_PROJECT` in the production host's login shell. Deploy step 5 then builds the web app with `FESTIE_WEB_SOURCEMAPS=1`, and step 5b runs `scripts/ci/sentry-sourcemaps.mjs`. The script uploads the backend and web maps, then deletes the web maps. The server also refuses to serve any `*.map` file. Without `FESTIE_WEB_SOURCEMAPS=1` the web build emits no maps.
+- Release marker: set the same three variables on the operator machine that runs `scripts/deploy/deploy.py`. After a successful deploy it creates the release and deploy marker for the deployed sha. A failure only warns.
 
 ---
 

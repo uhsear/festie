@@ -13,6 +13,7 @@ import RatingButtons from '../components/features/RatingButtons';
 import { cn } from '../lib/utils';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useToast } from '../lib/toastContext';
+import { ArtistNameButton } from '../components/features/ArtistName';
 
 const ADVANCE_DELAY_MS = 300;
 
@@ -168,7 +169,9 @@ function RateFlow({ festivalId }: { festivalId: string }) {
         {index + 1} of {queue.length}
       </p>
       <div className="mt-4 rounded-xl border border-border bg-bg-card p-5 text-center">
-        <div className="text-2xl font-bold text-text-primary">{set.artist || 'Unknown artist'}</div>
+        <div className="text-2xl font-bold text-text-primary">
+          <ArtistNameButton name={set.artist || 'Unknown artist'} />
+        </div>
         {meta && <div className="mt-1 text-sm text-text-secondary">{meta}</div>}
         <div className="mt-5 flex justify-center gap-2">
           <button

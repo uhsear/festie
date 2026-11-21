@@ -14,9 +14,10 @@ describe('T26 mobile crew layout', () => {
   });
 
   it('orders Home Base, meeting points, then status in Find', () => {
-    const home = crew.indexOf('<CrewHomeBase');
-    const points = crew.indexOf('<CrewMeetingPoints');
-    const status = crew.indexOf('<CrewStatus');
+    const find = read('components/crew/CrewFindTab.tsx');
+    const home = find.indexOf('<CrewHomeBase');
+    const points = find.indexOf('<CrewMeetingPoints');
+    const status = find.indexOf('<CrewStatus');
     expect(home).toBeGreaterThan(-1);
     expect(home).toBeLessThan(points);
     expect(points).toBeLessThan(status);

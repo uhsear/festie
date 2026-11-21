@@ -14,6 +14,25 @@ describe('index.html boot shell', () => {
     expect(html).not.toMatch(/\sstyle="/);
   });
 
+  it('self-hosts Space Grotesk: no Google Fonts host, and the main file is preloaded', () => {
+    expect(html).not.toMatch(/fonts\.(googleapis|gstatic)\.com/);
+    expect(html).not.toContain('font-loader.js');
+    expect(html).toContain('<link rel="preload" as="font" type="font/woff2" href="/fonts/space-grotesk/space-grotesk-latin.woff2" crossorigin />');
+    expect(html).toContain('<link rel="stylesheet" href="/fonts/space-grotesk/space-grotesk.css" />');
+  });
+
+  it('ships the Space Grotesk files, the licence and a stylesheet that declares every weight in use', () => {
+    const dir = resolve(__dirname, '../public/fonts/space-grotesk');
+    const css = readFileSync(resolve(dir, 'space-grotesk.css'), 'utf8');
+    for (const file of ['space-grotesk-latin.woff2', 'space-grotesk-latin-ext.woff2', 'space-grotesk-vietnamese.woff2']) {
+      expect(readFileSync(resolve(dir, file)).subarray(0, 4).toString('latin1')).toBe('wOF2');
+      expect(css).toContain(`/fonts/space-grotesk/${file}`);
+    }
+    expect(readFileSync(resolve(dir, 'OFL.txt'), 'utf8')).toContain('SIL Open Font License');
+    expect(css).not.toMatch(/https?:/);
+    expect(css.match(/font-weight: 400 700;/g)).toHaveLength(3);
+  });
+
   it('loads the boot guard as an external script before the bundle', () => {
     expect(html).toMatch(/<script src="\/boot-guard\.js"><\/script>\s*<script type="module" src="\/src\/main\.tsx">/);
   });

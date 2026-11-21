@@ -232,14 +232,63 @@ describe('vendored runtime', () => {
   });
 });
 
-describe('map document — saved archive embedded as bytes', () => {
+describe('map document — saved archive read over the bridge', () => {
   const url = 'file:///cache/festie-basemaps/abc.pmtiles';
-  const html = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'stage', { url, base64: 'UE1UaWxlcw==' });
+  const html = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'stage', { url });
 
-  it('carries the bytes and serves them through the pmtiles protocol', () => {
-    expect(html).toContain('<script id="festie-basemap" type="text/plain">UE1UaWxlcw==</script>');
-    expect(html).toContain(`var INLINE_ARCHIVE_URL = "${url}";`);
+  it('names the archive and asks React Native for byte ranges instead of embedding it', () => {
+    expect(html).not.toContain('id="festie-basemap"');
+    expect(html).toContain(`var SAVED_ARCHIVE_URL = "${url}";`);
+    expect(html).toContain("type: 'archive-range'");
+    expect(html).toContain('window.__festieArchiveChunk = function');
     expect(html).toContain('var USE_PMTILES = true;');
+  });
+
+  it('resolves a read when React Native answers it and rejects one it reports as failed', async () => {
+    const code = html.slice(html.indexOf('var ARCHIVE_READS'), html.indexOf('function post(msg)'));
+    const posted: unknown[] = [];
+    const win: Record<string, (id: number, nonce: string, b64: string | null) => void> = {};
+    const source = new Function('window', 'post', `${code}; return bridgedArchiveSource('u');`)(
+      win,
+      (msg: unknown) => posted.push(msg),
+    ) as { getBytes: (offset: number, length: number) => Promise<{ data: ArrayBuffer }> };
+
+    const first = source.getBytes(10, 3);
+    const { nonce } = posted[0] as { nonce: string };
+    expect(nonce).toMatch(/^[0-9a-z]{8,64}$/);
+    expect(posted).toEqual([{ type: 'archive-range', id: 1, nonce, offset: 10, length: 3 }]);
+    win.__festieArchiveChunk!(1, nonce, 'UE1U');
+    expect([...new Uint8Array((await first).data)]).toEqual([80, 77, 84]);
+
+    const second = source.getBytes(0, 1);
+    win.__festieArchiveChunk!(2, nonce, null);
+    await expect(second).rejects.toThrow('unavailable');
+  });
+
+  it('ignores a reply that was asked by an earlier document', async () => {
+    const code = html.slice(html.indexOf('var ARCHIVE_READS'), html.indexOf('function post(msg)'));
+    const load = () => {
+      const posted: { nonce: string }[] = [];
+      const win: Record<string, (id: number, nonce: string, b64: string | null) => void> = {};
+      const source = new Function('window', 'post', `${code}; return bridgedArchiveSource('u');`)(
+        win,
+        (msg: { nonce: string }) => posted.push(msg),
+      ) as { getBytes: (offset: number, length: number) => Promise<{ data: ArrayBuffer }> };
+      return { posted, win, source };
+    };
+    const oldPage = load();
+    const newPage = load();
+    expect(newPage.posted).toEqual([]);
+    const read = newPage.source.getBytes(5, 3);
+    oldPage.source.getBytes(99, 3).catch(() => {});
+    // The old page's read had id 1 as well; its reply reaches the new page.
+    newPage.win.__festieArchiveChunk!(1, oldPage.posted[0]!.nonce, 'AAAA');
+    let settled = false;
+    read.then(() => (settled = true), () => (settled = true));
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    newPage.win.__festieArchiveChunk!(1, newPage.posted[0]!.nonce, 'UE1U');
+    expect([...new Uint8Array((await read).data)]).toEqual([80, 77, 84]);
   });
 
   it('widens nothing: no file: scheme and no remote origin', () => {
@@ -248,10 +297,9 @@ describe('map document — saved archive embedded as bytes', () => {
     expect(csp['connect-src']).not.toContain('https://festie.us');
   });
 
-  it('cannot be broken out of by a hostile payload', () => {
+  it('cannot be broken out of by a hostile archive url', () => {
     const hostile = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'stage', {
-      url,
-      base64: 'AA==</script><script>alert(1)</script>',
+      url: 'file:///x.pmtiles</script><script>alert(1)</script>',
     });
     expect(hostile).not.toContain('<script>alert(1)');
   });

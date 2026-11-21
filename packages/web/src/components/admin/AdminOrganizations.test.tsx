@@ -51,9 +51,11 @@ vi.mock('@festie/shared/services/festivalAdmin', () => ({
     { id: 'f9', name: 'Platform Fest', stageCount: 1, dayCount: 1, startDate: '', endDate: '', published: true, updatedAt: '' },
   ]),
 }));
+const updateManageOrganization = vi.fn();
 vi.mock('@festie/shared/services/organizer', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   fetchManageFestivals: vi.fn(),
+  updateManageOrganization: (...a: unknown[]) => updateManageOrganization(...a),
 }));
 
 const org = (over: Record<string, unknown> = {}) => ({
@@ -74,7 +76,7 @@ const org = (over: Record<string, unknown> = {}) => ({
 const detail = (over: Record<string, unknown> = {}) => ({
   ...org(),
   members: [{ userId: 'u1', username: 'sam', email: 'sam@venue.example', active: true, role: 'owner', addedBy: null, createdAt: '2026-11-01T00:00:00.000Z' }],
-  pending: [{ email: 'kim@venue.example', role: 'editor', addedBy: null, createdAt: '2026-11-01T00:00:00.000Z' }],
+  pending: [{ email: 'kim@venue.example', role: 'editor', addedBy: null, createdAt: '2026-11-01T00:00:00.000Z', expiresAt: '2027-01-30T00:00:00.000Z', expired: false }],
   usage: { festivals: 1, drafts: 1, announcementsThisMonth: 2, uploadedBytes: 3 * 1024 * 1024 },
   festivals: [{ id: 'f1', name: 'Venue Fest', location: '', organizationId: 'o1', slug: null, published: false, deleted: false, publishRequestedAt: null, publishReviewNote: null, updatedAt: '2026-11-01T00:00:00.000Z' }],
   ...over,
@@ -139,6 +141,20 @@ describe('AdminOrganizations', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add member' }));
     await waitFor(() => expect(svc.addOrganizationMember).toHaveBeenCalledWith('o1', { email: 'owner@venue.example', role: 'editor' }));
     expect(toast).toHaveBeenCalledWith(expect.stringContaining('Member added'), 'success');
+  });
+
+  it('renames a verified organization, which an owner cannot', async () => {
+    svc.fetchOrganization.mockResolvedValue(detail({ verifiedAt: '2026-11-01' }));
+    updateManageOrganization.mockResolvedValue({});
+    render();
+    await userEvent.click(await screen.findByRole('button', { name: 'Venue A' }));
+    await screen.findByRole('heading', { name: 'Venue A' });
+    expect(screen.getByText('Owners cannot rename a verified organization. Only you can.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Rename' })).toBeDisabled();
+    await userEvent.type(screen.getByLabelText(/^New name/), ' Venue A Official ');
+    await userEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    await waitFor(() => expect(updateManageOrganization).toHaveBeenCalledWith('o1', { name: 'Venue A Official' }));
+    expect(toast).toHaveBeenCalledWith('Organization renamed.', 'success');
   });
 
   it('removes a member and a pending member after confirmation', async () => {

@@ -107,7 +107,7 @@ describe('request-helpers: getSocketRequestIp', () => {
 
   it('takes the first value if cf-connecting-ip arrives as an array', () => {
     const helpers = makeHelpers({ TRUST_PROXY: true });
-    const req = socketReq({ 'cf-connecting-ip': ['203.0.113.4', '10.0.0.1'] }, '127.0.0.1');
+    const req = socketReq({ 'cf-connecting-ip': ['203.0.113.4', '10.0.0.1'] }, '127.0.0.1'); // secret-scan: allow test address in a documentation range
     assert.equal(helpers.getSocketRequestIp(req), '203.0.113.4');
   });
 
@@ -146,7 +146,7 @@ describe('request-helpers: getRequestIp', () => {
     // and no cf-connecting-ip, the key comes from the raw socket peer.
     const helpers = makeHelpers({ TRUST_PROXY: true });
     const req = mockReq({
-      headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.2' },
+      headers: { 'x-forwarded-for': '10.0.0.1, 10.0.0.2' }, // secret-scan: allow test address in a documentation range
       ip: undefined,
       socket: { remoteAddress: '203.0.113.7' },
     });
@@ -174,14 +174,14 @@ describe('request-helpers: getRequestIp', () => {
 
   it('ignores proxy headers when TRUST_PROXY is false', () => {
     const helpers = makeHelpers({ TRUST_PROXY: false });
-    const req = mockReq({ headers: { 'cf-connecting-ip': '1.2.3.4' }, ip: '192.168.1.1' });
-    assert.equal(helpers.getRequestIp(req), '192.168.1.1');
+    const req = mockReq({ headers: { 'cf-connecting-ip': '1.2.3.4' }, ip: '192.168.1.1' }); // secret-scan: allow test address in a documentation range
+    assert.equal(helpers.getRequestIp(req), '192.168.1.1'); // secret-scan: allow test address in a documentation range
   });
 
   it('falls back to req.ip', () => {
     const helpers = makeHelpers({ TRUST_PROXY: false });
-    const req = mockReq({ ip: '10.10.10.10' });
-    assert.equal(helpers.getRequestIp(req), '10.10.10.10');
+    const req = mockReq({ ip: '10.10.10.10' }); // secret-scan: allow test address in a documentation range
+    assert.equal(helpers.getRequestIp(req), '10.10.10.10'); // secret-scan: allow test address in a documentation range
   });
 
   it('returns "unknown" when no valid IP is found', () => {
@@ -234,14 +234,14 @@ describe('request-helpers: unresolved IP warning throttle', () => {
 describe('request-helpers: getRawRequestIp', () => {
   it('returns socket.remoteAddress', () => {
     const helpers = makeHelpers();
-    const req = mockReq({ socket: { remoteAddress: '192.168.0.5' } });
-    assert.equal(helpers.getRawRequestIp(req), '192.168.0.5');
+    const req = mockReq({ socket: { remoteAddress: '192.168.0.5' } }); // secret-scan: allow test address in a documentation range
+    assert.equal(helpers.getRawRequestIp(req), '192.168.0.5'); // secret-scan: allow test address in a documentation range
   });
 
   it('returns connection.remoteAddress as fallback', () => {
     const helpers = makeHelpers();
-    const req = mockReq({ socket: {}, connection: { remoteAddress: '10.0.0.5' } });
-    assert.equal(helpers.getRawRequestIp(req), '10.0.0.5');
+    const req = mockReq({ socket: {}, connection: { remoteAddress: '10.0.0.5' } }); // secret-scan: allow test address in a documentation range
+    assert.equal(helpers.getRawRequestIp(req), '10.0.0.5'); // secret-scan: allow test address in a documentation range
   });
 
   it('returns "unknown" when no IP found', () => {

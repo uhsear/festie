@@ -97,7 +97,7 @@ describe('FriendPicksView', () => {
   it('adds ticked sets once per priority and undo restores previous picks', async () => {
     renderView();
     const addBtn = await screen.findByRole('button', { name: 'Add 1 to my plan' });
-    fireEvent.click(screen.getByLabelText(/Three/));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Three/ }));
     fireEvent.click(await screen.findByRole('button', { name: 'Add 2 to my plan' }));
     await waitFor(() => expect(bulkSavePicks).toHaveBeenCalledTimes(2));
     expect(bulkSavePicks).toHaveBeenCalledWith(['s1'], 'must');

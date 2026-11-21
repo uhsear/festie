@@ -28,7 +28,7 @@ export default function ScheduleDayChips({ hPad }: { hPad: number }) {
   useEffect(() => {
     scrollToDay(chipX.current.get(selectedDay));
     // scrollToDay only reads refs and hPad.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scrollToDay only reads refs and hPad
   }, [selectedDay, hPad]);
 
   const days = getDays();

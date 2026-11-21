@@ -11,7 +11,7 @@ import {
   setOrganizationVerified,
   transferFestival,
 } from '@festie/shared/services/adminOrganizations';
-import { organizerFestivalStatus, type OrgRole } from '@festie/shared/services/organizer';
+import { organizerFestivalStatus, updateManageOrganization, type OrgRole } from '@festie/shared/services/organizer';
 import { useToast } from '../../lib/toastContext';
 import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
@@ -50,6 +50,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
   const [pending, setPending] = useState<Pending>(null);
   const [suspending, setSuspending] = useState(false);
   const [moveId, setMoveId] = useState('');
+  const [newName, setNewName] = useState('');
   const festivals = useAdminFestivals();
 
   const refresh = async () => {
@@ -82,6 +83,21 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
       },
       'Member added. A person without an account joins when they sign in with this email and confirm it.',
       "Couldn't add the member. Try again.",
+    );
+  };
+
+  // The rename goes through the organizer PUT, which lets an admin change a verified name that an owner cannot.
+  const rename = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const name = newName.trim();
+    await act(
+      async () => {
+        const renamed = await updateManageOrganization(organizationId, { name });
+        setNewName('');
+        return renamed;
+      },
+      'Organization renamed.',
+      "Couldn't rename it. Try again.",
     );
   };
 
@@ -177,6 +193,17 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
         </div>
       </div>
 
+      <form onSubmit={rename} aria-label="Rename organization" className="grid grid-cols-1 gap-3 rounded-lg border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto] md:items-end">
+        <label className="flex flex-col gap-1 text-xs text-text-muted">
+          New name
+          <input required minLength={2} maxLength={80} value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={data.name} className={INPUT_CLASS} />
+          {verified && <span>Owners cannot rename a verified organization. Only you can.</span>}
+        </label>
+        <button type="submit" disabled={busy || newName.trim().length < 2 || newName.trim() === data.name} className={smallButton}>
+          Rename
+        </button>
+      </form>
+
       <section aria-label="Usage" className="space-y-1">
         <h3 className="type-label text-text-primary">Usage</h3>
         <p className="text-sm text-text-secondary">
@@ -230,7 +257,12 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
                 <li key={p.email} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
                   <div className="min-w-0">
                     <p className="break-all text-sm text-text-primary">{p.email}</p>
-                    <p className="text-xs text-text-muted">{p.role}. Joins when they sign in with this email and confirm it.</p>
+                    <p className="text-xs text-text-muted">
+                      {p.role}.{' '}
+                      {p.expired
+                        ? 'Expired: they can no longer join with this invitation. Add them again to send a new one.'
+                        : 'Joins when they sign in with this email and confirm it.'}
+                    </p>
                   </div>
                   <button
                     type="button"

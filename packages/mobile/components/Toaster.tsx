@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { AccessibilityInfo, Platform, Pressable, Text, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown, FadeOut } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOut } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { FullWindowOverlay } from 'react-native-screens';
 import { useUIStore, type Toast } from '@festie/shared/stores';
@@ -36,7 +36,7 @@ function ToastCard({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolea
   useEffect(() => {
     if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(toast.message);
     if (toast.kind === 'error' || toast.kind === 'warning' || toast.kind === 'success') haptic(toast.kind);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: announce and buzz once when the toast appears
   }, []);
 
   // The Toaster owns the timer. Never paused: an undo toast must not outlive its delete timer.
@@ -48,8 +48,8 @@ function ToastCard({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolea
   const { onUndo } = toast;
   return (
     <Animated.View
-      entering={reduceMotion ? FadeIn.duration(durationEffects.fast) : FadeInDown.duration(durationSpatial.med)}
-      exiting={FadeOut.duration(durationEffects.fast)}
+      entering={reduceMotion ? undefined : FadeInDown.duration(durationSpatial.med)}
+      exiting={reduceMotion ? undefined : FadeOut.duration(durationEffects.fast)}
       style={[styles.card, { borderLeftColor: accent }]}
       accessibilityRole={toast.kind === 'error' || toast.kind === 'warning' ? 'alert' : undefined}
     >

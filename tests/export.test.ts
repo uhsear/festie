@@ -150,6 +150,13 @@ after(async () => {
   try { await cleanupById(pool); } finally { await pool.end(); }
 });
 
+describe('export template', () => {
+  test('loads no font from another host: the downloaded file must not call Google when it is opened', () => {
+    const template = fs.readFileSync(path.join(PUBLIC_DIR, 'export-template.html'), 'utf8');
+    assert.doesNotMatch(template, /fonts\.(googleapis|gstatic)\.com/);
+  });
+});
+
 describe('export routes', { skip, concurrency: 1 }, () => {
   test('HTML export returns text/html with DOCTYPE', async () => {
     if (!createFestivalPlanner) return;

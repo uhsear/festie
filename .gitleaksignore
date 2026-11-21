@@ -25,3 +25,5 @@ tests/notifications-webhook-pii.test.ts
 # RFC 8291 Web Push test vectors (public example keys, not secrets), added with T6
 ce11deda23545078c5c44eb0a361ae391a7b7169:tests/integration-notifications.test.ts:generic-api-key:278
 ce11deda23545078c5c44eb0a361ae391a7b7169:tests/webpush.test.ts:generic-api-key:18
+# Fixed sample Sec-WebSocket-Key nonce in the first smoke-check commit (not a credential; replaced by a random nonce in 800f4130)
+0c21792dbebb05ce57a6ffaf64e3dfa8922f8fc7:scripts/deploy/smoke.py:generic-api-key:26

@@ -38,7 +38,7 @@ describe('AlsoPickedSection', () => {
     expect(hook).toHaveBeenCalledWith('f1', 's0');
     expect(screen.getByRole('heading', { name: 'People who picked this also picked' })).toBeInTheDocument();
     expect(screen.getByText('Fri · Main')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: /Other/ }));
+    await userEvent.click(screen.getByRole('button', { name: /^Other/ }));
     expect(setDetailSet).toHaveBeenCalledWith(other);
   });
 

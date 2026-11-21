@@ -2,9 +2,10 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 import { describe, expect, it } from 'vitest';
 import { crewCopy } from '@festie/shared/utils';
+import { read as readSource } from './read-source';
 
 const read = (...p: string[]) => readFileSync(join(__dirname, '..', ...p), 'utf8');
-const crew = read('app', '(tabs)', 'crew.tsx');
+const crew = readSource('app/(tabs)/crew.tsx');
 
 describe('crew switcher sheet keyboard', () => {
   it('lifts the sheet above the keyboard', () => {

@@ -12,6 +12,7 @@ import {
   type SyncedFestival,
 } from '../lib/db/stores/artists.js';
 import * as spotify from '../lib/spotify.js';
+import { refreshStaleSpotifyArtists } from '../lib/spotify-refresh.js';
 import { applyBackfillPlan, planBackfill, planHash, verifyBackfill } from '../lib/artist-backfill.js';
 import { createOpaqueId } from '../lib/helpers.js';
 import type { Request, Response, NextFunction } from 'express';
@@ -327,6 +328,35 @@ export default function createArtistsRoutes(deps: RouteDeps) {
     },
   );
 
+  // One request must end well inside Cloudflare's 100 s limit, so the route reads fewer artists per call than the cron script does; the rest wait for the next call.
+  const STALE_REFRESH_ROUTE_LIMIT = 200;
+
+  /**
+   * Re-reads the Spotify photo and genres of every artist whose stored copy is older than the refresh limit
+   * (30 days, Spotify Developer Terms IV.3.1.1), one transaction per artist. The same work runs from cron through
+   * scripts/spotify-refresh-stale.ts; this route is the admin trigger and also clears the caches.
+   */
+  router.post('/spotify-refresh-stale', rateLimit(6, 'artist-spotify-refresh-stale'), validate(schemas.artistSpotifyRefreshStale), async (req: Request, res: Response) => {
+    try {
+      const missing = spotifyKeysMissing(res);
+      if (missing) return missing;
+      const { limit } = req.validatedBody as z.infer<typeof schemas.artistSpotifyRefreshStale>;
+      const { synced, ...counts } = await refreshStaleSpotifyArtists({
+        stores: { artists: stores.artists },
+        config,
+        log,
+        userId: req.user?.userId ?? null,
+        ip: getRequestIp(req),
+        limit: limit ?? STALE_REFRESH_ROUTE_LIMIT,
+      });
+      if (counts.updated > 0 && req.res?.locals) req.res.locals.auditWritten = true;
+      await afterSync(synced);
+      return sendSuccess(res, counts);
+    } catch (error) {
+      return sendArtistError(res, error, 'refresh stale Spotify data');
+    }
+  });
+
   /**
    * Applies the plan under the lock. Festivals commit one by one, so even a failed run may have changed
    * data: the caches are cleared and one audit row is written whichever way it ends.
@@ -463,6 +493,85 @@ export default function createArtistsRoutes(deps: RouteDeps) {
         return sendSuccess(res, { status: result.status, artistId: result.artistId, festivalsUpdated: result.synced.length });
       } catch (error) {
         return sendArtistError(res, error, 'decide the suggestion');
+      }
+    },
+  );
+
+  /**
+   * The artist review queue: researched link, merge and rename proposals (a batch imported as JSON) that an admin
+   * approves one by one. An approval goes through the same edit and merge code as the Artists tab, in one
+   * transaction with the item. A merge needs a recent re-auth, as the Artists tab's merge does.
+   */
+  router.post('/review/import', rateLimit(10, 'artist-review-import'), validate(schemas.artistReviewImport), async (req: Request, res: Response) => {
+    try {
+      const batch = req.validatedBody as z.infer<typeof schemas.artistReviewImport>;
+      const result = await stores.artistMatchReview.importBatch(batch, req.user?.userId ?? null);
+      audit(AUDIT_ACTIONS.ARTIST_REVIEW_IMPORTED, 'import', req, { generatedAt: batch.generatedAt, ...result }, 'artist_match_review');
+      return sendSuccess(res, result);
+    } catch (error) {
+      return sendArtistError(res, error, 'import the review batch');
+    }
+  });
+
+  router.get('/review', validateQuery(schemas.artistReviewList), async (req: Request, res: Response) => {
+    try {
+      const { status, limit, offset } = req.validatedQuery as Query;
+      return sendSuccess(res, await stores.artistMatchReview.list({ status: status ?? 'pending', limit: limit ?? 50, offset: offset ?? 0 }));
+    } catch (error) {
+      return sendArtistError(res, error, 'load the review queue');
+    }
+  });
+
+  // A merge through the queue shares the Artists tab merge's bucket (10 a minute); link and rename keep the looser limit.
+  const reviewMergeLimit = rateLimit(10, 'artist-merge');
+  const limitReviewMerges = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const kind = await stores.artistMatchReview.kindOf((req.validatedParams as Params).id as string);
+      return kind === 'merge' ? reviewMergeLimit(req, res, next) : next();
+    } catch (error) {
+      return sendArtistError(res, error, 'approve the review item');
+    }
+  };
+
+  router.post(
+    '/review/:id/approve',
+    rateLimit(60, 'artist-review-decide'),
+    validateParams(schemas.genericIdParams),
+    limitReviewMerges,
+    validate(schemas.artistReviewApprove),
+    async (req: Request, res: Response) => {
+      try {
+        const id = (req.validatedParams as Params).id as string;
+        const body = req.validatedBody as z.infer<typeof schemas.artistReviewApprove>;
+        const result = await stores.artistMatchReview.approve(id, {
+          ...body,
+          recentAuth: deps.hasRecentAuth(req),
+          userId: req.user?.userId ?? null,
+          ip: getRequestIp(req),
+        });
+        await afterSync(result.synced);
+        audit(AUDIT_ACTIONS.ARTIST_REVIEW_DECIDED, id, req, { decision: 'approved', artistId: result.artistId, ...(result.loserId ? { survivorId: result.artistId, loserId: result.loserId } : {}), festivals: result.synced.length }, 'artist_match_review');
+        return sendSuccess(res, { status: 'approved', artistId: result.artistId, festivalsUpdated: result.synced.length });
+      } catch (error) {
+        return sendArtistError(res, error, 'approve the review item');
+      }
+    },
+  );
+
+  router.post(
+    '/review/:id/reject',
+    rateLimit(60, 'artist-review-decide'),
+    validateParams(schemas.genericIdParams),
+    validate(schemas.artistReviewReject),
+    async (req: Request, res: Response) => {
+      try {
+        const id = (req.validatedParams as Params).id as string;
+        const { note } = req.validatedBody as z.infer<typeof schemas.artistReviewReject>;
+        await stores.artistMatchReview.reject(id, { note: note ?? null, userId: req.user?.userId ?? null });
+        audit(AUDIT_ACTIONS.ARTIST_REVIEW_DECIDED, id, req, { decision: 'rejected', note: note ?? null }, 'artist_match_review');
+        return sendSuccess(res, { status: 'rejected' });
+      } catch (error) {
+        return sendArtistError(res, error, 'reject the review item');
       }
     },
   );

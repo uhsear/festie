@@ -11,6 +11,7 @@ import { useHaptics } from '@/hooks/useHaptics';
 import { cn } from '@/lib/utils';
 import LiveBadge from './LiveBadge';
 import PriorityIcon from '../ui/PriorityIcon';
+import ArtistName from './ArtistName';
 import CrewOverlapAvatars from './CrewOverlapAvatars';
 import { ensureWhiteContrast } from '../ui/StageBadge';
 
@@ -269,9 +270,8 @@ function SetCard({
           'type-title font-bold leading-[1.15] mb-1',
           dimmed ? 'text-text-secondary' : 'text-text-primary',
         )}
-        aria-hidden="true"
       >
-        {artistName}
+        <ArtistName set={set} separator={b2bSeparator} />
       </div>
       {subtitle && (
         <div

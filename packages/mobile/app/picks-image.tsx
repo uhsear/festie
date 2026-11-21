@@ -31,6 +31,7 @@ import {
   defaultScheduleImageDay,
   formatDayChip,
   formatTime,
+  formatTimeCompact,
   lockscreenSavedKey,
   lockscreenSnapshot,
   setMinuteRange,
@@ -150,7 +151,7 @@ function parseSavedOptions(raw: string | null): SavedOptions {
 /** "1 PM – 9 PM": first start to the latest end of the sets on one image. */
 function spanLabel(pageSets: FestivalSet[]): string {
   if (!pageSets.length) return '';
-  const short = (t: string) => formatTime(t).replace(':00', '');
+  const short = (t: string) => formatTimeCompact(t);
   const endOf = (s: FestivalSet) => setMinuteRange(s)?.end ?? 0;
   const last = pageSets.reduce((a, b) => (endOf(b) > endOf(a) ? b : a));
   return `${short(pageSets[0]!.startTime)} – ${short(last.endTime || last.startTime)}`;

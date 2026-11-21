@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, within, fireEvent } from '@testing-library/react';
+import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 
 const state: Record<string, unknown> = {};
 const rows: unknown[] = [];
@@ -53,5 +54,16 @@ describe('MarkedNoSet', () => {
     expect(items.map((li) => li.firstElementChild?.textContent)).toEqual(['Wait Act', 'Day Act']);
     expect(within(items[0]!).getByText('Day TBA')).toBeInTheDocument();
     expect(within(items[1]!).getByText('Fri · Stage and time TBA')).toBeInTheDocument();
+  });
+
+  it('opens the artist sheet from a marked act, one button per artist of a B2B act', () => {
+    useArtistSheetStore.setState({ target: null, isOpen: false });
+    const b2b = row('5', 'x', 'waiting');
+    b2b.entry.artists = [{ name: 'Ana' }, { name: 'Bo' }];
+    rows.push(b2b);
+    render(<MarkedNoSet />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Bo' }));
+    expect(useArtistSheetStore.getState().target?.title).toBe('Bo');
+    expect(screen.getByRole('button', { name: 'Open Ana' })).toBeInTheDocument();
   });
 });

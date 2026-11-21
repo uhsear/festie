@@ -7,7 +7,8 @@
 //
 // Usage: node scripts/ci/check-public-text.mjs --base <ref> --head <ref>
 // Exit:  0 clean, 1 leak found, 2 usage or git error.
-// Allowlist: end a line with the marker `public-text: allow` (in a comment).
+// Allowlist: end a line with the marker `public-text: allow`, or with a comment that holds
+// `secret-scan: allow <reason>` (the reason is required). The second is the one the pre-commit scan documents.
 //
 // The Android emulator's host alias (the 10.0.2.2 address) is not a leak and is skipped.
 // shortcut: reads whole diff into memory (256 MB cap), upgrade if ranges outgrow it.
@@ -19,7 +20,15 @@ const OCTET = String.raw`(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]?\d)`;
 // Pieces are joined at runtime so this file never matches its own patterns.
 const KEY_HEADER = new RegExp('-----BEGIN (?:[A-Z0-9]+ )*PRIV' + 'ATE KEY-----');
 
+const PROD_DB = new RegExp('(?<![A-Za-z0-9])festival' + '_planner(?!_(?:staging|test)(?![A-Za-z0-9_]))');
+
 export const ALLOW_MARKER = 'public-text: allow';
+export const SECRET_ALLOW_MARKER = 'secret-scan: allow';
+// A trailing comment with a non-empty reason. A bare marker, or one outside a comment, does not count.
+export const SECRET_ALLOW_PATTERN = /(?:\/\/|#|<!--|\/\*)\s*secret-scan: allow \S.*$/;
+
+// Files that legitimately name the production database: tests, backup scripts, config and the changelog.
+const PROD_DB_EXEMPT_PATHS = /^(?:tests\/|scripts\/backup-|lib\/config\.ts$|CHANGELOG\.md$)/;
 
 export const SHAPES = Object.freeze([
   {
@@ -30,12 +39,19 @@ export const SHAPES = Object.freeze([
   },
   { kind: 'private key header', pattern: KEY_HEADER },
   { kind: 'home-directory server path', pattern: /\/home\/[a-z_][a-z0-9_-]*\//i },
+  // A generic placeholder such as `C:/Users/...` does not start with a name character, so it passes.
+  { kind: 'absolute Windows user path', pattern: /(?<![A-Za-z0-9])[A-Za-z]:[\\/]+Users[\\/]+[A-Za-z0-9_-][A-Za-z0-9_.-]*/i },
+  { kind: 'private project path', pattern: /(?<![A-Za-z0-9])[A-Za-z]:[\\/]+FESTIE-private/i },
+  // The staging and test databases are fine; the bare production name is not.
+  { kind: 'production database name', pattern: PROD_DB },
 ]);
 
 /** The kinds of leak in one line of text. Never returns the matched text. */
-export function findKinds(text, terms = []) {
-  if (text.includes(ALLOW_MARKER)) return [];
-  const kinds = SHAPES.filter(({ pattern }) => pattern.test(text)).map(({ kind }) => kind);
+export function findKinds(text, terms = [], file = '') {
+  if (text.includes(ALLOW_MARKER) || SECRET_ALLOW_PATTERN.test(text)) return [];
+  const kinds = SHAPES
+    .filter(({ pattern }) => pattern.test(text) && !(pattern === PROD_DB && PROD_DB_EXEMPT_PATHS.test(file)))
+    .map(({ kind }) => kind);
   const lower = text.toLowerCase();
   if (terms.some(term => lower.includes(term))) kinds.push('private term');
   return kinds;
@@ -46,12 +62,22 @@ export function addedLines(diff) {
   const out = [];
   let file = null;
   let line = 0;
+  // 'header' after `diff --git`, 'minus' after its `--- ` line, 'body' after `+++ ` or a hunk header.
+  // Only in 'minus' is a `+++ ` line a file header; in a hunk it is added content.
+  let state = 'body';
   for (const raw of diff.split('\n')) {
-    if (raw.startsWith('+++ ')) {
+    if (raw.startsWith('diff --git ')) {
+      state = 'header';
+      file = null;
+    } else if (state === 'header' && raw.startsWith('--- ')) {
+      state = 'minus';
+    } else if (state === 'minus' && raw.startsWith('+++ ')) {
       file = raw === '+++ /dev/null' ? null : raw.slice(6).replace(/\t$/, '');
+      state = 'body';
     } else if (raw.startsWith('@@')) {
+      state = 'body';
       line = Number(/\+(\d+)/.exec(raw)?.[1] ?? 0);
-    } else if (raw.startsWith('+') && file !== null) {
+    } else if (state === 'body' && raw.startsWith('+') && file !== null) {
       out.push({ file, line, text: raw.slice(1) });
       line += 1;
     }
@@ -70,7 +96,7 @@ export function check({ commits, diff, terms = [] }) {
     }
   }
   for (const { file, line, text } of addedLines(diff)) {
-    for (const kind of findKinds(text, terms)) {
+    for (const kind of findKinds(text, terms, file)) {
       findings.push({ where: `${file}:${line}`, file, line, kind });
     }
   }

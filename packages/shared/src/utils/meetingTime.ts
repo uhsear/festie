@@ -1,5 +1,5 @@
 import type { FestivalDay } from '../types/domain';
-import { formatTime } from './format';
+import { formatClock, formatTime } from './format';
 import { FESTIVAL_DAY_START_HOUR, createDateInLocalFrame, zonedWallTimeToMs } from './setStatus';
 
 /**
@@ -240,12 +240,6 @@ export function meetingTimeDisplay(
   const d = new Date(meetAt);
   if (Number.isNaN(d.getTime())) return { label: '', recurring, next: null };
   const next: MeetingOccurrence = { dayKey: meetAt.slice(0, 10), ms: d.getTime() };
-  const opts: Intl.DateTimeFormatOptions = {
-    weekday: 'short',
-    hour: 'numeric',
-    minute: '2-digit',
-    ...(timeZone ? { timeZone } : {}),
-  };
-  const label = new Intl.DateTimeFormat('en-US', opts).format(d);
-  return { label, recurring, next };
+  const weekday = new Intl.DateTimeFormat('en-US', { weekday: 'short', ...(timeZone ? { timeZone } : {}) }).format(d);
+  return { label: `${weekday} ${formatClock(next.ms, timeZone)}`, recurring, next };
 }

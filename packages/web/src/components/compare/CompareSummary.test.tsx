@@ -70,8 +70,8 @@ describe('CompareSummary', () => {
       />,
     );
     expect(screen.getByText('8:00 PM – 9:30 PM')).toBeInTheDocument();
-    expect(screen.getByText('Ana Set: You')).toBeInTheDocument();
-    expect(screen.getByText('Bea Set: Bob')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open Ana Set' }).closest('li')).toHaveTextContent('Ana Set: You');
+    expect(screen.getByRole('button', { name: 'Open Bea Set' }).closest('li')).toHaveTextContent('Bea Set: Bob');
     expect(screen.getByText('Together')).toBeInTheDocument();
     expect(screen.getByText(/10:00 PM · You, Bob/)).toBeInTheDocument();
   });

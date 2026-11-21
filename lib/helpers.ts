@@ -24,6 +24,7 @@ const INLINE_HASH_FILES = [
   'export-template.html',
   'privacy.html',
   'terms.html',
+  'delete-account.html',
   'security-whitepaper.html',
   'offline.html',
 ];
@@ -152,7 +153,7 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
   // Accepted because: the CSS exfiltration attack requires pre-existing HTML
   // injection which is already mitigated, and removing 'unsafe-inline' would
   // break all motion/react animations across the app.
-  const styleParts = ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'];
+  const styleParts = ["'self'", "'unsafe-inline'"];
   if (googleSignIn) styleParts.push('https://accounts.google.com/gsi/style');
   const styleSrc = styleParts.join(' ');
   const websocketOrigin = config.PUBLIC_ORIGIN
@@ -164,11 +165,6 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
   const connectParts = ["'self'"];
   if (websocketOrigin) connectParts.push(websocketOrigin);
   if (fcmEndpoints) connectParts.push(fcmEndpoints);
-  // Allow html-to-image to fetch the Google Fonts CSS (already allowed in
-  // style-src, but html-to-image uses fetch() which is governed by connect-src)
-  // so exported wrap PNGs include the custom Syncopate/Space Grotesk glyphs
-  // instead of falling back to system fonts.
-  connectParts.push('https://fonts.googleapis.com https://fonts.gstatic.com');
   // Crew map (MapLibre) OpenFreeMap basemap + Sentry error ingest. The basemap
   // host serves the style, vector tiles, glyphs and sprites; it is also in
   // img-src for its raster hillshade and sprite images. Sentry's RN/web SDK
@@ -190,7 +186,7 @@ export function buildContentSecurityPolicy(config: any, inlineHashes: any, optio
     // browser blocks the cached images from rendering (CSP violation), defeating the
     // offline art cache entirely.  Kept tight — no other hosts added.
     "img-src 'self' data: blob: https://art.festie.us https://*.scdn.co https://*.spotifycdn.com https://tiles.openfreemap.org",
-    "font-src 'self' https://fonts.gstatic.com",
+    "font-src 'self'",
     `style-src ${styleSrc}`,
     `script-src ${scriptSrc}`,
     "script-src-attr 'none'",

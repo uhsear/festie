@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<!--
+  Public account-deletion page, linked from the App Store and Google Play listings.
+  It must stay readable without signing in. Every statement must match the code
+  (routes/account.ts, lib/background-tasks.ts retention job) and the Privacy Policy.
+-->
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete your account - Festie</title>
+    <meta name="description" content="How to delete your Festie account in the app or on the web, what is deleted and when.">
+    <link href="/fonts/space-grotesk/space-grotesk.css" rel="stylesheet">
+    <style>
+        body {
+            background: #0a0a0f;
+            color: #e0e0e0;
+            font-family: 'Space Grotesk', sans-serif;
+            max-width: 800px;
+            overflow-x: hidden;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            margin: 0 auto;
+            padding: 2rem 1.5rem;
+            line-height: 1.7;
+        }
+        h1 { color: #fff; font-size: 2rem; margin-bottom: 0.5rem; }
+        h2 {
+            color: #a8d8ea;
+            font-size: 1.3rem;
+            margin-top: 2rem;
+            border-bottom: 1px solid rgba(168,216,234,0.2);
+            padding-bottom: 0.5rem;
+        }
+        a { color: #a8d8ea; text-decoration: none; padding: 4px 0; display: inline; line-height: 2.2; }
+        a:hover { text-decoration: underline; }
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            min-height: 44px;
+            padding: 10px 16px;
+            margin-bottom: 2rem;
+            margin-left: -16px;
+            color: #a8d8ea;
+            border-radius: 8px;
+            text-decoration: none;
+        }
+        .back-link:hover { background: rgba(168,216,234,0.1); }
+        .back-link:focus-visible, .button:focus-visible { outline: 2px solid #a8d8ea; outline-offset: 2px; }
+        .section { margin-bottom: 1.5rem; }
+        ul, ol { margin: 1rem 0 1rem 1.5rem; }
+        li { margin-bottom: 0.5rem; }
+        strong { color: #fff; }
+        .button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 44px;
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: #a8d8ea;
+            color: #0a0a0f;
+            font-weight: 700;
+            text-decoration: none;
+        }
+        .button:hover { text-decoration: none; background: #c4e6f2; }
+        .summary {
+            border: 1px solid rgba(168,216,234,0.3);
+            border-radius: 8px;
+            padding: 0.5rem 1.25rem;
+        }
+        .summary h2 { border-bottom: none; margin-top: 1rem; }
+        footer {
+            margin-top: 3rem;
+            padding-top: 1rem;
+            border-top: 1px solid rgba(168,216,234,0.2);
+            color: #888;
+            font-size: 0.9rem;
+        }
+        footer a { margin-right: 1rem; }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← Back to Festie</a>
+
+    <header>
+        <h1>Delete your Festie account</h1>
+    </header>
+
+    <main>
+        <section class="section summary">
+            <h2>In short</h2>
+            <ul>
+                <li>You can delete your account yourself, in the app or on the web. You do not need to email us.</li>
+                <li>Your account is hidden at once. We delete it for good 30 days later.</li>
+                <li>If you change your mind, sign in again within those 30 days and your account comes back.</li>
+            </ul>
+            <p><a class="button" href="/account#danger">Go to my account</a></p>
+            <p>If you are signed out, sign in first. Then open Account and scroll to the Danger zone.</p>
+        </section>
+
+        <section class="section">
+            <h2>Delete your account in the app</h2>
+            <ol>
+                <li>Open Festie and go to the Account tab.</li>
+                <li>Scroll to the Danger zone and choose Delete My Account.</li>
+                <li>If you created a crew that has other members, choose who takes it over.</li>
+                <li>Confirm with your password. If you sign in with Apple or Google and have no password, confirm by signing in with that provider again.</li>
+            </ol>
+        </section>
+
+        <section class="section">
+            <h2>Delete your account on the web</h2>
+            <ol>
+                <li>Go to <a href="/account#danger">festie.us/account</a> and sign in. If signing in takes you to Home, open Account from the menu.</li>
+                <li>Scroll to the Danger zone and choose Delete My Account.</li>
+                <li>Choose who takes over any crew you created, then confirm as described above.</li>
+            </ol>
+            <p>If you cannot sign in, email <a href="mailto:privacy@festie.us">privacy@festie.us</a> from the address on your account and ask us to delete it. We answer within 30 days.</p>
+        </section>
+
+        <section class="section">
+            <h2>What happens, and when</h2>
+            <ul>
+                <li><strong>Right away:</strong> you are signed out everywhere, your devices stop getting notifications, and your festival plans are hidden from other people.</li>
+                <li><strong>Within 30 days:</strong> if you sign in again, your account comes back as it was.</li>
+                <li><strong>After 30 days:</strong> we delete your account and the data that belongs to it for good. This cannot be undone.</li>
+            </ul>
+        </section>
+
+        <section class="section">
+            <h2>What we delete</h2>
+            <ul>
+                <li>Your account: username, email, password, date of birth, display name, photo and payment handles.</li>
+                <li>Your picks, notes, ratings and followed festivals.</li>
+                <li>Your place in every crew, including your status and activity in it.</li>
+                <li>Your signed-in devices, sessions and notification history.</li>
+            </ul>
+            <p>A crew you created passes to its longest-standing member. If you were the only member, we delete the crew.</p>
+        </section>
+
+        <section class="section">
+            <h2>What stays</h2>
+            <ul>
+                <li>An expense another member paid and split with you stays in that crew's records, without your name.</li>
+                <li>Copies of our database backups that still hold your data are deleted on a rolling schedule. The <a href="/privacy.html">Privacy Policy</a> says how long that takes.</li>
+            </ul>
+        </section>
+
+        <section class="section">
+            <h2>Want a copy of your data first?</h2>
+            <p>In Account, under Your data, choose Download my data. You can download your data once a day.</p>
+        </section>
+    </main>
+
+    <footer>
+        <a href="/privacy.html">Privacy Policy</a>
+        <a href="/terms.html">Terms of Service</a>
+        <a href="mailto:privacy@festie.us">privacy@festie.us</a>
+    </footer>
+</body>
+</html>

@@ -10,6 +10,7 @@
 import crypto from 'crypto';
 import type { Request, Response } from 'express';
 import { sendVerificationEmail } from '../email';
+import { TOS_VERSION } from '../constants';
 import { DELETED_USER_ID } from '../db/stores/users';
 import { describeDevice } from '../helpers/device-label';
 import type {} from '../types';
@@ -38,7 +39,7 @@ export async function createUserWithProfile(userData: any, deps: any) {
     dateOfBirth: dateOfBirth || null,
     createdAt: new Date().toISOString(),
     tosAcceptedAt: new Date().toISOString(),
-    tosVersion: 1,
+    tosVersion: TOS_VERSION,
     ...(emailVerified && cleanEmail ? { emailVerifiedAt: new Date().toISOString() } : {}),
   });
   invalidateUserCache();

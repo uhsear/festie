@@ -115,7 +115,8 @@ function StepRow({
  * the same offline-honesty pattern as FreshnessChip.
  */
 export default function OfflineReadinessCard({ festivalId, className }: Props) {
-  const { steps, summary, download, isDownloading, mapBytes, hasMap } = useOfflineDownload(festivalId);
+  const { steps, summary, download, isDownloading, mapBytes, hasMap, mapProgress, mapReady, removeMap } =
+    useOfflineDownload(festivalId);
   const [expanded, setExpanded] = useState(false);
 
   // 30s tick so "synced N ago" keeps advancing from the device clock.
@@ -148,8 +149,11 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
 
   const handleDownload = () => void download();
   const mapMb = mapBytes != null ? ` The map is ${Math.max(1, Math.round(mapBytes / 1_000_000))} MB.` : '';
+  // The size is visible in the header, before the details open, so people can decide before they download.
+  const sizeNote = hasMap && !mapReady && mapBytes != null ? ` (map ${Math.max(1, Math.round(mapBytes / 1_000_000))} MB)` : '';
+  const mapPercent = mapProgress != null ? ` Downloading the map: ${Math.round(mapProgress * 100)}%.` : '';
   const description = hasMap
-    ? `Saves the schedule, your picks, crew plan, weather, artist art and the festival map so they work with no signal.${mapMb}`
+    ? `Saves the schedule, your picks, crew plan, weather, artist art and the festival map so they work with no signal.${mapMb}${mapPercent}`
     : 'Saves the schedule, your picks, crew plan, weather and artist art so they work with no signal. The map needs signal at this festival.';
 
   return (
@@ -175,6 +179,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
         </span>
         <span className="flex-1 min-w-0 text-sm leading-tight font-medium text-text-primary">
           {offlineStatusLabel(summary)}
+          {sizeNote}
         </span>
         <button
           type="button"
@@ -205,6 +210,14 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
       {expanded && (
         <div className="pb-3">
           <p className="text-xs text-text-secondary">{description}</p>
+          {mapProgress != null && (
+            <progress
+              className="mt-2 h-1.5 w-full"
+              value={mapProgress}
+              max={1}
+              aria-label="Map download progress"
+            />
+          )}
           <ul className="mt-3 divide-y divide-[var(--color-overlay-4)]" aria-label="Offline readiness checklist">
             {steps.map(({ key, label, section, detail }) => (
               <StepRow
@@ -217,6 +230,15 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
               />
             ))}
           </ul>
+          {hasMap && mapReady && (
+            <button
+              type="button"
+              onClick={() => void removeMap()}
+              className="mt-2 inline-flex min-h-11 items-center gap-1 px-2 text-xs text-text-secondary hover:text-text-primary transition-colors focus-visible:outline-1 focus-visible:outline-accent-aqua rounded"
+            >
+              Delete downloaded map
+            </button>
+          )}
         </div>
       )}
     </section>

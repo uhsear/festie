@@ -41,7 +41,7 @@ const detail = (over: Partial<ManageOrganizationDetail> = {}): ManageOrganizatio
     { userId: 'u1', name: 'Alex', email: 'alex@venue.example', role: 'owner', active: true, addedBy: 'Festie support', createdAt: '2026-11-01T00:00:00.000Z' },
     { userId: 'u2', name: 'Sam', email: 'sam@venue.example', role: 'editor', active: true, addedBy: 'Alex', createdAt: '2026-11-02T00:00:00.000Z' },
   ],
-  pending: [{ email: 'new@venue.example', role: 'viewer', addedBy: 'Alex', createdAt: '2026-11-03T00:00:00.000Z' }],
+  pending: [{ email: 'new@venue.example', role: 'viewer', addedBy: 'Alex', createdAt: '2026-11-03T00:00:00.000Z', expiresAt: '2027-02-01T00:00:00.000Z', expired: false }],
   upload: { usedBytes: 12 * 1024 * 1024, capBytes: 200 * 1024 * 1024 },
   ...over,
 });
@@ -67,6 +67,25 @@ describe('ManageTeam', () => {
     // An owner adds editors and viewers only.
     const roles = within(screen.getByRole('form', { name: 'Add a member' })).getAllByRole('option').map((o) => o.textContent);
     expect(roles).toEqual(['Editor', 'Viewer']);
+  });
+
+  it('tells the owner an invitation expired and that adding the person again sends a new one', async () => {
+    mockGet.mockResolvedValue(
+      detail({
+        pending: [
+          { email: 'old@venue.example', role: 'viewer', addedBy: 'Alex', createdAt: '2026-06-01T00:00:00.000Z', expiresAt: '2026-08-30T00:00:00.000Z', expired: true },
+          { email: 'new@venue.example', role: 'viewer', addedBy: 'Alex', createdAt: '2026-11-03T00:00:00.000Z', expiresAt: '2027-02-01T00:00:00.000Z', expired: false },
+        ],
+      }),
+    );
+    render();
+    const old = (await screen.findByText('old@venue.example')).closest('li')!;
+    expect(within(old).getByText(/Expired: they can no longer join with this invitation/)).toBeInTheDocument();
+    expect(within(old).queryByText(/Joins when they sign in/)).not.toBeInTheDocument();
+    const fresh = screen.getByText('new@venue.example').closest('li')!;
+    expect(within(fresh).getByText(/Joins when they sign in with this email and confirm it/)).toBeInTheDocument();
+    expect(within(fresh).queryByText(/Expired/)).not.toBeInTheDocument();
+    expect(screen.getByText('Waiting to join (1)')).toBeInTheDocument();
   });
 
   it('adds a member through the members route', async () => {
@@ -129,6 +148,28 @@ describe('ManageTeam', () => {
     await waitFor(() =>
       expect(mockPut).toHaveBeenCalledWith('/manage/organizations/org-a', { name: 'Venue A', displayName: null, contactEmail: null, website: null }),
     );
+  });
+
+  it('locks the name of a verified organization for its owner', async () => {
+    mockGet.mockResolvedValue(detail({ verified: true }));
+    render();
+    const form = await screen.findByRole('form', { name: 'Organization profile' });
+    expect(within(form).getByLabelText(/^Name/)).toBeDisabled();
+    expect(within(form).getByText('Verified organizations can only be renamed by Festie support.')).toBeInTheDocument();
+    expect(within(form).getByLabelText(/^Display name/)).toBeEnabled();
+  });
+
+  it('leaves a locked name out of the save, so a rename by support meanwhile does not block it', async () => {
+    mockGet.mockResolvedValue(detail({ verified: true }));
+    mockPut.mockResolvedValue(detail({ verified: true }));
+    render();
+    const form = await screen.findByRole('form', { name: 'Organization profile' });
+    await userEvent.type(within(form).getByLabelText(/^Contact email/), 'booking@venue.example');
+    await userEvent.click(within(form).getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(mockPut).toHaveBeenCalled());
+    const body = mockPut.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('name');
+    expect(body.contactEmail).toBe('booking@venue.example');
   });
 
   it('offers Retry when the team cannot load', async () => {

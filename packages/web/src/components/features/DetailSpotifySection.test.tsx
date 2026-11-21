@@ -34,13 +34,13 @@ describe('DetailSpotifySection', () => {
     expect(button).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(button);
     expect(onToggle).toHaveBeenCalledOnce();
-    expect(screen.queryByRole('link', { name: /Open in Spotify/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Open Spotify/ })).not.toBeInTheDocument();
   });
 
   it('ready and open: shows Hide player, the iframe and the Spotify link', () => {
     render(<DetailSpotifySection status="ready" preview={ready} spotifyUrl={URL_} visible onToggle={vi.fn()} />);
     expect(screen.getByRole('button', { name: 'Hide player' })).toHaveAttribute('aria-expanded', 'true');
-    expect(screen.getByRole('link', { name: /Open in Spotify/ })).toHaveAttribute('href', URL_);
+    expect(screen.getByRole('link', { name: /Open Spotify/ })).toHaveAttribute('href', URL_);
   });
 
   it('loading: shows a disabled Listen button', () => {
@@ -51,13 +51,13 @@ describe('DetailSpotifySection', () => {
   it('offline: says listening needs signal and keeps the Spotify link', () => {
     render(<DetailSpotifySection status="offline" preview={null} spotifyUrl={URL_} visible={false} onToggle={vi.fn()} />);
     expect(screen.getByText('Listening needs signal.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Open in Spotify/ })).toHaveAttribute('href', URL_);
+    expect(screen.getByRole('link', { name: /Open Spotify/ })).toHaveAttribute('href', URL_);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
   it('none: shows only the Spotify link', () => {
     render(<DetailSpotifySection status="none" preview={null} spotifyUrl={URL_} visible={false} onToggle={vi.fn()} />);
-    expect(screen.getByRole('link', { name: /Open in Spotify/ })).toHaveAttribute('target', '_blank');
+    expect(screen.getByRole('link', { name: /Open Spotify/ })).toHaveAttribute('target', '_blank');
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

@@ -49,6 +49,7 @@ export const ACCOUNT_COPY = {
   verifyResendLink: 'Resend link',
   verifySendA11y: 'Send a confirmation link to your email',
   deleteTitle: 'Delete Account',
+  deleteHelp: 'How to delete your account',
   deleteFailed: "Couldn't delete account. Try again.",
   changePasswordFailed: "Couldn't change password. Try again.",
   devicesTitle: 'Signed-in devices',

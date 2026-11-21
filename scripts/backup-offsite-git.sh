@@ -6,12 +6,13 @@ set -euo pipefail
 # Off-site, encrypted, version-controlled DB backups for Festie prod.
 #
 # WHAT IT DOES
-#   1. Finds the NEWEST fp_*.dump in $BACKUP_DIR (default ~/backups/festie),
-#      ignoring *_weekly.dump copies. Fails (exit 1) when it is older than 26 h
-#      (2 h while ~/.festie-festival-mode exists) or fails pg_restore --list;
-#      a corrupt dump is renamed *.dump.bad.
-#   2. Encrypts it with GPG symmetric AES256 using $BACKUP_GPG_PASSPHRASE
-#      (read from ../.env). The passphrase NEVER leaves the server.
+#   1. Finds the NEWEST fp_*.dump.gpg in $BACKUP_DIR (default ~/backups/festie),
+#      ignoring *_weekly.dump.gpg copies. backup-pg.sh wrote it already encrypted.
+#      Fails (exit 1) when it is older than 26 h (2 h while ~/.festie-festival-mode
+#      exists) or, once decrypted to a temporary file, fails pg_restore --list;
+#      a corrupt dump is renamed *.dump.gpg.bad.
+#   2. Copies that GPG symmetric AES256 file (key: $BACKUP_GPG_PASSPHRASE, read
+#      from ../.env). The passphrase NEVER leaves the server.
 #   3. Pushes the encrypted blob to a PRIVATE GitHub repo ($BACKUP_GIT_REPO)
 #      over SSH using a dedicated, write-only deploy key. The repo is the
 #      off-site store -- no third-party cloud account required.
@@ -71,6 +72,8 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 # BACKUP_DIR resolves exactly as in backup-pg.sh (caller env, else the default), so
 # both scripts share one directory and one lock; a BACKUP_DIR in .env is ignored.
 CALLER_BACKUP_DIR="${BACKUP_DIR:-}"
+# shellcheck source=lib/backup-gpg.sh
+source "$SCRIPT_DIR/lib/backup-gpg.sh"
 # shellcheck disable=SC1091
 source "$SCRIPT_DIR/../.env" 2>/dev/null || true
 
@@ -121,18 +124,19 @@ if ! flock "${FLOCK_ARGS[@]}" 9; then
   exit 75
 fi
 
-# 1. Newest dump by the timestamp in its name. *_weekly.dump is a copy of a daily
+# 1. Newest dump by the timestamp in its name. *_weekly.dump.gpg is a copy of a daily
 # dump with no sidecar, so it is never selected.
 NEWEST=""
-for f in "$BACKUP_DIR"/fp_*.dump; do
-  [ -f "$f" ] && [[ "$f" != *_weekly.dump ]] && NEWEST="$f"   # glob order is sorted, so the last is the newest
+for f in "$BACKUP_DIR"/fp_*.dump.gpg; do
+  [ -f "$f" ] && [[ "$f" != *_weekly.dump.gpg ]] && NEWEST="$f"   # glob order is sorted, so the last is the newest
 done
 if [ -z "$NEWEST" ]; then
-  log "ERROR: no fp_*.dump found in $BACKUP_DIR -- nothing to push."
+  log "ERROR: no fp_*.dump.gpg found in $BACKUP_DIR -- nothing to push."
   exit 1
 fi
 BASENAME="$(basename "$NEWEST")"
-STAMP="${BASENAME#fp_}"; STAMP="${STAMP%.dump}"
+STAMP="${BASENAME#fp_}"; STAMP="${STAMP%.dump.gpg}"
+COUNTS_NAME="${BASENAME%.gpg}.counts"
 DUMP_EPOCH="$(date -d "${STAMP:0:8} ${STAMP:9:2}:${STAMP:11:2}:${STAMP:13:2}" +%s 2>/dev/null || echo 0)"
 MAX_AGE=$((26 * 3600))
 [ -e "$FESTIVAL_MODE_FLAG" ] && MAX_AGE=$((2 * 3600))
@@ -144,8 +148,16 @@ if ! command -v pg_restore >/dev/null 2>&1; then
   log "ERROR: pg_restore not found in PATH -- cannot verify $BASENAME."
   exit 1
 fi
+# The dump is checked in a temporary plaintext copy that is deleted at once.
+PLAIN="$(mktemp "$BACKUP_DIR/.offsite-verify.XXXXXX")"
+if ! backup_decrypt "$NEWEST" "$PLAIN"; then
+  rm -f "$PLAIN"
+  log "ERROR: could not decrypt $BASENAME with BACKUP_GPG_PASSPHRASE -- left in place."
+  exit 1
+fi
 LIST_RC=0
-LIST_ERR="$(pg_restore --list "$NEWEST" 2>&1 >/dev/null)" || LIST_RC=$?
+LIST_ERR="$(pg_restore --list "$PLAIN" 2>&1 >/dev/null)" || LIST_RC=$?
+rm -f "$PLAIN"
 if [ "$LIST_RC" -eq 126 ] || [ "$LIST_RC" -eq 127 ]; then
   log "ERROR: pg_restore could not run (exit $LIST_RC): $(head -n1 <<<"$LIST_ERR") -- $BASENAME left in place."
   exit 1
@@ -154,7 +166,7 @@ elif [ "$LIST_RC" -ne 0 ]; then
   log "ERROR: pg_restore --list failed for $BASENAME ($(head -n1 <<<"$LIST_ERR")) -- renamed to ${BASENAME}.bad."
   exit 1
 fi
-ENC_NAME="${BASENAME}.gpg"
+ENC_NAME="$BASENAME"
 log "Selected newest dump: $BASENAME"
 
 # 2. Clone on first run (shallow), else refresh
@@ -181,25 +193,21 @@ git reset -q --hard origin/main 2>/dev/null || true
 
 mkdir -p "$DUMPS_SUBDIR"
 
-# 3. Encrypt newest dump (AES256 symmetric) into the repo's dumps dir
+# 3. Copy the newest dump, already encrypted (AES256 symmetric) by backup-pg.sh, into the repo's dumps dir
 if [ -f "$DUMPS_SUBDIR/$ENC_NAME" ]; then
-  log "Already pushed $ENC_NAME -- skipping re-encrypt; running prune only."
+  log "Already pushed $ENC_NAME -- skipping the copy; running prune only."
 else
-  if gpg --batch --yes --quiet --pinentry-mode loopback \
-        --symmetric --cipher-algo AES256 \
-        --passphrase-fd 3 \
-        --output "$DUMPS_SUBDIR/$ENC_NAME" \
-        "$NEWEST" 3<<<"$BACKUP_GPG_PASSPHRASE" 9>&-; then
-    log "Encrypted -> $DUMPS_SUBDIR/$ENC_NAME"
+  if cp "$NEWEST" "$DUMPS_SUBDIR/$ENC_NAME"; then
+    log "Copied -> $DUMPS_SUBDIR/$ENC_NAME"
     git add "$DUMPS_SUBDIR/$ENC_NAME"
-    if [ -f "$NEWEST.counts" ]; then
-      cp "$NEWEST.counts" "$DUMPS_SUBDIR/$BASENAME.counts"
-      git add "$DUMPS_SUBDIR/$BASENAME.counts"
+    if [ -f "${NEWEST%.gpg}.counts" ]; then
+      cp "${NEWEST%.gpg}.counts" "$DUMPS_SUBDIR/$COUNTS_NAME"
+      git add "$DUMPS_SUBDIR/$COUNTS_NAME"
     else
-      log "WARNING: no $BASENAME.counts sidecar -- the restore drill will fail on it."
+      log "WARNING: no $COUNTS_NAME sidecar -- the restore drill will fail on it."
     fi
   else
-    log "ERROR: gpg encryption failed for $BASENAME -- aborting."
+    log "ERROR: copying $BASENAME into the backups repo failed -- aborting."
     exit 1
   fi
 fi
