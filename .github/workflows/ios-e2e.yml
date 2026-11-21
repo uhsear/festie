@@ -223,17 +223,26 @@ jobs:
       # Tee the full log to a file so it can be uploaded as an artifact on failure.
       - name: Build .app for the simulator
         working-directory: packages/mobile/ios
+        # Expo's @ExpoModule scan has a fixed 5 s limit and times out on a busy runner
+        # ("Scanning for @ExpoModule classes didn't complete ... Build again to retry").
+        # Retry the build once for that error only; any other failure fails at once.
         run: |
           set -o pipefail
-          xcodebuild \
-            -workspace "${{ steps.xcode.outputs.workspace }}" \
-            -scheme "${{ steps.xcode.outputs.scheme }}" \
-            -sdk iphonesimulator \
-            -configuration Release \
-            -arch arm64 \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
-            build | tee "$GITHUB_WORKSPACE/xcodebuild.log"
+          build() {
+            xcodebuild \
+              -workspace "${{ steps.xcode.outputs.workspace }}" \
+              -scheme "${{ steps.xcode.outputs.scheme }}" \
+              -sdk iphonesimulator \
+              -configuration Release \
+              -arch arm64 \
+              -derivedDataPath build \
+              CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+              build | tee "$GITHUB_WORKSPACE/xcodebuild.log"
+          }
+          if build; then exit 0; fi
+          if ! grep -q "Scanning for @ExpoModule classes didn't complete" "$GITHUB_WORKSPACE/xcodebuild.log"; then exit 1; fi
+          echo "::warning::Expo module scan timed out; building once more."
+          build
 
       # Locate the built .app and fail loudly with a clear message if it's missing.
       - name: Locate built .app
