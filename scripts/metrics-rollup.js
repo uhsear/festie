@@ -17,7 +17,7 @@ const { Pool } = pg;
 // var already set, so an explicit DATABASE_URL still wins. The root package is
 // "type": "module", so this file is ESM and has no require/__dirname.
 dotenv.config({ path: path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '.env'), quiet: true });
-const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost/festival_planner';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgresql://localhost/festival_planner'; // secret-scan: allow names the guarded production database on purpose
 
 async function rollup() {
   const pool = new Pool({ connectionString: DATABASE_URL, max: 2 });

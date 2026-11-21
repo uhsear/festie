@@ -690,7 +690,7 @@ describe('routes/admin-metrics.js', () => {
     const appWithIp = express();
     appWithIp.use(express.json());
     appWithIp.use((req: any, _res: any, next: any) => {
-      Object.defineProperty(req.socket, 'remoteAddress', { value: '10.0.0.5', configurable: true });
+      Object.defineProperty(req.socket, 'remoteAddress', { value: '10.0.0.5', configurable: true }); // secret-scan: allow test address in a documentation range
       next();
     });
     appWithIp.use(router);
