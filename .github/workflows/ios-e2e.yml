@@ -296,7 +296,13 @@ jobs:
             local flow="$1" debug="$2" report="$3" log="$4"
             shift 4
             run_maestro() {
-              MAESTRO_CLI_NO_ANALYTICS=1 maestro test "$@"                 --test-output-dir="$PWD/$debug"                 --debug-output="$PWD/$debug"                 --flatten-debug-output                 --format junit                 --output "$report"                 "$flow"
+              MAESTRO_CLI_NO_ANALYTICS=1 maestro test "$@" \
+                --test-output-dir="$PWD/$debug" \
+                --debug-output="$PWD/$debug" \
+                --flatten-debug-output \
+                --format junit \
+                --output "$report" \
+                "$flow"
             }
             if ! run_maestro "$@" 2>&1 | tee "$log"; then
               if grep -Eq 'IOSDriverTimeoutException|iOS driver not ready' "$log"; then
@@ -310,7 +316,9 @@ jobs:
           }
           # Run both flows even if the first fails, then fail the step.
           status=0
-          run_flow .maestro/ios-smoke.yaml maestro-ios-debug maestro-ios-report.xml maestro-ios.log             -e TEST_USERNAME="$TEST_USERNAME"             -e TEST_PASSWORD="$TEST_PASSWORD" || status=1
+          run_flow .maestro/ios-smoke.yaml maestro-ios-debug maestro-ios-report.xml maestro-ios.log \
+            -e TEST_USERNAME="$TEST_USERNAME" \
+            -e TEST_PASSWORD="$TEST_PASSWORD" || status=1
           run_flow .maestro/ios-artist-sheet.yaml maestro-ios-artist-debug maestro-ios-artist-report.xml maestro-ios-artist.log || status=1
           exit "$status"
 

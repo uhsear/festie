@@ -122,6 +122,8 @@ packages/web/public/fonts/clash-display/
 /docs/*
 !/docs/brand/
 !/docs/runbooks/
+/docs/runbooks/*
+!/docs/runbooks/ios-testing.md
 !/docs/REUSE.md
 !/docs/adrs/
 /docs/adrs/*

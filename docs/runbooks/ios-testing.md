@@ -14,7 +14,7 @@ Two GitHub Actions workflows test the iOS app on free GitHub-hosted macOS runner
 - Simulators have no push notifications.
 - Live Activities work in simulators on iOS 16.1 and later.
 - Sign in with Apple needs an Apple ID signed in to the simulator. Sign in through the simulator's Settings app first.
-- Only one session runs at a time. A second request waits for the first.
+- Only one session runs at a time. A request made during a session waits, but GitHub keeps only one waiting request, so a newer request cancels an older waiting one. Every request builds the app first, even one that later waits or is cancelled.
 
 ## Run the build and the Maestro flows
 
@@ -44,13 +44,13 @@ Dispatch from the command line:
 
 1. Run `gh workflow run ios-sim-session.yml --ref <branch>`.
 2. To pick the build, device or length, add `-f ref=<git ref>`, `-f device="iPhone 17 Pro"` or `-f minutes=45`. The length is 5 to 60 minutes and defaults to 30.
-3. If the branch has no open pull request, add `-f pr_number=<number>`. The workflow posts the link on that pull request.
+3. The workflow posts the link as a comment. It uses the open pull request for the ref branch, or the issue `iOS simulator sessions` (it creates one if none is open). To choose the target, add `-f pr_number=<pull request or issue number>`.
 
-Or comment `/ios-sim` on a pull request. Only the repository owner can do this, and the pull request must come from this repository. The comment builds the pull request head with the default device and length.
+Or comment exactly `/ios-sim` on a pull request. Only the repository owner can do this, and the pull request must come from this repository. The comment builds the pull request head with the default device and length.
 
 Then:
 
-1. Wait for the build job, then for the session job to post a comment with an "Open SimDeck" link.
+1. Wait for the build job, then for the session job to post a comment with an "Open SimDeck" link. The run summary names the built ref, the app artifact and the comment target.
 2. Open the link and enter the session password.
 3. Use Festie in the simulator. The session ends when the time is up. To end it sooner, cancel the run.
 
@@ -60,4 +60,8 @@ The link goes through the SimDeck proxy at `ci.simdeck.sh`, which holds only the
 
 The session action is pinned to the commit of SimDeck release `simdeck-v0.2.1`, and the `simdeck` npm package is pinned to `0.2.1`. To upgrade, read the new release notes, then change both pins in `ios-sim-session.yml`.
 
-The action downloads the latest `cloudflared` without a checksum. This workflow cannot pin it.
+The action downloads the latest `cloudflared` without a checksum. The workflow first installs `cloudflared` `2026.11.1` with a SHA-256 check into the directory that the action puts first on `PATH`, so the pinned copy runs. This depends on action version `simdeck-v0.2.1`. Check it again before you upgrade the action.
+
+The action also installs the pinned `simdeck` npm version from the npm registry without a checksum. This risk is accepted.
+
+The action's "Commit" line shows the head of the default branch for a comment-triggered run. It is not the built commit. Read the built ref and artifact name in the run summary.

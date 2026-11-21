@@ -4,11 +4,13 @@ name: iOS Simulator Session
 # Builds the simulator .app (ios-e2e.yml, run_maestro=false), boots a simulator on a standard
 # GitHub-hosted macOS runner, installs and launches Festie, and streams it through SimDeck
 # (Apache-2.0, https://simdeck.sh/guide/github-actions). The session link is posted as a comment
-# on the pull request.
+# on the pull request, or on the standing issue "iOS simulator sessions" when there is no pull
+# request. The run summary names what was built and where the link goes.
 #
 # Start it with:
 #   gh workflow run ios-sim-session.yml --ref <branch> [-f ref=<git ref>] [-f device=<name>] [-f minutes=<5-60>]
-# or comment `/ios-sim` on a pull request (repo owner only; the PR must come from this repo).
+# or comment `/ios-sim` on a pull request (repo owner only; the PR must come from this repo; the
+# comment must be exactly `/ios-sim`).
 # GitHub reads issue_comment and dispatchable workflows from the default branch, so this file
 # only takes effect once it is merged to main.
 #
@@ -31,7 +33,7 @@ on:
         type: string
         default: '30'
       pr_number:
-        description: 'PR to post the session link on; empty looks up the open PR for the ref branch'
+        description: 'PR or issue to post the session link on; empty uses the open PR for the ref branch, else the standing sessions issue'
         type: string
         default: ''
   issue_comment:
@@ -51,11 +53,13 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event.issue.pull_request &&
        github.event.comment.author_association == 'OWNER' &&
-       startsWith(github.event.comment.body, '/ios-sim'))
+       (github.event.comment.body == '/ios-sim' ||
+        startsWith(github.event.comment.body, '/ios-sim ')))
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
       contents: read
+      issues: write
       pull-requests: read
     outputs:
       ref: ${{ steps.in.outputs.ref }}
@@ -98,9 +102,16 @@ jobs:
             ref="$INPUT_REF"
             [[ -z "$ref" || "$ref" =~ ^[A-Za-z0-9._/-]{1,200}$ ]] || fail "ref contains characters a git ref should not."
             if [ -z "$pr" ]; then
-              # The session action posts its link on a pull request, so a ref needs one.
+              # The session action posts its link as a comment, so it needs a pull request or issue.
               pr=$(gh pr list --repo "$REPO" --state open --head "${ref:-$REF_NAME}" --json number --jq '.[0].number // empty')
-              [ -n "$pr" ] || fail "No open pull request has '${ref:-$REF_NAME}' as its head branch. Open one, or pass pr_number."
+            fi
+            if [ -z "$pr" ]; then
+              title="iOS simulator sessions"
+              pr=$(gh issue list --repo "$REPO" --state open --search "in:title \"$title\"" --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")
+              if [ -z "$pr" ]; then
+                url=$(gh issue create --repo "$REPO" --title "$title" --body "Links to iOS simulator sessions that have no pull request. Opening a link needs the session password.")
+                pr="${url##*/}"
+              fi
             fi
           fi
 
@@ -147,9 +158,39 @@ jobs:
       issues: write
       pull-requests: write
     steps:
+      - name: Record what this session streams
+        env:
+          REF: ${{ needs.gate.outputs.ref }}
+          TARGET: ${{ needs.gate.outputs.pr_number }}
+          ARTIFACT: ${{ needs.build.outputs.artifact_name }}
+        run: |
+          {
+            echo "Built ref: \`${REF:-the ref this run started on}\`"
+            echo "Simulator app artifact: \`$ARTIFACT\`"
+            echo "The session link is posted on #$TARGET. The action's \"Commit\" line shows the default branch, not the built ref."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The action downloads the latest cloudflared with no checksum, but it puts its own bin
+      # directory first on PATH when it starts the tunnel. A pinned copy placed there wins, so the
+      # unpinned download is never run. This relies on action v0.2.1; re-check it when upgrading.
+      - name: Install a pinned cloudflared
+        env:
+          CLOUDFLARED_VERSION: '2026.11.1'
+          CLOUDFLARED_SHA256: '02fe4bcf08f2c09699cff30658228a739a0c47fb75f3653d1b8772a27ade4462'
+        run: |
+          set -euo pipefail
+          [ "$(uname -m)" = arm64 ] || { echo "::error::The pinned cloudflared checksum is for arm64 only."; exit 1; }
+          bin="$GITHUB_WORKSPACE/.tools/bin"
+          mkdir -p "$bin"
+          curl -fsSL -o "$RUNNER_TEMP/cloudflared.tgz" \
+            "https://github.com/cloudflare/cloudflared/releases/download/$CLOUDFLARED_VERSION/cloudflared-darwin-arm64.tgz"
+          echo "$CLOUDFLARED_SHA256  $RUNNER_TEMP/cloudflared.tgz" | shasum -a 256 -c -
+          tar -xzf "$RUNNER_TEMP/cloudflared.tgz" -C "$bin" cloudflared
+          chmod +x "$bin/cloudflared"
+          "$bin/cloudflared" --version
+
       # Pinned to the commit of tag simdeck-v0.2.1; the npm package `simdeck` is pinned to the same
-      # version. The action also downloads the latest cloudflared with no checksum, which this
-      # workflow cannot pin.
+      # version.
       # pr_sha is the sha of THIS run, because the action finds the build artifact by the head
       # sha of the run that uploaded it; the artifact name carries the commit that was built.
       - name: Stream the simulator
