@@ -17,8 +17,13 @@
 
 import json
 import re
+import shlex
 
-SCRIPT_SRC = re.compile(r"""<script\b[^>]*\bsrc=["']([^"']+\.js)["']""", re.IGNORECASE)
+# The built entry is the module script under assets/. index.html also carries classic scripts
+# (font-loader.js, theme-init.js, boot-guard.js): static files that prove nothing about the build.
+SCRIPT_TAG = re.compile(r"<script\b[^>]*>", re.IGNORECASE)
+MODULE_TYPE = re.compile(r"""\btype=["']module["']""", re.IGNORECASE)
+ENTRY_SRC = re.compile(r"""\bsrc=["']([^"']*\bassets/[^"']+\.js)["']""", re.IGNORECASE)
 WS_HEADERS = (
     "Connection: Upgrade",
     "Upgrade: websocket",
@@ -66,7 +71,7 @@ def make_remote_fetch(runner):
             lines.append(f"data-raw = {_config_quote(data)}")
         config = "\n".join(lines)
         cmd = (
-            f"curl -s -i -m {int(max_time)} -X {method} -K - {_config_quote(url)} <<'FESTIE_SMOKE_EOF'\n"
+            f"curl -s -i -m {int(max_time)} -X {method} -K - {shlex.quote(url)} <<'FESTIE_SMOKE_EOF'\n"
             f"{config}\nFESTIE_SMOKE_EOF"
         )
         # curl exits 28 when -m cuts the websocket off after the 101; the headers are already out.
@@ -81,10 +86,12 @@ def check_web(fetch, base):
     content_type = next((v for k, v in headers if k == "content-type"), "")
     if status != 200 or "text/html" not in content_type:
         return [f"GET / returned {status} ({content_type or 'no content-type'}), expected 200 text/html"]
-    match = SCRIPT_SRC.search(body)
-    if not match:
-        return ["GET / HTML has no <script src=...js> entry; the web build is missing or broken"]
-    src = match.group(1)
+    src = next(
+        (m.group(1) for tag in SCRIPT_TAG.findall(body) if MODULE_TYPE.search(tag) and (m := ENTRY_SRC.search(tag))),
+        None,
+    )
+    if not src:
+        return ['GET / HTML has no <script type="module" src=".../assets/....js"> entry; the web build is missing or broken']
     url = src if re.match(r"https?://", src) else base + (src if src.startswith("/") else "/" + src)
     asset_status = fetch("GET", url)[0]
     print(f"[smoke:web] / 200 html, entry {src} http={asset_status}")

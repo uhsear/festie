@@ -61,6 +61,24 @@ class WebAndSocketTest(unittest.TestCase):
         routes = {**GOOD, ("GET", "/"): (200, HTML, "<html></html>")}
         self.assertEqual(len(self.run_checks(routes)), 1)
 
+    def test_static_scripts_do_not_count_as_the_built_entry(self):
+        # Shape of the built packages/web/index.html: classic public scripts, then the hashed module.
+        built = (
+            '<head><script src="/font-loader.js" async></script>'
+            '<script type="module" crossorigin src="/assets/index-abc123.js"></script>'
+            '<script src="/theme-init.js"></script><script src="/boot-guard.js"></script></head>'
+        )
+        fetch = fake_fetch({**GOOD, ("GET", "/"): (200, HTML, built)})
+        with redirect_stdout(io.StringIO()):
+            self.assertEqual(smoke.run_smoke(fetch, BASE, LOGIN), [])
+        self.assertIn(("GET", BASE + "/assets/index-abc123.js", (), None), fetch.calls)
+        self.assertNotIn("/font-loader.js", [c[1][len(BASE):] for c in fetch.calls])
+
+    def test_only_static_scripts_fails(self):
+        static_only = '<script src="/font-loader.js"></script><script src="/boot-guard.js"></script>'
+        routes = {**GOOD, ("GET", "/"): (200, HTML, static_only), ("GET", "/font-loader.js"): (200, [], "x")}
+        self.assertIn("assets/", self.run_checks(routes)[0])
+
     def test_asset_404_fails(self):
         routes = {**GOOD, ("GET", "/assets/index-abc123.js"): (404, [], "")}
         self.assertIn("index-abc123.js returned 404", self.run_checks(routes)[0])
@@ -116,6 +134,12 @@ class LoginTest(unittest.TestCase):
 
 
 class RemoteFetchTest(unittest.TestCase):
+    def test_url_is_shell_quoted(self):
+        runner = mock.Mock(return_value=(0, "HTTP/1.1 200 OK\r\n\r\n", ""))
+        smoke.make_remote_fetch(runner)("GET", BASE + "/a$(id)`x`.js")
+        first_line = runner.call_args.args[0].partition("\n")[0]
+        self.assertIn("'" + BASE + "/a$(id)`x`.js'", first_line)
+
     def test_secrets_go_on_stdin_not_argv_and_output_is_parsed(self):
         runner = mock.Mock(return_value=(0, "HTTP/1.1 200 OK\r\nX-A: b\r\n\r\nhi", ""))
         status, headers, body = smoke.make_remote_fetch(runner)(
