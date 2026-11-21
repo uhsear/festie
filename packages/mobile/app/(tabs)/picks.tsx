@@ -45,6 +45,7 @@ import {
   fmtZonedClock,
   foldSearch,
   festivalLoadState,
+  spotifyAttributionFor,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
 import { COPY, PRIORITY_SYMBOLS, clashCount } from '@festie/shared/constants';
@@ -63,6 +64,7 @@ import LoadingState from '../../components/LoadingState';
 import GuestPicksBanner from '../../components/GuestPicksBanner';
 import { Skeleton } from '../../components/Skeleton';
 import SetCardMobile from '../../components/SetCardMobile';
+import SpotifyAttribution from '../../components/SpotifyAttribution';
 import CrewSuggestionStrip from '../../components/CrewSuggestionStrip';
 import RateNightBanner from '../../components/RateNightBanner';
 import LockscreenStaleBanner from '../../components/LockscreenStaleBanner';
@@ -423,6 +425,8 @@ export default function PicksScreen() {
   const stageGroups = bulkGroups.stages;
   const genreGroups = bulkGroups.genres;
   const hasBulkGroups = stageGroups.length > 0 || genreGroups.length > 0;
+  // The genre groups are named from Spotify genres, so they carry the attribution (Spotify Developer Policy II.4).
+  const genreAttribution = useMemo(() => spotifyAttributionFor(sets.flatMap((set) => set.artists ?? [])), [sets]);
 
   const handleBulkApply = useCallback(
     (group: (typeof stageGroups)[number]) => {
@@ -1021,6 +1025,7 @@ export default function PicksScreen() {
                   />
                 ))}
               </View>
+              {genreAttribution ? <SpotifyAttribution href={genreAttribution.href} /> : null}
             </View>
           )}
         </View>

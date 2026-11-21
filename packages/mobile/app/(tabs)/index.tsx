@@ -53,6 +53,7 @@ import {
   toggleStageFilter,
   toggleGenreFilter,
   festivalGenres,
+  spotifyAttributionFor,
   toggleHiddenDay,
   scheduleEmptyCopy,
   scheduleEmptyReason,
@@ -74,6 +75,7 @@ import { useNow } from '../../hooks/useNow';
 import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import SegmentedControl from '../../components/SegmentedControl';
+import SpotifyAttribution from '../../components/SpotifyAttribution';
 import NowNextStrip from '../../components/NowNextStrip';
 import PhaseHomeActions from '../../components/PhaseHomeActions';
 import FestivalReadyCard from '../../components/FestivalReadyCard';
@@ -359,6 +361,8 @@ export default function TimelineScreen() {
   const stageFilterActive = isStageFilterActive(activeStages, stages.length);
   const genreFilterActive = activeGenres.length > 0;
   const genreChips = useMemo(() => festivalGenres(allSets), [allSets]);
+  // The genre chips come from Spotify, so the filter carries the attribution (Spotify Developer Policy II.4).
+  const genreAttribution = useMemo(() => spotifyAttributionFor(allSets.flatMap((set) => set.artists ?? [])), [allSets]);
   const visibleDays = visibleDayIndexes(days.length, hiddenDays, selectedDay);
 
   // Day + stage + My picks + search filtering lives in the shared hook
@@ -1125,6 +1129,7 @@ export default function TimelineScreen() {
                       </TouchableOpacity>
                     );
                   })}
+                  {genreAttribution ? <SpotifyAttribution href={genreAttribution.href} /> : null}
                 </View>
               ) : null}
             </ScrollView>
