@@ -135,6 +135,7 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 | `WEBHOOK_TOKEN_HMAC_KEY` | Required when `FCM_RETRY_WEBHOOK_URL` is set; startup validator enforces this pairing |
 | `FCM_RETRY_WEBHOOK_URL` | FCM retry webhook endpoint |
 | `MOBILE_ORIGINS` | Comma-separated TWA / custom-scheme origins for mobile CORS |
+| `TILES_DIR` | Absolute path to a directory of `.pmtiles` files. The server then serves them at `/tiles/<name>.pmtiles` with Range support. File names use `a-z`, `0-9`, `_` and `-`. Unset turns the feature off, and the route answers 404. See `scripts/maps/extract-pmtiles.md`. |
 
 ### Development minimum `.env`
 

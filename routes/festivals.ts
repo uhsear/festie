@@ -11,6 +11,7 @@ import { deliverScheduleAlert } from '../lib/alert-hold.js';
 import { normalizeArtistLink } from '../lib/artist-links.js';
 import { sendPublishDecisionEmail } from '../lib/email.js';
 import { appOrigin } from '../lib/notifications/links.js';
+import { absolutizeTilesUrl } from '../lib/tiles.js';
 import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organizer-rules.js';
 import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
@@ -550,6 +551,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     validate(schemas.festivalCreate),
     async (req: Request, res: Response) => {
       try {
+        absolutizeTilesUrl((req.validatedBody as z.infer<typeof schemas.festivalCreate>).mapConfig, appOrigin(config));
         const issues = validateFestivalIssues(config, req.validatedBody);
         if (issues.length > 0) return sendIssues(res, issues);
         const festival = sanitizeFestivalPayload(req.validatedBody);
@@ -598,6 +600,8 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
           const rules = organizerFestivalRules(appOrigin(config)).safeParse(body);
           if (!rules.success) return sendRuleIssues(res, rules.error);
         }
+        // A member's save with a /tiles/ path already failed the rules above, so this only affects an admin.
+        absolutizeTilesUrl(body.mapConfig, appOrigin(config));
         // The body is partial, so check the festival that results from the save.
         // A stored lineup is not re-checked: only a body that carries one can fail on duplicates.
         const issues = validateFestivalIssues(config, { ...existingFestival, lineup: undefined, ...body });
