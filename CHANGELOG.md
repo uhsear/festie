@@ -14,7 +14,7 @@ Merged to `main` but not yet deployed to production.
 - A public `/delete-account` page explains how to delete an account, for the App Store and Google Play.
 - Every marketing email carries a signed one-click unsubscribe link (`List-Unsubscribe` and `List-Unsubscribe-Post`). These emails are not sent while `EMAIL_POSTAL_ADDRESS` is unset.
 - The Spotify logo and a link to the artist's Spotify page show next to Spotify photos and genres, on web and mobile.
-- Stored Spotify photos and genres are re-read after 30 days (`scripts/spotify-refresh-stale.ts`, admin route `POST /api/v1/admin/artists/spotify-refresh-stale`, migration 121).
+- Stored Spotify photos and genres are re-read after 30 days (`scripts/spotify-refresh-stale.ts`, admin route `POST /api/v1/admin/artists/spotify-refresh-stale`, migration 122).
 
 ### Changed
 - Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.

@@ -4,7 +4,7 @@
 /**
  * Keeps stored Spotify content fresh. The Spotify Developer Terms (IV.3.1.1) forbid keeping Spotify
  * content indefinitely, so every artist with a Spotify id gets its photo and genres re-read once the
- * stored copy is older than SPOTIFY_MAX_AGE_DAYS (artists.spotify_fetched_at, migration 121).
+ * stored copy is older than SPOTIFY_MAX_AGE_DAYS (artists.spotify_fetched_at, migration 122).
  *
  * An artist that Spotify answers for as unknown (404) loses its Spotify photo and genres at that age; a lookup that
  * fails keeps them and is tried again. A photo that did not come from Spotify is never replaced or cleared.

@@ -1,4 +1,4 @@
--- 121_artist_spotify_fetched_at.sql
+-- 122_artist_spotify_fetched_at.sql
 -- artists.spotify_fetched_at: when artists.photo and artists.genres were last read from Spotify.
 -- The Spotify Developer Terms (IV.3.1.1) forbid keeping Spotify content indefinitely. The scheduled
 -- refresh (lib/spotify-refresh.ts) re-reads every artist with a Spotify id whose value is NULL or older
