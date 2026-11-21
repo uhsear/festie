@@ -10,16 +10,23 @@
 #   2. /api/ready returns 200 (db + redis healthy).
 #   3. A real login returns 200 (only if test creds are provided).
 #   4. The served index references a fresh asset bundle hash.
+#   5. Smoke (scripts/deploy/smoke.py): the web app mounts (index HTML plus its JS
+#      entry), the Socket.IO websocket upgrade answers 101, and, when
+#      FESTIE_SMOKE_USER / FESTIE_SMOKE_PASSWORD are set, login -> /auth/me -> logout.
 #
 # Configuration (env — KEY AUTH ONLY, no password support):
 #   FESTIE_SSH_HOST / FESTIE_SSH_USER / FESTIE_SSH_KEY
 #   FESTIE_APP_DIR / FESTIE_PM2_NAME / FESTIE_READY_URL / FESTIE_LOGIN_URL
 #   FESTIE_TEST_USER / FESTIE_TEST_PASSWORD  (optional; skips login check if unset)
+#   FESTIE_SMOKE_USER / FESTIE_SMOKE_PASSWORD  (optional; skips the smoke login if unset)
 # See scripts/deploy/deploy.py for the full env contract.
 
 import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from smoke import make_remote_fetch, run_smoke
 
 try:
     import paramiko
@@ -45,6 +52,8 @@ READY_URL = os.environ.get("FESTIE_READY_URL", "http://localhost:4000/api/ready"
 LOGIN_URL = os.environ.get("FESTIE_LOGIN_URL", "http://localhost:4000/api/v1/auth/login")
 TEST_USER = os.environ.get("FESTIE_TEST_USER")
 TEST_PASSWORD = os.environ.get("FESTIE_TEST_PASSWORD")
+SMOKE_USER = os.environ.get("FESTIE_SMOKE_USER")
+SMOKE_PASSWORD = os.environ.get("FESTIE_SMOKE_PASSWORD")
 
 
 def run(client, cmd, timeout=120):
