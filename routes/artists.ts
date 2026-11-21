@@ -328,6 +328,9 @@ export default function createArtistsRoutes(deps: RouteDeps) {
     },
   );
 
+  // One request must end well inside Cloudflare's 100 s limit, so the route reads fewer artists per call than the cron script does; the rest wait for the next call.
+  const STALE_REFRESH_ROUTE_LIMIT = 200;
+
   /**
    * Re-reads the Spotify photo and genres of every artist whose stored copy is older than the refresh limit
    * (30 days, Spotify Developer Terms IV.3.1.1), one transaction per artist. The same work runs from cron through
@@ -344,7 +347,7 @@ export default function createArtistsRoutes(deps: RouteDeps) {
         log,
         userId: req.user?.userId ?? null,
         ip: getRequestIp(req),
-        ...(limit ? { limit } : {}),
+        limit: limit ?? STALE_REFRESH_ROUTE_LIMIT,
       });
       if (counts.updated > 0 && req.res?.locals) req.res.locals.auditWritten = true;
       await afterSync(synced);
