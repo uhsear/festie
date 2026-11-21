@@ -12,8 +12,7 @@ import {
   formatTime,
   fromPickPriority,
   previewPlanImport,
-  safeReturnPath,
-  type PlanSnapshot,
+    type PlanSnapshot,
 } from '@festie/shared/utils';
 import { useToast } from '../lib/toastContext';
 
@@ -33,8 +32,8 @@ interface Row {
   priority: string;
 }
 
-// A snapshot is longer than the 512 characters a sign-in return path may carry, so a signed-out visitor's
-// hash waits here (this tab only) while they sign in, and /p reads it back.
+// The hash waits here (this tab only) while a signed-out visitor signs in, and /p reads it back. It never goes
+// into the sign-in return path: that is a query string, which reaches the server and its logs.
 const PENDING_PLAN_KEY = 'fk.pendingPlanSnapshot';
 
 function readHash(): string {
@@ -56,14 +55,14 @@ function ImportPlan({ snapshot, hash }: { snapshot: PlanSnapshot; hash: string }
   const { toast, toastUndo, toastError } = useToast();
   const user = useAuthStore((s) => s.user);
   const currentFestivalId = useFestivalStore((s) => s.currentFestivalId);
-  const currentProfile = useFestivalStore((s) => s.currentProfile);
+  const storeProfile = useFestivalStore((s) => s.currentProfile);
   const sets = useFestivalStore((s) => s.sets);
+  // Selecting a festival sets its id at once, but the sets and the profile still belong to the previous festival until the fetch ends.
+  const isLoading = useFestivalStore((s) => s.isLoading);
+  const loadFailed = useFestivalStore((s) => !!s.error);
+  const currentProfile = storeProfile?.festivalId === snapshot.festivalId ? storeProfile : null;
   const [busy, setBusy] = useState(false);
-  // The full link when it fits a return path; else /p, with the hash stashed when a sign-in link is clicked.
-  const fullPath = safeReturnPath(`/p#${hash}`);
-  const next = fullPath ?? '/p';
   const stashHash = () => {
-    if (fullPath) return;
     try {
       sessionStorage.setItem(PENDING_PLAN_KEY, hash);
     } catch {
@@ -106,10 +105,10 @@ function ImportPlan({ snapshot, hash }: { snapshot: PlanSnapshot; hash: string }
       <>
         <p className="text-[length:var(--font-size-14)] text-text-primary">{signInTo('add these picks to your plan')}</p>
         <div className="flex gap-2 flex-wrap">
-          <Link to="/login" search={{ next }} onClick={stashHash} className={PRIMARY}>
+          <Link to="/login" search={{ next: '/p' }} onClick={stashHash} className={PRIMARY}>
             {COPY.auth.signIn}
           </Link>
-          <Link to="/register" search={{ next }} onClick={stashHash} className={`${BUTTON} border border-border-subtle text-text-primary`}>
+          <Link to="/register" search={{ next: '/p' }} onClick={stashHash} className={`${BUTTON} border border-border-subtle text-text-primary`}>
             {COPY.auth.createAccount}
           </Link>
         </div>
@@ -121,6 +120,21 @@ function ImportPlan({ snapshot, hash }: { snapshot: PlanSnapshot; hash: string }
         <p className="text-[length:var(--font-size-14)] text-text-primary">These picks are for {snapshot.festivalName}.</p>
         <button type="button" className={PRIMARY} onClick={() => void useFestivalStore.getState().selectFestival(snapshot.festivalId)}>
           Switch to {snapshot.festivalName}
+        </button>
+      </>
+    );
+  } else if (isLoading) {
+    body = (
+      <p role="status" className="text-[length:var(--font-size-14)] text-text-secondary">
+        Loading your plan…
+      </p>
+    );
+  } else if (!currentProfile && loadFailed) {
+    body = (
+      <>
+        <p className="text-[length:var(--font-size-14)] text-text-primary">Couldn&apos;t load your plan. Check your connection, then try again.</p>
+        <button type="button" className={PRIMARY} onClick={() => void useFestivalStore.getState().selectFestival(snapshot.festivalId)}>
+          Try again
         </button>
       </>
     );

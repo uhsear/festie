@@ -73,7 +73,7 @@ describe('PlanSnapshotPage', () => {
     sessionStorage.clear();
     authState.user = null;
     for (const key of Object.keys(festivalState)) delete festivalState[key];
-    Object.assign(festivalState, { currentFestivalId: null, currentProfile: null, sets: [] });
+    Object.assign(festivalState, { currentFestivalId: null, currentProfile: null, sets: [], isLoading: false, error: null });
     bulkSavePicks.mockImplementation(async (ids: string[]) => ids.length);
     restorePicks.mockResolvedValue(undefined);
   });
@@ -173,7 +173,7 @@ describe('PlanSnapshotPage', () => {
       authState.user = { id: 'u1' };
       Object.assign(festivalState, {
         currentFestivalId: 'fest-1',
-        currentProfile: { id: 'p1', picks },
+        currentProfile: { id: 'p1', festivalId: 'fest-1', picks },
         sets: [{ id: 'a' }, { id: 'b' }, { id: 'c' }],
       });
     };
@@ -189,14 +189,18 @@ describe('PlanSnapshotPage', () => {
       const hash = snapshotHash([{ setId: 'set-1', priority: 'must' }]);
       setHash(hash);
       render(<PlanSnapshotPage />);
-      const back = encodeURIComponent(`/p#${hash}`);
+      const back = encodeURIComponent('/p');
       expect(screen.getByText('Sign in to add these picks to your plan.')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', `/login?next=${back}`);
       expect(screen.getByRole('link', { name: 'Create account' })).toHaveAttribute('href', `/register?next=${back}`);
       expect(bulkSavePicks).not.toHaveBeenCalled();
+      // The picks never go into the return path, which is a query string the server and its logs see.
+      expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).not.toContain(hash);
+      await userEvent.click(screen.getByRole('link', { name: 'Sign in' }));
+      expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
     });
 
-    it('stashes a snapshot too long for a return path and restores it on the way back', async () => {
+    it('restores the stashed snapshot on the way back from sign-in', async () => {
       apiGet.mockResolvedValue(festival);
       const picks = Array.from({ length: 20 }, (_, i) => ({ setId: `set-${i}-${'x'.repeat(30)}`, priority: 'want' as const }));
       const hash = snapshotHash(picks);
@@ -237,6 +241,31 @@ describe('PlanSnapshotPage', () => {
       render(<PlanSnapshotPage />);
       expect(screen.getByText('You already have all of these picks.')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^Add/ })).toBeNull();
+    });
+
+    it('shows a loading state, not "already have all", while the festival is still loading', async () => {
+      apiGet.mockResolvedValue(festival);
+      // selectFestival has set the id; the old festival's profile and sets are still in the store.
+      authState.user = { id: 'u1' };
+      Object.assign(festivalState, {
+        currentFestivalId: 'fest-1',
+        currentProfile: { id: 'p0', festivalId: 'other', picks: {} },
+        sets: [{ id: 'z' }],
+        isLoading: true,
+      });
+      setHash(threePicks());
+      const first = render(<PlanSnapshotPage />);
+      expect(screen.getByRole('status')).toHaveTextContent('Loading your plan');
+      expect(screen.queryByText('You already have all of these picks.')).toBeNull();
+      first.unmount();
+
+      festivalState.isLoading = false;
+      festivalState.error = 'offline';
+      render(<PlanSnapshotPage />);
+      expect(screen.getByText(/Couldn't load your plan/)).toBeInTheDocument();
+      expect(screen.queryByText('You already have all of these picks.')).toBeNull();
+      await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
+      expect(selectFestival).toHaveBeenCalledWith('fest-1');
     });
 
     it('offers to switch when another festival is open, then to join when there is no profile', async () => {
