@@ -16,6 +16,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import StageBadge from '../components/ui/StageBadge';
 import PriorityIcon from '../components/ui/PriorityIcon';
 import { useToast } from '../lib/toastContext';
+import { ArtistNameButton } from '../components/features/ArtistName';
 
 const BAD_LINK = "This link can't be read. Ask your friend to send it again.";
 const NOT_FOUND = 'This link no longer works. Ask your friend for a new one.';
@@ -78,7 +79,9 @@ function Row({
           />
         )}
         <span className="type-meta text-text-muted tabular-nums">{row.time}</span>
-        <span className="font-semibold">{row.artist}</span>
+        <span className="font-semibold">
+          <ArtistNameButton name={row.artist} />
+        </span>
         {row.stage && (
           <StageBadge
             stageName={row.stage}

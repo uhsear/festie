@@ -8,6 +8,7 @@ import { clashPromptCopy, clashesWith } from '@festie/shared/constants';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import ArtistName from './ArtistName';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 
 interface Props {
@@ -147,6 +148,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
               </Text>
             </View>
             <Text style={styles.body}>{body}</Text>
+            <ArtistName set={c} separator={b2bSeparator} textStyle={styles.otherArtist} numberOfLines={1} />
             {plan ? (
               <Text style={styles.plan}>{leaveAtLine(plan, (s) => artistDisplayName(s, b2bSeparator))}</Text>
             ) : null}
@@ -252,6 +254,10 @@ const useStyles = makeStyles((t) => ({
   body: {
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
+  },
+  otherArtist: {
+    ...typeStyle('caption', 600),
+    color: t.colors.accent.aqua,
   },
   plan: {
     ...typeStyle('caption'),

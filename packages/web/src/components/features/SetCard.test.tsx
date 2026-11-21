@@ -74,6 +74,7 @@ import { useSetStatus } from '@/hooks/useSetStatus';
 import { api } from '@festie/shared/services/api';
 import { usePicks } from '@festie/shared/hooks';
 import { ensureWhiteContrast } from '../ui/StageBadge';
+import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 
 // useSetStatus is overloaded; pin the single-set overload so mockReturnValue takes one result.
 const setStatusMock = vi.mocked(useSetStatus) as unknown as Mock<(set: FestivalSet) => SetStatusResult>;
@@ -127,6 +128,42 @@ describe('SetCard', () => {
     expect(screen.getByText('Late')).toBeInTheDocument();
     rerender(<SetCard {...defaultProps} set={makeSet({ date: '2026-09-04' })} />);
     expect(screen.queryByText('Late')).toBeNull();
+  });
+
+  describe('artist name', () => {
+    beforeEach(() => useArtistSheetStore.setState({ target: null, isOpen: false }));
+
+    it('opens the artist sheet without opening the set, with or without set times', async () => {
+      for (const times of [{}, { startTime: '', endTime: '' }]) {
+        const onTap = vi.fn();
+        useArtistSheetStore.setState({ target: null, isOpen: false });
+        const { unmount } = render(
+          <SetCard {...defaultProps} onTap={onTap} set={makeSet({ artists: [{ name: 'Daft Punk', genres: ['house'] }], ...times })} />,
+        );
+        await userEvent.click(screen.getByRole('button', { name: 'Open Daft Punk' }));
+        expect(useArtistSheetStore.getState().isOpen).toBe(true);
+        expect(useArtistSheetStore.getState().target?.artists[0]).toMatchObject({ name: 'Daft Punk', genres: ['house'] });
+        expect(onTap).not.toHaveBeenCalled();
+        unmount();
+      }
+    });
+
+    it('still opens the set from the card body', async () => {
+      const onTap = vi.fn();
+      render(<SetCard {...defaultProps} onTap={onTap} />);
+      await userEvent.click(screen.getByRole('button', { name: /^Daft Punk — Main Stage/ }));
+      expect(onTap).toHaveBeenCalledTimes(1);
+      expect(useArtistSheetStore.getState().isOpen).toBe(false);
+    });
+
+    it('gives each B2B artist its own button and sheet', async () => {
+      const set = makeSet({ artist: 'Ana b2b Bo', artists: [{ name: 'Ana' }, { name: 'Bo', links: { spotify: 'https://open.spotify.com/b' } }] });
+      render(<SetCard {...defaultProps} set={set} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Open Bo' }));
+      expect(useArtistSheetStore.getState().target).toMatchObject({ title: 'Bo', artists: [{ name: 'Bo' }] });
+      await userEvent.click(screen.getByRole('button', { name: 'Open Ana' }));
+      expect(useArtistSheetStore.getState().target?.title).toBe('Ana');
+    });
   });
 
   it('hides the moved chip when the set has no fresh move', () => {

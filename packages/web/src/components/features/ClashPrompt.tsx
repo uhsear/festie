@@ -4,6 +4,7 @@ import { formatTime, artistDisplayName, festivalStartMinutes, buildLeaveAtPlan, 
 import { AlertTriangle, TriangleAlert } from 'lucide-react';
 import { clashPromptCopy, clashesWith } from '@festie/shared/constants';
 import Button from '../ui/Button';
+import ArtistName from './ArtistName';
 
 interface Props {
   /** The set currently open in the detail panel. */
@@ -123,6 +124,9 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
               <span>{title}</span>
             </div>
             <div className="mt-1 text-[length:var(--font-size-14)] text-text-secondary">{body}</div>
+            <div className="mt-1 text-[length:var(--font-size-14)] font-semibold text-accent-aqua">
+              <ArtistName set={c} separator={b2bSeparator} />
+            </div>
             {plan && (
               <div className="mt-1 text-[length:var(--font-size-14)] text-text-primary">
                 {leaveAtLine(plan, (s) => artistDisplayName(s, b2bSeparator))}

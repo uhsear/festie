@@ -37,6 +37,7 @@ import { PRIORITY_BUTTONS } from '../lib/prioritySymbol';
 
 import Avatar from './Avatar';
 import LiveBadge from './LiveBadge';
+import ArtistName from './ArtistName';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
@@ -260,13 +261,7 @@ function SetCardMobileImpl({
   // R19: Apply live state styling when set status is 'live'.
   return (
     <View style={[styles.card, isLive && styles.cardLive]}>
-      <AppPressable
-        style={styles.body}
-        onPress={onPress}
-        accessibilityRole="button"
-        accessibilityLabel={a11yBody}
-        testID={`set-card-${set.id}`}
-      >
+      <AppPressable style={styles.bodyTop} onPress={onPress} accessibilityRole="button" accessibilityLabel={a11yBody} testID={`set-card-${set.id}`}>
         <View style={styles.stagePill}>
           <View style={[styles.stagePillBg, { backgroundColor: dimmed ? t.colors.overlay[3] : pillBg }]} pointerEvents="none" />
           <Text style={[styles.stageText, dimmed && styles.dimmedText]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
@@ -276,10 +271,36 @@ function SetCardMobileImpl({
             {stageName + '\u00A0'}
           </Text>
         </View>
+      </AppPressable>
 
-        <Text style={[styles.artist, dimmed && styles.dimmedText]} numberOfLines={2} maxFontSizeMultiplier={typeScaleCap('title')}>
-          {artistName}
-        </Text>
+      {/* The name is its own button between two halves of the body: the halves are siblings of it, so no
+          touchable nests another. The lower half repeats the body's press but hides from screen readers,
+          which already get the body's accessible name from the top half. */}
+      <View style={styles.nameRow}>
+        <ArtistName
+          set={set}
+          separator={b2bSeparator}
+          textStyle={[styles.artist, dimmed && styles.dimmedText]}
+          numberOfLines={2}
+          maxFontSizeMultiplier={typeScaleCap('title')}
+        />
+        {/* The space to the right of a short name opens the set, as the whole row did before the name became a button. */}
+        <AppPressable
+          style={styles.nameFill}
+          onPress={onPress}
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+        />
+      </View>
+
+      <AppPressable
+        style={styles.body}
+        onPress={onPress}
+        accessible={false}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+      >
         {subtitle ? (
           <Text style={styles.subtitle} numberOfLines={2}>
             {subtitle}
@@ -558,6 +579,11 @@ const useStyles = makeStyles((t) => ({
     borderRadius: t.radii.pill,
     backgroundColor: t.colors.accent.coral,
   },
+  bodyTop: {
+    alignSelf: 'stretch',
+  },
+  nameRow: { flexDirection: 'row', alignItems: 'stretch' },
+  nameFill: { flex: 1 },
   body: {
     gap: t.spacing[1],
   },

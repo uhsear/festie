@@ -2,7 +2,7 @@ import { useCallback, useRef } from 'react';
 import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import { useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores';
+import { useFestivalDataStore, useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores';
 import { INBOX_COPY } from '@festie/shared/constants';
 import { timeAgo } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
@@ -10,6 +10,20 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
 import { routeNotification } from '../lib/routeNotification';
 import AppPressable from '../components/AppPressable';
 import Button from '../components/Button';
+import ArtistName from '../components/ArtistName';
+
+/** The artist a notification is about, as its own button under the row. Hidden when the set is not loaded. */
+function InboxArtist({ setId }: { setId?: string }) {
+  const styles = useStyles();
+  const set = useFestivalDataStore((s) => (setId ? s.sets.find((x) => x.id === setId) : undefined));
+  const separator = useFestivalDataStore((s) => s.currentFestival?.b2bSeparator);
+  if (!set) return null;
+  return (
+    <View style={styles.artistLine}>
+      <ArtistName set={set} separator={separator} textStyle={styles.artistLink} numberOfLines={1} />
+    </View>
+  );
+}
 
 export default function InboxScreen() {
   const t = useTokens();
@@ -41,23 +55,26 @@ export default function InboxScreen() {
     const unread = isInboxItemUnread(item, prevSeenAt.current);
     const ago = timeAgo(Date.parse(item.createdAt));
     return (
-      <AppPressable
-        style={styles.row}
-        accessibilityRole="button"
-        accessibilityLabel={`${item.title}. ${item.body}. ${ago}.${unread ? ` ${INBOX_COPY.unreadA11y}.` : ''}`}
-        onPress={() => routeNotification(router, { ...item.data, type: item.type })}
-      >
-        <View
-          style={[styles.dot, !unread && styles.dotHidden]}
-          accessibilityElementsHidden
-          importantForAccessibility="no-hide-descendants"
-        />
-        <View style={styles.rowText}>
-          <Text style={styles.rowTitle}>{item.title}</Text>
-          <Text style={styles.rowBody}>{item.body}</Text>
-          <Text style={styles.rowTime}>{ago}</Text>
-        </View>
-      </AppPressable>
+      <View>
+        <AppPressable
+          style={styles.row}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.title}. ${item.body}. ${ago}.${unread ? ` ${INBOX_COPY.unreadA11y}.` : ''}`}
+          onPress={() => routeNotification(router, { ...item.data, type: item.type })}
+        >
+          <View
+            style={[styles.dot, !unread && styles.dotHidden]}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          />
+          <View style={styles.rowText}>
+            <Text style={styles.rowTitle}>{item.title}</Text>
+            <Text style={styles.rowBody}>{item.body}</Text>
+            <Text style={styles.rowTime}>{ago}</Text>
+          </View>
+        </AppPressable>
+        <InboxArtist setId={item.data.setId} />
+      </View>
     );
   };
 
@@ -122,6 +139,8 @@ const useStyles = makeStyles((t) => ({
   rowTitle: { ...typeStyle('body', 600), color: t.colors.text.primary },
   rowBody: { ...typeStyle('caption'), color: t.colors.text.primary },
   rowTime: { ...typeStyle('caption'), color: t.colors.text.secondary },
+  artistLine: { paddingHorizontal: t.spacing[4], paddingBottom: t.spacing[3], paddingLeft: t.spacing[4] + 8 + t.spacing[3] },
+  artistLink: { ...typeStyle('caption', 600), color: t.colors.accent.aqua },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: t.colors.border.light },
   message: { padding: t.spacing[4], gap: t.spacing[2], alignItems: 'flex-start' },
   errorText: { ...typeStyle('body'), color: t.colors.text.secondary },

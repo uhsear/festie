@@ -22,6 +22,7 @@ import Button from '../components/Button';
 import RatingButtons from '../components/RatingButtons';
 import { makeStyles, typeStyle, useLargeText, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { ArtistNameButton } from '../components/ArtistName';
 
 interface FestivalDetail {
   days: (FestivalDay & { sets?: FestivalSet[] })[];
@@ -199,9 +200,7 @@ export default function CaughtScreen() {
       <View style={styles.row}>
         <View style={styles.rowHead}>
           <View style={styles.rowText}>
-            <Text style={styles.artist} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {artist}
-            </Text>
+            <ArtistNameButton name={artist} textStyle={styles.artist} />
             {meta ? (
               <Text style={styles.meta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {meta}
@@ -319,9 +318,7 @@ export default function CaughtScreen() {
             return (
               <View key={set.id} style={styles.result}>
                 <View style={styles.rowText}>
-                  <Text style={styles.artist} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                    {artist}
-                  </Text>
+                  <ArtistNameButton name={artist} textStyle={styles.artist} />
                   {meta ? (
                     <Text style={styles.meta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                       {meta}
