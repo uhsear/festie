@@ -12,10 +12,40 @@ name: iOS E2E
 # dispatch. It is not on every push: it is a ~20-25min build+sim job. Run it on demand from the
 # Actions tab, or:
 #   gh workflow run ios-e2e.yml --ref <branch>
+#   gh workflow run ios-e2e.yml --ref <branch> -f ref=<git ref to build> -f run_maestro=false
+#
+# It is also the reusable simulator build (workflow_call): every run uploads the zipped
+# simulator .app as the artifact ios-simulator-app-<short sha>. ios-sim-session.yml calls it with
+# run_maestro=false, then streams that .app in a browser. `ref` picks what to build (default: the
+# ref the run started on); `run_maestro` turns the boot-and-test half off (the scheduled run
+# always runs it).
 on:
   schedule:
     - cron: '0 4 * * 0'
   workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch, tag or sha) to build; empty builds the ref the run started on'
+        type: string
+        default: ''
+      run_maestro:
+        description: 'Boot the simulator and run the Maestro flows after the build'
+        type: boolean
+        default: true
+  workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref (branch, tag or sha) to build; empty builds the caller ref'
+        type: string
+        default: ''
+      run_maestro:
+        description: 'Boot the simulator and run the Maestro flows after the build'
+        type: boolean
+        default: false
+    outputs:
+      artifact_name:
+        description: 'Name of the artifact that holds the zipped simulator .app'
+        value: ${{ jobs.ios-e2e.outputs.artifact_name }}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
@@ -33,6 +63,11 @@ jobs:
   ios-e2e:
     runs-on: macos-15
     timeout-minutes: 60
+    outputs:
+      artifact_name: ${{ steps.app.outputs.artifact_name }}
+    env:
+      # inputs.* is empty on a scheduled run, which always runs Maestro.
+      RUN_MAESTRO: ${{ github.event_name == 'schedule' || inputs.run_maestro }}
     steps:
       # Expo SDK 56+'s precompiled XCFrameworks ship a Package.swift declaring
       # `swift-tools-version: 6.2`, which xcodebuild can only resolve with a
@@ -53,12 +88,15 @@ jobs:
           swift --version
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
       - name: Fetch licensed fonts (private repo; see scripts/fetch-fonts.mjs)
         run: node scripts/fetch-fonts.mjs
         env:
           FESTIE_FONTS_SSH_KEY: ${{ secrets.FESTIE_FONTS_SSH_KEY }}
 
       - name: Require smoke-test credentials
+        if: env.RUN_MAESTRO == 'true'
         env:
           TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
@@ -116,6 +154,7 @@ jobs:
       # devices and warned about the ambiguity.
       - name: Boot iOS Simulator
         id: sim
+        if: env.RUN_MAESTRO == 'true'
         uses: futureware-tech/simulator-action@c768f52966d5f70335ec77881f9806b24a52f80e # v6
         with:
           model: 'iPhone 16 Pro'
@@ -204,10 +243,30 @@ jobs:
           echo "APP_PATH=$(cd "$(dirname "$APP_PATH")" && pwd)/$(basename "$APP_PATH")" >> "$GITHUB_ENV"
           echo "Found app: $APP_PATH"
 
+      # The simulator build is the reusable product of this workflow: zip it (ditto keeps the
+      # bundle's symlinks and metadata, which a plain zip drops) and publish it under a name
+      # that carries the built commit, so a session can pick the build for any ref.
+      - name: Zip the simulator .app
+        id: app
+        run: |
+          SHORT_SHA=$(git rev-parse --short=8 HEAD)
+          ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/festie-simulator.app.zip"
+          echo "artifact_name=ios-simulator-app-$SHORT_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Upload simulator .app
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.app.outputs.artifact_name }}
+          path: ${{ runner.temp }}/festie-simulator.app.zip
+          retention-days: 7
+          if-no-files-found: error
+
       - name: Install .app into the booted simulator
+        if: env.RUN_MAESTRO == 'true'
         run: xcrun simctl install "${{ steps.sim.outputs.udid }}" "$APP_PATH"
 
       - name: Install Maestro
+        if: env.RUN_MAESTRO == 'true'
         run: |
           # Pinned release zip with a checksum, not the unpinned get.maestro.mobile.dev installer.
           curl -fsSL -o "$RUNNER_TEMP/maestro.zip" "https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.6.1/maestro.zip"
@@ -215,11 +274,12 @@ jobs:
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME/.maestro-install"
           echo "$HOME/.maestro-install/maestro/bin" >> "$GITHUB_PATH"
 
-      - name: Run Maestro smoke (iOS)
+      - name: Run Maestro flows (iOS)
+        if: env.RUN_MAESTRO == 'true'
         working-directory: packages/mobile
         env:
           # Passed to Maestro so the authed phase of the smoke runs; CI provides
-          # them from repo secrets.
+          # them from repo secrets. The artist-sheet flow is guest-level and gets none.
           TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
           TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
           # On the FIRST run against a fresh sim, Maestro has to build + install
@@ -231,28 +291,31 @@ jobs:
           MAESTRO_DRIVER_STARTUP_TIMEOUT: '240000'
         run: |
           set -o pipefail
-          run_maestro() {
-            MAESTRO_CLI_NO_ANALYTICS=1 maestro test \
-              -e TEST_USERNAME="$TEST_USERNAME" \
-              -e TEST_PASSWORD="$TEST_PASSWORD" \
-              --test-output-dir="$PWD/maestro-ios-debug" \
-              --debug-output="$PWD/maestro-ios-debug" \
-              --flatten-debug-output \
-              --format junit \
-              --output maestro-ios-report.xml \
-              .maestro/ios-smoke.yaml
-          }
-          if ! run_maestro 2>&1 | tee maestro-ios.log; then
-            if grep -Eq 'IOSDriverTimeoutException|iOS driver not ready' maestro-ios.log; then
-              echo "::warning::Cold iOS driver startup failed; retrying once."
-              sleep 10
-              run_maestro 2>&1 | tee -a maestro-ios.log
-            else
-              exit 1
+          # run_flow <flow> <debug dir> <junit report> <log> [extra maestro args...]
+          run_flow() {
+            local flow="$1" debug="$2" report="$3" log="$4"
+            shift 4
+            run_maestro() {
+              MAESTRO_CLI_NO_ANALYTICS=1 maestro test "$@"                 --test-output-dir="$PWD/$debug"                 --debug-output="$PWD/$debug"                 --flatten-debug-output                 --format junit                 --output "$report"                 "$flow"
+            }
+            if ! run_maestro "$@" 2>&1 | tee "$log"; then
+              if grep -Eq 'IOSDriverTimeoutException|iOS driver not ready' "$log"; then
+                echo "::warning::Cold iOS driver startup failed; retrying once."
+                sleep 10
+                run_maestro "$@" 2>&1 | tee -a "$log"
+              else
+                return 1
+              fi
             fi
-          fi
+          }
+          # Run both flows even if the first fails, then fail the step.
+          status=0
+          run_flow .maestro/ios-smoke.yaml maestro-ios-debug maestro-ios-report.xml maestro-ios.log             -e TEST_USERNAME="$TEST_USERNAME"             -e TEST_PASSWORD="$TEST_PASSWORD" || status=1
+          run_flow .maestro/ios-artist-sheet.yaml maestro-ios-artist-debug maestro-ios-artist-report.xml maestro-ios-artist.log || status=1
+          exit "$status"
 
       - name: Verify route screenshot coverage
+        if: env.RUN_MAESTRO == 'true'
         working-directory: packages/mobile
         run: |
           SCREENSHOT_DIR=maestro-ios-debug/screenshots
@@ -266,36 +329,42 @@ jobs:
       # Keep only screenshots in the debug tree so Actions artifacts can never
       # publish the smoke credentials from this public repository.
       - name: Remove credential-bearing Maestro metadata
-        if: always()
+        if: always() && env.RUN_MAESTRO == 'true'
         working-directory: packages/mobile
         run: |
-          if [ -d maestro-ios-debug ]; then
-            find maestro-ios-debug -type f ! -path '*/screenshots/*.png' -delete
-          fi
+          for dir in maestro-ios-debug maestro-ios-artist-debug; do
+            if [ -d "$dir" ]; then
+              find "$dir" -type f ! -path '*/screenshots/*.png' -delete
+            fi
+          done
 
       - name: Upload Maestro artifacts
-        if: always()
+        if: always() && env.RUN_MAESTRO == 'true'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ios-maestro-results
           path: |
             packages/mobile/*.png
             packages/mobile/maestro-ios-report.xml
+            packages/mobile/maestro-ios-artist-report.xml
             packages/mobile/maestro-ios-debug/**
+            packages/mobile/maestro-ios-artist-debug/**
             !packages/mobile/maestro-ios-debug/commands-*.json
             !packages/mobile/maestro-ios-debug/maestro.log
+            !packages/mobile/maestro-ios-artist-debug/commands-*.json
+            !packages/mobile/maestro-ios-artist-debug/maestro.log
           if-no-files-found: error
 
       # Publish the Maestro JUnit report as a PR/run check annotation so failures
       # surface inline. if: always() + continue-on-error: true ensures this step
       # never fails the gate — it is purely informational trend tracking.
       - name: Publish Maestro test results
-        if: always()
+        if: always() && env.RUN_MAESTRO == 'true'
         continue-on-error: true
         uses: dorny/test-reporter@d1b5dff021aa968b288b02285a8bf47471c5928a # v3.2.0
         with:
           name: iOS Maestro Results
-          path: packages/mobile/maestro-ios-report.xml
+          path: packages/mobile/maestro-ios-*report.xml
           reporter: java-junit
           fail-on-error: false
 
