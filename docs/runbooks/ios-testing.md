@@ -26,7 +26,7 @@ Two GitHub Actions workflows test the iOS app on free GitHub-hosted macOS runner
 
 The workflow also runs every Sunday on `main`.
 
-Every run uploads the zipped simulator app as the artifact `ios-simulator-app-<short sha>`. The artifact expires after 7 days.
+Only a session run (`upload_app: true`) uploads the zipped simulator app, as the artifact `ios-simulator-app-<short sha>`, and it expires after 1 day. Artifacts on a public repo can be downloaded by any signed-in GitHub user, and the app embeds the licensed display fonts, so scheduled and manual test runs never upload it.
 
 ## Set the session password
 

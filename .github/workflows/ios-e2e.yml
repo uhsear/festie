@@ -14,8 +14,8 @@ name: iOS E2E
 #   gh workflow run ios-e2e.yml --ref <branch>
 #   gh workflow run ios-e2e.yml --ref <branch> -f ref=<git ref to build> -f run_maestro=false
 #
-# It is also the reusable simulator build (workflow_call): every run uploads the zipped
-# simulator .app as the artifact ios-simulator-app-<short sha>. ios-sim-session.yml calls it with
+# It is also the reusable simulator build (workflow_call): with upload_app=true it uploads the zipped
+# simulator .app (1-day retention) as the artifact ios-simulator-app-<short sha>. ios-sim-session.yml calls it with
 # run_maestro=false, then streams that .app in a browser. `ref` picks what to build (default: the
 # ref the run started on); `run_maestro` turns the boot-and-test half off (the scheduled run
 # always runs it).
@@ -40,6 +40,10 @@ on:
         default: ''
       run_maestro:
         description: 'Boot the simulator and run the Maestro flows after the build'
+        type: boolean
+        default: false
+      upload_app:
+        description: 'Upload the zipped simulator .app (only a session needs it)'
         type: boolean
         default: false
     outputs:
@@ -253,12 +257,16 @@ jobs:
           ditto -c -k --keepParent "$APP_PATH" "$RUNNER_TEMP/festie-simulator.app.zip"
           echo "artifact_name=ios-simulator-app-$SHORT_SHA" >> "$GITHUB_OUTPUT"
 
+      # Artifacts on a public repo are downloadable by any signed-in GitHub user, and the .app
+      # embeds the licensed display fonts. Upload it only when a session asks for it, and keep it
+      # for one day.
       - name: Upload simulator .app
+        if: inputs.upload_app == true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.app.outputs.artifact_name }}
           path: ${{ runner.temp }}/festie-simulator.app.zip
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
 
       - name: Install .app into the booted simulator

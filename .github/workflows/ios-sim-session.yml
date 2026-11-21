@@ -137,6 +137,7 @@ jobs:
     with:
       ref: ${{ needs.gate.outputs.ref }}
       run_maestro: false
+      upload_app: true
     secrets: inherit
     permissions:
       contents: read
