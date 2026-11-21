@@ -30,7 +30,8 @@ env:
     visible:
       id: "festival-card-.*"
     timeout: 30000
-- assertVisible: "Choose a festival"
+- assertVisible:
+    id: "festival-card-fk-2026"
 - takeScreenshot: 02-festival-picker
 # At large Dynamic Type a festival card is taller than half the screen and its
 # centre sits under the tab bar, so a plain tap lands on a tab. Centre it first.
