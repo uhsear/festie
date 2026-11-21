@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import type { ConflictGroup } from '@festie/shared/utils';
-import type { FestivalSet } from '@festie/shared/types';
+import type { FestivalSet, Priority } from '@festie/shared/types';
 
 // Mock dependencies
 const storeState: Record<string, unknown> = {};
@@ -64,7 +64,7 @@ vi.mock('@festie/shared/hooks', async () => {
           activeStages: string[];
           onlyMine?: boolean;
           searchQuery?: string;
-          currentProfile?: { picks?: Record<string, string> };
+          currentProfile?: { picks?: Record<string, Priority> };
         };
         return filterScheduleSets(st.sets.filter((x) => x.dayIndex === st.selectedDay) as never[], {
           activeStages: st.activeStages,
@@ -518,6 +518,8 @@ describe('GridView', () => {
       picks: [pick(alpha, 0), pick(beta, 1_800_000)],
       recommendedKeepId: 'alpha',
       overlapMin: 30,
+      pairs: [],
+      tight: false,
     };
 
     beforeEach(() => {

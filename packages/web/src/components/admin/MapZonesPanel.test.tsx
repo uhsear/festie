@@ -46,7 +46,7 @@ describe('MapZonesPanel', () => {
 
   it('fills the label from a colour preset', async () => {
     const props = setup();
-    await userEvent.click(screen.getAllByRole('button', { name: /^Use .* color$/ })[0]);
+    await userEvent.click(screen.getAllByRole('button', { name: /^Use .* color$/ })[0]!);
     expect(props.onZoneColorChange).toHaveBeenCalled();
     expect(props.onZoneLabelChange).toHaveBeenCalled();
   });

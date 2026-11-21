@@ -66,11 +66,11 @@ export default function EmailSection() {
       {user.pendingEmail ? <p className="text-xs text-text-muted">{ACCOUNT_COPY.emailPending(user.pendingEmail)}</p> : null}
       <div className="flex flex-wrap gap-2">
         {user.email && !user.emailVerified ? (
-          <Button variant="outline" size="sm" isLoading={resending} disabled={offlineMode} onClick={handleResend} className="min-h-[44px]">
+          <Button variant="secondary" size="sm" isLoading={resending} disabled={offlineMode} onClick={handleResend} className="min-h-[44px]">
             {ACCOUNT_COPY.emailResend}
           </Button>
         ) : null}
-        <Button variant="outline" size="sm" disabled={offlineMode} onClick={() => setShowChange(true)} className="min-h-[44px]">
+        <Button variant="secondary" size="sm" disabled={offlineMode} onClick={() => setShowChange(true)} className="min-h-[44px]">
           {user.email ? ACCOUNT_COPY.emailChange : ACCOUNT_COPY.emailAdd}
         </Button>
       </div>

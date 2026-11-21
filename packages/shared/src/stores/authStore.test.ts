@@ -189,6 +189,7 @@ describe('authStore', () => {
         password: 'pass',
         confirmPassword: 'pass',
         tosAccepted: true,
+        email: 'alice@example.com',
       });
       expect(useAuthStore.getState().user).toEqual(mockUser);
       expect(useAuthStore.getState().userToken).toBe('tok-reg');
@@ -203,6 +204,7 @@ describe('authStore', () => {
           password: 'p',
           confirmPassword: 'p',
           tosAccepted: true,
+          email: 'alice@example.com',
         }),
       ).rejects.toThrow();
       expect(useAuthStore.getState().error).toBe('Username taken');
@@ -216,6 +218,7 @@ describe('authStore', () => {
           password: 'p',
           confirmPassword: 'p',
           tosAccepted: true,
+          email: 'alice@example.com',
         }),
       ).rejects.toBe('string error');
       expect(useAuthStore.getState().error).toBe('Registration failed');
@@ -230,6 +233,7 @@ describe('authStore', () => {
         password: 'pass',
         confirmPassword: 'pass',
         tosAccepted: true,
+        email: 'alice@example.com',
       });
       const state = useAuthStore.getState();
       expect(state.user).toEqual(mockUser);
@@ -250,7 +254,7 @@ describe('authStore', () => {
       });
       const res = await useAuthStore.getState().signInWithProvider('google', { idToken });
       expect(res).toEqual({ status: 'signed-in', reactivated: true });
-      expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/auth/oauth/google');
+      expect(vi.mocked(api.post).mock.calls[0]![0]).toBe('/auth/oauth/google');
       expect(setAuthToken).toHaveBeenCalledWith('tok');
       expect(useAuthStore.getState().user?.id).toBe('user-1');
       expect(useAuthStore.getState().userToken).toBe('tok');
@@ -277,7 +281,7 @@ describe('authStore', () => {
         dateOfBirth: '1990-01-01',
         tosAccepted: true,
       });
-      expect(vi.mocked(api.post).mock.calls[0][0]).toBe('/auth/oauth/complete');
+      expect(vi.mocked(api.post).mock.calls[0]![0]).toBe('/auth/oauth/complete');
       expect(useAuthStore.getState().user?.id).toBe('user-1');
       expect(useAuthStore.getState().userToken).toBe('tok2');
     });
@@ -298,7 +302,7 @@ describe('authStore', () => {
   });
 
   describe('register emailVerificationSent', () => {
-    const req = { username: 'alice', password: 'pass', confirmPassword: 'pass', tosAccepted: true };
+    const req = { username: 'alice', password: 'pass', confirmPassword: 'pass', tosAccepted: true, email: 'alice@example.com' };
     it('returns true when the response says so', async () => {
       vi.mocked(api.post).mockResolvedValueOnce({ user: mockUser, emailVerificationSent: true });
       await expect(useAuthStore.getState().register(req)).resolves.toEqual({ emailVerificationSent: true });

@@ -68,11 +68,11 @@ describe('AdminFestivals', () => {
 
     expect(await screen.findByText('Remove sets with picks?')).toBeInTheDocument();
     expect(screen.getByText(/removes 1 day, 24 sets and 113 picks/)).toBeInTheDocument();
-    expect(mockPut.mock.calls[0][1]).toMatchObject({ expectedUpdatedAt: FULL.updatedAt });
+    expect(mockPut.mock.calls[0]![1]).toMatchObject({ expectedUpdatedAt: FULL.updatedAt });
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove and save' }));
     await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
-    expect(mockPut.mock.calls[1][1]).toMatchObject({ confirmRemovals: true, expectedUpdatedAt: FULL.updatedAt });
+    expect(mockPut.mock.calls[1]![1]).toMatchObject({ confirmRemovals: true, expectedUpdatedAt: FULL.updatedAt });
   });
 
   it('puts the cancel line in the same removal confirm, and says no one is told when alerts are off', async () => {

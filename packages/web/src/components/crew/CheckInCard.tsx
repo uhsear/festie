@@ -82,7 +82,7 @@ export default function CheckInCard({ crewId }: Props) {
           <p className="text-sm text-text-secondary">{CHECKIN_COPY.idleBody}</p>
           <div className="flex flex-wrap gap-2">
             {CHECKIN_DURATIONS.map((d) => (
-              <Button key={d.minutes} variant="outline" size="sm" disabled={busy} onClick={() => begin(d.minutes)}>
+              <Button key={d.minutes} variant="secondary" size="sm" disabled={busy} onClick={() => begin(d.minutes)}>
                 {d.label}
               </Button>
             ))}

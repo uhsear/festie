@@ -97,7 +97,7 @@ export default function SettleUpCard({
                   </div>
                 )}
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   onClick={() => onPay(s)}
                   disabled={settlePending}
                   className="!py-1 !px-3 text-xs min-h-11"
@@ -112,7 +112,7 @@ export default function SettleUpCard({
             <div key={`get-${s.fromUserId}`} className="flex items-center justify-between gap-2">
               <span className="text-sm text-text-primary">{settlementSentence(s, currentUserId, currency)}</span>
               <Button
-                variant="outline"
+                variant="secondary"
                 onClick={() => onRemind(s.fromUserId, s.fromName)}
                 disabled={remindPending}
                 className="!py-1 !px-3 text-xs min-h-11"

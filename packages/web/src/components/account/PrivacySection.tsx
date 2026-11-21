@@ -101,7 +101,7 @@ export default function PrivacySection() {
       <p className="text-xs text-text-muted">{PRIVACY_COPY.freeOffline}</p>
 
       <Button
-        variant="outline"
+        variant="secondary"
         fullWidth
         disabled={!canStop || offlineMode || stopping}
         onClick={() => setConfirmOpen(true)}

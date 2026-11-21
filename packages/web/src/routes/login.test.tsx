@@ -49,6 +49,8 @@ describe('LoginPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -113,6 +115,8 @@ describe('LoginPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: true,
       error: null,
     });
@@ -131,6 +135,8 @@ describe('LoginPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -152,6 +158,8 @@ describe('LoginPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -182,6 +190,8 @@ describe('LoginPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });
@@ -220,6 +230,8 @@ describe('LoginPage', () => {
       changePassword: vi.fn(),
       uploadAvatar: vi.fn(),
       removeAvatar: vi.fn(),
+      signInWithProvider: vi.fn(),
+      completeProviderSignup: vi.fn(),
       isLoading: false,
       error: null,
     });

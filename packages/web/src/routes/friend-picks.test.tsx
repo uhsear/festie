@@ -104,8 +104,8 @@ describe('FriendPicksView', () => {
     expect(bulkSavePicks).toHaveBeenCalledWith(['s3'], 'maybe');
     expect(addBtn).toBeTruthy();
     await waitFor(() => expect(toastUndo).toHaveBeenCalled());
-    expect(toastUndo.mock.calls[0][0]).toBe('Added 2 picks to your plan.');
-    toastUndo.mock.calls[0][1]();
+    expect(toastUndo.mock.calls[0]![0]).toBe('Added 2 picks to your plan.');
+    toastUndo.mock.calls[0]![1]();
     await waitFor(() => expect(restorePicks).toHaveBeenCalledWith({ s1: undefined, s3: undefined }));
   });
 

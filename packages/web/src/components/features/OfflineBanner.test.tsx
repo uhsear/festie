@@ -37,7 +37,7 @@ function setStoreState(state: Partial<MockState>) {
     clearFailedSync,
     ...state,
   };
-  vi.mocked(useUIStore).mockImplementation((selector: (s: typeof full) => unknown) => selector(full) as never);
+  vi.mocked(useUIStore).mockImplementation(((selector: (s: typeof full) => unknown) => selector(full)) as never);
   (useUIStore as unknown as { getState: () => unknown }).getState = () => full;
 }
 

@@ -24,17 +24,17 @@ vi.mock('lucide-react', () => ({
 
 function setUI(offlineMode: boolean) {
   vi.mocked(useUIStore).mockImplementation(
-    (sel: (s: { offlineMode: boolean }) => unknown) => sel({ offlineMode }) as never,
+    ((sel: (s: { offlineMode: boolean }) => unknown) => sel({ offlineMode })) as never,
   );
 }
 function setCrewCachedAt(_cachedAt: number | null) {
   vi.mocked(useCrewStore).mockImplementation(
-    (sel: (s: { _cachedAt: number | null }) => unknown) => sel({ _cachedAt }) as never,
+    ((sel: (s: { _cachedAt: number | null }) => unknown) => sel({ _cachedAt })) as never,
   );
 }
 function setFestivalCachedAt(_festivalCachedAt: number | null) {
   vi.mocked(useFestivalDataStore).mockImplementation(
-    (sel: (s: { _festivalCachedAt: number | null }) => unknown) => sel({ _festivalCachedAt }) as never,
+    ((sel: (s: { _festivalCachedAt: number | null }) => unknown) => sel({ _festivalCachedAt })) as never,
   );
 }
 

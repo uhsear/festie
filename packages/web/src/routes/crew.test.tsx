@@ -253,7 +253,7 @@ describe('CrewView', () => {
     render(<CrewView />);
     expect(screen.getByTestId('create-crew-dialog')).toBeInTheDocument();
     expect(mockNavigate).toHaveBeenCalledTimes(1);
-    const { search } = mockNavigate.mock.calls[0][0] as { search: (prev: Record<string, unknown>) => Record<string, unknown> };
+    const { search } = mockNavigate.mock.calls[0]![0] as { search: (prev: Record<string, unknown>) => Record<string, unknown> };
     expect(search({ start: 'create', tab: 'plan' })).toEqual({ start: undefined, tab: 'plan' });
   });
 

@@ -30,8 +30,8 @@ function seed(currentProfile: Profile | null) {
     currentFestivalId: 'f',
     currentFestival: null,
     stages: [
-      { id: 's1', name: 'Main Stage', festivalId: 'f', createdAt: stamp.createdAt },
-      { id: 's2', name: 'Forest Stage', festivalId: 'f', createdAt: stamp.createdAt },
+      { id: 's1', name: 'Main Stage', festivalId: 'f', createdAt: stamp.createdAt, updatedAt: stamp.createdAt },
+      { id: 's2', name: 'Forest Stage', festivalId: 'f', createdAt: stamp.createdAt, updatedAt: stamp.createdAt },
     ],
     sets,
     days: [{ id: 'd0', festivalId: 'f', date: '2026-06-15', ...stamp }],

@@ -164,7 +164,7 @@ describe('RidesTab', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save ride' }));
     const update = state.updateRideOffer as ReturnType<typeof vi.fn>;
     expect(update).toHaveBeenCalledTimes(1);
-    const request = update.mock.calls[0][2];
+    const request = update.mock.calls[0]![2];
     expect(request).not.toHaveProperty('departTime');
     expect(request.departAt).toBe('after lunch');
   });
@@ -173,7 +173,7 @@ describe('RidesTab', () => {
     setup([offer({ created_by: 'me', depart_at: 'after lunch', depart_time: null })]);
     fireEvent.click(await screen.findByRole('button', { name: 'Edit ride' }));
     fireEvent.click(screen.getByRole('button', { name: 'Save ride' }));
-    const request = (state.updateRideOffer as ReturnType<typeof vi.fn>).mock.calls[0][2];
+    const request = (state.updateRideOffer as ReturnType<typeof vi.fn>).mock.calls[0]![2];
     expect(request).not.toHaveProperty('departAt');
     expect(request).not.toHaveProperty('departTime');
   });

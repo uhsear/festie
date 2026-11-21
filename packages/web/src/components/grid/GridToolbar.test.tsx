@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, type Mock } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import GridToolbar from './GridToolbar';
 
@@ -58,7 +58,7 @@ describe('GridToolbar', () => {
     const { onZoom } = renderToolbar({ zoom: 1 });
     fireEvent.click(screen.getByRole('button', { name: 'Zoom out' }));
     fireEvent.click(screen.getByRole('button', { name: 'Zoom in' }));
-    expect(onZoom.mock.calls).toEqual([[0], [2]]);
+    expect((onZoom as Mock).mock.calls).toEqual([[0], [2]]);
   });
 
   it('disables Zoom out at the smallest level and Zoom in at the largest', () => {

@@ -49,7 +49,7 @@ describe('SW cache boundary — the SHIPPED matcher functions (not just the cons
   // matcher that referenced the wrong const, dropped the GET check, or inverted
   // the logic is caught — the consts above could be correct while the shipped
   // matcher is not.
-  const m = (i: number) => FESTIE_RUNTIME_CACHING[i].urlPattern as (o: {
+  const m = (i: number) => FESTIE_RUNTIME_CACHING[i]!.urlPattern as (o: {
     url: URL;
     request: Request;
   }) => boolean;
@@ -76,7 +76,7 @@ describe('SW cache boundary — the SHIPPED matcher functions (not just the cons
   });
 
   it('art-cache matcher matches the public art hosts', () => {
-    const art = FESTIE_RUNTIME_CACHING[2].urlPattern as (o: { url: URL }) => boolean;
+    const art = FESTIE_RUNTIME_CACHING[2]!.urlPattern as (o: { url: URL }) => boolean;
     expect(art({ url: new URL('https://i.scdn.co/image/abc') })).toBe(true);
     expect(art({ url: new URL('https://art.festie.us/x.png') })).toBe(true);
     expect(art({ url: new URL('https://evil.example.com/x.png') })).toBe(false);
@@ -110,20 +110,20 @@ describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
       FESTIE_RUNTIME_CACHING.map((r) => [r.options?.cacheName, r] as const),
     ) as Record<string, RuntimeCachingRule>;
 
-    expect(byName['api-cache'].options?.expiration).toEqual({
+    expect(byName['api-cache']!.options?.expiration).toEqual({
       maxEntries: 50,
       maxAgeSeconds: 60 * 60,
     });
-    expect(byName['weather-cache'].options?.networkTimeoutSeconds).toBe(4);
-    expect(byName['weather-cache'].options?.expiration).toEqual({
+    expect(byName['weather-cache']!.options?.networkTimeoutSeconds).toBe(4);
+    expect(byName['weather-cache']!.options?.expiration).toEqual({
       maxEntries: 30,
       maxAgeSeconds: 60 * 60 * 6,
     });
-    expect(byName['art-cache'].options?.expiration).toEqual({
+    expect(byName['art-cache']!.options?.expiration).toEqual({
       maxEntries: 300,
       maxAgeSeconds: 60 * 60 * 24 * 30,
     });
-    expect(byName['google-fonts'].options?.expiration).toEqual({
+    expect(byName['google-fonts']!.options?.expiration).toEqual({
       maxEntries: 10,
       maxAgeSeconds: 60 * 60 * 24 * 365,
     });
@@ -133,7 +133,7 @@ describe('runtimeCaching config parity (vite.config.ts ↔ shared)', () => {
 describe('SW offline map rule', () => {
   const rule = FESTIE_RUNTIME_CACHING[4];
   const match = (method: string, path: string) =>
-    (rule.urlPattern as (o: { url: URL; request: Request }) => boolean)({
+    (rule!.urlPattern as (o: { url: URL; request: Request }) => boolean)({
       url: new URL(`https://festie.us${path}`),
       request: { method } as Request,
     });
@@ -145,9 +145,9 @@ describe('SW offline map rule', () => {
   });
 
   it('serves ranges from a whole-file 200', () => {
-    expect(rule.options?.rangeRequests).toBe(true);
-    expect(rule.options?.cacheName).toBe(OFFLINE_MAP_CACHE);
-    expect(rule.options?.cacheableResponse?.statuses).toEqual([200]);
+    expect(rule!.options?.rangeRequests).toBe(true);
+    expect(rule!.options?.cacheName).toBe(OFFLINE_MAP_CACHE);
+    expect(rule!.options?.cacheableResponse?.statuses).toEqual([200]);
   });
 });
 
@@ -173,13 +173,13 @@ describe('SW matchers survive serialization into sw.js', () => {
 
   it('rebuilt matchers agree with the exported boundary regexes', () => {
     for (const path of ['/api/v1/festivals', '/api/v1/festivals/abc', '/api/v1/festivals/abc/picks', '/api/v1/crews']) {
-      expect(rebuild(FESTIE_RUNTIME_CACHING[0].urlPattern)(opts(path))).toBe(FESTIVAL_CATALOG_RE.test(path));
+      expect(rebuild(FESTIE_RUNTIME_CACHING[0]!.urlPattern)(opts(path))).toBe(FESTIVAL_CATALOG_RE.test(path));
     }
     for (const path of ['/api/v1/weather/abc', '/api/v1/weather', '/api/v1/weather/']) {
-      expect(rebuild(FESTIE_RUNTIME_CACHING[1].urlPattern)(opts(path))).toBe(WEATHER_RE.test(path));
+      expect(rebuild(FESTIE_RUNTIME_CACHING[1]!.urlPattern)(opts(path))).toBe(WEATHER_RE.test(path));
     }
-    expect(rebuild(FESTIE_RUNTIME_CACHING[4].urlPattern)(opts('/uploads/basemaps/x.pmtiles'))).toBe(true);
-    expect(rebuild(FESTIE_RUNTIME_CACHING[5].urlPattern)(opts('/uploads/siteplans/x.webp'))).toBe(true);
-    expect(rebuild(FESTIE_RUNTIME_CACHING[5].urlPattern)(opts('/uploads/avatars/x.webp'))).toBe(false);
+    expect(rebuild(FESTIE_RUNTIME_CACHING[4]!.urlPattern)(opts('/uploads/basemaps/x.pmtiles'))).toBe(true);
+    expect(rebuild(FESTIE_RUNTIME_CACHING[5]!.urlPattern)(opts('/uploads/siteplans/x.webp'))).toBe(true);
+    expect(rebuild(FESTIE_RUNTIME_CACHING[5]!.urlPattern)(opts('/uploads/avatars/x.webp'))).toBe(false);
   });
 });

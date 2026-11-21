@@ -37,7 +37,7 @@ describe('retryDelayMs', () => {
 
 describe('useCrewSections', () => {
   it('recovers after a 429 using Retry-After', async () => {
-    loaders.loadPolls.mockRejectedValueOnce(err(429, '2'));
+    loaders.loadPolls!.mockRejectedValueOnce(err(429, '2'));
     const { result } = renderHook(() => useCrewSections('c1'));
     await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
     expect(loaders.loadPolls).toHaveBeenCalledTimes(1);
@@ -47,18 +47,18 @@ describe('useCrewSections', () => {
   });
 
   it('gives up after 3 attempts and reload retries again', async () => {
-    loaders.loadRides.mockRejectedValue(err(429));
+    loaders.loadRides!.mockRejectedValue(err(429));
     const { result } = renderHook(() => useCrewSections('c1'));
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
     expect(loaders.loadRides).toHaveBeenCalledTimes(3);
     expect(result.current.error).toBe('Failed to load: rides');
-    loaders.loadRides.mockResolvedValue(undefined);
+    loaders.loadRides!.mockResolvedValue(undefined);
     await act(async () => { result.current.reload(); await vi.advanceTimersByTimeAsync(0); });
     expect(result.current.error).toBeNull();
   });
 
   it('does not retry a 403', async () => {
-    loaders.loadPacking.mockRejectedValue(err(403));
+    loaders.loadPacking!.mockRejectedValue(err(403));
     const { result } = renderHook(() => useCrewSections('c1'));
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
     expect(loaders.loadPacking).toHaveBeenCalledTimes(1);
@@ -66,7 +66,7 @@ describe('useCrewSections', () => {
   });
 
   it('stops retrying after unmount', async () => {
-    loaders.loadPolls.mockRejectedValue(err(503));
+    loaders.loadPolls!.mockRejectedValue(err(503));
     const { unmount } = renderHook(() => useCrewSections('c1'));
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     unmount();

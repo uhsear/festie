@@ -227,7 +227,7 @@ describe('PickConflicts', () => {
     unmount();
 
     const contained = twoPickGroup();
-    contained.picks[1] = { ...contained.picks[1], startMs: 900_000, endMs: 2_700_000, durationMin: 30 };
+    contained.picks[1] = { ...contained.picks[1]!, startMs: 900_000, endMs: 2_700_000, durationMin: 30 };
     buildPickConflicts.mockReturnValue([contained]);
     render(<PickConflicts />);
     expect(screen.queryByRole('button', { name: /^Split/ })).toBeNull();
@@ -277,7 +277,7 @@ describe('PickConflicts', () => {
       expect(buttons[0]).toHaveAccessibleName(
         'Catch Odesza Sun 9:00 PM instead, and remove this set from your picks',
       );
-      await user.click(buttons[0]);
+      await user.click(buttons[0]!);
       expect(resolver.catchInstead).toHaveBeenCalledWith(expect.anything());
       expect(toastUndo).toHaveBeenCalledWith('Catching Odesza Sun 9:00 PM instead.', expect.any(Function));
     });

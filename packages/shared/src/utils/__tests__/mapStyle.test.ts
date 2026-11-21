@@ -19,7 +19,7 @@ describe('pickMapStyle', () => {
 });
 
 describe('pmtilesVectorStyle', () => {
-  const bg = (s: { layers: Array<Record<string, any>> }) => s.layers[0].paint['background-color'];
+  const bg = (s: { layers: Array<Record<string, any>> }) => s.layers[0]!.paint['background-color'];
   it('keeps the dark palette for Stage and by default', () => {
     expect(bg(pmtilesVectorStyle('https://festie.us/b.pmtiles'))).toBe('#0c0c14');
     expect(pmtilesVectorStyle('https://festie.us/b.pmtiles', undefined, 'stage')).toEqual(
@@ -34,7 +34,7 @@ describe('pmtilesVectorStyle', () => {
   });
 
   it('pickMapStyle passes the theme to the PMTiles style', () => {
-    const cfg = { version: 1, offlineBasemap: { pmtilesUrl: 'https://festie.us/b.pmtiles' } };
+    const cfg = { version: 1 as const, offlineBasemap: { pmtilesUrl: 'https://festie.us/b.pmtiles' } };
     expect(bg(pickMapStyle(cfg, 'daylight') as any)).toBe('#f2f0eb');
   });
 });

@@ -216,7 +216,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
           />
         </div>
         {lowPowerMode && (
-          <Button variant="outline" size="sm" onClick={() => setLowPowerMode(false)}>
+          <Button variant="secondary" size="sm" onClick={() => setLowPowerMode(false)}>
             {LOW_POWER_COPY.turnOff}
           </Button>
         )}
@@ -258,7 +258,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
                 {orderedOptions.map((option) => (
                   <Button
                     key={option.id}
-                    variant={option.id === durationChoices?.defaultId ? 'primary' : 'outline'}
+                    variant={option.id === durationChoices?.defaultId ? 'primary' : 'secondary'}
                     className="min-h-11"
                     onClick={() => startSharing(option.ms)}
                   >
@@ -296,7 +296,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
           <>
             <div className="flex gap-2">
               <RadixDialog.Close asChild>
-                <Button variant="outline" type="button" className="flex-1 min-h-11" disabled={clearBusy}>
+                <Button variant="secondary" type="button" className="flex-1 min-h-11" disabled={clearBusy}>
                   Cancel
                 </Button>
               </RadixDialog.Close>

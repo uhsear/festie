@@ -26,7 +26,7 @@ function setup(clients: Array<{ focus: () => Promise<void>; navigate?: (u: strin
 async function click(listeners: Record<string, Listener>, url: string | undefined) {
   const waits: Promise<unknown>[] = [];
   const close = vi.fn();
-  listeners.notificationclick({
+  listeners.notificationclick!({
     notification: { close, data: { url } },
     waitUntil: (p: Promise<unknown>) => waits.push(p),
   });
@@ -42,7 +42,7 @@ describe('push-sw.js', () => {
 
   it('shows a notification with title, body, tag and data.url', async () => {
     const waits: Promise<unknown>[] = [];
-    ctx.listeners.push({
+    ctx.listeners.push!({
       data: { json: () => ({ title: 'Peggy Gou', body: 'Moved', tag: 't1', url: 'https://festie.us/set/s1' }) },
       waitUntil: (p: Promise<unknown>) => waits.push(p),
     });
@@ -55,7 +55,7 @@ describe('push-sw.js', () => {
 
   it('falls back to a generic title when the payload is not JSON', async () => {
     const waits: Promise<unknown>[] = [];
-    ctx.listeners.push({
+    ctx.listeners.push!({
       data: {
         json: () => {
           throw new Error('bad');
@@ -64,7 +64,7 @@ describe('push-sw.js', () => {
       waitUntil: (p: Promise<unknown>) => waits.push(p),
     });
     await Promise.all(waits);
-    expect(ctx.showNotification.mock.calls[0][0]).toBe('Festie');
+    expect(ctx.showNotification.mock.calls[0]![0]).toBe('Festie');
   });
 
   it('opens / for a cross-origin url', async () => {

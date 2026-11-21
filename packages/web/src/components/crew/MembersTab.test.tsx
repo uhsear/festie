@@ -18,9 +18,9 @@ vi.mock('@festie/shared', () => ({
 function makeProps(overrides: Partial<MembersTabProps> = {}): MembersTabProps {
   return {
     members: [
-      { id: 'm1', userId: 'u1', name: 'Alice', username: 'alice', role: 'owner' as const },
-      { id: 'm2', userId: 'u2', name: 'Bob', username: 'bob', role: 'member' as const },
-      { id: 'm3', userId: 'u3', name: 'Charlie', username: 'charlie' },
+      { userId: 'u1', name: 'Alice', username: 'alice', role: 'owner' as const },
+      { userId: 'u2', name: 'Bob', username: 'bob', role: 'member' as const },
+      { userId: 'u3', name: 'Charlie', username: 'charlie' },
     ],
     ownerId: 'u1',
     isAdmin: false,
@@ -49,7 +49,7 @@ describe('MembersTab', () => {
 
   it('shows owner badge for member matching ownerId even without role', () => {
     const members = [
-      { id: 'm1', userId: 'u1', name: 'Alice', username: 'alice' }, // no role set
+      { userId: 'u1', name: 'Alice', username: 'alice' }, // no role set
     ];
     render(<MembersTab {...makeProps({ members, ownerId: 'u1' })} />);
     expect(screen.getByText(/Owner/)).toBeInTheDocument();
@@ -57,7 +57,7 @@ describe('MembersTab', () => {
 
   it('does not show owner badge for regular members', () => {
     const members = [
-      { id: 'm2', userId: 'u2', name: 'Bob', username: 'bob', role: 'member' as const },
+      { userId: 'u2', name: 'Bob', username: 'bob', role: 'member' as const },
     ];
     render(<MembersTab {...makeProps({ members, ownerId: 'u1' })} />);
     expect(screen.queryByText(/Owner/)).not.toBeInTheDocument();
@@ -102,7 +102,7 @@ describe('MembersTab', () => {
 
   it('falls back to username when name is missing', () => {
     const members = [
-      { id: 'm4', userId: 'u4', username: 'dave_99' },
+      { userId: 'u4', username: 'dave_99' },
     ];
     render(<MembersTab {...makeProps({ members, ownerId: undefined })} />);
     expect(screen.getByText('dave_99')).toBeInTheDocument();
@@ -171,8 +171,8 @@ describe('MembersTab', () => {
 
   it('renders a photo for a member with an avatar and initials for the rest', () => {
     const members = [
-      { id: 'm1', userId: 'u1', name: 'Alice', username: 'alice', avatarKey: 'u1', avatarVersion: '3' },
-      { id: 'm2', userId: 'u2', name: 'Bob', username: 'bob' },
+      { userId: 'u1', name: 'Alice', username: 'alice', avatarKey: 'u1', avatarVersion: '3' },
+      { userId: 'u2', name: 'Bob', username: 'bob' },
     ];
     render(<MembersTab {...makeProps({ members })} />);
     const imgs = screen.getAllByRole('img');

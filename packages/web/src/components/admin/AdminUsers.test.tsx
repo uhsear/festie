@@ -93,7 +93,7 @@ describe('AdminUsers', () => {
 
   it('Grant opens a confirm dialog that names the user', async () => {
     render(<AdminUsers />);
-    await userEvent.click(screen.getAllByRole('button', { name: /Grant Admin/ })[1]);
+    await userEvent.click(screen.getAllByRole('button', { name: /Grant Admin/ })[1]!);
     expect(await screen.findByText('Grant admin to @bob?')).toBeInTheDocument();
   });
 
@@ -122,7 +122,7 @@ describe('AdminUsers', () => {
 
     const openResetConfirm = async () => {
       render(<AdminUsers />);
-      await userEvent.click(screen.getAllByRole('button', { name: 'Copy reset link' })[1]);
+      await userEvent.click(screen.getAllByRole('button', { name: 'Copy reset link' })[1]!);
       await userEvent.click(await screen.findByRole('button', { name: 'Create link' }));
     };
 
@@ -138,7 +138,7 @@ describe('AdminUsers', () => {
     it('a double click on Create link sends one request', async () => {
       vi.mocked(api.post).mockReset().mockReturnValue(new Promise(() => {}));
       render(<AdminUsers />);
-      await userEvent.click(screen.getAllByRole('button', { name: 'Copy reset link' })[1]);
+      await userEvent.click(screen.getAllByRole('button', { name: 'Copy reset link' })[1]!);
       const create = await screen.findByRole('button', { name: 'Create link' });
       fireEvent.click(create);
       fireEvent.click(create);

@@ -212,7 +212,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
             <p className="text-sm text-text-secondary">Start from a list:</p>
             <div className="flex flex-wrap justify-center gap-2">
               {PACKING_TEMPLATES.map((t) => (
-                <Button key={t.id} variant="outline" onClick={() => addTemplate(t.items)} className="min-h-11">
+                <Button key={t.id} variant="secondary" onClick={() => addTemplate(t.items)} className="min-h-11">
                   {t.label}
                 </Button>
               ))}
@@ -252,7 +252,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
                         <Button type="submit" variant="primary" disabled={!editLabel.trim() || busy} className="min-h-11">
                           Save
                         </Button>
-                        <Button type="button" variant="outline" onClick={() => setEditingId(null)} className="min-h-11">
+                        <Button type="button" variant="secondary" onClick={() => setEditingId(null)} className="min-h-11">
                           Cancel
                         </Button>
                       </div>
@@ -277,7 +277,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
                   <div className="flex flex-wrap gap-2">
                     {claim.state === 'open' ? (
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         onClick={() => patchItem(item.id, { claimed: true })}
                         disabled={busy}
                         className="min-h-11"
@@ -288,7 +288,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
                     {claim.state === 'mine' ? (
                       <>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           aria-pressed={claim.packed}
                           onClick={() => patchItem(item.id, { packed: !claim.packed })}
                           disabled={busy}

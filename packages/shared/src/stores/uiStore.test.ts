@@ -301,7 +301,7 @@ describe('uiStore', () => {
     it('keeps the newest 100 pollIds', () => {
       const ids = Array.from({ length: 105 }, (_, i) => `p${i}`);
       useUIStore.getState().markCrewBadgeSeen('c1', { pollIds: ids });
-      const kept = useUIStore.getState().crewBadgeSeen.c1.pollIds;
+      const kept = useUIStore.getState().crewBadgeSeen.c1!.pollIds;
       expect(kept).toHaveLength(100);
       expect(kept[99]).toBe('p104');
     });

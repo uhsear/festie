@@ -11,7 +11,7 @@ vi.mock('lucide-react', () => ({ BatteryLow: () => <span data-testid="battery-ic
 
 function setLowPower(lowPowerMode: boolean) {
   vi.mocked(useFestivalModeStore).mockImplementation(
-    (sel: (s: { lowPowerMode: boolean }) => unknown) => sel({ lowPowerMode }) as never,
+    ((sel: (s: { lowPowerMode: boolean }) => unknown) => sel({ lowPowerMode })) as never,
   );
 }
 

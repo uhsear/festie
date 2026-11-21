@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import type { CrewExpense, CrewExpenseBalance, CrewSettlement } from '../types';
 import {
   sanitizeAmountInput,

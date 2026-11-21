@@ -37,7 +37,7 @@ vi.mock('@festie/shared/stores/uiStore', () => {
 
 function setStoreState(failedSync: FailedSyncItem[]) {
   const state: MockState = { failedSync, dismissFailedSync, clearFailedSync };
-  vi.mocked(useUIStore).mockImplementation((selector: (s: typeof state) => unknown) => selector(state) as never);
+  vi.mocked(useUIStore).mockImplementation(((selector: (s: typeof state) => unknown) => selector(state)) as never);
   (useUIStore as unknown as { getState: () => unknown }).getState = () => state;
 }
 

@@ -44,7 +44,7 @@ describe('DataExportSection', () => {
     render(<DataExportSection />);
     await user.click(screen.getByRole('button', { name: DATA_COPY.button }));
     await waitFor(() => expect(mockToast).toHaveBeenCalled());
-    const [msg, kind] = mockToast.mock.calls[0];
+    const [msg, kind] = mockToast.mock.calls[0]!;
     expect(msg).toMatch(/^You can download your data once a day\. Try again (today|tomorrow) at /);
     expect(kind).toBe('error');
   });

@@ -390,7 +390,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
                     Got it
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => confirm.mutate({ id: p.id, received: false, payer })}
                     disabled={confirm.isPending}
                     className="!py-1 !px-3 text-xs min-h-11"

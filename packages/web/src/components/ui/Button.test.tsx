@@ -41,32 +41,12 @@ describe('Button', () => {
       render(<Button variant="secondary">Secondary</Button>);
       expect(screen.getByRole('button').className).toContain('border-accent-aqua/70');
     });
-
-    it('applies outline variant', () => {
-      render(<Button variant="outline">Outline</Button>);
-      expect(screen.getByRole('button').className).toContain('bg-transparent');
-      expect(screen.getByRole('button').className).toContain('border');
-    });
   });
 
   describe('shared vocabulary', () => {
-    const classOf = (variant: React.ComponentProps<typeof Button>['variant']) => {
-      const { unmount } = render(<Button variant={variant}>x</Button>);
-      const cls = screen.getByRole('button').className;
-      unmount();
-      return cls;
-    };
-
-    it('outline renders the same classes as secondary', () => {
-      expect(classOf('outline')).toBe(classOf('secondary'));
-    });
-
-    it('util renders the same classes as utility', () => {
-      expect(classOf('util')).toBe(classOf('utility'));
-    });
-
     it('is a pill', () => {
-      expect(classOf('primary')).toContain('rounded-full');
+      render(<Button>x</Button>);
+      expect(screen.getByRole('button').className).toContain('rounded-full');
     });
   });
 

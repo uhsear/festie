@@ -83,6 +83,6 @@ describe('dashboardStatRows', () => {
       ['profiles', 'Festival plans', 20, 'analytics'],
       ['picks', 'Total picks', 400, 'analytics'],
     ]);
-    expect(rows[2].hint).toBe("One person's plan for one festival");
+    expect(rows[2]!.hint).toBe("One person's plan for one festival");
   });
 });

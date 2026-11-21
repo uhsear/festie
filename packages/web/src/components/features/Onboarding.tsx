@@ -242,7 +242,7 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
               <Button variant="primary" size="md" className="w-full" onClick={() => handleCrewChoice('start')}>
                 {ONBOARDING_COPY.going.start}
               </Button>
-              <Button variant="outline" size="md" className="w-full" onClick={() => handleCrewChoice('join')}>
+              <Button variant="secondary" size="md" className="w-full" onClick={() => handleCrewChoice('join')}>
                 {ONBOARDING_COPY.going.join}
               </Button>
               <Button variant="ghost" size="md" className="w-full" onClick={() => handleCrewChoice('solo')}>

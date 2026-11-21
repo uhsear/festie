@@ -41,7 +41,7 @@ describe('buildGridCrewAvatars', () => {
     )!;
     expect(r.total).toBe(1);
     expect(r.shown).toHaveLength(1);
-    expect(r.shown[0].priority).toBe('must');
+    expect(r.shown[0]!.priority).toBe('must');
     expect(r.label).toBe('1 crew member picked this');
   });
 
@@ -69,7 +69,7 @@ describe('buildGridCrewAvatarsBySet', () => {
   it('with an active crew, uses only the crew-scoped picks and draws avatars', () => {
     const m = buildGridCrewAvatarsBySet(['a', 'b'], source(true), profiles);
     expect([...m.keys()]).toEqual(['a']);
-    expect(m.get('a')!.shown[0].name).toBe('Amy');
+    expect(m.get('a')!.shown[0]!.name).toBe('Amy');
   });
 
   it('with no active crew, keeps the plain getOtherPicks count and draws no avatars', () => {

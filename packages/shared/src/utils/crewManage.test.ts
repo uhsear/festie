@@ -54,10 +54,10 @@ describe('groupCrewsByFestival', () => {
     const crews = [crew('a', 'past'), crew('b', 'up'), crew('c', 'cur'), crew('d', 'nope'), crew('e')];
     const groups = groupCrewsByFestival(crews, festivals, 'cur', NOW);
     expect(groups.map((g) => g.festivalId)).toEqual(['cur', 'up', 'past', null]);
-    expect(groups[0].isCurrent).toBe(true);
-    expect(groups[2].status).toBe('past');
-    expect(groups[3].label).toBeNull();
-    expect(groups[3].crews.map((c) => c.id)).toEqual(['d', 'e']);
+    expect(groups[0]!.isCurrent).toBe(true);
+    expect(groups[2]!.status).toBe('past');
+    expect(groups[3]!.label).toBeNull();
+    expect(groups[3]!.crews.map((c) => c.id)).toEqual(['d', 'e']);
   });
 
   it('sorts upcoming ascending and past descending', () => {
@@ -69,15 +69,15 @@ describe('groupCrewsByFestival', () => {
   it('keeps server order inside a group and puts optimistic crews with unknown festivals last', () => {
     const crews = [crew('x', 'cur'), crew('opt', undefined, { _optimistic: true }), crew('y', 'cur')];
     const groups = groupCrewsByFestival(crews, festivals, 'cur', NOW);
-    expect(groups[0].crews.map((c) => c.id)).toEqual(['x', 'y']);
-    expect(groups[1].festivalId).toBeNull();
-    expect(groups[1].crews[0].id).toBe('opt');
+    expect(groups[0]!.crews.map((c) => c.id)).toEqual(['x', 'y']);
+    expect(groups[1]!.festivalId).toBeNull();
+    expect(groups[1]!.crews[0]!.id).toBe('opt');
   });
 
   it('puts everything in the unknown group with no festivals', () => {
     const groups = groupCrewsByFestival([crew('a', 'cur')], [], 'cur', NOW);
     expect(groups).toHaveLength(1);
-    expect(groups[0].festivalId).toBeNull();
+    expect(groups[0]!.festivalId).toBeNull();
   });
 
   it('returns no groups for no crews', () => {
@@ -193,8 +193,8 @@ describe('ownedCrewsForDeletion', () => {
     const out = ownedCrewsForDeletion(crews, 'me');
     expect(out.soloCount).toBe(1);
     expect(out.handover).toHaveLength(1);
-    expect(out.handover[0].crew.id).toBe('a');
-    expect(out.handover[0].defaultOwnerId).toBe('x');
+    expect(out.handover[0]!.crew.id).toBe('a');
+    expect(out.handover[0]!.defaultOwnerId).toBe('x');
   });
 });
 

@@ -56,7 +56,7 @@ export default function MembersTab({
             <UserPlus className="w-3.5 h-3.5" aria-hidden="true" />
             <span className="font-semibold">Admin</span>
           </div>
-          <Button variant="outline" onClick={onForceAdd} disabled={adminAddBusy} className="!py-1 !px-2.5 text-xs">
+          <Button variant="secondary" onClick={onForceAdd} disabled={adminAddBusy} className="!py-1 !px-2.5 text-xs">
             {adminAddBusy ? 'Adding…' : 'Force Add'}
           </Button>
         </div>
@@ -96,7 +96,7 @@ export default function MembersTab({
                   </div>
                   {canManage && (
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => setManagingId(open ? null : m.userId)}
                       aria-expanded={open}
                       aria-controls={`member-actions-${m.userId}`}
@@ -118,7 +118,7 @@ export default function MembersTab({
                     aria-label={`Manage ${displayName}`}
                     className="flex gap-2 px-2.5 pb-2 pt-1.5"
                   >
-                    <Button variant="outline" className="min-h-11 text-xs" onClick={() => onTransferOwnership(m)}>
+                    <Button variant="secondary" className="min-h-11 text-xs" onClick={() => onTransferOwnership(m)}>
                       Make owner
                     </Button>
                     {canKick && (
@@ -145,7 +145,7 @@ export default function MembersTab({
           <h3 id="crew-membership-heading" className="text-xs font-semibold uppercase tracking-wide text-text-muted">
             Membership
           </h3>
-          <Button variant="outline" onClick={onLeaveCrew} className="min-h-11 text-sm text-[var(--color-text-danger)]">
+          <Button variant="secondary" onClick={onLeaveCrew} className="min-h-11 text-sm text-[var(--color-text-danger)]">
             <LogOut className="w-4 h-4" aria-hidden="true" /> Leave crew…
           </Button>
         </section>
@@ -155,7 +155,7 @@ export default function MembersTab({
           <h3 id="crew-danger-heading" className="text-xs font-semibold uppercase tracking-wide text-text-muted">
             Danger zone
           </h3>
-          <Button variant="outline" onClick={onDeleteCrew} className="min-h-11 text-sm text-[var(--color-text-danger)]">
+          <Button variant="secondary" onClick={onDeleteCrew} className="min-h-11 text-sm text-[var(--color-text-danger)]">
             <Trash2 className="w-4 h-4" aria-hidden="true" /> Delete crew…
           </Button>
           <p className="text-xs text-text-muted">Deletes the crew for everyone.</p>

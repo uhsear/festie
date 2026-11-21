@@ -4,7 +4,14 @@ import type { Festival } from '../types';
 import { getIntroSteps, introCrewAction, introFestivalChoices, nextIntroStep } from './onboarding';
 
 const NOW = new Date('2026-06-15T12:00:00Z');
-const fest = (id: string, startDate: string, endDate: string): Festival => ({ id, name: id, startDate, endDate });
+const fest = (id: string, startDate: string, endDate: string): Festival => ({
+  id,
+  name: id,
+  startDate,
+  endDate,
+  createdAt: '2026-01-01T00:00:00Z',
+  updatedAt: '2026-01-01T00:00:00Z',
+});
 
 // live, two upcoming, four past (most recent first after sorting)
 const festivals = [
@@ -36,7 +43,7 @@ describe('introFestivalChoices', () => {
   it('returns five choices, live first, and defaults to the live one', () => {
     const { choices, defaultId } = introFestivalChoices(festivals, null, NOW);
     expect(choices).toHaveLength(5);
-    expect(choices[0].id).toBe('live');
+    expect(choices[0]!.id).toBe('live');
     expect(defaultId).toBe('live');
   });
 
@@ -49,7 +56,7 @@ describe('introFestivalChoices', () => {
     const { choices, defaultId } = introFestivalChoices(festivals, 'past1', NOW);
     expect(sorted.some((f) => f.id === 'past1')).toBe(false);
     expect(choices).toHaveLength(5);
-    expect(choices[4].id).toBe('past1');
+    expect(choices[4]!.id).toBe('past1');
     expect(choices.slice(0, 4)).toEqual(sorted.slice(0, 4));
     expect(defaultId).toBe('past1');
   });

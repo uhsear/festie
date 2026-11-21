@@ -162,7 +162,7 @@ describe('FestivalModeView (Now surface)', () => {
     crewDayOf = {
       crew: { id: 'c1', name: 'Night Owls', owner: 'me', members: [], createdAt: '', updatedAt: '' },
       whereabouts: [
-        { userId: 'a', name: 'Ana', statusLabel: 'Here · Big tree', statusAt: null, live: 'live', liveAt: null, sos: false },
+        { userId: 'a', name: 'Ana', statusLabel: 'Here · Big tree', statusAt: null, live: 'live', liveAt: null, battery: null, lostAt: null, sos: false },
       ],
       meet: { kind: 'meeting-point', id: 'mp1', label: 'Big tree', location: 'Left of Main', atMs: null, timeText: null },
     };

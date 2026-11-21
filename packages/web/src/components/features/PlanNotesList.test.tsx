@@ -20,7 +20,9 @@ vi.mock('@festie/shared/utils', () => ({
   reminderBeforeLabel: (m: number) => `${m} min before`,
 }));
 
-const days = [{ date: '2026-06-10', label: 'Friday' }];
+const days = [
+  { id: 'd1', festivalId: 'f1', date: '2026-06-10', label: 'Friday', createdAt: '', updatedAt: '' },
+];
 const setA = { id: 'a', artist: 'Fisher', stageId: 'st1', startTime: '21:00' } as FestivalSet;
 const setB = { id: 'b', artist: 'Four Tet', stageId: 'st1' } as FestivalSet;
 const items: PlanListItem[] = [

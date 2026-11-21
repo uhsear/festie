@@ -199,7 +199,7 @@ export default function CrewSelector({
 
           <div className="border-t border-border p-1.5 space-y-1.5">
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => {
                 onCreateCrew();
@@ -212,7 +212,7 @@ export default function CrewSelector({
             </Button>
 
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={() => {
                 onJoinCrew();

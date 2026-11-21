@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+import type { Festival } from '../types';
 import { otherEditions, partitionSeriesBlocks, seriesIdsIn, slugifySeriesInput, splitBySeries, suggestSeriesId } from './festivalSeries';
 
 describe('suggestSeriesId', () => {
@@ -110,12 +111,16 @@ describe('splitBySeries edition order', () => {
 
 describe('partitionSeriesBlocks', () => {
   const now = new Date('2026-09-01T12:00:00Z');
-  const fest = (id: string, name: string, startDate: string | null, endDate: string | null) => ({
-    id,
-    name,
-    startDate,
-    endDate,
-  });
+  // Festival types the dates as non-null; the undated cases need null, so the cast is deliberate.
+  const fest = (id: string, name: string, startDate: string | null, endDate: string | null) =>
+    ({
+      id,
+      name,
+      startDate,
+      endDate,
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+    }) as unknown as Festival;
 
   it('puts a block with an edition that has not ended in current, and an all-past block in ended', () => {
     const { series } = splitBySeries([

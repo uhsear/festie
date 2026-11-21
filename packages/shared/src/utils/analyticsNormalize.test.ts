@@ -298,7 +298,7 @@ describe('admin analytics copy', () => {
     expect(d.pickDistribution).toEqual({ must: 1, want: 2, maybe: 3 });
     expect(d.install).toEqual({ days: 30, shown: 5, accepted: 2, dismissed: 3 });
     expect(d.topSets[0]).toMatchObject({ festivalName: 'F', dayLabel: 'Fri', pickCount: 2 });
-    expect(d.crews[0].festivalName).toBe('F');
+    expect(d.crews[0]!.festivalName).toBe('F');
   });
 
   it('turns missing objects into zeros', () => {

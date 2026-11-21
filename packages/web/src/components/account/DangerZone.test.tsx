@@ -191,7 +191,7 @@ describe('DangerZone', () => {
 
     const field = screen.getByPlaceholderText('Password');
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
-    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0])).toHaveTextContent(
+    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0]!)).toHaveTextContent(
       'That password is not correct.',
     );
     expect(mockToast).not.toHaveBeenCalledWith(expect.anything(), 'error');

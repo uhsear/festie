@@ -76,7 +76,7 @@ describe('sharesByDays', () => {
       const total = 1 + Math.floor(Math.random() * 100000);
       const ids = Array.from({ length: 1 + Math.floor(Math.random() * 8) }, (_, i) => `u${i}`);
       const days = ids.map(() => Math.floor(Math.random() * 6));
-      const { shares } = sharesByDays(total, ids, (id) => days[ids.indexOf(id)]);
+      const { shares } = sharesByDays(total, ids, (id) => days[ids.indexOf(id)] ?? 0);
       if (days.some((d) => d > 0)) expect(shares.reduce((s, x) => s + x.cents, 0)).toBe(total);
       else expect(shares).toEqual([]);
     }
@@ -167,7 +167,7 @@ describe('sentences', () => {
     toName: 'Sam',
     amountCents: 1240,
     amount: 12.4,
-    payeeHandles: {},
+    payeeHandles: { venmo: null, cashapp: null, paypal: null },
   };
 
   it('writes all three settlement forms', () => {

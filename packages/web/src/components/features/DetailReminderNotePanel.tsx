@@ -38,7 +38,7 @@ export default function DetailReminderNotePanel({
   return (
     <div>
       <Button
-        variant="outline"
+        variant="secondary"
         type="button"
         fullWidth
         aria-expanded={open}

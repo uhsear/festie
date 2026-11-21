@@ -56,8 +56,8 @@ describe('extractZones', () => {
     expect(zones).toHaveLength(1);
     expect(zones[0]).toMatchObject({ id: 'camp', label: 'Camping', color: '#3ad29f' });
     // Centroid ignores the closing duplicate → mean of the 4 corners = (0,0).
-    expect(zones[0].centroid).toEqual({ latitude: 0, longitude: 0 });
-    expect(zones[0].rings[0]).toEqual(SQUARE);
+    expect(zones[0]!.centroid).toEqual({ latitude: 0, longitude: 0 });
+    expect(zones[0]!.rings[0]).toEqual(SQUARE);
   });
 
   it('falls back to the default color when color is missing/invalid', () => {
@@ -68,7 +68,7 @@ describe('extractZones', () => {
         properties: { id: 'z1', color: 'not-a-hex' },
       },
     ]);
-    expect(extractZones(cfg)[0].color).toBe(ZONE_DEFAULT_COLOR);
+    expect(extractZones(cfg)![0]!.color).toBe(ZONE_DEFAULT_COLOR);
   });
 
   it('reads `name` when `label` is absent and generates an id when missing', () => {
@@ -80,8 +80,8 @@ describe('extractZones', () => {
       },
     ]);
     const z = extractZones(cfg)[0];
-    expect(z.label).toBe('VIP');
-    expect(z.id).toBe('zone-0');
+    expect(z!.label).toBe('VIP');
+    expect(z!.id).toBe('zone-0');
   });
 
   it('drops degenerate rings (fewer than 3 finite positions) and non-Polygon geometry', () => {
@@ -118,8 +118,8 @@ describe('zonesGeoJSON', () => {
     ]);
     const fc = zonesGeoJSON(extractZones(cfg));
     expect(fc.type).toBe('FeatureCollection');
-    expect(fc.features[0].properties).toEqual({ id: 'z', color: '#ffd23a', label: 'VIP' });
-    expect(fc.features[0].geometry.coordinates).toEqual([SQUARE]);
+    expect(fc.features[0]!.properties).toEqual({ id: 'z', color: '#ffd23a', label: 'VIP' });
+    expect(fc.features[0]!.geometry.coordinates).toEqual([SQUARE]);
   });
 });
 
@@ -158,8 +158,8 @@ describe('buildZoneFeature', () => {
     expect(f!.geometry.type).toBe('Polygon');
     const ring = f!.geometry.coordinates[0];
     // Converted to [lng,lat] and closed (first === last).
-    expect(ring[0]).toEqual([-1, -1]);
-    expect(ring[ring.length - 1]).toEqual([-1, -1]);
+    expect(ring![0]).toEqual([-1, -1]);
+    expect(ring![ring!.length - 1]).toEqual([-1, -1]);
     expect(ring).toHaveLength(4); // 3 verts + closing point
     expect(f!.properties).toEqual({ id: 'zone-fixed', color: '#3ad29f', label: 'Camping' });
   });

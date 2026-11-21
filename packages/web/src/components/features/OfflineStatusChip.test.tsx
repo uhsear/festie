@@ -6,7 +6,7 @@ const h = vi.hoisted(() => ({
   user: { id: 'u1' } as { id: string } | null,
   festivalId: 'f1' as string | null,
   days: [] as { date: string }[],
-  hook: { summary: { overall: 'none', hasDownloaded: false, lastSyncedAt: null, hidden: false }, isDownloading: false },
+  hook: { summary: { overall: 'none', hasDownloaded: false, lastSyncedAt: null as number | null, hidden: false }, isDownloading: false },
   download: vi.fn(),
 }));
 

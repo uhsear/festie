@@ -174,7 +174,7 @@ export default function DangerZone() {
 
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               fullWidth
               isLoading={downloading}
               disabled={deleting || offlineMode}

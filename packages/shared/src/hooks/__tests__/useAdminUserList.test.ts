@@ -13,7 +13,7 @@ const page = (ids: string[], nextCursor: string | null, total = 10) => ({
   data: ids.map((id) => ({ id, username: id })),
   meta: { pagination: { hasMore: !!nextCursor, nextCursor, pageSize: ids.length, total } },
 });
-const lastUrl = () => String(getEnvelope.mock.calls[getEnvelope.mock.calls.length - 1][0]);
+const lastUrl = () => String(getEnvelope.mock.calls[getEnvelope.mock.calls.length - 1]![0]);
 
 describe('useAdminUserList', () => {
   beforeEach(() => {

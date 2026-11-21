@@ -21,7 +21,6 @@ function resetStores() {
     crews: [],
     activeCrew: null,
     crewMembers: [],
-    isLoading: false,
     error: null,
   });
   useFestivalStore.setState({
@@ -33,7 +32,6 @@ function resetStores() {
     days: [],
     currentProfile: null,
     allProfiles: [],
-    isLoading: false,
     error: null,
   });
 }
@@ -52,8 +50,8 @@ describe('useCrew hook', () => {
     it('returns profiles that match crew member userIds', () => {
       useCrewStore.setState({
         crewMembers: [
-          { id: 'm1', userId: 'u1', name: 'Alice' },
-          { id: 'm2', userId: 'u2', name: 'Bob' },
+          { userId: 'u1', name: 'Alice' },
+          { userId: 'u2', name: 'Bob' },
         ],
       });
       useFestivalStore.setState({
@@ -88,8 +86,8 @@ describe('useCrew hook', () => {
     it('returns picks from crew members excluding current user', () => {
       useCrewStore.setState({
         crewMembers: [
-          { id: 'm1', userId: 'u1' },
-          { id: 'm2', userId: 'u2' },
+          { userId: 'u1' },
+          { userId: 'u2' },
         ],
       });
       useFestivalStore.setState({
@@ -117,8 +115,8 @@ describe('useCrew hook', () => {
     it('returns empty when crew member has no pick for the set', () => {
       useCrewStore.setState({
         crewMembers: [
-          { id: 'm1', userId: 'u1' },
-          { id: 'm2', userId: 'u2' },
+          { userId: 'u1' },
+          { userId: 'u2' },
         ],
       });
       useFestivalStore.setState({
@@ -143,7 +141,7 @@ describe('useCrew hook', () => {
 
     it('only includes picks from crew members, not all profiles', () => {
       useCrewStore.setState({
-        crewMembers: [{ id: 'm1', userId: 'u1' }],
+        crewMembers: [{ userId: 'u1' }],
       });
       useFestivalStore.setState({
         currentProfile: {

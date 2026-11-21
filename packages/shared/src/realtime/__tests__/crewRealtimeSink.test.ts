@@ -161,7 +161,7 @@ describe('crewRealtimeSink: onReconnectResync', () => {
   it('logs a failed reload instead of swallowing it', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { loaders, sink } = makeApi('c1');
-    loaders.loadPolls.mockRejectedValueOnce(new Error('offline'));
+    loaders.loadPolls!.mockRejectedValueOnce(new Error('offline'));
     sink.onReconnectResync?.('c1');
     await vi.waitFor(() => expect(warn).toHaveBeenCalledWith('crew resync failed', expect.any(Error)));
     warn.mockRestore();

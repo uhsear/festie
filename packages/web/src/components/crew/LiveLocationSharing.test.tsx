@@ -94,7 +94,7 @@ describe('LiveLocationSharing', () => {
         },
       });
       render(<LiveLocationSharing />);
-      const { watchPosition } = sessionSpy.mock.calls[0][0];
+      const { watchPosition } = sessionSpy.mock.calls[0]![0];
       const onError = vi.fn();
       watchPosition(vi.fn(), onError);
       return { onError, fail: (code: number) => onErr({ code, PERMISSION_DENIED: 1 }) };

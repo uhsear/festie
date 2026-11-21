@@ -244,7 +244,7 @@ describe('buildCrewSplits', () => {
       sets,
       days: DAYS,
       dayIndex: 0,
-      profiles: crew({ ana: { a: 'must', c: 'want' }, ben: { b: 'want', c: 'must', d: 'maybe' } }),
+      profiles: crew({ ana: { a: 'must', c: 'want-to-see' }, ben: { b: 'want-to-see', c: 'must', d: 'maybe' } }),
     });
     expect(out.split).toHaveLength(1);
     expect(out.split[0]!.sides.map((s) => [s.set.id, s.memberIds])).toEqual([
@@ -261,7 +261,7 @@ describe('buildCrewSplits', () => {
       sets,
       days: DAYS,
       dayIndex: 0,
-      profiles: crew({ ana: { a: 'must', b: 'want' }, ben: { a: 'must' } }),
+      profiles: crew({ ana: { a: 'must', b: 'want-to-see' }, ben: { a: 'must' } }),
     });
     expect(out.together).toEqual([]);
     expect(out.split).toHaveLength(1);
@@ -272,7 +272,7 @@ describe('buildCrewSplits', () => {
       sets,
       days: DAYS,
       dayIndex: 0,
-      profiles: crew({ ana: { a: 'must', b: 'want' }, ben: { c: 'must' } }),
+      profiles: crew({ ana: { a: 'must', b: 'want-to-see' }, ben: { c: 'must' } }),
     });
     expect(out.split).toEqual([]);
   });

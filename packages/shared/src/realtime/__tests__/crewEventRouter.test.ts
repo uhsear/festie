@@ -16,6 +16,14 @@ import { createStoreSink } from '../crewRealtimeSink';
 import { useCrewStore } from '../../stores/crewStore';
 import { api } from '../../services/api';
 import type { CrewMeetingPoint, CrewPoll } from '../../types/domain';
+import type {
+  CrewMeetingPointPayload,
+  CrewPollCreatedPayload,
+  CrewPollVotedPayload,
+  CrewPollClosedPayload,
+} from '../../types/socket-events';
+
+type MeetingPointRow = CrewMeetingPoint & CrewMeetingPointPayload;
 
 vi.mock('../../services/api', () => ({
   api: {
@@ -49,7 +57,7 @@ const mpRowSnake = {
   stage_reference: null,
   active: true,
   created_at: '2026-06-01T00:00:00Z',
-} as unknown as CrewMeetingPoint;
+} as unknown as MeetingPointRow;
 
 const mpRemovedPayload = { id: 'mp-1', crewId: ACTIVE };
 
@@ -58,10 +66,10 @@ const pollCreatedPayload = {
   question: 'Where to meet?',
   options: ['Gate', 'Tent'],
   createdBy: 'user-1',
-};
+} as CrewPollCreatedPayload;
 
-const pollVotedPayload = { pollId: 'poll-1', userId: 'user-2', optionIndex: 1 };
-const pollClosedPayload = { pollId: 'poll-1' };
+const pollVotedPayload = { pollId: 'poll-1', userId: 'user-2', optionIndex: 1 } as CrewPollVotedPayload;
+const pollClosedPayload = { pollId: 'poll-1' } as CrewPollClosedPayload;
 
 const expenseAddedPayload = {
   _v: 1,
@@ -115,7 +123,7 @@ describe('crewEventRouter — pure routers', () => {
     });
 
     it('falls back to camelCase crewId when crew_id absent', () => {
-      const camel = { id: 'mp-2', crewId: ACTIVE } as unknown as CrewMeetingPoint;
+      const camel = { id: 'mp-2', crewId: ACTIVE } as unknown as MeetingPointRow;
       const intent = routeMeetingPointUpsert(camel, ACTIVE);
       expect(intent).not.toBeNull();
       expect(intent!.crewId).toBe(ACTIVE);
@@ -126,7 +134,7 @@ describe('crewEventRouter — pure routers', () => {
         id: 'mp-3',
         crew_id: ACTIVE,
         crewId: OTHER,
-      } as unknown as CrewMeetingPoint;
+      } as unknown as MeetingPointRow;
       // crew_id (ACTIVE) wins -> matches active -> routes.
       expect(routeMeetingPointUpsert(mixed, ACTIVE)).not.toBeNull();
       // And with OTHER active, crew_id=ACTIVE means it does NOT match.
@@ -319,7 +327,7 @@ describe('crewEventRouter + createStoreSink integration', () => {
     sink().onMeetingPointUpsert(intent.crewId, intent.meetingPoint);
     expect(useCrewStore.getState().meetingPoints).toHaveLength(1);
 
-    const updatedRow = { ...mpRowSnake, label: 'Tent v2' } as CrewMeetingPoint;
+    const updatedRow = { ...mpRowSnake, label: 'Tent v2' } as MeetingPointRow;
     const intent2 = routeMeetingPointUpsert(updatedRow, ACTIVE)!;
     sink().onMeetingPointUpsert(intent2.crewId, intent2.meetingPoint);
     const mps = useCrewStore.getState().meetingPoints;

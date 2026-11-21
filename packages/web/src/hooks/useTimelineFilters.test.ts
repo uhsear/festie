@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { renderHook } from '@testing-library/react';
-import type { FestivalSet, Stage } from '@festie/shared/types';
+import type { FestivalSet, Priority, Stage } from '@festie/shared/types';
 
 // --- Mocks ---------------------------------------------------------------
 // useTimelineFilters reads festival data via useFestivalStore selectors,
@@ -31,7 +31,7 @@ vi.mock('@festie/shared/hooks', async () => {
           selectedDay: number;
           activeStages: string[];
           onlyMine: boolean;
-          picks?: Record<string, string>;
+          picks?: Record<string, Priority>;
         };
         return filterScheduleSets(
           st.sets.filter((x) => x.dayIndex === st.selectedDay),

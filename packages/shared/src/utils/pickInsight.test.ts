@@ -15,7 +15,7 @@ describe('pickClashRows', () => {
       detail: 'Friday · Main 11:00 PM–1:00 AM · 12:30 AM–2:00 AM',
       a11y: '8 people picked both Alpha and =Beta, Friday',
     });
-    expect(rows[1].barPct).toBe(63);
+    expect(rows[1]!.barPct).toBe(63);
   });
 });
 
@@ -34,7 +34,7 @@ describe('picksPerSetCsv', () => {
     expect(guarded).toContain("'=SUM(A1)");
   });
   it('has no user fields', () => {
-    expect(lines[0].toLowerCase()).not.toMatch(/user/);
+    expect(lines[0]!.toLowerCase()).not.toMatch(/user/);
   });
 });
 

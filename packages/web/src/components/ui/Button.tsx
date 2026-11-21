@@ -3,19 +3,8 @@ import { Loader } from 'lucide-react';
 import type { ButtonVariant as SharedButtonVariant } from '@festie/shared/tokens';
 import { cn } from '../../lib/utils';
 
-/**
- * Deprecated aliases for `secondary` and `utility`. They stay for one release.
- * @deprecated Use `secondary` / `utility`.
- */
-type DeprecatedButtonVariant = 'outline' | 'util';
 // `delete` is a web-only icon button.
-type ButtonVariant = SharedButtonVariant | DeprecatedButtonVariant | 'delete';
-type CanonicalVariant = SharedButtonVariant | 'delete';
-
-const VARIANT_ALIASES: Record<DeprecatedButtonVariant, SharedButtonVariant> = {
-  outline: 'secondary',
-  util: 'utility',
-};
+type ButtonVariant = SharedButtonVariant | 'delete';
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: ButtonVariant;
@@ -26,7 +15,7 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 export default function Button({
-  variant: variantProp = 'primary',
+  variant = 'primary',
   size = 'md',
   isLoading = false,
   fullWidth = false,
@@ -37,14 +26,10 @@ export default function Button({
   onClick,
   ...props
 }: ButtonProps) {
-  const variant: CanonicalVariant =
-    variantProp in VARIANT_ALIASES
-      ? VARIANT_ALIASES[variantProp as DeprecatedButtonVariant]
-      : (variantProp as CanonicalVariant);
   const baseStyles =
     'inline-flex items-center justify-center gap-2 rounded-full font-semibold transition-[color,background-color,border-color,box-shadow,transform,outline-color] duration-200 ease-out cursor-pointer active:scale-[0.97] active:brightness-95 motion-reduce:transform-none disabled:opacity-50 disabled:cursor-not-allowed aria-busy:opacity-50 aria-busy:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2';
 
-  const variantStyles: Record<CanonicalVariant, string> = {
+  const variantStyles: Record<ButtonVariant, string> = {
     primary:
       'bg-accent-aqua text-bg-primary hover:bg-[var(--color-accent-aqua-hover)] focus-visible:outline-accent-aqua',
     // DANGER/SOS only. Filled with the deepened coral so WHITE label text clears

@@ -23,7 +23,7 @@ function pick(id: string, startMin: number, endMin: number, extra: Partial<Festi
 }
 
 function group(...picks: ConflictPick[]): ConflictGroup {
-  return { picks, recommendedKeepId: picks[0]!.set.id, overlapMin: 0 };
+  return { picks, recommendedKeepId: picks[0]!.set.id, overlapMin: 0, pairs: [], tight: false };
 }
 
 const label = (s: FestivalSet) => `${s.artist} · Forest`;

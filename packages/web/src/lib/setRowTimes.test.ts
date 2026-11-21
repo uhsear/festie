@@ -78,7 +78,7 @@ describe('set rows show start - end', () => {
   });
 
   it('PicksPlanRow', () => {
-    render(React.createElement(PicksPlanRow, { set }));
+    render(React.createElement(PicksPlanRow, { set, hasClash: false }));
     expect(screen.getByText(RANGE)).toBeInTheDocument();
   });
 

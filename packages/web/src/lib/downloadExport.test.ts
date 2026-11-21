@@ -43,7 +43,7 @@ describe('saveBlob', () => {
     saveBlob(new Blob(['x']), 'a.csv');
     expect(seen).toHaveLength(1);
     expect(seen[0]).toMatchObject({ name: 'a.csv', href: 'blob:mock', connected: true });
-    expect(seen[0].anchor?.isConnected).toBe(false);
+    expect(seen[0]!.anchor?.isConnected).toBe(false);
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock');
   });
 });
