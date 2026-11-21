@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 
 const page = (name: string) => readFileSync(resolve('public', name), 'utf8');
 
@@ -27,7 +29,8 @@ test('privacy page renders the organizer subsection and the organizer recipient'
   const html = page('privacy.html');
   assert.ok(headings(html).includes('If you work with a festival organizer account'));
   assert.match(html, /<li><strong>Festival organizers:<\/strong>/);
-  assert.match(html, /<li><strong>Invitations:<\/strong>[^<]*after 90 days\./);
+  assert.match(html, /<li><strong>Invitations:<\/strong>[^<]*accepted or cancelled\./);
+  assert.doesNotMatch(html, /after 90 days/, 'no code expires invitations yet');
 });
 
 test('mobile privacy screen mirrors the organizer subsection', () => {
@@ -47,7 +50,27 @@ test('placeholders are plain text, never a stray tag, and all of them are marked
 
 test('security whitepaper no longer makes the claims the code does not back', () => {
   const html = page('security-whitepaper.html');
-  for (const stale of ['tamper-evident', 'SameSite=Strict', 'Monthly restoration', 'WAL files retained for 7 days', 'geographically distributed']) {
+  for (const stale of ['tamper-evident', 'SHA-256 checksums', 'Origin and Referer headers', 'explicit re-acceptance', 'Monthly restoration', 'WAL files retained for 7 days', 'geographically distributed']) {
     assert.ok(!html.includes(stale), `security-whitepaper.html still says "${stale}"`);
   }
+  assert.match(html, /SameSite=Strict \[TODO-confirm: production \.env/, 'SameSite claim must match ecosystem.config.cjs and stay marked');
+});
+
+test('release check flags a placeholder left in a legal page or the mobile privacy screen', () => {
+  const root = mkdtempSync(join(tmpdir(), 'legal-check-'));
+  mkdirSync(join(root, 'public'));
+  mkdirSync(join(root, 'packages/mobile/app'), { recursive: true });
+  const write = (file: string, text: string) => writeFileSync(join(root, file), text + '\n');
+  write('public/terms.html', '<p>Effective [TODO-D: effective date]</p>');
+  write('public/about.html', '<p>Clean</p>');
+  write('packages/mobile/app/privacy.tsx', "const D = '[TODO-D: effective date]';");
+  const check = () => spawnSync(process.execPath, [resolve('scripts/ci/check-legal-placeholders.mjs'), '--root', root], { encoding: 'utf8' });
+  const failed = check();
+  assert.equal(failed.status, 1);
+  assert.match(failed.stderr, /public\/terms\.html:1:/);
+  assert.match(failed.stderr, /packages\/mobile\/app\/privacy\.tsx:1:/);
+  assert.doesNotMatch(failed.stderr, /about\.html/);
+  write('public/terms.html', '<p>Effective December 1, 2026</p>');
+  write('packages/mobile/app/privacy.tsx', "const D = 'December 1, 2026';");
+  assert.equal(check().status, 0);
 });

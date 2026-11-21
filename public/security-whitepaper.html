@@ -279,7 +279,7 @@
             <ul>
                 <li><strong>Token Format:</strong> Cryptographically random tokens (minimum 256 bits entropy)</li>
                 <li><strong>Storage:</strong> Tokens are hashed using SHA-256 before database storage; raw tokens never stored on disk</li>
-                <li><strong>Cookie Configuration:</strong> HTTP-only flag prevents JavaScript access, Secure flag enforced on HTTPS connections, SameSite=Lax by default [TODO-confirm: production COOKIE_SAME_SITE value]. Cross-site request forgery is also blocked by an Origin check on state-changing requests from browsers, and by a required custom request header when a cookie-authenticated request has no Origin</li>
+                <li><strong>Cookie Configuration:</strong> HTTP-only flag prevents JavaScript access, Secure flag enforced on HTTPS connections, SameSite=Strict [TODO-confirm: production .env COOKIE_SAME_SITE value]. Cross-site request forgery is also blocked by an Origin check on state-changing requests from browsers, and by a required custom request header when a cookie-authenticated request has no Origin</li>
                 <li><strong>Session Duration:</strong> 24-hour absolute timeout, sliding window renewal on activity</li>
             </ul>
 
@@ -386,13 +386,13 @@
 
             <h3>CSRF Protection</h3>
             <div class="security-feature">
-                <strong>Origin Enforcement:</strong> State-changing requests (POST, PUT, DELETE) require valid Origin and Referer headers matching the application domain
+                <strong>Origin Enforcement:</strong> State-changing requests (POST, PUT, DELETE) from browsers are checked against the application's Origin. A cookie-authenticated request with no Origin must carry a required custom request header
             </div>
             <div class="security-feature">
                 <strong>Token-Based Protection:</strong> Optional CSRF tokens for additional protection on sensitive operations
             </div>
             <div class="security-feature">
-                <strong>SameSite Cookies:</strong> Session cookies use the SameSite attribute, Lax by default [TODO-confirm: production COOKIE_SAME_SITE value], limiting cross-site cookie transmission
+                <strong>SameSite Cookies:</strong> Session cookies use SameSite=Strict [TODO-confirm: production .env COOKIE_SAME_SITE value], limiting cross-site cookie transmission
             </div>
 
             <h3>Other Injection Attacks</h3>
@@ -553,11 +553,10 @@
             </ul>
 
             <h3>Terms of Service & Consent Versioning</h3>
-            <p>Account creation requires acceptance of current Terms of Service and Privacy Policy. Versions are tracked:</p>
+            <p>Account creation requires acceptance of the current Terms of Service and Privacy Policy. The accepted Terms version is tracked:</p>
             <ul>
-                <li>Each user record stores accepted ToS/Privacy version and acceptance timestamp</li>
-                <li>Material changes require explicit re-acceptance before continued service use</li>
-                <li>30-day notice period for material policy changes with continued-use-as-acceptance</li>
+                <li>Each user record stores the Terms version and the acceptance time</li>
+                <li>Material changes are announced at least 30 days ahead</li>
             </ul>
         </section>
 
@@ -652,15 +651,15 @@
                     <tr>
                         <td>Weekly Snapshots</td>
                         <td>Sunday dumps</td>
-                        <td>Several recent weeks</td>
-                        <td>Rolling window</td>
+                        <td>12 most recent</td>
+                        <td>12 weeks</td>
                     </tr>
                 </tbody>
             </table>
 
             <h3>Backup Integrity</h3>
             <ul>
-                <li><strong>Checksums:</strong> SHA-256 checksums computed on all backups for integrity verification</li>
+                <li><strong>Verification:</strong> Each dump is checked with <code>pg_restore --list</code> before it is kept; a dump that fails is set aside as bad</li>
                 <li><strong>Test Restores:</strong> A weekly restore drill validates backup integrity and recovery procedures</li>
                 <li><strong>Encryption:</strong> Off-site copies are encrypted with AES-256 before upload</li>
                 <li><strong>Offsite Copy:</strong> An encrypted copy is kept off site in a private GitHub repository</li>

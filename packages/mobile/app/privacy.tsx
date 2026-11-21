@@ -138,7 +138,7 @@ const SECTIONS: PolicySection[] = [
         bullets: [
           'Organization details: the organization\'s name, contact email and the festivals it runs.',
           'Team members: which Festie accounts belong to the organization, their role, and a log of what each member changed. Other members of the same organization see your display name in that log.',
-          'Invitations: the email address of someone invited to join the organization, even if they do not have a Festie account yet. We delete it when the invitation is accepted or cancelled, or after 90 days.',
+          'Invitations: the email address of someone invited to join the organization, even if they do not have a Festie account yet. We delete it when the invitation is accepted or cancelled.',
           'Uploads: files the organization uploads, such as site maps.',
         ],
       },
