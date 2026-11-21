@@ -15,7 +15,7 @@ env:
 - launchApp
 - extendedWaitUntil:
     visible:
-      text: "Plan your weekend|Select a Festival"
+      text: "Plan your weekend|Choose a festival"
     timeout: 90000
 - extendedWaitUntil:
     visible: "__wait_for_ota_download__"
@@ -25,7 +25,7 @@ env:
 - launchApp
 - extendedWaitUntil:
     visible:
-      text: "Plan your weekend|Select a Festival"
+      text: "Plan your weekend|Choose a festival"
     timeout: 90000
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/00-intro
 - runFlow:
@@ -34,7 +34,7 @@ env:
     commands:
       - tapOn: "Skip intro"
 - extendedWaitUntil:
-    visible: "Select a Festival"
+    visible: "Choose a festival"
     timeout: 30000
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/01-festival-picker
 # North Coast has artist photos on about half its sets.

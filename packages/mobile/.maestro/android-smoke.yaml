@@ -14,20 +14,20 @@ env:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Plan.your.whole.weekend|Select a Festival"
+      text: "Plan your weekend|Choose a festival"
     timeout: 120000
 - takeScreenshot: 01-launch
 - runFlow:
     when:
-      visible: "Plan.your.whole.weekend"
+      visible: "Plan your weekend"
     commands:
-      - assertVisible: "Plan.your.whole.weekend"
+      - assertVisible: "Plan your weekend"
       - tapOn:
           id: "intro-skip"
 - extendedWaitUntil:
-    visible: "Select a Festival"
+    visible: "Choose a festival"
     timeout: 30000
-- assertVisible: "Select a Festival"
+- assertVisible: "Choose a festival"
 - takeScreenshot: 02-festival-picker
 - tapOn:
     id: "festival-card-${FESTIVAL_ID}"
@@ -37,7 +37,7 @@ env:
     timeout: 150000
 - waitForAnimationToEnd:
     timeout: 6000
-- assertNotVisible: "Select a Festival"
+- assertNotVisible: "Choose a festival"
 - takeScreenshot: 03-schedule-guest
 
 - openLink: "festie://register"

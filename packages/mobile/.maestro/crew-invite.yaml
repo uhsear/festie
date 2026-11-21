@@ -33,7 +33,7 @@ env:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Skip|Build your festival|Select a Festival|Festie"
+      text: "Skip|Build your festival|Choose a festival|Festie"
     timeout: 120000
 - takeScreenshot: ci-01-launch
 
@@ -129,7 +129,7 @@ env:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Skip|Build your festival|Select a Festival|Festie"
+      text: "Skip|Build your festival|Choose a festival|Festie"
     timeout: 120000
 - tapOn:
     text: "Skip"

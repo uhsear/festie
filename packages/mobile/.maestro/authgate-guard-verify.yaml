@@ -22,7 +22,7 @@ tags:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Skip|Select a Festival|Lineup|Festie"
+      text: "Skip|Choose a festival|Lineup|Festie"
     timeout: 120000
 - tapOn:
     text: "Skip"
