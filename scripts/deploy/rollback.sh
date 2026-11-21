@@ -10,7 +10,7 @@
 # is: pick the last known-good tag and run this.
 #
 # Usage (on the box):
-#   cd /home/asir/festival-planner
+#   cd ~/<app checkout>
 #   bash scripts/deploy/rollback.sh deploy-20260611-180000
 #
 # List available tags:
