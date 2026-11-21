@@ -2,7 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { z } from 'zod';
-import { normalizeArtistLink, type ArtistLinkPlatform } from '../artist-links';
+import { detectPlatform, normalizeArtistLink, type ArtistLinkPlatform } from '../artist-links';
 
 /**
  * What an organization member may point a festival at (plan-v3 6.3). The festival schemas accept any https
@@ -41,12 +41,24 @@ export function organizerFestivalRules(origin: string) {
         }
       };
 
+      // The legacy flat set.linkUrl is stored as the first artist's Spotify link, so it gets the same rule.
+      const checkLinkUrl = (url: unknown, path: Array<string | number>) => {
+        if (typeof url !== 'string' || url.trim() === '') return;
+        if (!/^https:\/\//i.test(url.trim())) return issue(path, 'Use an https link.');
+        const platform = detectPlatform(url);
+        const result = platform ? normalizeArtistLink(platform, url) : null;
+        if (!result) issue(path, 'This link must be a profile on a music or social site Festie knows.');
+        else if (!result.ok) issue(path, result.message);
+      };
+
       (body.days ?? []).forEach((day: any, dayIndex: number) =>
-        (day?.sets ?? []).forEach((set: any, setIndex: number) =>
+        (day?.sets ?? []).forEach((set: any, setIndex: number) => {
+          const setPath = ['days', dayIndex, 'sets', setIndex];
+          checkLinkUrl(set?.linkUrl, [...setPath, 'linkUrl']);
           (set?.artists ?? []).forEach((artist: any, artistIndex: number) =>
-            checkLinks(artist?.links, ['days', dayIndex, 'sets', setIndex, 'artists', artistIndex]),
-          ),
-        ),
+            checkLinks(artist?.links, [...setPath, 'artists', artistIndex]),
+          );
+        }),
       );
       (body.lineup ?? []).forEach((entry: any, entryIndex: number) =>
         (entry?.artists ?? []).forEach((artist: any, artistIndex: number) =>

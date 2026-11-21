@@ -307,6 +307,25 @@ describe('links, hosting and live edits', { skip }, () => {
     assert.equal(admin.status, 200, JSON.stringify(admin.body));
   });
 
+  test('the legacy set linkUrl follows the same https and platform rule for an organizer', async () => {
+    const { server, users, adminToken } = await boot();
+    const withLinkUrl = (linkUrl: string) => ({
+      stages: [{ id: 'main', name: 'Main' }],
+      days: [{ label: 'Fri', date: '2027-06-04', sets: [{ id: 'set-alpha', artist: 'Alpha', linkUrl, stageId: 'main' }] }],
+    });
+    rejected(await put(server, users.editorA.token, 'f-a', withLinkUrl('javascript:alert(1)')), /sets\.0\.linkUrl/);
+    rejected(await put(server, users.editorA.token, 'f-a', withLinkUrl('http://open.spotify.com/artist/4Z8W4fKeB5YxbusRsdQVPb')), /sets\.0\.linkUrl/);
+    rejected(await put(server, users.editorA.token, 'f-a', withLinkUrl('https://evil.example/alpha')), /sets\.0\.linkUrl/);
+    const ok = await put(server, users.editorA.token, 'f-a', withLinkUrl('https://open.spotify.com/artist/4Z8W4fKeB5YxbusRsdQVPb'));
+    assert.equal(ok.status, 200, JSON.stringify(ok.body));
+    // New festival: the create route runs the same rules.
+    const created = await o.as(server, users.ownerA.token).post(MANAGE, { ...dated('org-a', 'Linked'), days: withLinkUrl('http://evil.example/x').days });
+    rejected(created, /sets\.0\.linkUrl/);
+    // An admin save keeps the wider rule.
+    const admin = await o.as(server, adminToken).put(`/api/v1/admin/festivals/f-a`, withLinkUrl('https://evil.example/alpha'));
+    assert.equal(admin.status, 200, JSON.stringify(admin.body));
+  });
+
   test('the offline map and the site plan must be files Festie hosts', async () => {
     const { server, users } = await boot();
     const map = (extra: object) => ({ mapConfig: { version: 1, ...extra } });
