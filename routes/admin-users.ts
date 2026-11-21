@@ -1,5 +1,6 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
+import type { AdminMountArgs } from './admin-ctx.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user.js';
@@ -12,7 +13,7 @@ import { revokeAppleForUser } from '../lib/oauth/revoke-user.js';
  * Called by routes/admin.js::createAdminRoutes() with { router, deps, ctx } where
  * ctx carries: adminWriteLimit, crypto, parsePageParams, paginateArray, enrichAuditEntries
  */
-export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
+export default function mountAdminUserRoutes({ router, deps, ctx }: AdminMountArgs<'adminWriteLimit' | 'passwordResetRateLimit' | 'crypto' | 'parsePageParams' | 'paginateArray' | 'enrichAuditEntries'>): void {
   const {
     config,
     log,
@@ -449,7 +450,7 @@ export default function mountAdminUserRoutes({ router, deps, ctx }: any): void {
         await removeAvatarFile(removedUser.avatarKey).catch(() => {});
         for (const profile of removedProfiles || []) {
           await removeProfileSockets(profile, io);
-          emitter.toRoom(profile.festivalId, 'profile:deleted', { festivalId: profile.festivalId, profileId: profile.id });
+          emitter.profileDeleted({ festivalId: profile.festivalId, profileId: profile.id });
         }
         await invalidateUserSessions(targetUserId);
         // Revoke long-lived refresh tokens so a held token chain cannot

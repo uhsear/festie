@@ -168,7 +168,7 @@ function makeDeps(overrides: any = {}) {
       of: () => ({ to: () => ({ emit: mock.fn() }) }),
       engine: { clientsCount: 5 },
     },
-    emitter: { toCrew: mock.fn(), toRoom: mock.fn(), broadcast: mock.fn() },
+    emitter: { toCrew: mock.fn(), toRoom: mock.fn(), profileDeleted: mock.fn(), broadcast: mock.fn() },
     metrics: {
       totalRequests: 100,
       totalErrors: 2,
@@ -910,7 +910,7 @@ describe('routes/admin-users.js', () => {
     const { parsePageParams, paginateArray } = await import('../lib/pagination.js');
     const passwordResetRateLimit = (req: any, res: any, next: any) => next();
     const adminWriteLimit = (req: any, res: any, next: any) => next();
-    const ctx = { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray };
+    const ctx = { adminWriteLimit, passwordResetRateLimit, crypto, parsePageParams, paginateArray, enrichAuditEntries: async (rows: any[]) => rows };
     mountAdminUserRoutes({ router, deps, ctx });
     return { app: buildApp(router), deps };
   }

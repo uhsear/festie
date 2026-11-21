@@ -6,12 +6,13 @@
  * Mounts: /bulk/deactivate, /bulk/archive-festivals,
  *         /crews, /crews/:id/members, /crews/:id/members/:userId, /crews/:id
  */
+import type { AdminMountArgs } from './admin-ctx.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { dropLivePosition } from '../lib/live-location-cache.js';
 import { evictCrewRoomSockets } from '../lib/presence.js';
 
-export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
+export default function mountAdminBulkRoutes({ router, deps, ctx }: AdminMountArgs<'adminWriteLimit'>): void {
   const {
     log,
     setNoStore,
@@ -51,13 +52,14 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: any): void {
     if (!io || typeof io.in !== 'function') return;
     const room = `crew:${crewId}`;
     try {
+      // Evict first: a missing or throwing emitter must not leave the member in the crew room (H1).
+      await evictCrewRoomSockets(io, crewId, removedUserId);
       emitter.toRoom(room, 'location:peer-stopped', {
         _v: 1,
         crewId,
         userId: removedUserId,
         reason: 'kicked',
       });
-      await evictCrewRoomSockets(io, crewId, removedUserId);
     } catch (error: any) {
       log.warn('admin crew room eviction failed', { error: error?.message, crewId, removedUserId });
     }
