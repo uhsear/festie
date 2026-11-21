@@ -350,6 +350,13 @@ jobs:
           test "$COUNT" -ge 21 || { echo "::error::Expected at least 21 route screenshots"; exit 1; }
           test "$UNIQUE" -ge 15 || { echo "::error::Screenshots are not diverse enough; navigation likely stalled"; exit 1; }
 
+      # On failure, save what XCUITest exposes on the screen the flow stopped on,
+      # because the debug tree is scrubbed to screenshots below.
+      - name: Dump the iOS view hierarchy on failure
+        if: failure() && env.RUN_MAESTRO == 'true'
+        working-directory: packages/mobile
+        run: MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > maestro-ios-hierarchy.json || echo "::warning::maestro hierarchy failed"
+
       # Maestro records every -e value in commands-*.json and maestro.log.
       # Keep only screenshots in the debug tree so Actions artifacts can never
       # publish the smoke credentials from this public repository.
@@ -372,6 +379,7 @@ jobs:
             packages/mobile/*.png
             packages/mobile/maestro-ios-report.xml
             packages/mobile/maestro-ios-artist-report.xml
+            packages/mobile/maestro-ios-hierarchy.json
             packages/mobile/maestro-ios-debug/**
             packages/mobile/maestro-ios-artist-debug/**
             !packages/mobile/maestro-ios-debug/commands-*.json
