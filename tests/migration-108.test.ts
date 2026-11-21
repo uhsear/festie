@@ -29,7 +29,8 @@ describe('migrations 108 and 109 organizations', () => {
   test('the files are ASCII only and have no transaction control', () => {
     for (const sql of [SQL_108, SQL_109]) {
       assert.equal(/[^\x00-\x7F]/.test(sql), false);
-      assert.equal(/^\s*(BEGIN|COMMIT)\b/im.test(sql), false);
+      // A function body (between $$) has its own BEGIN; only a statement outside one would be transaction control.
+      assert.equal(/^\s*(BEGIN|COMMIT)\b/im.test(sql.replace(/\$\$[\s\S]*?\$\$/g, '')), false);
     }
   });
 
@@ -62,7 +63,7 @@ describe('migrations 108 and 109 organizations', () => {
              OR (table_name = 'audit_log' AND column_name = 'organization_id')`,
       );
       const columns = (table: string) => rows.filter((r: any) => r.table_name === table).map((r: any) => r.column_name).sort();
-      assert.deepEqual(columns('organizations'), ['created_at', 'created_by', 'id', 'kind', 'name', 'status', 'updated_at', 'verified_at', 'website']);
+      assert.deepEqual(columns('organizations'), ['contact_email', 'created_at', 'created_by', 'display_name', 'id', 'kind', 'name', 'status', 'updated_at', 'verified_at', 'website']);
       assert.deepEqual(columns('organization_members'), ['added_by', 'created_at', 'organization_id', 'role', 'user_id']);
       assert.deepEqual(columns('organization_pending_members'), ['added_by', 'created_at', 'email', 'organization_id', 'role']);
       assert.deepEqual(columns('festivals'), ['created_by', 'organization_id']);

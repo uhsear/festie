@@ -4,6 +4,7 @@
 --   organization_pending_members    the claim by email in GET /manage/me
 --   festivals(organization_id)      the organization's festival list
 --   audit_log(organization_id, ...) the per-organization audit filter
+--   festival_announcements(organization_id, ...) the organization's daily announcement cap
 -- CONCURRENTLY cannot run in a transaction, so this file has no BEGIN/COMMIT.
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_org_members_user
@@ -17,3 +18,6 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_festivals_org
 
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_audit_log_org
   ON audit_log (organization_id, created_at) WHERE organization_id IS NOT NULL;
+
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_festival_announcements_org
+  ON festival_announcements (organization_id, created_at) WHERE organization_id IS NOT NULL;
