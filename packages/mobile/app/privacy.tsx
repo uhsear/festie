@@ -13,13 +13,13 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
  * on November 3, 2026. No attorney has reviewed it.
  *
  * The web policy remains the single source of truth; this screen reproduces
- * its text word for word (effective November 18, 2026) as a typed data array so it
+ * its text word for word (effective [TODO-D: effective date]) as a typed data array so it
  * renders like the rest of the app and works offline. Emails open the mail
  * client and the Terms reference opens the web Terms of Service in an in-app
  * browser sheet.
  */
 
-const EFFECTIVE_DATE = 'November 18, 2026';
+const EFFECTIVE_DATE = '[TODO-D: effective date]';
 const OPERATOR_NAME = 'Asir Khan';
 const CONTACT_EMAIL = 'privacy@festie.us';
 const SERVICE_URL = 'https://festie.us';
@@ -133,6 +133,15 @@ const SECTIONS: PolicySection[] = [
           'Sign-up source: Links that Festie\'s share buttons create carry a source tag in the address, such as share-festival, share-wrap, share-picks or crew-invite. If you sign up from a link with a source tag, we add one to a daily count for that tag. The count holds nothing about you.',
         ],
       },
+      {
+        heading: 'If you work with a festival organizer account',
+        bullets: [
+          'Organization details: the organization\'s name, contact email and the festivals it runs.',
+          'Team members: which Festie accounts belong to the organization, their role, and a log of what each member changed. Other members of the same organization see your display name in that log.',
+          'Invitations: the email address of someone invited to join the organization, even if they do not have a Festie account yet. We delete it when the invitation is accepted or cancelled, or after 90 days.',
+          'Uploads: files the organization uploads, such as site maps.',
+        ],
+      },
     ],
   },
   {
@@ -176,6 +185,7 @@ const SECTIONS: PolicySection[] = [
         bullets: [
           'Your crews: Members of a crew see your name, photo, picks, status, payment handles and what you post to that crew. Live location and status location go only to the crew you share them with.',
           'Anyone with a link: If you turn on your public schedule page, anyone with its link can see your picks. It is off by default. A picks link you send works the same way for one festival, until you reset your links in Account › Privacy. These pages tell search engines not to list them.',
+          'Festival organizers: A verified organizer sees counts for its own festival, such as how many people picked a set or set a reminder. It never sees names or who picked what. We show counts only when at least 20 people joined the festival, and we hide any count below 5. Announcements from an organizer reach people who follow or joined its festival, under the "Schedule changes" notification switch.',
           'Our service providers: the companies in the next section, only to run Festie for us.',
           'Police and courts: only when the law requires it.',
           'A new owner: If Festie is sold or merged, your data passes to the new owner under this policy, and we tell you first.',
@@ -275,8 +285,7 @@ const SECTIONS: PolicySection[] = [
         bullets: [
           'OpenFreeMap: the map tiles on festival and crew maps.',
           'Expo: the app downloads its updates from Expo.',
-          'Google Fonts: the fonts on the website.',
-          "Spotify: artist photos, and the Spotify player when you open it on a set. Spotify's own privacy policy applies to the player.",
+          "Spotify: artist photos, and the Spotify player when you open it on a set. The player is Spotify's own page and may set Spotify cookies. Spotify's own privacy policy applies to the player.",
         ],
       },
       {
@@ -335,14 +344,14 @@ const SECTIONS: PolicySection[] = [
       'SOS position: with the crew activity, until the crew or your account is deleted.',
       'Security log: up to one year.',
       'Sign-in sessions: A website session ends 24 hours after you sign in. The app renews its session with a refresh token that lasts up to 90 days.',
-      'Notification history: while your account exists. The inbox shows the newest 50.',
-      'Backups: Encrypted backups rotate on a fixed schedule. Data you delete leaves the backups when the last backup that holds it is deleted.',
+      'Notification history: 90 days. The inbox shows the newest 50. We keep a record that a news alert was sent for up to a year, so you do not get it twice.',
+      'Backups: up to 13 weeks. Data you delete leaves the backups when the last backup that holds it is deleted, within 13 weeks. Copies that leave our server are encrypted first.',
     ],
     subsections: [
       {
         heading: 'When you delete your account',
         paragraphs: [
-          'In Account, choose Delete account and confirm with your password. You are signed out everywhere, your devices stop getting notifications and your festival plans are hidden from others at once.',
+          'In Account, choose Delete account and confirm with your password, or by signing in again if you use Apple or Google. You are signed out everywhere, your devices stop getting notifications and your festival plans are hidden from others at once.',
           "If you sign in again within 30 days, your account comes back. After 30 days we delete your account and its data for good. A crew you created passes to its longest-standing member, or is deleted if you were the only member. An expense another member paid and split with you stays in that crew's records.",
         ],
       },
@@ -496,6 +505,7 @@ const SECTIONS: PolicySection[] = [
       {
         heading: 'Version history',
         paragraphs: [
+          '[TODO-D: effective date]: added festival organizers and what they can see; corrected how long we keep notification history and backups; Spotify cookies; how to confirm deletion if you use Apple or Google. No new use of the data we already had.',
           'November 18, 2026: clarified the examples of sign-up source tags. No change in how we collect, use or share data.',
           'November 3, 2026: full rewrite of this policy.',
         ],
