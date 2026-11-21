@@ -236,7 +236,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
               <Button
                 key={value}
                 type="button"
-                variant={direction === value ? 'primary' : 'outline'}
+                variant={direction === value ? 'primary' : 'secondary'}
                 aria-pressed={direction === value}
                 onClick={() => setDirection(value)}
                 className="flex-1 min-h-11"
@@ -252,7 +252,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
                   <Button
                     key={o.date}
                     type="button"
-                    variant={day === o.date ? 'primary' : 'outline'}
+                    variant={day === o.date ? 'primary' : 'secondary'}
                     aria-pressed={day === o.date}
                     onClick={() => setDay(o.date)}
                     className="min-h-11"
@@ -375,7 +375,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
                   {offer.note ? <p className="text-xs text-text-muted mt-0.5 break-words">{offer.note}</p> : null}
                   {seatAction === 'take' || seatAction === 'leave' ? (
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => changeSeat(offer.id, seatAction)}
                       disabled={seatBusyId === offer.id}
                       className="mt-1.5 min-h-11"
@@ -384,7 +384,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
                     </Button>
                   ) : null}
                   {seatAction === 'full' ? (
-                    <Button variant="outline" disabled className="mt-1.5 min-h-11">
+                    <Button variant="secondary" disabled className="mt-1.5 min-h-11">
                       Full
                     </Button>
                   ) : null}

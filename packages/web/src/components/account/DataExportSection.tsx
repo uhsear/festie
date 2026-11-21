@@ -35,7 +35,7 @@ export default function DataExportSection() {
       <p className="text-sm text-text-muted">{DATA_COPY.hint}</p>
 
       <Button
-        variant="outline"
+        variant="secondary"
         fullWidth
         isLoading={exporting}
         disabled={offlineMode}

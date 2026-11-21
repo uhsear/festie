@@ -20,7 +20,7 @@ export default function DetailSpotifySection({ status, preview, spotifyUrl, visi
     <div className="my-2.5">
       {(ready || status === 'loading') && (
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           type="button"
           onClick={onToggle}

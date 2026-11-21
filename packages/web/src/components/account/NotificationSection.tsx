@@ -249,7 +249,7 @@ function PushSubsection() {
           <p className="text-sm text-text-muted" role="alert">
             Couldn't check push notifications. Check your connection, then try again.
           </p>
-          <Button variant="outline" fullWidth onClick={push.retry} className="min-h-[44px]">
+          <Button variant="secondary" fullWidth onClick={push.retry} className="min-h-[44px]">
             Try again
           </Button>
         </>
@@ -274,7 +274,7 @@ function PushSubsection() {
             SOS alerts from your crew always come through, even when other alerts are muted.
           </p>
           {push.subscribed ? (
-            <Button variant="outline" fullWidth isLoading={pushBusy} onClick={handleDisablePush} className="min-h-[44px]">
+            <Button variant="secondary" fullWidth isLoading={pushBusy} onClick={handleDisablePush} className="min-h-[44px]">
               Disable Notifications
             </Button>
           ) : (

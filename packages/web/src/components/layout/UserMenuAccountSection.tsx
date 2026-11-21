@@ -20,7 +20,7 @@ export default function UserMenuAccountSection({ user, onClose, onLogout }: User
       <div className="flex flex-col gap-[var(--space-3)]">
         {/* Desktop hides the bottom nav, so this is the way to /account at lg+. */}
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           type="button"
           data-testid="user-menu-account-link"
@@ -33,7 +33,7 @@ export default function UserMenuAccountSection({ user, onClose, onLogout }: User
         </Button>
         {user.isAdmin && (
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             type="button"
             onClick={() => {

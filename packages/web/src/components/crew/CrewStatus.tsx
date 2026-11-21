@@ -293,7 +293,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
           <Navigation className="w-4 h-4 text-accent-aqua" aria-hidden="true" /> Crew status
         </h3>
         {!showForm && !showPresets && (
-          <Button variant="outline" onClick={() => setShowPresets(true)} className="text-xs">
+          <Button variant="secondary" onClick={() => setShowPresets(true)} className="text-xs">
             {mine ? 'Update mine' : 'Share status'}
           </Button>
         )}

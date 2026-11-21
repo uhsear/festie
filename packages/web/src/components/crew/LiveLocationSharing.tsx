@@ -159,7 +159,7 @@ export default function LiveLocationSharing() {
         </p>
       </div>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         onClick={() => useLiveLocationStore.getState().setSharePaused(!paused)}
         aria-label={paused ? LIVE_SHARE_COPY.resumeA11y : LIVE_SHARE_COPY.pauseA11y}
@@ -167,7 +167,7 @@ export default function LiveLocationSharing() {
         {paused ? <Play className="w-4 h-4" aria-hidden="true" /> : <Pause className="w-4 h-4" aria-hidden="true" />}{' '}
         {paused ? LIVE_SHARE_COPY.resume : LIVE_SHARE_COPY.pause}
       </Button>
-      <Button variant="outline" size="sm" onClick={endShare} aria-label={LIVE_SHARE_COPY.stopA11y}>
+      <Button variant="secondary" size="sm" onClick={endShare} aria-label={LIVE_SHARE_COPY.stopA11y}>
         <Square className="w-4 h-4" aria-hidden="true" /> {LIVE_SHARE_COPY.stop}
       </Button>
     </div>
