@@ -119,6 +119,7 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 | `REDIS_ENABLED` | `true` | Set `false` to run without Redis locally |
 | `RESEND_API_KEY` | — | Transactional email (password reset, invites). Email features silently disabled when unset. |
 | `EMAIL_POSTAL_ADDRESS` | — | Postal address in the footer of marketing email (wrap-up, lineup, days, set times, crew re-form). Those emails are not sent while it is unset; the server logs this once at startup |
+| `EMAIL_UNSUBSCRIBE_SECRET` | `SESSION_SECRET` | Key that signs the unsubscribe links in marketing email. Set it so that rotating `SESSION_SECRET` does not break links already sent (they must work for 30 days) |
 | `FIREBASE_CREDENTIALS_PATH` | — | Absolute path to the Firebase service-account JSON file. Set it to enable FCM push notifications. The server starts normally when it is unset, and push delivery stays disabled. |
 | `ALLOWED_ORIGINS` | derived from `PUBLIC_ORIGIN` | Comma-separated extra CORS origins |
 | `PORT` | `4000` | HTTP port the backend listens on |

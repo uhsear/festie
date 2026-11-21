@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { MARKETING_EMAIL_TYPES, unsubscribeToken, verifyUnsubscribeToken, sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail } from '../lib/email.js';
+import { MARKETING_EMAIL_TYPES, unsubscribeSecret, unsubscribeToken, verifyUnsubscribeToken, sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -471,6 +471,18 @@ describe('email: re-engagement senders', () => {
         assert.equal(send.mock.calls.length, 0, type);
       }
     }
+  });
+
+  it('signs the link with EMAIL_UNSUBSCRIBE_SECRET when set, so rotating SESSION_SECRET keeps old links valid', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    const config = marketingConfig({ EMAIL_UNSUBSCRIBE_SECRET: 'unsub-secret' });
+    assert.equal(await sendLineupDropEmail({ ...base, to: 'sep@example.com', config, log: createMockLog(), _client: createMockClient(send) }), true);
+    const link = (send.mock.calls as any[])[0].arguments[0].headers['List-Unsubscribe'].slice(1, -1);
+    const token = decodeURIComponent(new URL(link).searchParams.get('token') ?? '');
+    assert.equal(verifyUnsubscribeToken(token, 'unsub-secret'), 'user-1');
+    assert.equal(verifyUnsubscribeToken(token, 'test-secret'), null);
+    assert.equal(unsubscribeSecret(config), 'unsub-secret');
+    assert.equal(unsubscribeSecret(marketingConfig()), 'test-secret', 'falls back to SESSION_SECRET');
   });
 
   it('transactional mail is unchanged: no postal address needed and no List-Unsubscribe header', async () => {

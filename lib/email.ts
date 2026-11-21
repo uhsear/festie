@@ -360,6 +360,11 @@ function _postalAddress(config: any): string {
   return typeof config?.EMAIL_POSTAL_ADDRESS === 'string' ? config.EMAIL_POSTAL_ADDRESS.trim() : '';
 }
 
+/** The key that signs unsubscribe links: EMAIL_UNSUBSCRIBE_SECRET, else SESSION_SECRET. */
+export function unsubscribeSecret(config: any): string {
+  return config?.EMAIL_UNSUBSCRIBE_SECRET || config?.SESSION_SECRET || '';
+}
+
 function _unsubscribeSignature(userId: string, secret: string): string {
   return crypto.createHmac('sha256', secret).update(`email-unsubscribe:${userId}`).digest('base64url');
 }
@@ -384,7 +389,7 @@ export function verifyUnsubscribeToken(token: unknown, secret: string): string |
 // null (and no send) when any of them cannot be provided: no address, no signing secret or no user id.
 function _marketingPrep(type: string, userId: any, config: any, log: any) {
   const address = _postalAddress(config);
-  const secret = config?.SESSION_SECRET;
+  const secret = unsubscribeSecret(config);
   if (!address || !secret || !userId) {
     log?.debug?.('email:marketing-skip', { type, reason: 'postal address, signing secret or user id missing' });
     return null;

@@ -563,17 +563,27 @@ describe('email-auth: unsubscribe', { concurrency: 1 }, () => {
     }
   }
 
-  test('GET with a valid token turns the re-engagement switches off, without a session', async () => {
+  test('GET with a valid token only shows a confirmation form and changes nothing, so a mail scanner opening the link does no harm', async () => {
     const { server, userId } = await setup(`unsub-get-${Date.now()}`);
     const token = unsubscribeToken(userId, SECRET);
     const res = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
+    assert.equal(res.status, 200);
+    assert.match(res.text, /<form method="post" action="\/api\/v1\/auth\/unsubscribe\?token=[^"]+&amp;from=page">/);
+    assert.doesNotMatch(res.text, /You are unsubscribed/);
+    assert.equal(await prefs(userId), undefined, 'no prefs row was written');
+  });
+
+  test('POST from the confirmation form turns the re-engagement switches off and answers with a page', async () => {
+    const { server, userId } = await setup(`unsub-form-${Date.now()}`);
+    const token = unsubscribeToken(userId, SECRET);
+    const url = `/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}&from=page`;
+    const res = await server.request.post(url);
     assert.equal(res.status, 200);
     assert.match(res.text, /You are unsubscribed/);
     const row = await prefs(userId);
     assert.deepEqual([row.lineup_drops, row.crew_reformed, row.wrap_ready], [0, 0, 0]);
     assert.equal(row.set_reminders, 1, 'unrelated switches stay on');
-    const again = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
-    assert.equal(again.status, 200, 'replaying the link is harmless');
+    assert.equal((await server.request.post(url)).status, 200, 'replaying it is harmless');
   });
 
   test('POST (RFC 8058 one-click) with a valid token unsubscribes', async () => {
@@ -600,8 +610,12 @@ describe('email-auth: unsubscribe', { concurrency: 1 }, () => {
       const get = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
       assert.equal(get.status, 400, token);
       assert.match(get.text, /Link not valid/);
+      assert.doesNotMatch(get.text, /Need a new link/, 'the sign-in retry hint does not apply to an unsubscribe link');
       const post = await server.request.post(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`).type('form').send('List-Unsubscribe=One-Click');
       assert.equal(post.status, 400, token);
+      const page = await server.request.post(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}&from=page`);
+      assert.equal(page.status, 400, token);
+      assert.match(page.text, /Link not valid/);
     }
     assert.equal(await prefs(userId), undefined, 'no prefs row was written');
   });
