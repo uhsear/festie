@@ -34,10 +34,10 @@ env:
 # centre sits under the tab bar, so a plain tap lands on a tab. Centre it first.
 - scrollUntilVisible:
     element:
-      id: "festival-card-nc-2026"
+      id: "festival-card-fk-2026"
     centerElement: true
 - tapOn:
-    id: "festival-card-nc-2026"
+    id: "festival-card-fk-2026"
 - extendedWaitUntil:
     visible:
       text: "Timeline|Cards"

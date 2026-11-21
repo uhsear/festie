@@ -24,10 +24,10 @@ onFlowComplete:
 # See ios-smoke.yaml: centre the card first so a tap cannot land on the tab bar.
 - scrollUntilVisible:
     element:
-      id: "festival-card-nc-2026"
+      id: "festival-card-fk-2026"
     centerElement: true
 - tapOn:
-    id: "festival-card-nc-2026"
+    id: "festival-card-fk-2026"
 - extendedWaitUntil:
     visible:
       id: "schedule-screen"
