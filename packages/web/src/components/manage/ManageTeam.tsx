@@ -189,7 +189,7 @@ export default function ManageTeam({ organization }: Props) {
 
         {isOwner && data.pending.length > 0 && (
           <>
-            <h4 className="text-sm font-semibold text-text-primary">Waiting to join ({data.pending.length})</h4>
+            <h4 className="text-sm font-semibold text-text-primary">Waiting to join ({data.pending.filter((p) => !p.expired).length})</h4>
             <ul className="list-none space-y-2 p-0">
               {data.pending.map((p) => (
                 <li key={p.email} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">

@@ -85,6 +85,7 @@ describe('ManageTeam', () => {
     const fresh = screen.getByText('new@venue.example').closest('li')!;
     expect(within(fresh).getByText(/Joins when they sign in with this email and confirm it/)).toBeInTheDocument();
     expect(within(fresh).queryByText(/Expired/)).not.toBeInTheDocument();
+    expect(screen.getByText('Waiting to join (1)')).toBeInTheDocument();
   });
 
   it('adds a member through the members route', async () => {
