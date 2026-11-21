@@ -2,10 +2,11 @@ import { useMemo } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 import { useInterest } from '@festie/shared/hooks/useInterest';
-import { artistLinkEntries } from '@festie/shared/utils';
+import { artistLinkEntries, spotifyAttributionFor } from '@festie/shared/utils';
 import { enrichArtistTarget } from '@festie/shared/utils/artistSheet';
 import Avatar from '../ui/Avatar';
 import Sheet from '../ui/Sheet';
+import SpotifyAttribution from './SpotifyAttribution';
 import { cn } from '../../lib/utils';
 
 export const sheetButtonClass =
@@ -57,6 +58,7 @@ export default function ArtistSheetHost() {
                 {artist.genres && artist.genres.length > 0 && (
                   <span className="text-sm text-text-secondary">{artist.genres.join(' · ')}</span>
                 )}
+                {spotifyAttributionFor([artist]) ? <SpotifyAttribution href={spotifyAttributionFor([artist])!.href} /> : null}
                 <div className="flex flex-wrap gap-2">
                   {artistLinkEntries(artist.links).map((link) => (
                     <a

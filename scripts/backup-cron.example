@@ -21,7 +21,7 @@ APP_DIR=/opt/festie
 
 # ── Database backups ─────────────────────────────────────────────────────────
 
-# On-host dump every 6 hours (pg_dump custom format, 30-day daily + 12 weekly).
+# On-host dump every 6 hours (pg_dump custom format, encrypted with BACKUP_GPG_PASSPHRASE; 30-day daily + 12 weekly, nothing older than 13 weeks).
 # The same run writes avatars_YYYYMMDD.tar.gz beside the dump (on host only; restore steps in the script header).
 0 */6 * * * cd $APP_DIR && bash scripts/backup-pg.sh >> logs/backup.log 2>&1 && curl -fsS -m 10 --retry 3 -o /dev/null https://hc-ping.com/<uuid>
 
@@ -62,6 +62,10 @@ APP_DIR=/opt/festie
 
 # Application log cleanup daily at 3:00 AM (rotate deploy.log, migrate.log)
 0 3 * * * cd $APP_DIR && bash scripts/log-cleanup.sh >> logs/log-cleanup.log 2>&1 && curl -fsS -m 10 --retry 3 -o /dev/null https://hc-ping.com/<uuid>
+
+# Spotify data refresh daily at 3:30 AM: re-reads artist photos and genres older than 30 days
+# (Spotify Developer Terms IV.3.1.1). Needs SPOTIFY_CLIENT_ID and SPOTIFY_CLIENT_SECRET in .env.
+30 3 * * * cd $APP_DIR && node --import tsx/esm scripts/spotify-refresh-stale.ts >> logs/spotify-refresh.log 2>&1
 
 # Audit log cleanup: 1st of each month at 2:15 AM (prune rows older than 90d)
 15 2 1 * * cd $APP_DIR && bash scripts/audit-log-cleanup.sh >> logs/audit-log-cleanup.log 2>&1 && curl -fsS -m 10 --retry 3 -o /dev/null https://hc-ping.com/<uuid>

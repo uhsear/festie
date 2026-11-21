@@ -14,7 +14,7 @@ import {
 // Minimal logger / config helpers
 // ---------------------------------------------------------------------------
 const log = { info() {}, warn() {}, debug() {}, error() {} };
-const config = { PUBLIC_ORIGIN: 'https://festie.test', RESEND_API_KEY: '' };
+const config = { PUBLIC_ORIGIN: 'https://festie.test', RESEND_API_KEY: '', SESSION_SECRET: 'test-secret' };
 
 // =====================================================================
 // payload.ts — the three M3 types are allowed
@@ -277,7 +277,7 @@ describe('createReengagementTriggers.sendLineupDrop', () => {
         return new Response(JSON.stringify({ id: 'e1' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
       });
       const users = new Map(
-        [...followers, ...prior].map((id) => [id, { email: `${id}@example.com`, emailVerifiedAt: unverified.includes(id) ? null : '2026-01-01T00:00:00.000Z', username: id }] as const),
+        [...followers, ...prior].map((id) => [id, { id, email: `${id}@example.com`, emailVerifiedAt: unverified.includes(id) ? null : '2026-01-01T00:00:00.000Z', username: id }] as const),
       );
       const stores = {
         users: { getByIds: async () => users },
@@ -370,6 +370,7 @@ describe('createReengagementTriggers.sendWrapReady', () => {
     seen = new Set<string>(),
     existsThrows = false,
     existsCalls = [] as any[],
+    postal = '1 Main St, Town',
   }: any = {}) {
     const sends: any[] = [];
     const notificationService = {
@@ -404,7 +405,7 @@ describe('createReengagementTriggers.sendWrapReady', () => {
         insert: async () => {},
       },
     };
-    const triggers = createReengagementTriggers({ stores, config, log, notificationService });
+    const triggers = createReengagementTriggers({ stores, config: { ...config, EMAIL_POSTAL_ADDRESS: postal }, log, notificationService });
     return { triggers, sends };
   }
 
@@ -466,6 +467,19 @@ describe('createReengagementTriggers.sendWrapReady', () => {
     assert.equal(sends.length, 0);
     const emailCall = existsCalls.find((c) => c.key === 'wrap:f1#email');
     assert.deepEqual(emailCall?.uids, ['u1', 'u2']);
+  });
+
+  it('without a postal address the email path is skipped entirely (no dedup read, no send)', async () => {
+    const existsCalls: any[] = [];
+    const { triggers } = build({
+      festival: { name: 'FK', days: [{ date: PAST }] },
+      attendeeIds: ['u1'],
+      existsCalls,
+      postal: '',
+    });
+    const r = await triggers.sendWrapReady('f1');
+    assert.equal(r.emailSent, 0);
+    assert.equal(existsCalls.some((c) => c.key === 'wrap:f1#email'), false);
   });
 
   it('a throwing attendee lookup is swallowed → festival over but no attendees', async () => {
@@ -826,7 +840,7 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
     };
     const stores = {
       festivals: { getById: async () => festival },
-      users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
+      users: { getByIds: async () => new Map([['f1', { id: 'f1', email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
       notificationPrefs: { get: async () => prefs },
       notificationLog: {
         // Stands in for notification_log: a user pushed for this event is not fresh.
@@ -910,7 +924,7 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
       const emailLog = { ...log, warn: (msg: string) => { if (msg === 'email:skip') skips.push(msg); } };
       const stores = {
         festivals: { getById: async () => FEST },
-        users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
+        users: { getByIds: async () => new Map([['f1', { id: 'f1', email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
         notificationPrefs: { get: async () => prefs },
         notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {}, countEmailsSince: async () => emailsToday },
       };
@@ -937,7 +951,7 @@ describe('createReengagementTriggers.sendTimeRelease', () => {
     const emailLog = { ...log, warn: (...args: any[]) => { warns.push(args); } };
     const stores = {
       festivals: { getById: async () => FEST },
-      users: { getByIds: async () => new Map([['f1', { email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
+      users: { getByIds: async () => new Map([['f1', { id: 'f1', email: 'f1@example.com', emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: 'f1' }]]) },
       notificationPrefs: { get: async () => ({ lineupDrops: true }) },
       notificationLog: { existsForEvents: async () => new Set<string>(), insert: async () => {}, countEmailsSince: async () => 0 },
     };
@@ -1058,7 +1072,7 @@ describe('createReengagementTriggers days_out', () => {
       festivals: { getById: async () => festival },
       users: {
         getByIds: async (ids: string[]) =>
-          new Map(ids.map((id) => [id, { email: `${id}@example.com`, emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: id }] as const)),
+          new Map(ids.map((id) => [id, { id, email: `${id}@example.com`, emailVerifiedAt: '2026-01-01T00:00:00.000Z', username: id }] as const)),
       },
       notificationPrefs: {
         get: async () => {

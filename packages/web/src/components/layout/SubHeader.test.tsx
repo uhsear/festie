@@ -388,6 +388,17 @@ describe('SubHeader genre chips', () => {
     expect(screen.getByRole('button', { name: 'Filters (1)' })).toBeInTheDocument();
   });
 
+  it('shows the Spotify attribution only when the genres come from Spotify artists', () => {
+    const spotifyLink = 'https://open.spotify.com/artist/4gzpq5DPGxSnKTe4SA8HAU';
+    storeState.sets = richSets;
+    const { unmount } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByTestId('spotify-attribution')).not.toBeInTheDocument();
+    unmount();
+    storeState.sets = richSets.map((set) => ({ ...set, artists: [{ ...set.artists[0], links: { spotify: spotifyLink } }] }));
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByTestId('spotify-attribution')).toHaveAttribute('href', spotifyLink);
+  });
+
   it('hides the group on day-only routes where the stage chips hide', () => {
     storeState.sets = richSets;
     mockPathname = '/picks';

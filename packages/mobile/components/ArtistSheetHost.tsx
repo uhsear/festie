@@ -4,11 +4,12 @@ import { Linking, ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 import { useInterest } from '@festie/shared/hooks/useInterest';
-import { artistLinkEntries } from '@festie/shared/utils';
+import { artistLinkEntries, spotifyAttributionFor } from '@festie/shared/utils';
 import { enrichArtistTarget } from '@festie/shared/utils/artistSheet';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Avatar from './Avatar';
 import SheetShell from './SheetShell';
+import SpotifyAttribution from './SpotifyAttribution';
 
 /** The filled or empty "Interested" toggle on one act. A guest's mark stays on the device. */
 export function InterestToggle({ entryId, name }: { entryId: string; name: string }) {
@@ -66,6 +67,7 @@ export default function ArtistSheetHost({ inSetSheet = false }: { inSetSheet?: b
                       {artist.genres.join(' · ')}
                     </Text>
                   ) : null}
+                  {spotifyAttributionFor([artist]) ? <SpotifyAttribution href={spotifyAttributionFor([artist])!.href} /> : null}
                   <View style={styles.linkRow}>
                     {artistLinkEntries(artist.links).map((link) => (
                       <TouchableOpacity

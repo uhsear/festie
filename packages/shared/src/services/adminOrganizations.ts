@@ -35,6 +35,9 @@ export interface OrgPendingMember {
   role: OrgRole;
   addedBy: string | null;
   createdAt: string;
+  /** An invitation lapses 90 days after it was added. An expired one cannot be claimed. */
+  expiresAt: string;
+  expired: boolean;
 }
 
 /** What an organization used: the festivals it holds, this month's announcements and its stored images. */

@@ -8,6 +8,7 @@ import { useHaptics } from '../../hooks/useHaptics';
 import { priorityColor } from '../../lib/priorityColor';
 import { priorityIconName } from '../../lib/prioritySymbol';
 import type { Dispatch, SetStateAction } from 'react';
+import SpotifyAttribution from '../SpotifyAttribution';
 import BulkPill from './BulkPill';
 import { useStyles } from './styles';
 
@@ -21,6 +22,7 @@ interface PicksBulkPanelProps {
   bulkBusyKey: string | null;
   bulkOpen: boolean;
   bulkPriority: Priority;
+  genreAttribution: { href: string } | null;
   genreGroups: BulkPickGroup[];
   handleBulkApply: (group: BulkPickGroup) => void;
   setBulkOpen: Dispatch<SetStateAction<boolean>>;
@@ -32,6 +34,7 @@ export default function PicksBulkPanel({
   bulkBusyKey,
   bulkOpen,
   bulkPriority,
+  genreAttribution,
   genreGroups,
   handleBulkApply,
   setBulkOpen,
@@ -127,6 +130,7 @@ export default function PicksBulkPanel({
               />
             ))}
           </View>
+          {genreAttribution ? <SpotifyAttribution href={genreAttribution.href} /> : null}
         </View>
       )}
     </View>

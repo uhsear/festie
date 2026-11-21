@@ -12,6 +12,7 @@ import {
   type SyncedFestival,
 } from '../lib/db/stores/artists.js';
 import * as spotify from '../lib/spotify.js';
+import { refreshStaleSpotifyArtists } from '../lib/spotify-refresh.js';
 import { applyBackfillPlan, planBackfill, planHash, verifyBackfill } from '../lib/artist-backfill.js';
 import { createOpaqueId } from '../lib/helpers.js';
 import type { Request, Response, NextFunction } from 'express';
@@ -326,6 +327,35 @@ export default function createArtistsRoutes(deps: RouteDeps) {
       }
     },
   );
+
+  // One request must end well inside Cloudflare's 100 s limit, so the route reads fewer artists per call than the cron script does; the rest wait for the next call.
+  const STALE_REFRESH_ROUTE_LIMIT = 200;
+
+  /**
+   * Re-reads the Spotify photo and genres of every artist whose stored copy is older than the refresh limit
+   * (30 days, Spotify Developer Terms IV.3.1.1), one transaction per artist. The same work runs from cron through
+   * scripts/spotify-refresh-stale.ts; this route is the admin trigger and also clears the caches.
+   */
+  router.post('/spotify-refresh-stale', rateLimit(6, 'artist-spotify-refresh-stale'), validate(schemas.artistSpotifyRefreshStale), async (req: Request, res: Response) => {
+    try {
+      const missing = spotifyKeysMissing(res);
+      if (missing) return missing;
+      const { limit } = req.validatedBody as z.infer<typeof schemas.artistSpotifyRefreshStale>;
+      const { synced, ...counts } = await refreshStaleSpotifyArtists({
+        stores: { artists: stores.artists },
+        config,
+        log,
+        userId: req.user?.userId ?? null,
+        ip: getRequestIp(req),
+        limit: limit ?? STALE_REFRESH_ROUTE_LIMIT,
+      });
+      if (counts.updated > 0 && req.res?.locals) req.res.locals.auditWritten = true;
+      await afterSync(synced);
+      return sendSuccess(res, counts);
+    } catch (error) {
+      return sendArtistError(res, error, 'refresh stale Spotify data');
+    }
+  });
 
   /**
    * Applies the plan under the lock. Festivals commit one by one, so even a failed run may have changed

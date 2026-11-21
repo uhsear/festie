@@ -5,11 +5,12 @@
     "lib/instrument.ts",
     "scripts/*.{mjs,js}",
     "scripts/artist-backfill.ts",
+    "scripts/spotify-refresh-stale.ts",
     "scripts/staging/*.ts",
     "tests/**/*.test.ts"
   ],
   "project": ["lib/**/*.ts", "routes/**/*.ts", "scripts/**/*.{ts,mjs,js}"],
   "ignore": ["packages/**"],
   "ignoreDependencies": ["@sentry/node", "papaparse", "@types/papaparse"],
-  "ignoreBinaries": ["expo", "lhci", "psql", "pmtiles", "build-storybook", "bundlemon"]
+  "ignoreBinaries": ["expo", "gpg", "lhci", "psql", "pmtiles", "build-storybook", "bundlemon"]
 }

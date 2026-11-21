@@ -53,6 +53,10 @@ function AccountPageInner() {
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
   }, [user, navigate]);
+  // The public /delete-account page links to /account#danger; the sections render after the lazy chunk, so scroll once the user is known.
+  useEffect(() => {
+    if (user && window.location.hash === '#danger') document.getElementById('danger')?.scrollIntoView();
+  }, [user]);
   if (!user) return null;
 
   const handleSignOut = async () => {
@@ -165,7 +169,7 @@ function AccountPageInner() {
         ) : null}
 
         {ACCOUNT_SECTIONS.filter((s) => !('adminOnly' in s) || isAdmin).map((s) => (
-          <Section key={s.id} label={s.label}>
+          <Section key={s.id} id={s.id} label={s.label}>
             {body[s.id]}
           </Section>
         ))}
@@ -179,9 +183,9 @@ function AccountPageInner() {
  * section body. Mirrors the mobile `sectionLabel` type style. An empty label
  * renders the body with no header.
  */
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
+function Section({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
   return (
-    <div className="space-y-3">
+    <div id={id === 'danger' ? id : undefined} className="space-y-3">
       {label ? (
         <h2 className="px-1 text-xs font-semibold text-text-secondary uppercase tracking-[.8px]">{label}</h2>
       ) : null}

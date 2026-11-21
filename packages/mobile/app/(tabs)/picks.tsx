@@ -40,6 +40,7 @@ import {
   clashBadgeBySetId,
   fmtZonedClock,
   foldSearch,
+  spotifyAttributionFor,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { COPY, clashCount } from '@festie/shared/constants';
@@ -414,6 +415,8 @@ export default function PicksScreen() {
   const bulkGroups = useMemo(() => buildBulkPickGroups(sets, stages, getStageName), [sets, stages, getStageName]);
   const stageGroups = bulkGroups.stages;
   const genreGroups = bulkGroups.genres;
+  // The genre groups are named from Spotify genres, so they carry the attribution (Spotify Developer Policy II.4).
+  const genreAttribution = useMemo(() => spotifyAttributionFor(sets.flatMap((set) => set.artists ?? [])), [sets]);
   const hasBulkGroups = stageGroups.length > 0 || genreGroups.length > 0;
 
   const handleBulkApply = useCallback(
@@ -641,6 +644,7 @@ export default function PicksScreen() {
       bulkBusyKey={bulkBusyKey}
       bulkOpen={bulkOpen}
       bulkPriority={bulkPriority}
+      genreAttribution={genreAttribution}
       genreGroups={genreGroups}
       handleBulkApply={handleBulkApply}
       setBulkOpen={setBulkOpen}

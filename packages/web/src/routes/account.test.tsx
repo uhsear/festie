@@ -112,6 +112,26 @@ describe('AccountPage', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Account' })).toBeInTheDocument();
   });
 
+  it('scrolls the Danger zone into view for the /account#danger link on the public delete-account page', () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.location.hash = '#danger';
+    try {
+      render(<AccountPage />);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(scrollIntoView.mock.instances[0]).toBe(screen.getByTestId('danger-zone').parentElement);
+    } finally {
+      window.location.hash = '';
+    }
+  });
+
+  it('does not scroll without the #danger hash', () => {
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    render(<AccountPage />);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
   it('redirects to /login when there is no user', () => {
     setStoreState({ user: null });
     const { container } = render(<AccountPage />);

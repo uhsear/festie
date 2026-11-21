@@ -46,6 +46,7 @@ import {
   hasAnyPick,
   isStageFilterActive,
   festivalGenres,
+  spotifyAttributionFor,
   scheduleEmptyCopy,
   scheduleEmptyReason,
   visibleDayIndexes,
@@ -322,6 +323,8 @@ export default function TimelineScreen() {
   const stageFilterActive = isStageFilterActive(activeStages, stages.length);
   const genreFilterActive = activeGenres.length > 0;
   const genreChips = useMemo(() => festivalGenres(allSets), [allSets]);
+  // The genre chips come from Spotify, so the filter carries the attribution (Spotify Developer Policy II.4).
+  const genreAttribution = useMemo(() => spotifyAttributionFor(allSets.flatMap((set) => set.artists ?? [])), [allSets]);
   const visibleDays = visibleDayIndexes(days.length, hiddenDays, selectedDay);
 
   // Day + stage + My picks + search filtering lives in the shared hook
@@ -832,6 +835,7 @@ export default function TimelineScreen() {
       dismissedPhase={dismissedPhase}
       filteredSets={filteredSets}
       filtersOpen={filtersOpen}
+      genreAttribution={genreAttribution}
       genreChips={genreChips}
       genreFilterActive={genreFilterActive}
       hPad={hPad}

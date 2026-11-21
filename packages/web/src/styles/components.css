@@ -589,3 +589,14 @@ button[aria-label='Back to app'] {
   border: 1px solid color-mix(in srgb, var(--color-accent-aqua, #19e3d3) 40%, transparent);
   pointer-events: none;
 }
+
+/* Spotify attribution: the white logo on the dark theme, the black one on daylight. */
+.spotify-logo-on-light {
+  display: none;
+}
+:root[data-theme='daylight'] .spotify-logo-on-dark {
+  display: none;
+}
+:root[data-theme='daylight'] .spotify-logo-on-light {
+  display: inline-block;
+}

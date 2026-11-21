@@ -9,7 +9,10 @@ set -euo pipefail
 #
 # Usage:
 #   bash scripts/backup-verify-restore.sh                    # latest backup
-#   bash scripts/backup-verify-restore.sh /path/to/dump.dump # specific file
+#   bash scripts/backup-verify-restore.sh /path/to/dump.dump.gpg # specific file
+#
+# On-host dumps are GPG-encrypted (fp_*.dump.gpg). The script decrypts the chosen one to a
+# temporary file with BACKUP_GPG_PASSPHRASE (environment or .env) and deletes that file at exit.
 #
 # Environment variables:
 #   BACKUP_DIR          Override backup directory (default: $HOME/backups/festie)
@@ -49,6 +52,7 @@ send_alert() {
 }
 
 cleanup() {
+  [ -z "${PLAIN:-}" ] || rm -f "$PLAIN"
   # Never drop a database this run did not create (RESTORE_DB may name an existing one).
   [ "$CREATED_DB" = "1" ] || return 0
   if [ "${KEEP_DB:-0}" = "1" ]; then
@@ -80,11 +84,11 @@ if [ -n "${1:-}" ]; then
   BACKUP_FILE="$1"
 else
   # Find the most recent .dump file in BACKUP_DIR
-  BACKUP_FILE=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump" -not -name "*_weekly.dump" \
+  BACKUP_FILE=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump.gpg" -not -name "*_weekly.dump.gpg" \
     -printf '%T+ %p\n' 2>/dev/null | sort -r | head -1 | awk '{print $2}')
   if [ -z "$BACKUP_FILE" ]; then
     # Try weekly backups as fallback
-    BACKUP_FILE=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*_weekly.dump" \
+    BACKUP_FILE=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*_weekly.dump.gpg" \
       -printf '%T+ %p\n' 2>/dev/null | sort -r | head -1 | awk '{print $2}')
   fi
 fi
@@ -96,6 +100,19 @@ FSIZE=$(stat -c%s "$BACKUP_FILE" 2>/dev/null || stat -f%z "$BACKUP_FILE" 2>/dev/
 [ "$FSIZE" -gt 100 ] || die "Backup file suspiciously small (${FSIZE} bytes): ${BACKUP_FILE}"
 
 log "Verifying backup: ${BACKUP_FILE} ($(du -h "$BACKUP_FILE" | cut -f1))"
+
+# ── Decrypt ─────────────────────────────────────────────────────────────────
+
+RESTORE_FILE="$BACKUP_FILE"
+if [[ "$BACKUP_FILE" == *.gpg ]]; then
+  # shellcheck source=lib/backup-gpg.sh
+  source "$SCRIPT_DIR/scripts/lib/backup-gpg.sh"
+  load_backup_passphrase "$SCRIPT_DIR"
+  [ -n "$BACKUP_GPG_PASSPHRASE" ] || die "BACKUP_GPG_PASSPHRASE is not set (environment or .env): cannot decrypt ${BACKUP_FILE}"
+  PLAIN="$(mktemp "${TMPDIR:-/tmp}/festie-restore-verify.XXXXXX")"
+  backup_decrypt "$BACKUP_FILE" "$PLAIN" || die "Could not decrypt ${BACKUP_FILE}"
+  RESTORE_FILE="$PLAIN"
+fi
 
 # ── Pre-flight checks ───────────────────────────────────────────────────────
 
@@ -129,7 +146,7 @@ CREATED_DB=1
 
 log "Running pg_restore into ${TEMP_DB}..."
 if pg_restore -h "$DB_HOST" -p "$DB_PORT" -U "$DB_USER" -d "$TEMP_DB" \
-  --no-owner --no-privileges "$BACKUP_FILE" 2>&1; then
+  --no-owner --no-privileges "$RESTORE_FILE" 2>&1; then
   log "pg_restore completed successfully"
 else
   # pg_restore returns non-zero for warnings (e.g., missing roles); check if tables exist

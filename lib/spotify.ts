@@ -228,9 +228,18 @@ function bulkSearchCandidates(names: any, clientId: any, clientSecret: any, opts
   return bulkSearchArtists(names, clientId, clientSecret, { ...opts, search: searchCandidates });
 }
 
-/** Spotify artists by id, looked up with a bounded pool. An id Spotify does not know, or a failed lookup, is missing from the map. */
-async function getArtistsByIds(ids: string[], clientId: any, clientSecret: any, { concurrency = 6, log }: any = {}) {
-  return bulkSearchArtists(ids, clientId, clientSecret, { concurrency, log, search: getArtistById });
+/**
+ * Spotify artists by id, looked up with a bounded pool. An id Spotify does not know, or a failed lookup, is
+ * missing from the map. `gone`, when given, receives only the ids Spotify answered for as unknown, so a caller can
+ * tell a removed artist from a lookup that failed.
+ */
+async function getArtistsByIds(ids: string[], clientId: any, clientSecret: any, { concurrency = 6, log, gone }: any = {}) {
+  const search = async (spotifyId: string) => {
+    const artist = await getArtistById(spotifyId, clientId, clientSecret);
+    if (!artist) gone?.add(spotifyId);
+    return artist;
+  };
+  return bulkSearchArtists(ids, clientId, clientSecret, { concurrency, log, search });
 }
 
 export { searchArtist, bulkSearchArtists, bulkSearchCandidates, getArtistsByIds, getToken, cleanArtistName };

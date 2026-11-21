@@ -20,11 +20,13 @@ describe('scripts/backup-offsite-git.sh', { skip }, () => {
   const log = () => readFileSync(path.join(backupDir, 'offsite-git.log'), 'utf8');
   const pushed = () => readdirSync(dumpsDir).sort();
   const run = (extra: Record<string, string> = {}) => runScript(SCRIPT, [], { ...env, ...extra });
+  const counts = (gpgName: string) => gpgName.replace(/\.gpg$/, '.counts');
 
   function writeDump(hoursAgo: number, opts: { weekly?: boolean; counts?: boolean } = {}): string {
-    const name = `fp_${dumpStamp(hoursAgo)}${opts.weekly ? '_weekly' : ''}.dump`;
+    // backup-pg.sh leaves dumps already encrypted: fp_<stamp>.dump.gpg, with fp_<stamp>.dump.counts beside it.
+    const name = `fp_${dumpStamp(hoursAgo)}${opts.weekly ? '_weekly' : ''}.dump.gpg`;
     writeFileSync(path.join(backupDir, name), 'x'.repeat(300));
-    if (opts.counts !== false && !opts.weekly) writeFileSync(path.join(backupDir, `${name}.counts`), 'users|1|\n');
+    if (opts.counts !== false && !opts.weekly) writeFileSync(path.join(backupDir, counts(name)), 'users|1|\n');
     return name;
   }
 
@@ -38,7 +40,8 @@ describe('scripts/backup-offsite-git.sh', { skip }, () => {
     const bin = path.join(work, 'bin');
     // diff exits 1 so the script sees changes; rm exits 1 so its plain rm -f fallback runs.
     writeStub(bin, 'git', 'case "$*" in "diff --cached --quiet"|"diff --quiet"|"rm "*) exit 1;; esac; exit 0');
-    writeStub(bin, 'gpg', 'while [ $# -gt 0 ]; do [ "$1" = "--output" ] && echo encrypted > "$2"; shift; done');
+    // Only the decrypt-to-verify step calls gpg now: the dump is already encrypted.
+    writeStub(bin, 'gpg', 'while [ $# -gt 0 ]; do [ "$1" = "--output" ] && echo decrypted > "$2"; shift; done; exit "${GPG_RC:-0}"');
     writeStub(bin, 'pg_restore', 'echo "pg_restore: stub failure" >&2; exit "${PG_RESTORE_RC:-0}"');
     env = stubEnv(bin, path.join(work, 'stub.log'), {
       BACKUP_DIR: backupDir,
@@ -56,8 +59,28 @@ describe('scripts/backup-offsite-git.sh', { skip }, () => {
     const name = writeDump(1);
     const r = run();
     assert.equal(r.status, 0, r.stdout + r.stderr + log());
-    assert.deepEqual(pushed(), [`${name}.counts`, `${name}.gpg`]);
+    assert.deepEqual(pushed(), [counts(name), name]);
     assert.match(readFileSync(path.join(work, 'stub.log'), 'utf8'), /^git push /m);
+  });
+
+  it('pushes a byte copy of the on-host file and never encrypts it again', () => {
+    const name = writeDump(1);
+    assert.equal(run().status, 0, log());
+    assert.equal(readFileSync(path.join(dumpsDir, name), 'utf8'), 'x'.repeat(300));
+    const calls = readFileSync(path.join(work, 'stub.log'), 'utf8');
+    assert.doesNotMatch(calls, /--symmetric/);
+    assert.match(calls, /^gpg .*--decrypt/m, 'gpg only decrypts, to check the dump');
+  });
+
+  it('exits 1 and leaves the dump alone when it cannot be decrypted', () => {
+    const name = writeDump(1);
+    const r = run({ GPG_RC: '2' });
+    assert.equal(r.status, 1);
+    assert.match(log(), /could not decrypt/);
+    assert.ok(existsSync(path.join(backupDir, name)));
+    assert.ok(!existsSync(path.join(backupDir, `${name}.bad`)));
+    assert.deepEqual(pushed(), []);
+    assert.deepEqual(readdirSync(backupDir).filter((f) => f.startsWith('.offsite-verify')), [], 'no plaintext temp file is left');
   });
 
   it('fails on a dump older than 26 h', () => {
@@ -117,7 +140,7 @@ describe('scripts/backup-offsite-git.sh', { skip }, () => {
     writeDump(2, { weekly: true });
     const r = run();
     assert.equal(r.status, 0, r.stdout + r.stderr + log());
-    assert.deepEqual(pushed(), [`${daily}.counts`, `${daily}.gpg`]);
+    assert.deepEqual(pushed(), [counts(daily), daily]);
   });
 
   it('prunes a sidecar together with its dump and keeps the pair of a kept dump', () => {
@@ -132,7 +155,7 @@ describe('scripts/backup-offsite-git.sh', { skip }, () => {
     const r = run();
     assert.equal(r.status, 0, r.stdout + r.stderr + log());
     const files = new Set(pushed());
-    assert.ok(files.has(`${name}.gpg`) && files.has(`${name}.counts`), 'the new pair is pushed');
+    assert.ok(files.has(name) && files.has(counts(name)), 'the new pair is pushed');
     const kept = (day: number) => files.has(`${stems.get(day)}.gpg`);
     assert.ok(kept(5), 'a 5-day-old dump stays');
     assert.ok(!kept(100), 'a 100-day-old dump is pruned');
@@ -147,7 +170,7 @@ describe('scripts/backup-offsite-git.sh', { skip }, () => {
     const r = run();
     assert.equal(r.status, 1);
     assert.match(log(), /retention prune failed/);
-    assert.ok(pushed().includes(`${name}.gpg`), 'the new dump is still pushed');
+    assert.ok(pushed().includes(name), 'the new dump is still pushed');
     assert.match(readFileSync(path.join(work, 'stub.log'), 'utf8'), /^git push /m);
   });
 });

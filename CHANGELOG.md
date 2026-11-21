@@ -11,10 +11,18 @@ Merged to `main` but not yet deployed to production.
 
 ### Added
 - **Mobile**: the theme follows the OS when Match system is chosen.
+- A public `/delete-account` page explains how to delete an account, for the App Store and Google Play.
+- Every marketing email carries a signed one-click unsubscribe link (`List-Unsubscribe` and `List-Unsubscribe-Post`). These emails are not sent while `EMAIL_POSTAL_ADDRESS` is unset.
+- The Spotify logo and a link to the artist's Spotify page show next to Spotify photos and genres, on web and mobile.
+- Stored Spotify photos and genres are re-read after 30 days (`scripts/spotify-refresh-stale.ts`, admin route `POST /api/v1/admin/artists/spotify-refresh-stale`, migration 122).
 - **Admin**: an Artist review tab. Import a JSON batch of researched link, merge and rename proposals, then approve or reject each one. An approval uses the same edit and merge code as the Artists tab.
 
 ### Changed
 - Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.
+- Space Grotesk is self-hosted on web; no page loads fonts from Google any more.
+- Pending organization invitations expire after 90 days and are deleted after 120, so an owner still sees them as expired in between.
+- On-host database dumps are GPG-encrypted with `BACKUP_GPG_PASSPHRASE`, and nothing in the backup directory outlives 13 weeks. `backup-pg.sh` refuses to run without the passphrase.
+- The accepted Terms version comes from one `TOS_VERSION` constant.
 - Festival profiles are paged in SQL, and page parameters are parsed with Zod.
 
 ### Fixed
