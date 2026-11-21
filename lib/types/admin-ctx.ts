@@ -3,16 +3,18 @@
 /** The shared `ctx` that routes/admin.ts builds and passes to each admin sub-route module. */
 import type crypto from 'crypto';
 import type { Router } from 'express';
-import type { createPasswordResetRateLimit } from '../lib/rate-limiting.js';
-import type { parsePageParams, paginateArray } from '../lib/pagination.js';
-import type { RouteDeps } from '../lib/types';
+import type { createPasswordResetRateLimit } from '../rate-limiting.js';
+import type { parsePageParams, paginateArray } from '../pagination.js';
+import type { RouteDeps } from './app-context.js';
 
-export interface AdminRouteCtx {
+interface AdminRouteCtx {
   adminWriteLimit: ReturnType<RouteDeps['rateLimit']>;
   passwordResetRateLimit: ReturnType<typeof createPasswordResetRateLimit>;
   crypto: typeof crypto;
   parsePageParams: typeof parsePageParams;
   paginateArray: typeof paginateArray;
+  // Audit rows are untyped DB rows; this matches the implementation in routes/admin.ts.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   enrichAuditEntries: (rows: any[]) => Promise<any[]>;
 }
 

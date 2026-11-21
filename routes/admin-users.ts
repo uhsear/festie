@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
-import type { AdminMountArgs } from './admin-ctx.js';
+import type { AdminMountArgs } from '../lib/types/admin-ctx.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user.js';

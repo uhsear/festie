@@ -6,7 +6,7 @@
  * Mounts: /bulk/deactivate, /bulk/archive-festivals,
  *         /crews, /crews/:id/members, /crews/:id/members/:userId, /crews/:id
  */
-import type { AdminMountArgs } from './admin-ctx.js';
+import type { AdminMountArgs } from '../lib/types/admin-ctx.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { dropLivePosition } from '../lib/live-location-cache.js';

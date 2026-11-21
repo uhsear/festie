@@ -7,7 +7,7 @@
  * policy_notice_sends so a re-run never mails a user twice. The first send of a noticeId pins its content hash in
  * policy_notices, and only one notice may be sent in any 24 hours, so a reused or second id cannot mail new text.
  */
-import type { AdminMountArgs } from './admin-ctx.js';
+import type { AdminMountArgs } from '../lib/types/admin-ctx.js';
 import { createHash } from 'node:crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { sendPolicyNoticeEmail } from '../lib/email.js';
