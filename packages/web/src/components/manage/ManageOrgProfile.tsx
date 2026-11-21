@@ -22,6 +22,8 @@ export default function ManageOrgProfile({ organization, canEdit }: Props) {
   const [contactEmail, setContactEmail] = useState(organization.contactEmail ?? '');
   const [website, setWebsite] = useState(organization.website ?? '');
   const [busy, setBusy] = useState(false);
+  // A verified name is part of the badge: only Festie staff rename it, and they do not use this form (the server enforces the same rule).
+  const nameLocked = organization.verified;
 
   if (!canEdit) {
     return (
@@ -76,7 +78,8 @@ export default function ManageOrgProfile({ organization, canEdit }: Props) {
     <form onSubmit={save} aria-label="Organization profile" className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         Name
-        <input required minLength={2} maxLength={80} value={name} onChange={(e) => setName(e.target.value)} className={INPUT_CLASS} />
+        <input required minLength={2} maxLength={80} value={name} disabled={nameLocked} onChange={(e) => setName(e.target.value)} className={INPUT_CLASS} />
+        {nameLocked && <span>Verified organizations can only be renamed by Festie support.</span>}
       </label>
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         Display name

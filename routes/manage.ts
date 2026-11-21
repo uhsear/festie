@@ -357,6 +357,14 @@ export default function createManageRoutes(
     validate(deps.schemas.organizationProfile),
     async (req: any, res: any) => {
       try {
+        // A verified name is part of the badge, so only Festie staff (the admin pass of this gate) change it.
+        // The form resends the current name with every save, so an unchanged name passes.
+        if (req.validatedBody.name !== undefined && req.orgVerified === true) {
+          const current = await stores.organizations.profile(req.organizationId);
+          if (current && current.name !== req.validatedBody.name) {
+            return sendError(res, 403, 'Verified organizations can only be renamed by Festie support. Contact Festie to change the name.', ErrorCodes.FORBIDDEN);
+          }
+        }
         const updated = await stores.organizations.updateProfile(req.organizationId, req.validatedBody);
         if (!updated) return sendError(res, 404, 'Organization not found', ErrorCodes.NOT_FOUND);
         await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_UPDATED, 'organization', req.organizationId, { fields: Object.keys(req.validatedBody) });

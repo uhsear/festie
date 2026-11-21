@@ -314,6 +314,33 @@ describe('the organization on the manage mount', { skip }, () => {
     assert.equal((await o.as(server, users.ownerP.token).put('/api/v1/manage/organizations/org-p', { name: 'Pending Venue' })).status, 200);
     assert.equal((await o.as(server, users.ownerS.token).put('/api/v1/manage/organizations/org-s', { name: 'Paused Venue' })).status, 403);
   });
+
+  test('once an organization is verified only Festie renames it; an owner keeps the other fields and may resend the same name', async () => {
+    const { server, users, adminToken } = await boot();
+    const owner = o.as(server, users.ownerA.token);
+    const name = () => o.sql(server, "SELECT name FROM organizations WHERE id = 'org-a'").then((r: any) => r.rows[0].name);
+
+    assert.equal((await owner.put(ORG, { name: 'Venue A' })).status, 200, 'unverified: the owner renames');
+
+    await o.sql(server, "UPDATE organizations SET verified_at = NOW() WHERE id = 'org-a'");
+    const blocked = await owner.put(ORG, { name: 'Venue A Renamed', website: 'https://venue.example' });
+    assert.equal(blocked.status, 403);
+    assert.match(blocked.body.error.message, /Verified organizations can only be renamed by Festie support/);
+    assert.equal(await name(), 'Venue A', 'a blocked rename changes nothing, not even the other fields');
+    assert.equal((await o.sql(server, "SELECT website FROM organizations WHERE id = 'org-a'")).rows[0].website, null);
+
+    // The /manage form always sends the name, so an unchanged name must pass.
+    const same = await owner.put(ORG, { name: 'Venue A', displayName: 'The Venue' });
+    assert.equal(same.status, 200, JSON.stringify(same.body));
+    assert.equal(same.body.data.displayName, 'The Venue');
+
+    const renamed = await o.as(server, adminToken).put(ORG, { name: 'Venue A Official' });
+    assert.equal(renamed.status, 200, JSON.stringify(renamed.body));
+    assert.equal(await name(), 'Venue A Official');
+    const audit = (await o.sql(server, "SELECT actor_type, details_json FROM audit_log WHERE action = 'organization.updated' AND organization_id = 'org-a' ORDER BY created_at DESC LIMIT 1")).rows[0];
+    assert.equal(audit.actor_type, 'admin');
+    assert.deepEqual(JSON.parse(audit.details_json).fields, ['name']);
+  });
 });
 
 describe('the organization name goes into mail, so it carries no address or line break', { skip }, () => {

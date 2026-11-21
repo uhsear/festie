@@ -131,6 +131,15 @@ describe('ManageTeam', () => {
     );
   });
 
+  it('locks the name of a verified organization for its owner', async () => {
+    mockGet.mockResolvedValue(detail({ verified: true }));
+    render();
+    const form = await screen.findByRole('form', { name: 'Organization profile' });
+    expect(within(form).getByLabelText(/^Name/)).toBeDisabled();
+    expect(within(form).getByText('Verified organizations can only be renamed by Festie support.')).toBeInTheDocument();
+    expect(within(form).getByLabelText(/^Display name/)).toBeEnabled();
+  });
+
   it('offers Retry when the team cannot load', async () => {
     mockGet.mockRejectedValueOnce(new Error('network'));
     render();
