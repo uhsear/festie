@@ -290,6 +290,8 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 primaryArtist={primaryArtist}
                 stageColor={stageColor}
                 setArtist={set.artist}
+                set={set}
+                separator={b2bSeparator}
               />
 
               <div className="text-base text-text-secondary tabular-nums" data-testid="set-when">

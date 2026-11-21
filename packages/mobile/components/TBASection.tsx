@@ -10,6 +10,7 @@ import { priorityColor } from '../lib/priorityColor';
 import { PRIORITY_BUTTONS } from '../lib/prioritySymbol';
 
 import { safeStageColor } from '../lib/stageColor';
+import ArtistName, { artistOpenActions } from './ArtistName';
 
 
 type Crew = { profileId: string; priority: Priority; name?: string };
@@ -77,10 +78,9 @@ function TBACard({
         activeOpacity={0.7}
         accessibilityRole="button"
         accessibilityLabel={`${name}${stageName ? ' at ' + stageName : ''}, time TBA`}
+        {...artistOpenActions(set, b2bSeparator)}
       >
-        <Text style={styles.cardArtist} numberOfLines={2}>
-          {name}
-        </Text>
+        <ArtistName set={set} separator={b2bSeparator} textStyle={styles.cardArtist} numberOfLines={2} />
       </TouchableOpacity>
 
       {showPicks ? (

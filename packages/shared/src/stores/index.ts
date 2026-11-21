@@ -10,3 +10,4 @@ export * from './weatherStore';
 export * from './followStore';
 export * from './announcementStore';
 export * from './inboxStore';
+export * from './artistSheetStore';

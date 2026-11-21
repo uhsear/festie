@@ -16,6 +16,7 @@ import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
 import CrewSuggestionStrip from '../components/CrewSuggestionStrip';
 import CrewCompareSummary from '../components/CrewCompareSummary';
+import { ArtistNameRuns, artistOpenActions } from '../components/ArtistName';
 
 const ROW_HEADER_W = 168;
 const CELL_W = 76;
@@ -322,6 +323,7 @@ export default function CrewCompareScreen() {
                     activeOpacity={0.7}
                     accessibilityRole="button"
                     accessibilityLabel={`Open ${name}. ${pickedBy} of ${columns.length} picked`}
+                    {...artistOpenActions(set, currentFestival?.b2bSeparator)}
                   >
                     <View style={styles.rowHeaderInner}>
                       <View
@@ -332,7 +334,7 @@ export default function CrewCompareScreen() {
                       />
                       <View style={styles.rowHeaderText}>
                         <Text style={styles.setArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                          {name}
+                          <ArtistNameRuns set={set} separator={currentFestival?.b2bSeparator} />
                         </Text>
                         <Text style={styles.setTime} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                           {set.startTime ? `${formatTime(set.startTime)} · ` : ''}

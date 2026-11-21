@@ -199,7 +199,7 @@ describe('CrewPlanView', () => {
 
   it('wraps long artist names in Up next instead of truncating', () => {
     render(<CrewPlanView />);
-    const label = screen.getByText('Disclosure').parentElement!;
+    const label = screen.getByText('Disclosure').closest('.break-words')!;
     expect(label).toHaveClass('break-words');
     expect(label).not.toHaveClass('truncate');
   });

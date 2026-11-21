@@ -5,6 +5,7 @@ import { COPY, PRIORITY_LABELS } from '@festie/shared/constants';
 import { artistDisplayName } from '@festie/shared/utils';
 import type { SetContextEntry } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
+import ArtistName, { RowOpenButton } from './ArtistName';
 
 /** "On <stage> that night" neighbours and "Playing at the same time". Each part hides when empty. */
 export default function SetContextSection({ set }: { set: FestivalSet }) {
@@ -22,21 +23,17 @@ export default function SetContextSection({ set }: { set: FestivalSet }) {
     const pick = getMyPick(e.set.id);
     return (
       <li key={e.set.id}>
-        <button
-          type="button"
-          onClick={() => setDetailSet(e.set)}
-          aria-label={COPY.setContext.openA11y(artist, stage, e.time)}
-          className="flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2 text-left cursor-pointer hover:bg-bg-input focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-        >
+        <div className="relative flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-bg-input">
+          <RowOpenButton label={COPY.setContext.openA11y(artist, stage, e.time)} onClick={() => setDetailSet(e.set)} />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-text-primary">
               {lead && <span className="font-normal text-text-muted">{lead}: </span>}
-              {artist}
+              <ArtistName set={e.set} separator={separator} />
             </span>
             <span className="block text-xs text-text-muted">{lead ? e.time : `${stage} · ${e.time}`}</span>
           </span>
           {pick && <span className="text-xs text-accent-aqua">{PRIORITY_LABELS[pick]}</span>}
-        </button>
+        </div>
       </li>
     );
   };

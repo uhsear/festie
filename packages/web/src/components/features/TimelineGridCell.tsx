@@ -6,6 +6,7 @@ import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
 import PriorityIcon from '../ui/PriorityIcon';
 import Avatar from '../ui/Avatar';
+import ArtistName from './ArtistName';
 
 // Pick-icon ink per priority for the compact cell (no pick buttons there).
 const PICK_ICON_COLOR: Record<string, string> = {
@@ -146,12 +147,12 @@ function TimelineGridCell({
         </span>
       )}
 
-      {/* Open-detail control: a real button so the pick buttons below are not
-          nested inside another interactive role. Its name is its visible text. */}
+      {/* Open-detail control: a real button that fills the cell, so the artist name and the pick buttons
+          are siblings of it, not nested inside it. Its name is the sr-only text. */}
       <button
         type="button"
         className={cn(
-          'flex min-h-0 w-full flex-1 flex-col justify-center text-left cursor-pointer',
+          'absolute inset-0 cursor-pointer border-0 bg-transparent p-0 m-0 text-left',
           'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
         )}
         onClick={() => {
@@ -165,6 +166,15 @@ function TimelineGridCell({
         title={clash?.text}
         data-open
       >
+        <span className="sr-only">
+          {`${dn}, ${fmtShort(set.startTime!)} to ${fmtShort(set.endTime!)}, ${stageName}${myPick ? `, priority: ${myPick}` : ''}${
+            crew
+              ? `, ${crew.label}${crew.shown.length ? `: ${crew.shown.map((o) => `${o.name} (${o.priority})`).join(', ')}` : ''}${crew.overflow ? `, and ${crew.overflow} more` : ''}`
+              : ''
+          }${clash ? `, ${clash.text}` : ''}`}
+        </span>
+      </button>
+      <div className="relative flex min-h-0 w-full flex-1 flex-col justify-center pointer-events-none">
         <span
           className={cn(
             'block line-clamp-2 break-words [overflow-wrap:anywhere] [hyphens:auto] min-w-0',
@@ -177,7 +187,19 @@ function TimelineGridCell({
           )}
           title={dn}
         >
-          {dn}
+          {compact || isShort ? (
+            // A short or compact tile is mostly name. The cell button is its only target; the name opens from the set sheet.
+            dn
+          ) : (
+            <ArtistName
+              set={set}
+              separator={festival?.b2bSeparator}
+              slop={false}
+              tabIndex={tabIndex}
+              onKeyDown={(e) => onNavKey(e, set.id)}
+              onFocus={() => onActivate(set.id)}
+            />
+          )}
         </span>
         {/* Time label: compact format so the end time fits; wraps between start and end, never clips. */}
         <span
@@ -186,18 +208,12 @@ function TimelineGridCell({
             'text-[var(--color-text-secondary)]',
             isShort && 'sr-only',
           )}
+          aria-hidden="true"
         >
           <span className="whitespace-nowrap">{fmtShort(set.startTime!)}&ndash;</span>
           <span className="whitespace-nowrap">{fmtShort(set.endTime!)}</span>
         </span>
-        <span className="sr-only">
-          {`, ${stageName}${myPick ? `, priority: ${myPick}` : ''}${
-            crew
-              ? `, ${crew.label}${crew.shown.length ? `: ${crew.shown.map((o) => `${o.name} (${o.priority})`).join(', ')}` : ''}${crew.overflow ? `, and ${crew.overflow} more` : ''}`
-              : ''
-          }${clash ? `, ${clash.text}` : ''}`}
-        </span>
-      </button>
+      </div>
 
       {/* Priority pick buttons */}
       {canPick && !compact && !isShort && blockPx >= 60 && (

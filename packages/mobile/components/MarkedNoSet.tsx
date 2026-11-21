@@ -2,9 +2,11 @@ import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useInterestedRows } from '@festie/shared/hooks';
-import { lineupDays, lineupEntryBadge, lineupEntryName, markedWithoutSet } from '@festie/shared/utils';
+import { lineupDays, lineupEntryBadge, markedWithoutSet } from '@festie/shared/utils';
+import { lineupEntrySegments } from '@festie/shared/utils/artistSheet';
 import { useNow } from '../hooks/useNow';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { ArtistNameButton } from './ArtistName';
 
 /**
  * The Picks tab group "Marked, no set yet": acts the user marked that no set covers. Each row has the
@@ -27,9 +29,18 @@ export default function MarkedNoSet() {
       </Text>
       {rows.map((row) => (
         <View key={row.entry.id} style={styles.row}>
-          <Text style={styles.name} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {lineupEntryName(row.entry, festival?.b2bSeparator)}
-          </Text>
+          {lineupEntrySegments(row.entry, festival?.b2bSeparator, true).map((seg, i) => (
+            <View key={`${seg.label}-${i}`} style={styles.nameRow}>
+              {i > 0 ? (
+                <Text style={styles.name} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {festival?.b2bSeparator || 'b2b'}
+                </Text>
+              ) : null}
+              <ArtistNameButton target={seg.target} textStyle={styles.name}>
+                {seg.label}
+              </ArtistNameButton>
+            </View>
+          ))}
           {lineupEntryBadge(row.entry, row.cover, lineup, festival?.publishedAt, nowMs).map((badge) => (
             <View key={badge.kind} style={styles.pill}>
               <Text style={styles.pillText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
@@ -47,6 +58,7 @@ const useStyles = makeStyles((t) => ({
   group: { marginBottom: t.spacing[3] },
   heading: { ...typeStyle('label'), color: t.colors.text.primary, marginBottom: t.spacing[2] },
   row: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: t.spacing[2], minHeight: 44 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: t.spacing[1] },
   name: { ...typeStyle('body'), color: t.colors.text.primary },
   pill: {
     paddingHorizontal: t.spacing[2],

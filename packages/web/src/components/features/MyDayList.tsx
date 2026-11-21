@@ -13,6 +13,7 @@ import type { MyDay, MyDayItem } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
 import StageBadge from '../ui/StageBadge';
 import PriorityIcon from '../ui/PriorityIcon';
+import ArtistName, { RowOpenButton } from './ArtistName';
 
 interface MyDayListProps {
   myDay: MyDay;
@@ -41,17 +42,18 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
             {COPY.myDay.walk(walkFromPrev.minutes, getStageName(walkFromPrev.fromStageId) || '')}
           </p>
         )}
-        <button
-          type="button"
-          className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 cursor-pointer hover:bg-bg-card-hover focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-          aria-label={`${name}, ${formatTime(set.startTime)}${stageName ? `, ${stageName}` : ''}`}
-          onClick={() => onOpenSet(set)}
-        >
+        <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 hover:bg-bg-card-hover">
+          <RowOpenButton
+            label={`${name}, ${formatTime(set.startTime)}${stageName ? `, ${stageName}` : ''}`}
+            onClick={() => onOpenSet(set)}
+          />
           <span className="text-xs text-text-muted font-semibold tabular-nums min-w-[100px]">
             {formatTime(set.startTime)}
             {set.endTime ? ` – ${formatTime(set.endTime)}` : ''}
           </span>
-          <span className="flex-1 basis-40 text-sm font-bold min-w-[10rem] break-words">{name}</span>
+          <span className="flex-1 basis-40 text-sm font-bold min-w-[10rem] break-words">
+            <ArtistName set={set} separator={b2bSeparator} />
+          </span>
           <PriorityIcon priority={item.priority} className="w-4 h-4" />
           <StageBadge variant="pick" stageName={stageName} stageColor={stageColor(set.stageId)} />
           {clashLabel && (
@@ -59,7 +61,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
               {clashLabel}
             </span>
           )}
-        </button>
+        </div>
       </div>
     );
   };
@@ -109,15 +111,16 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
             {COPY.myDay.unscheduled}
           </Heading>
           {myDay.unscheduled.map((set) => (
-            <button
+            <div
               key={set.id}
-              type="button"
-              className="flex items-center gap-x-3 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 cursor-pointer hover:bg-bg-card-hover focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-              onClick={() => onOpenSet(set)}
+              className="relative flex items-center gap-x-3 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 hover:bg-bg-card-hover"
             >
-              <span className="flex-1 text-sm font-bold min-w-0 break-words [overflow-wrap:anywhere] line-clamp-2">{artistDisplayName(set, b2bSeparator)}</span>
+              <RowOpenButton label={artistDisplayName(set, b2bSeparator)} onClick={() => onOpenSet(set)} />
+              <span className="flex-1 text-sm font-bold min-w-0 break-words [overflow-wrap:anywhere] line-clamp-2">
+                <ArtistName set={set} separator={b2bSeparator} />
+              </span>
               <StageBadge variant="pick" stageName={getStageName(set.stageId) || ''} stageColor={stageColor(set.stageId)} />
-            </button>
+            </div>
           ))}
         </section>
       )}

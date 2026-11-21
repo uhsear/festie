@@ -11,6 +11,7 @@ import { Skeleton } from './Skeleton';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
+import { ArtistNameButton } from './ArtistName';
 
 interface AccountHistorySectionProps {
   /** Bumping this (from the screen's pull-to-refresh) re-fetches the history. */
@@ -131,15 +132,8 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
           </Text>
         </View>
         {seenMost.map((r, i) => (
-          <View
-            key={r.artist}
-            accessible
-            accessibilityLabel={`${r.artist}, ${r.festivals} festivals`}
-            style={[styles.artistRow, i === seenMost.length - 1 && styles.lastRow]}
-          >
-            <Text style={styles.artistName} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {r.artist}
-            </Text>
+          <View key={r.artist} style={[styles.artistRow, i === seenMost.length - 1 && styles.lastRow]}>
+            <ArtistNameButton name={r.artist} textStyle={styles.artistName} numberOfLines={2} />
             <Text style={styles.artistMeta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               {r.festivals} festivals
             </Text>
@@ -237,9 +231,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
               <View style={[styles.rank, i < 3 && { borderColor: MEDAL[i] }]}>
                 <Text style={styles.rankText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{i + 1}</Text>
               </View>
-              <Text style={styles.artistName} numberOfLines={2}>
-                {a.artist}
-              </Text>
+              <ArtistNameButton name={a.artist} textStyle={styles.artistName} numberOfLines={2} />
               <View style={styles.artistMetaWrap}>
                 <Ionicons name="flame" size={11} color={t.colors.accent.amber} />
                 <Text style={styles.artistMeta}>

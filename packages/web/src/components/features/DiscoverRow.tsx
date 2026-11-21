@@ -13,6 +13,7 @@ import {
   topPickedGenres,
 } from '@festie/shared/utils';
 import { useNow } from '../../hooks/useSetStatus';
+import ArtistName, { RowOpenButton } from './ArtistName';
 
 /** "More like your picks": unpicked sets in the genres the user picks most. */
 export default function DiscoverRow() {
@@ -57,17 +58,16 @@ export default function DiscoverRow() {
             .join(' · ');
           return (
             <li key={s.id} className="snap-start shrink-0">
-              <button
-                type="button"
-                onClick={() => setDetailSet(s)}
-                className="block w-[200px] min-h-[44px] rounded-xl border border-border bg-bg-card px-3 py-2 text-left cursor-pointer hover:bg-bg-input focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-              >
-                <span className="block truncate text-sm font-semibold text-text-primary">{artistDisplayName(s)}</span>
+              <div className="relative block w-[200px] min-h-[44px] rounded-xl border border-border bg-bg-card px-3 py-2 text-left hover:bg-bg-input">
+                <RowOpenButton label={`${artistDisplayName(s)}${when ? `, ${when}` : ''}`} onClick={() => setDetailSet(s)} />
+                <span className="block truncate text-sm font-semibold text-text-primary">
+                  <ArtistName set={s} />
+                </span>
                 {when && <span className="block truncate text-xs text-text-secondary">{when}</span>}
                 <span className="block truncate text-xs text-text-muted">
                   {getStageName(s.stageId) ?? ''}
                 </span>
-              </button>
+              </div>
             </li>
           );
         })}

@@ -8,18 +8,23 @@
 # script. Read-only — it changes nothing on the server. Checks:
 #   1. PM2 process is online.
 #   2. /api/ready returns 200 (db + redis healthy).
-#   3. A real login returns 200 (only if test creds are provided).
+#   3. Smoke (scripts/deploy/smoke.py): the web app mounts (index HTML plus its JS
+#      entry), the Socket.IO websocket upgrade answers 101, and, when
+#      FESTIE_SMOKE_USER / FESTIE_SMOKE_PASSWORD are set, login -> /auth/me -> logout.
 #   4. The served index references a fresh asset bundle hash.
 #
 # Configuration (env — KEY AUTH ONLY, no password support):
 #   FESTIE_SSH_HOST / FESTIE_SSH_USER / FESTIE_SSH_KEY
 #   FESTIE_APP_DIR / FESTIE_PM2_NAME / FESTIE_READY_URL / FESTIE_LOGIN_URL
-#   FESTIE_TEST_USER / FESTIE_TEST_PASSWORD  (optional; skips login check if unset)
+#   FESTIE_SMOKE_USER / FESTIE_SMOKE_PASSWORD  (optional; falls back to FESTIE_TEST_USER /
+#   FESTIE_TEST_PASSWORD; the smoke login is skipped if neither pair is set)
 # See scripts/deploy/deploy.py for the full env contract.
 
-import json
 import os
 import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from smoke import make_remote_fetch, run_smoke
 
 try:
     import paramiko
@@ -43,8 +48,9 @@ APP = _required("FESTIE_APP_DIR")
 PM2_NAME = os.environ.get("FESTIE_PM2_NAME", "festie")
 READY_URL = os.environ.get("FESTIE_READY_URL", "http://localhost:4000/api/ready")
 LOGIN_URL = os.environ.get("FESTIE_LOGIN_URL", "http://localhost:4000/api/v1/auth/login")
-TEST_USER = os.environ.get("FESTIE_TEST_USER")
-TEST_PASSWORD = os.environ.get("FESTIE_TEST_PASSWORD")
+# FESTIE_TEST_* (the deploy.py login check) is the fallback, so one credential pair drives both scripts.
+SMOKE_USER = os.environ.get("FESTIE_SMOKE_USER") or os.environ.get("FESTIE_TEST_USER")
+SMOKE_PASSWORD = os.environ.get("FESTIE_SMOKE_PASSWORD") or os.environ.get("FESTIE_TEST_PASSWORD")
 
 
 def run(client, cmd, timeout=120):
@@ -85,24 +91,9 @@ def main():
         if ready_code != "200":
             failures.append(f"/api/ready returned {ready_code}")
 
-        if TEST_USER and TEST_PASSWORD:
-            payload = json.dumps({"username": TEST_USER, "password": TEST_PASSWORD})
-            tmp = "/tmp/festie-verify-login.$$.json"
-            # One command, so one remote shell: $$ matches across write, curl and rm.
-            code, out, err = run(
-                client,
-                f"umask 077 && trap 'rm -f {tmp}' EXIT && cat > {tmp} <<'EOF'\n{payload}\nEOF\n"
-                f"curl -s -o /dev/null -w '%{{http_code}}' -X POST {LOGIN_URL} "
-                "-H 'Content-Type: application/json' -H 'X-Festie-Request: 1' "
-                f"-d @{tmp}",
-                timeout=60,
-            )
-            login_code = out.strip()
-            print(f"[login] http={login_code}")
-            if login_code != "200":
-                failures.append(f"login returned {login_code}")
-        else:
-            print("[login] skipped (FESTIE_TEST_USER / FESTIE_TEST_PASSWORD not set)")
+        # Web mount, websocket upgrade and (with credentials) login -> /auth/me -> logout.
+        fetch = make_remote_fetch(lambda cmd, t: run(client, cmd, t))
+        failures += run_smoke(fetch, READY_URL.rsplit("/api/", 1)[0], LOGIN_URL, SMOKE_USER, SMOKE_PASSWORD)
 
         code, out, err = run(
             client,
