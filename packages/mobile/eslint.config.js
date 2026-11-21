@@ -9,16 +9,18 @@ module.exports = [
       // does NOT decode HTML entities (&apos; would show literally), so this
       // is inappropriate for RN.
       'react/no-unescaped-entities': 'off',
-      // React Compiler readiness rules (new in eslint-plugin-react-hooks 7.x,
-      // flipped to "error" by SDK 56's eslint-config-expo). Festie does NOT
-      // enable the React Compiler, and this existing code shipped fine on SDK
-      // 54, so these are advisory here: keep them as warnings (still surfaced
-      // for incremental cleanup) rather than hard-failing the upgraded build.
-      'react-hooks/set-state-in-effect': 'warn',
-      'react-hooks/refs': 'warn',
-      'react-hooks/purity': 'warn',
-      'react-hooks/immutability': 'warn',
-      'react-hooks/preserve-manual-memoization': 'warn',
+      // Hook rules are errors: every current violation was fixed or carries a
+      // one-line `eslint-disable-next-line ... -- reason`. The React Compiler
+      // readiness rules (eslint-plugin-react-hooks 7.x) stay on even though Festie
+      // does not enable the Compiler, so new effects cannot reintroduce the
+      // set-state-in-effect and ref patterns that were cleaned up.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'error',
+      'react-hooks/set-state-in-effect': 'error',
+      'react-hooks/refs': 'error',
+      'react-hooks/purity': 'error',
+      'react-hooks/immutability': 'error',
+      'react-hooks/preserve-manual-memoization': 'error',
       // mobile-import-guard: a package that only @festie/shared depends on
       // (e.g. socket.io-client) resolves locally via hoisting but fails CI's
       // mobile typecheck with TS2307. Import it through @festie/shared instead.

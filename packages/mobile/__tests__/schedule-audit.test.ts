@@ -1,9 +1,10 @@
 import { readFileSync } from 'node:fs';
+import { read as readSource } from './read-source';
 import { join } from 'node:path';
 
 // Source-level guards: mobile tests run in plain node with no RN render harness.
 const read = (f: string) => readFileSync(join(__dirname, f), 'utf8');
-const index = () => read('../app/(tabs)/index.tsx');
+const index = () => readSource('app/(tabs)/index.tsx');
 
 describe('Schedule tab audit fixes', () => {
   it('retries a missing festival once per id, not in an endless loop', () => {

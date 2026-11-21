@@ -21,21 +21,16 @@ import { useAuthStore } from '@festie/shared/stores';
 import EmptyState from '../../components/EmptyState';
 import AppSwitch from '../../components/AppSwitch';
 import LoadingState from '../../components/LoadingState';
-import SectionLabel from '../../components/SectionLabel';
 import {
   ConfirmDialog,
   LabeledTextInput,
   useReauthPrompt,
-  ModalSelect,
-  HexColorField,
-  DateField,
-  TimeField,
   isValidDate,
   isValidTime,
   ShiftTimesDialog,
   type SelectOption,
 } from '../../components/admin';
-import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
+import { useTokens } from '../../hooks/useTokens';
 import {
   addStage as addStageReducer,
   removeStage as removeStageReducer,
@@ -58,7 +53,6 @@ import {
   type FormState,
 } from './festivalEditState';
 import {
-  amenityCount,
   announcedActsLine,
   artistNamesOf,
   countFestivalChanges,
@@ -66,21 +60,23 @@ import {
   describeDeleteImpact,
   describeShiftResult,
   festivalStatusLine,
-  filterLineup,
   groupIssues,
   isPublishBlocked,
   issueKey,
   joinArtistNames,
   listTimeZones,
   pickShiftTargets,
-  setEngagementLabel,
-  startsAfterMidnight,
   type ChecklistItem,
   type DeleteImpact,
   type FestivalIssue,
   type ScheduleNotice,
 } from '@festie/shared/utils';
 import type { Artist, FestivalMapConfig, LineupEntry } from '@festie/shared/types';
+import FestivalStatusCard from '../../components/admin/festival-edit/FestivalStatusCard';
+import FestivalFieldsSection from '../../components/admin/festival-edit/FestivalFieldsSection';
+import FestivalStagesSection from '../../components/admin/festival-edit/FestivalStagesSection';
+import FestivalDaysSection from '../../components/admin/festival-edit/FestivalDaysSection';
+import { useStyles } from '../../components/admin/festival-edit/styles';
 
 /**
  * Admin — Festival editor (native UI parity for the web FestivalEditForm →
@@ -162,19 +158,12 @@ const EMPTY_FORM: FormState = {
 
 const NO_ISSUES: FestivalIssue[] = [];
 
-const CHECK_PREFIX = { done: 'Done', todo: 'To do', warn: 'Warning' } as const;
-
 function plural(n: number): string {
   return `${n} ${n === 1 ? 'change' : 'changes'}`;
 }
 
 function uid(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-}
-
-/** True when a stage row carries a finite lat/lng pin. */
-function stageIsPinned(s: StageRow): boolean {
-  return typeof s.latitude === 'number' && typeof s.longitude === 'number';
 }
 
 /** First spotify/soundcloud link found on a set. Sent back on save so a set with no artists[] keeps it. */
@@ -772,401 +761,63 @@ export default function FestivalEditScreen() {
 
           {/* Status + publish checklist (edit only) */}
           {editingId && meta ? (
-            <View style={styles.card}>
-              <View style={styles.statusRow}>
-                <View style={[styles.chip, status.state === 'draft' ? styles.chipDraft : styles.chipLive]}>
-                  <Text style={[styles.chipText, status.state === 'draft' ? styles.chipTextDraft : styles.chipTextLive]}>
-                    {status.chip}
-                  </Text>
-                </View>
-                {status.edited ? <Text style={styles.statusEdited}>{status.edited}</Text> : null}
-              </View>
-              {status.state === 'draft' ? (
-                <>
-                  <Text style={styles.emptyHint}>This festival is a draft. Only admins can see it.</Text>
-                  <View>
-                    <Text style={styles.checklistTitle} accessibilityRole="header">
-                      Before you publish
-                    </Text>
-                    <Text style={styles.emptyHint}>Based on the last save.</Text>
-                  </View>
-                  {checklist.map((item) => (
-                    <View key={item.key} style={styles.checkRow}>
-                      <Ionicons
-                        name={item.status === 'done' ? 'checkmark-circle' : item.status === 'todo' ? 'close-circle' : 'warning'}
-                        size={t.iconSize.md}
-                        color={
-                          item.status === 'done'
-                            ? t.colors.accent.aqua
-                            : item.status === 'todo'
-                              ? t.colors.accent.coral
-                              : t.colors.accent.amber
-                        }
-                      />
-                      <Text style={styles.checkText} accessibilityLabel={`${CHECK_PREFIX[item.status]}: ${item.label}`}>
-                        {item.label}
-                      </Text>
-                      {item.key === 'sets' && item.status !== 'done' ? (
-                        <TouchableOpacity
-                          onPress={() => router.push({ pathname: '/admin/lineup-import', params: { id: editingId } })}
-                          style={styles.locationBtn}
-                          activeOpacity={0.7}
-                          accessibilityRole="button"
-                          accessibilityLabel="Import lineup"
-                        >
-                          <Text style={styles.locationBtnText}>Import lineup</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                      {item.key === 'pins' && item.status === 'warn' ? (
-                        <TouchableOpacity
-                          onPress={() => goToMapEditor()}
-                          style={styles.locationBtn}
-                          activeOpacity={0.7}
-                          accessibilityRole="button"
-                          accessibilityLabel="Edit map"
-                        >
-                          <Text style={styles.locationBtnText}>Edit map</Text>
-                        </TouchableOpacity>
-                      ) : null}
-                    </View>
-                  ))}
-                  <TouchableOpacity
-                    onPress={() => setConfirmPublish(true)}
-                    style={[styles.actionBtn, styles.saveBtn, !canPublish && styles.btnDisabled]}
-                    activeOpacity={0.7}
-                    disabled={!canPublish}
-                    accessibilityRole="button"
-                    accessibilityLabel="Publish festival"
-                    accessibilityState={{ disabled: !canPublish }}
-                  >
-                    <Text style={styles.saveBtnText} maxFontSizeMultiplier={1.4}>
-                      Publish festival
-                    </Text>
-                  </TouchableOpacity>
-                  {publishHint ? <Text style={styles.emptyHint}>{publishHint}</Text> : null}
-                </>
-              ) : null}
-            </View>
+            <FestivalStatusCard
+              canPublish={canPublish}
+              checklist={checklist}
+              editingId={editingId}
+              goToMapEditor={goToMapEditor}
+              publishHint={publishHint}
+              setConfirmPublish={setConfirmPublish}
+              status={status}
+            />
           ) : null}
 
           {/* Festival fields */}
-          <SectionLabel>Festival</SectionLabel>
-          <View style={styles.card}>
-            <LabeledTextInput
-              label="Name"
-              value={form.name}
-              onChangeText={(v) => updateForm((f) => ({ ...f, name: v }))}
-              placeholder="Festival name"
-              autoCapitalize="words"
-              error={fieldIssues('festival:name', ['name'])}
-            />
-            <LabeledTextInput
-              label="Location"
-              value={form.location}
-              onChangeText={(v) => updateForm((f) => ({ ...f, location: v }))}
-              placeholder="City, venue"
-              autoCapitalize="words"
-            />
-            <ModalSelect
-              label="Time zone"
-              value={form.timeZone}
-              options={timeZoneOptions}
-              onSelect={(v) => updateForm((f) => ({ ...f, timeZone: v }))}
-              placeholder="Choose a time zone…"
-              searchable
-              hint="Set times, countdowns and reminders use this zone."
-            />
-            <LabeledTextInput
-              label="B2B separator"
-              value={form.b2bSeparator}
-              onChangeText={(v) => updateForm((f) => ({ ...f, b2bSeparator: v }))}
-              placeholder="b2b"
-              autoCapitalize="none"
-              maxLength={10}
-              hint="Joins B2B artist names, for example b2b, vs or &. Up to 10 characters."
-            />
-          </View>
+          <FestivalFieldsSection
+            fieldIssues={fieldIssues}
+            form={form}
+            timeZoneOptions={timeZoneOptions}
+            updateForm={updateForm}
+          />
 
           {/* Stages */}
-          <SectionLabel>Stages</SectionLabel>
-          <View style={styles.card}>
-            {form.stages.length === 0 ? (
-              <Text style={styles.emptyHint}>No stages yet. Add one below.</Text>
-            ) : (
-              form.stages.map((stage, stageIndex) => (
-                <View
-                  key={stage.id}
-                  style={[styles.stageBlock, stageKeys(stage, stageIndex).some((k) => issuesByKey.has(k)) && styles.blockError]}
-                >
-                  <View style={styles.stageHeader}>
-                    <Text style={styles.stageHeaderText}>Stage</Text>
-                    <TouchableOpacity
-                      onPress={() => removeStage(stage.id)}
-                      style={styles.removeBtn}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${stage.name || 'stage'}`}
-                    >
-                      <Ionicons name="trash-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
-                      <Text style={styles.removeBtnText}>Remove</Text>
-                    </TouchableOpacity>
-                  </View>
-                  <LabeledTextInput
-                    label="Name"
-                    value={stage.name}
-                    onChangeText={(v) => setStageField(stage.id, 'name', v)}
-                    placeholder="Main Stage"
-                    autoCapitalize="words"
-                    error={fieldIssuesOf(stageKeys(stage, stageIndex), ['name'])}
-                  />
-                  <HexColorField
-                    label="Color"
-                    value={stage.color}
-                    onChangeText={(v) => setStageField(stage.id, 'color', v)}
-                  />
-                  {/* Pin status. Locations are AUTHORED on the map editor (it has
-                      the actual map); here we only surface whether this stage is
-                      pinned and link across to set/move it. */}
-                  <View style={styles.locationRow}>
-                    <Ionicons
-                      name={stageIsPinned(stage) ? 'location' : 'location-outline'}
-                      size={t.iconSize.sm}
-                      color={stageIsPinned(stage) ? t.colors.accent.aqua : t.colors.text.muted}
-                    />
-                    <Text style={styles.locationText} numberOfLines={1}>
-                      {stageIsPinned(stage)
-                        ? `Pinned · ${stage.latitude!.toFixed(5)}, ${stage.longitude!.toFixed(5)}`
-                        : 'No location pinned'}
-                    </Text>
-                    {editingId ? (
-                      <TouchableOpacity
-                        onPress={() => goToMapEditor(stage.id)}
-                        style={styles.locationBtn}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Set location for ${stage.name || 'stage'} on the map`}
-                      >
-                        <Text style={styles.locationBtnText}>{stageIsPinned(stage) ? 'Move' : 'Set location'}</Text>
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                </View>
-              ))
-            )}
-            <TouchableOpacity
-              onPress={addStage}
-              style={styles.addBtn}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Add stage"
-            >
-              <Ionicons name="add" size={t.iconSize.md} color={t.colors.accent.aqua} />
-              <Text style={styles.addBtnText}>Add stage</Text>
-            </TouchableOpacity>
-            {/* Map editor link (edit only — the map screen loads the festival by
-                id and persists stage pins + amenities itself). */}
-            {editingId ? (
-              <TouchableOpacity
-                onPress={() => goToMapEditor()}
-                style={styles.toolBtn}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Edit festival map"
-              >
-                <Ionicons name="map-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                <Text style={styles.toolBtnText}>
-                  Edit map{amenityCount(form.mapConfig) > 0 ? ` · ${amenityCount(form.mapConfig)} amenities` : ''}
-                </Text>
-              </TouchableOpacity>
-            ) : null}
-          </View>
+          <FestivalStagesSection
+            addStage={addStage}
+            editingId={editingId}
+            fieldIssuesOf={fieldIssuesOf}
+            form={form}
+            goToMapEditor={goToMapEditor}
+            issuesByKey={issuesByKey}
+            removeStage={removeStage}
+            setStageField={setStageField}
+            stageKeys={stageKeys}
+          />
 
           {announcedLine ? <Text style={styles.emptyHint}>{announcedLine}</Text> : null}
 
           {/* Days & Artists */}
-          <SectionLabel>Days &amp; artists</SectionLabel>
-          <View style={styles.card}>
-            {engagementError ? <Text style={styles.emptyHint}>Couldn't load pick counts.</Text> : null}
-            <LabeledTextInput
-              label="Filter"
-              value={filter}
-              onChangeText={setFilter}
-              placeholder="Artist or stage"
-              autoCapitalize="none"
-            />
-            {form.days.length === 0 ? (
-              <Text style={styles.emptyHint}>No days yet. Add one below.</Text>
-            ) : (
-              form.days.map((day, dayIndex) => {
-                const visibleSets = filterLineup(day.sets, form.stages, filter);
-                const isExpanded = expandedDays.has(day.id) || (filter.trim() !== '' && visibleSets.length > 0);
-                return (
-                  <View key={day.id} style={styles.dayBlock}>
-                    <View style={styles.dayHeader}>
-                      <TouchableOpacity
-                        onPress={() => toggleDay(day.id)}
-                        style={styles.chevronBtn}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={isExpanded ? 'Collapse day' : 'Expand day'}
-                        accessibilityState={{ expanded: isExpanded }}
-                      >
-                        <Ionicons
-                          name={isExpanded ? 'chevron-down' : 'chevron-forward'}
-                          size={t.iconSize.md}
-                          color={t.colors.text.secondary}
-                        />
-                      </TouchableOpacity>
-                      <Text style={styles.dayTitle} numberOfLines={1}>
-                        {day.label || 'Untitled day'}
-                      </Text>
-                      <Text style={styles.dayCount}>
-                        {day.sets.length} {day.sets.length === 1 ? 'artist' : 'artists'}
-                      </Text>
-                      <TouchableOpacity
-                        onPress={() => removeDay(day.id)}
-                        style={styles.removeBtn}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${day.label || 'day'}`}
-                      >
-                        <Ionicons name="trash-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
-                      </TouchableOpacity>
-                    </View>
-
-                    {isExpanded ? (
-                      <View style={styles.dayBody}>
-                        <LabeledTextInput
-                          label="Label"
-                          value={day.label}
-                          onChangeText={(v) => setDayField(day.id, 'label', v)}
-                          placeholder="Day 1 / Friday"
-                          autoCapitalize="words"
-                        />
-                        <DateField label="Date" value={day.date} onChangeText={(v) => setDayField(day.id, 'date', v)} />
-
-                        {day.sets.length === 0 ? (
-                          <Text style={styles.emptyHint}>No artists yet. Add one below.</Text>
-                        ) : visibleSets.length === 0 ? (
-                          <Text style={styles.emptyHint}>No sets match &quot;{filter.trim()}&quot;.</Text>
-                        ) : (
-                          visibleSets.map((s) => {
-                            const keys = setKeys(s, dayIndex, day.sets.indexOf(s));
-                            const isNew = changes.newSetIds.has(s.id);
-                            const isChanged = changes.changedSetIds.has(s.id);
-                            const stageError = fieldIssuesOf(keys, ['stageId']);
-                            const timeError = fieldIssuesOf(keys, ['startTime', 'endTime']);
-                            return (
-                            <View
-                              key={s.id}
-                              style={[
-                                styles.setBlock,
-                                (isNew || isChanged) && styles.setBlockChanged,
-                                keys.some((k) => issuesByKey.has(k)) && styles.blockError,
-                              ]}
-                            >
-                              <View style={styles.setHeader}>
-                                <Text style={styles.setHeaderText}>
-                                  Artist set
-                                  {isNew || isChanged ? (
-                                    <Text style={styles.changeCaption}>{isNew ? '  New' : '  Changed'}</Text>
-                                  ) : null}
-                                </Text>
-                                <TouchableOpacity
-                                  onPress={() => removeSet(day.id, s.id)}
-                                  style={styles.removeBtn}
-                                  activeOpacity={0.7}
-                                  accessibilityRole="button"
-                                  accessibilityLabel={`Remove ${s.artist || 'artist'}`}
-                                >
-                                  <Ionicons name="close" size={t.iconSize.sm} color={t.colors.accent.coral} />
-                                </TouchableOpacity>
-                              </View>
-                              {engagement ? (
-                                <Text style={styles.emptyHint}>
-                                  {setEngagementLabel(engagement[s.id] ?? { picks: 0, reminders: 0 })}
-                                </Text>
-                              ) : null}
-                              {artistInputs(day.id, s, fieldIssuesOf(keys, ['artist']))}
-                              <ModalSelect
-                                label="Stage"
-                                value={s.stageId || null}
-                                options={stageOptions}
-                                onSelect={(v) => setSetField(day.id, s.id, 'stageId', v)}
-                                placeholder="— Stage —"
-                              />
-                              {stageError ? (
-                                <Text style={styles.fieldError} accessibilityLiveRegion="polite">
-                                  {stageError}
-                                </Text>
-                              ) : null}
-                              <View style={styles.datePair}>
-                                <View style={styles.flex}>
-                                  <TimeField
-                                    label="Start"
-                                    value={s.startTime}
-                                    onChangeText={(v) => setSetField(day.id, s.id, 'startTime', v)}
-                                    hint={
-                                      startsAfterMidnight(s.startTime)
-                                        ? `After midnight. Shows as part of ${day.label.trim() || "this day's"} night.`
-                                        : undefined
-                                    }
-                                  />
-                                </View>
-                                <View style={styles.flex}>
-                                  <TimeField
-                                    label="End"
-                                    value={s.endTime}
-                                    onChangeText={(v) => setSetField(day.id, s.id, 'endTime', v)}
-                                  />
-                                </View>
-                              </View>
-                              {timeError ? (
-                                <Text style={styles.fieldError} accessibilityLiveRegion="polite">
-                                  {timeError}
-                                </Text>
-                              ) : null}
-                            </View>
-                            );
-                          })
-                        )}
-                        <TouchableOpacity
-                          onPress={() => setShiftDayId(day.id)}
-                          style={styles.toolBtn}
-                          activeOpacity={0.7}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Shift times for ${day.label || 'this day'}`}
-                        >
-                          <Ionicons name="time-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                          <Text style={styles.toolBtnText}>Shift times</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => addSet(day.id)}
-                          style={styles.addBtn}
-                          activeOpacity={0.7}
-                          accessibilityRole="button"
-                          accessibilityLabel="Add artist"
-                        >
-                          <Ionicons name="add" size={t.iconSize.md} color={t.colors.accent.aqua} />
-                          <Text style={styles.addBtnText}>Add artist</Text>
-                        </TouchableOpacity>
-                      </View>
-                    ) : null}
-                  </View>
-                );
-              })
-            )}
-            <TouchableOpacity
-              onPress={addDay}
-              style={styles.addBtn}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Add day"
-            >
-              <Ionicons name="add" size={t.iconSize.md} color={t.colors.accent.aqua} />
-              <Text style={styles.addBtnText}>Add day</Text>
-            </TouchableOpacity>
-          </View>
+          <FestivalDaysSection
+            addDay={addDay}
+            addSet={addSet}
+            artistInputs={artistInputs}
+            changes={changes}
+            engagement={engagement}
+            engagementError={engagementError}
+            expandedDays={expandedDays}
+            fieldIssuesOf={fieldIssuesOf}
+            filter={filter}
+            form={form}
+            issuesByKey={issuesByKey}
+            removeDay={removeDay}
+            removeSet={removeSet}
+            setDayField={setDayField}
+            setFilter={setFilter}
+            setKeys={setKeys}
+            setSetField={setSetField}
+            setShiftDayId={setShiftDayId}
+            stageOptions={stageOptions}
+            toggleDay={toggleDay}
+          />
 
           {issues.length > 0 ? (
             <View style={[styles.card, styles.blockError]}>
@@ -1307,315 +958,3 @@ export default function FestivalEditScreen() {
     </View>
   );
 }
-
-const useStyles = makeStyles((t) => ({
-  screen: {
-    flex: 1,
-    backgroundColor: t.colors.bg.primary,
-  },
-  flex: {
-    flex: 1,
-  },
-  scroll: {
-    width: '100%',
-    maxWidth: 600,
-    alignSelf: 'center',
-    paddingHorizontal: t.spacing[4],
-    gap: t.spacing[2],
-  },
-  card: {
-    backgroundColor: t.colors.bg.secondary,
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    padding: t.spacing[4],
-    gap: t.spacing[4],
-  },
-  datePair: {
-    flexDirection: 'row',
-    gap: t.spacing[3],
-  },
-  emptyHint: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  // Stages -------------------------------------------------------------------
-  stageBlock: {
-    gap: t.spacing[3],
-    paddingBottom: t.spacing[4],
-    borderBottomWidth: 1,
-    borderBottomColor: t.colors.border.default,
-  },
-  stageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  stageHeaderText: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.secondary,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-  },
-  locationText: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    flex: 1,
-  },
-  locationBtn: {
-    minHeight: 36,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.aqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationBtnText: {
-    ...typeStyle('caption', 600),
-    color: t.colors.accent.aqua,
-  },
-  // Days ---------------------------------------------------------------------
-  dayBlock: {
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    borderRadius: t.radii.default,
-    overflow: 'hidden',
-  },
-  dayHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[2],
-    minHeight: 56,
-  },
-  chevronBtn: {
-    minHeight: 44,
-    minWidth: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayTitle: {
-    ...typeStyle('body'),
-    color: t.colors.text.primary,
-    flex: 1,
-  },
-  dayCount: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  dayBody: {
-    borderTopWidth: 1,
-    borderTopColor: t.colors.border.default,
-    padding: t.spacing[3],
-    gap: t.spacing[4],
-  },
-  // Sets ---------------------------------------------------------------------
-  setBlock: {
-    gap: t.spacing[3],
-    padding: t.spacing[3],
-    borderRadius: t.radii.default,
-    backgroundColor: t.colors.bg.primary,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-  },
-  setHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  setHeaderText: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.secondary,
-  },
-  setBlockChanged: {
-    borderLeftWidth: 3,
-    borderLeftColor: t.colors.accent.aqua,
-  },
-  blockError: {
-    borderColor: t.colors.accent.coral,
-  },
-  changeCaption: {
-    ...typeStyle('caption', 600),
-    color: t.colors.accent.aqua,
-  },
-  fieldError: {
-    ...typeStyle('caption'),
-    color: t.colors.text.danger,
-  },
-  pickOnWeb: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  // Status card --------------------------------------------------------------
-  banner: {
-    ...typeStyle('label', 600),
-    color: t.colors.accent.aqua,
-    paddingHorizontal: t.spacing[1],
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-  },
-  chip: {
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[1],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-  },
-  chipDraft: {
-    borderColor: t.colors.accent.amber,
-  },
-  chipLive: {
-    borderColor: t.colors.accent.aqua,
-  },
-  chipText: {
-    ...typeStyle('caption', 600),
-  },
-  chipTextDraft: {
-    color: t.colors.accent.amber,
-  },
-  chipTextLive: {
-    color: t.colors.accent.aqua,
-  },
-  statusEdited: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    flex: 1,
-  },
-  checklistTitle: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.primary,
-  },
-  checkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: t.spacing[2],
-  },
-  checkText: {
-    ...typeStyle('body'),
-    color: t.colors.text.secondary,
-    flex: 1,
-    minWidth: 160,
-  },
-  // Buttons ------------------------------------------------------------------
-  addBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: t.spacing[1],
-    minHeight: 44,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.aqua,
-  },
-  addBtnText: {
-    ...typeStyle('label', 600),
-    color: t.colors.accent.aqua,
-  },
-  removeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    minHeight: 44,
-    minWidth: 44,
-    paddingHorizontal: t.spacing[2],
-    justifyContent: 'center',
-  },
-  removeBtnText: {
-    ...typeStyle('caption'),
-    color: t.colors.accent.coral,
-  },
-  toolBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    minHeight: 48,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.light,
-    backgroundColor: t.colors.bg.primary,
-  },
-  toolBtnText: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.primary,
-  },
-  // Actions ------------------------------------------------------------------
-  formError: {
-    ...typeStyle('caption'),
-    color: t.colors.text.danger,
-    paddingHorizontal: t.spacing[1],
-  },
-  notifyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    paddingHorizontal: t.spacing[1],
-  },
-  notifyBody: {
-    flex: 1,
-  },
-  notifyTitle: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.primary,
-  },
-  notifyHint: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: t.spacing[3],
-    marginTop: t.spacing[2],
-  },
-  actionBtn: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: t.radii.default,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: t.spacing[4],
-  },
-  cancelBtn: {
-    backgroundColor: t.colors.bg.secondary,
-    borderWidth: 1,
-    borderColor: t.colors.border.light,
-  },
-  cancelBtnText: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.primary,
-  },
-  saveBtn: {
-    backgroundColor: t.colors.accent.aqua,
-  },
-  saveBtnText: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.onLightAccent,
-  },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: t.spacing[2],
-    minHeight: 48,
-    marginTop: t.spacing[2],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.coral,
-  },
-  deleteBtnText: {
-    ...typeStyle('label', 600),
-    color: t.colors.accent.coral,
-  },
-}));

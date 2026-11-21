@@ -1,8 +1,7 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { read } from './read-source';
 
 // Source-level guards: mobile tests run in plain node with no RN render harness.
-const src = readFileSync(join(__dirname, '..', 'app', '(tabs)', 'picks.tsx'), 'utf8');
+const src = read('app/(tabs)/picks.tsx');
 
 describe('T22 mobile Picks entry points', () => {
   it('routes Share picks to the share hub and wires calendar subscribe + download summary', () => {

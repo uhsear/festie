@@ -36,7 +36,7 @@ function ToastCard({ toast, reduceMotion }: { toast: Toast; reduceMotion: boolea
   useEffect(() => {
     if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(toast.message);
     if (toast.kind === 'error' || toast.kind === 'warning' || toast.kind === 'success') haptic(toast.kind);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only: announce and buzz once when the toast appears
   }, []);
 
   // The Toaster owns the timer. Never paused: an undo toast must not outlive its delete timer.
