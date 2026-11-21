@@ -54,7 +54,7 @@ const ACTIVE_USER = 'u.deleted_at IS NULL AND u.email_verified_at IS NOT NULL';
 
 // An invitation by email stops being claimable this many days after it was added (or re-added). The retention
 // job deletes it then; until it runs, the SQL below still treats it as expired. The Privacy Policy states the period.
-export const PENDING_INVITE_DAYS = 90;
+const PENDING_INVITE_DAYS = 90;
 const PENDING_INVITE_TTL = `INTERVAL '${PENDING_INVITE_DAYS} days'`;
 
 // An owner runs editors and viewers. Owners are Festie's to add, change and remove (plan-v3 3.3).
