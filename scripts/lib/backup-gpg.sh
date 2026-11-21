@@ -16,12 +16,12 @@ load_backup_passphrase() {
 # backup_encrypt <plain file> <encrypted file>. fd 9 (the backup lock) is closed for gpg so a
 # gpg-agent that outlives the run cannot hold the lock.
 backup_encrypt() {
-  gpg --batch --yes --quiet --pinentry-mode loopback --symmetric --cipher-algo AES256 \
+  gpg --batch --yes --quiet --pinentry-mode loopback --no-symkey-cache --symmetric --cipher-algo AES256 \
     --passphrase-fd 3 --output "$2" "$1" 3<<<"$BACKUP_GPG_PASSPHRASE" 9>&-
 }
 
 # backup_decrypt <encrypted file> <plain file>
 backup_decrypt() {
-  gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 \
+  gpg --batch --yes --quiet --pinentry-mode loopback --no-symkey-cache --passphrase-fd 3 \
     --output "$2" --decrypt "$1" 3<<<"$BACKUP_GPG_PASSPHRASE" 9>&-
 }

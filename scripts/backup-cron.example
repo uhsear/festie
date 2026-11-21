@@ -14,7 +14,7 @@ APP_DIR=/opt/festie
 
 # ── Database backups ─────────────────────────────────────────────────────────
 
-# On-host dump every 6 hours (pg_dump custom format, 30-day daily + 12 weekly).
+# On-host dump every 6 hours (pg_dump custom format, encrypted with BACKUP_GPG_PASSPHRASE; 30-day daily + 12 weekly, nothing older than 13 weeks).
 # The same run writes avatars_YYYYMMDD.tar.gz beside the dump (on host only; restore steps in the script header).
 0 */6 * * * cd $APP_DIR && bash scripts/backup-pg.sh >> logs/backup.log 2>&1
 
