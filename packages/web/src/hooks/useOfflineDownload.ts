@@ -6,9 +6,11 @@ import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { buildOfflineSteps, summarizeOffline, festivalPhase, hasOfflineBasemap, extractSiteplan } from '@festie/shared/utils';
 import {
   basemapCacheInfo,
+  basemapProgress,
   basemapSize,
   basemapSupported,
   ensureBasemapCached,
+  removeBasemap,
   subscribeBasemapCache,
 } from '../lib/basemapCache';
 
@@ -31,6 +33,7 @@ export function useOfflineDownload(festivalId: string) {
   const [mapSection, setMapSection] = useState<SectionReadiness>(IDLE);
   const [mapBytes, setMapBytes] = useState<number | null>(null);
   const [quotaFailed, setQuotaFailed] = useState(false);
+  const [mapProgress, setMapProgress] = useState<number | null>(null);
 
   useEffect(() => {
     if (!mapUrl) return;
@@ -47,7 +50,10 @@ export function useOfflineDownload(festivalId: string) {
     void basemapSize(mapUrl).then((n) => {
       if (live) setMapBytes(n);
     });
-    const unsubscribe = subscribeBasemapCache(read);
+    const unsubscribe = subscribeBasemapCache(() => {
+      setMapProgress(basemapProgress(mapUrl));
+      read();
+    });
     return () => {
       live = false;
       unsubscribe();
@@ -78,6 +84,10 @@ export function useOfflineDownload(festivalId: string) {
     await Promise.all([store, map]);
   }, [downloadForOffline, festivalId, activeCrewId, mapUrl, mapConfig]);
 
+  const removeMap = useCallback(async () => {
+    if (mapUrl) await removeBasemap(mapUrl);
+  }, [mapUrl]);
+
   const mapDetail =
     quotaFailed && mapSection.status === 'error'
       ? `Not enough space for the map (${mapBytes != null ? toMb(mapBytes) : '?'} MB). Free up space, then retry.`
@@ -91,5 +101,15 @@ export function useOfflineDownload(festivalId: string) {
   const summary = summarizeOffline(steps, festivalPhase(currentFestival, days));
   const isDownloading = downloadingFestivalId === festivalId || mapSection.status === 'syncing';
 
-  return { steps, summary, download, isDownloading, mapBytes, hasMap: !!mapUrl };
+  return {
+    steps,
+    summary,
+    download,
+    isDownloading,
+    mapBytes,
+    hasMap: !!mapUrl,
+    mapProgress,
+    mapReady: mapSection.status === 'ready',
+    removeMap,
+  };
 }

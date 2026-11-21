@@ -2,8 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { useOfflineReadinessStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { SectionReadiness } from '@festie/shared/stores';
-import { buildOfflineSteps, summarizeOffline, festivalPhase, hasOfflineBasemap, extractSiteplan } from '@festie/shared/utils';
-import { basemapCacheInfo, ensureBasemapCached, subscribeBasemapCache } from '../lib/basemapCache';
+import {
+  buildOfflineSteps,
+  summarizeOffline,
+  festivalPhase,
+  hasOfflineBasemap,
+  extractSiteplan,
+  headContentLength,
+} from '@festie/shared/utils';
+import { basemapCacheInfo, clearBasemapCache, ensureBasemapCached, subscribeBasemapCache } from '../lib/basemapCache';
 
 const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
 
@@ -86,6 +93,22 @@ export function useOfflineDownload(festivalId: string) {
   const siteplanUrl = mapUrl ? (extractSiteplan(currentFestival?.mapConfig)?.imageUrl ?? null) : null;
   const { section: mapSection, download: downloadMap } = useOfflineMapSection(mapUrl, siteplanUrl);
 
+  // The archive size, shown before the download so people on mobile data can decide.
+  const [mapBytes, setMapBytes] = useState<number | null>(null);
+  useEffect(() => {
+    if (!mapUrl) return;
+    let live = true;
+    void headContentLength(mapUrl).then((bytes) => {
+      if (live) setMapBytes(bytes);
+    });
+    return () => {
+      live = false;
+    };
+  }, [mapUrl]);
+  const removeMap = useCallback(() => {
+    if (mapUrl) clearBasemapCache(mapUrl);
+  }, [mapUrl]);
+
   const download = useCallback(() => {
     void downloadForOffline(festivalId, activeCrewId ?? undefined);
     void downloadMap();
@@ -101,5 +124,14 @@ export function useOfflineDownload(festivalId: string) {
   );
   const isDownloading = downloadingFestivalId === festivalId || mapSection.status === 'syncing';
 
-  return { steps, summary, download, isDownloading, hasMap: !!mapUrl };
+  return {
+    steps,
+    summary,
+    download,
+    isDownloading,
+    hasMap: !!mapUrl,
+    mapBytes: mapUrl ? mapBytes : null,
+    mapReady: mapSection.status === 'ready',
+    removeMap,
+  };
 }

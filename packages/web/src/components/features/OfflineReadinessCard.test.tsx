@@ -7,6 +7,7 @@ import type { FestivalPhase } from '@festie/shared/utils';
 const h = vi.hoisted(() => ({
   state: null as unknown as Record<string, unknown>,
   download: vi.fn(),
+  removeMap: vi.fn(),
 }));
 
 vi.mock('../../hooks/useOfflineDownload', () => ({
@@ -19,11 +20,14 @@ const ready: Sec = { status: 'ready', syncedAt: Date.now() };
 
 function setState(
   sections: Partial<Record<'schedule' | 'picks' | 'crew' | 'weather' | 'art', Sec>>,
-  opts: { map?: Sec | null; mapDetail?: string; phase?: FestivalPhase | null; mapBytes?: number | null } = {},
+  opts: { map?: Sec | null; mapDetail?: string; phase?: FestivalPhase | null; mapBytes?: number | null; mapProgress?: number | null } = {},
 ) {
   const full = { schedule: idle, picks: idle, crew: idle, weather: idle, art: idle, ...sections };
   const steps = buildOfflineSteps(full, { hasCrew: true, map: opts.map ?? null, mapDetail: opts.mapDetail });
   h.state = {
+    mapProgress: opts.mapProgress ?? null,
+    mapReady: opts.map?.status === 'ready',
+    removeMap: h.removeMap,
     steps,
     summary: summarizeOffline(steps, opts.phase ?? 'pre'),
     isDownloading: steps.some((s) => s.section.status === 'syncing'),
@@ -100,5 +104,26 @@ describe('OfflineReadinessCard', () => {
     setState({}, { phase: 'post' });
     const { container } = render(<OfflineReadinessCard festivalId="fest-1" />);
     expect(container).toBeEmptyDOMElement();
+  });
+
+  it('shows the map download percentage and a progress bar while it downloads', () => {
+    setState({}, { map: { status: 'syncing', syncedAt: null }, mapProgress: 0.42 });
+    render(<OfflineReadinessCard festivalId="fest-1" />);
+    open();
+    expect(screen.getByText(/Downloading the map: 42%/)).toBeInTheDocument();
+    expect(screen.getByRole('progressbar', { name: 'Map download progress' })).toHaveAttribute('value', '0.42');
+  });
+
+  it('deletes the downloaded map only when one is stored', () => {
+    setState({}, { map: { status: 'idle', syncedAt: null } });
+    const { unmount } = render(<OfflineReadinessCard festivalId="fest-1" />);
+    open();
+    expect(screen.queryByRole('button', { name: 'Delete downloaded map' })).not.toBeInTheDocument();
+    unmount();
+    setState({}, { map: ready });
+    render(<OfflineReadinessCard festivalId="fest-1" />);
+    open();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete downloaded map' }));
+    expect(h.removeMap).toHaveBeenCalledTimes(1);
   });
 });

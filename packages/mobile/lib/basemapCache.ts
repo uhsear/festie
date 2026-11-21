@@ -211,6 +211,8 @@ export function clearBasemapCache(pmtilesUrl: string): boolean {
     const file = basemapCacheFile(pmtilesUrl);
     if (file.exists) {
       file.delete();
+      // Mounted download cards re-read the disk, so the map step drops back to "not saved".
+      ensurer.notify();
       return true;
     }
   } catch {

@@ -3,6 +3,7 @@ import { renderHook, act, waitFor } from '@testing-library/react';
 import { useOfflineDownload } from './useOfflineDownload';
 
 const h = vi.hoisted(() => ({
+  removeBasemap: vi.fn(async (_url: string) => true),
   downloadForOffline: vi.fn(async () => {}),
   readiness: { byFestival: {} as Record<string, unknown>, downloadingFestivalId: null as string | null },
   crew: { activeCrew: { id: 'crew-1' } as { id: string } | null },
@@ -36,6 +37,8 @@ vi.mock('../lib/basemapCache', () => ({
     if ((h.cache.ensure as { ok: boolean }).ok) h.cache.info = { cached: true, syncedAt: 123 };
     return h.cache.ensure;
   }),
+  basemapProgress: () => null,
+  removeBasemap: (url: string) => h.removeBasemap(url),
   subscribeBasemapCache: () => () => {},
 }));
 
@@ -107,5 +110,15 @@ describe('useOfflineDownload', () => {
       await result.current.download();
     });
     expect(h.downloadForOffline).toHaveBeenCalledWith('f1', undefined);
+  });
+
+  it('removeMap deletes the festival archive by its URL and flags a cached map as ready', async () => {
+    h.cache.info = { cached: true, syncedAt: 99 };
+    const { result } = renderHook(() => useOfflineDownload('f1'));
+    await waitFor(() => expect(result.current.mapReady).toBe(true));
+    await act(async () => {
+      await result.current.removeMap();
+    });
+    expect(h.removeBasemap).toHaveBeenCalledWith('https://cdn.example.com/a.pmtiles');
   });
 });
