@@ -7,6 +7,10 @@
 // eslint config via the --no-eslintrc / flat-config-aware binary in their node_modules.
 // Using relative paths so lint-staged resolves each file against the correct config.
 module.exports = {
+  // ── secrets (every staged file) ─────────────────────────────────────────────
+  // Reads the staged diff itself, so it needs no file list. Dependency-free and fast.
+  '*': () => 'node scripts/ci/scan-staged-secrets.mjs',
+
   // ── backend (root) ──────────────────────────────────────────────────────────
   'lib/**/*.{ts,tsx,js,cjs}': 'eslint --fix',
   'routes/**/*.{ts,tsx,js,cjs}': 'eslint --fix',
