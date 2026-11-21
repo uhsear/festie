@@ -26,7 +26,7 @@ describe('searchAdminTargets', () => {
       label: 'Late crew',
       hint: 'Invite code SAM · Forbidden Kingdom',
     });
-    expect(crews[1].id).toBe('c1');
+    expect(crews[1]!.id).toBe('c1');
   });
 
   it('matches festivals by name or location and ends with a user row', () => {

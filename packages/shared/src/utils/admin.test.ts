@@ -120,10 +120,10 @@ describe('buildFestivalPreview', () => {
 
   it('sorts sets, looks up stage names and formats times', () => {
     const p = buildFestivalPreview(detail);
-    expect(p.days[0].sets.map((s) => s.artist)).toEqual(['Early', 'Later', 'Nope']);
-    expect(p.days[0].sets[0]).toMatchObject({ time: '6:00 PM', stageName: 'Main', stageColor: '#f00' });
-    expect(p.days[0].sets[1].time).toBe('8:00 PM – 9:00 PM');
-    expect(p.days[0].sets[2].time).toBe('Time TBA');
+    expect(p.days[0]!.sets.map((s) => s.artist)).toEqual(['Early', 'Later', 'Nope']);
+    expect(p.days[0]!.sets[0]).toMatchObject({ time: '6:00 PM', stageName: 'Main', stageColor: '#f00' });
+    expect(p.days[0]!.sets[1]!.time).toBe('8:00 PM – 9:00 PM');
+    expect(p.days[0]!.sets[2]!.time).toBe('Time TBA');
   });
   it('lists the announced lineup with its resolved day and scheduled state', () => {
     const entry = (id: string, names: string[], extra = {}) => ({

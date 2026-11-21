@@ -29,7 +29,7 @@ describe('weatherStore', () => {
     await useWeatherStore.getState().loadWeather('f1');
     vi.mocked(api.get).mockRejectedValueOnce(new Error('down'));
     await expect(useWeatherStore.getState().loadWeather('f1')).rejects.toThrow('down');
-    expect(useWeatherStore.getState().byFestival.f1.fetchedAt).toBe(1000);
+    expect(useWeatherStore.getState().byFestival.f1!.fetchedAt).toBe(1000);
   });
 
   it('keeps a real forecast when the route answers available: false', async () => {

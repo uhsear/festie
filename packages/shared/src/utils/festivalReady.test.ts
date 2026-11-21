@@ -53,8 +53,8 @@ describe('getFestivalReadyChecklist', () => {
 
   it('writes a11y strings', () => {
     const r = getFestivalReadyChecklist({ ...none, hasCrew: true });
-    expect(r.items[0].a11y).toMatch(/, not done yet$/);
-    expect(r.items[1].a11y).toMatch(/, done$/);
+    expect(r.items[0]!.a11y).toMatch(/, not done yet$/);
+    expect(r.items[1]!.a11y).toMatch(/, done$/);
   });
 });
 

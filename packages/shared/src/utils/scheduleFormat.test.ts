@@ -145,8 +145,8 @@ describe('setLabel', () => {
 
 const TZ = 'America/New_York';
 const days = [
-  { id: 'd0', festivalId: 'f', date: '2026-11-07', label: 'Saturday', createdAt: '' },
-  { id: 'd1', festivalId: 'f', date: '2026-11-08', label: 'Day 2', createdAt: '' },
+  { id: 'd0', festivalId: 'f', date: '2026-11-07', label: 'Saturday', createdAt: '', updatedAt: '' },
+  { id: 'd1', festivalId: 'f', date: '2026-11-08', label: 'Day 2', createdAt: '', updatedAt: '' },
 ];
 const at = (date: string, hh: number, mm = 0) => zonedWallTimeToMs(date, hh, mm, TZ);
 const mk = (id: string, startTime: string, endTime: string, dayIndex = 0, artist = id): FestivalSet => ({

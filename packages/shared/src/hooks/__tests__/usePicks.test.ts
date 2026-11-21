@@ -3,6 +3,7 @@ import { renderHook, act } from '@testing-library/react';
 import { usePicks, usePickSync, useCanPick, useMyPick, useMyNote, useMyReminder, usePickActions } from '../usePicks';
 import { useFestivalStore } from '../../stores/festivalStore';
 import { useAuthStore } from '../../stores/authStore';
+import type { Priority } from '../../types';
 
 vi.mock('../../services/api', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -104,7 +105,7 @@ describe('usePicks hook', () => {
           id: 'p1',
           userId: 'u1',
           festivalId: 'f1',
-          picks: null as unknown as Record<string, string>,
+          picks: null as unknown as Record<string, Priority>,
           notes: {},
           updatedAt: '2026-01-01T00:00:00Z',
         },

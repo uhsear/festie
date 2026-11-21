@@ -315,7 +315,7 @@ describe('artistLinkEntries', () => {
       twitter: 'https://x.com/a',
     });
     expect(out.map((l) => l.key)).toEqual(['spotify', 'instagram', 'twitter', 'zzz']);
-    expect(out[2].label).toBe('X');
+    expect(out[2]!.label).toBe('X');
   });
 
   it('returns an empty list for no links', () => {

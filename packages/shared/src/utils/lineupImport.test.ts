@@ -42,7 +42,7 @@ describe('parseLineupTable', () => {
   });
 
   it('strips a BOM', () => {
-    expect(parseLineupTable('﻿artist,day\nKai,Fri').rows[0][0]).toBe('artist');
+    expect(parseLineupTable('﻿artist,day\nKai,Fri')!.rows[0]![0]).toBe('artist');
   });
 });
 
@@ -79,9 +79,9 @@ describe('column mapping', () => {
 describe('LINEUP_SAMPLE_CSV', () => {
   it('parses to 3 rows with no mapping problems', () => {
     const { rows } = parseLineupTable(LINEUP_SAMPLE_CSV);
-    const mapping = autoMapColumns(rows[0]);
+    const mapping = autoMapColumns(rows[0] ?? []);
     expect(mappingProblems(mapping)).toEqual([]);
-    const out = toImportRows(rows, mapping, looksLikeHeader(rows[0]));
+    const out = toImportRows(rows, mapping, looksLikeHeader(rows[0] ?? []));
     expect(out).toHaveLength(3);
     expect(out[1]).toEqual({
       row: 3,

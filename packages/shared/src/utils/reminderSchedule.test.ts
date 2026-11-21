@@ -35,7 +35,7 @@ function makeSet(id: string, startTime: string, endTime = ''): FestivalSet {
 function localMs(hh: number, mm: number): number {
   const [y, m, d] = DAY.split('-').map((x) => parseInt(x, 10));
   const dt = new Date();
-  dt.setFullYear(y, m - 1, d);
+  dt.setFullYear(y!, m! - 1, d!);
   dt.setHours(hh, mm, 0, 0);
   return dt.getTime();
 }

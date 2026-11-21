@@ -125,7 +125,7 @@ describe('extractStagePins', () => {
 });
 
 describe('extractAmenityPins', () => {
-  function cfgWith(features: FestivalMapConfig['amenities']['features']): FestivalMapConfig {
+  function cfgWith(features: NonNullable<FestivalMapConfig['amenities']>['features']): FestivalMapConfig {
     return { version: 1, amenities: { type: 'FeatureCollection', features } };
   }
 

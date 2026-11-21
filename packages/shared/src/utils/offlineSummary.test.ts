@@ -15,7 +15,7 @@ describe('buildOfflineSteps', () => {
   it('adds crew and map in order with map detail', () => {
     const steps = buildOfflineSteps(all('idle'), { hasCrew: true, map: r('idle'), mapDetail: 'x' });
     expect(steps.map((s) => s.key)).toEqual(['schedule', 'picks', 'crew', 'weather', 'art', 'map']);
-    expect(steps[5].detail).toBe('x');
+    expect(steps[5]!.detail).toBe('x');
   });
 });
 

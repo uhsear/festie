@@ -43,7 +43,7 @@ describe('exportAuditCsv', () => {
     let i = 0;
     return vi.fn(async () => {
       const p = pages[i++];
-      return jsonResponse(200, { data: p.ids.map(entry), error: null, meta: { total: 9, nextCursor: p.next } });
+      return jsonResponse(200, { data: p!.ids.map(entry), error: null, meta: { total: 9, nextCursor: p!.next } });
     });
   };
 
