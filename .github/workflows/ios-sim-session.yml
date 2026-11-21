@@ -1,0 +1,171 @@
+name: iOS Simulator Session
+
+# An interactive iOS Simulator in your browser, for checking the app without a Mac.
+# Builds the simulator .app (ios-e2e.yml, run_maestro=false), boots a simulator on a standard
+# GitHub-hosted macOS runner, installs and launches Festie, and streams it through SimDeck
+# (Apache-2.0, https://simdeck.sh/guide/github-actions). The session link is posted as a comment
+# on the pull request.
+#
+# Start it with:
+#   gh workflow run ios-sim-session.yml --ref <branch> [-f ref=<git ref>] [-f device=<name>] [-f minutes=<5-60>]
+# or comment `/ios-sim` on a pull request (repo owner only; the PR must come from this repo).
+# GitHub reads issue_comment and dispatchable workflows from the default branch, so this file
+# only takes effect once it is merged to main.
+#
+# The session is password-gated: the repo secret IOS_SIM_SESSION_PASSWORD must be set. When it is
+# missing the workflow fails before it builds or opens anything, so a public PR can never end up
+# with an open simulator. Runbook: docs/runbooks/ios-testing.md.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref (branch, tag or sha) to build; empty builds the ref this run started on'
+        type: string
+        default: ''
+      device:
+        description: 'Simulator device name; a missing name falls back to the newest iPhone'
+        type: string
+        default: 'iPhone 17 Pro'
+      minutes:
+        description: 'Session length in minutes (5 to 60)'
+        type: string
+        default: '30'
+      pr_number:
+        description: 'PR to post the session link on; empty looks up the open PR for the ref branch'
+        type: string
+        default: ''
+  issue_comment:
+    types: [created]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+permissions:
+  contents: read
+
+jobs:
+  # Authorises the request and validates every input before any macOS minute is spent.
+  # Untrusted values reach the shell only through env, never through ${{ }} in a script.
+  gate:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request &&
+       github.event.comment.author_association == 'OWNER' &&
+       startsWith(github.event.comment.body, '/ios-sim'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      ref: ${{ steps.in.outputs.ref }}
+      pr_number: ${{ steps.in.outputs.pr_number }}
+      device: ${{ steps.in.outputs.device }}
+      keepalive_seconds: ${{ steps.in.outputs.keepalive_seconds }}
+    steps:
+      - name: Validate inputs and require the session password
+        id: in
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          EVENT: ${{ github.event_name }}
+          SESSION_PASSWORD: ${{ secrets.IOS_SIM_SESSION_PASSWORD }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          INPUT_REF: ${{ inputs.ref }}
+          INPUT_DEVICE: ${{ inputs.device }}
+          INPUT_MINUTES: ${{ inputs.minutes }}
+          INPUT_PR: ${{ inputs.pr_number }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          fail() { echo "::error::$1"; exit 1; }
+
+          # Fail closed: SimDeck opens an unauthenticated session when the password is empty.
+          [ -n "$SESSION_PASSWORD" ] || fail "Repository secret IOS_SIM_SESSION_PASSWORD is not set. Add it under Settings > Secrets and variables > Actions, then run this workflow again."
+
+          ref=""
+          pr="$INPUT_PR"
+          device="${INPUT_DEVICE:-iPhone 17 Pro}"
+          minutes="${INPUT_MINUTES:-30}"
+
+          if [ "$EVENT" = "issue_comment" ]; then
+            pr="$ISSUE_NUMBER"
+            read -r ref head_repo < <(gh api "repos/$REPO/pulls/$pr" --jq '"\(.head.sha) \(.head.repo.full_name)"')
+            [ "$head_repo" = "$REPO" ] || fail "PR #$pr comes from '$head_repo'. Sessions build only branches of this repository."
+            device="iPhone 17 Pro"
+            minutes=30
+          else
+            ref="$INPUT_REF"
+            [[ -z "$ref" || "$ref" =~ ^[A-Za-z0-9._/-]{1,200}$ ]] || fail "ref contains characters a git ref should not."
+            if [ -z "$pr" ]; then
+              # The session action posts its link on a pull request, so a ref needs one.
+              pr=$(gh pr list --repo "$REPO" --state open --head "${ref:-$REF_NAME}" --json number --jq '.[0].number // empty')
+              [ -n "$pr" ] || fail "No open pull request has '${ref:-$REF_NAME}' as its head branch. Open one, or pass pr_number."
+            fi
+          fi
+
+          [[ "$pr" =~ ^[0-9]{1,9}$ ]] || fail "pr_number must be a number."
+          [[ "$device" =~ ^[A-Za-z0-9\ ()-]{1,40}$ ]] || fail "device may use letters, digits, spaces, hyphens and parentheses only."
+          [[ "$minutes" =~ ^[0-9]{1,4}$ ]] || fail "minutes must be a number."
+          minutes=$((10#$minutes))
+          if [ "$minutes" -gt 60 ]; then minutes=60; echo "::warning::minutes capped at 60."; fi
+          if [ "$minutes" -lt 5 ]; then minutes=5; fi
+
+          {
+            echo "ref=$ref"
+            echo "pr_number=$pr"
+            echo "device=$device"
+            echo "keepalive_seconds=$((minutes * 60))"
+          } >> "$GITHUB_OUTPUT"
+          echo "ref='${ref:-<run ref>}' pr=#$pr device='$device' minutes=$minutes"
+
+  # The called workflow carries its own timeout-minutes (a job that uses a workflow cannot set one).
+  build:
+    needs: gate
+    uses: ./.github/workflows/ios-e2e.yml
+    with:
+      ref: ${{ needs.gate.outputs.ref }}
+      run_maestro: false
+    secrets: inherit
+    permissions:
+      contents: read
+      checks: write
+      actions: read
+
+  session:
+    needs: [gate, build]
+    # Standard runner (free on public repos). The SimDeck guide uses macos-26.
+    runs-on: macos-26
+    timeout-minutes: 80
+    # One session at a time; a second request waits instead of cutting the first one short.
+    concurrency:
+      group: ios-sim-session
+      cancel-in-progress: false
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+      pull-requests: write
+    steps:
+      # Pinned to the commit of tag simdeck-v0.2.1; the npm package `simdeck` is pinned to the same
+      # version. The action also downloads the latest cloudflared with no checksum, which this
+      # workflow cannot pin.
+      # pr_sha is the sha of THIS run, because the action finds the build artifact by the head
+      # sha of the run that uploaded it; the artifact name carries the commit that was built.
+      - name: Stream the simulator
+        uses: NativeScript/SimDeck/actions/run-ios-comment-session@814f7df6383cbfad2a95884c66ef356e7b6e31fa # simdeck-v0.2.1
+        with:
+          pr_number: ${{ needs.gate.outputs.pr_number }}
+          command: simdeck run ios
+          command_comment_id: ${{ github.event.comment.id }}
+          command_comment_author: ${{ github.event.comment.user.login || github.actor }}
+          pr_sha: ${{ github.sha }}
+          build_workflow: ''
+          artifact_name: ${{ needs.build.outputs.artifact_name }}
+          bundle_id: us.festie.app
+          simdeck_version: '0.2.1'
+          simulator_name: ${{ needs.gate.outputs.device }}
+          # The cache step inside the action is an unpinned third-party reference.
+          simulator_cache: 'false'
+          keepalive_seconds: ${{ needs.gate.outputs.keepalive_seconds }}
+          session_password: ${{ secrets.IOS_SIM_SESSION_PASSWORD }}
