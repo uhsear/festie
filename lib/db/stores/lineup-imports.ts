@@ -18,6 +18,7 @@ import { resolveArtistRefs, resolveSetValues } from '../../artist-refs';
 import { type ArtistViewer, viewerMask } from './artist-visibility';
 
 import { lockFestival } from './festival-lock';
+import { outsideLabelSql } from './organizations';
 
 export { lockFestivalAny } from './festival-lock';
 
@@ -717,8 +718,8 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
 
     /**
      * The newest 20 imports, or null when the festival does not exist. With `viewerOrganizationId` the creator
-     * reads as "<display name> at <organization>" for a member of that organization, and as "Festie support" for
-     * anyone else (an admin, in practice). An organizer never sees an attendee username.
+     * reads as "<display name> at <organization>" for a member of that organization, as "Festie support" for
+     * a platform admin and as "A former teammate" for anyone else. An organizer never sees an attendee username.
      */
     async list(festivalId: string, viewerOrganizationId: string | null = null) {
       const fest = await pool.query('SELECT name FROM festivals WHERE id = $1 AND deleted_at IS NULL', [festivalId]);
@@ -735,7 +736,7 @@ export function createLineupImportsStore(pool: Pool, { festivals }: { festivals:
       WHEN EXISTS (
         SELECT 1 FROM organization_members m WHERE m.organization_id = $2 AND m.user_id = u.id
       ) THEN COALESCE(NULLIF(btrim(u.display_name), ''), 'A teammate') || ' at ' || (SELECT o.name FROM organizations o WHERE o.id = $2)
-      ELSE 'Festie support'
+      ELSE ${outsideLabelSql('u.id')}
     END AS username,
     (
       SELECT

@@ -39,8 +39,15 @@ const ORG_COLUMNS = `
   o.updated_at AS "updatedAt"
 `;
 
-/** What an organizer sees in place of the name of anyone outside the organization, an admin included. */
+/** What an organizer sees in place of the name of a platform admin. */
 const SUPPORT_LABEL = 'Festie support';
+/** What an organizer sees in place of a former teammate, so a removed member's edits never read as Festie's. */
+const FORMER_LABEL = 'A former teammate';
+
+/** The label for a user outside the organization: Festie support for a platform admin, a neutral one for anyone else. */
+export const outsideLabelSql = (userIdExpr: string) => `CASE WHEN EXISTS (
+    SELECT 1 FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE ur.user_id = ${userIdExpr} AND r.name = 'admin'
+  ) THEN '${SUPPORT_LABEL}' ELSE '${FORMER_LABEL}' END`;
 
 // The one rule for "this user may act as a member": not deleted, email confirmed.
 const ACTIVE_USER = 'u.deleted_at IS NULL AND u.email_verified_at IS NOT NULL';
@@ -78,9 +85,11 @@ export function createOrganizationsStore(pool: Pool) {
     return { target: target ? (target.role as OrgRole) : null, otherActiveOwners };
   }
 
-  // The owner's membership email is what the per-day cap counts; an admin's add sends none and is not counted.
+  // The owner's membership email is what the per-day cap counts; an admin's add is not capped and not counted.
   async function countMemberEmail(client: PoolClient, organizationId: string, email: string, dailyCap?: number) {
     if (dailyCap === undefined) return;
+    // The cap reads the last 24 hours only, and an address here may belong to someone with no account, so older rows go.
+    await client.query("DELETE FROM organization_member_emails WHERE created_at < NOW() - INTERVAL '2 days'");
     await client.query('INSERT INTO organization_member_emails (organization_id, email) VALUES ($1, $2)', [organizationId, email]);
   }
 
@@ -171,8 +180,9 @@ export function createOrganizationsStore(pool: Pool) {
     },
 
     /**
-     * Adds a member by email. A confirmed, live account becomes a member at once. Any other address
-     * (no account, or an unconfirmed one) is stored as pending and claimed by GET /manage/me.
+     * Adds a member by email. For an admin, a confirmed, live account becomes a member at once. Any other address
+     * (no account, or an unconfirmed one) is stored as pending and claimed by GET /manage/me. An owner's add is always
+     * pending, so its answer is the same whether or not the address has an account.
      * An owner (`byOwner`) never adds an owner and never replaces or consumes a pending owner invitation: only Festie does.
      */
     async addByEmail(
@@ -204,10 +214,11 @@ export function createOrganizationsStore(pool: Pool) {
             throw new OrganizationError(429, `You can add ${dailyCap} people a day. Try again tomorrow, or contact Festie.`, 'RATE_LIMITED');
           }
         }
-        const { rows: found } = await client.query(
-          `SELECT u.id FROM users u WHERE lower(u.email) = $1 AND ${ACTIVE_USER}`,
-          [email],
-        );
+        // An owner's add never looks the address up: an account match would tell the owner who has a Festie account
+        // and hand back that account's id. The person claims the pending row at /manage/me instead.
+        const { rows: found } = byOwner
+          ? { rows: [] as Array<{ id: string }> }
+          : await client.query(`SELECT u.id FROM users u WHERE lower(u.email) = $1 AND ${ACTIVE_USER}`, [email]);
         const userId: string | undefined = found[0]?.id;
         if (!userId) {
           await client.query(
@@ -231,6 +242,35 @@ export function createOrganizationsStore(pool: Pool) {
         ]);
         await countMemberEmail(client, organizationId, email, dailyCap);
         return { kind: 'member' as const, userId, role };
+      });
+    },
+
+    /**
+     * Moves a festival between owners (admin only, plan-v3 3.2). `organizationId` null hands it back to the platform. The
+     * festival keeps its data and publish state; only the owner changes. A target organization must be active.
+     * `expectedFrom` makes a hand-back check the current owner. Returns where the festival came from and where it went.
+     */
+    async transferFestival(festivalId: string, organizationId: string | null, expectedFrom?: string) {
+      return withTransaction(pool, async (client) => {
+        if (organizationId) {
+          await requireOrg(client, organizationId);
+          const { rows: target } = await client.query('SELECT status FROM organizations WHERE id = $1', [organizationId]);
+          if (target[0].status !== 'active') {
+            throw new OrganizationError(409, 'Activate the organization before you move a festival into it.', 'INVALID_INPUT');
+          }
+        }
+        const { rows } = await client.query(
+          'SELECT organization_id AS "from" FROM festivals WHERE id = $1 AND deleted_at IS NULL FOR UPDATE',
+          [festivalId],
+        );
+        if (!rows[0] || (expectedFrom !== undefined && rows[0].from !== expectedFrom)) {
+          throw new OrganizationError(404, 'Festival not found.', 'NOT_FOUND');
+        }
+        if ((rows[0].from ?? null) === organizationId) {
+          throw new OrganizationError(409, 'That festival already has this owner.', 'ALREADY_EXISTS');
+        }
+        await client.query('UPDATE festivals SET organization_id = $2 WHERE id = $1', [festivalId, organizationId]);
+        return { from: (rows[0].from as string | null) ?? null, to: organizationId };
       });
     },
 
@@ -364,7 +404,8 @@ export function createOrganizationsStore(pool: Pool) {
 
     /**
      * How organizer-visible lists name the person behind an edit (owner decision 9): "Alex at Venue X" for a
-     * teammate, from the display name and never the attendee username, and "Festie support" for anyone else.
+     * teammate, from the display name and never the attendee username, "Festie support" for a platform admin, and
+     * "A former teammate" for anyone else.
      */
     async editorLabel(organizationId: string, userId: string | null) {
       if (!userId) return null;
@@ -383,7 +424,10 @@ export function createOrganizationsStore(pool: Pool) {
 `,
         [organizationId, userId],
       );
-      if (!rows[0]) return SUPPORT_LABEL;
+      if (!rows[0]) {
+        const { rows: outside } = await pool.query(`SELECT ${outsideLabelSql('$1::text')} AS label`, [userId]);
+        return outside[0].label as string;
+      }
       return `${String(rows[0].displayName ?? '').trim() || 'A teammate'} at ${rows[0].organizationName}`;
     },
 
@@ -435,13 +479,14 @@ export function createOrganizationsStore(pool: Pool) {
 
     /**
      * What the Members screen shows a teammate: the person's display name (null when unset) and email, never the attendee username,
-     * and who added them as a label ("Festie support" for anyone outside the organization).
+     * and who added them as a label ("Festie support" for a platform admin, "A former teammate" for anyone else outside the organization).
      */
     async listTeam(organizationId: string) {
-      const added = `CASE WHEN am.user_id IS NULL THEN '${SUPPORT_LABEL}' ELSE COALESCE(NULLIF(btrim(a.display_name), ''), 'A teammate') END`;
+      const added = (alias: string) =>
+        `CASE WHEN am.user_id IS NULL THEN ${outsideLabelSql(`${alias}.added_by`)} ELSE COALESCE(NULLIF(btrim(a.display_name), ''), 'A teammate') END`;
       const { rows: members } = await pool.query(
         `SELECT m.user_id AS "userId", NULLIF(btrim(u.display_name), '') AS "name", u.email, m.role,
-                (${ACTIVE_USER}) AS "active", ${added} AS "addedBy", m.created_at AS "createdAt"
+                (${ACTIVE_USER}) AS "active", ${added('m')} AS "addedBy", m.created_at AS "createdAt"
            FROM organization_members m
            JOIN users u ON u.id = m.user_id
            LEFT JOIN organization_members am ON am.organization_id = m.organization_id AND am.user_id = m.added_by
@@ -451,7 +496,7 @@ export function createOrganizationsStore(pool: Pool) {
         [organizationId],
       );
       const { rows: pending } = await pool.query(
-        `SELECT p.email, p.role, ${added} AS "addedBy", p.created_at AS "createdAt"
+        `SELECT p.email, p.role, ${added('p')} AS "addedBy", p.created_at AS "createdAt"
            FROM organization_pending_members p
            LEFT JOIN organization_members am ON am.organization_id = p.organization_id AND am.user_id = p.added_by
            LEFT JOIN users a ON a.id = am.user_id

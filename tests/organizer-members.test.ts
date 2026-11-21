@@ -44,17 +44,25 @@ const emailsOf = async (server: any, organizationId = 'org-a') =>
   (await o.sql(server, 'SELECT email FROM organization_member_emails WHERE organization_id = $1 ORDER BY id', [organizationId])).rows.map((r: any) => r.email);
 
 describe('owner-run members: adding', { skip }, () => {
-  test('an owner adds a confirmed account at once, and that person can open the festivals of the team', async () => {
+  test('an owner add always waits, even for a confirmed account, and the answer never names that account', async () => {
     const { server, users } = await boot();
     const person = await o.makeUser(server, `joiner-${Date.now()}`);
     assert.equal((await o.as(server, person.token).get('/api/v1/manage/festivals/f-a')).status, 404);
 
     const added = await o.as(server, users.ownerA.token).post(`${ORG}/members`, { email: person.email, role: 'editor' });
     assert.equal(added.status, 201);
-    assert.deepEqual([added.body.data.kind, added.body.data.userId, added.body.data.role], ['member', person.id, 'editor']);
+    assert.deepEqual([added.body.data.kind, added.body.data.email, added.body.data.role], ['pending', person.email, 'editor']);
+    assert.equal('userId' in added.body.data, false, 'no internal user id');
+    const unknown = await o.as(server, users.ownerA.token).post(`${ORG}/members`, { email: `nobody-${Date.now()}@example.com`, role: 'editor' });
+    assert.deepEqual(Object.keys(unknown.body.data).sort(), Object.keys(added.body.data).sort(), 'the same answer for an address with no account');
     assert.equal(added.body.data.emailed, false, 'no mail key on the test server');
+    assert.equal((await o.as(server, person.token).get('/api/v1/manage/festivals/f-a')).status, 404, 'not a member until they claim it');
+
+    // Signing in to /manage/me claims the invitation for the confirmed address, and then the festivals open.
+    const claimed = await o.as(server, person.token).get('/api/v1/manage/me');
+    assert.deepEqual(claimed.body.data.organizations.map((x: any) => [x.id, x.role]), [['org-a', 'editor']]);
     assert.equal((await o.as(server, person.token).get('/api/v1/manage/festivals/f-a')).status, 200);
-    assert.deepEqual(await emailsOf(server), [person.email]);
+    assert.deepEqual(await emailsOf(server), [person.email, unknown.body.data.email]);
   });
 
   test('an address with no account waits, and is claimed only after that email is confirmed', async () => {
@@ -105,10 +113,11 @@ describe('owner-run members: adding', { skip }, () => {
   });
 
   test('the daily cap counts every membership email, refuses the next one, and an add that fails is not counted', async () => {
-    const { server, users } = await boot({ ORGANIZER_MEMBER_ADD_DAILY_CAP: '2' });
+    const { server, users, adminToken } = await boot({ ORGANIZER_MEMBER_ADD_DAILY_CAP: '2' });
     const add = (email: string) => o.as(server, users.ownerA.token).post(`${ORG}/members`, { email, role: 'viewer' });
-    // Already a member: a 409 that rolls back and uses none of the cap.
-    assert.equal((await add(users.viewerA.email)).status, 409);
+    // An invitation for an owner is Festie's alone: a 403 that rolls back and uses none of the cap.
+    assert.equal((await o.as(server, adminToken).post(`${ORG}/members`, { email: 'boss@example.com', role: 'owner' })).status, 201);
+    assert.equal((await add('boss@example.com')).status, 403);
     assert.equal((await add('one@example.com')).status, 201);
     assert.equal((await add('two@example.com')).status, 201);
     const third = await add('three@example.com');
@@ -251,15 +260,18 @@ describe('the organization on the manage mount', { skip }, () => {
     assert.equal((await o.as(server, users.ownerS.token).get('/api/v1/manage/organizations/org-s')).status, 200);
   });
 
-  test('"added by" names a teammate by display name, and anyone outside the team as Festie support', async () => {
+  test('"added by" names a teammate by display name, a platform admin as Festie support and anyone else as a former teammate', async () => {
     const { server, users } = await boot();
     await o.sql(server, "UPDATE users SET display_name = 'Alex' WHERE id = $1", [users.ownerA.id]);
+    const { rows: admins } = await o.sql(server, "SELECT ur.user_id FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.name = 'admin' LIMIT 1");
     await o.sql(server, 'UPDATE organization_members SET added_by = $1 WHERE user_id = $2', [users.ownerA.id, users.editorA.id]);
-    await o.sql(server, "UPDATE organization_members SET added_by = 'some-admin' WHERE user_id = $1", [users.viewerA.id]);
+    await o.sql(server, 'UPDATE organization_members SET added_by = $1 WHERE user_id = $2', [admins[0].user_id, users.viewerA.id]);
+    await o.sql(server, "UPDATE organization_members SET added_by = 'removed-teammate' WHERE user_id = $1", [users.unconfirmed.id]);
     const { members } = (await o.as(server, users.ownerA.token).get(ORG)).body.data;
     const byId = Object.fromEntries(members.map((m: any) => [m.userId, m.addedBy]));
     assert.equal(byId[users.editorA.id], 'Alex');
     assert.equal(byId[users.viewerA.id], 'Festie support');
+    assert.equal(byId[users.unconfirmed.id], 'A former teammate');
   });
 
   test('an owner edits the profile; the display name then names the organization to teammates', async () => {

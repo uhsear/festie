@@ -119,13 +119,10 @@ export function createAdminAnnouncementRoutes(deps: any) {
         if (member && severity === 'urgent') {
           return sendError(res, 403, 'Only Festie can send an urgent announcement.', ErrorCodes.FORBIDDEN);
         }
+        const capMessage = `Your organization can send ${config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP} announcements a day. Try again tomorrow.`;
+        // A cheap early answer; the insert below enforces the cap again under the organization lock.
         if (member && (await stores.announcements.countByOrganizationToday(req.organizationId)) >= config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP) {
-          return sendError(
-            res,
-            429,
-            `Your organization can send ${config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP} announcements a day. Try again tomorrow.`,
-            ErrorCodes.RATE_LIMITED,
-          );
+          return sendError(res, 429, capMessage, ErrorCodes.RATE_LIMITED);
         }
         const push = !member || req.orgVerified === true;
         const now = Date.now();
@@ -142,7 +139,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
             ErrorCodes.RATE_LIMITED,
           );
         }
-        const announcement = await stores.announcements.create({
+        const row = {
           id: crypto.randomUUID(),
           festivalId,
           severity,
@@ -152,8 +149,12 @@ export function createAdminAnnouncementRoutes(deps: any) {
           sendAt,
           createdBy: req.user?.userId ?? null,
           push,
-          organizationId: member ? req.organizationId : null,
-        });
+        };
+        // An organization's daily cap is counted and the row inserted under the organization lock, so parallel posts cannot pass it.
+        const announcement = member
+          ? await stores.announcements.createWithinOrganizationCap({ ...row, organizationId: req.organizationId }, config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP)
+          : await stores.announcements.create({ ...row, organizationId: null });
+        if (!announcement) return sendError(res, 429, capMessage, ErrorCodes.RATE_LIMITED);
         const recipients = await countRecipients(festivalId);
         await writeAudit(req, res, festivalId, AUDIT_ACTIONS.FESTIVAL_ANNOUNCEMENT_SENT, {
           announcementId: announcement.id,

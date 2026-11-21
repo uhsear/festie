@@ -15,7 +15,7 @@ import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organiz
 import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
 import { artistViewerOf } from '../lib/artist-viewer.js';
-import { organizerAudience } from '../lib/organizer-engagement.js';
+import { ENGAGEMENT_MIN_COUNT, organizerAudience } from '../lib/organizer-engagement.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
 import { ArtistError } from '../lib/db/stores/artists.js';
 import type { Request, Response } from 'express';
@@ -295,6 +295,20 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     const shownPeople = organizerAudience(people);
     const shownMarked = organizerAudience(marked);
     return { ...(shownPeople !== null ? { people: shownPeople } : {}), ...(shownMarked !== null ? { marked: shownMarked } : {}) };
+  }
+
+  // An organizer sees a removal count only from ENGAGEMENT_MIN_JOINED up, like an audience size; a smaller one reads
+  // as 0 and drops out of the message. The save still asks for the confirm, which hidden counts alone can trigger.
+  function removalForMember<T extends { picks: number; ratings: number; cancel?: { picks: number; picked: number; marked: number } }>(removal: T): T {
+    const floor = (n: number) => organizerAudience(n) ?? 0;
+    return {
+      ...removal,
+      picks: floor(removal.picks),
+      ratings: floor(removal.ratings),
+      ...(removal.cancel
+        ? { cancel: { ...removal.cancel, picks: floor(removal.cancel.picks), picked: floor(removal.cancel.picked), marked: floor(removal.cancel.marked) } }
+        : {}),
+    };
   }
 
   // The cancel line of the removal confirm: what cancelling these acts takes away and who hears about it.
@@ -674,12 +688,13 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             ratings,
             ...(cancel ? { cancel } : {}),
           };
+          const shownRemoval = isMemberReq(req) ? removalForMember(removal) : removal;
           return sendError(
             res,
             409,
-            removalMessage(removal),
+            removalMessage(shownRemoval),
             ErrorCodes.CONFIRM_REMOVALS,
-            { removal },
+            { removal: shownRemoval },
           );
         }
         if (daysSent) {
@@ -770,6 +785,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             organizer,
             verified,
             hourlyCap: config.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP,
+            log,
           });
           if (!organizer) void sending.catch((err: Error) => log.warn('schedule alert failed', { festivalId: festival.id, error: err.message }));
           else {
@@ -806,7 +822,11 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
           venueSent &&
           (nextFestival.latitude !== existingFestival.latitude ||
             nextFestival.longitude !== existingFestival.longitude);
-        const wantsVenue = !venueSetByAdmin && (venueMissing || nextFestival.location !== existingFestival.location);
+        // A pending organization may not geocode: the lookup calls an outside service on its text (plan 6.6).
+        const wantsVenue =
+          !venueSetByAdmin &&
+          (req as any).orgStatus !== 'pending' &&
+          (venueMissing || nextFestival.location !== existingFestival.location);
         let venueGuessed = false;
         if (wantsVenue && !organizer) venueGuessed = await fillVenueCoords(festival.id, nextFestival.location);
         else if (wantsVenue && memberGeocodesWaiting >= MEMBER_GEOCODE_QUEUE) {
@@ -852,7 +872,13 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     try {
       const festival = await getFestivalById((req.validatedParams as Params).id);
       if (!festival) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
-      return sendSuccess(res, await stores.festivals.countImpact(festival.id));
+      const impact = await stores.festivals.countImpact(festival.id);
+      if (!isMemberReq(req)) return sendSuccess(res, impact);
+      // An organizer learns who uses a live festival only from ENGAGEMENT_MIN_JOINED joined users up, and no single
+      // count under ENGAGEMENT_MIN_COUNT (owner decision 4). A hidden count reads 0.
+      const open = organizerAudience(impact.profiles) !== null;
+      const shown = (n: number) => (open && n >= ENGAGEMENT_MIN_COUNT ? n : 0);
+      return sendSuccess(res, { profiles: open ? impact.profiles : 0, crews: shown(impact.crews), picks: shown(impact.picks) });
     } catch (error) {
       log.error('festival impact failed', { error: (error as NodeJS.ErrnoException).message, festivalId: (req.validatedParams as Params)?.id });
       return sendError(res, 500, 'Failed to count who uses this festival', ErrorCodes.INTERNAL_ERROR);

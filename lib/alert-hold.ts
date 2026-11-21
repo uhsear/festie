@@ -27,6 +27,7 @@ export async function deliverScheduleAlert({
   organizer,
   verified = false,
   hourlyCap,
+  log,
 }: {
   stores: any;
   emitter: any;
@@ -35,10 +36,14 @@ export async function deliverScheduleAlert({
   organizer: boolean;
   verified?: boolean;
   hourlyCap?: number;
+  log?: { warn: (message: string, meta?: Record<string, unknown>) => void };
 }): Promise<HoldResult> {
   const send = organizer ? verified && hourlyCap !== undefined && (await stores.festivalReview.takeAlertRun(festival.id, hourlyCap)) : true;
   if (send) {
-    await emitter?.scheduleChanged?.({ festival, ...alert });
+    const sending = emitter?.scheduleChanged?.({ festival, ...alert });
+    // An organizer's request waits for the decision to send or hold, never for the chunked push fan-out.
+    if (!organizer) await sending;
+    else void Promise.resolve(sending).catch((err: Error) => log?.warn('schedule alert failed', { festivalId: festival.id, error: err.message }));
     return { held: false, changes: 0, people: 0 };
   }
   const { held, people } = await stores.festivalReview.hold(festival.id, alert);

@@ -131,7 +131,17 @@ export default function createLineupImportRoute(deps: any) {
       if (!after) return;
       const { changes, pickersBySet } = await planPickerAlerts({ stores, before, after, tbaOnly: true });
       if (changes.length === 0) return;
-      const result = await deliverScheduleAlert({ stores, emitter, festival: after, alert: { changes, pickersBySet }, organizer: isOrganizerRequest(req) });
+      const organizer = isOrganizerRequest(req);
+      const result = await deliverScheduleAlert({
+        stores,
+        emitter,
+        festival: after,
+        alert: { changes, pickersBySet },
+        organizer,
+        verified: organizer && req.orgVerified === true,
+        hourlyCap: config.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP,
+        log,
+      });
       if (result.held) {
         await writeAdminAudit(req, {}, {
           action: AUDIT_ACTIONS.FESTIVAL_ALERT_HELD,

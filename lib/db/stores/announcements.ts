@@ -7,7 +7,7 @@
  */
 
 import type { Pool } from 'pg';
-import { isoOrNull } from '../connection';
+import { isoOrNull, withTransaction } from '../connection';
 
 export interface AnnouncementRow {
   id: string;
@@ -47,20 +47,22 @@ function mapRow(r: any): AnnouncementRow {
   };
 }
 
+type AnnouncementInput = {
+  id: string;
+  festivalId: string;
+  severity: string;
+  title: string;
+  body: string;
+  screen: string;
+  sendAt: string;
+  createdBy: string | null;
+  push?: boolean;
+  organizationId?: string | null;
+};
+
 export function createAnnouncementsStore(pool: Pool) {
   return {
-    async create(a: {
-      id: string;
-      festivalId: string;
-      severity: string;
-      title: string;
-      body: string;
-      screen: string;
-      sendAt: string;
-      createdBy: string | null;
-      push?: boolean;
-      organizationId?: string | null;
-    }): Promise<AnnouncementRow> {
+    async create(a: AnnouncementInput): Promise<AnnouncementRow> {
       const { rows } = await pool.query(
         `INSERT INTO festival_announcements (id, festival_id, severity, title, body, screen, send_at, created_by, push, organization_id)
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -68,6 +70,28 @@ export function createAnnouncementsStore(pool: Pool) {
         [a.id, a.festivalId, a.severity, a.title, a.body, a.screen, a.sendAt, a.createdBy, a.push ?? true, a.organizationId ?? null],
       );
       return mapRow(rows[0]);
+    },
+
+    /**
+     * Creates an organization's announcement unless it already has `cap` in the last 24 hours (null then). The count and
+     * the insert run under the organization row lock, so parallel posts cannot pass the cap together.
+     */
+    async createWithinOrganizationCap(a: AnnouncementInput & { organizationId: string }, cap: number): Promise<AnnouncementRow | null> {
+      return withTransaction(pool, async (client) => {
+        await client.query('SELECT id FROM organizations WHERE id = $1 FOR UPDATE', [a.organizationId]);
+        const { rows: counted } = await client.query(
+          "SELECT COUNT(*)::int AS n FROM festival_announcements WHERE organization_id = $1 AND created_at > NOW() - INTERVAL '24 hours'",
+          [a.organizationId],
+        );
+        if (counted[0].n >= cap) return null;
+        const { rows } = await client.query(
+          `INSERT INTO festival_announcements (id, festival_id, severity, title, body, screen, send_at, created_by, push, organization_id)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           RETURNING *`,
+          [a.id, a.festivalId, a.severity, a.title, a.body, a.screen, a.sendAt, a.createdBy, a.push ?? true, a.organizationId],
+        );
+        return mapRow(rows[0]);
+      });
     },
 
     /** Announcements an organization's members created in the last 24 hours, cancelled ones included. */

@@ -265,9 +265,9 @@ describe('which routes that send to attendees an organizer reaches', { skip }, (
     ];
     // The set-time and days alerts are Festie's alone: 404 on manage for everyone, verified or not.
     const staysAdmin = new Set(['days-announcement', 'time-releases']);
-    // A verified owner reaches the rest: an empty announcement is a 400, the lineup count is a 200 and a send with
-    // nobody to tell is a 400. An editor has the role for none of them.
-    const ownerOnManage: Record<string, number> = { 'POST announcements': 400, 'POST lineup-announcement': 400, 'GET lineup-announcement': 200 };
+    // A verified owner reaches the rest: an empty announcement is a 400, the lineup count is a 200 and a send is a 200
+    // even with nobody to tell, so an organizer never learns that its audience is exactly zero. An editor has the role for none.
+    const ownerOnManage: Record<string, number> = { 'POST announcements': 400, 'POST lineup-announcement': 200, 'GET lineup-announcement': 200 };
     const problems: string[] = [];
     for (const who of ['ownerA', 'editorA']) {
       const caller = o.as(server, (users as any)[who].token);

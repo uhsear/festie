@@ -7,6 +7,7 @@
 --   festival_schedule_alert_runs     one row per moved-set alert a verified organization sent, for its hourly cap
 --   organizations.display_name / contact_email   how teammates and emails name the organization
 --   organization_member_emails       one row per membership email an owner triggered, for the per-day cap
+--   festival_lineup_announce_claims  one row per lineup announcement an organization sent, so the once-a-day guard is atomic
 --   organization_uploads             the stored bytes of every site-plan image of an organization's festival
 --   festival_announcements.push / organization_id   a banner an unverified organization posts has no push; the daily cap counts by organization
 --   a trigger on users that removes a hard-deleted user's id from the held alerts, so retention_cleanup() keeps working
@@ -83,7 +84,17 @@ CREATE TABLE IF NOT EXISTS festival_schedule_alert_runs (
 );
 CREATE INDEX IF NOT EXISTS idx_schedule_alert_runs_festival ON festival_schedule_alert_runs (festival_id, created_at DESC);
 
--- The address is kept so an owner can see who was mailed; the cap counts rows of the last 24 hours.
+-- An organization sends the lineup announcement of a festival once a day. The send claims a row here first, under an
+-- advisory lock, so two requests at once cannot both pass and a lost audit row cannot reopen the day.
+CREATE TABLE IF NOT EXISTS festival_lineup_announce_claims (
+  id BIGSERIAL PRIMARY KEY,
+  festival_id TEXT NOT NULL REFERENCES festivals (id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_lineup_announce_claims_festival ON festival_lineup_announce_claims (festival_id, created_at DESC);
+
+-- The cap counts rows of the last 24 hours, so the app deletes rows older than two days: an address here may belong to
+-- someone with no account.
 CREATE TABLE IF NOT EXISTS organization_member_emails (
   id BIGSERIAL PRIMARY KEY,
   organization_id TEXT NOT NULL REFERENCES organizations (id) ON DELETE CASCADE,

@@ -12,11 +12,13 @@
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { OrganizationError } from '../lib/db/stores/organizations.js';
+import { sendOrganizationMemberEmail } from '../lib/email.js';
 
 export default function createOrganizationsRoutes(deps: any) {
   const {
     express,
     log,
+    config,
     stores,
     emitter,
     festivalAccess,
@@ -78,12 +80,16 @@ export default function createOrganizationsRoutes(deps: any) {
   });
 
   // What waits for an admin: publish requests (decide with POST /admin/festivals/:id/publish or .../publish/decline)
-  // and held attendee alerts. Declared before '/:id', which would take 'review-queue' for an organization id.
+  // and held attendee alerts, plus what members changed on live festivals lately. Declared before '/:id', which would take 'review-queue' for an organization id.
   router.get('/review-queue', rateLimit(60, 'admin-review-queue'), async (_req: any, res: any) => {
     try {
       setNoStore(res);
-      const [requests, held] = await Promise.all([stores.festivalReview.reviewQueue(), stores.festivalReview.listHeld()]);
-      return sendSuccess(res, { requests, held });
+      const [requests, held, recentEdits] = await Promise.all([
+        stores.festivalReview.reviewQueue(),
+        stores.festivalReview.listHeld(),
+        stores.festivalReview.recentOrganizerEdits(),
+      ]);
+      return sendSuccess(res, { requests, held, recentEdits });
     } catch (error) {
       return fail(res, error, 'load the review queue');
     }
@@ -101,7 +107,14 @@ export default function createOrganizationsRoutes(deps: any) {
         if (rows === 0) return sendError(res, 404, 'No alerts are held for this festival.', ErrorCodes.NOT_FOUND);
         const people = new Set<string>([...(alert?.pickersBySet.values() ?? []), ...(alert?.interestedByEntry?.values() ?? [])].flat());
         const festival = alert ? await stores.festivals.getById(festivalId) : null;
-        if (alert && festival) await emitter.scheduleChanged({ festival, ...alert });
+        if (alert && festival) {
+          // The rows were deleted to claim them, so a send that failed as a whole puts them back for another try.
+          const result = await emitter.scheduleChanged({ festival, ...alert });
+          if (result?.ok === false) {
+            await stores.festivalReview.hold(festivalId, alert);
+            return sendError(res, 503, 'The alerts could not be sent. They are held again. Try again in a few minutes.', ErrorCodes.SERVICE_UNAVAILABLE);
+          }
+        }
         await writeAdminAudit(req, res, {
           action: AUDIT_ACTIONS.FESTIVAL_ALERT_RELEASED,
           targetType: 'festival',
@@ -163,7 +176,7 @@ export default function createOrganizationsRoutes(deps: any) {
     async (req: any, res: any) => {
       try {
         const { id } = req.validatedParams;
-        const { status } = req.validatedBody;
+        const { status, reason } = req.validatedBody;
         const organization = await stores.organizations.setStatus(id, status);
         if (!organization) return notFound(res);
         await audit(
@@ -171,10 +184,56 @@ export default function createOrganizationsRoutes(deps: any) {
           res,
           status === 'active' ? AUDIT_ACTIONS.ORGANIZATION_ACTIVATED : AUDIT_ACTIONS.ORGANIZATION_SUSPENDED,
           id,
+          reason ? { reason } : {},
         );
         return sendSuccess(res, organization);
       } catch (error) {
         return fail(res, error, 'change organization status');
+      }
+    },
+  );
+
+  // Moves an existing festival into this organization, or hands it back to the platform. The festival keeps its data and
+  // publish state. Only an admin may, because it gives a live festival to new editors. Each move is audited with both owners.
+  async function moveFestival(req: any, res: any, festivalId: string, target: string | null, from?: string) {
+    const moved = await stores.organizations.transferFestival(festivalId, target, from);
+    deps.invalidateFestivalCache?.();
+    deps.invalidateFestivalListCache?.();
+    await writeAdminAudit(req, res, {
+      action: AUDIT_ACTIONS.FESTIVAL_TRANSFERRED,
+      targetType: 'festival',
+      targetId: festivalId,
+      organizationId: target ?? moved.from ?? undefined,
+      details: moved,
+    });
+    return sendSuccess(res, { festivalId, ...moved });
+  }
+
+  router.post(
+    '/:id/festivals',
+    rateLimit(30, 'admin-org-write'),
+    requireRecentAuth,
+    validateParams(schemas.organizationIdParams),
+    validate(schemas.organizationTransfer),
+    async (req: any, res: any) => {
+      try {
+        return await moveFestival(req, res, req.validatedBody.festivalId, req.validatedParams.id);
+      } catch (error) {
+        return fail(res, error, 'move the festival');
+      }
+    },
+  );
+
+  router.delete(
+    '/:id/festivals/:festivalId',
+    rateLimit(30, 'admin-org-write'),
+    requireRecentAuth,
+    validateParams(schemas.organizationFestivalParams),
+    async (req: any, res: any) => {
+      try {
+        return await moveFestival(req, res, req.validatedParams.festivalId, null, req.validatedParams.id);
+      } catch (error) {
+        return fail(res, error, 'hand the festival back');
       }
     },
   );
@@ -215,8 +274,18 @@ export default function createOrganizationsRoutes(deps: any) {
         } else {
           await audit(req, res, AUDIT_ACTIONS.ORGANIZATION_PENDING_MEMBER_ADDED, id, { email, role });
         }
+        // The person hears about /manage from the same fixed-template email an owner's add sends. A failed mail only logs.
+        let emailed = false;
+        try {
+          const organization = await stores.organizations.getById(id);
+          // A test seam: deps.sendOrganizationMemberEmail replaces the mail send.
+          const send = deps.sendOrganizationMemberEmail ?? sendOrganizationMemberEmail;
+          emailed = !!(await send({ to: email, organizationName: organization?.name, role, config, log }));
+        } catch (error) {
+          log.warn('admin member email failed', { error: (error as Error).message });
+        }
         res.status(201);
-        return sendSuccess(res, added);
+        return sendSuccess(res, { ...added, emailed });
       } catch (error) {
         return fail(res, error, 'add member');
       }

@@ -154,6 +154,50 @@ export function createFestivalReviewStore(pool: Pool) {
       return rows;
     },
 
+    /**
+     * What organization members changed on live festivals in the last 14 days, newest first, for the admin review
+     * list (plan-v3 6.3). Publish requests are left out: the queue above them already lists those.
+     */
+    async recentOrganizerEdits(limit = 30) {
+      const { rows } = await pool.query(
+        `
+  SELECT
+    a.id,
+    a.created_at AS "createdAt",
+    a.action,
+    a.target_id AS "festivalId",
+    f.name,
+    a.organization_id AS "organizationId",
+    o.name AS "organizationName",
+    a.details_json AS "details"
+  FROM
+    audit_log a
+    JOIN festivals f ON f.id = a.target_id AND f.published_at IS NOT NULL AND f.deleted_at IS NULL
+    LEFT JOIN organizations o ON o.id = a.organization_id
+  WHERE
+    a.actor_type = 'organizer'
+    AND a.target_type = 'festival'
+    AND a.action LIKE 'festival.%'
+    AND a.action NOT IN ('festival.publish_requested', 'festival.publish_withdrawn')
+    AND a.created_at > NOW() - INTERVAL '14 days'
+  ORDER BY
+    a.created_at DESC,
+    a.id DESC
+  LIMIT
+    $1
+`,
+        [limit],
+      );
+      // audit_log.details_json is text, so parse it the way the audit store does.
+      return rows.map((row: any) => {
+        try {
+          return { ...row, details: row.details ? JSON.parse(row.details) : null };
+        } catch {
+          return { ...row, details: null };
+        }
+      });
+    },
+
     /** When the festival was last edited by a form save, and by whom. Read for the 409 body. */
     async editInfo(festivalId: string) {
       const { rows } = await pool.query(
@@ -210,7 +254,29 @@ export function createFestivalReviewStore(pool: Pool) {
       return { held, people: people.size };
     },
 
-    /** Festivals with held alerts, with the sets held and the people who would hear. */
+    /**
+     * Claims the once-a-day lineup announcement of a festival for an organization: the claim id, or null when one was
+     * taken in the last 24 hours. The advisory lock makes two requests at once count each other. Release the claim
+     * when the send fails, so the organization can try again.
+     */
+    async claimLineupAnnounce(festivalId: string): Promise<number | null> {
+      return withTransaction(pool, async (client) => {
+        await client.query('SELECT pg_advisory_xact_lock(hashtext($1))', [`lineup-announce:${festivalId}`]);
+        const { rows: taken } = await client.query(
+          "SELECT 1 FROM festival_lineup_announce_claims WHERE festival_id = $1 AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1",
+          [festivalId],
+        );
+        if (taken.length > 0) return null;
+        await client.query("DELETE FROM festival_lineup_announce_claims WHERE created_at < NOW() - INTERVAL '2 days'");
+        const { rows } = await client.query('INSERT INTO festival_lineup_announce_claims (festival_id) VALUES ($1) RETURNING id', [festivalId]);
+        return Number(rows[0].id);
+      });
+    },
+
+    async releaseLineupAnnounce(claimId: number): Promise<void> {
+      await pool.query('DELETE FROM festival_lineup_announce_claims WHERE id = $1', [claimId]);
+    },
+
     /**
      * Takes one moved-set alert run for a festival, for a verified organization: false when `cap` runs already went
      * out in the last hour. The advisory lock makes two saves at once count each other.

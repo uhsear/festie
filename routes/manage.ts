@@ -367,8 +367,9 @@ export default function createManageRoutes(
     },
   );
 
-  // A confirmed account joins at once; any other address waits in the pending table until its owner signs in and
-  // confirms it. Either way the person gets one fixed-template email, and the organization daily cap counts it.
+  // An owner's add always waits in the pending table until that person signs in and confirms the address at
+  // /manage/me, so the answer never says whether the address has an account. The person gets one fixed-template
+  // email, and the organization daily cap counts it.
   router.post(
     '/organizations/:id/members',
     orgAccess({ action: 'org.member.manage', param: 'id' }),
@@ -487,7 +488,7 @@ export default function createManageRoutes(
   );
 
   // The audience counts an audit row carries (alerts and announcements). An organizer sees one only from 20 people up.
-  const AUDIENCE_KEYS = ['notifiedPeople', 'people', 'recipients'];
+  const AUDIENCE_KEYS = ['notifiedPeople', 'people', 'recipients', 'picksLost', 'picks', 'ratings'];
   const withoutSmallAudiences = (details: any) => {
     if (!details || typeof details !== 'object') return details ?? null;
     return Object.fromEntries(

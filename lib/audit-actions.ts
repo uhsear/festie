@@ -23,6 +23,7 @@ export const AUDIT_ACTIONS = {
   FESTIVAL_ALERT_HELD: 'festival.alert_held',
   FESTIVAL_ALERT_RELEASED: 'festival.alert_released',
   FESTIVAL_ALERT_DISCARDED: 'festival.alert_discarded',
+  FESTIVAL_TRANSFERRED: 'festival.transferred',
   FESTIVAL_SITEPLAN_UPLOADED: 'festival.siteplan.uploaded',
   FESTIVAL_ANNOUNCEMENT_SENT: 'festival.announcement.sent',
   FESTIVAL_ANNOUNCEMENT_CANCELLED: 'festival.announcement.cancelled',

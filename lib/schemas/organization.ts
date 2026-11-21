@@ -45,7 +45,13 @@ export const organizationProfileSchema = z
   .refine((profile) => Object.keys(profile).length > 0, 'Change at least one field.');
 
 // Only an admin moves an organization between active and suspended. A new organization starts pending.
-export const organizationStatusSchema = z.object({ status: z.enum(['active', 'suspended']) });
+// The reason is optional text for the audit row, so a later admin sees why an organization was suspended or activated.
+export const organizationStatusSchema = z.object({
+  status: z.enum(['active', 'suspended']),
+  reason: z.string().trim().min(1).max(500).optional(),
+});
+// An admin moves one festival into the organization named in the path (plan-v3 3.2).
+export const organizationTransferSchema = z.object({ festivalId: identifier }).strict();
 export const organizationVerifiedSchema = z.object({ verified: z.boolean() });
 
 export const organizationMemberAddSchema = z.object({
@@ -65,6 +71,7 @@ export const organizerAuditQuery = z.object({
 });
 
 export const organizationIdParams = z.object({ id: identifier });
+export const organizationFestivalParams = z.object({ id: identifier, festivalId: identifier });
 export const organizationMemberParams = z.object({ id: identifier, userId: z.string().regex(/^[a-zA-Z0-9_-]{1,100}$/, 'Invalid user ID') });
 export const organizationPendingParams = z.object({ id: identifier, email: z.string().trim().toLowerCase().email().max(254) });
 

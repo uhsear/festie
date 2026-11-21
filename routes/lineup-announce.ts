@@ -79,14 +79,12 @@ export default function createLineupAnnounceRoute(deps: any) {
         return sendError(res, 409, 'Publish the festival before you announce its lineup.', ErrorCodes.DRAFT);
       }
       const scope = scopeOf(req);
-      // An organization sends the lineup drop of a festival once a day.
-      if (scope && (await stores.auditLog.count({ actions: [AUDIT_ACTIONS.LINEUP_ANNOUNCED], targetId: festivalId, from: new Date(Date.now() - 24 * 3600 * 1000).toISOString() })) > 0) {
-        return sendError(res, 429, 'This festival already sent its lineup announcement today. Try again tomorrow.', ErrorCodes.RATE_LIMITED);
-      }
       const { festivalName, recipients, followers, priorAttendees } = await reengagementExecutor.countLineupDrop(festivalId, scope);
       if (!festivalName) return sendError(res, 404, 'Festival not found', ErrorCodes.NOT_FOUND);
       // Push may be fully deduped while email still retries (its own dedup key), so only block when nobody is eligible.
-      if (followers + priorAttendees === 0) {
+      // An organizer is never told that the audience is exactly zero (owner decision 4), so an empty one is answered
+      // like any other and uses the day's send. Only an admin is told that nobody can be notified.
+      if (!scope && followers + priorAttendees === 0) {
         return sendError(
           res,
           400,
@@ -94,7 +92,20 @@ export default function createLineupAnnounceRoute(deps: any) {
           ErrorCodes.INVALID_INPUT,
         );
       }
-      await reengagement.sendLineupDrop(festivalId, scope);
+      // An organization sends the lineup drop of a festival once a day. The claim is atomic, unlike a count of audit rows.
+      let claimId: number | null = null;
+      if (scope) {
+        claimId = await stores.festivalReview.claimLineupAnnounce(festivalId);
+        if (claimId === null) {
+          return sendError(res, 429, 'This festival already sent its lineup announcement today. Try again tomorrow.', ErrorCodes.RATE_LIMITED);
+        }
+      }
+      try {
+        await reengagement.sendLineupDrop(festivalId, scope);
+      } catch (err) {
+        if (claimId !== null) await stores.festivalReview.releaseLineupAnnounce(claimId);
+        throw err;
+      }
       await writeAdminAudit(req, res, {
         action: AUDIT_ACTIONS.LINEUP_ANNOUNCED,
         targetType: 'festival',
