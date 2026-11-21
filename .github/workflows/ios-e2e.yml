@@ -355,7 +355,20 @@ jobs:
       - name: Dump the iOS view hierarchy on failure
         if: failure() && env.RUN_MAESTRO == 'true'
         working-directory: packages/mobile
-        run: MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > maestro-ios-hierarchy.json || echo "::warning::maestro hierarchy failed"
+        env:
+          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+        run: |
+          out=maestro-ios-hierarchy.json
+          MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > "$out" || echo "::warning::maestro hierarchy failed"
+          # The artifact is public: drop the dump if a typed credential is on screen.
+          for secret in "$TEST_USERNAME" "$TEST_PASSWORD"; do
+            if [ -n "$secret" ] && grep -qiF -- "$secret" "$out" 2>/dev/null; then
+              rm -f "$out"
+              echo "::warning::Hierarchy held a test credential and was not uploaded"
+              break
+            fi
+          done
 
       # Maestro records every -e value in commands-*.json and maestro.log.
       # Keep only screenshots in the debug tree so Actions artifacts can never
