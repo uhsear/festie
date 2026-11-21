@@ -63,7 +63,7 @@ export function createBackgroundTasks(ctx: any, { io }: any) {
   for (const [provider, missing] of Object.entries(config.OAUTH_CONFIG_MISSING ?? {})) {
     if ((missing as string[]).length > 0) log.warn('oauth:config-incomplete', { provider, missing });
   }
-  if (config.RESEND_API_KEY && !config.EMAIL_POSTAL_ADDRESS) log.warn('email:postal-address-unset', { setting: 'EMAIL_POSTAL_ADDRESS' });
+  if (config.RESEND_API_KEY && !config.EMAIL_POSTAL_ADDRESS) log.warn('email:postal-address-unset', { setting: 'EMAIL_POSTAL_ADDRESS', effect: 'wrap-up, lineup, days, set-times and crew-reform emails are not sent' });
 
   // Overlap guard: skip a tick while the previous run of the same sweep is still going.
   // Running sweeps are tracked in state.sweepsInFlight so shutdown can drain them

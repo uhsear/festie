@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail } from '../lib/email.js';
+import { MARKETING_EMAIL_TYPES, unsubscribeToken, verifyUnsubscribeToken, sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -415,7 +415,9 @@ describe('email: sendVerificationEmail', () => {
 // ---------------------------------------------------------------------------
 
 describe('email: re-engagement senders', () => {
-  const base = { to: 'u@example.com', username: 'u', festivalName: 'Fest', festivalId: 'f1', crewName: 'Crew', crewId: 'c1' };
+  const base = { to: 'u@example.com', userId: 'user-1', username: 'u', festivalName: 'Fest', festivalId: 'f1', crewName: 'Crew', crewId: 'c1' };
+  const POSTAL = 'PO Box 1 & Co, Orlando, FL 32801';
+  const marketingConfig = (extra: any = {}) => createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', SESSION_SECRET: 'test-secret', EMAIL_POSTAL_ADDRESS: POSTAL, ...extra });
   const cases: Array<[string, any, string]> = [
     ['wrap ready', sendWrapReadyEmail, 'Wrap-up ready'],
     ['lineup drop', sendLineupDropEmail, 'New lineups'],
@@ -423,35 +425,78 @@ describe('email: re-engagement senders', () => {
     ['set times out', sendSetTimesOutEmail, 'New lineups and set times'],
     ['days out', sendDaysOutEmail, 'New lineups, days and set times'],
   ];
+  const url = `https://festie.test/api/v1/auth/unsubscribe?token=${encodeURIComponent(unsubscribeToken('user-1', 'test-secret'))}`;
   for (const [name, fn, label] of cases) {
-    it(`${name}: https List-Unsubscribe header and settings footer`, async () => {
+    it(`${name}: one-click List-Unsubscribe headers, unsubscribe link, settings line and postal address`, async () => {
       const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
-      const ok = await fn({ ...base, to: `${name.replace(' ', '')}@example.com`, config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }), log: createMockLog(), _client: createMockClient(send) });
+      const ok = await fn({ ...base, to: `${name.replace(' ', '')}@example.com`, config: marketingConfig(), log: createMockLog(), _client: createMockClient(send) });
       assert.equal(ok, true);
       const msg = (send.mock.calls as any[])[0].arguments[0];
-      assert.equal(msg.headers['List-Unsubscribe'], '<https://festie.test/account>');
+      assert.equal(msg.headers['List-Unsubscribe'], `<${url}>`);
+      assert.equal(msg.headers['List-Unsubscribe-Post'], 'List-Unsubscribe=One-Click');
       const sentence = `You get this email because "${label}" is on in your Festie notification settings.`;
       assert.ok(msg.html.includes(sentence));
+      assert.ok(msg.html.includes(`href="${url}"`));
       assert.ok(msg.html.includes('href="https://festie.test/account"'));
-      assert.ok(msg.text.endsWith(`${sentence} Turn it off: https://festie.test/account`));
+      assert.ok(msg.html.includes('PO Box 1 &amp; Co, Orlando, FL 32801'), 'html escaped');
+      assert.ok(msg.text.includes(`Unsubscribe in one click: ${url}`));
+      assert.ok(msg.text.endsWith('\nPO Box 1 & Co, Orlando, FL 32801'), 'text plain');
+    });
+
+    it(`${name}: not sent without EMAIL_POSTAL_ADDRESS, a signing secret or a user id`, async () => {
+      for (const [extra, input] of [
+        [{ EMAIL_POSTAL_ADDRESS: '' }, {}],
+        [{ EMAIL_POSTAL_ADDRESS: '   ' }, {}],
+        [{ SESSION_SECRET: '' }, {}],
+        [{}, { userId: undefined }],
+      ] as Array<[any, any]>) {
+        const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+        const ok = await fn({ ...base, ...input, config: marketingConfig(extra), log: createMockLog(), _client: createMockClient(send) });
+        assert.equal(ok, false);
+        assert.equal(send.mock.calls.length, 0);
+      }
     });
   }
 
-  for (const [name, fn] of cases) {
-    it(`${name}: postal address in html and text when set, omitted when unset`, async () => {
-      const run = async (to: string, extra: Record<string, string>) => {
+  it('sendEmail refuses a marketing type that lacks the postal address or the one-click header', async () => {
+    for (const type of MARKETING_EMAIL_TYPES) {
+      for (const [config, headers] of [
+        [createMockConfig({ EMAIL_POSTAL_ADDRESS: POSTAL }), { 'List-Unsubscribe': '<https://x>' }],
+        [createMockConfig({ EMAIL_POSTAL_ADDRESS: POSTAL }), undefined],
+        [createMockConfig(), { 'List-Unsubscribe': '<https://x>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' }],
+      ] as Array<[any, any]>) {
         const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
-        await fn({ ...base, to, config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', ...extra }), log: createMockLog(), _client: createMockClient(send) });
-        return (send.mock.calls as any[])[0].arguments[0];
-      };
-      const withAddress = await run(`addr-${name.replace(' ', '')}@example.com`, { EMAIL_POSTAL_ADDRESS: 'PO Box 1 & Co, Orlando, FL 32801' });
-      assert.ok(withAddress.html.includes('PO Box 1 &amp; Co, Orlando, FL 32801'), 'html escaped');
-      assert.ok(withAddress.text.endsWith('\nPO Box 1 & Co, Orlando, FL 32801'), 'text plain');
-      const without = await run(`noaddr-${name.replace(' ', '')}@example.com`, {});
-      assert.ok(!without.html.includes('Orlando') && !without.html.includes('<br>'));
-      assert.ok(without.text.endsWith('Turn it off: https://festie.test/account'));
-    });
-  }
+        const ok = await sendEmail({ to: 'g@example.com', subject: `s-${type}`, html: 'h', text: 't', headers, type, config, log: createMockLog(), _client: createMockClient(send) });
+        assert.equal(ok, false, type);
+        assert.equal(send.mock.calls.length, 0, type);
+      }
+    }
+  });
+
+  it('transactional mail is unchanged: no postal address needed and no List-Unsubscribe header', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    const ok = await sendPasswordResetEmail({ to: 'tx@example.com', username: 'u', resetUrl: 'https://festie.test/reset', config: createMockConfig(), log: createMockLog(), _client: createMockClient(send) });
+    assert.equal(ok, true);
+    assert.equal((send.mock.calls as any[])[0].arguments[0].headers, undefined);
+  });
+});
+
+describe('email: unsubscribe token', () => {
+  it('round-trips the user id and is stable', () => {
+    const token = unsubscribeToken('user-1', 's3cret');
+    assert.equal(token, unsubscribeToken('user-1', 's3cret'));
+    assert.equal(verifyUnsubscribeToken(token, 's3cret'), 'user-1');
+  });
+
+  it('rejects a forged signature, another user, another secret and malformed input', () => {
+    const token = unsubscribeToken('user-1', 's3cret');
+    const sig = token.slice(token.lastIndexOf('.') + 1);
+    assert.equal(verifyUnsubscribeToken(`user-2.${sig}`, 's3cret'), null);
+    assert.equal(verifyUnsubscribeToken(`user-1.${sig.slice(0, -1)}x`, 's3cret'), null);
+    assert.equal(verifyUnsubscribeToken(token, 'other'), null);
+    assert.equal(verifyUnsubscribeToken(token, ''), null);
+    for (const bad of [undefined, null, '', 'nodot', '.sig', 42, ['a.b']]) assert.equal(verifyUnsubscribeToken(bad, 's3cret'), null);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -588,10 +633,11 @@ describe('email: sendSetTimesOutEmail', () => {
     const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
     const ok = await sendSetTimesOutEmail({
       to: 'u@example.com',
+      userId: 'u1',
       username: '<b>u</b>',
       festivalName: 'EDC <Las Vegas>',
       festivalId: 'edc 27',
-      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }),
+      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', SESSION_SECRET: 's', EMAIL_POSTAL_ADDRESS: 'PO Box 1' }),
       log: createMockLog(),
       _client: createMockClient(send),
     });
@@ -610,12 +656,13 @@ describe('email: sendSetTimesOutEmail', () => {
     const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
     await sendSetTimesOutEmail({
       to: 'u@example.com',
+      userId: 'u1',
       username: 'u',
       festivalName: 'Wasteland',
       festivalId: 'wl-27',
       dayLabels: ['Friday', 'Saturday'],
       note: 'Gates at <noon>.',
-      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }),
+      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', SESSION_SECRET: 's', EMAIL_POSTAL_ADDRESS: 'PO Box 1' }),
       log: createMockLog(),
       _client: createMockClient(send),
     });
@@ -633,10 +680,11 @@ describe('email: sendDaysOutEmail', () => {
     const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
     const ok = await sendDaysOutEmail({
       to: 'days@example.com',
+      userId: 'u1',
       username: '<b>u</b>',
       festivalName: 'Wasteland <2027>',
       festivalId: 'wl 27',
-      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }),
+      config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', SESSION_SECRET: 's', EMAIL_POSTAL_ADDRESS: 'PO Box 1' }),
       log: createMockLog(),
       _client: createMockClient(send),
     });
@@ -653,7 +701,7 @@ describe('email: sendDaysOutEmail', () => {
 describe('email: sendLineupDropEmail copy', () => {
   const send = async (hasTimes?: boolean) => {
     const fn = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
-    await sendLineupDropEmail({ to: 'lu@example.com', username: 'u', festivalName: 'Fest', festivalId: 'f1', ...(hasTimes === undefined ? {} : { hasTimes }), config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }), log: createMockLog(), _client: createMockClient(fn) });
+    await sendLineupDropEmail({ to: 'lu@example.com', userId: 'u1', username: 'u', festivalName: 'Fest', festivalId: 'f1', ...(hasTimes === undefined ? {} : { hasTimes }), config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', SESSION_SECRET: 's', EMAIL_POSTAL_ADDRESS: 'PO Box 1' }), log: createMockLog(), _client: createMockClient(fn) });
     return (fn.mock.calls as any[])[0].arguments[0];
   };
 

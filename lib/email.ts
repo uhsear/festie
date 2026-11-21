@@ -81,6 +81,11 @@ async function _recordSend(to: any, subject: any, log: any, redis: any, config: 
  * exempt message neither suppresses nor is suppressed by anything else.
  */
 export async function sendEmail({ to, subject, html, text, headers, idempotencyKey, config, log, _client, dedupe = true, type, redis }: any) {
+  // Hard gate for non-transactional mail: no postal address or no one-click unsubscribe header, no send.
+  if (MARKETING_EMAIL_TYPES.has(type) && (!_postalAddress(config) || !headers?.['List-Unsubscribe-Post'])) {
+    log.debug?.('email:marketing-skip', { type, reason: 'postal address or unsubscribe link missing' });
+    return false;
+  }
   const apiKey = config.RESEND_API_KEY;
   if (!apiKey) {
     // A missing key in production means every user email is silently lost; surface it as an error.
@@ -338,7 +343,7 @@ export async function sendOrganizationMemberEmail({ to, organizationName: stored
 }
 
 // ── M3 re-engagement emails ─────────────────────────────────────────────
-// All three follow the _wrapTemplate + _buttonHtml pattern and deep-link to the
+// All of these follow the _wrapTemplate + _buttonHtml pattern and deep-link to the
 // relevant surface. They degrade gracefully when RESEND_API_KEY is unset
 // (sendEmail logs a warning and returns false). Origin defaults to festie.us.
 
@@ -346,30 +351,67 @@ function _origin(config: any) {
   return (config?.PUBLIC_ORIGIN || 'https://festie.us').replace(/\/+$/, '');
 }
 
-// CAN-SPAM / RFC 8058: re-engagement (marketing) mail carries an unsubscribe
-// affordance via the List-Unsubscribe header. Transactional mail (password
-// reset, email verification) is exempt and does NOT set this. The server-side
-// opt-out + DND checks in lib/notifications/reengagement.ts are the enforcement
-// layer; this header is the inbox-client one-tap surface.
-function reengagementHeaders(config: any) {
-  return { 'List-Unsubscribe': `<${_origin(config)}/account>` };
+// Non-transactional ("re-engagement", CAN-SPAM commercial) mail. sendEmail refuses these types unless
+// EMAIL_POSTAL_ADDRESS is set and the message carries the RFC 8058 one-click unsubscribe headers.
+// Transactional mail (password reset, verification, account alerts, the policy notice) is not listed.
+export const MARKETING_EMAIL_TYPES = new Set(['wrap_ready', 'lineup_drop', 'days_out', 'set_times_out', 'crew_reformed']);
+
+function _postalAddress(config: any): string {
+  return typeof config?.EMAIL_POSTAL_ADDRESS === 'string' ? config.EMAIL_POSTAL_ADDRESS.trim() : '';
 }
 
-// Footer + plain-text line naming the notification setting that gates this email.
-// CAN-SPAM needs a postal address; it comes from config because the repo is public.
-function _reengagementFooter(label: string, config: any) {
-  const url = `${_origin(config)}/account`;
-  const address = typeof config?.EMAIL_POSTAL_ADDRESS === 'string' ? config.EMAIL_POSTAL_ADDRESS.trim() : '';
+function _unsubscribeSignature(userId: string, secret: string): string {
+  return crypto.createHmac('sha256', secret).update(`email-unsubscribe:${userId}`).digest('base64url');
+}
+
+/** Signed per-user unsubscribe token: `<userId>.<HMAC-SHA256>`. It never expires; an unsubscribe is safe to replay. */
+export function unsubscribeToken(userId: string, secret: string): string {
+  return `${userId}.${_unsubscribeSignature(userId, secret)}`;
+}
+
+/** The user id inside a valid unsubscribe token, or null for a malformed or forged one. */
+export function verifyUnsubscribeToken(token: unknown, secret: string): string | null {
+  if (!secret || typeof token !== 'string') return null;
+  const dot = token.lastIndexOf('.');
+  if (dot < 1) return null;
+  const userId = token.slice(0, dot);
+  const given = Buffer.from(token.slice(dot + 1));
+  const expected = Buffer.from(_unsubscribeSignature(userId, secret));
+  return given.length === expected.length && crypto.timingSafeEqual(given, expected) ? userId : null;
+}
+
+// Everything a marketing message needs: the unsubscribe URL, the RFC 8058 headers and the postal address.
+// null (and no send) when any of them cannot be provided: no address, no signing secret or no user id.
+function _marketingPrep(type: string, userId: any, config: any, log: any) {
+  const address = _postalAddress(config);
+  const secret = config?.SESSION_SECRET;
+  if (!address || !secret || !userId) {
+    log?.debug?.('email:marketing-skip', { type, reason: 'postal address, signing secret or user id missing' });
+    return null;
+  }
+  const url = `${_origin(config)}/api/v1/auth/unsubscribe?token=${encodeURIComponent(unsubscribeToken(String(userId), secret))}`;
+  const headers = { 'List-Unsubscribe': `<${url}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
+  return { url, address, headers };
+}
+
+// Footer + plain-text line naming the notification setting that gates this email, a one-click
+// unsubscribe link and the CAN-SPAM postal address (from config because the repo is public).
+function _reengagementFooter(label: string, config: any, prep: { url: string; address: string }) {
+  const settings = `${_origin(config)}/account`;
   return {
-    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${url}" style="color:rgba(255,255,255,0.5)">Turn it off</a>.${address ? `<br>${escapeHtml(address)}` : ''}`,
-    text: `You get this email because "${label}" is on in your Festie notification settings. Turn it off: ${url}${address ? `\n${address}` : ''}`,
+    html: `You get this email because "${label}" is on in your Festie notification settings. <a href="${prep.url}" style="color:rgba(255,255,255,0.5)">Unsubscribe</a> in one click, or change your <a href="${settings}" style="color:rgba(255,255,255,0.5)">notification settings</a>.<br>${escapeHtml(prep.address)}`,
+    text: `You get this email because "${label}" is on in your Festie notification settings. Unsubscribe in one click: ${prep.url}
+Notification settings: ${settings}
+${prep.address}`,
   };
 }
 
 /**
  * "Your wrap-up is ready" — deep-links to /wrap for the finished festival.
  */
-export async function sendWrapReadyEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
+export async function sendWrapReadyEmail({ to, userId, username, festivalName, festivalId, config, log, _client }: any) {
+  const prep = _marketingPrep('wrap_ready', userId, config, log);
+  if (!prep) return false;
   const origin = _origin(config);
   const wrapUrl = `${origin}/wrap${festivalId ? `?festival=${encodeURIComponent(festivalId)}` : ''}`;
   const name = festivalName || 'your festival';
@@ -378,16 +420,18 @@ export async function sendWrapReadyEmail({ to, username, festivalName, festivalI
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(name)} wrapped up. Your recap is ready: top sets, crew superlatives, and your numbers.</p>
     ${_buttonHtml(wrapUrl, 'See your wrap-up')}
     ${_urlFallback(wrapUrl)}`;
-  const footer = _reengagementFooter('Wrap-up ready', config);
+  const footer = _reengagementFooter('Wrap-up ready', config, prep);
   const html = _wrapTemplate('Your Festival Wrap-Up', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\n${name} wrapped up. Your recap is ready.\n\nSee your wrap-up: ${wrapUrl}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `Your ${name} wrap-up is ready`, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'wrap_ready' });
+  return sendEmail({ to, subject: `Your ${name} wrap-up is ready`, html, text, headers: prep.headers, config, log, _client, type: 'wrap_ready' });
 }
 
 /**
  * "The lineup just dropped" — deep-links to the festival page.
  */
-export async function sendLineupDropEmail({ to, username, festivalName, festivalId, hasTimes = true, config, log, _client }: any) {
+export async function sendLineupDropEmail({ to, userId, username, festivalName, festivalId, hasTimes = true, config, log, _client }: any) {
+  const prep = _marketingPrep('lineup_drop', userId, config, log);
+  if (!prep) return false;
   const origin = _origin(config);
   const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'a festival you love';
@@ -400,17 +444,19 @@ export async function sendLineupDropEmail({ to, username, festivalName, festival
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The lineup for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> ${escapeHtml(sentence)}</p>
     ${_buttonHtml(festivalUrl, 'See the lineup')}
     ${_urlFallback(festivalUrl)}`;
-  const footer = _reengagementFooter('New lineups', config);
+  const footer = _reengagementFooter('New lineups', config, prep);
   const html = _wrapTemplate('New Lineup', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\nThe lineup for ${name} ${hasTimes ? 'just dropped.' : sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
   const subject = hasTimes ? `${name} lineup just dropped` : `${name} lineup is out`;
-  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'lineup_drop' });
+  return sendEmail({ to, subject, html, text, headers: prep.headers, config, log, _client, type: 'lineup_drop' });
 }
 
 /**
  * "{Festival} days are out" — sent from the admin "Announce days" action, before any set has a time.
  */
-export async function sendDaysOutEmail({ to, username, festivalName, festivalId, config, log, _client }: any) {
+export async function sendDaysOutEmail({ to, userId, username, festivalName, festivalId, config, log, _client }: any) {
+  const prep = _marketingPrep('days_out', userId, config, log);
+  if (!prep) return false;
   const origin = _origin(config);
   const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'Your festival';
@@ -420,10 +466,10 @@ export async function sendDaysOutEmail({ to, username, festivalName, festivalId,
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The days for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> are out. ${sentence}</p>
     ${_buttonHtml(festivalUrl, 'See the lineup')}
     ${_urlFallback(festivalUrl)}`;
-  const footer = _reengagementFooter('New lineups, days and set times', config);
+  const footer = _reengagementFooter('New lineups, days and set times', config, prep);
   const html = _wrapTemplate('Days Are Out', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\nThe days for ${name} are out. ${sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `${name} days are out`, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'days_out' });
+  return sendEmail({ to, subject: `${name} days are out`, html, text, headers: prep.headers, config, log, _client, type: 'days_out' });
 }
 
 /** "Friday", "Friday and Saturday", "Fri, Sat and Sun". The set-times push and email share it. */
@@ -436,7 +482,9 @@ export function joinDayLabels(labels: string[]): string {
  * "{Festival} set times are out" — deep-links to the festival page. `dayLabels` names the released days
  * ("Friday and Saturday"); without them the mail says "the set times". `note` is the admin's own line.
  */
-export async function sendSetTimesOutEmail({ to, username, festivalName, festivalId, dayLabels = [], note, config, log, _client }: any) {
+export async function sendSetTimesOutEmail({ to, userId, username, festivalName, festivalId, dayLabels = [], note, config, log, _client }: any) {
+  const prep = _marketingPrep('set_times_out', userId, config, log);
+  if (!prep) return false;
   const origin = _origin(config);
   const festivalUrl = `${origin}/?festival=${encodeURIComponent(festivalId || '')}`;
   const name = festivalName || 'Your festival';
@@ -449,12 +497,12 @@ export async function sendSetTimesOutEmail({ to, username, festivalName, festiva
     ${noteHtml}
     ${_buttonHtml(festivalUrl, 'See the schedule')}
     ${_urlFallback(festivalUrl)}`;
-  const footer = _reengagementFooter('New lineups and set times', config);
+  const footer = _reengagementFooter('New lineups and set times', config, prep);
   const html = _wrapTemplate('Set Times Are Out', bodyHtml, footer.html);
   const noteText = note ? `\n\n${note}` : '';
   const text = `Hey ${username || 'there'},\n\n${the} for ${name} are out. Pick your sets and spot clashes before the weekend.${noteText}\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
   const subject = days ? `${name}: ${days} set times are out` : `${name} set times are out`;
-  return sendEmail({ to, subject, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'set_times_out' });
+  return sendEmail({ to, subject, html, text, headers: prep.headers, config, log, _client, type: 'set_times_out' });
 }
 
 /**
@@ -462,6 +510,7 @@ export async function sendSetTimesOutEmail({ to, username, festivalName, festiva
  */
 export async function sendCrewReformEmail({
   to,
+  userId,
   username,
   crewName,
   festivalName,
@@ -471,6 +520,8 @@ export async function sendCrewReformEmail({
   log,
   _client,
 }: any) {
+  const prep = _marketingPrep('crew_reformed', userId, config, log);
+  if (!prep) return false;
   const origin = _origin(config);
   // Prefer an explicit invite link (the invitee may not have a festival profile
   // yet); otherwise deep-link to the crew page.
@@ -482,10 +533,10 @@ export async function sendCrewReformEmail({
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px"><strong style="color:#e4e4e7">${escapeHtml(crew)}</strong> is getting back together${escapeHtml(fest)}. Jump in to plan picks, meeting points, and logistics with the crew.</p>
     ${_buttonHtml(url, 'Join the crew')}
     ${_urlFallback(url)}`;
-  const footer = _reengagementFooter('Crew re-forms', config);
+  const footer = _reengagementFooter('Crew re-forms', config, prep);
   const html = _wrapTemplate('Your Crew Reformed', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\n${crew} is getting back together${fest}.\n\nJoin the crew: ${url}\n\n${footer.text}`;
-  return sendEmail({ to, subject: `${crew} reformed${fest}`, html, text, headers: reengagementHeaders(config), config, log, _client, type: 'crew_reformed' });
+  return sendEmail({ to, subject: `${crew} reformed${fest}`, html, text, headers: prep.headers, config, log, _client, type: 'crew_reformed' });
 }
 
 const POLICY_NOTICE_LINE = 'This is a service notice about changes to the Festie Privacy Policy and Terms. We send it to every account.';

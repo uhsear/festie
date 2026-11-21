@@ -8,6 +8,7 @@
  * GET  /verify-email      - Verify email address via token link
  * POST /resend-verification - Resend email verification (authenticated)
  * POST /reset-password    - Reset password via emailed token
+ * GET|POST /unsubscribe   - One-click unsubscribe from marketing email (signed link, no sign-in)
  * (GET /reset-password lives in routes/pages.ts: it checks the link and hands it to the SPA.)
  *
  * AUDIT FIX (2026-04-14, DEFERRED FIX AGENT 1):
@@ -21,7 +22,7 @@
 import crypto from 'crypto';
 import type { Router } from 'express';
 import { createEmailWindowLimit, createPasswordResetRateLimit } from '../lib/rate-limiting';
-import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail } from '../lib/email';
+import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail, verifyUnsubscribeToken } from '../lib/email';
 import { escapeHtml } from '../lib/helpers/sanitize';
 import type { RouteDeps } from '../lib/types';
 
@@ -231,6 +232,53 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
     }
   });
 
+  // ── GET|POST /unsubscribe — one-click unsubscribe from re-engagement email ──
+  // The link in every marketing email carries a signed per-user token (lib/email.ts), so it works
+  // without a sign-in. POST is RFC 8058 (List-Unsubscribe-Post); GET serves the footer link.
+  // It turns off the three switches that gate re-engagement email: new lineups, crew re-forms and wrap-ups.
+  async function unsubscribeFromToken(token: unknown): Promise<boolean> {
+    const userId = verifyUnsubscribeToken(token, config.SESSION_SECRET);
+    if (!userId || !(await getUserById(userId))) return false;
+    const prefs = await stores.notificationPrefs.get(userId);
+    await stores.notificationPrefs.upsert({ ...prefs, lineupDrops: 0, crewReformed: 0, wrapReady: 0 });
+    log.info('email:unsubscribed', { userId });
+    return true;
+  }
+
+  router.get('/unsubscribe', rateLimit(120, 'email-unsubscribe'), async (req: any, res: any) => {
+    const sendHtml = (status: number, title: string, message: string, action: VerifyAction) => {
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-store');
+      return res.status(status).send(_verifyEmailPage(status, title, message, action, 'Unsubscribe'));
+    };
+    try {
+      if (!(await unsubscribeFromToken(req.query.token))) {
+        return sendHtml(400, 'Link not valid', 'This unsubscribe link is not valid. You can turn these emails off in your Festie notification settings.', OPEN_FESTIE);
+      }
+      return sendHtml(
+        200,
+        'You are unsubscribed',
+        'We turned off Festie lineup, crew re-form and wrap-up emails and alerts for you. You can turn them back on in Account, under Notifications.',
+        OPEN_FESTIE,
+      );
+    } catch (error: any) {
+      log.error('unsubscribe failed', { error: error.message });
+      return sendHtml(500, 'Something went wrong', 'Something went wrong. Please try again.', OPEN_FESTIE);
+    }
+  });
+
+  router.post('/unsubscribe', rateLimit(120, 'email-unsubscribe'), async (req: any, res: any) => {
+    try {
+      if (!(await unsubscribeFromToken(req.query.token))) {
+        return sendError(res, 400, 'Invalid unsubscribe link', ErrorCodes.INVALID_INPUT);
+      }
+      return sendSuccess(res, { unsubscribed: true });
+    } catch (error: any) {
+      log.error('unsubscribe failed', { error: error.message });
+      return sendError(res, 500, 'Something went wrong', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
   // ── POST /resend-verification — resend email verification (authenticated) ──
   router.post('/resend-verification', userAuth, rateLimit(2, 'resend-verify'), async (req: any, res: any) => {
     try {
@@ -361,7 +409,7 @@ const SIGN_IN: VerifyAction = { label: 'Sign in', href: '/login' };
 // Colours: Stage from packages/shared/src/tokens/colors.ts, Daylight from
 // colorsDaylight.ts (bg.primary, text.primary, text.secondary, accent.aqua).
 // `action` carries fixed strings only; `title` too. `message` is escaped.
-function _verifyEmailPage(status: number, title: string, message: string, action: VerifyAction) {
+function _verifyEmailPage(status: number, title: string, message: string, action: VerifyAction, pageTitle = 'Email Verification') {
   const success = status < 400;
   const icon = success ? '&#10003;' : '&#10007;';
   const color = success ? '#22c55e' : '#ef4444';
@@ -374,7 +422,7 @@ function _verifyEmailPage(status: number, title: string, message: string, action
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark light">
-<title>Email Verification - Festie</title>
+<title>${pageTitle} - Festie</title>
 <style>
   :root { --bg: #0a0a0a; --text: #eaeaf2; --text-2: #9999bb; --accent: #00e8d0; --on-accent: #0a0a0a; --card: rgba(255,255,255,0.05); --border: rgba(255,255,255,0.1); }
   @media (prefers-color-scheme: light) {

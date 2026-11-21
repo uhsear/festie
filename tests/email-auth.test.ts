@@ -15,6 +15,7 @@ import { Pool } from 'pg';
 import { bootServer } from './_boot-server';
 import { registerUser as registerSharedUser } from './_integration-helpers';
 import { requireTestDatabaseUrl } from './_test-schema';
+import { unsubscribeToken } from '../lib/email';
 
 const DEFAULT_PASSWORD = 'Str0ngTest!Pw';
 const TRUSTED_MUTATION_HEADER = 'x-festie-request';
@@ -33,6 +34,7 @@ async function cleanupCreatedUsers() {
     await pool.query('DELETE FROM password_reset_tokens WHERE user_id = ANY($1)', [createdUserIds]);
     await pool.query('DELETE FROM refresh_tokens WHERE user_id = ANY($1)', [createdUserIds]);
     await pool.query('DELETE FROM user_sessions WHERE user_id = ANY($1)', [createdUserIds]);
+    await pool.query('DELETE FROM notification_preferences WHERE user_id = ANY($1)', [createdUserIds]);
     await pool.query('DELETE FROM users WHERE id = ANY($1)', [createdUserIds]);
   } finally {
     await pool.end();
@@ -531,5 +533,76 @@ describe('email-auth: resend-verification', { concurrency: 1 }, () => {
       statuses.push(r.status);
     }
     assert.ok(statuses.includes(429), `expected a 429 among ${statuses.join(',')}`);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
+// unsubscribe (signed one-click link from marketing email, no sign-in)
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('email-auth: unsubscribe', { concurrency: 1 }, () => {
+  const SECRET = 'unsubscribe-test-secret';
+
+  async function setup(username: string) {
+    const server = await startServer({ SESSION_SECRET: SECRET });
+    servers.push(server);
+    const data = await registerUser(server, username, DEFAULT_PASSWORD);
+    return { server, userId: data.user.id as string };
+  }
+
+  async function prefs(userId: string) {
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      const { rows } = await pool.query(
+        'SELECT lineup_drops, crew_reformed, wrap_ready, set_reminders FROM notification_preferences WHERE user_id = $1',
+        [userId],
+      );
+      return rows[0];
+    } finally {
+      await pool.end();
+    }
+  }
+
+  test('GET with a valid token turns the re-engagement switches off, without a session', async () => {
+    const { server, userId } = await setup(`unsub-get-${Date.now()}`);
+    const token = unsubscribeToken(userId, SECRET);
+    const res = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
+    assert.equal(res.status, 200);
+    assert.match(res.text, /You are unsubscribed/);
+    const row = await prefs(userId);
+    assert.deepEqual([row.lineup_drops, row.crew_reformed, row.wrap_ready], [0, 0, 0]);
+    assert.equal(row.set_reminders, 1, 'unrelated switches stay on');
+    const again = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
+    assert.equal(again.status, 200, 'replaying the link is harmless');
+  });
+
+  test('POST (RFC 8058 one-click) with a valid token unsubscribes', async () => {
+    const { server, userId } = await setup(`unsub-post-${Date.now()}`);
+    const token = unsubscribeToken(userId, SECRET);
+    const res = await server.request
+      .post(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`)
+      .type('form')
+      .send('List-Unsubscribe=One-Click');
+    assert.equal(res.status, 200);
+    const row = await prefs(userId);
+    assert.deepEqual([row.lineup_drops, row.crew_reformed, row.wrap_ready], [0, 0, 0]);
+  });
+
+  test('a forged, foreign-secret or unknown-user token is refused and changes nothing', async () => {
+    const { server, userId } = await setup(`unsub-bad-${Date.now()}`);
+    const bad = [
+      `${userId}.forged`,
+      unsubscribeToken(userId, 'some-other-secret'),
+      unsubscribeToken(crypto.randomUUID(), SECRET),
+      'garbage',
+    ];
+    for (const token of bad) {
+      const get = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
+      assert.equal(get.status, 400, token);
+      assert.match(get.text, /Link not valid/);
+      const post = await server.request.post(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`).type('form').send('List-Unsubscribe=One-Click');
+      assert.equal(post.status, 400, token);
+    }
+    assert.equal(await prefs(userId), undefined, 'no prefs row was written');
   });
 });
