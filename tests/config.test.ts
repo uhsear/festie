@@ -278,6 +278,28 @@ describe('config: string fields', () => {
     assert.equal(typeof config.APP_VERSION, 'string');
   });
 
+  it('keeps the default Sentry traces rate at 0.05 or lower', () => {
+    assert.ok(DEFAULTS.SENTRY_TRACES_RATE <= 0.05);
+    saveEnv('SENTRY_TRACES_RATE');
+    try {
+      assert.equal(loadConfig({ PUBLIC_ORIGIN: '' }).SENTRY_TRACES_RATE, DEFAULTS.SENTRY_TRACES_RATE);
+    } finally {
+      restoreEnv();
+    }
+  });
+
+  it('reads SENTRY_RELEASE from the override, then the environment', () => {
+    saveEnv('SENTRY_RELEASE');
+    try {
+      assert.equal(loadConfig({ PUBLIC_ORIGIN: '' }).SENTRY_RELEASE, '');
+      process.env.SENTRY_RELEASE = ' abc123 ';
+      assert.equal(loadConfig({ PUBLIC_ORIGIN: '' }).SENTRY_RELEASE, 'abc123');
+      assert.equal(loadConfig({ PUBLIC_ORIGIN: '', SENTRY_RELEASE: 'def456' }).SENTRY_RELEASE, 'def456');
+    } finally {
+      restoreEnv();
+    }
+  });
+
   // tsx never sees the esbuild define, so only the built bundle proves APP_VERSION is baked in.
   it('bakes the package.json version into dist/server.js at build time', () => {
     const { version } = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
@@ -285,6 +307,14 @@ describe('config: string fields', () => {
     const bundle = readFileSync('dist/server.js', 'utf8');
     assert.ok(!bundle.includes('__APP_VERSION__'), 'define did not replace __APP_VERSION__');
     assert.match(bundle, new RegExp(`const APP_VERSION = true [?] ${JSON.stringify(version)}`));
+  });
+
+  it('bakes the git sha into dist/server.js so Sentry events match the deploy marker', () => {
+    const sha = execFileSync('git', ['rev-parse', 'HEAD']).toString().trim();
+    execFileSync(process.execPath, ['scripts/build.mjs'], { stdio: 'pipe' });
+    const bundle = readFileSync('dist/server.js', 'utf8');
+    assert.ok(!bundle.includes('__GIT_SHA__'), 'define did not replace __GIT_SHA__');
+    assert.ok(bundle.includes(JSON.stringify(sha)), 'bundle does not contain the built git sha');
   });
 });
 
