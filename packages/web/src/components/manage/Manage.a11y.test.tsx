@@ -33,7 +33,7 @@ describe('organizer screens: accessibility', () => {
 
   it('the status panel has none in draft, review and live states', async () => {
     const organizer = { role: 'owner' as const, orgName: 'Venue A', orgStatus: 'active' as const, verified: false };
-    const checklist = [{ key: 'timeZone', status: 'todo' as const, label: 'Choose a time zone.' }];
+    const checklist = [{ key: 'timeZone' as const, status: 'todo' as const, label: 'Choose a time zone.' }];
     const metas = [
       { publishedAt: null, checklist },
       { publishedAt: null, publishRequestedAt: '2026-11-02T12:00:00.000Z', checklist },

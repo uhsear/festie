@@ -128,9 +128,9 @@ describe('AdminFestivals in organizer mode', () => {
     await waitFor(() => expect(mockPut).toHaveBeenCalled());
     expect(mockGet).toHaveBeenCalledWith('/manage/festivals/f1');
     expect(mockGet).not.toHaveBeenCalledWith(expect.stringContaining('/admin/'));
-    expect(mockPut.mock.calls[0][0]).toBe('/manage/festivals/f1');
+    expect(mockPut.mock.calls[0]![0]).toBe('/manage/festivals/f1');
     // The server holds an organizer's alert, but only when the save asks to notify.
-    expect(mockPut.mock.calls[0][1]).toMatchObject({ notify: true, expectedUpdatedAt: FULL.updatedAt });
+    expect(mockPut.mock.calls[0]![1]).toMatchObject({ notify: true, expectedUpdatedAt: FULL.updatedAt });
     expect(routes.every((r) => r === '/manage')).toBe(true);
     expect(screen.queryByText('announcements panel')).not.toBeInTheDocument();
     expect(screen.getByTestId('form-mode')).toHaveTextContent('organizer readOnly=false');
@@ -189,8 +189,8 @@ describe('AdminFestivals in organizer mode', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
     await userEvent.click(await screen.findByRole('button', { name: 'Remove and save' }));
     await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
-    expect(mockPut.mock.calls[1][0]).toBe('/manage/festivals/f1');
-    expect(mockPut.mock.calls[1][1]).toMatchObject({ confirmRemovals: true });
+    expect(mockPut.mock.calls[1]![0]).toBe('/manage/festivals/f1');
+    expect(mockPut.mock.calls[1]![1]).toMatchObject({ confirmRemovals: true });
   });
 
   describe('a verified organization', () => {
@@ -201,11 +201,11 @@ describe('AdminFestivals in organizer mode', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
       expect(await screen.findByText(/This save tells 3 people that a set they picked moved or was removed/)).toBeInTheDocument();
       expect(mockPut).toHaveBeenCalledTimes(1);
-      expect(mockPut.mock.calls[0][1]).toMatchObject({ dryRun: true, notify: true });
+      expect(mockPut.mock.calls[0]![1]).toMatchObject({ dryRun: true, notify: true });
       await userEvent.click(screen.getByRole('button', { name: 'Save and tell them' }));
       await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
-      expect(mockPut.mock.calls[1][1]).toMatchObject({ notify: true });
-      expect(mockPut.mock.calls[1][1]).not.toHaveProperty('dryRun');
+      expect(mockPut.mock.calls[1]![1]).toMatchObject({ notify: true });
+      expect(mockPut.mock.calls[1]![1]).not.toHaveProperty('dryRun');
     });
 
     it('still confirms when the dry run hides a count below 20 people', async () => {
@@ -230,7 +230,7 @@ describe('AdminFestivals in organizer mode', () => {
       render([org()]);
       await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
       await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(1));
-      expect(mockPut.mock.calls[0][1]).not.toHaveProperty('dryRun');
+      expect(mockPut.mock.calls[0]![1]).not.toHaveProperty('dryRun');
     });
   });
 
@@ -305,8 +305,8 @@ describe('AdminFestivals in organizer mode', () => {
     await userEvent.click(screen.getByRole('button', { name: 'fill form' }));
     await userEvent.click(screen.getByRole('button', { name: 'save form' }));
     await waitFor(() => expect(mockPost).toHaveBeenCalled());
-    expect(mockPost.mock.calls[0][0]).toBe('/manage/festivals');
-    expect(mockPost.mock.calls[0][1]).toMatchObject({ name: 'Typed name', organizationId: 'org-b' });
+    expect(mockPost.mock.calls[0]![0]).toBe('/manage/festivals');
+    expect(mockPost.mock.calls[0]![1]).toMatchObject({ name: 'Typed name', organizationId: 'org-b' });
     expect(toast).toHaveBeenCalledWith('Festival created as a draft. Only your team and Festie can see it.', 'success');
   });
 

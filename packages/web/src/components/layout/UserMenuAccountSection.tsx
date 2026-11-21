@@ -33,7 +33,7 @@ export default function UserMenuAccountSection({ user, onClose, onLogout }: User
         </Button>
         {!!user.organizations?.length && (
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             type="button"
             data-testid="user-menu-manage-link"
