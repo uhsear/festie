@@ -3,8 +3,10 @@ import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
   formatFestivalDate,
   formatDateSpan,
+  formatClock,
   formatTime,
   formatTimeOrRaw,
+  uses24HourClock,
   timeToMinutes,
   minutesToTime,
   artistDisplayName,
@@ -80,6 +82,68 @@ describe('formatTime', () => {
 
   it('converts 23:59 to 11:59 PM', () => {
     expect(formatTime('23:59')).toBe('11:59 PM');
+  });
+});
+
+describe('formatTime follows the locale hour cycle', () => {
+  it.each([
+    ['en-US', '21:30', '9:30 PM'],
+    ['en-US', '00:05', '12:05 AM'],
+    ['en-US', '12:00', '12:00 PM'],
+    ['en-GB', '21:30', '21:30'],
+    ['en-GB', '09:05', '09:05'],
+    ['de-DE', '21:30', '21:30'],
+    ['de-DE', '00:05', '00:05'],
+  ])('%s shows %s as %s', (locale, hhmm, expected) => {
+    expect(formatTime(hhmm, locale)).toBe(expected);
+  });
+
+  it('reads the runtime locale when none is given', () => {
+    const runtime = new Intl.DateTimeFormat().resolvedOptions().locale;
+    expect(formatTime('21:30')).toBe(formatTime('21:30', runtime));
+  });
+
+  it('never uses a no-break space and returns non-time input unchanged', () => {
+    expect(formatTime('21:30', 'en-US')).not.toMatch(/[  ]/);
+    expect(formatTime('soon', 'en-US')).toBe('soon');
+    expect(formatTimeOrRaw('21:30', 'de-DE')).toBe('21:30');
+    expect(formatTimeOrRaw('after sunset', 'de-DE')).toBe('after sunset');
+  });
+
+  it('does not move with the host time zone', () => {
+    // formatTime builds a UTC date, so no zone can shift a wall-clock time. Run the check in two zones.
+    const original = process.env.TZ;
+    try {
+      const seen = ['Pacific/Kiritimati', 'Pacific/Pago_Pago'].map((tz) => {
+        process.env.TZ = tz;
+        return [formatTime('23:30', 'en-US'), formatTime('23:30', 'de-DE')];
+      });
+      expect(seen[0]).toEqual(['11:30 PM', '23:30']);
+      expect(seen[1]).toEqual(seen[0]);
+    } finally {
+      if (original === undefined) delete process.env.TZ;
+      else process.env.TZ = original;
+    }
+  });
+});
+
+describe('formatClock', () => {
+  // 2026-07-11 01:30 UTC is 6:30 PM on Jul 10 in Los Angeles and 10:30 AM in Tokyo.
+  const instant = Date.UTC(2026, 6, 11, 1, 30);
+
+  it('shows the festival zone clock, not the host clock', () => {
+    expect(formatClock(instant, 'America/Los_Angeles', 'en-US')).toBe('6:30 PM');
+    expect(formatClock(instant, 'America/Los_Angeles', 'en-GB')).toBe('18:30');
+    expect(formatClock(instant, 'Asia/Tokyo', 'en-US')).toBe('10:30 AM');
+    expect(formatClock(instant, 'Asia/Tokyo', 'de-DE')).toBe('10:30');
+  });
+});
+
+describe('uses24HourClock', () => {
+  it('tells 12-hour locales from 24-hour ones', () => {
+    expect(uses24HourClock('en-US')).toBe(false);
+    expect(uses24HourClock('en-GB')).toBe(true);
+    expect(uses24HourClock('de-DE')).toBe(true);
   });
 });
 

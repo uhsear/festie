@@ -1,3 +1,5 @@
+import { uses24HourClock } from './format';
+
 export type WeatherForecast =
   | { available: false; reason: string }
   | {
@@ -51,6 +53,7 @@ function hourKey(nowMs: number, timeZone: string): string {
 
 function hourLabel(time: string): string {
   const h = parseInt(time.slice(11, 13), 10);
+  if (uses24HourClock()) return `${String(h).padStart(2, '0')}:00`;
   return `${h % 12 === 0 ? 12 : h % 12} ${h < 12 ? 'AM' : 'PM'}`;
 }
 

@@ -226,7 +226,7 @@ describe('PlanSnapshotPage', () => {
       await waitFor(() => expect(bulkSavePicks).toHaveBeenCalledWith(['a', 'c'], 'must'));
       expect(bulkSavePicks).toHaveBeenCalledTimes(1);
       expect(toastUndo).toHaveBeenCalledWith('Added 2 picks to your plan.', expect.any(Function));
-      toastUndo.mock.calls[0][1]();
+      toastUndo.mock.calls[0]![1]();
       await waitFor(() => expect(restorePicks).toHaveBeenCalledWith({ a: undefined, c: undefined }));
     });
 
