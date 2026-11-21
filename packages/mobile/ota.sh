@@ -9,6 +9,12 @@ set -euo pipefail
 # in the shell that runs `eas update`, the OTA turns Apple or Google sign-in off on
 # builds that have it. Set them in the shell, never in EAS env.
 #
+# FESTIE_LIVE_ACTIVITY works the same way: app.config.js bakes extra.liveActivity into the manifest.
+# Set it to 1 when the installed native build was made with FESTIE_LIVE_ACTIVITY=1, else 0. An unset
+# or different value turns the iOS Live Activity off (or on without its extension) for that build,
+# so the check fails unless the value is explicitly 0 or 1. It cannot read the build's value: the
+# caller must pass the one the build used.
+#
 # Usage:
 #   bash ota.sh --check                      check the flags only (dry run)
 #   bash ota.sh <branch> "<update message>"  check the flags, then publish
@@ -25,13 +31,20 @@ check_flags() {
     echo "ERROR: GOOGLE_IOS_URL_SCHEME is empty -- this OTA would hide Google sign-in. Export the reversed iOS client ID (the value the iOS build used)." >&2
     missing=1
   fi
+  case "${FESTIE_LIVE_ACTIVITY:-}" in
+    0|1) ;;
+    *)
+      echo "ERROR: FESTIE_LIVE_ACTIVITY is '${FESTIE_LIVE_ACTIVITY:-}', not 0 or 1 -- this OTA would change the Live Activity flag. Export the value the native build used (1 if it had the widget extension, else 0)." >&2
+      missing=1
+      ;;
+  esac
   return "$missing"
 }
 
 case "${1:-}" in
   --check)
     check_flags
-    echo "OK: sign-in flags are set"
+    echo "OK: sign-in and Live Activity flags are set"
     ;;
   "")
     echo "Usage: bash ota.sh --check | bash ota.sh <branch> \"<message>\"" >&2

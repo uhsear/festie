@@ -101,6 +101,9 @@ jobs:
           # `bash ota.sh --check` below fails the job when either is missing.
           FESTIE_APPLE_SIGNIN: '1'
           GOOGLE_IOS_URL_SCHEME: ${{ secrets.GOOGLE_IOS_URL_SCHEME }}
+          # app.config.js bakes extra.liveActivity from this too. Set the repo variable to 1 when the
+          # installed native build has the widget extension, else 0; `ota.sh --check` fails when unset.
+          FESTIE_LIVE_ACTIVITY: ${{ vars.FESTIE_LIVE_ACTIVITY }}
           # Inlined into the JS bundle at export; unset, the update ships with Sentry off.
           EXPO_PUBLIC_SENTRY_DSN: ${{ secrets.EXPO_PUBLIC_SENTRY_DSN }}
         run: |
