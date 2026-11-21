@@ -24,6 +24,7 @@ import { createTimeReleasesStore } from './stores/time-releases.js';
 import { createAnnouncementsStore } from './stores/announcements.js';
 import { createIdentitiesStore } from './stores/identities.js';
 import { createArtistsStore } from './stores/artists.js';
+import { createArtistMatchReviewStore } from './stores/artist-match-review.js';
 import { createOrganizationsStore } from './stores/organizations.js';
 import { createFestivalReviewStore } from './stores/festival-review.js';
 import { createAnalyticsStore } from './stores/analytics.js';
@@ -79,6 +80,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
   const announcements = createAnnouncementsStore(pool);
   const identities = createIdentitiesStore(pool);
   const artists = createArtistsStore(pool);
+  const artistMatchReview = createArtistMatchReviewStore(pool, artists);
   const organizations = createOrganizationsStore(pool);
   const festivalReview = createFestivalReviewStore(pool);
   const analytics = createAnalyticsStore(pool);
@@ -118,6 +120,7 @@ function createStores(pool: Pool, { nodeEnv }: { nodeEnv?: string; sessionSecret
     announcements,
     identities,
     artists,
+    artistMatchReview,
     organizations,
     festivalReview,
     analytics,

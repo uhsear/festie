@@ -81,7 +81,7 @@ export {
 } from './artists-helpers';
 export type { ArtistViewer } from './artist-visibility';
 
-interface UpdateInput {
+export interface UpdateInput {
   expectedUpdatedAt?: string;
   changes: ArtistChanges;
   userId: string | null;
@@ -100,6 +100,10 @@ export type UpdateOutcome =
 type NamedArtist = { id?: string | null; name?: string } | null | undefined;
 
 export function createArtistsStore(pool: Pool) {
+  // A caller that already holds a transaction (the artist review approval) passes its client; the work then joins it.
+  const inTransaction = <T>(existing: PoolClient | undefined, fn: (client: PoolClient) => Promise<T>) =>
+    existing ? fn(existing) : withTransactionRetry(pool, fn);
+
   const candidatesOf = (rows: ArtistRecord[], uses: Map<string, ArtistUse[]>, viewer?: ArtistViewer) => {
     return rows.slice(0, MAX_CANDIDATES).map((row) => {
       // A viewer is never told the name of a festival it may not see.
@@ -210,6 +214,9 @@ export function createArtistsStore(pool: Pool) {
   }
 
   return {
+    /** One edit inside the caller's transaction (the artist review approval). The caller owns the commit and the retries. */
+    updateWithin,
+
     /**
      * For each name, the live artists it could be. A Spotify artist link whose id belongs to a live
      * artist, or exactly one live artist with the same key, is "linked". Two or more is "pick".
@@ -698,11 +705,13 @@ export function createArtistsStore(pool: Pool) {
       acceptedFestivals: number;
       userId: string | null;
       ip?: string | null;
+      /** Join this open transaction instead of starting one. */
+      client?: PoolClient;
     }) {
       const { survivorId, loserId } = input;
       if (survivorId === loserId) throw new ArtistError(400, 'INVALID_INPUT', 'Pick two different artists to merge.');
       try {
-        return await withTransactionRetry(pool, async (client) => {
+        return await inTransaction(input.client, async (client) => {
           const loadPair = async (lock: boolean) => {
             const { rows } = await client.query(
               `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = ANY($1::text[]) ORDER BY id${lock ? ' FOR UPDATE' : ''}`,
