@@ -25,7 +25,7 @@ describe('Spotify attribution on mobile', () => {
   });
 
   it('is shown on the set screen and in the announced-act sheet, driven by the shared rules', () => {
-    for (const file of ['app/set/[setId].tsx', 'components/AnnouncedLineup.tsx']) {
+    for (const file of ['app/set/[setId].tsx', 'components/ArtistSheetHost.tsx']) {
       const source = read(file);
       expect(source).toContain('spotifyAttributionFor');
       expect(source).toContain('<SpotifyAttribution');
