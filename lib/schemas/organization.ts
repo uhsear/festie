@@ -9,9 +9,10 @@ import { identifier } from './primitives';
 const orgRole = z.enum(['owner', 'editor', 'viewer']);
 
 // An organization name goes into mail to addresses that may have no account, so it must not carry a link or a line
-// break: letters, digits, spaces and a few marks only, and no "word.word" that reads as a web address.
+// break: letters, digits, spaces and a few marks only. A dot directly before a letter or digit ("evil1.com", "x-y.io")
+// reads as a web address; "St. Louis" and a trailing "Inc." still pass.
 const SAFE_NAME_CHARACTERS = /^[\p{L}\p{M}\p{N} '’&,.()+!-]+$/u;
-const LOOKS_LIKE_ADDRESS = /\p{L}\.\p{L}{2,}/u;
+const LOOKS_LIKE_ADDRESS = /\.[\p{L}\p{N}]/u;
 export const isSafeOrganizationName = (name: string) => SAFE_NAME_CHARACTERS.test(name) && !LOOKS_LIKE_ADDRESS.test(name);
 const safeName = z
   .string()
