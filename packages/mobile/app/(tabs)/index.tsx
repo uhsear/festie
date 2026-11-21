@@ -4,10 +4,7 @@ import {
   Text,
   TouchableOpacity,
   FlatList,
-  TextInput,
-  ScrollView,
   RefreshControl,
-  ActivityIndicator,
   BackHandler,
   AppState,
   Platform,
@@ -30,7 +27,7 @@ import {
   followTodayOnResume,
 } from '@festie/shared/stores';
 import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady, useViewAs } from '@festie/shared/hooks';
-import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
+import { DISCOVER_COPY } from '@festie/shared/constants';
 import {
   artistDisplayName,
   detectConflicts,
@@ -44,28 +41,19 @@ import {
   searchOtherDays,
   searchEmptyCopy,
   searchHiddenByFilters,
-  SCHEDULE_VIEWS,
-  SCHEDULE_GROUP_BYS,
   groupScheduleSets,
   defaultScheduleView,
   hasAnyPick,
   isStageFilterActive,
-  toggleStageFilter,
-  toggleGenreFilter,
   festivalGenres,
-  toggleHiddenDay,
   scheduleEmptyCopy,
   scheduleEmptyReason,
-  scheduleResultsSummary,
   visibleDayIndexes,
   lineupReplacesEmptyState,
-  type ScheduleView,
-  type ScheduleGroupBy,
 } from '@festie/shared/utils';
 import type { FestivalSet, Priority } from '@festie/shared/types';
-import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
-import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import { safeStageColor } from '../../lib/stageColor';
 import type { TimeBounds } from '../../hooks/useNowIndicator';
 import { useHaptics } from '../../hooks/useHaptics';
@@ -73,48 +61,23 @@ import { undoNotifier } from '../../lib/undoNotifier';
 import { useNow } from '../../hooks/useNow';
 import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
-import SegmentedControl from '../../components/SegmentedControl';
-import NowNextStrip from '../../components/NowNextStrip';
-import PhaseHomeActions from '../../components/PhaseHomeActions';
-import FestivalReadyCard from '../../components/FestivalReadyCard';
-import ScheduleDayChips from '../../components/ScheduleDayChips';
-import ScheduleResultsRow from '../../components/ScheduleResultsRow';
-import FestivalList from '../../components/FestivalList';
-import FreshnessChip from '../../components/FreshnessChip';
-import SaveStatusChip from '../../components/SaveStatusChip';
-import OfflineStatusChip from '../../components/OfflineStatusChip';
 import OtherDayMatches from '../../components/OtherDayMatches';
 import SetCardMobile from '../../components/SetCardMobile';
 import EmptyState from '../../components/EmptyState';
 import ScreenHeader from '../../components/ScreenHeader';
-import { Skeleton } from '../../components/Skeleton';
-import TimelineView from '../../components/TimelineView';
 import TBASection from '../../components/TBASection';
-import SetTimesBanner from '../../components/SetTimesBanner';
-import AnnouncedLineup from '../../components/AnnouncedLineup';
-import DiscoverRow from '../../components/DiscoverRow';
+import type { ListRow } from '../../components/schedule/listRow';
+import { useStyles } from '../../components/schedule/styles';
+import ScheduleSkeleton from '../../components/schedule/ScheduleSkeleton';
+import SchedulePickerView from '../../components/schedule/SchedulePickerView';
+import ScheduleControls from '../../components/schedule/ScheduleControls';
+import ScheduleHeaderActions from '../../components/schedule/ScheduleHeaderActions';
+import ScheduleViewSwitcher from '../../components/schedule/ScheduleViewSwitcher';
+import ScheduleCardsView from '../../components/schedule/ScheduleCardsView';
+import ScheduleTimelineView from '../../components/schedule/ScheduleTimelineView';
 
 const SLOT_MINUTES = 15;
 const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
-
-// Mobile schedule views, in the shared order: Cards, Timeline, then Grid. Grid
-// is a pushed route, not a view the Schedule tab can show or remember (T18 makes
-// it in-place). It rides in the switcher (instead of a header icon) so Find your
-// crew keeps its header slot on 360dp phones.
-const VIEW_OPTIONS_WITH_GRID: readonly { value: ScheduleView; label: string }[] = SCHEDULE_VIEWS.map((v) => ({
-  value: v.key,
-  label: v.label,
-}));
-const VIEW_OPTIONS = VIEW_OPTIONS_WITH_GRID.filter((v) => v.value !== 'grid');
-const GROUP_BY_OPTIONS: readonly { value: ScheduleGroupBy; label: string }[] = SCHEDULE_GROUP_BYS.map((g) => ({
-  value: g.key,
-  label: g.label,
-}));
-
-type ListRow =
-  | { kind: 'groupHeader'; key: string; label: string; stageColor?: string }
-  | { kind: 'earlier'; key: 'earlier'; count: number }
-  | { kind: 'set'; key: string; set: FestivalSet };
 
 export default function TimelineScreen() {
   const t = useTokens();
@@ -827,34 +790,12 @@ export default function TimelineScreen() {
   // different-looking treatments for the identical condition.
   if (!currentFestival || pickingFestival) {
     return (
-      // ScreenHeader owns the top safe-area inset (insets.top + spacing[4]) — the
-      // native Tabs nav header is hidden (see (tabs)/_layout.tsx), so this is the
-      // single top of the screen.
-      <View style={styles.container}>
-        <ScreenHeader
-          title="Choose a festival"
-          icon="musical-notes"
-          right={
-            pickingFestival && currentFestival ? (
-              <TouchableOpacity
-                style={styles.headerIconButton}
-                onPress={() => setPickingFestival(false)}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={`Back to ${currentFestival.name}`}
-              >
-                <Ionicons name="close" size={20} color={t.colors.text.secondary} />
-              </TouchableOpacity>
-            ) : undefined
-          }
-        />
-        {pickingFestival && offlineMode ? (
-          <Text style={styles.pickerOffline} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            You&apos;re offline. Switching festivals needs signal. Your current lineup stays saved.
-          </Text>
-        ) : null}
-        <FestivalList onSelected={() => setPickingFestival(false)} />
-      </View>
+      <SchedulePickerView
+        currentFestival={currentFestival}
+        offlineMode={offlineMode}
+        pickingFestival={pickingFestival}
+        setPickingFestival={setPickingFestival}
+      />
     );
   }
 
@@ -878,361 +819,59 @@ export default function TimelineScreen() {
   // Passed as an element (not an inline component) so the search TextInput keeps
   // focus across keystroke re-renders.
   const controls = (
-    <>
-      {/* Before the festival the Festival ready checklist takes the band's place
-          until it is done or hidden. It covers the band's pre-festival rows
-          (first pick, crew), so the two are never shown together. It is
-          first-run guidance, so it is not gated on the filters.
-          Otherwise: next-step band from shared getHomeActions (picks and crew
-          before the festival, find the crew during it, wrap and settle-up
-          after). It is empty, and so hidden, when there is nothing left to do. It
-          rides in the controls so it scrolls with the Cards list. The close
-          button hides it for this festival and phase. */}
-      {ready.visible ? (
-        <View style={{ paddingHorizontal: hPad }}>
-          <FestivalReadyCard ready={ready} />
-        </View>
-      ) : homeActions.length > 0 && phase && dismissedPhase !== phase ? (
-        <View style={{ paddingHorizontal: hPad }}>
-          <PhaseHomeActions actions={homeActions} onDismiss={() => dismissPhaseBand(phase)} />
-        </View>
-      ) : null}
-
-      {/* Live-day Now & Next surface: shows the picked set playing now / up next
-          inline, tapping through to the full Now & Next screen. Renders nothing
-          when there's no current/upcoming pick. */}
-      <View style={{ paddingHorizontal: hPad }}>
-        <NowNextStrip onPress={() => router.push('/festival-mode')} />
-      </View>
-
-      {/* F19 — offline-honest freshness for the flagship schedule surface,
-          matching the crew tab's chip. Driven by festivalDataStore's
-          _festivalCachedAt; renders nothing until the schedule is cached once. */}
-      <View style={[styles.freshnessRow, { paddingHorizontal: hPad }]}>
-        <FreshnessChip surface="schedule" />
-        {currentProfile ? <SaveStatusChip /> : null}
-        {/* Cards and fallback views support pull-to-refresh. Timeline owns both
-            scroll axes, so narrow phones need this compact manual action after
-            the header sheds secondary icons to preserve the festival title. */}
-        {width < 400 && viewMode === 'timeline' ? (
-          <TouchableOpacity
-            style={styles.compactRefreshButton}
-            onPress={handleRefresh}
-            disabled={isLoading}
-            activeOpacity={0.7}
-            accessibilityRole="button"
-            accessibilityLabel="Refresh schedule"
-            accessibilityState={{ busy: isLoading }}
-          >
-            {isLoading ? (
-              <ActivityIndicator size="small" color={t.colors.accent.aqua} />
-            ) : (
-              <Ionicons name="refresh" size={18} color={t.colors.accent.aqua} />
-            )}
-          </TouchableOpacity>
-        ) : null}
-      </View>
-      {user ? (
-        <View style={{ paddingHorizontal: hPad, paddingTop: t.spacing[2] }}>
-          <OfflineStatusChip remind />
-        </View>
-      ) : null}
-
-      {/* DC1 — search and the stage / my-picks + phase-action setup chrome are
-          folded behind the search/filter toggles in the control row above; only
-          the day chips (the one mid-festival control) stay always visible. The
-          panels expand inline here when toggled (or when they carry active
-          state), so on small phones the timeline keeps ~70% of the viewport. */}
-      {searchOpen ? (
-        <View style={[styles.searchRow, { marginHorizontal: hPad }]}>
-          <Ionicons name="search" size={16} color={t.colors.text.placeholder} style={styles.searchIcon} />
-          <TextInput
-            style={styles.searchInput}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            placeholder="Search artists or stages"
-            placeholderTextColor={t.colors.text.placeholder}
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoFocus={showSearch && searchQuery.length === 0}
-            accessibilityLabel="Search the lineup"
-            returnKeyType="search"
-          />
-          {searchQuery.length > 0 ? (
-            <TouchableOpacity
-              onPress={() => setSearchQuery('')}
-              accessibilityRole="button"
-              accessibilityLabel="Clear search"
-              hitSlop={13}
-            >
-              <Ionicons name="close-circle" size={18} color={t.colors.text.muted} />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* Day selector */}
-      <ScheduleDayChips hPad={hPad} />
-      {days.length > 1 && zoneLabel ? (
-        <Text style={[styles.zoneLabel, { paddingHorizontal: hPad }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {zoneLabel}
-        </Text>
-      ) : null}
-
-      {/* Stage + my-picks filters, then the days the person attends — folded
-          behind the filter toggle (DC1). */}
-      {filtersOpen && (currentProfile || stages.length > 1 || days.length > 1 || genreChips.length > 0) ? (
-        <View style={styles.filterRow}>
-          {currentProfile || stages.length > 1 || genreChips.length > 0 ? (
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[styles.filterContent, { paddingHorizontal: hPad }]}
-              // Android-native right-edge fade — signals scrollable overflow without
-              // requiring expo-linear-gradient. No-op on iOS (ignored silently).
-              fadingEdgeLength={Platform.OS === 'android' ? 32 : 0}
-            >
-              {currentProfile ? (
-                // R3 single-accent-fill-per-screen: the SegmentedControl already
-                // holds the solid-aqua primary fill. The My picks chip uses the
-                // outlined/tinted secondary variant (aqua border + aqua text on
-                // transparent bg) so two solid aqua fills never appear together.
-                // With no picks it is muted and inert so it can never blank the lineup.
-                <TouchableOpacity
-                  style={[
-                    styles.filterChip,
-                    !canFilterMine && styles.filterChipMuted,
-                    mineActive && styles.filterChipActiveTinted,
-                  ]}
-                  onPress={canFilterMine ? () => setOnlyMine(!onlyMine) : undefined}
-                  activeOpacity={canFilterMine ? 0.7 : 1}
-                  accessibilityRole="button"
-                  accessibilityState={canFilterMine ? { selected: onlyMine } : { disabled: true, selected: false }}
-                  accessibilityLabel="Show only my picks"
-                >
-                  <Ionicons
-                    name={CONCEPT_IONICON.picks}
-                    size={12}
-                    color={mineActive ? t.colors.accent.aqua : t.colors.text.muted}
-                  />
-                  <Text
-                    style={[
-                      styles.filterChipText,
-                      !canFilterMine && styles.filterChipTextMuted,
-                      mineActive && styles.filterChipTextTinted,
-                    ]}
-                    maxFontSizeMultiplier={MAX_FONT_SCALE}
-                  >
-                    {canFilterMine ? 'My picks' : 'Pick a set first'}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-              {stages.length > 1 ? (
-                <>
-                  <TouchableOpacity
-                    style={[styles.filterChip, activeStages.length === 0 && styles.filterChipActiveTinted]}
-                    onPress={() => {
-                      haptics.select();
-                      setActiveStages([]);
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: activeStages.length === 0 }}
-                    accessibilityLabel="All stages"
-                  >
-                    <Text
-                      style={[styles.filterChipText, activeStages.length === 0 && styles.filterChipTextTinted]}
-                      numberOfLines={1}
-                      maxFontSizeMultiplier={MAX_FONT_SCALE}
-                    >
-                      All stages
-                    </Text>
-                  </TouchableOpacity>
-                  {stages.map((st) => {
-                    const on = activeStages.includes(st.id);
-                    // Stage dots keep their data-driven identity color (matching the
-                    // timeline columns) — the accent rule governs UI accents, not the
-                    // stage palette.
-                    return (
-                      <TouchableOpacity
-                        key={st.id}
-                        style={[styles.filterChip, on && styles.filterChipActiveTinted]}
-                        onPress={() => {
-                          haptics.select();
-                          setActiveStages(toggleStageFilter(activeStages, allStageIds, st.id));
-                        }}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: on }}
-                        accessibilityLabel={st.name}
-                      >
-                        <View style={[styles.stageDotSmall, { backgroundColor: resolveStageColor(st.id) }]} />
-                        <Text
-                          style={[styles.filterChipText, on && styles.filterChipTextTinted]}
-                          numberOfLines={1}
-                          maxFontSizeMultiplier={MAX_FONT_SCALE}
-                        >
-                          {st.name}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </>
-              ) : null}
-              {genreChips.length > 0 ? (
-                <View style={styles.genreGroup} accessibilityRole="toolbar" accessibilityLabel={DISCOVER_COPY.genres.groupA11y}>
-                  <TouchableOpacity
-                    style={[styles.filterChip, !genreFilterActive && styles.filterChipActiveTinted]}
-                    onPress={() => {
-                      haptics.select();
-                      setActiveGenres([]);
-                    }}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: !genreFilterActive }}
-                    accessibilityLabel={DISCOVER_COPY.genres.clear}
-                  >
-                    <Text
-                      style={[styles.filterChipText, !genreFilterActive && styles.filterChipTextTinted]}
-                      numberOfLines={1}
-                      maxFontSizeMultiplier={MAX_FONT_SCALE}
-                    >
-                      {DISCOVER_COPY.genres.clear}
-                    </Text>
-                  </TouchableOpacity>
-                  {genreChips.map((g) => {
-                    const on = activeGenres.some((a) => a.toLocaleLowerCase() === g.toLocaleLowerCase());
-                    return (
-                      <TouchableOpacity
-                        key={g}
-                        style={[styles.filterChip, on && styles.filterChipActiveTinted]}
-                        onPress={() => {
-                          haptics.select();
-                          setActiveGenres(toggleGenreFilter(activeGenres, g));
-                        }}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected: on }}
-                        accessibilityLabel={genreChipLabel(g)}
-                      >
-                        <Text
-                          style={[styles.filterChipText, on && styles.filterChipTextTinted]}
-                          numberOfLines={1}
-                          maxFontSizeMultiplier={MAX_FONT_SCALE}
-                        >
-                          {genreChipLabel(g)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              ) : null}
-            </ScrollView>
-          ) : null}
-          {days.length > 1 ? (
-            <>
-              <Text style={[styles.daysGoingLabel, { paddingHorizontal: hPad }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                Days I&apos;m going
-              </Text>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[styles.filterContent, { paddingHorizontal: hPad }]}
-              >
-                {days.map((day) => {
-                  const shown = !hiddenDays.includes(day.index);
-                  const onlyShown = shown && visibleDays.length === 1;
-                  return (
-                    <TouchableOpacity
-                      key={day.index}
-                      style={[styles.filterChip, shown && styles.filterChipActiveTinted]}
-                      onPress={() => {
-                        haptics.select();
-                        setHiddenDays(toggleHiddenDay(hiddenDays, days.length, day.index));
-                      }}
-                      disabled={onlyShown}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityState={onlyShown ? { selected: shown, disabled: true } : { selected: shown }}
-                      accessibilityLabel={day.label ?? day.date}
-                    >
-                      <Text
-                        style={[styles.filterChipText, shown && styles.filterChipTextTinted]}
-                        numberOfLines={1}
-                        maxFontSizeMultiplier={MAX_FONT_SCALE}
-                      >
-                        {day.label ?? day.date}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
-            </>
-          ) : null}
-        </View>
-      ) : null}
-
-      {/* Results summary + Clear-all. Surfaces honestly how many sets the active
-          search/stage/my-picks filters resolve to, and gives a single recovery
-          tap when a filter is hiding most of the lineup. Only shown while a
-          filter is actually narrowing the list. In Timeline mode the count spans
-          the whole filtered day but only timed sets are plotted, so the TBA
-          count qualifies the number. */}
-      {anyFilterActive ? (
-        <ScheduleResultsRow
-          summary={scheduleResultsSummary({
-            count: filteredSets.length,
-            onlyMine: mineActive,
-            activeStageCount: stageFilterActive ? activeStages.length : 0,
-            activeGenreCount: activeGenres.length,
-            viewAsName: viewAs.target?.name,
-            tbaCount: viewMode === 'timeline' ? timelessSets.length : 0,
-          })}
-          onClearAll={clearAllFilters}
-          hPad={hPad}
-        />
-      ) : null}
-    </>
+    <ScheduleControls
+      activeGenres={activeGenres}
+      activeStages={activeStages}
+      allStageIds={allStageIds}
+      anyFilterActive={anyFilterActive}
+      canFilterMine={canFilterMine}
+      clearAllFilters={clearAllFilters}
+      currentProfile={currentProfile}
+      days={days}
+      dismissPhaseBand={dismissPhaseBand}
+      dismissedPhase={dismissedPhase}
+      filteredSets={filteredSets}
+      filtersOpen={filtersOpen}
+      genreChips={genreChips}
+      genreFilterActive={genreFilterActive}
+      hPad={hPad}
+      handleRefresh={handleRefresh}
+      hiddenDays={hiddenDays}
+      homeActions={homeActions}
+      isLoading={isLoading}
+      mineActive={mineActive}
+      onlyMine={onlyMine}
+      phase={phase}
+      ready={ready}
+      resolveStageColor={resolveStageColor}
+      searchOpen={searchOpen}
+      searchQuery={searchQuery}
+      setActiveGenres={setActiveGenres}
+      setActiveStages={setActiveStages}
+      setHiddenDays={setHiddenDays}
+      setOnlyMine={setOnlyMine}
+      setSearchQuery={setSearchQuery}
+      showSearch={showSearch}
+      stageFilterActive={stageFilterActive}
+      stages={stages}
+      timelessSets={timelessSets}
+      user={user}
+      viewAs={viewAs}
+      viewMode={viewMode}
+      visibleDays={visibleDays}
+      width={width}
+      zoneLabel={zoneLabel}
+    />
   );
 
   // The Switch + Now & Next actions live in the header's trailing slot.
   const headerActions = (
-    <View style={styles.headerActions}>
-      {/* Manual refresh for ALL views — the RefreshControls only cover the Cards
-          list + fallback scroll, leaving Timeline with no pull-to-refresh. */}
-      {/* Cards has pull-to-refresh, so the button only shows in Timeline. */}
-      {width >= 400 && viewMode === 'timeline' ? (
-        <TouchableOpacity
-          style={styles.headerIconButton}
-          onPress={handleRefresh}
-          disabled={isLoading}
-          activeOpacity={0.7}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Refresh schedule"
-          accessibilityState={{ busy: isLoading }}
-        >
-          {isLoading ? (
-            <ActivityIndicator size="small" color={t.colors.accent.aqua} />
-          ) : (
-            <Ionicons name="refresh" size={t.iconSize.lg} color={t.colors.accent.aqua} />
-          )}
-        </TouchableOpacity>
-      ) : null}
-      <TouchableOpacity
-        style={styles.headerNowPill}
-        onPress={() => router.push('/festival-mode')}
-        activeOpacity={0.7}
-        accessibilityRole="button"
-        accessibilityLabel="Open Now and Next"
-      >
-        {/* "Live" is reserved for location (P1-2); flash = Now & Next. */}
-        <Ionicons name="flash" size={20} color={t.colors.accent.aqua} />
-        <Text style={styles.headerNowText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          Now
-        </Text>
-      </TouchableOpacity>
-    </View>
+    <ScheduleHeaderActions
+      handleRefresh={handleRefresh}
+      isLoading={isLoading}
+      viewMode={viewMode}
+      width={width}
+    />
   );
 
   return (
@@ -1251,532 +890,84 @@ export default function TimelineScreen() {
           view switcher, and the search/filter toggles. The search bar and the
           stage/phase filters fold inline below (in `controls`) only when their
           toggle is on or they carry active state, reclaiming vertical space. */}
-      <View style={[styles.viewSwitcher, { paddingHorizontal: hPad }]}>
-        {/* No now-indicator here: it crowded the row and truncated the
-            Timeline/Cards labels on narrow phones. The real now/next surface is
-            NowNextStrip above (shown only when a pick is actually live). */}
-        <View style={styles.switcherFlex}>
-          <SegmentedControl
-            options={festivalHasTimedSets ? VIEW_OPTIONS_WITH_GRID : VIEW_OPTIONS}
-            value={viewMode}
-            onChange={(next: ScheduleView) => (next === 'grid' ? router.push('/grid') : setScheduleView(next))}
-            accessibilityLabel="Schedule view"
-          />
-        </View>
-        <TouchableOpacity
-          style={[styles.toggleButton, searchOpen && styles.toggleButtonActive]}
-          // searchOpen stays true while a query is present (searchOpen = showSearch
-          // || search.length > 0), so merely toggling showSearch can't close an
-          // active search — the panel re-opens itself. Closing must also CLEAR the
-          // query so the X reliably collapses the bar.
-          onPress={() => {
-            if (searchOpen) {
-              setSearchQuery('');
-              setShowSearch(false);
-            } else {
-              revealControls();
-              setShowSearch(true);
-            }
-          }}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: searchOpen }}
-          accessibilityLabel={searchOpen ? 'Hide search' : 'Search the lineup'}
-        >
-          {/* When the search bar is open a search icon inside the field already
-              serves as the affordance — switch the header trigger to a close icon
-              so the two search icons don't appear simultaneously on screen. */}
-          <Ionicons
-            name={searchOpen ? 'close' : 'search'}
-            size={18}
-            color={searchOpen ? t.colors.accent.aqua : t.colors.text.secondary}
-          />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.toggleButton, filtersOpen && styles.toggleButtonActive]}
-          onPress={() => {
-            if (!filtersOpen) revealControls();
-            setShowFilters((v) => !v);
-          }}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityState={{ expanded: filtersOpen }}
-          accessibilityLabel={filtersOpen ? 'Hide filters' : 'Show filters'}
-        >
-          <Ionicons
-            name="options-outline"
-            size={18}
-            color={filtersOpen ? t.colors.accent.aqua : t.colors.text.secondary}
-          />
-          {filtersActive ? <View style={styles.toggleDot} /> : null}
-        </TouchableOpacity>
-      </View>
+      <ScheduleViewSwitcher
+        festivalHasTimedSets={festivalHasTimedSets}
+        filtersActive={filtersActive}
+        filtersOpen={filtersOpen}
+        hPad={hPad}
+        revealControls={revealControls}
+        searchOpen={searchOpen}
+        setScheduleView={setScheduleView}
+        setSearchQuery={setSearchQuery}
+        setShowFilters={setShowFilters}
+        setShowSearch={setShowSearch}
+        viewMode={viewMode}
+      />
 
       {/* Schedule body — view-mode specific. In both views the WHOLE page
           scrolls as one: Cards carries the `controls` in the FlatList's
           ListHeaderComponent, and Timeline puts them above a timeline sized to
           the full viewport, so scrolling past them shows the timeline full size. */}
       {viewMode === 'cards' ? (
-        <>
-          <FlatList
-            ref={listRef}
-            style={[styles.scrollBody, { marginBottom: scheduleViewportBottomInset }]}
-            data={rows}
-            renderItem={renderRow}
-            keyExtractor={keyExtractor}
-            ListHeaderComponent={
-              <>
-                {controls}
-                <SetTimesBanner hPad={hPad} />
-                <DiscoverRow
-                  hPad={hPad}
-                  hidden={phase === 'post' || searchQuery.trim() !== '' || stageFilterActive || genreFilterActive}
-                />
-                {/* A search lists the matching announced acts under the set results instead (footer). */}
-                {searchQuery.trim() ? null : <AnnouncedLineup model={announced} hPad={hPad} />}
-                {filteredSets.length > 0 ? (
-                  <View style={[styles.groupByRow, { paddingHorizontal: hPad }]}>
-                    <Text style={styles.groupByLabel}>Group by</Text>
-                    <View style={styles.switcherFlex}>
-                      <SegmentedControl
-                        options={GROUP_BY_OPTIONS}
-                        value={groupBy}
-                        onChange={setScheduleGroupBy}
-                        accessibilityLabel="Group sets by"
-                      />
-                    </View>
-                  </View>
-                ) : null}
-              </>
-            }
-            // The controls already apply hPad themselves, so cancel the container's.
-            ListHeaderComponentStyle={{ marginHorizontal: -hPad }}
-            contentContainerStyle={[styles.listContent, { paddingHorizontal: hPad, paddingBottom: listBottomPad }]}
-            refreshControl={refreshControl}
-            ItemSeparatorComponent={cardsSeparator}
-            // F2 — a failed festival load surfaces the error + retry rather than a
-            // misleading "No sets" empty state (see cardsEmpty).
-            ListEmptyComponent={cardsEmpty}
-            ListFooterComponent={
-              <>
-                {rows.length > 0 ? otherDayMatches : null}
-                {searchQuery.trim() ? <AnnouncedLineup model={announced} /> : null}
-              </>
-            }
-            // Perf for big lineups: cap the initial + per-batch render window so a
-            // 200-set day paints fast and scrolls without a long first frame.
-            initialNumToRender={8}
-            maxToRenderPerBatch={8}
-            windowSize={11}
-            onScroll={handleCardsScroll}
-            scrollEventThrottle={16}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode="on-drag"
-            contentInsetAdjustmentBehavior="automatic"
-          />
-          {showScrollTop ? (
-            <TouchableOpacity
-              style={[styles.scrollTopFab, { right: hPad, bottom: t.spacing[5] + scheduleViewportBottomInset }]}
-              onPress={scrollCardsToTop}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Scroll to top of the lineup"
-            >
-              <Ionicons name="chevron-up" size={18} color={t.colors.text.onLightAccent} />
-              <Text style={styles.scrollTopText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                Top
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-        </>
-      ) : (
-        <ScrollView
-          ref={timelineScrollRef}
-          style={[styles.scrollBody, { marginBottom: scheduleViewportBottomInset }]}
-          onLayout={(e) => setTimelineViewportH(Math.round(e.nativeEvent.layout.height))}
-          // Rest either on the controls or on the full-size timeline, never half way
-          // (only when the controls fit the viewport; a taller stack scrolls freely).
-          snapToOffsets={
-            hasTimeline && timelineControlsH > 0 && timelineControlsH <= timelineViewportH
-              ? [0, timelineControlsH]
-              : undefined
-          }
-          snapToEnd={false}
-          decelerationRate={hasTimeline ? 'fast' : undefined}
-          showsVerticalScrollIndicator={!hasTimeline}
+        <ScheduleCardsView
+          announced={announced}
+          cardsEmpty={cardsEmpty}
+          cardsSeparator={cardsSeparator}
+          controls={controls}
+          filteredSets={filteredSets}
+          genreFilterActive={genreFilterActive}
+          groupBy={groupBy}
+          hPad={hPad}
+          handleCardsScroll={handleCardsScroll}
+          keyExtractor={keyExtractor}
+          listBottomPad={listBottomPad}
+          listRef={listRef}
+          otherDayMatches={otherDayMatches}
+          phase={phase}
           refreshControl={refreshControl}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          contentContainerStyle={hasTimeline ? undefined : [styles.fallbackScroll, { paddingBottom: listBottomPad }]}
-          contentInsetAdjustmentBehavior={hasTimeline ? undefined : 'automatic'}
-        >
-          {/* One ScrollView for both states so the search TextInput inside
-              `controls` is never remounted (which would drop the keyboard). */}
-          <View onLayout={(e) => setTimelineControlsH(Math.round(e.nativeEvent.layout.height))}>{controls}</View>
-          {hasTimeline ? (
-            <>
-              <View style={[styles.timelineBody, { height: timelineViewportH || Math.round(height * 0.6) }]}>
-                <TimelineView
-                  key={selectedDay}
-                  visibleStages={visibleStages}
-                  timedSets={timedSets}
-                  timeBounds={timeBounds}
-                  selectedDay={selectedDay}
-                  b2bSeparator={currentFestival.b2bSeparator}
-                  getMyPick={getMyPick}
-                  getStageColor={resolveStageColor}
-                  onSetPress={handleSetPress}
-                  days={days}
-                  allSets={allSets}
-                  picks={myPicks}
-                />
-              </View>
-              {/* The TBA list sits below the full-size timeline as part of the
-                  page scroll, so it never shrinks the timeline's viewport. */}
-              {tbaSection}
-            </>
-          ) : (
-            <>
-              {scheduleColdLoading ? (
-                <ScheduleSkeleton hPad={hPad} />
-              ) : scheduleLoadError ? (
-                errorScheduleState
-              ) : lineupStandsIn ? null : (
-                emptyScheduleState
-              )}
-              {tbaSection}
-            </>
-          )}
-          {/* The lineup follows the day's own content; a search lists the matching acts here too. */}
-          <AnnouncedLineup model={announced} hPad={hPad} />
-        </ScrollView>
+          renderRow={renderRow}
+          rows={rows}
+          scheduleViewportBottomInset={scheduleViewportBottomInset}
+          scrollCardsToTop={scrollCardsToTop}
+          searchQuery={searchQuery}
+          setScheduleGroupBy={setScheduleGroupBy}
+          showScrollTop={showScrollTop}
+          stageFilterActive={stageFilterActive}
+        />
+      ) : (
+        <ScheduleTimelineView
+          allSets={allSets}
+          announced={announced}
+          controls={controls}
+          currentFestival={currentFestival}
+          days={days}
+          emptyScheduleState={emptyScheduleState}
+          errorScheduleState={errorScheduleState}
+          getMyPick={getMyPick}
+          hPad={hPad}
+          handleSetPress={handleSetPress}
+          hasTimeline={hasTimeline}
+          height={height}
+          lineupStandsIn={lineupStandsIn}
+          listBottomPad={listBottomPad}
+          myPicks={myPicks}
+          refreshControl={refreshControl}
+          resolveStageColor={resolveStageColor}
+          scheduleColdLoading={scheduleColdLoading}
+          scheduleLoadError={scheduleLoadError}
+          scheduleViewportBottomInset={scheduleViewportBottomInset}
+          selectedDay={selectedDay}
+          setTimelineControlsH={setTimelineControlsH}
+          setTimelineViewportH={setTimelineViewportH}
+          tbaSection={tbaSection}
+          timeBounds={timeBounds}
+          timedSets={timedSets}
+          timelineControlsH={timelineControlsH}
+          timelineScrollRef={timelineScrollRef}
+          timelineViewportH={timelineViewportH}
+          visibleStages={visibleStages}
+        />
       )}
     </View>
   );
 }
-
-/**
- * Cold-load placeholder for the schedule — a stage header plus a few set-card
- * shaped rows so the layout matches what's about to render (no spinner, no
- * jump). Mirrors PicksSkeleton on the Picks tab. `hPad` is passed by callers
- * that are NOT already inside a horizontally padded container.
- */
-function ScheduleSkeleton({ hPad = 0 }: { hPad?: number }) {
-  const t = useTokens();
-  const styles = useStyles();
-  return (
-    <View
-      style={[styles.skeletonContent, { paddingHorizontal: hPad }]}
-      accessibilityRole="progressbar"
-      accessibilityLabel="Loading the schedule"
-    >
-      <Skeleton width="40%" height={20} radius={t.radii.xs} style={styles.skeletonDay} />
-      {[0, 1, 2, 3].map((i) => (
-        <View key={i} style={styles.skeletonCard}>
-          <View style={styles.skeletonCardMain}>
-            <Skeleton width="62%" height={16} radius={t.radii.xs} />
-            <Skeleton width="38%" height={12} radius={t.radii.xs} />
-          </View>
-          <Skeleton width={72} height={28} radius={t.radii.pill} />
-        </View>
-      ))}
-    </View>
-  );
-}
-
-const useStyles = makeStyles((t) => ({
-  container: {
-    flex: 1,
-    backgroundColor: t.colors.bg.primary,
-    // Clip to the screen frame. The schedule body's internal scroll views can
-    // size to tall content; without this, on short screens (or large iOS notch
-    // insets) that content overflows the frame's bottom edge and — because RN's
-    // default overflow is 'visible' — paints AND intercepts touches over the
-    // bottom tab bar, making tabs untappable. Clipping confines it to the body.
-    overflow: 'hidden',
-  },
-  // DC1 — one horizontal control row: LiveDot · view switcher (flex) ·
-  // search/filter toggles. Replaces the former two-line live row + switcher.
-  // gap[1] (4px) instead of gap[2] (8px) recovers ~12px so both "Timeline" and
-  // "Cards" labels fit without clipping on ~360dp phones (toggle targets are 44px
-  // so they still comfortably meet WCAG 2.5.5 without the extra gap).
-  viewSwitcher: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    paddingHorizontal: t.spacing[4],
-    paddingVertical: t.spacing[3],
-  },
-  // minWidth:0 prevents the flex child from overflowing its flex allocation when
-  // the SegmentedControl's natural content width exceeds the available space.
-  switcherFlex: {
-    flex: 1,
-    minWidth: 0,
-  },
-  // DC1 (Option C) — Switch / Now&Next moved into ScreenHeader's trailing slot.
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-  },
-  headerIconButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    // WCAG 2.5.5 / 2.5.8 minimum 44px touch target.
-    minWidth: 44,
-    minHeight: 44,
-  },
-  headerNowPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    minHeight: 44,
-    paddingHorizontal: t.spacing[3],
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    borderRadius: 22,
-  },
-  headerNowText: {
-    ...typeStyle('label', 700),
-    color: t.colors.accent.aqua,
-  },
-  pickerOffline: {
-    ...typeStyle('label'),
-    color: t.colors.accent.amber,
-    paddingHorizontal: t.spacing[4],
-    paddingBottom: t.spacing[2],
-  },
-  toggleButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    // WCAG 2.5.5 / 2.5.8 minimum 44px touch target.
-    minWidth: 44,
-    minHeight: 44,
-    borderRadius: t.radii.default,
-  },
-  toggleButtonActive: {
-    backgroundColor: t.colors.aquaAlpha[12],
-  },
-  // Active-filter affordance: a small aqua dot on the filter toggle so a
-  // collapsed-but-active filter stays discoverable.
-  toggleDot: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: t.colors.accent.aqua,
-  },
-  searchRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    marginHorizontal: t.spacing[4],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[2],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    // border.light (0.10 alpha) instead of border.default (0.06) so the field
-    // reads as an interactive text input and is not confused with the card
-    // surfaces (same #1a1a1a bg) that lack a distinguishing border.
-    borderColor: t.colors.border.light,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  searchIcon: {
-    marginRight: 0,
-  },
-  searchInput: {
-    flex: 1,
-    ...typeStyle('body'),
-    color: t.colors.text.primary,
-    padding: 0,
-  },
-  freshnessRow: {
-    paddingTop: t.spacing[2],
-  },
-  compactRefreshButton: {
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: t.radii.default,
-  },
-  // Scroll-to-top FAB (cards view, long lineups). Aqua pill with dark ink to
-  // match the timeline's Now FAB; sits above the tab bar, right-aligned.
-  scrollTopFab: {
-    position: 'absolute',
-    bottom: t.spacing[5],
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    paddingHorizontal: t.spacing[4],
-    paddingVertical: t.spacing[3],
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.accent.aqua,
-    minHeight: 44,
-    // Lift the pill above the surface so it reads as floating over the list.
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 4,
-  },
-  scrollTopText: {
-    ...typeStyle('label', 700),
-    color: t.colors.text.onLightAccent,
-  },
-  zoneLabel: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    marginTop: t.spacing[1],
-  },
-  filterRow: {
-    paddingBottom: t.spacing[2],
-  },
-  filterContent: {
-    paddingHorizontal: t.spacing[4],
-    gap: t.spacing[2],
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[3],
-    // WCAG 2.5.5 / 2.5.8 minimum 44x44px touch target (motor accessibility).
-    minHeight: 44,
-    borderRadius: t.radii.pill,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  // R3 outlined-secondary variant for the "My picks" chip. The SegmentedControl
-  // already holds the solid-aqua primary fill; a second solid aqua fill (the
-  // old filterChipActive) violates the single-accent-fill-per-screen rule.
-  // Outlined tint (aqua border + tinted bg, no solid fill) is the correct
-  // secondary treatment for a non-primary toggle alongside a primary control.
-  filterChipActiveTinted: {
-    backgroundColor: t.colors.aquaAlpha[12],
-    borderColor: t.colors.aquaAlpha[70],
-  },
-  // Inert "Pick a set first" chip: recessed background + lighter border, with a
-  // muted label, so it reads as unavailable without relying on opacity.
-  filterChipMuted: {
-    backgroundColor: t.colors.bg.primary,
-    borderColor: t.colors.border.light,
-  },
-  filterChipText: {
-    ...typeStyle('label'),
-    color: t.colors.text.secondary,
-  },
-  // Companion text style for the outlined-tinted chip variant (My picks).
-  filterChipTextTinted: {
-    color: t.colors.accent.aqua,
-  },
-  filterChipTextMuted: {
-    color: t.colors.text.muted,
-  },
-  daysGoingLabel: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    paddingTop: t.spacing[2],
-  },
-  genreGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-  },
-  stageDotSmall: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  stageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    paddingTop: t.spacing[2],
-    paddingBottom: t.spacing[1],
-  },
-  stageDot: {
-    width: 10,
-    height: 10,
-    borderRadius: t.radii.pill,
-  },
-  earlierRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 44,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  earlierText: {
-    ...typeStyle('label'),
-    color: t.colors.text.secondary,
-  },
-  stageHeaderText: {
-    ...typeStyle('label'),
-    color: t.colors.text.primary,
-  },
-  groupByRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    paddingTop: t.spacing[2],
-  },
-  groupByLabel: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-  },
-  listContent: {
-    padding: t.spacing[4],
-    paddingTop: t.spacing[2],
-    flexGrow: 1,
-  },
-  separator: {
-    height: t.spacing[3],
-  },
-  // flex:1 binds the cards FlatList / fallback ScrollView to the (overflow-clipped)
-  // container so they scroll internally up to the tab bar instead of sizing to
-  // content and being clipped.
-  scrollBody: {
-    flex: 1,
-  },
-  timelineBody: {
-    // A fixed height, not flex: inside a ScrollView flex:1 resolves to 0.
-    overflow: 'hidden',
-  },
-  fallbackScroll: {
-    flexGrow: 1,
-    paddingBottom: t.spacing[4],
-  },
-  // ── Cold-load skeleton (geometry shared with the Picks tab) ───────────────
-  skeletonContent: {
-    paddingTop: t.spacing[2],
-  },
-  skeletonDay: {
-    marginTop: t.spacing[4],
-    marginBottom: t.spacing[3],
-  },
-  skeletonCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    padding: t.spacing[4],
-    minHeight: 72,
-    marginBottom: t.spacing[2],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.card,
-  },
-  skeletonCardMain: {
-    flex: 1,
-    gap: t.spacing[2],
-  },
-}));

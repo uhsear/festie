@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { Festival, FestivalDay, FestivalSet, LineupEntry } from '@festie/shared/types';
 import { announcedLineupModel, lineupReplacesEmptyState } from '@festie/shared/utils';
-
-const read = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), 'utf8');
+import { read } from './read-source';
 
 const entry = (id: string, name: string, over: Partial<LineupEntry> = {}): LineupEntry => ({
   id,

@@ -1,7 +1,6 @@
 {
   "app/(auth)/complete-signup.tsx": 1,
   "app/(auth)/register.tsx": 1,
-  "app/(tabs)/index.tsx": 1,
   "app/(tabs)/map.tsx": 1,
   "app/(tabs)/picks.tsx": 1,
   "app/admin/festival-edit.tsx": 1,
@@ -14,6 +13,7 @@
   "components/MapPlaceCard.tsx": 1,
   "components/OfflineMap.tsx": 5,
   "components/PlanQRShare.tsx": 3,
+  "components/schedule/styles.ts": 1,
   "components/admin/AdminFields.tsx": 13,
   "lib/backgroundShare.ts": 1,
   "lib/mapDocument.ts": 44,

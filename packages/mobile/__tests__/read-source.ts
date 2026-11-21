@@ -10,6 +10,7 @@ const root = join(__dirname, '..');
  */
 const SPLIT_SCREENS: Record<string, string> = {
   'app/(tabs)/crew.tsx': 'components/crew',
+  'app/(tabs)/index.tsx': 'components/schedule',
 };
 
 /**
