@@ -489,10 +489,16 @@ export default function createManageRoutes(
 
   // The audience counts an audit row carries (alerts and announcements). An organizer sees one only from 20 people up.
   const AUDIENCE_KEYS = ['notifiedPeople', 'people', 'recipients', 'picksLost', 'picks', 'ratings'];
+  // A shared-artist edit rewrites copies in every festival that lists the artist, other tenants' drafts included. Its
+  // festival ids and count stay with Festie.
+  const OTHER_TENANT_KEYS = ['festivalIds', 'festivalsUpdated'];
   const withoutSmallAudiences = (details: any) => {
     if (!details || typeof details !== 'object') return details ?? null;
     return Object.fromEntries(
-      Object.entries(details).filter(([key, value]) => !(AUDIENCE_KEYS.includes(key) && typeof value === 'number' && organizerAudience(value) === null)),
+      Object.entries(details).filter(
+        ([key, value]) =>
+          !OTHER_TENANT_KEYS.includes(key) && !(AUDIENCE_KEYS.includes(key) && typeof value === 'number' && organizerAudience(value) === null),
+      ),
     );
   };
 
