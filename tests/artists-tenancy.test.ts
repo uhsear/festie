@@ -257,6 +257,33 @@ describe('editing an artist', { skip }, () => {
     assert.equal((await edit(own, { name: 'Seat Own Renamed' })).status, 200);
   });
 
+  test('a hidden merged artist is a 404 that never names its survivor; a visible one still names it', async () => {
+    const survivor = await seedArtist({ name: 'Merge Survivor Secret' });
+    const hidden = await seedArtist({ name: 'Merge Hidden Loser' });
+    await festival('fe-mg-b', 'org-b', false, [{ id: hidden, name: 'Merge Hidden Loser' }, { id: survivor, name: 'Merge Survivor Secret' }]);
+    await sql('UPDATE artists SET merged_into = $2 WHERE id = $1', [hidden, survivor]);
+    const res = await patch('editorA', hidden, { name: 'Probe' });
+    assert.equal(res.status, 404, JSON.stringify(res.body));
+    assert.ok(!JSON.stringify(res.body).includes('Merge Survivor Secret'));
+    // Its own merged artist: visible to organization A, so the 409 may name the survivor when A can see that too.
+    const mine = await seedArtist({ name: 'Merge Mine Loser' });
+    const mineSurvivor = await seedArtist({ name: 'Merge Mine Survivor' });
+    await festival('fe-mg-a', 'org-a', false, [{ id: mine, name: 'Merge Mine Loser' }, { id: mineSurvivor, name: 'Merge Mine Survivor' }]);
+    await sql('UPDATE artists SET merged_into = $2 WHERE id = $1', [mine, mineSurvivor]);
+    const own = await patch('editorA', mine, { name: 'Probe' });
+    assert.equal(own.status, 409, JSON.stringify(own.body));
+    assert.match(own.body.error.message, /Merge Mine Survivor/);
+    // Visible loser, hidden survivor: the survivor stays unnamed.
+    const loser2 = await seedArtist({ name: 'Merge Mine Loser Two' });
+    const hiddenSurvivor = await seedArtist({ name: 'Merge Survivor Hidden Two' });
+    await festival('fe-mg-a2', 'org-a', false, [{ id: loser2, name: 'Merge Mine Loser Two' }]);
+    await festival('fe-mg-b2', 'org-b', false, [{ id: hiddenSurvivor, name: 'Merge Survivor Hidden Two' }]);
+    await sql('UPDATE artists SET merged_into = $2 WHERE id = $1', [loser2, hiddenSurvivor]);
+    const partial = await patch('editorA', loser2, { name: 'Probe' });
+    assert.equal(partial.status, 409);
+    assert.ok(!JSON.stringify(partial.body).includes('Merge Survivor Hidden Two'));
+  });
+
   test('an admin-only festival counts as another user, and a stale token is a 409', async () => {
     const id = await seedArtist({ name: 'Platform Shared' });
     await festival('fe-pl-a', 'org-a', false, [{ id, name: 'Platform Shared' }]);

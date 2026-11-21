@@ -126,7 +126,14 @@ export function createArtistsStore(pool: Pool) {
     const before = rows[0] as ArtistRecord | undefined;
     if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
     if (before.merged_into) {
-      const survivor = (await client.query('SELECT name, label FROM artists WHERE id = $1', [before.merged_into])).rows[0];
+      // A viewer learns nothing about a hidden artist, so its visibility is checked before the merge is mentioned,
+      // and the survivor is named only when the viewer can see it too.
+      const seen = input.viewer ? await viewerMask(client, input.viewer, [before.id, before.merged_into]) : null;
+      if (seen && !seen.has(before.id)) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
+      const survivor =
+        seen && !seen.has(before.merged_into)
+          ? undefined
+          : (await client.query('SELECT name, label FROM artists WHERE id = $1', [before.merged_into])).rows[0];
       throw new ArtistError(
         409,
         'ARTIST_CHANGED',
