@@ -2,34 +2,25 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
-  FlatList,
-  ScrollView,
   Keyboard,
   Alert,
-  ActivityIndicator,
   RefreshControl,
   AppState,
   Share,
   AccessibilityInfo,
-  StyleSheet,
   useWindowDimensions,
   Platform,
-  type ScrollViewInstance,
   type TextInputInstance,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { setReturnTo } from '../../lib/returnTo';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore, useUIStore } from '@festie/shared/stores';
-import { useCrew, useActiveCrew, useCrewSections } from '@festie/shared/hooks';
+import { useActiveCrew, useCrewSections } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services';
-import { COPY, GUEST_PROMPT_COPY, LOW_POWER_COPY } from '@festie/shared/constants';
 import {
-  setLabel,
   buildJoinUrl,
   formatInviteExpiry,
   inviteShareMessage,
@@ -37,55 +28,41 @@ import {
   crewCopy,
   festivalLabel,
   handOverCandidates,
-  memberAvatarUrl,
   memberCountLabel,
-  FESTIE_ORIGIN,
   deleteCrewConfirmMessage,
   leaveCrewConfirmMessage,
   removeMemberConfirmMessage,
   isCrewOwner,
-  memberIsOwner,
   DEFAULT_CREW_TAB,
   parseCrewTab,
   openPollIds,
   balanceCents,
 } from '@festie/shared/utils';
 import type { Crew, CrewMember, CrewOverlap, FestivalSet } from '@festie/shared/types';
-import { useTokens, makeStyles, typeStyle, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useHaptics } from '../../hooks/useHaptics';
-import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import Button from '../../components/Button';
 import ScreenHeader from '../../components/ScreenHeader';
-import Avatar from '../../components/Avatar';
-import CreateCrewForm from '../../components/CreateCrewForm';
 import CrewSwitcherSheet from '../../components/CrewSwitcherSheet';
 import FestivalChoiceSheet from '../../components/FestivalChoiceSheet';
 import HandOverSheet from '../../components/HandOverSheet';
 import CrewTabBar, { type CrewTabKey } from '../../components/CrewTabBar';
-import EmptyState from '../../components/EmptyState';
-import SectionLabel from '../../components/SectionLabel';
-import { Skeleton } from '../../components/Skeleton';
-import CrewHomeBase from '../../components/CrewHomeBase';
-import CrewPhotoLink from '../../components/CrewPhotoLink';
-import CrewPolls from '../../components/CrewPolls';
-import CrewMeetingPoints from '../../components/CrewMeetingPoints';
-import CrewMyDays from '../../components/CrewMyDays';
-import CrewLockRow from '../../components/CrewLockRow';
-import MemberDayChips from '../../components/MemberDayChips';
-import CrewStatus from '../../components/CrewStatus';
 import { festivalForCrew } from '../../lib/crewFestival';
-import CrewPacking from '../../components/CrewPacking';
-import CrewRides from '../../components/CrewRides';
-import CrewExpenses from '../../components/CrewExpenses';
-import CrewActivity from '../../components/CrewActivity';
-import CrewLiveLocation from '../../components/CrewLiveLocation';
-import CrewSos from '../../components/CrewSos';
-import CrewCheckIn from '../../components/CrewCheckIn';
-import { BeaconRow } from '../../components/BeaconModal';
 import InviteQRSheet from '../../components/InviteQRSheet';
 import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
+import { useStyles } from '../../components/crew/styles';
+import CrewGuestState from '../../components/crew/CrewGuestState';
+import CrewLoadingState from '../../components/crew/CrewLoadingState';
+import CrewJoiningState from '../../components/crew/CrewJoiningState';
+import CrewLoadErrorState from '../../components/crew/CrewLoadErrorState';
+import CrewNoCrewView from '../../components/crew/CrewNoCrewView';
+import CrewInviteCard from '../../components/crew/CrewInviteCard';
+import CrewMembersTab from '../../components/crew/CrewMembersTab';
+import CrewPlanTab from '../../components/crew/CrewPlanTab';
+import CrewFindTab from '../../components/crew/CrewFindTab';
+import CrewMoneyTab from '../../components/crew/CrewMoneyTab';
 
 /** Mirrors IOS_NATIVE_TAB_BAR_HEIGHT in (tabs)/index.tsx: the native iOS tab bar overlays content. */
 const IOS_NATIVE_TAB_BAR_HEIGHT = 49;
@@ -95,7 +72,6 @@ const CREW_ERROR_RETRY_MS = 30_000;
 
 export default function CrewScreen() {
   const t = useTokens();
-  const largeText = useLargeText();
   const styles = useStyles();
   const haptics = useHaptics();
 
@@ -170,9 +146,6 @@ export default function CrewScreen() {
   // mode screen and can be turned off from the Find tab.
   const lowPowerMode = useFestivalModeStore((s) => s.lowPowerMode);
 
-  // Per-set crew picks (shared hook) — used to enrich the overlap UI without
-  // an extra endpoint round-trip.
-  const { getCrewScopedOtherPicks } = useCrew();
   const router = useRouter();
 
   const [inviteCode, setInviteCode] = useState('');
@@ -217,13 +190,6 @@ export default function CrewScreen() {
     sheet: sheetParam,
     start: startParam,
   } = useLocalSearchParams<{ tab?: string; joined?: string; sheet?: string; start?: string }>();
-
-  // Plan index: each chip scrolls its section label to the top of the Plan pane.
-  const reduceMotion = useReduceMotion();
-  const planScrollRef = useRef<ScrollViewInstance>(null);
-  const moneyScrollRef = useRef<ScrollViewInstance>(null);
-  const expensesY = useRef(0);
-  const planSectionY = useRef<{ polls?: number; packing?: number; rides?: number }>({});
 
   // Loads crews and selects the first one; status drives the loading/error/none branches.
   const { status, retry } = useActiveCrew();
@@ -668,157 +634,33 @@ export default function CrewScreen() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- keyed on the ids, not the whole objects
   }, [crewTab, activeCrew?.id, polls, expenseBalances, user?.id, markCrewBadgeSeen]);
 
-  if (!user) {
-    return (
-      <View style={styles.screen} testID="crew-screen">
-        <ScreenHeader title="Crew" icon="people" />
-        <EmptyState
-          icon="people-outline"
-          title={GUEST_PROMPT_COPY.teasers.crew.title}
-          message={GUEST_PROMPT_COPY.teasers.crew.message}
-          action={{
-            label: GUEST_PROMPT_COPY.createAccount,
-            onPress: () => {
-              setReturnTo('/(tabs)/crew');
-              router.push('/(auth)/register');
-            },
-          }}
-          secondaryAction={{
-            label: GUEST_PROMPT_COPY.signIn,
-            onPress: () => {
-              setReturnTo('/(tabs)/crew');
-              router.push('/(auth)/login');
-            },
-          }}
-        />
-      </View>
-    );
-  }
+  if (!user) return <CrewGuestState />;
 
   // Initial load — no crews fetched yet. Show a skeleton that matches the crew
   // chrome + member-row geometry instead of a bare spinner, so the layout
   // doesn't jump when data lands. (Cached crews render immediately and skip
   // this branch entirely — this is the cold-start case only.)
-  if (status === 'loading') {
-    return (
-      <View style={styles.screen} testID="crew-screen">
-        <ScreenHeader title="Crew" icon="people" />
-        <View
-          style={[styles.crewChrome, tabletInset]}
-          accessibilityRole="progressbar"
-          accessibilityLabel="Loading your crews"
-        >
-          <Skeleton height={44} radius={t.radii.default} />
-          <View style={styles.skeletonList}>
-            {[0, 1, 2, 3].map((i) => (
-              <View key={i} style={styles.skeletonRow}>
-                <Skeleton width={40} height={40} radius={20} />
-                <View style={styles.skeletonRowBody}>
-                  <Skeleton width="55%" height={14} radius={t.radii.xs} />
-                  <Skeleton width="32%" height={10} radius={t.radii.xs} />
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-      </View>
-    );
-  }
+  if (status === 'loading') return <CrewLoadingState tabletInset={tabletInset} />;
 
-  if (status === 'joining') {
-    return (
-      <View style={styles.screen} testID="crew-screen">
-        <ScreenHeader title="Crew" icon="people" />
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Joining when you're back online"
-          message="Your join is saved on this device. The crew opens once you reconnect."
-        />
-      </View>
-    );
-  }
+  if (status === 'joining') return <CrewJoiningState />;
 
-  if (status === 'error') {
-    return (
-      <View style={styles.screen} testID="crew-screen">
-        <ScreenHeader title="Crew" icon="people" />
-        <EmptyState
-          icon="cloud-offline-outline"
-          title="Couldn't load your crew"
-          message="Check your connection, then try again."
-          action={{ label: 'Try again', onPress: retry }}
-        />
-      </View>
-    );
-  }
+  if (status === 'error') return <CrewLoadErrorState retry={retry} />;
+
 
   // No crews: show create / join forms.
   if (!activeCrew) {
     return (
-      // KAV is dropped: behavior='padding' is a no-op on Android and
-      // behavior='height' doesn't scroll the focused field into view when it's
-      // deep in the list. automaticallyAdjustKeyboardInsets on the scroll
-      // container handles both platforms correctly (same pattern as
-      // account.tsx / app/set/[setId].tsx).
-      <View style={styles.screen} testID="crew-screen">
-        <ScreenHeader title="Crew" subtitle="Coordinate with friends" icon="people" />
-        <ScrollView
-          style={tabBodyStyle}
-          contentContainerStyle={formScrollStyle}
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
-        >
-          <EmptyState
-            illustration="noCrew"
-            title="No crew yet"
-            message="Plan with your friends. Make a crew, or join one with a code."
-          />
-
-          {/* Leaving the only crew lands here, so its notice must show here too. */}
-          {notice ? (
-            <Text style={styles.notice} accessibilityLiveRegion="polite" maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {notice}
-            </Text>
-          ) : null}
-
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-
-          <CreateCrewForm autoFocus={pendingStart === 'create'} />
-
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Join by code</Text>
-            <Text style={styles.formHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              6-character code, or paste the invite link
-            </Text>
-            <TextInput
-              ref={inviteInputRef}
-              style={styles.input}
-              placeholder="K7XQ2M"
-              placeholderTextColor={t.colors.text.placeholder}
-              value={inviteCode}
-              onChangeText={setInviteCode}
-              autoCapitalize="characters"
-              autoCorrect={false}
-              maxLength={64}
-              returnKeyType="done"
-              onSubmitEditing={handleJoin}
-              accessibilityLabel="Invite code"
-            />
-            <TouchableOpacity
-              style={[styles.outlineButton, !inviteCode.trim() && styles.buttonDisabled]}
-              onPress={handleJoin}
-              disabled={!inviteCode.trim()}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Join crew by code"
-            >
-              <Text style={styles.outlineButtonText}>Join by Code</Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </View>
+      <CrewNoCrewView
+        error={error}
+        formScrollStyle={formScrollStyle}
+        handleJoin={handleJoin}
+        inviteCode={inviteCode}
+        inviteInputRef={inviteInputRef}
+        notice={notice}
+        pendingStart={pendingStart}
+        setInviteCode={setInviteCode}
+        tabBodyStyle={tabBodyStyle}
+      />
     );
   }
 
@@ -851,16 +693,6 @@ export default function CrewScreen() {
   const packingLeft = packingItems.filter((i) => !i.claimed).length;
   const packingDone = packingItems.length > 0 && packingLeft === 0;
   const rideCount = rideOffers.length;
-  const planIndex = [
-    { key: 'polls', testID: 'plan-index-polls', label: 'Polls', count: openPollCount },
-    { key: 'packing', testID: 'plan-index-packing', label: 'Packing', count: packingLeft },
-    { key: 'rides', testID: 'plan-index-rides', label: 'Rides', count: rideCount },
-  ] as const;
-  const jumpToPlanSection = (key: 'polls' | 'packing' | 'rides') =>
-    planScrollRef.current?.scrollTo({
-      y: Math.max(0, (planSectionY.current[key] ?? 0) - t.spacing[2]),
-      animated: !reduceMotion,
-    });
 
   // Shared pull-to-refresh control (only one tab renders at a time).
   const crewRefreshControl = (
@@ -873,35 +705,10 @@ export default function CrewScreen() {
     />
   );
 
-  const inviteCard = members.length <= 1 && crew.inviteCode ? (
-    <View style={styles.inviteCard}>
-      <Text style={styles.inviteCardTitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        {crewCopy.inviteCardTitle}
-      </Text>
-      <Text style={styles.inviteCardBody} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        {crewCopy.inviteCardBody(crew.name)}
-      </Text>
-      <View style={styles.forceAddRow}>
-        <Button
-          label="Share invite link"
-          onPress={() => handleShareInvite(crew.inviteCode!, crew.name)}
-          accessibilityLabel="Share invite link"
-          style={styles.flexButton}
-        />
-        <TouchableOpacity
-          style={[styles.outlineButton, styles.flexButton]}
-          onPress={() => setInviteQrOpen(true)}
-          activeOpacity={0.8}
-          accessibilityRole="button"
-          accessibilityLabel="Show QR code"
-        >
-          <Text style={styles.outlineButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            Show QR code
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  ) : null;
+  const inviteCard =
+    members.length <= 1 && crew.inviteCode ? (
+      <CrewInviteCard crew={crew} handleShareInvite={handleShareInvite} setInviteQrOpen={setInviteQrOpen} />
+    ) : null;
 
   return (
     // KAV is dropped: behavior='padding' is a no-op on Android and
@@ -1042,1169 +849,98 @@ export default function CrewScreen() {
       />
 
       {crewTab === 'members' ? (
-        <FlatList
-          style={tabBodyStyle}
-          data={members}
-          extraData={managingMemberId}
-          keyExtractor={(m) => m.userId}
-          contentContainerStyle={memberListStyle}
-          contentInsetAdjustmentBehavior="automatic"
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
-          refreshControl={crewRefreshControl}
-          renderItem={({ item }) => {
-            const rowIsOwner = memberIsOwner(item, crew.owner);
-            const displayName = item.name || 'Member';
-            const isSelf = item.userId === user.id;
-            // Owners may manage other members (kick + transfer). Force-add and
-            // these controls hit admin-gated shared store actions.
-            const canManage = isOwner && !rowIsOwner && !isSelf;
-            const managing = managingMemberId === item.userId;
-            return (
-              <View>
-                <View style={[styles.memberRow, largeText && styles.memberRowWrap]}>
-                  <Avatar name={displayName} image={memberAvatarUrl(item, FESTIE_ORIGIN)} size="md" />
-                  <View style={styles.memberInfo}>
-                    <Text style={styles.memberName} numberOfLines={2}>
-                      {displayName}
-                      {isSelf ? ' (you)' : ''}
-                    </Text>
-                    {rowIsOwner ? <Text style={styles.memberRole}>Owner</Text> : null}
-                    {crewFestival ? <MemberDayChips userId={item.userId} name={displayName} days={festivalDays} /> : null}
-                  </View>
-                  {canManage ? (
-                    <TouchableOpacity
-                      onPress={() => setManagingMemberId(managing ? null : item.userId)}
-                      style={styles.manageButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Manage ${displayName}`}
-                      accessibilityState={{ expanded: managing }}
-                    >
-                      <Text style={styles.manageButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Manage</Text>
-                      <Ionicons name={managing ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                  ) : rowIsOwner ? (
-                    <View accessible accessibilityLabel="Owner">
-                      <Ionicons name="star" size={16} color={t.colors.aquaAlpha[40]} />
-                    </View>
-                  ) : null}
-                </View>
-                {canManage && managing ? (
-                  <View style={styles.memberActionRow}>
-                    <Button variant="secondary" size="sm" label="Make owner" onPress={() => handleTransfer(crew.id, item)} />
-                    <Button variant="danger" size="sm" label="Remove from crew" onPress={() => handleKick(crew.id, item)} />
-                  </View>
-                ) : null}
-              </View>
-            );
-          }}
-          ListHeaderComponent={
-            <View style={styles.membersHeader}>
-              {inviteCard ? <View style={styles.inviteCardSpacer}>{inviteCard}</View> : null}
-              {crew.inviteCode ? (
-                <View style={styles.inviteBar}>
-                  <Ionicons name="key-outline" size={16} color={t.colors.accent.aqua} />
-                  <Text style={styles.inviteLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>Invite code</Text>
-                  <Text style={styles.inviteCode} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityLabel={`Invite code ${crew.inviteCode}`}>
-                    {crew.inviteCode}
-                  </Text>
-                  {inviteExpiry ? (
-                    <Text style={styles.inviteExpiry} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                      {inviteExpiry === 'Expired' && !isOwner
-                        ? 'Expired. Ask the crew owner for a new link.'
-                        : inviteExpiry}
-                    </Text>
-                  ) : null}
-                  <View style={[styles.inviteActions, largeText && styles.inviteActionsWrap]}>
-                    <TouchableOpacity
-                      testID="crew-action-share-invite"
-                      onPress={() => handleShareInvite(crew.inviteCode!, crew.name)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel="Share invite link"
-                    >
-                      <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      testID="crew-action-show-invite-qr"
-                      onPress={() => setInviteQrOpen(true)}
-                      style={styles.iconButton}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel="Show QR code"
-                    >
-                      <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
-                    </TouchableOpacity>
-                    {isOwner ? (
-                      <TouchableOpacity
-                        testID="crew-action-regenerate-invite"
-                        onPress={() => handleRegenerate(crew.id)}
-                        disabled={regenBusy}
-                        style={styles.iconButton}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel="Regenerate invite code"
-                      >
-                        {regenBusy ? (
-                          <ActivityIndicator size="small" color={t.colors.accent.aqua} />
-                        ) : (
-                          <Ionicons name="refresh" size={16} color={t.colors.accent.aqua} />
-                        )}
-                      </TouchableOpacity>
-                    ) : null}
-                  </View>
-                  <CrewLockRow crewId={crew.id} isOwner={isOwner} />
-                </View>
-              ) : null}
-              {crewFestival ? (
-                <CrewMyDays crewId={crew.id} myUserId={user.id} days={festivalDays} />
-              ) : null}
-            </View>
-          }
-          ListEmptyComponent={
-            <EmptyState
-              icon="person-outline"
-              title="No members yet"
-              message="Share your invite code to bring friends in."
-              action={
-                crew.inviteCode
-                  ? { label: 'Share invite', onPress: () => handleShareInvite(crew.inviteCode!, crew.name) }
-                  : undefined
-              }
-            />
-          }
-          ListFooterComponent={
-            <View style={styles.tabFooter}>
-              <SectionLabel>Manage</SectionLabel>
-
-              {/* Reform this crew for another festival (M3). */}
-              <TouchableOpacity
-                testID="crew-action-reform"
-                style={styles.overlapToggle}
-                onPress={() => handleReform(crew.id, crew.festivalId)}
-                disabled={reformBusy}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel="Reform this crew for another festival"
-              >
-                <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
-                <Text style={styles.overlapToggleText}>
-                  {reformBusy ? 'Reforming…' : 'Reform for another festival'}
-                </Text>
-                {reformBusy ? (
-                  <ActivityIndicator size="small" color={t.colors.accent.aqua} />
-                ) : (
-                  <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-                )}
-              </TouchableOpacity>
-
-              {/* Owner-only crew totem editor (rally marker: emoji + name). */}
-              {isOwner ? (
-                totemEditOpen ? (
-                  <View style={styles.forceAddBox}>
-                    <Text style={styles.formLabel}>Crew totem</Text>
-                    <View style={styles.totemFieldRow}>
-                      <TextInput
-                        style={[styles.input, styles.totemEmojiInput]}
-                        placeholder="Emoji"
-                        placeholderTextColor={t.colors.text.placeholder}
-                        value={editTotemEmoji}
-                        onChangeText={setEditTotemEmoji}
-                        maxLength={16}
-                        autoCorrect={false}
-                        accessibilityLabel="Crew totem emoji"
-                      />
-                      <TextInput
-                        style={[styles.input, styles.totemNameInput]}
-                        placeholder="Totem name"
-                        placeholderTextColor={t.colors.text.placeholder}
-                        value={editTotemName}
-                        onChangeText={setEditTotemName}
-                        maxLength={40}
-                        returnKeyType="done"
-                        onSubmitEditing={() => handleSaveTotem(crew.id)}
-                        accessibilityLabel="Crew totem name"
-                      />
-                    </View>
-                    <View style={styles.forceAddRow}>
-                      <TouchableOpacity
-                        style={[styles.outlineButton, styles.flexButton]}
-                        onPress={() => setTotemEditOpen(false)}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel totem edit"
-                      >
-                        <Text style={styles.outlineButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <Button
-                        label={totemBusy ? 'Saving…' : 'Save totem'}
-                        onPress={() => handleSaveTotem(crew.id)}
-                        disabled={totemBusy}
-                        accessibilityLabel="Save crew totem"
-                        style={styles.flexButton}
-                      />
-                    </View>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    testID="crew-action-edit-totem"
-                    style={styles.overlapToggle}
-                    onPress={() => openTotemEditor(crew)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Edit crew totem"
-                  >
-                    <Ionicons name="flag-outline" size={16} color={t.colors.accent.aqua} />
-                    <Text style={styles.overlapToggleText}>
-                      {crew.totem_emoji || crew.totem_name ? 'Edit crew totem' : crewCopy.addTotem}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-                  </TouchableOpacity>
-                )
-              ) : null}
-              {isOwner && !totemEditOpen ? <Text style={styles.formHint}>{crewCopy.totemExplainer}</Text> : null}
-
-              {/* Rename (owner). */}
-              {isOwner ? (
-                renameOpen ? (
-                  <View style={styles.forceAddBox}>
-                    <Text style={styles.formLabel}>Crew name</Text>
-                    <TextInput
-                      style={styles.input}
-                      value={renameText}
-                      onChangeText={setRenameText}
-                      maxLength={60}
-                      returnKeyType="done"
-                      onSubmitEditing={() => handleSaveRename(crew.id)}
-                      accessibilityLabel="Crew name"
-                    />
-                    <View style={styles.forceAddRow}>
-                      <TouchableOpacity
-                        style={[styles.outlineButton, styles.flexButton]}
-                        onPress={() => setRenameOpen(false)}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel rename"
-                      >
-                        <Text style={styles.outlineButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <Button
-                        label={renameBusy ? 'Saving…' : 'Save'}
-                        onPress={() => handleSaveRename(crew.id)}
-                        disabled={renameBusy || !renameText.trim() || renameText.trim() === crew.name}
-                        accessibilityLabel="Save crew name"
-                        style={styles.flexButton}
-                      />
-                    </View>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    testID="crew-action-rename"
-                    style={styles.overlapToggle}
-                    onPress={() => {
-                      setRenameText(crew.name);
-                      setRenameOpen(true);
-                    }}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Rename crew"
-                  >
-                    <Ionicons name="pencil-outline" size={16} color={t.colors.accent.aqua} />
-                    <Text style={styles.overlapToggleText}>Rename crew</Text>
-                    <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-                  </TouchableOpacity>
-                )
-              ) : null}
-
-              {/* Force-add by username (admin-gated server-side). Shown to admins only. */}
-              {user.isAdmin ? (
-                forceAddOpen ? (
-                  <View style={styles.forceAddBox}>
-                    <Text style={styles.formLabel}>Username</Text>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="username"
-                      placeholderTextColor={t.colors.text.placeholder}
-                      value={forceAddName}
-                      onChangeText={setForceAddName}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      returnKeyType="done"
-                      onSubmitEditing={() => handleForceAdd(crew.id)}
-                      accessibilityLabel="Username to add"
-                    />
-                    <View style={styles.forceAddRow}>
-                      <TouchableOpacity
-                        style={[styles.outlineButton, styles.flexButton]}
-                        onPress={() => {
-                          setForceAddOpen(false);
-                          setForceAddName('');
-                        }}
-                        activeOpacity={0.8}
-                        accessibilityRole="button"
-                        accessibilityLabel="Cancel force-add"
-                      >
-                        <Text style={styles.outlineButtonText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <Button
-                        label={forceAddBusy ? 'Adding…' : 'Add'}
-                        onPress={() => handleForceAdd(crew.id)}
-                        disabled={forceAddBusy || !forceAddName.trim()}
-                        accessibilityLabel="Confirm force-add"
-                        style={styles.flexButton}
-                      />
-                    </View>
-                  </View>
-                ) : (
-                  <TouchableOpacity
-                    testID="crew-action-force-add"
-                    style={styles.overlapToggle}
-                    onPress={() => setForceAddOpen(true)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Add member by username (admin)"
-                  >
-                    <Ionicons name="person-add-outline" size={16} color={t.colors.accent.aqua} />
-                    <Text style={styles.overlapToggleText}>Add member by username (admin)</Text>
-                  </TouchableOpacity>
-                )
-              ) : null}
-
-              <View style={styles.footerActions}>
-                <TouchableOpacity
-                  testID="crew-action-leave"
-                  style={styles.dangerButton}
-                  onPress={() =>
-                    isOwner ? handleOwnerLeave(crew.id, crew.name, members, user.id) : handleLeave(crew.id)
-                  }
-                  activeOpacity={0.8}
-                  accessibilityRole="button"
-                  accessibilityLabel="Leave crew"
-                >
-                  <Ionicons name="exit-outline" size={16} color={t.colors.text.danger} />
-                  <Text style={styles.dangerButtonText}>Leave crew</Text>
-                </TouchableOpacity>
-              </View>
-              {isOwner ? (
-                <View style={styles.footerActions}>
-                  <TouchableOpacity
-                    testID="crew-action-delete"
-                    style={styles.dangerButton}
-                    onPress={() => handleDelete(crew.id, crew.name, members.length)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Delete crew"
-                  >
-                    <Ionicons name="trash-outline" size={16} color={t.colors.text.danger} />
-                    <Text style={styles.dangerButtonText}>Delete crew</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.formHint}>Deletes the crew for everyone.</Text>
-                </View>
-              ) : null}
-            </View>
-          }
+        <CrewMembersTab
+          crew={crew}
+          crewFestival={crewFestival}
+          crewRefreshControl={crewRefreshControl}
+          editTotemEmoji={editTotemEmoji}
+          editTotemName={editTotemName}
+          festivalDays={festivalDays}
+          forceAddBusy={forceAddBusy}
+          forceAddName={forceAddName}
+          forceAddOpen={forceAddOpen}
+          handleDelete={handleDelete}
+          handleForceAdd={handleForceAdd}
+          handleKick={handleKick}
+          handleLeave={handleLeave}
+          handleOwnerLeave={handleOwnerLeave}
+          handleReform={handleReform}
+          handleRegenerate={handleRegenerate}
+          handleSaveRename={handleSaveRename}
+          handleSaveTotem={handleSaveTotem}
+          handleShareInvite={handleShareInvite}
+          handleTransfer={handleTransfer}
+          inviteCard={inviteCard}
+          inviteExpiry={inviteExpiry}
+          isOwner={isOwner}
+          managingMemberId={managingMemberId}
+          memberListStyle={memberListStyle}
+          members={members}
+          openTotemEditor={openTotemEditor}
+          reformBusy={reformBusy}
+          regenBusy={regenBusy}
+          renameBusy={renameBusy}
+          renameOpen={renameOpen}
+          renameText={renameText}
+          setEditTotemEmoji={setEditTotemEmoji}
+          setEditTotemName={setEditTotemName}
+          setForceAddName={setForceAddName}
+          setForceAddOpen={setForceAddOpen}
+          setInviteQrOpen={setInviteQrOpen}
+          setManagingMemberId={setManagingMemberId}
+          setRenameOpen={setRenameOpen}
+          setRenameText={setRenameText}
+          setTotemEditOpen={setTotemEditOpen}
+          tabBodyStyle={tabBodyStyle}
+          totemBusy={totemBusy}
+          totemEditOpen={totemEditOpen}
+          user={user}
         />
       ) : crewTab === 'plan' ? (
-        <ScrollView
-          ref={planScrollRef}
-          style={tabBodyStyle}
-          contentContainerStyle={tabScrollStyle}
-          contentInsetAdjustmentBehavior="automatic"
-          refreshControl={crewRefreshControl}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
-        >
-          {inviteCard}
-          <View style={styles.planIndexRow}>
-            {planIndex.map(({ key, testID, label, count }) => (
-              <TouchableOpacity
-                key={key}
-                testID={testID}
-                style={styles.planIndexChip}
-                onPress={() => jumpToPlanSection(key)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityLabel={`Jump to ${label}`}
-              >
-                <Text style={styles.overlapToggleText} numberOfLines={1}>{label}</Text>
-                {count > 0 ? (
-                  <View style={styles.countBadge}>
-                    <Text style={styles.countBadgeText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{count}</Text>
-                  </View>
-                ) : null}
-              </TouchableOpacity>
-            ))}
-          </View>
-
-          {/* Everyday primary: the offline-native "what's my crew's plan"
-              digest. Emphasized (aqua-tinted fill + border) so the most-used
-              action carries more weight than the rest of the tab. Coral is
-              reserved for danger/SOS, so these nav actions are aqua. */}
-          <TouchableOpacity
-            testID="crew-action-plan"
-            style={[styles.overlapToggle, styles.overlapTogglePrimary]}
-            onPress={() => router.push('/crew-plan')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="View your crew's plan"
-          >
-            <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapTogglePrimaryText}>Crew plan</Text>
-            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-          </TouchableOpacity>
-
-          {/* Schedule compare / overlap toggle. */}
-          <TouchableOpacity
-            testID="crew-action-overlap"
-            style={styles.overlapToggle}
-            onPress={() => handleToggleOverlap(crew.id)}
-            disabled={overlapBusy}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel={showOverlap ? 'Hide schedule overlap' : 'Compare crew schedules'}
-          >
-            <Ionicons name="git-compare-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>
-              {overlapBusy ? 'Loading overlap…' : showOverlap ? 'Hide schedule overlap' : 'Compare schedules'}
-            </Text>
-            {overlapBusy ? (
-              <ActivityIndicator size="small" color={t.colors.accent.aqua} />
-            ) : (
-              <Ionicons name={showOverlap ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.accent.aqua} />
-            )}
-          </TouchableOpacity>
-
-          {overlapError ? (
-            <TouchableOpacity
-              style={styles.overlapErrorRow}
-              onPress={() => handleToggleOverlap(crew.id)}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityLabel="Retry loading schedule overlap"
-            >
-              <Ionicons name="cloud-offline-outline" size={16} color={t.colors.text.danger} />
-              <Text style={styles.overlapErrorText}>{overlapError}</Text>
-              <Text style={styles.overlapRetryText}>Retry</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          {showOverlap ? (
-            overlapEntries.length === 0 ? (
-              <Text style={styles.overlapEmpty}>No shared picks yet — overlap appears once members add sets.</Text>
-            ) : (
-              <View style={styles.overlapList}>
-                {overlapEntries.map((o) => {
-                  const picks = getCrewScopedOtherPicks(o.setId);
-                  const mustCount = picks.filter((p) => p.priority === 'must').length;
-                  return (
-                    <View key={o.setId} style={styles.overlapRow}>
-                      <View style={styles.overlapInfo}>
-                        <Text style={styles.overlapSet} numberOfLines={2}>
-                          {setLabel(setsById.get(o.setId), o.setId)}
-                        </Text>
-                        <Text style={styles.overlapMeta}>
-                          {o.memberCount} {o.memberCount === 1 ? 'member' : 'members'}
-                          {mustCount > 0 ? ` · ${mustCount} must-see` : ''}
-                        </Text>
-                      </View>
-                      <View style={styles.overlapBadge}>
-                        {/* DC25: 13 is off-grid; snap to iconSize.xs (12). */}
-                        <Ionicons name="people" size={12} color={t.colors.accent.aqua} />
-                        <Text style={styles.overlapBadgeText}>{o.memberCount}</Text>
-                      </View>
-                    </View>
-                  );
-                })}
-              </View>
-            )
-          ) : null}
-
-          {/* Full side-by-side compare matrix (members × sets). */}
-          <TouchableOpacity
-            testID="crew-action-compare-grid"
-            style={styles.overlapToggle}
-            onPress={() => router.push('/crew-compare')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Open full compare grid"
-          >
-            <Ionicons name="grid-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>Full compare grid</Text>
-            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-          </TouchableOpacity>
-
-          {/* P2P plan handoff — discoverable from the Plan cluster so users
-              find it before they need it. QR / SMS works with no signal. */}
-          <TouchableOpacity
-            testID="crew-action-share-plan-planning"
-            style={styles.overlapToggle}
-            onPress={() => router.push('/plan-share')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Share offline: QR or text, works without signal"
-          >
-            <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
-            <View style={styles.overlapToggleLabelStack}>
-              <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
-              <Text style={styles.overlapToggleHint}>QR or text, works without signal</Text>
-            </View>
-            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-          </TouchableOpacity>
-
-          <View style={styles.sectionLabelRow} onLayout={(e) => { planSectionY.current.polls = e.nativeEvent.layout.y; }}>
-            <SectionLabel>Polls</SectionLabel>
-            {openPollCount > 0 ? (
-              <View style={styles.countBadge}>
-                <Text style={styles.countBadgeText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{openPollCount}</Text>
-              </View>
-            ) : null}
-          </View>
-          <CrewPolls crewId={crew.id} currentUserId={user.id} isOwner={isOwner} />
-
-          {/* DC4: Packing + Rides are pre-festival planning, so they live in
-              Plan (moved out of the mid-festival "Find" cluster). The count
-              pills give an at-a-glance "what's outstanding" without expanding. */}
-          <View style={styles.sectionLabelRow} onLayout={(e) => { planSectionY.current.packing = e.nativeEvent.layout.y; }}>
-            <SectionLabel>Packing</SectionLabel>
-            {packingDone ? (
-              <View style={styles.donePill} accessibilityLabel="All packing items claimed">
-                <Ionicons name="checkmark" size={12} color={t.colors.accent.aqua} />
-                <Text style={styles.donePillText} maxFontSizeMultiplier={MAX_FONT_SCALE}>All packed</Text>
-              </View>
-            ) : packingLeft > 0 ? (
-              <View
-                style={styles.countBadge}
-                accessibilityLabel={`${packingLeft} packing ${packingLeft === 1 ? 'item' : 'items'} unclaimed`}
-              >
-                <Text style={styles.countBadgeText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{packingLeft}</Text>
-              </View>
-            ) : null}
-          </View>
-          <CrewPacking crewId={crew.id} currentUserId={user.id} isOwner={isOwner} />
-
-          <View style={styles.sectionLabelRow} onLayout={(e) => { planSectionY.current.rides = e.nativeEvent.layout.y; }}>
-            <SectionLabel>Rides</SectionLabel>
-            {rideCount > 0 ? (
-              <View
-                style={styles.countBadge}
-                accessibilityLabel={`${rideCount} ${rideCount === 1 ? 'ride' : 'rides'} on the board`}
-              >
-                <Text style={styles.countBadgeText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{rideCount}</Text>
-              </View>
-            ) : null}
-          </View>
-          <CrewRides crewId={crew.id} currentUserId={user.id} isOwner={isOwner} />
-        </ScrollView>
+        <CrewPlanTab
+          crew={crew}
+          crewRefreshControl={crewRefreshControl}
+          handleToggleOverlap={handleToggleOverlap}
+          inviteCard={inviteCard}
+          isOwner={isOwner}
+          openPollCount={openPollCount}
+          overlapBusy={overlapBusy}
+          overlapEntries={overlapEntries}
+          overlapError={overlapError}
+          packingDone={packingDone}
+          packingLeft={packingLeft}
+          rideCount={rideCount}
+          setsById={setsById}
+          showOverlap={showOverlap}
+          tabBodyStyle={tabBodyStyle}
+          tabScrollStyle={tabScrollStyle}
+          user={user}
+        />
       ) : crewTab === 'find' ? (
-        <ScrollView
-          style={tabBodyStyle}
-          contentContainerStyle={tabScrollStyle}
-          contentInsetAdjustmentBehavior="automatic"
-          refreshControl={crewRefreshControl}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
-        >
-          {/* DC2: SOS must be reachable without any scroll — top of the pane,
-              always visible the instant the Find tab opens. */}
-          <CrewSos crewId={crew.id} currentUserId={user.id} />
-          {inviteCard}
-          <CrewCheckIn crewId={crew.id} />
-
-          <TouchableOpacity
-            testID="crew-action-map"
-            style={styles.overlapToggle}
-            onPress={() => router.navigate('/(tabs)/map')}
-            activeOpacity={0.8}
-            accessibilityRole="button"
-            accessibilityLabel="Open the map with your crew and meeting points"
-          >
-            <Ionicons name="map-outline" size={16} color={t.colors.accent.aqua} />
-            <Text style={styles.overlapToggleText}>Open map</Text>
-            <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
-          </TouchableOpacity>
-
-          <SectionLabel>Meeting points</SectionLabel>
-          <CrewHomeBase crewId={crew.id} location={crew.homeBaseLocation} time={crew.homeBaseTime} isOwner={isOwner} />
-          <CrewMeetingPoints
-            crewId={crew.id}
-            currentUserId={user.id}
-            isOwner={isOwner}
-            festival={crewFestival}
-            days={crewFestival ? festivalDays : undefined}
-          />
-
-          {/* In low-power mode the battery-hungry live-location share is paused
-              (gated by the shared festival low-power flag); a chip explains why. */}
-          <CrewStatus crewId={crew.id} currentUserId={user.id} />
-
-          <SectionLabel>Live location</SectionLabel>
-          <View style={styles.liveSafetyBlock}>
-            {lowPowerMode ? (
-              <View style={styles.lowPowerPaused}>
-                <LowPowerIndicator />
-                <Text style={styles.lowPowerPausedText}>{LOW_POWER_COPY.livePaused}</Text>
-                <Button
-                  variant="secondary"
-                  label={LOW_POWER_COPY.turnOff}
-                  onPress={() => useFestivalModeStore.getState().setLowPowerMode(false)}
-                />
-              </View>
-            ) : (
-              <CrewLiveLocation crewId={crew.id} />
-            )}
-          </View>
-          <BeaconRow />
-
-          <CrewPhotoLink crewId={crew.id} photoAlbumUrl={crew.photoAlbumUrl} />
-
-          <SectionLabel>Activity</SectionLabel>
-          <CrewActivity crewId={crew.id} />
-        </ScrollView>
+        <CrewFindTab
+          crew={crew}
+          crewFestival={crewFestival}
+          crewRefreshControl={crewRefreshControl}
+          festivalDays={festivalDays}
+          inviteCard={inviteCard}
+          isOwner={isOwner}
+          lowPowerMode={lowPowerMode}
+          tabBodyStyle={tabBodyStyle}
+          tabScrollStyle={tabScrollStyle}
+          user={user}
+        />
       ) : (
-        <ScrollView
-          ref={moneyScrollRef}
-          style={tabBodyStyle}
-          contentContainerStyle={tabScrollStyle}
-          contentInsetAdjustmentBehavior="automatic"
-          refreshControl={crewRefreshControl}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          automaticallyAdjustKeyboardInsets
-        >
-          {inviteCard}
-          <View style={styles.sectionLabelRow}>
-            <SectionLabel>Expenses</SectionLabel>
-            {hasUnsettledBalance ? (
-              <View style={styles.unsettledDot} accessibilityLabel="You have an unsettled balance" />
-            ) : null}
-          </View>
-          <View
-            onLayout={(e) => {
-              expensesY.current = e.nativeEvent.layout.y;
-            }}
-          >
-            <CrewExpenses
-              crewId={crew.id}
-              members={members}
-              currentUserId={user.id}
-              onFormShown={(y) =>
-                moneyScrollRef.current?.scrollTo({
-                  y: Math.max(0, expensesY.current + y - t.spacing[2]),
-                  animated: !reduceMotion,
-                })
-              }
-            />
-          </View>
-        </ScrollView>
+        <CrewMoneyTab
+          crew={crew}
+          crewRefreshControl={crewRefreshControl}
+          hasUnsettledBalance={hasUnsettledBalance}
+          inviteCard={inviteCard}
+          members={members}
+          tabBodyStyle={tabBodyStyle}
+          tabScrollStyle={tabScrollStyle}
+          user={user}
+        />
       )}
     </View>
   );
 }
-
-const useStyles = makeStyles((t) => ({
-  screen: {
-    flex: 1,
-    backgroundColor: t.colors.bg.primary,
-  },
-  // Bind each scroll body (Members FlatList + the Plan/Logistics/Money
-  // ScrollViews + the no-crew form) to the screen's remaining height. Without
-  // flex:1 they size to content, overflow past the bottom tab bar (member rows
-  // "overlapping" the nav) and let the fixed chrome / CrewTabBar above expand to
-  // fill the slack — which is why a tab's controls looked oversized on the
-  // shorter Plan/Logistics panes. flex:1 makes the body absorb the slack and
-  // scroll internally instead.
-  flex1: {
-    flex: 1,
-  },
-  formScroll: {
-    paddingHorizontal: t.spacing[4],
-    paddingBottom: t.spacing[6],
-    gap: t.spacing[4],
-  },
-  // Persistent crew chrome (identity / invite / switcher) above the tab bar.
-  crewChrome: {
-    paddingHorizontal: t.spacing[4],
-    gap: t.spacing[2],
-    paddingBottom: t.spacing[2],
-  },
-  // Members-tab header: the invite bar (setup) moved out of the pinned chrome.
-  membersHeader: {
-    marginBottom: t.spacing[3],
-  },
-  inviteCardSpacer: {
-    marginBottom: t.spacing[3],
-  },
-  // Header meta row: freshness badge + low-power indicator.
-  crewMetaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: t.spacing[2],
-  },
-  // Compact always-visible SOS entry, right-aligned in the header meta row.
-  // coralStrong bg + white text mirrors the Button danger pattern; jumps to the
-  // Logistics tab where the full CrewSos panel renders.
-  sosChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    marginLeft: 'auto',
-    paddingHorizontal: t.spacing[3],
-    minHeight: 44,
-    justifyContent: 'center',
-    borderRadius: t.radii.default,
-    backgroundColor: t.colors.accent.coralStrong,
-  },
-  sosChipText: {
-    ...typeStyle('label', 700),
-    color: t.colors.text.onAccent,
-  },
-  // Crew totem chip shown in the header (emoji + name rally marker).
-  totemChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    alignSelf: 'flex-start',
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[1],
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.aquaAlpha[15],
-  },
-  totemChipEmoji: {
-    ...typeStyle('label'),
-  },
-  totemChipName: {
-    ...typeStyle('caption', 700),
-    color: t.colors.accent.aqua,
-    flexShrink: 1,
-  },
-  // Totem create/edit fields: a narrow emoji box + a flexible name box.
-  totemFieldRow: {
-    flexDirection: 'row',
-    gap: t.spacing[2],
-  },
-  totemEmojiInput: {
-    width: 64,
-    textAlign: 'center',
-  },
-  totemNameInput: {
-    flex: 1,
-  },
-  // Live-location block when low-power mode pauses the share.
-  lowPowerPaused: {
-    gap: t.spacing[2],
-  },
-  lowPowerPausedText: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-  },
-  // Scroll content for the Plan / Logistics / Money tabs.
-  tabScroll: {
-    paddingHorizontal: t.spacing[4],
-    paddingTop: t.spacing[1],
-    gap: t.spacing[3],
-  },
-  // Members-tab footer (Manage cluster + danger actions).
-  tabFooter: {
-    gap: t.spacing[3],
-    marginTop: t.spacing[4],
-  },
-  error: {
-    ...typeStyle('body'),
-    color: t.colors.text.danger,
-    textAlign: 'center',
-  },
-  formGroup: {
-    gap: t.spacing[2],
-  },
-  formLabel: {
-    ...typeStyle('label'),
-    color: t.colors.text.primary,
-  },
-  formHint: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  input: {
-    backgroundColor: t.colors.bg.input,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    borderRadius: t.radii.default,
-    paddingHorizontal: t.spacing[4],
-    paddingVertical: t.spacing[3],
-    ...typeStyle('body'),
-    color: t.colors.text.primary,
-  },
-  // Primary aqua CTAs migrated to components/Button (F8).
-  outlineButton: {
-    borderWidth: 1,
-    borderColor: t.colors.accent.aqua,
-    borderRadius: t.radii.default,
-    paddingVertical: t.spacing[3],
-    alignItems: 'center',
-  },
-  outlineButtonText: {
-    ...typeStyle('label'),
-    color: t.colors.accent.aqua,
-  },
-  flexButton: {
-    flex: 1,
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-  iconButton: {
-    padding: t.spacing[2],
-    // Guarantee a >=44pt touch target (WCAG / Apple HIG) for these small
-    // (16-18px) icon-only controls — padding alone can't reach it.
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inviteBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    rowGap: t.spacing[2],
-    gap: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.aqua,
-    backgroundColor: t.colors.aquaAlpha[10],
-  },
-  inviteActions: {
-    flexDirection: 'row',
-    gap: t.spacing[2],
-  },
-  inviteActionsWrap: {
-    width: '100%',
-    justifyContent: 'flex-end',
-  },
-  inviteLabel: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-  },
-  inviteExpiry: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  inviteCode: {
-    ...typeStyle('label'),
-    color: t.colors.text.primary,
-    marginLeft: 'auto',
-    letterSpacing: 2,
-  },
-  switcherButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    paddingHorizontal: t.spacing[3],
-    minHeight: 44,
-    justifyContent: 'center',
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.aqua,
-    backgroundColor: t.colors.aquaAlpha[10],
-  },
-  switcherButtonText: {
-    ...typeStyle('label'),
-    color: t.colors.accent.aqua,
-  },
-  notice: {
-    ...typeStyle('label'),
-    color: t.colors.accent.aqua,
-  },
-  inviteCard: {
-    gap: t.spacing[2],
-    padding: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.aqua,
-    backgroundColor: t.colors.aquaAlpha[10],
-  },
-  inviteCardTitle: {
-    ...typeStyle('label', 700),
-    color: t.colors.text.primary,
-  },
-  inviteCardBody: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-  },
-  overlapToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  overlapToggleText: {
-    ...typeStyle('label'),
-    color: t.colors.text.primary,
-    flex: 1,
-  },
-  overlapToggleLabelStack: {
-    flex: 1,
-    flexDirection: 'column',
-    gap: 1,
-  },
-  overlapToggleHint: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  // Emphasized variant for the everyday-primary action (Crew plan): aqua-tinted
-  // fill + aqua border so it carries more weight than the plain toolbox rows,
-  // without becoming a loud solid-aqua CTA.
-  overlapTogglePrimary: {
-    borderColor: t.colors.accent.aqua,
-    backgroundColor: t.colors.aquaAlpha[10],
-  },
-  overlapTogglePrimaryText: {
-    ...typeStyle('label', 700),
-    color: t.colors.accent.aqua,
-    flex: 1,
-  },
-  planIndexRow: {
-    flexDirection: 'row',
-    gap: t.spacing[2],
-  },
-  planIndexChip: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: t.spacing[2],
-    minHeight: 44,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  overlapEmpty: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    paddingHorizontal: t.spacing[2],
-  },
-  overlapErrorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.text.danger,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  overlapErrorText: {
-    ...typeStyle('caption'),
-    color: t.colors.text.danger,
-    flex: 1,
-  },
-  overlapRetryText: {
-    ...typeStyle('label'),
-    color: t.colors.accent.aqua,
-  },
-  overlapList: {
-    gap: t.spacing[2],
-  },
-  overlapRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.light,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  overlapInfo: {
-    flex: 1,
-    gap: t.spacing[1],
-  },
-  overlapSet: {
-    ...typeStyle('body'),
-    color: t.colors.text.primary,
-  },
-  overlapMeta: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-  },
-  overlapBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    paddingHorizontal: t.spacing[2],
-    paddingVertical: t.spacing[1],
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.aquaAlpha[12],
-  },
-  overlapBadgeText: {
-    ...typeStyle('caption'),
-    color: t.colors.accent.aqua,
-  },
-  forceAddBox: {
-    gap: t.spacing[2],
-    padding: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  forceAddRow: {
-    flexDirection: 'row',
-    gap: t.spacing[2],
-  },
-  memberList: {
-    paddingHorizontal: t.spacing[4],
-    paddingBottom: t.spacing[6],
-    gap: t.spacing[3],
-  },
-  // Cold-start skeleton (mirrors the member-row geometry so nothing jumps).
-  skeletonList: {
-    gap: t.spacing[3],
-    marginTop: t.spacing[3],
-  },
-  skeletonRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[3],
-    minHeight: 56,
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  skeletonRowBody: {
-    flex: 1,
-    gap: t.spacing[2],
-  },
-  sectionLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-  },
-  countBadge: {
-    minWidth: 18,
-    paddingHorizontal: t.spacing[1],
-    paddingVertical: 1,
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.aquaAlpha[15],
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: t.spacing[1],
-  },
-  countBadgeText: {
-    ...typeStyle('caption', 700),
-    color: t.colors.accent.aqua,
-  },
-  // "All packed" affordance — a calm aqua confirmation pill (not coral; this is
-  // a positive done-state, not an alarm) shown when nothing is left to claim.
-  donePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    paddingHorizontal: t.spacing[2],
-    paddingVertical: 1,
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.aquaAlpha[12],
-    marginBottom: t.spacing[1],
-  },
-  donePillText: {
-    ...typeStyle('caption', 700),
-    color: t.colors.accent.aqua,
-  },
-  unsettledDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: t.colors.accent.coral,
-    marginBottom: t.spacing[1],
-  },
-  memberRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[3],
-    // Match AccountScreen's row floor so every member row keeps a >=44pt
-    // touch target even when the name wraps to a single short line.
-    minHeight: 56,
-    // Hairline-divider idiom: flat row separated by a single-pixel bottom
-    // border rather than individually boxed cards.
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: t.colors.border.default,
-  },
-  memberRowWrap: {
-    flexWrap: 'wrap',
-  },
-  memberInfo: {
-    flex: 1,
-    gap: t.spacing[1],
-  },
-  memberName: {
-    ...typeStyle('body'),
-    color: t.colors.text.primary,
-  },
-  memberRole: {
-    ...typeStyle('caption'),
-    color: t.colors.text.secondary,
-  },
-  manageButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: t.spacing[1],
-    minWidth: 44,
-    minHeight: 44,
-    paddingHorizontal: t.spacing[3],
-  },
-  manageButtonText: {
-    ...typeStyle('label'),
-    color: t.colors.accent.aqua,
-  },
-  memberActionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
-    paddingBottom: t.spacing[3],
-  },
-  liveSafetyBlock: {
-    gap: t.spacing[3],
-    marginBottom: t.spacing[2],
-  },
-  footerActions: {
-    marginTop: t.spacing[4],
-  },
-  dangerButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: t.spacing[2],
-    paddingVertical: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.text.danger,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  dangerButtonText: {
-    ...typeStyle('label'),
-    color: t.colors.text.danger,
-  },
-}));

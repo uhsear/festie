@@ -1,8 +1,8 @@
-import { readFileSync } from 'fs';
-import { join } from 'path';
 import { describe, expect, it } from 'vitest';
+import { read } from './read-source';
 
-const src = readFileSync(join(__dirname, '..', 'app', '(tabs)', 'crew.tsx'), 'utf8');
+const src = read('app/(tabs)/crew.tsx');
+const findTab = read('components/crew/CrewFindTab.tsx');
 
 describe('crew invite card scrolls with the tab body', () => {
   it('is not pinned in the crew chrome', () => {
@@ -14,16 +14,17 @@ describe('crew invite card scrolls with the tab body', () => {
   });
 
   it('renders once in each of the four scroll bodies', () => {
-    expect(src.match(/\{inviteCard\}/g)?.length).toBe(4);
+    const tabs = ['Members', 'Plan', 'Find', 'Money'].map((name) => read(`components/crew/Crew${name}Tab.tsx`));
+    for (const tab of tabs) expect(tab.match(/\{inviteCard\}/g)?.length).toBe(1);
+    expect(src.match(/inviteCard=\{inviteCard\}/g)?.length).toBe(4);
   });
 
   it('sits after SOS on Find so SOS stays visible without scrolling', () => {
-    const find = src.indexOf("crewTab === 'find' ?");
-    const sos = src.indexOf('<CrewSos', find);
-    const card = src.indexOf('{inviteCard}', find);
-    expect(sos).toBeGreaterThan(find);
+    const sos = findTab.indexOf('<CrewSos');
+    const card = findTab.indexOf('{inviteCard}');
+    expect(sos).toBeGreaterThan(-1);
     expect(card).toBeGreaterThan(sos);
-    expect(card).toBeLessThan(src.indexOf('<CrewCheckIn', find));
+    expect(card).toBeLessThan(findTab.indexOf('<CrewCheckIn'));
   });
 
   it('keeps the iOS tab bar inset', () => {
