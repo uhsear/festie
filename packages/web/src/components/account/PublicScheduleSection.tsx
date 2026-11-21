@@ -114,7 +114,7 @@ export default function PublicScheduleSection() {
             <code className="min-w-0 flex-1 truncate text-xs text-accent-aqua" data-testid="public-schedule-url">
               {url}
             </code>
-            <Button variant="outline" size="sm" onClick={copy}>
+            <Button variant="secondary" size="sm" onClick={copy}>
               {copied ? 'Copied' : 'Copy'}
             </Button>
             <a
@@ -126,7 +126,7 @@ export default function PublicScheduleSection() {
               Open
             </a>
             {canShare && (
-              <Button variant="outline" size="sm" onClick={share}>
+              <Button variant="secondary" size="sm" onClick={share}>
                 Share
               </Button>
             )}
@@ -141,7 +141,7 @@ export default function PublicScheduleSection() {
         </>
       )}
       <div className="space-y-1">
-        <Button variant="outline" size="sm" disabled={offlineMode} onClick={() => setConfirmOpen(true)}>
+        <Button variant="secondary" size="sm" disabled={offlineMode} onClick={() => setConfirmOpen(true)}>
           Reset my share links
         </Button>
         <p className="text-xs text-text-muted">

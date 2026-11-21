@@ -69,7 +69,7 @@ export default function ReformCrewButton({ crewId, sourceFestivalId, crewName }:
 
   return (
     <>
-      <Button variant="outline" fullWidth className="min-h-11" onClick={() => setOpen(true)}>
+      <Button variant="secondary" fullWidth className="min-h-11" onClick={() => setOpen(true)}>
         <CalendarPlus className="w-4 h-4" aria-hidden="true" /> Reform this crew for another festival
       </Button>
       <Dialog
@@ -97,7 +97,7 @@ export default function ReformCrewButton({ crewId, sourceFestivalId, crewName }:
           {options.length === 0 && <p className="text-sm text-text-secondary">No other festivals available yet.</p>}
           <div className="flex gap-2">
             <RadixDialog.Close asChild>
-              <Button variant="outline" type="button" className="flex-1 min-h-11">
+              <Button variant="secondary" type="button" className="flex-1 min-h-11">
                 Cancel
               </Button>
             </RadixDialog.Close>

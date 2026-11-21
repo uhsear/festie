@@ -15,8 +15,11 @@ const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
 const SPOTIFY_TIMEOUT_MS = 10_000;
 
-/** Spotify answered 429. Callers stop calling it and tell the admin to wait. */
-class SpotifyRateLimitedError extends Error {
+/**
+ * Spotify answered 429. Callers stop calling it and tell the admin to wait.
+ * @public Reached by tests through a dynamic import with a query string, which knip cannot follow.
+ */
+export class SpotifyRateLimitedError extends Error {
   readonly code = 'SPOTIFY_RATE_LIMITED';
   constructor() {
     super('Spotify is rate limiting Festie');
@@ -148,8 +151,9 @@ function toCandidate(artist: any, exact: boolean) {
 /**
  * The top candidates of a Spotify search answer: artists whose name equals the searched name
  * (same key as the artist table uses) first, then by followers. Never auto-picks: the editor decides.
+ * @public Reached by tests through a dynamic import with a query string, which knip cannot follow.
  */
-function rankCandidates(data: any, cleanedName: any) {
+export function rankCandidates(data: any, cleanedName: any) {
   const target = artistNameKey(String(cleanedName || ''));
   const followers = (a: any) => a?.followers?.total ?? a?.popularity ?? 0;
   const items = (data?.artists?.items || []).filter((a: any) => a?.id && /^[A-Za-z0-9]{22}$/.test(a.id));
@@ -158,8 +162,11 @@ function rankCandidates(data: any, cleanedName: any) {
   return withExact.slice(0, CANDIDATE_LIMIT).map(({ a, exact }: any) => toCandidate(a, exact));
 }
 
-/** Top candidates for a name. [] when Spotify has none, null when Spotify refused (try again). */
-async function searchCandidates(name: any, clientId: any, clientSecret: any) {
+/**
+ * Top candidates for a name. [] when Spotify has none, null when Spotify refused (try again).
+ * @public Reached by tests through a dynamic import with a query string, which knip cannot follow.
+ */
+export async function searchCandidates(name: any, clientId: any, clientSecret: any) {
   if (!name || !clientId || !clientSecret) return null;
   const cleaned = cleanArtistName(name) || String(name).trim();
   if (!cleaned) return [];
@@ -226,4 +233,4 @@ async function getArtistsByIds(ids: string[], clientId: any, clientSecret: any, 
   return bulkSearchArtists(ids, clientId, clientSecret, { concurrency, log, search: getArtistById });
 }
 
-export { SpotifyRateLimitedError, searchArtist, bulkSearchArtists, bulkSearchCandidates, searchCandidates, rankCandidates, getArtistsByIds, getToken, cleanArtistName };
+export { searchArtist, bulkSearchArtists, bulkSearchCandidates, getArtistsByIds, getToken, cleanArtistName };

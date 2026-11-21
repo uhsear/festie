@@ -42,7 +42,7 @@ async function loadMain() {
   document.body.innerHTML = '<div id="root"></div>';
   await import('./main');
   const { useAuthStore } = await import('@festie/shared');
-  const handler = m.setOnUnauthorized.mock.calls[0][0] as () => Promise<boolean>;
+  const handler = m.setOnUnauthorized.mock.calls[0]![0] as () => Promise<boolean>;
   return { useAuthStore, handler };
 }
 
@@ -120,7 +120,7 @@ describe('main.tsx wiring', { timeout: 30000 }, () => {
     } finally {
       vi.unstubAllEnvs();
     }
-    const dc = m.sentryInit.mock.calls[0][0].dataCollection;
+    const dc = m.sentryInit.mock.calls[0]![0].dataCollection;
     expect(dc.userInfo).toBe(false);
     expect(dc.cookies).toBe(false);
     expect(dc.httpBodies).toEqual([]);

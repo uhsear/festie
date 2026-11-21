@@ -14,7 +14,7 @@ function renderTba(sets: FestivalSet[], allTba?: boolean) {
       getMyPick={() => null}
       getOtherPicks={() => []}
       conflictIds={new Set()}
-      currentProfile={null}
+      canPick={false}
       currentFestival={null}
       getStageColor={() => '#ff3366'}
       onSavePick={vi.fn()}

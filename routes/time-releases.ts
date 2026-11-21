@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { isFestivalOver, timeReleaseCopy } from '../lib/notifications/reengagement.js';
+import type { RouteDeps } from '../lib/types';
 
 type DayCount = { date: string; label: string; timed: number; total: number };
 
@@ -36,7 +37,7 @@ function countByDate(festival: any): DayCount[] {
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export default function createTimeReleasesRoute(deps: any) {
+export default function createTimeReleasesRoute(deps: RouteDeps) {
   const {
     express,
     log,

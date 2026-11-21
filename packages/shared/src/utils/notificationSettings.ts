@@ -1,3 +1,5 @@
+import { NOTIFICATION_TOPIC_COPY } from '../constants/accountSettings';
+
 export type NotificationBoolKey =
   | 'setReminders'
   | 'scheduleChanges'
@@ -24,8 +26,8 @@ export interface NotificationTypeRow {
 // Tranches 24, 26 and 30 set `live: true` on their row when they add a sender.
 export const NOTIFICATION_TYPE_ROWS: readonly NotificationTypeRow[] = [
   { key: 'setReminders', label: 'Set reminders', hint: 'Before a set you asked to be reminded about.', onDevice: true, live: true },
-  { key: 'scheduleChanges', label: 'Schedule changes', hint: 'When a set you picked moves or is removed, and announcements from Festie about your festival.', onDevice: false, live: true },
-  { key: 'crewUpdates', label: 'Crew picks', hint: 'When someone in your crew changes their picks.', onDevice: false, live: true },
+  { key: 'scheduleChanges', label: NOTIFICATION_TOPIC_COPY.topicLabels.schedule, hint: 'When a set you picked moves or is removed, and announcements from Festie about your festival.', onDevice: false, live: true },
+  { key: 'crewUpdates', label: NOTIFICATION_TOPIC_COPY.topicLabels.crew, hint: 'When someone in your crew changes their picks.', onDevice: false, live: true },
   { key: 'crewNudges', label: 'Nudges from your crew', hint: 'When a crewmate nudges you to check in. These still arrive during quiet hours.', onDevice: false, live: true },
   { key: 'crewMeetingPoints', label: 'Meeting points', hint: "When your crew sets a meeting point, or moves or cancels one you're coming to.", onDevice: false, live: true },
   { key: 'crewPolls', label: 'Polls', hint: 'When your crew starts or closes a poll.', onDevice: false, live: false },

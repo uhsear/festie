@@ -133,6 +133,29 @@
         width: 64px;
         height: 64px;
       }
+      .boot-shell[role='alert'] {
+        padding: 24px;
+        text-align: center;
+      }
+      .boot-shell button {
+        min-height: 44px;
+        padding: 0 24px;
+        border: 0;
+        border-radius: 8px;
+        background: #ff3366;
+        color: #0a0a0a;
+        font: inherit;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .boot-shell a {
+        color: inherit;
+      }
+      .boot-noscript {
+        padding: 24px;
+        text-align: center;
+        color: #a1a1aa;
+      }
     </style>
     <!-- Persisted theme, applied before first paint (see /theme-init.js). -->
     <script src="/theme-init.js"></script>
@@ -145,6 +168,15 @@
         <span>Loading Festie…</span>
       </div>
     </div>
+    <noscript>
+      <style>
+        .boot-shell {
+          display: none;
+        }
+      </style>
+      <p class="boot-noscript">Festie needs JavaScript. Turn it on and reload the page.</p>
+    </noscript>
+    <script src="/boot-guard.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

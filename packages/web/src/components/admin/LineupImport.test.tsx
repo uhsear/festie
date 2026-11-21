@@ -137,7 +137,7 @@ describe('LineupImport', () => {
     api.preview.mockResolvedValue(plan([planRow()], { new: 3 }));
     await pasteSampleAndCheck();
     expect(api.preview).toHaveBeenCalledTimes(1);
-    const [id, body] = api.preview.mock.calls[0];
+    const [id, body] = api.preview.mock.calls[0]!;
     expect(id).toBe('f1');
     expect(body.rows).toHaveLength(3);
     expect(body.rows[1]).toMatchObject({ row: 3, artist: 'Kai b2b Mira', stage: 'Forest', day: 'Friday', startTime: '23:30' });
@@ -147,11 +147,11 @@ describe('LineupImport', () => {
   it('leaves Update off for a file with no set_id column and offers a banner button for changed rows', async () => {
     api.preview.mockResolvedValue(plan([planRow({ status: 'changed' })], { changed: 2 }));
     await pasteSampleAndCheck();
-    expect(api.preview.mock.calls[0][1].updateExisting).toBe(false);
+    expect(api.preview.mock.calls[0]![1].updateExisting).toBe(false);
     expect(await screen.findByText('2 rows change existing sets or announced acts. Turn on Update to apply them.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Turn on Update' }));
     expect(api.preview).toHaveBeenCalledTimes(2);
-    expect(api.preview.mock.calls[1][1].updateExisting).toBe(true);
+    expect(api.preview.mock.calls[1]![1].updateExisting).toBe(true);
     expect(screen.getByLabelText('Update sets that match')).toBeChecked();
     expect(screen.queryByText(/Turn on Update to apply/)).toBeNull();
   });
@@ -165,7 +165,7 @@ describe('LineupImport', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Next: match columns' }));
     await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
     await screen.findByRole('button', { name: 'Approve' });
-    expect(api.preview.mock.calls[0][1].updateExisting).toBe(true);
+    expect(api.preview.mock.calls[0]![1].updateExisting).toBe(true);
     expect(screen.getByLabelText('Update sets that match')).toBeChecked();
     expect(screen.queryByText(/Turn on Update to apply/)).toBeNull();
   });
@@ -213,7 +213,7 @@ describe('LineupImport', () => {
     await userEvent.clear(input);
     await userEvent.type(input, 'Saturday');
     await userEvent.click(screen.getByRole('button', { name: 'Check again' }));
-    const body = api.preview.mock.calls[1][1];
+    const body = api.preview.mock.calls[1]![1];
     expect(body.rows.find((r: { row: number }) => r.row === 2).day).toBe('Saturday');
     expect(await screen.findByRole('button', { name: 'Approve' })).toBeEnabled();
   });
@@ -265,7 +265,7 @@ describe('LineupImport', () => {
     render(<LineupImport festivalId="f1" festivalName="Fest" />);
     await userEvent.click(await screen.findByRole('button', { name: 'Undo import' }));
     const buttons = await screen.findAllByRole('button', { name: 'Undo import' });
-    await userEvent.click(buttons[buttons.length - 1]);
+    await userEvent.click(buttons[buttons.length - 1]!);
     expect(api.undo).toHaveBeenCalledWith('f1', 'imp-9', 'admin');
   });
 
@@ -320,7 +320,7 @@ describe('LineupImport P6', () => {
     renderSource('Alok\n\nKai b2b Mira\n');
     await userEvent.click(screen.getByRole('button', { name: 'Check as a list of names' }));
     expect(api.preview).toHaveBeenCalledTimes(1);
-    const body = api.preview.mock.calls[0][1];
+    const body = api.preview.mock.calls[0]![1];
     expect(body.rows).toEqual([{ row: 1, artist: 'Alok' }, { row: 3, artist: 'Kai b2b Mira' }]);
     expect(body.updateExisting).toBe(false);
     expect(await screen.findByText('Announced')).toBeInTheDocument();
@@ -341,7 +341,7 @@ describe('LineupImport P6', () => {
     renderSource('set_id,artist,day,start\ns1,Alok,Friday,21:00\n');
     await userEvent.click(screen.getByRole('button', { name: 'Next: match columns' }));
     await userEvent.click(screen.getByRole('button', { name: 'Check rows' }));
-    expect(api.preview.mock.calls[0][1].updateExisting).toBe(true);
+    expect(api.preview.mock.calls[0]![1].updateExisting).toBe(true);
     expect((await screen.findByRole('checkbox', { name: 'Update sets that match' }))).toBeChecked();
   });
 
@@ -350,16 +350,16 @@ describe('LineupImport P6', () => {
     await pasteSampleAndCheck();
     expect(await screen.findByText('2 rows change existing sets or announced acts. Turn on Update to apply them.')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Turn on Update' }));
-    expect(api.preview.mock.calls[1][1].updateExisting).toBe(true);
+    expect(api.preview.mock.calls[1]![1].updateExisting).toBe(true);
     expect(screen.queryByText(/Turn on Update to apply them/)).toBeNull();
   });
 
   it('sends moveDays when Move sets is ticked', async () => {
     api.preview.mockResolvedValue(plan([planRow()], { new: 1 }));
     await pasteSampleAndCheck();
-    expect(api.preview.mock.calls[0][1].moveDays).toBeUndefined();
+    expect(api.preview.mock.calls[0]![1].moveDays).toBeUndefined();
     await userEvent.click(await screen.findByRole('checkbox', { name: 'Move sets to the day in the file' }));
-    expect(api.preview.mock.calls[1][1].moveDays).toBe(true);
+    expect(api.preview.mock.calls[1]![1].moveDays).toBe(true);
   });
 
   it('groups the rows and blocks Approve until a Needs choice row has an artist', async () => {
@@ -384,7 +384,7 @@ describe('LineupImport P6', () => {
     expect(screen.getByRole('button', { name: 'Approve' })).toBeDisabled();
 
     await userEvent.selectOptions(screen.getByLabelText('Row 3 artist Nina Kraviz'), 'ar-ru');
-    const body = api.preview.mock.calls[1][1];
+    const body = api.preview.mock.calls[1]![1];
     expect(body.rows.find((r: { row: number }) => r.row === 3).artistId).toBe('ar-ru');
     expect(await screen.findByRole('button', { name: 'Approve' })).toBeEnabled();
   });

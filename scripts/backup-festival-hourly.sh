@@ -27,6 +27,7 @@ log() { printf '[%s] %s\n' "$(date -Iseconds)" "$*"; }
 
 [ -f "$FLAG" ] || exit 0
 
+final_rc=0
 for step in backup-pg.sh backup-offsite-git.sh; do
   BACKUP_LOCK_WAIT=0 bash "$SCRIPT_DIR/$step"
   rc=$?
@@ -34,9 +35,14 @@ for step in backup-pg.sh backup-offsite-git.sh; do
     log "SKIP: $step reports another backup is running (exit 75)"
     exit 0
   fi
-  if [ "$rc" -ne 0 ]; then
+  if [ "$rc" -eq 76 ]; then
+    # backup-pg.sh: the dump is good, only the avatar archive failed. Still push the dump.
+    log "WARNING: $step exited 76 (avatar archive failed); continuing"
+    final_rc=76
+  elif [ "$rc" -ne 0 ]; then
     log "ERROR: $step exited $rc"
     exit "$rc"
   fi
 done
 log "Festival hourly backup complete"
+exit "$final_rc"

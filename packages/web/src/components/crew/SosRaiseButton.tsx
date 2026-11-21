@@ -125,7 +125,7 @@ export default function SosRaiseButton({ crewId, compact = false, alerting = fal
 
         <div className="flex gap-2">
           <RadixDialog.Close asChild>
-            <Button variant="outline" type="button" className="flex-1 min-h-11" disabled={busy}>
+            <Button variant="secondary" type="button" className="flex-1 min-h-11" disabled={busy}>
               Cancel
             </Button>
           </RadixDialog.Close>

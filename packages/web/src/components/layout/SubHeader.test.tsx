@@ -161,7 +161,7 @@ describe('SubHeader My picks toggle', () => {
 
 describe('SubHeader day chips and picks placeholder', () => {
   afterEach(() => {
-    storeState.currentProfile = { id: 'p1' };
+    storeState.currentProfile = { id: 'p1', picks: {} };
     storeState.isLoading = false;
     vi.clearAllMocks();
   });

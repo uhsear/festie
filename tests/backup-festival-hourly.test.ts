@@ -83,6 +83,15 @@ describe('backup-festival-hourly.sh', () => {
     assert.deepEqual(r.calls, ['backup-pg.sh wait=0']);
   });
 
+  it('pushes the dump when only the avatar archive failed (exit 76), then exits 76', () => {
+    stub('backup-pg.sh', 76);
+    stub('backup-offsite-git.sh', 0);
+    const r = run(true);
+    assert.equal(r.code, 76);
+    assert.match(r.out, /WARNING: backup-pg\.sh exited 76/);
+    assert.deepEqual(r.calls, ['backup-pg.sh wait=0', 'backup-offsite-git.sh wait=0']);
+  });
+
   it('propagates a real push failure code', () => {
     stub('backup-pg.sh', 0);
     stub('backup-offsite-git.sh', 3);

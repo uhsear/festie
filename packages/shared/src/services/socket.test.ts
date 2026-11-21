@@ -21,8 +21,8 @@ describe('createSocket auth recovery', () => {
     createSocket('tok', 'http://localhost', onAuthError);
 
     const err = Object.assign(new Error('Invalid session token'), { data: { status: 401 } });
-    handlers.connect_error(err);
-    handlers.connect_error(err);
+    handlers.connect_error!(err);
+    handlers.connect_error!(err);
 
     expect(socket.disconnect).toHaveBeenCalled();
     expect(onAuthError).toHaveBeenCalledTimes(1);
@@ -33,7 +33,7 @@ describe('createSocket auth recovery', () => {
     const onAuthError = vi.fn();
     createSocket('tok', 'http://localhost', onAuthError);
 
-    handlers.connect_error(Object.assign(new Error('Session check unavailable'), { data: { status: 503 } }));
+    handlers.connect_error!(Object.assign(new Error('Session check unavailable'), { data: { status: 503 } }));
 
     expect(socket.disconnect).not.toHaveBeenCalled();
     expect(onAuthError).not.toHaveBeenCalled();

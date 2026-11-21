@@ -81,7 +81,7 @@ const LIGHT_STYLE = `
     }`;
 
 /** "Crew of 6 · 2 spots left", or "Crew of 30 · full". */
-export function inviteStateLine(memberCount: number, spotsLeft: number): string {
+function inviteStateLine(memberCount: number, spotsLeft: number): string {
   if (spotsLeft <= 0) return `Crew of ${memberCount} · full`;
   return `Crew of ${memberCount} · ${spotsLeft} ${spotsLeft === 1 ? 'spot' : 'spots'} left`;
 }

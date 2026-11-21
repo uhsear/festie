@@ -51,6 +51,7 @@ type SendError = (
   message: string,
   code?: string | null,
   details?: Record<string, unknown> | null,
+  data?: unknown,
 ) => Response;
 
 /**
@@ -93,7 +94,20 @@ export interface Stores {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     [k: string]: any;
   };
-  activity: { log(entry: Record<string, unknown>): Promise<string> };
+  organizations: {
+    listForUser(
+      userId: string,
+    ): Promise<Array<{ id: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'active' | 'suspended' }>>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    [k: string]: any;
+  };
+  activity: {
+    log(entry: Record<string, unknown>): Promise<string>;
+    getByCrew(
+      crewId: string,
+      opts?: { cursor?: unknown; limit?: number },
+    ): Promise<{ items: unknown[]; nextCursor: string | null }>;
+  };
   // Other stores (profiles, sessions, deviceTokens, notificationPrefs, …) are
   // accessed dynamically by not-yet-typed call sites. `any` (not `unknown`)
   // because those modules destructure deep methods off them; tighten as each is
@@ -171,7 +185,12 @@ export interface AppContext {
   adminAuth: Middleware;
   festivalAccess: (opts: { action: FestivalAction; param?: string; allow?: FestivalAllow }) => Middleware;
   orgAccess: (opts: { action: OrgAction }) => Middleware;
-  rateLimit: (max: number, key: string, opts?: { anonIpCap?: boolean }) => Middleware;
+  rateLimit: (
+    max: number,
+    key: string,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    opts?: { anonIpCap?: boolean; keyFromBody?: (req: any) => unknown },
+  ) => Middleware;
 
   // Stores
   stores: Stores;

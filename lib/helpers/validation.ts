@@ -268,7 +268,7 @@ const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
  * "{a} and {b} overlap on {stage}, Sat 10:00 PM." for each same-stage overlap.
  * Orders sets by the 6 AM day rule, so a 00:30 set follows a 23:00 set on the same day.
  */
-export function stageOverlapWarnings(festival: any): string[] {
+function stageOverlapWarnings(festival: any): string[] {
   const stageNames = new Map<string, string>(
     (Array.isArray(festival?.stages) ? festival.stages : []).map((s: any) => [s?.id, s?.name || s?.id]),
   );

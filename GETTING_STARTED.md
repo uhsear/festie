@@ -109,7 +109,7 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 
 | Variable | Purpose |
 |----------|---------|
-| `TEST_DATABASE_URL` | Must include `_test` in the DB name, e.g. `postgresql://user:pass@localhost:5432/festie_test`. Integration tests skip gracefully when absent; CI always sets it. |
+| `TEST_DATABASE_URL` | Must include `_test` in the DB name, e.g. `postgresql://user:pass@localhost:5432/festie_test`. Set it before `npm test`: most DB-backed suites fail at import without it (details under "Without `TEST_DATABASE_URL`" below). CI always sets it. |
 
 ### Optional but commonly needed
 
@@ -218,12 +218,11 @@ createdb festie_test
 
 CI sets `TEST_DATABASE_URL=postgresql://test_user:test_password@localhost:5432/festie_test` with a Postgres 16 service container.
 
-**Skip-gate pattern:** every integration test file guards itself:
+**Without `TEST_DATABASE_URL`:** suites that import `skip` from `tests/_test-schema.ts` skip themselves. Suites that import `tests/_integration-helpers.ts` (or call `requireTestDatabaseUrl()`) print `ERROR: TEST_DATABASE_URL env var required` and exit 1. With no `DATABASE_URL` either, suites fail at import with `loadConfig: refusing the implicit ... fallback`, because the config refuses to guess a database. So `npm test` fails with no database configured. Set both `TEST_DATABASE_URL` and `DATABASE_URL` to the same `_test` database.
 ```ts
-const skip = !TEST_DATABASE_URL || !TEST_DATABASE_URL.includes('_test');
+import { skip } from './_test-schema';
 describe('feature', { skip }, () => { ... });
 ```
-Running `npm test` without `TEST_DATABASE_URL` is safe — integration suites are skipped, not failed.
 
 ### Frontend / shared tests (vitest)
 

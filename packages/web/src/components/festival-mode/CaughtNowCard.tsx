@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, markCaught } from '@festie/shared/services';
+import { fetchWrap, markCaught } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { WrapResponse } from '@festie/shared/types';
 import { applyCaughtMark, artistDisplayName, catchableMeta, caughtFor, selectCatchable } from '@festie/shared/utils';
@@ -37,7 +37,7 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
 
   const { data } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId],
-    queryFn: () => api.get(`/ratings/wrap/${festivalId}`),
+    queryFn: () => fetchWrap(festivalId),
     enabled: items.length > 0,
   });
 

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AccessibilityInfo, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { api, markCaught } from '@festie/shared/services';
+import { fetchWrap, markCaught } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { FestivalSet, WrapResponse } from '@festie/shared/types';
 import { applyCaughtMark, artistDisplayName, catchableMeta, caughtFor, selectCatchable } from '@festie/shared/utils';
@@ -51,8 +51,7 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
     useCallback(() => {
       if (!itemIds) return;
       let cancelled = false;
-      api
-        .get<WrapResponse>(`/ratings/wrap/${festivalId}`)
+      fetchWrap(festivalId)
         .then((res) => {
           if (!cancelled) setData(res);
         })

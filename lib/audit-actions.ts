@@ -65,8 +65,6 @@ export const AUDIT_ACTIONS = {
   ORGANIZATION_UPDATED: 'organization.updated',
 } as const;
 
-export type AuditAction = (typeof AUDIT_ACTIONS)[keyof typeof AUDIT_ACTIONS];
-
 // Old value written before the rename, mapped to its dotted value.
 export const LEGACY_AUDIT_ACTIONS: Record<string, string> = {
   'festival:create': AUDIT_ACTIONS.FESTIVAL_CREATED,

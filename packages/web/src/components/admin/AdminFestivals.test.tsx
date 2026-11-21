@@ -169,11 +169,11 @@ describe('AdminFestivals', () => {
 
     expect(await screen.findByText('Remove sets with picks?')).toBeInTheDocument();
     expect(screen.getByText(/removes 1 day, 24 sets and 113 picks/)).toBeInTheDocument();
-    expect(mockPut.mock.calls[0][1]).toMatchObject({ expectedUpdatedAt: FULL.updatedAt });
+    expect(mockPut.mock.calls[0]![1]).toMatchObject({ expectedUpdatedAt: FULL.updatedAt });
 
     await userEvent.click(screen.getByRole('button', { name: 'Remove and save' }));
     await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
-    expect(mockPut.mock.calls[1][1]).toMatchObject({ confirmRemovals: true, expectedUpdatedAt: FULL.updatedAt });
+    expect(mockPut.mock.calls[1]![1]).toMatchObject({ confirmRemovals: true, expectedUpdatedAt: FULL.updatedAt });
   });
 
   it('resends the lineup only when it changed', async () => {
@@ -185,12 +185,12 @@ describe('AdminFestivals', () => {
     // An unchanged lineup is left out, so a large list cannot 413 the save.
     await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
     await waitFor(() => expect(mockPut).toHaveBeenCalled());
-    expect('lineup' in mockPut.mock.calls[0][1]).toBe(false);
+    expect('lineup' in mockPut.mock.calls[0]![1]).toBe(false);
 
     await userEvent.click(await screen.findByRole('button', { name: 'add lineup entry' }));
     await userEvent.click(screen.getByRole('button', { name: 'save form' }));
     await waitFor(() => expect(mockPut).toHaveBeenCalledTimes(2));
-    expect(mockPut.mock.calls[1][1].lineup).toHaveLength(2);
+    expect(mockPut.mock.calls[1]![1].lineup).toHaveLength(2);
   });
 
   it('sends notify: false when the box is unchecked', async () => {
@@ -202,7 +202,7 @@ describe('AdminFestivals', () => {
     await userEvent.click(box);
     await userEvent.click(screen.getByRole('button', { name: 'save form' }));
     await waitFor(() => expect(mockPut).toHaveBeenCalled());
-    expect(mockPut.mock.calls[0][1]).toMatchObject({ notify: false });
+    expect(mockPut.mock.calls[0]![1]).toMatchObject({ notify: false });
   });
 
   it('toasts the schedule notice, else the saved-changes line', async () => {

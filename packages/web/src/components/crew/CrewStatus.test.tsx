@@ -8,6 +8,7 @@ const h = vi.hoisted(() => ({
   updateMyStatus: vi.fn(),
   useAutoArrive: vi.fn(),
   stage: { value: null as string | null },
+  loadStatuses: vi.fn(),
 }));
 
 vi.mock('@festie/shared', async (importOriginal) => ({
@@ -16,7 +17,7 @@ vi.mock('@festie/shared', async (importOriginal) => ({
     selector({
       crewStatuses: h.statuses,
       crewMembers: h.members,
-      loadStatuses: () => Promise.resolve(),
+      loadStatuses: h.loadStatuses,
       updateMyStatus: h.updateMyStatus,
     }),
   formatStaleness: () => '1h ago',
@@ -54,6 +55,12 @@ const row = (user_id: string, status: string, hoursAgo: number) => ({
   updated_at: new Date(Date.now() - hoursAgo * 3_600_000).toISOString(),
 });
 
+const offlineError = () =>
+  Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true });
+const serverError = () => Object.assign(new Error('upstream exploded'), { name: 'ApiClientError', status: 503 });
+const OFFLINE_COPY = "You're offline. Check your connection and try again.";
+const SERVER_COPY = 'Something went wrong on our side. Try again in a minute.';
+
 function renderStatus() {
   return render(<CrewStatus crewId="c1" currentUserId="me" meetingPoints={[]} />);
 }
@@ -65,6 +72,27 @@ describe('CrewStatus', () => {
     h.stage.value = null;
     h.updateMyStatus.mockReset().mockResolvedValue('sent');
     h.useAutoArrive.mockClear();
+    h.loadStatuses.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('shows one loading status while statuses load', () => {
+    h.loadStatuses.mockReturnValue(new Promise(() => {}));
+    renderStatus();
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
+  it('says the device is offline when the load fails offline', async () => {
+    h.loadStatuses.mockRejectedValue(offlineError());
+    renderStatus();
+    expect(await screen.findByText("Couldn't load crew status")).toBeInTheDocument();
+    expect(screen.getByText(OFFLINE_COPY)).toBeInTheDocument();
+  });
+
+  it('says the server failed when the load fails with a 5xx', async () => {
+    h.loadStatuses.mockRejectedValue(serverError());
+    renderStatus();
+    expect(await screen.findByText(SERVER_COPY)).toBeInTheDocument();
+    expect(screen.queryByText(/upstream exploded/)).not.toBeInTheDocument();
   });
 
   it('shows the roster line when nobody has a status', async () => {

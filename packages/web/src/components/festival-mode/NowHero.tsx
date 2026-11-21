@@ -136,7 +136,7 @@ export default function NowHero({
         body="The festival is over."
         action={
           onWrap && (
-            <Button variant="outline" onClick={onWrap} className="self-start">
+            <Button variant="secondary" onClick={onWrap} className="self-start">
               {COPY.wrap.open}
             </Button>
           )
@@ -150,7 +150,7 @@ export default function NowHero({
         title="No picks today"
         body={next ? `Your next pick is ${name(next.set)}, ${fmtStartsIn(next.start, nowMs, timeZone)}.` : 'Pick the sets you want to see today.'}
         action={
-          <Button variant="outline" onClick={onBrowse} className="self-start" data-testid="fm-browse">
+          <Button variant="secondary" onClick={onBrowse} className="self-start" data-testid="fm-browse">
             Browse the lineup
           </Button>
         }

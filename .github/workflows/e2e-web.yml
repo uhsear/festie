@@ -87,11 +87,13 @@ jobs:
           key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
 
       - name: Install Playwright system dependencies
-        timeout-minutes: 16
+        timeout-minutes: 30
         run: |
           for attempt in 1 2 3; do
-            timeout 300 npx playwright install-deps chromium firefox webkit && exit 0
+            timeout 480 npx playwright install-deps chromium firefox webkit && exit 0
             echo "install-deps attempt $attempt failed or timed out"
+            # A timed-out attempt leaves its apt-get running under sudo, holding the dpkg lock.
+            for _ in $(seq 1 60); do sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 || break; sleep 5; done
           done
           exit 1
 

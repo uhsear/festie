@@ -717,7 +717,7 @@ describe('crewStore', () => {
 
     it('takeRideSeat adds me, then replaces the offer with the server copy', async () => {
       useCrewStore.setState({ rideOffers: [offer([])] });
-      vi.mocked(api.post).mockResolvedValueOnce({ offer: { ...offer(['user-1']), seats: 3 } });
+      vi.mocked(api.post).mockResolvedValueOnce({ offer: { ...(offer(['user-1']) as object), seats: 3 } });
       await expect(useCrewStore.getState().takeRideSeat('crew-1', 'r1', 'user-1')).resolves.toBe('sent');
       expect(api.post).toHaveBeenCalledWith('/crews/crew-1/rides/r1/seat');
       expect(useCrewStore.getState().rideOffers[0]!.seats).toBe(3);

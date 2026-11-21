@@ -164,18 +164,18 @@ describe('moveAmenity', () => {
   it('replaces the matching feature coordinate (in [lng, lat])', () => {
     const prior = appendAmenity(null, feature({ id: 'a1', lng: 1, lat: 2 }));
     const cfg = moveAmenity(prior, 'a1', { latitude: 40, longitude: 30 });
-    expect(cfg.amenities?.features[0].geometry.coordinates).toEqual([30, 40]);
+    expect(cfg.amenities?.features[0]!.geometry.coordinates).toEqual([30, 40]);
   });
   it('leaves other features and the label/type untouched', () => {
     const prior = appendAmenity(appendAmenity(null, feature({ id: 'a1', label: 'Keep' })), feature({ id: 'a2' }));
     const cfg = moveAmenity(prior, 'a2', { latitude: 5, longitude: 6 });
-    expect(cfg.amenities?.features[0].properties.label).toBe('Keep');
-    expect(cfg.amenities?.features[1].geometry.coordinates).toEqual([6, 5]);
+    expect(cfg.amenities?.features[0]!.properties.label).toBe('Keep');
+    expect(cfg.amenities?.features[1]!.geometry.coordinates).toEqual([6, 5]);
   });
   it('rejects an out-of-range coord (config unchanged)', () => {
     const prior = appendAmenity(null, feature({ id: 'a1', lng: 1, lat: 2 }));
     const cfg = moveAmenity(prior, 'a1', { latitude: 999, longitude: 0 });
-    expect(cfg.amenities?.features[0].geometry.coordinates).toEqual([1, 2]);
+    expect(cfg.amenities?.features[0]!.geometry.coordinates).toEqual([1, 2]);
   });
 });
 
@@ -183,12 +183,12 @@ describe('setAmenityLabel', () => {
   it('replaces the matching feature label (trimmed)', () => {
     const prior = appendAmenity(null, feature({ id: 'a1', label: 'old' }));
     const cfg = setAmenityLabel(prior, 'a1', '  New  ');
-    expect(cfg.amenities?.features[0].properties.label).toBe('New');
+    expect(cfg.amenities?.features[0]!.properties.label).toBe('New');
   });
   it('falls back to the humanized type for a blank label', () => {
     const prior = appendAmenity(null, feature({ id: 'a1', label: 'old' }));
     const cfg = setAmenityLabel(prior, 'a1', '   ');
-    expect(cfg.amenities?.features[0].properties.label).toBe('Water');
+    expect(cfg.amenities?.features[0]!.properties.label).toBe('Water');
   });
 });
 

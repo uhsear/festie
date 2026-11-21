@@ -5,12 +5,11 @@ import { useAuth } from '@festie/shared/hooks';
 import { mapErrorToUserMessage, setPassword, withReauth } from '@festie/shared/services';
 import { PROVIDER_COPY } from '@festie/shared/constants';
 import { PASSWORD_CHANGED_MESSAGE, useAuthStore, useUIStore } from '@festie/shared/stores';
-import { PASSWORD_RULES, passwordPolicyError, validateNewPassword } from '@festie/shared/utils';
+import { PASSWORD_RULES, passwordPolicyError, passwordStrength, validateNewPassword } from '@festie/shared/utils';
 import Button from './Button';
 import { useReauthPrompt } from './admin';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
-import { passwordStrength } from '../lib/accountFormat';
 
 /**
  * Password-change form for the Account screen.
@@ -238,7 +237,7 @@ function ChangePasswordForm() {
     }
   };
 
-  const strength = passwordStrength(next);
+  const strength = passwordStrength(next, { username: user?.username, email: user?.email });
   const matchState: 'none' | 'match' | 'mismatch' =
     confirm.length === 0 ? 'none' : confirm === next ? 'match' : 'mismatch';
   // Gate the CTA on a clean form the same way the sibling sections do, so the

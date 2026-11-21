@@ -12,11 +12,12 @@ import {
   visibleNotificationRows,
 } from '@festie/shared/utils';
 import { useNotificationTopics } from '@festie/shared/hooks';
+import { NOTIFICATION_TOPIC_COPY } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { cn } from '../../lib/utils';
 import Button from '../ui/Button';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
 import Switch from '../ui/Switch';
 import { Card } from '../ui/Card';
 
@@ -48,11 +49,11 @@ const windowLabel = (start: string, end: string) => `${formatTime(start)}–${fo
 
 function SkeletonRows({ count }: { count: number }) {
   return (
-    <div className="space-y-3 py-2">
+    <SkeletonGroup className="space-y-3 py-2">
       {Array.from({ length: count }, (_, i) => (
         <Skeleton key={i} />
       ))}
-    </div>
+    </SkeletonGroup>
   );
 }
 
@@ -68,8 +69,8 @@ function FestivalTopicsSubsection() {
   if (!festival) return null;
 
   const rows = [
-    { topic: 'crew', label: 'Crew picks' },
-    { topic: 'schedule', label: 'Schedule changes' },
+    { topic: 'crew', label: NOTIFICATION_TOPIC_COPY.topicLabels.crew },
+    { topic: 'schedule', label: NOTIFICATION_TOPIC_COPY.topicLabels.schedule },
   ] as const;
 
   return (
@@ -248,7 +249,7 @@ function PushSubsection() {
           <p className="text-sm text-text-muted" role="alert">
             Couldn't check push notifications. Check your connection, then try again.
           </p>
-          <Button variant="outline" fullWidth onClick={push.retry} className="min-h-[44px]">
+          <Button variant="secondary" fullWidth onClick={push.retry} className="min-h-[44px]">
             Try again
           </Button>
         </>
@@ -273,7 +274,7 @@ function PushSubsection() {
             SOS alerts from your crew always come through, even when other alerts are muted.
           </p>
           {push.subscribed ? (
-            <Button variant="outline" fullWidth isLoading={pushBusy} onClick={handleDisablePush} className="min-h-[44px]">
+            <Button variant="secondary" fullWidth isLoading={pushBusy} onClick={handleDisablePush} className="min-h-[44px]">
               Disable Notifications
             </Button>
           ) : (
@@ -349,8 +350,8 @@ function PrefsSubsection() {
               {row.key === 'setReminders' ? (
                 <div className="flex items-center justify-between py-2">
                   <label htmlFor="must-see-reminder" className="min-w-0">
-                    <div className="text-sm text-text-primary">Must-see reminders</div>
-                    <div className="text-xs text-text-muted">Remind me before every set I mark Must see.</div>
+                    <div className="text-sm text-text-primary">{NOTIFICATION_TOPIC_COPY.mustSeeTitle}</div>
+                    <div className="text-xs text-text-muted">{NOTIFICATION_TOPIC_COPY.mustSeeHint}</div>
                   </label>
                   <select
                     id="must-see-reminder"

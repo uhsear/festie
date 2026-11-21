@@ -1,51 +1,14 @@
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@festie/shared/services';
+import { fetchLifetime } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
+import type { LifetimeResponse } from '@festie/shared/types';
 import { festivalPhase, formatDateSpan } from '@festie/shared/utils';
 import { Link, useNavigate } from '@tanstack/react-router';
 import EmptyState from '../ui/EmptyState';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
+import { loadErrorMessage } from '../crew/loadErrorMessage';
 import { History, Trophy, CalendarDays, Clock, Music } from 'lucide-react';
 import { RATING_META } from '../../lib/ratingIcon';
-
-// Server shape from GET /ratings/lifetime:
-//   { totals: { totalRated, avgRating, festivalsAttended, stagesVisited,
-//               daysAttended, totalHours },
-//     byFestival: [{ festivalId, festivalName, startDate, endDate, totalRated,
-//                    avgRating, stagesVisited, daysAttended, totalHours }],
-//     topArtists: [{ artist, timesRated, bestRating, avgRating }],
-//     seenMost?: [{ artist, festivals }] }   // absent on an older server
-interface LifetimeTotals {
-  totalRated: number;
-  avgRating: number | null;
-  festivalsAttended: number;
-  stagesVisited: number;
-  daysAttended: number;
-  totalHours: number | null;
-}
-interface FestivalRow {
-  festivalId: string;
-  festivalName: string | null;
-  startDate: string | null;
-  endDate: string | null;
-  totalRated: number;
-  avgRating: number | null;
-  stagesVisited: number;
-  daysAttended: number;
-  totalHours: number | null;
-}
-interface TopArtist {
-  artist: string;
-  timesRated: number;
-  bestRating: number;
-  avgRating: number | null;
-}
-interface LifetimeResponse {
-  totals: LifetimeTotals;
-  byFestival: FestivalRow[];
-  topArtists: TopArtist[];
-  seenMost?: Array<{ artist: string; festivals: number }>;
-}
 
 /**
  * History surface for the account screen (M3 — cross-festival year-over-year
@@ -60,18 +23,18 @@ export default function HistorySection() {
   const days = useFestivalStore((s) => s.days);
   const phase = festivalPhase(currentFestival, days);
 
-  const { data, isLoading, isError, refetch } = useQuery<LifetimeResponse>({
+  const { data, isLoading, isError, error, refetch } = useQuery<LifetimeResponse>({
     queryKey: ['ratings-lifetime', user?.id],
-    queryFn: async () => api.get<LifetimeResponse>('/ratings/lifetime'),
+    queryFn: fetchLifetime,
     enabled: !!user,
   });
 
   if (isLoading) {
     return (
-      <div className="space-y-3">
+      <SkeletonGroup className="space-y-3">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
-      </div>
+      </SkeletonGroup>
     );
   }
 
@@ -80,7 +43,7 @@ export default function HistorySection() {
       <EmptyState
         icon={<History className="w-10 h-10" aria-hidden="true" />}
         title="Couldn't load your history"
-        description="Something went wrong loading your festival history."
+        description={loadErrorMessage(error, 'Something went wrong loading your festival history.')}
         cta={{ label: 'Retry', onClick: () => refetch() }}
       />
     );

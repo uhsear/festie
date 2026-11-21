@@ -5,8 +5,9 @@ import { dropLivePosition } from '../lib/live-location-cache.js';
 import { evictCrewRoomSockets } from '../lib/presence.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
+import type { RouteDeps } from '../lib/types';
 
-export default function createCrewMemberRoutes(deps: any) {
+export default function createCrewMemberRoutes(deps: RouteDeps) {
   const {
     log,
     pool,
@@ -358,7 +359,7 @@ export default function createCrewMemberRoutes(deps: any) {
 
         // Check member cap (fast pre-check; addMember enforces it atomically below).
         const memberCount = await stores.crews.getMemberCount(crewId);
-        if (memberCount >= crew.maxMembers) {
+        if (memberCount >= (crew.maxMembers ?? Infinity)) {
           return sendError(res, 400, 'Crew is full', ErrorCodes.MAX_LIMIT_REACHED);
         }
 

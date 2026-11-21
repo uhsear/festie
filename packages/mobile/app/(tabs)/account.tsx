@@ -291,7 +291,7 @@ export default function AccountScreen() {
           <LinkRow
             icon={CONCEPT_IONICON.wrap}
             title={COPY.wrap.name}
-            hint="Your stats & top sets after the festival"
+            hint={COPY.wrap.hint}
             onPress={() => go('/wrap')}
             accessibilityLabel="Open your Festival Wrap"
           />

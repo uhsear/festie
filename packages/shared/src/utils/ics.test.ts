@@ -98,3 +98,21 @@ describe('describeIcsExport', () => {
     expect(describeIcsExport(r(2, 0, 3))).toContain('3 sets were left out because their days have no date.');
   });
 });
+
+describe('buildPicksIcsExport time zone', () => {
+  const festival = (timeZone?: string | null) => ({ id: 'f1', name: 'Fest', timeZone });
+  const sets = [mk({ id: 'a', date: '2026-06-05', startTime: '20:00', endTime: '21:30' })];
+  const picks = { a: 'must' as const };
+
+  it('exports the absolute UTC instant of a New York set', () => {
+    const { ics } = buildPicksIcsExport({ festival: festival('America/New_York'), sets, stages, picks });
+    expect(ics).toContain('DTSTART:20260606T000000Z');
+    expect(ics).toContain('DTEND:20260606T013000Z');
+  });
+
+  it('keeps floating times when the zone is missing or unknown', () => {
+    for (const tz of [undefined, null, 'Not/AZone']) {
+      expect(buildPicksIcsExport({ festival: festival(tz), sets, stages, picks }).ics).toContain('DTSTART:20260605T200000\r\n');
+    }
+  });
+});

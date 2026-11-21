@@ -24,10 +24,20 @@ const members = [
   { userId: 'sam', username: 'sam', name: 'Sam' },
 ];
 
-function setup(items: unknown[], isOwner = false) {
+const offlineError = () =>
+  Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true });
+const serverError = () => Object.assign(new Error('upstream exploded'), { name: 'ApiClientError', status: 503 });
+const OFFLINE_COPY = "You're offline. Check your connection and try again.";
+const SERVER_COPY = 'Something went wrong on our side. Try again in a minute.';
+
+function setup(
+  items: unknown[],
+  isOwner = false,
+  loadPacking: () => Promise<void> = vi.fn().mockResolvedValue(undefined),
+) {
   Object.assign(state, {
     packingItems: items,
-    loadPacking: vi.fn().mockResolvedValue(undefined),
+    loadPacking,
     createPackingItem: vi.fn(),
     updatePackingItem,
     deletePackingItem: vi.fn(),
@@ -52,6 +62,23 @@ describe('PackingTab', () => {
     vi.clearAllMocks();
     addPackingItems.mockResolvedValue('sent');
     updatePackingItem.mockResolvedValue(undefined);
+  });
+
+  it('shows one loading status while the list loads', () => {
+    setup([], false, () => new Promise(() => {}));
+    expect(screen.getAllByRole('status')).toHaveLength(1);
+  });
+
+  it('says the device is offline when the load fails offline', async () => {
+    setup([], false, vi.fn().mockRejectedValue(offlineError()));
+    expect(await screen.findByText("Couldn't load packing list")).toBeTruthy();
+    expect(screen.getByText(OFFLINE_COPY)).toBeTruthy();
+  });
+
+  it('says the server failed when the load fails with a 5xx', async () => {
+    setup([], false, vi.fn().mockRejectedValue(serverError()));
+    expect(await screen.findByText(SERVER_COPY)).toBeTruthy();
+    expect(screen.queryByText(/upstream exploded/)).toBeNull();
   });
 
   it('open item offers a claim button', async () => {

@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import type { CrewSettlement } from '@festie/shared/types';
 import SettleUpCard from './SettleUpCard';
 
-const owe: CrewSettlement = { fromUserId: 'me', fromName: 'Me', toUserId: 'u2', toName: 'Kai', amountCents: 500, amount: 5, payeeHandles: {} };
-const owed: CrewSettlement = { fromUserId: 'u3', fromName: 'Mira', toUserId: 'me', toName: 'Me', amountCents: 300, amount: 3, payeeHandles: {} };
+const owe: CrewSettlement = { fromUserId: 'me', fromName: 'Me', toUserId: 'u2', toName: 'Kai', amountCents: 500, amount: 5, payeeHandles: { venmo: null, cashapp: null, paypal: null } };
+const owed: CrewSettlement = { fromUserId: 'u3', fromName: 'Mira', toUserId: 'me', toName: 'Me', amountCents: 300, amount: 3, payeeHandles: { venmo: null, cashapp: null, paypal: null } };
 
 const setup = (over: Partial<Parameters<typeof SettleUpCard>[0]> = {}) => {
   const props = {

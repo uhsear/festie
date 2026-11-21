@@ -1,8 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import type { FestivalSet } from '@festie/shared/types';
+import type { FestivalSet, Priority } from '@festie/shared/types';
+import type { SetStatusResult } from '@festie/shared/utils';
 
 // Mock dependencies
 const clearPickMock = vi.fn();
@@ -10,9 +11,9 @@ const moveMock = vi.hoisted(() => ({ value: null as null | { chip: string; line:
 const pickSyncMock = { sync: undefined as { state: string; priority: string | null } | undefined, retry: vi.fn(() => Promise.resolve()) };
 vi.mock('@festie/shared/hooks', () => {
   const usePicks = vi.fn(() => ({
-    getMyPick: vi.fn(() => null),
+    getMyPick: vi.fn((_id: string): Priority | null => null),
     savePick: vi.fn(),
-    getMyNote: vi.fn(() => ''),
+    getMyNote: vi.fn((_id: string) => ''),
   }));
   return {
     usePickSync: () => pickSyncMock,
@@ -74,6 +75,17 @@ import { api } from '@festie/shared/services/api';
 import { usePicks } from '@festie/shared/hooks';
 import { ensureWhiteContrast } from '../ui/StageBadge';
 
+// useSetStatus is overloaded; pin the single-set overload so mockReturnValue takes one result.
+const setStatusMock = vi.mocked(useSetStatus) as unknown as Mock<(set: FestivalSet) => SetStatusResult>;
+
+// The component reads only these three members of usePicks.
+const mockPicks = (pick: Priority | null, note = '') =>
+  vi.mocked(usePicks).mockReturnValue({
+    getMyPick: vi.fn(() => pick),
+    savePick: vi.fn(),
+    getMyNote: vi.fn(() => note),
+  } as unknown as ReturnType<typeof usePicks>);
+
 function makeSet(overrides: Partial<FestivalSet> = {}): FestivalSet {
   return makeFestivalSet({ artist: 'Daft Punk', ...overrides });
 }
@@ -92,17 +104,13 @@ describe('SetCard', () => {
     pickSyncMock.sync = undefined;
     festivalStoreState.allProfiles = [];
     crewStoreState.crewMembers = [];
-    vi.mocked(useSetStatus).mockReturnValue({
+    setStatusMock.mockReturnValue({
       status: 'later',
       label: '2:00 PM',
       minutesUntil: 300,
       progress: 0,
     });
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn(() => null),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => ''),
-    });
+    mockPicks(null);
   });
 
   it('shows the moved chip and reads the old slot in the accessible name', () => {
@@ -244,11 +252,7 @@ describe('SetCard', () => {
     });
 
     it('marks the active priority with aria-pressed=true', () => {
-      vi.mocked(usePicks).mockReturnValue({
-        getMyPick: vi.fn(() => 'must'),
-        savePick: vi.fn(),
-        getMyNote: vi.fn(() => ''),
-      });
+      mockPicks('must');
       render(<SetCard {...defaultProps} />);
       expect(screen.getByRole('button', { name: 'Must See: Daft Punk' })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByRole('button', { name: 'Want to See: Daft Punk' })).toHaveAttribute('aria-pressed', 'false');
@@ -256,11 +260,7 @@ describe('SetCard', () => {
     });
 
     it('clears through usePickClear when the active priority is clicked', async () => {
-      vi.mocked(usePicks).mockReturnValue({
-        getMyPick: vi.fn(() => 'must'),
-        savePick: vi.fn(),
-        getMyNote: vi.fn(() => ''),
-      });
+      mockPicks('must');
       clearPickMock.mockClear();
       render(<SetCard {...defaultProps} />);
       await userEvent.click(screen.getByLabelText('Must See: Daft Punk'));
@@ -270,11 +270,7 @@ describe('SetCard', () => {
 
   describe('priority class', () => {
     it('adds priority-must class when pick is must', () => {
-      vi.mocked(usePicks).mockReturnValue({
-        getMyPick: vi.fn(() => 'must'),
-        savePick: vi.fn(),
-        getMyNote: vi.fn(() => ''),
-      });
+      mockPicks('must');
       render(<SetCard {...defaultProps} />);
       expect(screen.getByTestId('set-card').className).toContain('priority-must');
     });
@@ -433,7 +429,7 @@ describe('SetCard', () => {
 
   describe('live badge', () => {
     it('shows LiveBadge when status is live', () => {
-      vi.mocked(useSetStatus).mockReturnValue({
+      setStatusMock.mockReturnValue({
         status: 'live',
         label: 'LIVE',
         minutesUntil: -10,
@@ -444,7 +440,7 @@ describe('SetCard', () => {
     });
 
     it('shows LiveBadge when status is soon', () => {
-      vi.mocked(useSetStatus).mockReturnValue({
+      setStatusMock.mockReturnValue({
         status: 'soon',
         label: 'In 15m',
         minutesUntil: 15,
@@ -455,7 +451,7 @@ describe('SetCard', () => {
     });
 
     it('does not show LiveBadge when status is later', () => {
-      vi.mocked(useSetStatus).mockReturnValue({
+      setStatusMock.mockReturnValue({
         status: 'later',
         label: '6:00 PM',
         minutesUntil: 300,
@@ -467,11 +463,7 @@ describe('SetCard', () => {
   });
 
   it('renders note indicator when user has a note', () => {
-    vi.mocked(usePicks).mockReturnValue({
-      getMyPick: vi.fn(() => null),
-      savePick: vi.fn(),
-      getMyNote: vi.fn(() => 'My note'),
-    });
+    mockPicks(null, 'My note');
     render(<SetCard {...defaultProps} />);
     // role=img: aria-label is prohibited on a bare span (axe aria-prohibited-attr).
     expect(screen.getByRole('img', { name: 'Has note' })).toBeInTheDocument();
@@ -511,7 +503,7 @@ describe('SetCard', () => {
       festivalStoreState.currentFestival = { id: 'fest-1', startDate: iso(start), endDate: iso(end) };
     };
     const renderPast = () => {
-      vi.mocked(useSetStatus).mockReturnValue({ status: 'past', label: 'Ended', minutesUntil: -60, progress: 0 });
+      setStatusMock.mockReturnValue({ status: 'past', label: 'Ended', minutesUntil: -60, progress: 0 });
       render(<SetCard {...defaultProps} />);
       return {
         artist: document.querySelector('.card-artist') as HTMLElement,
@@ -540,11 +532,7 @@ describe('SetCard', () => {
 
   describe('pick save state', () => {
     const mustPicked = () =>
-      vi.mocked(usePicks).mockReturnValue({
-        getMyPick: vi.fn(() => 'must'),
-        savePick: vi.fn(),
-        getMyNote: vi.fn(() => ''),
-      });
+      mockPicks('must');
 
     it.each(['saving', 'queued'])('shows the clock while %s', (state) => {
       mustPicked();

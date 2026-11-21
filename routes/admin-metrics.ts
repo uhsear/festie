@@ -13,8 +13,9 @@
 // object. They are optional; if absent, the client-perf block is skipped.
 
 import { Router } from 'express';
+import type { RouteDeps } from '../lib/types';
 
-export default function createAdminMetricsRoutes(deps: any): { router: Router } {
+export default function createAdminMetricsRoutes(deps: RouteDeps): { router: Router } {
   const {
     adminAuth, setNoStore, log,
     getUsers: _getUsers, getFestivals, getProfiles, io, stores, state, pool,

@@ -33,8 +33,8 @@ const mockCrew: Crew = {
 };
 
 const mockMembers: CrewMember[] = [
-  { id: 'cm-1', userId: 'user-1', name: 'Alice', role: 'owner' },
-  { id: 'cm-2', userId: 'user-2', name: 'Bob', role: 'member' },
+  { userId: 'user-1', name: 'Alice', role: 'owner' },
+  { userId: 'user-2', name: 'Bob', role: 'member' },
 ];
 
 function makePolls(n: number): CrewPoll[] {

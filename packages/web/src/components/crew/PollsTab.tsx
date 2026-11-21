@@ -28,7 +28,8 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import EmptyState from '../ui/EmptyState';
 import StaleNote from './StaleNote';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
+import { loadErrorMessage } from './loadErrorMessage';
 import IconButton from '../ui/IconButton';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import PollItem from './PollItem';
@@ -79,6 +80,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
 
   const {
     data: polls = [],
+    error,
     isLoading,
     isError,
     refetch,
@@ -221,10 +223,10 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
 
   if (isLoading)
     return (
-      <div className="px-4 space-y-2">
+      <SkeletonGroup className="px-4 space-y-2">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
-      </div>
+      </SkeletonGroup>
     );
   if (isError && polls.length === 0)
     return (
@@ -232,7 +234,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
         <EmptyState
           icon={<BarChart3 className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load polls"
-          description="Something went wrong loading polls."
+          description={loadErrorMessage(error, 'Something went wrong loading polls.')}
           cta={{ label: 'Retry', onClick: () => refetch() }}
         />
       </div>

@@ -145,7 +145,7 @@ export default function Header() {
                 would silently no-op. */}
             {installAvailable && (
             <Button
-              variant="util"
+              variant="utility"
               type="button"
               aria-label="Install App for Festie"
               data-testid="install-app-btn"

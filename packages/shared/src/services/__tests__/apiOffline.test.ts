@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // assert what gets enqueued without touching storage. Hoisted because api.ts
 // imports it statically.
 const { enqueueMutation, drainQueue } = vi.hoisted(() => ({
-  enqueueMutation: vi.fn(async () => {}),
+  enqueueMutation: vi.fn(async (_mutation: { clientId: string; idempotencyKey?: string; [key: string]: unknown }) => {}),
   drainQueue: vi.fn(async () => {}),
 }));
 vi.mock('../offlineQueue', () => ({ enqueueMutation, drainQueue }));
@@ -203,7 +203,7 @@ describe('api offline interception', () => {
       await api.post('/crews/c1/meeting-points', { label: 'Main gate' });
       const sentKey = (fetchSpy.mock.calls[0]![1] as { headers: Record<string, string> }).headers['Idempotency-Key'];
       expect(sentKey).toBeTruthy();
-      expect(vi.mocked(enqueueMutation).mock.calls[0]![0].idempotencyKey).toBe(sentKey);
+      expect(vi.mocked(enqueueMutation).mock.calls[0]![0]!.idempotencyKey).toBe(sentKey);
     });
 
     it('still throws the network error for an INELIGIBLE mutation (not lost-silently elsewhere)', async () => {
@@ -240,7 +240,7 @@ describe('api offline interception', () => {
       fetchSpy.mockResolvedValueOnce(httpError(530));
       await api.post('/crews/c1/meeting-points', { label: 'Main gate' });
       const sentKey = (fetchSpy.mock.calls[0]![1] as { headers: Record<string, string> }).headers['Idempotency-Key'];
-      expect(vi.mocked(enqueueMutation).mock.calls[0]![0].idempotencyKey).toBe(sentKey);
+      expect(vi.mocked(enqueueMutation).mock.calls[0]![0]!.idempotencyKey).toBe(sentKey);
     });
 
     it('does NOT queue a POST on 502: the origin may have committed it already', async () => {

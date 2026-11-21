@@ -61,7 +61,7 @@ interface ErrorPresentation {
   showBack: boolean;
 }
 
-function getPresentation(kind: ErrorKind, error: Error): ErrorPresentation {
+function presentationFor(kind: ErrorKind, error: Error): ErrorPresentation {
   const errorId = isApiError(error) && error.code ? error.code : undefined;
 
   switch (kind) {
@@ -99,6 +99,15 @@ function getPresentation(kind: ErrorKind, error: Error): ErrorPresentation {
   }
 }
 
+/**
+ * Classify `error` and return the copy and icon to show for it. Never includes the raw
+ * `error.message`, so a boundary can render it without leaking internals.
+ */
+export function describeError(error: Error): ErrorPresentation & { kind: ErrorKind } {
+  const kind = classifyError(error);
+  return { kind, ...presentationFor(kind, error) };
+}
+
 // ---------------------------------------------------------------------------
 // RouteErrorBoundary — functional component for TanStack Router errorComponent
 // ---------------------------------------------------------------------------
@@ -119,8 +128,7 @@ export interface RouteErrorBoundaryProps {
  */
 export default function RouteErrorBoundary({ error, reset, contextMessage }: RouteErrorBoundaryProps) {
   const navigate = useNavigate();
-  const kind = classifyError(error);
-  const { icon, heading, description, showBack } = getPresentation(kind, error);
+  const { kind, icon, heading, description, showBack } = describeError(error);
 
   useEffect(() => {
     console.error('[route error]', error);

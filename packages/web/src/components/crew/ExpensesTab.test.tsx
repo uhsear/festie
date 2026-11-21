@@ -84,6 +84,12 @@ describe('ExpensesTab', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
+  it('says the device is offline when the load fails on a network error', async () => {
+    vi.spyOn(api, 'get').mockRejectedValue(Object.assign(new Error('Failed to fetch'), { name: 'ApiClientError', status: 0, isNetworkError: true }));
+    setup();
+    expect(await screen.findByText("You're offline. Check your connection and try again.")).toBeInTheDocument();
+  });
+
   it('shows total spent and who I owe', async () => {
     mockApi([expense({})]);
     setup();

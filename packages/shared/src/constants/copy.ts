@@ -15,6 +15,7 @@ export const COPY = {
   },
   wrap: {
     tab: 'Wrap', name: 'Festival Wrap', crewName: 'Crew Wrap', open: 'See your Festival Wrap',
+    hint: 'Your stats & top sets after the festival',
     ready: 'Festival Wrap ready', readyHint: 'Your Festival Wrap is ready to view', icon: 'wrap',
   },
   find: { name: 'Find', action: 'Find your crew', icon: 'find' },

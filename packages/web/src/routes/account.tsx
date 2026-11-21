@@ -104,8 +104,8 @@ function AccountPageInner() {
         >
           <Sparkles className="h-5 w-5 text-accent-aqua" aria-hidden="true" />
           <span className="flex flex-col">
-            <span className="text-sm font-semibold text-text-primary">Festival Wrap</span>
-            <span className="text-xs text-text-secondary">Your stats &amp; top sets after the festival</span>
+            <span className="text-sm font-semibold text-text-primary">{COPY.wrap.name}</span>
+            <span className="text-xs text-text-secondary">{COPY.wrap.hint}</span>
           </span>
         </Link>
         <HistorySection />

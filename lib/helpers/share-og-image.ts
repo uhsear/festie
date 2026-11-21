@@ -9,8 +9,8 @@
 import { escapeHtml } from './sanitize.js';
 import { festivalStartMinutes } from '../time-zone.js';
 
-export const OG_WIDTH = 1200;
-export const OG_HEIGHT = 630;
+const OG_WIDTH = 1200;
+const OG_HEIGHT = 630;
 
 /** 24-hour `HH:MM`, the stored set time format. */
 export const CLOCK_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;

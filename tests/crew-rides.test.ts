@@ -111,7 +111,7 @@ function makeRidesDeps(overrides: any = {}) {
 async function buildRidesApp(overrides: any = {}) {
   const deps = makeRidesDeps(overrides);
   const { default: createCrewRidesRoutes } = await import('../routes/crew-rides.js');
-  const router = createCrewRidesRoutes(deps);
+  const router = createCrewRidesRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/', router);

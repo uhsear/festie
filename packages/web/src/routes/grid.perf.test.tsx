@@ -68,7 +68,7 @@ vi.mock('@festie/shared/hooks', () => {
         selectedDay: storeState.selectedDay as number,
         days: storeState.days as FestivalDay[],
       });
-      return { count: groups.length, groups, marks: buildClashMarks(groups, (s) => s.artist), picked: 0 };
+      return { count: groups.length, groups, marks: buildClashMarks(groups, (s) => s.artist ?? ''), picked: 0 };
     },
     useViewAs: () => ({ target: null, canView: () => false, start: vi.fn(), clear: vi.fn() }),
   };

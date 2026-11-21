@@ -19,10 +19,15 @@ import { useHaptics } from '../../hooks/useHaptics';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import EmptyState from '../ui/EmptyState';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
 import IconButton from '../ui/IconButton';
 import SyncMarker from './SyncMarker';
+import StaleNote from './StaleNote';
 import { useUndoableRemove } from './useUndoableRemove';
+import { loadErrorMessage } from './loadErrorMessage';
 import { Car, MapPin, Pencil, Plus, Trash2, Users, X } from 'lucide-react';
+
+const RIDES_LOAD_FAILED = 'Something went wrong loading rides.';
 
 interface Props {
   crewId: string;
@@ -81,9 +86,31 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
   );
   const visibleOffers = offers.filter((o) => !hiddenIds.has(o.id));
 
+  // The store's error is shared across crew tabs, so the load state lives here (as in PackingTab).
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  // Bumped by Retry so the load effect (and its cancelled flag) handles the retry too.
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
-    if (crewId) loadRides(crewId).catch(() => {});
-  }, [crewId, loadRides]);
+    if (!crewId) {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    loadRides(crewId)
+      .catch((err) => {
+        if (!cancelled) setLoadError(loadErrorMessage(err, RIDES_LOAD_FAILED));
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [crewId, loadRides, reloadKey]);
 
   const myName = members.find((m) => m.userId === currentUserId);
   const myDisplayName = myName?.name || myName?.username || '';
@@ -209,7 +236,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
               <Button
                 key={value}
                 type="button"
-                variant={direction === value ? 'primary' : 'outline'}
+                variant={direction === value ? 'primary' : 'secondary'}
                 aria-pressed={direction === value}
                 onClick={() => setDirection(value)}
                 className="flex-1 min-h-11"
@@ -225,7 +252,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
                   <Button
                     key={o.date}
                     type="button"
-                    variant={day === o.date ? 'primary' : 'outline'}
+                    variant={day === o.date ? 'primary' : 'secondary'}
                     aria-pressed={day === o.date}
                     onClick={() => setDay(o.date)}
                     className="min-h-11"
@@ -280,7 +307,23 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
         </form>
       )}
 
-      {visibleOffers.length === 0 ? (
+      {/* Rides already in the store (cached or queued offline) stay visible while a load runs or fails. */}
+      {visibleOffers.length === 0 && loading ? (
+        <SkeletonGroup className="space-y-2">
+          <Skeleton variant="card" />
+          <Skeleton variant="card" />
+        </SkeletonGroup>
+      ) : visibleOffers.length === 0 && loadError ? (
+        <EmptyState
+          icon={<Car className="w-12 h-12" aria-hidden="true" />}
+          title="Couldn't load rides"
+          description={loadError}
+          cta={{
+            label: 'Retry',
+            onClick: () => setReloadKey((k) => k + 1),
+          }}
+        />
+      ) : visibleOffers.length === 0 ? (
         <EmptyState
           illustration="emptyList"
           title="No rides yet"
@@ -288,6 +331,8 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
           cta={{ label: 'Offer a ride', onClick: openCreate }}
         />
       ) : (
+        <>
+        <StaleNote show={!!loadError} onRetry={() => setReloadKey((k) => k + 1)} />
         <ul className="space-y-2">
           {visibleOffers.map((offer) => {
             // A queued create has no server id yet, so it cannot be removed or edited.
@@ -330,7 +375,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
                   {offer.note ? <p className="text-xs text-text-muted mt-0.5 break-words">{offer.note}</p> : null}
                   {seatAction === 'take' || seatAction === 'leave' ? (
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       onClick={() => changeSeat(offer.id, seatAction)}
                       disabled={seatBusyId === offer.id}
                       className="mt-1.5 min-h-11"
@@ -339,7 +384,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
                     </Button>
                   ) : null}
                   {seatAction === 'full' ? (
-                    <Button variant="outline" disabled className="mt-1.5 min-h-11">
+                    <Button variant="secondary" disabled className="mt-1.5 min-h-11">
                       Full
                     </Button>
                   ) : null}
@@ -364,6 +409,7 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
             );
           })}
         </ul>
+        </>
       )}
     </div>
   );

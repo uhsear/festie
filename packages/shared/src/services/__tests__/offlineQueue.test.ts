@@ -5,7 +5,8 @@ vi.mock('../api', () => {
   class ApiClientError extends Error {
     status: number;
     isNetworkError?: boolean;
-    constructor(message: string, status: number, isNetworkError?: boolean) {
+    // Mirrors the real constructor's argument order so the real type checks the call sites.
+    constructor(message: string, status: number, _code?: string, _retryAfter?: number | string | null, isNetworkError?: boolean) {
       super(message);
       this.name = 'ApiClientError';
       this.status = status;
@@ -242,7 +243,7 @@ describe('offlineQueue', () => {
       vi.mocked(api.put).mockImplementation(async () => {
         // Simulate dropping signal: the very first replay fails offline.
         useUIStore.setState({ offlineMode: true });
-        throw new ApiClientError('Network request failed', 0, true);
+        throw new ApiClientError('Network request failed', 0, undefined, undefined, true);
       });
 
       await drainQueue();
@@ -351,7 +352,7 @@ describe('offlineQueue', () => {
 
     it('network timeouts never consume MAX_RETRIES and never surface as failed', async () => {
       seed([makeMutation({ clientId: 'a' })]);
-      vi.mocked(api.put).mockRejectedValue(new ApiClientError('Request timed out', 0, true));
+      vi.mocked(api.put).mockRejectedValue(new ApiClientError('Request timed out', 0, undefined, undefined, true));
 
       for (let i = 0; i < MAX_RETRIES + 2; i++) await drainQueue();
 

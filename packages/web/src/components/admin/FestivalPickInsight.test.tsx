@@ -58,7 +58,7 @@ describe('FestivalPickInsight', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Export picks per set' }));
     await waitFor(() => expect(create).toHaveBeenCalled());
     expect(fileName).toMatch(/^festie-picks-f1-\d{4}-\d{2}-\d{2}\.csv$/);
-    expect(await create.mock.calls[0][0].text()).toBe(picksPerSetCsv(insight));
+    expect(await create.mock.calls[0]![0].text()).toBe(picksPerSetCsv(insight));
     expect(revoke).toHaveBeenCalledWith('blob:x');
     click.mockRestore();
   });

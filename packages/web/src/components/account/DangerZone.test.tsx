@@ -137,6 +137,7 @@ describe('DangerZone', () => {
     await user.click(screen.getByText('Confirm Delete'));
 
     await waitFor(() => expect(mockDeleteAccount).toHaveBeenCalledTimes(2));
+    expect(mockDeleteAccount).toHaveBeenNthCalledWith(1, undefined, []);
     expect(mockAsk).toHaveBeenCalledTimes(1);
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
   });
@@ -190,7 +191,7 @@ describe('DangerZone', () => {
 
     const field = screen.getByPlaceholderText('Password');
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
-    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0])).toHaveTextContent(
+    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0]!)).toHaveTextContent(
       'That password is not correct.',
     );
     expect(mockToast).not.toHaveBeenCalledWith(expect.anything(), 'error');

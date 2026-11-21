@@ -39,11 +39,27 @@ describe('offlineReminderAt', () => {
     expect(new Date(at!).getDate()).toBe(9);
   });
 
-  it('skips a reminder that falls in quiet hours', () => {
+  it('moves a reminder that falls in quiet hours to the first minute after them', () => {
+    const day = [{ date: '2026-11-02' }];
+    const eve = Date.UTC(2026, 10, 1, 23, 0); // 18:00 New York, the day before
     const quiet = { dndStart: '17:00', dndEnd: '19:00', dndTimeZone: NY };
-    expect(offlineReminderAt([{ date: '2026-11-02' }], { timeZone: NY, packReady: false, quietHours: quiet })).toBeNull();
+    const sameDay = offlineReminderAt(day, { timeZone: NY, packReady: false, quietHours: quiet });
+    expect(hourIn(sameDay!, NY)).toBe('19:01');
+    expect(sameDay! - eve).toBe(61 * 60_000);
+    const late = { dndStart: '17:00', dndEnd: '23:30', dndTimeZone: NY };
+    expect(hourIn(offlineReminderAt(day, { timeZone: NY, packReady: false, quietHours: late })!, NY)).toBe('23:31');
+  });
+
+  it('keeps the 18:00 reminder when it is outside quiet hours', () => {
     const nights = { dndStart: '23:00', dndEnd: '08:00', dndTimeZone: NY };
-    expect(offlineReminderAt([{ date: '2026-11-02' }], { timeZone: NY, packReady: false, quietHours: nights })).not.toBeNull();
+    expect(offlineReminderAt([{ date: '2026-11-02' }], { timeZone: NY, packReady: false, quietHours: nights })).toBe(
+      Date.UTC(2026, 10, 1, 23, 0),
+    );
+  });
+
+  it('drops a reminder whose quiet hours run past the start of day 1', () => {
+    const wide = { dndStart: '17:00', dndEnd: '08:00', dndTimeZone: NY };
+    expect(offlineReminderAt([{ date: '2026-11-02' }], { timeZone: NY, packReady: false, quietHours: wide })).toBeNull();
   });
 });
 

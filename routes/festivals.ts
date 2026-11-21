@@ -205,7 +205,7 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
       for (const crew of crews) {
         const crewId = crew?.id;
         if (!crewId) continue;
-        io.to(`crew:${crewId}`).emit('crew:deleted', { crewId, festivalId });
+        emitter.toCrew(crewId, 'crew:deleted', { crewId, festivalId });
         await evictCrewRoomSockets(io, crewId);
       }
     } catch (error) {

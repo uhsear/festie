@@ -75,6 +75,14 @@ describe('PasswordSection', () => {
     expect(screen.getByText('Update Password').closest('button')).toBeDisabled();
   });
 
+  it('shows the strength meter once a new password is typed', async () => {
+    const user = userEvent.setup();
+    render(<PasswordSection />);
+    expect(screen.queryByRole('status', { name: /Password strength/ })).not.toBeInTheDocument();
+    await user.type(screen.getByPlaceholderText(/New password/), 'Abcdefgh1!');
+    expect(screen.getByRole('status', { name: 'Password strength: Strong' })).toBeInTheDocument();
+  });
+
   it('shows character count hint when new password is too short', async () => {
     const user = userEvent.setup();
     render(<PasswordSection />);
@@ -266,7 +274,7 @@ describe('PasswordSection', () => {
 
     const field = screen.getByPlaceholderText('Current password');
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
-    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0])).toHaveTextContent(
+    expect(document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0]!)).toHaveTextContent(
       'Your current password is not correct.',
     );
     expect(mockToast).not.toHaveBeenCalledWith(expect.anything(), 'error');

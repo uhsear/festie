@@ -93,11 +93,11 @@ vi.mock('@festie/shared/utils', async (importOriginal) => ({
   siteplanImageSource: () => null,
   amenityGlyph: () => ({ glyph: '?', color: '#888888' }),
   pinsCentroid: (pins: Array<{ latitude: number; longitude: number }>) =>
-    pins.length ? { latitude: pins[0].latitude, longitude: pins[0].longitude } : null,
+    pins.length ? { latitude: pins[0]!.latitude, longitude: pins[0]!.longitude } : null,
   // Mirror the real precedence enough for these tests: with no map-config the
   // camera centres on the first pin (centroid stand-in) and never fits bounds.
   pickFestivalCamera: (_festival: unknown, pins: Array<{ latitude: number; longitude: number }>) => ({
-    center: pins.length ? { latitude: pins[0].latitude, longitude: pins[0].longitude } : null,
+    center: pins.length ? { latitude: pins[0]!.latitude, longitude: pins[0]!.longitude } : null,
     bounds: null,
   }),
   formatStaleness: () => 'as of just now',
@@ -256,7 +256,7 @@ describe('CrewMap', () => {
   describe('map load errors', () => {
     const PIN = { id: 'mp1', kind: 'meeting-point', label: 'Main Gate', sublabel: '', latitude: 41.88, longitude: -87.62 };
     function handler(i: number, name: string): (e?: unknown) => void {
-      const call = mapInstances[i].on.mock.calls.find((c) => c[0] === name);
+      const call = mapInstances[i]!.on.mock.calls.find((c) => c[0] === name);
       return call![1] as (e?: unknown) => void;
     }
 
@@ -407,7 +407,7 @@ async function renderReadyMap(props: Partial<React.ComponentProps<typeof CrewMap
   ]);
   const view = render(<CrewMap meetingPoints={[]} festival={FESTIVAL} {...props} />);
   await waitFor(() => expect(mapInstances).toHaveLength(1));
-  const load = mapInstances[0].on.mock.calls.find((c) => c[0] === 'load')![1] as () => void;
+  const load = mapInstances[0]!.on.mock.calls.find((c) => c[0] === 'load')![1] as () => void;
   act(() => load());
   return view;
 }
@@ -454,17 +454,17 @@ describe('CrewMap place card and Nearest', () => {
     expect(markerElements.some((el) => el.classList.contains('festie-self-marker'))).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
     expect(watchPosition).toHaveBeenCalledTimes(1);
-    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 20 } }));
+    act(() => watchPosition.mock.calls[0]![0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 20 } }));
     const dot = markerElements.find((el) => el.classList.contains('festie-self-marker'));
     expect(dot).toBeDefined();
     expect(dot!.getAttribute('aria-label')).toBe('You are here, accurate to about 20 m');
-    expect(mapInstances[0].flyTo).toHaveBeenCalled();
+    expect(mapInstances[0]!.flyTo).toHaveBeenCalled();
   });
 
   it('tells the user when Show my location is blocked', async () => {
     await renderReadyMap();
     fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
-    act(() => watchPosition.mock.calls[0][1]({ code: 1 }));
+    act(() => watchPosition.mock.calls[0]![1]({ code: 1 }));
     expect(screen.getByText(/Location is off or blocked/)).toBeInTheDocument();
   });
 
@@ -473,7 +473,7 @@ describe('CrewMap place card and Nearest', () => {
     const button = screen.getByRole('button', { name: 'Show my location' });
     fireEvent.click(button);
     expect(button).toHaveAttribute('aria-busy', 'true');
-    act(() => watchPosition.mock.calls[0][1]({ code: 3 }));
+    act(() => watchPosition.mock.calls[0]![1]({ code: 3 }));
     expect(button).toHaveAttribute('aria-busy', 'false');
     const status = screen.getByRole('status');
     expect(screen.getByRole('region', { name: /Crew map/ }).parentElement).toContainElement(status);
@@ -484,17 +484,17 @@ describe('CrewMap place card and Nearest', () => {
   it('says how far a distant fix is and Show festival flies back to the venue', async () => {
     await renderReadyMap();
     fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
-    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 20 } }));
+    act(() => watchPosition.mock.calls[0]![0]({ coords: { latitude: 28.5, longitude: -81.4, accuracy: 20 } }));
     expect(screen.getByRole('status')).toHaveTextContent(/km from/);
     fireEvent.click(screen.getByRole('button', { name: 'Show festival' }));
-    expect(mapInstances[0].flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ center: [-87.62, 41.88], zoom: 15 }));
+    expect(mapInstances[0]!.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ center: [-87.62, 41.88], zoom: 15 }));
     expect(screen.queryByText(/km from/)).toBeNull();
   });
 
   it('gives no far-away notice for a fix at the venue', async () => {
     await renderReadyMap();
     fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
-    act(() => watchPosition.mock.calls[0][0]({ coords: { latitude: 41.88, longitude: -87.62, accuracy: 20 } }));
+    act(() => watchPosition.mock.calls[0]![0]({ coords: { latitude: 41.88, longitude: -87.62, accuracy: 20 } }));
     expect(screen.queryByText(/km from|m from/)).toBeNull();
   });
 
@@ -502,10 +502,10 @@ describe('CrewMap place card and Nearest', () => {
     extractAmenityPins.mockReturnValue([amenity('a1', 'water', 'Water')]);
     await renderReadyMap();
     fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
-    act(() => watchPosition.mock.calls[0][1]({ code: 3 }));
+    act(() => watchPosition.mock.calls[0]![1]({ code: 3 }));
     fireEvent.click(screen.getByRole('button', { name: 'Show the way to the nearest water' }));
-    act(() => watchPosition.mock.calls[1][0]({ coords: { latitude: 10, longitude: 10, accuracy: 20 } }));
-    expect(mapInstances[0].flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ center: [-81.4, 28.5], zoom: 16 }));
+    act(() => watchPosition.mock.calls[1]![0]({ coords: { latitude: 10, longitude: 10, accuracy: 20 } }));
+    expect(mapInstances[0]!.flyTo).toHaveBeenLastCalledWith(expect.objectContaining({ center: [-81.4, 28.5], zoom: 16 }));
   });
 
   it('opens the card for a mapped focusPinId once and reports it handled', async () => {
@@ -514,7 +514,7 @@ describe('CrewMap place card and Nearest', () => {
     await renderReadyMap({ focusPinId: 's1', onFocusHandled });
     expect(await screen.findByRole('dialog', { name: 'Mainstage' })).toBeInTheDocument();
     expect(onFocusHandled).toHaveBeenCalledTimes(1);
-    expect(mapInstances[0].flyTo).toHaveBeenCalledWith(expect.objectContaining({ zoom: 17 }));
+    expect(mapInstances[0]!.flyTo).toHaveBeenCalledWith(expect.objectContaining({ zoom: 17 }));
   });
 
   it('does nothing for an unknown focusPinId', async () => {

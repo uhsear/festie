@@ -89,6 +89,13 @@ class PreDeployDumpTest(unittest.TestCase):
             result = deploy.pre_deploy_dump(object(), runner=lambda client, cmd, timeout=300: (0, "Backup OK", ""))
         self.assertIsNone(result)
 
+    def test_avatar_archive_failure_exit_76_does_not_block_the_deploy(self):
+        with redirect_stdout(io.StringIO()):
+            result = deploy.pre_deploy_dump(
+                object(), runner=lambda client, cmd, timeout=300: (76, "Dump OK, avatar archive failed", "")
+            )
+        self.assertIsNone(result)
+
     def test_timeout_raises_the_same_system_exit(self):
         def runner(client, cmd, timeout=300):
             raise socket.timeout("timed out")

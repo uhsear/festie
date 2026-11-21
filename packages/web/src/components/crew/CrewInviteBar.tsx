@@ -111,7 +111,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
       <div className="flex items-center gap-2 ml-auto flex-shrink-0">
         {isOwner && (
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={() => setConfirmRegen(true)}
             isLoading={regenBusy}
             aria-label="Regenerate invite code"
@@ -122,7 +122,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
         )}
         {canNativeShare && (
           <Button
-            variant="outline"
+            variant="secondary"
             onClick={handleShare}
             aria-label="Share invite link"
             className="!py-1 !px-2.5 min-w-11 text-xs"
@@ -131,7 +131,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
           </Button>
         )}
         <Button
-          variant="outline"
+          variant="secondary"
           onClick={() => setQrOpen(true)}
           aria-label="Show QR code"
           className="!py-1 !px-2.5 min-w-11 text-xs"
@@ -139,7 +139,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
           <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
         </Button>
         <Button
-          variant={copiedCode ? 'primary' : 'outline'}
+          variant={copiedCode ? 'primary' : 'secondary'}
           onClick={handleCopy}
           className={`!py-1 !px-2.5 text-xs ${copiedCode ? 'animate-[crew-copy-pulse_260ms_var(--ease-out,ease-out)] motion-reduce:!animate-none' : ''}`}
         >

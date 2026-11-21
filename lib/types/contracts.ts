@@ -16,27 +16,11 @@
  * relative form is the most robust under `moduleResolution: "bundler"`.
  */
 export type {
-  Priority,
-  Festival,
-  Stage,
-  FestivalDay,
-  Artist,
-  FestivalSet,
   User,
-  AuthResponse,
   Profile,
   CrewMember,
   Crew,
-  CrewOverlap,
-  CrewPoll,
-  CrewPollVote,
   CrewMeetingPoint,
-  CrewExpense,
-  CrewExpenseBalance,
-  CrewActivityEntry,
-  NotificationPrefs,
-  OnlineUser,
-  PeerLocation,
 } from '../../packages/shared/src/types/domain';
 
 // Live-location socket payloads live in the shared socket-events module (which

@@ -101,6 +101,8 @@ interface NotificationPrefsState {
   error: string | null;
   loadPrefs: () => Promise<void>;
   updatePrefs: (patch: Partial<NotificationPreferences>) => Promise<void>;
+  /** Re-pin quiet hours to the device zone when it changed since they were saved. */
+  syncTimeZone: () => void;
 }
 
 export const useNotificationPrefsStore = create<NotificationPrefsState>((set, get) => ({
@@ -115,18 +117,29 @@ export const useNotificationPrefsStore = create<NotificationPrefsState>((set, ge
       const raw = await api.get<Record<string, unknown>>('/notifications/prefs');
       const prefs = normalize(raw);
       set({ prefs, loaded: true, isLoading: false });
-      // Quiet hours follow the phone when the user travels.
-      // shortcut: the zone updates only when the user opens Account; upgrade to a sync on app foreground.
-      const device = deviceTimeZone();
-      if (prefs.dndStart && device && device !== prefs.dndTimeZone) {
-        get()
-          .updatePrefs({ dndTimeZone: device })
-          .catch(() => {});
-      }
+      // Quiet hours follow the phone when the user travels; foreground returns call syncTimeZone too.
+      get().syncTimeZone();
     } catch (err) {
       set({ error: mapErrorToUserMessage(err, 'Failed to load notification settings'), isLoading: false });
       throw err;
     }
+  },
+
+  syncTimeZone: () => {
+    const { prefs, loaded } = get();
+    const device = deviceTimeZone();
+    if (!loaded || !prefs.dndStart || !device || device === prefs.dndTimeZone) return;
+    // Not updatePrefs: a failed background sync must not show a save error the user never caused.
+    const previous = prefs.dndTimeZone;
+    set({ prefs: { ...prefs, dndTimeZone: device } });
+    void (async () => {
+      try {
+        await api.put('/notifications/prefs', { dndTimeZone: device });
+      } catch {
+        // Revert quietly; the next foreground return retries.
+        if (get().prefs.dndTimeZone === device) set({ prefs: { ...get().prefs, dndTimeZone: previous } });
+      }
+    })();
   },
 
   updatePrefs: async (patch: Partial<NotificationPreferences>) => {

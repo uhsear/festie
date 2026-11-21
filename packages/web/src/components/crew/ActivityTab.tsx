@@ -8,7 +8,8 @@ import { timeAgo, describeCrewActivity, visibleCrewActivity } from '@festie/shar
 import EmptyState from '../ui/EmptyState';
 import StaleNote from './StaleNote';
 import Avatar from '../ui/Avatar';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
+import { loadErrorMessage } from './loadErrorMessage';
 import Button from '../ui/Button';
 import { Activity } from 'lucide-react';
 
@@ -34,7 +35,7 @@ export default function ActivityTab({ crewId }: Props) {
     () => new Set(Object.values(sosByUser).filter((e) => e.crewId === crewId).map((e) => e.userId)),
     [sosByUser, crewId],
   );
-  const { data, isLoading, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery({
+  const { data, error, isLoading, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useInfiniteQuery({
     queryKey: ['crew-activity', crewId, 'pages'],
     queryFn: async ({ pageParam }): Promise<ActivityPage> => {
       const url = `/crews/${crewId}/activity${pageParam ? `?cursor=${encodeURIComponent(pageParam)}` : ''}`;
@@ -51,11 +52,11 @@ export default function ActivityTab({ crewId }: Props) {
 
   if (isLoading) {
     return (
-      <div className="px-4 space-y-2">
+      <SkeletonGroup className="px-4 space-y-2">
         <Skeleton variant="text" />
         <Skeleton variant="text" />
         <Skeleton variant="text" />
-      </div>
+      </SkeletonGroup>
     );
   }
   if (isError && items.length === 0) {
@@ -64,7 +65,7 @@ export default function ActivityTab({ crewId }: Props) {
         <EmptyState
           icon={<Activity className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load activity"
-          description="Something went wrong loading crew activity."
+          description={loadErrorMessage(error, 'Something went wrong loading crew activity.')}
           cta={{ label: 'Retry', onClick: () => refetch() }}
         />
       </div>

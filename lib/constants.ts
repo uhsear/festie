@@ -13,7 +13,6 @@ export const ALLOWED_REMINDER_MINUTES = new Set([5, 10, 15, 30, 60]);
 export const REMINDER_MINUTE_VALUES = [5, 10, 15, 30, 60] as const;
 
 export const ALLOWED_AVATAR_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
-export const ALLOWED_AVATAR_FORMATS = new Set(['jpeg', 'png', 'webp', 'gif']);
 
 export const ALLOWED_LINK_PLATFORMS = ['spotify', 'soundcloud', 'instagram', 'twitter', 'tiktok', 'facebook', 'website', 'youtube', 'apple_music'] as const;
 export const MAX_ARTISTS_PER_SET = 4;

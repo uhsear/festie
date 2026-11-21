@@ -1,20 +1,22 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
 import { sanitizeIdentifier } from '../lib/helpers/sanitize';
+import type { RouteDeps } from '../lib/types';
 
-export function createRatingsRoutes({
-  stores,
-  userAuth,
-  log,
-  sendSuccess,
-  sendError,
-  ErrorCodes,
-  rateLimit,
-  schemas,
-  validate,
-  validateParams,
-  validateQuery,
-}: any) {
+export function createRatingsRoutes(deps: RouteDeps) {
+  const {
+    stores,
+    userAuth,
+    log,
+    sendSuccess,
+    sendError,
+    ErrorCodes,
+    rateLimit,
+    schemas,
+    validate,
+    validateParams,
+    validateQuery,
+  } = deps;
   const router = Router();
   const crewMember = crewMembership({ stores, log, sendError, ErrorCodes });
   const writeLimit = rateLimit(60, 'rating-write');

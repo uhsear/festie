@@ -7,9 +7,10 @@ set -euo pipefail
 # Clones the newest encrypted dump and its .counts sidecar from the off-site repo
 # (uhsear/festie-backups), decrypts the dump to a temp dir, restores it into the
 # festie-test-db container through scripts/backup-verify-restore.sh, and compares
-# the restored row counts with the sidecar. PII stays on the host.
-#
-# It proves data and schema restore only. It does not boot the app.
+# the restored row counts with the sidecar, then boots the built app on loopback
+# against the restored database through scripts/backup-drill-boot.sh. The app applies
+# any migration the dump predates, and the drill passes only when /api/ready returns
+# 200. PII stays on the host.
 #
 # Credentials are the container's, never production's. Create
 # ~/.config/festie-drill-db.env (mode 600) with:
@@ -27,7 +28,11 @@ set -euo pipefail
 #                           BACKUP_GPG_PASSPHRASE (default <repo>/.env)
 #   DB_PORT                 Must be 5433 (default 5433)
 #   RESTORE_DB              Restore DB name (default festie_drill_<epoch>)
-#   KEEP_DB                 1 = leave the restored DB for the R1 boot drill
+#   KEEP_DB                 1 = leave the restored DB in place after the drill
+#   DRILL_APP_DIR           Directory with the built dist/server.js (default <repo>)
+#   DRILL_BOOT_PORT         Port for the boot step (default 4101)
+#   DRILL_BOOT_METRICS_PORT Metrics port for the boot step (default 9501)
+#   DRILL_BOOT_TIMEOUT      Seconds to wait for /api/ready (default 90)
 #   BACKUP_GIT_REPO         Off-site repo (default git@github.com:uhsear/festie-backups.git)
 #   BACKUP_DEPLOY_KEY       Read key for that repo (default ~/.ssh/festie_backups_deploy)
 #   DRILL_HEALTHCHECK_URL   Pinged on success
@@ -94,7 +99,7 @@ BACKUP_GPG_PASSPHRASE="$(env_value BACKUP_GPG_PASSPHRASE "$FESTIE_ENV_FILE")"
 [ -n "$BACKUP_GPG_PASSPHRASE" ] || die "BACKUP_GPG_PASSPHRASE not set in $FESTIE_ENV_FILE"
 unset PROD_PASSWORD
 
-for cmd in git gpg pg_restore psql createdb dropdb; do
+for cmd in git gpg pg_restore psql createdb dropdb node curl; do
   command -v "$cmd" >/dev/null 2>&1 || die "$cmd not found in PATH"
 done
 
@@ -161,6 +166,14 @@ while IFS='|' read -r table expected _newest; do
   fi
 done < "$SIDECAR"
 [ "$FAILED" = "0" ] || die "Row counts do not match the sidecar"
+
+# ── Boot the app against the restored database ─────────────────────────────
+
+urlenc() { V="$1" node -e 'process.stdout.write(encodeURIComponent(process.env.V))'; }
+DRILL_BOOT_DATABASE_URL="postgresql://$(urlenc "$DB_USER"):$(urlenc "$PGPASSWORD")@${DB_HOST}:${DB_PORT}/${RESTORE_DB}"
+export DRILL_BOOT_DATABASE_URL
+bash "$SCRIPT_DIR/backup-drill-boot.sh" || die "Boot drill failed on ${RESTORE_DB}"
+unset DRILL_BOOT_DATABASE_URL
 
 if [ "$KEEP_DB" = "1" ]; then
   log "KEEP_DB=1: restored database ${RESTORE_DB} left in place -- drop it by hand"

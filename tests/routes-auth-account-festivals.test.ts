@@ -1996,6 +1996,7 @@ describe('routes/festivals.js — createFestivalsRoutes', () => {
       };
       const deps = makeMockDeps({
         io,
+        emitter: { festivalDeleted: mock.fn(), toCrew: (id: string, ...a: any[]) => io.to('crew:' + id).emit(...a) },
         getFestivalById: mock.fn(async () => ({ id: 'f-1', name: 'Fest' })),
         stores: {
           festivals: { softDelete: mock.fn(async () => {}) },

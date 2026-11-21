@@ -74,8 +74,8 @@ describe('classifyBackfillReport', () => {
   it('caps examples', () => {
     const needsPick = Array.from({ length: 9 }, (_, i) => ({ festivalId: 'f', kind: 'set', ownerId: `s${i}`, ordinal: 0, name: `N${i}` }));
     const out = classifyBackfillReport({ needsPick }, { maxExamples: 3 });
-    expect(out.stop[0].count).toBe(9);
-    expect(out.stop[0].examples).toHaveLength(3);
+    expect(out.stop[0]!.count).toBe(9);
+    expect(out.stop[0]!.examples).toHaveLength(3);
   });
 });
 

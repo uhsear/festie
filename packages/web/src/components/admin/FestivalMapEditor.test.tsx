@@ -103,7 +103,7 @@ describe('FestivalMapEditor', () => {
     fireEvent.blur(input);
     fireEvent.click(screen.getByText('Save map'));
     await waitFor(() => expect(put).toHaveBeenCalled());
-    expect(savedPayload().mapConfig.amenities.features[0].properties.label).toBe('North water');
+    expect(savedPayload()!.mapConfig.amenities.features[0]!.properties.label).toBe('North water');
   });
 
   it('moves an amenity to the clicked point and keeps its name', async () => {
@@ -114,8 +114,8 @@ describe('FestivalMapEditor', () => {
     fireEvent.click(screen.getByText('Save map'));
     await waitFor(() => expect(put).toHaveBeenCalled());
     const moved = savedPayload().mapConfig.amenities.features[0];
-    expect(moved.geometry.coordinates).toEqual([CLICK.longitude, CLICK.latitude]);
-    expect(moved.properties.label).toBe('Water');
+    expect(moved!.geometry.coordinates).toEqual([CLICK.longitude, CLICK.latitude]);
+    expect(moved!.properties.label).toBe('Water');
   });
 
   it('refuses a site-plan image over 10 MB without uploading', async () => {

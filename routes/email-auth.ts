@@ -23,8 +23,9 @@ import type { Router } from 'express';
 import { createEmailWindowLimit, createPasswordResetRateLimit } from '../lib/rate-limiting';
 import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail } from '../lib/email';
 import { escapeHtml } from '../lib/helpers/sanitize';
+import type { RouteDeps } from '../lib/types';
 
-export default function createEmailAuthRoutes(deps: any): Router {
+export default function createEmailAuthRoutes(deps: RouteDeps): Router {
   const {
     express,
     config,

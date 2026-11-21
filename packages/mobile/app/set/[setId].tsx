@@ -35,7 +35,7 @@ import {
   useSpotifyPreview,
   type NoteSaveStatus,
 } from '@festie/shared/hooks';
-import { api, mapErrorToUserMessage } from '@festie/shared/services';
+import { locateSet, mapErrorToUserMessage } from '@festie/shared/services';
 import {
   formatSetWhen,
   reminderNoteSummary,
@@ -193,7 +193,7 @@ export default function SetDetailScreen() {
     resolveTried.current = true;
     (async () => {
       try {
-        const { festivalId } = await api.get<{ festivalId: string }>(`/festivals/locate-set/${setId}`);
+        const { festivalId } = await locateSet(setId);
         if (festivalId && festivalId !== currentFestivalId) {
           await selectFestival(festivalId);
         }

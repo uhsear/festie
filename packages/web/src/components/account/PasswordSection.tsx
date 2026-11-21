@@ -8,6 +8,7 @@ import { useToast } from '../../lib/toastContext';
 import { useIdentities } from '../../hooks/useIdentities';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
+import PasswordStrengthMeter from '../auth/PasswordStrengthMeter';
 import { Lock } from 'lucide-react';
 import { Card } from '../ui/Card';
 
@@ -92,6 +93,7 @@ export default function PasswordSection() {
           error={policyError ?? undefined}
           aria-describedby={newPassword.length > 0 && newPassword.length < 8 ? 'pw-rules pw-hint' : 'pw-rules'}
         />
+        <PasswordStrengthMeter password={newPassword} username={user?.username} email={user?.email} />
         {/* Outside the Input so the rule line stays visible while a policy error shows. */}
         <p id="pw-rules" className="text-sm text-text-muted">
           {PASSWORD_RULES}

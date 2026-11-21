@@ -44,6 +44,7 @@ import {
   type LineupImportPlan,
   type LineupImportWrites,
 } from '../lib/lineup-import-plan.js';
+import type { RouteDeps } from '../lib/types';
 
 const SKIPPED_MESSAGE = 'Matches an existing set. Not updated because Update sets that match was off.';
 const ANNOUNCED_SKIPPED_MESSAGE = 'Matches an announced lineup entry. Not updated because Update sets that match was off.';
@@ -92,7 +93,7 @@ function buildResult(plan: LineupImportPlan, writes: LineupImportWrites, importI
   };
 }
 
-export default function createLineupImportRoute(deps: any) {
+export default function createLineupImportRoute(deps: RouteDeps) {
   const {
     express,
     log,

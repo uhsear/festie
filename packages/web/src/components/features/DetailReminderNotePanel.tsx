@@ -38,7 +38,7 @@ export default function DetailReminderNotePanel({
   return (
     <div>
       <Button
-        variant="outline"
+        variant="secondary"
         type="button"
         fullWidth
         aria-expanded={open}
@@ -71,7 +71,7 @@ export default function DetailReminderNotePanel({
             <textarea
               id={`${panelId}-note`}
               placeholder='Private note, e.g. "meet at the rail"'
-              className="w-full min-h-[80px] resize-y text-sm p-3 rounded-sm bg-bg-input border border-border-light text-text-primary"
+              className="w-full min-h-[80px] resize-y text-sm p-3 rounded-sm bg-bg-input border border-border-input text-text-primary"
               value={personalNote}
               onFocus={onExpand}
               onChange={(e) => onPersonalChange(e.target.value)}

@@ -6,7 +6,7 @@ import { renderWithQueryClient } from '../../test-utils';
 const markCaught = vi.fn();
 const apiGet = vi.fn();
 vi.mock('@festie/shared/services', () => ({
-  api: { get: (...a: unknown[]) => apiGet(...a) },
+  fetchWrap: (...a: unknown[]) => apiGet(...a),
   markCaught: (...a: unknown[]) => markCaught(...a),
 }));
 

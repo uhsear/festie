@@ -8,10 +8,13 @@ name: iOS E2E
 # self-contained (a Debug build would need a Metro dev server CI doesn't have) and
 # installs without code signing.
 #
-# Manual-only by design (it's a ~20-25min build+sim job; we don't want it on every
-# push). Run it from the Actions tab, or:
+# Runs weekly on main (Sunday 04:00 UTC) so a mobile regression shows up without a manual
+# dispatch. It is not on every push: it is a ~20-25min build+sim job. Run it on demand from the
+# Actions tab, or:
 #   gh workflow run ios-e2e.yml --ref <branch>
 on:
+  schedule:
+    - cron: '0 4 * * 0'
   workflow_dispatch:
 
 env:

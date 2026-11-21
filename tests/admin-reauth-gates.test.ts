@@ -52,7 +52,8 @@ async function build(recent: { ok: boolean }) {
   const { default: mountBulk } = await import('../routes/admin-bulk.js');
   const { deps, ...spies } = makeDeps(recent);
   const router = express.Router();
-  const ctx = { adminWriteLimit: pass, passwordResetRateLimit: pass, crypto };
+  const { parsePageParams, paginateArray } = await import('../lib/pagination.js');
+  const ctx = { adminWriteLimit: pass, passwordResetRateLimit: pass, crypto, parsePageParams, paginateArray, enrichAuditEntries: async (rows: any[]) => rows };
   mountUsers({ router, deps, ctx });
   mountBulk({ router, deps, ctx });
   const app = express();

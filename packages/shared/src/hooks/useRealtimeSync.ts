@@ -3,6 +3,7 @@ import type { Socket } from '../services/socket';
 import { useUIStore } from '../stores/uiStore';
 import { useFestivalDataStore } from '../stores/festivalDataStore';
 import { useCrewStore } from '../stores/crewStore';
+import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
 import type {
   ProfileUpdatedPayload,
   ProfileDeletedPayload,
@@ -108,7 +109,18 @@ export function useRealtimeStoreSync({
     reloaders.reloadFestival();
     reloaders.reloadProfiles();
     reloaders.reloadCrews();
+    useNotificationPrefsStore.getState().syncTimeZone();
   }, [reloaders]);
+
+  // Browser foreground return (native apps call `backfill` from AppState): re-pin quiet hours to the device zone.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') useNotificationPrefsStore.getState().syncTimeZone();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => document.removeEventListener('visibilitychange', onVisible);
+  }, []);
 
   useEffect(() => {
     if (!socket) return;

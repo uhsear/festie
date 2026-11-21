@@ -1,4 +1,4 @@
-import React, { Component, type ReactNode, type ErrorInfo } from 'react';
+import React from 'react';
 import ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/react';
 import { QueryClient } from '@tanstack/react-query';
@@ -10,7 +10,7 @@ import { router } from './router';
 import { initWebVitals } from './lib/web-vitals';
 import { ToastProvider } from './lib/toastContext';
 import Toast from './components/layout/Toast';
-import Button from './components/ui/Button';
+import GlobalErrorBoundary from './components/layout/GlobalErrorBoundary';
 import { scrubSensitiveUrl } from '@festie/shared/utils';
 import './styles/globals.css';
 
@@ -62,38 +62,6 @@ if (import.meta.env.VITE_SENTRY_DSN) {
       return breadcrumb;
     },
   });
-}
-
-// ── Global error boundary ────────────────────────────────────────────────
-// Catches unhandled render errors anywhere in the tree. TanStack Router's
-// per-route `errorComponent` handles most cases, but this is the final
-// safety net so the user never sees a white screen.
-class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean; error: Error | null }> {
-  state = { hasError: false, error: null as Error | null };
-
-  static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error };
-  }
-
-  componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error('Unhandled error:', error, info);
-    Sentry.captureException(error, { contexts: { react: { componentStack: info.componentStack } } });
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="p-8 text-center">
-          <h1>Something went wrong</h1>
-          <p className="text-[var(--color-text-secondary)] text-sm my-2 mb-4">{this.state.error?.message}</p>
-          <Button variant="primary" size="sm" onClick={() => window.location.reload()}>
-            Reload
-          </Button>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
 }
 
 // Dev-only: expose zustand stores on window so smoke-test scripts and the

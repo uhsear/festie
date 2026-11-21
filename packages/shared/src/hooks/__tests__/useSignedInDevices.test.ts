@@ -65,8 +65,8 @@ describe('useSignedInDevices', () => {
   });
 
   it('titles and subtitles', () => {
-    expect(deviceSubtitle(rows[2])).toBe('This device');
-    expect(deviceSubtitle(rows[0])).toMatch(/^Last active \d+d ago$/);
-    expect(deviceTitle(rows[1])).toBe(ACCOUNT_COPY.unknownDevice);
+    expect(deviceSubtitle(rows[2]!)).toBe('This device');
+    expect(deviceSubtitle(rows[0]!)).toMatch(/^Last active \d+d ago$/);
+    expect(deviceTitle(rows[1]!)).toBe(ACCOUNT_COPY.unknownDevice);
   });
 });

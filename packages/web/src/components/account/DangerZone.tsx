@@ -82,7 +82,7 @@ export default function DangerZone() {
       }));
       // A provider-only account sends no password; the server needs a recent provider re-auth instead.
       const outcome = providerOnly
-        ? await withReauth(() => deleteAccount(undefined as unknown as string, choices), ask)
+        ? await withReauth(() => deleteAccount(undefined, choices), ask)
         : await deleteAccount(deletePassword, choices);
       if (!outcome) return;
       toast(accountDeletionNotice(outcome.deletionDate), 'info', 10000);
@@ -105,7 +105,7 @@ export default function DangerZone() {
       >
         <h3 className="text-sm font-semibold text-accent-coral flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" aria-hidden="true" />
-          Delete Account
+          {ACCOUNT_COPY.deleteTitle}
         </h3>
 
         <p className="text-sm text-text-muted">
@@ -138,7 +138,7 @@ export default function DangerZone() {
                   <label key={h.crew.id} className="block text-sm text-text-secondary">
                     {crewCopy.newOwnerFor(h.crew.name)}
                     <select
-                      className="mt-1 block w-full min-h-11 rounded-lg bg-bg-card border border-border px-2 text-text-primary"
+                      className="mt-1 block w-full min-h-11 rounded-lg bg-bg-card border border-border-input px-2 text-text-primary"
                       value={newOwners[h.crew.id] ?? h.defaultOwnerId}
                       onChange={(e) => setNewOwners((prev) => ({ ...prev, [h.crew.id]: e.target.value }))}
                     >
@@ -174,7 +174,7 @@ export default function DangerZone() {
 
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               fullWidth
               isLoading={downloading}
               disabled={deleting || offlineMode}

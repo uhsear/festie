@@ -314,7 +314,7 @@ describe('NotificationSection preferences', () => {
     resetStore({ isLoading: true, loaded: false });
     const { rerender } = render(<NotificationSection />);
     expect(screen.queryByRole('switch')).toBeNull();
-    expect(screen.getAllByRole('status')).toHaveLength(4);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
     resetStore({ isLoading: false, loaded: true });
     rerender(<NotificationSection />);
     expect(screen.getByRole('switch', { name: 'Set reminders' })).toBeInTheDocument();
@@ -346,7 +346,7 @@ describe('NotificationSection preferences', () => {
     topicsState = { festival: { id: 'f1', name: 'EDC' }, subs: null, error: false };
     render(<NotificationSection />);
     expect(screen.getByText('Only for EDC')).toBeInTheDocument();
-    expect(screen.getAllByRole('status')).toHaveLength(2);
+    expect(screen.getAllByRole('status')).toHaveLength(1);
   });
 
   it('applies the Festival nights preset to updatePrefs', async () => {

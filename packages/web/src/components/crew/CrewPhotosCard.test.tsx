@@ -50,7 +50,7 @@ describe('CrewPhotosCard', () => {
     expect(screen.getByText('Remove the crew album?')).toBeInTheDocument();
     expect(updatePhotoAlbum).not.toHaveBeenCalled();
     const buttons = screen.getAllByRole('button', { name: 'Remove' });
-    fireEvent.click(buttons[buttons.length - 1]);
+    fireEvent.click(buttons[buttons.length - 1]!);
     await waitFor(() => expect(updatePhotoAlbum).toHaveBeenCalledWith('c1', { photoAlbumUrl: null }));
   });
 });

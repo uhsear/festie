@@ -13,6 +13,16 @@ const DAY_MS = 86_400_000;
 /** An act announced within this many days of now carries the "New" badge. */
 export const LINEUP_NEW_DAYS = 14;
 
+export type LineupView = 'poster' | 'az' | 'interested';
+
+/** Storage key for the Poster / A-Z choice, kept per device (localStorage on web, AsyncStorage on mobile). */
+export const LINEUP_VIEW_KEY = 'festie.lineupView';
+
+/** A missing or unknown stored value falls back to Poster, the default view. */
+export function parseLineupView(raw: string | null | undefined): LineupView {
+  return raw === 'az' || raw === 'interested' ? raw : 'poster';
+}
+
 /** A festival day with the sets that fall on it. */
 export type LineupDay = FestivalDay & { sets: FestivalSet[] };
 

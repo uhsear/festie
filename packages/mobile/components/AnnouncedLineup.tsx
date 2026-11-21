@@ -6,6 +6,7 @@ import { useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
 import { useInterest, useInterestedRows } from '@festie/shared/hooks/useInterest';
 import type { LineupEntry } from '@festie/shared/types';
 import {
+  LINEUP_VIEW_KEY,
   artistLinkEntries,
   groupLineupAlphabetically,
   groupLineupByTier,
@@ -13,14 +14,13 @@ import {
   lineupEntryBadge,
   lineupEntryName,
   lineupSetWhen,
+  parseLineupView,
   searchLineupEntries,
   selectLineupEntries,
 } from '@festie/shared/utils';
-import type { InterestRow } from '@festie/shared/utils';
-import type { AnnouncedLineupModel } from '../hooks/useAnnouncedLineup';
+import type { AnnouncedLineupModel, InterestRow, LineupView } from '@festie/shared/utils';
 import { useNow } from '../hooks/useNow';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
-import { LINEUP_VIEW_KEY, parseLineupView, type LineupView } from '../lib/lineupView';
 import Avatar from './Avatar';
 import SegmentedControl from './SegmentedControl';
 import SheetShell from './SheetShell';

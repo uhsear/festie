@@ -33,9 +33,6 @@ import {
   describePayment,
   QUEUED_WRITE_MESSAGE,
   writeOutcomeMessage,
-} from '@festie/shared/utils';
-import { EXPENSE_CATEGORIES, CREW_CURRENCIES, expenseCategoryFor } from '@festie/shared/constants';
-import {
   sanitizeAmountInput,
   canAddExpense,
   isAmountInvalid,
@@ -47,7 +44,8 @@ import {
   myBalance as selectMyBalance,
   myPayments as selectMyPayments,
   myReceipts as selectMyReceipts,
-} from '../lib/expenseView';
+} from '@festie/shared/utils';
+import { EXPENSE_CATEGORIES, CREW_CURRENCIES, expenseCategoryFor } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';

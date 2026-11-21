@@ -34,14 +34,14 @@ export interface WebPushResult {
   error?: string;
 }
 
-export interface WebPushPayload {
+interface WebPushPayload {
   title: string;
   body: string;
   url: string;
   tag: string;
 }
 
-export interface WebPushSendOpts {
+interface WebPushSendOpts {
   ttl?: number;
   urgency?: 'very-low' | 'low' | 'normal' | 'high';
 }

@@ -26,6 +26,7 @@ function renderDay(engagement?: Record<string, { picks: number; reminders: numbe
       onAddSet={vi.fn()}
       onRemoveSet={vi.fn()}
       onSetField={vi.fn()}
+      onSetArtists={vi.fn()}
     />,
   );
 }

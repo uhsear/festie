@@ -84,3 +84,40 @@ export interface WrapCard {
   quote?: { text: string; by: string };
   stats?: Array<{ label: string; value: string }>;
 }
+
+/** Server shape from GET /ratings/lifetime (cross-festival history). */
+export interface LifetimeTotals {
+  totalRated: number;
+  avgRating: number | null;
+  festivalsAttended: number;
+  stagesVisited: number;
+  daysAttended: number;
+  totalHours: number | null;
+}
+
+export interface LifetimeFestivalRow {
+  festivalId: string;
+  festivalName: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  totalRated: number;
+  avgRating: number | null;
+  stagesVisited: number;
+  daysAttended: number;
+  totalHours: number | null;
+}
+
+export interface LifetimeTopArtist {
+  artist: string;
+  timesRated: number;
+  bestRating: number;
+  avgRating: number | null;
+}
+
+export interface LifetimeResponse {
+  totals: LifetimeTotals;
+  byFestival: LifetimeFestivalRow[];
+  topArtists: LifetimeTopArtist[];
+  /** Absent on an older server. */
+  seenMost?: { artist: string; festivals: number }[];
+}

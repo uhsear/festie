@@ -1,13 +1,15 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import type { Params } from '../lib/types/app-context';
+import type { RouteDeps } from '../lib/types';
 
 // In-memory cache: { key: { data, expiresAt } }
 // shortcut: per-process cache, so N instances fetch up to N times per TTL; move to Redis if the app scales out.
 const weatherCache = new Map();
 const CACHE_TTL_MS = 30 * 60 * 1000; // 30 min
 
-export function createWeatherRoutes({ config, stores, userAuth, sendSuccess, sendError, ErrorCodes, rateLimit, schemas, validateParams }: any) {
+export function createWeatherRoutes(deps: RouteDeps) {
+  const { config, stores, userAuth, sendSuccess, sendError, ErrorCodes, rateLimit, schemas, validateParams } = deps;
   const router = Router();
 
   // GET /weather/:festivalId — returns weather for festival's coordinates

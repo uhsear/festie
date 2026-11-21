@@ -17,6 +17,7 @@ import { verifiedOrganizationOnly } from '../lib/app-context/session.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { organizerAudience } from '../lib/organizer-engagement.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
+import type { RouteDeps } from '../lib/types';
 
 // Why "Announce days" refuses, as the message the admin sees and the status it carries.
 const DAYS_REFUSALS: Record<string, [number, string]> = {
@@ -27,7 +28,7 @@ const DAYS_REFUSALS: Record<string, [number, string]> = {
   already_heard: [400, 'Everyone who follows has already heard.'],
 };
 
-export default function createLineupAnnounceRoute(deps: any) {
+export default function createLineupAnnounceRoute(deps: RouteDeps) {
   const {
     express,
     log,

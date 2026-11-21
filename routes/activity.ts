@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
+import type { RouteDeps } from '../lib/types';
 
-export default function createActivityRoutes(deps: any) {
+export default function createActivityRoutes(deps: RouteDeps) {
   const router = Router();
   const { stores, userAuth, sendSuccess, sendError, ErrorCodes, log, sanitizeIdentifier, rateLimit, schemas, validateQuery, validateParams } = deps;
   const crewMember = crewMembership(deps);

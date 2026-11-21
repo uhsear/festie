@@ -38,8 +38,8 @@ describe('selectWeatherNow', () => {
     expect(w.temp).toBe('24°C');
     expect(w.condition).toBe('Partly cloudy');
     expect(w.hours).toHaveLength(6);
-    expect(w.hours[0].label).toBe('2 PM');
-    expect(w.hours[0].a11y).toBe('2 PM, 24°C, 0% chance of rain');
+    expect(w.hours[0]!.label).toBe('2 PM');
+    expect(w.hours[0]!.a11y).toBe('2 PM, 24°C, 0% chance of rain');
     expect(w.todayHigh).toBe('20°C');
     expect(w.todayLow).toBe('10°C');
   });

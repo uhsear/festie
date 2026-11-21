@@ -1,7 +1,7 @@
 import { useCrewStore } from './crewStore';
 import { useUIStore } from './uiStore';
 import { useInboxStore } from './inboxStore';
-import { useFestivalDataStore } from './festivalDataStore';
+import { useFestivalDataStore, clearGuestUnpicked } from './festivalDataStore';
 import { useFestivalUIStore } from './festivalUIStore';
 import { useFestivalModeStore } from './festivalModeStore';
 import { useLiveLocationStore } from './liveLocationStore';
@@ -11,6 +11,7 @@ import { useNotificationPrefsStore, DEFAULT_NOTIFICATION_PREFS } from './notific
 import { clearPersistedFailed, clearQueue } from '../services/offlineQueue';
 
 export function resetAllStores(): void {
+  clearGuestUnpicked();
   useFestivalDataStore.setState({
     festivals: [],
     currentFestivalId: null,

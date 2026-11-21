@@ -3,6 +3,7 @@
 
 import { parsePageParams } from '../lib/pagination.js';
 import { createWebPushSender, parseWebPushSubscription } from '../lib/notifications/webpush.js';
+import type { RouteDeps } from '../lib/types';
 
 // The core categories, the M3 re-engagement opt-outs and the finer crew types.
 const BOOLEAN_PREF_KEYS = [
@@ -19,7 +20,7 @@ const BOOLEAN_PREF_KEYS = [
   'crewNudges',
 ] as const;
 
-export default function createNotificationRoutes(deps: any) {
+export default function createNotificationRoutes(deps: RouteDeps) {
   const {
     express,
     config,

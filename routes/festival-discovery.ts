@@ -1,19 +1,21 @@
 import { Router } from 'express';
 import { CO_PICK_MIN_USERS } from '../lib/constants';
+import type { RouteDeps } from '../lib/types';
 
 // Mounted at /api/v1/festivals BEFORE festivalRoutes: its GET /:id would
 // otherwise catch GET /follows.
-export function createFestivalDiscoveryRoutes({
-  stores,
-  userAuth,
-  log,
-  sendSuccess,
-  sendError,
-  ErrorCodes,
-  rateLimit,
-  schemas,
-  validateParams,
-}: any) {
+export function createFestivalDiscoveryRoutes(deps: RouteDeps) {
+  const {
+    stores,
+    userAuth,
+    log,
+    sendSuccess,
+    sendError,
+    ErrorCodes,
+    rateLimit,
+    schemas,
+    validateParams,
+  } = deps;
   const router = Router();
   const followWriteLimit = rateLimit(30, 'festival-follow');
   const followReadLimit = rateLimit(120, 'festival-follow-read');

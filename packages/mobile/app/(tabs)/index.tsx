@@ -71,7 +71,7 @@ import type { TimeBounds } from '../../hooks/useNowIndicator';
 import { useHaptics } from '../../hooks/useHaptics';
 import { undoNotifier } from '../../lib/undoNotifier';
 import { useNow } from '../../hooks/useNow';
-import { useAnnouncedLineup } from '../../hooks/useAnnouncedLineup';
+import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import SegmentedControl from '../../components/SegmentedControl';
 import NowNextStrip from '../../components/NowNextStrip';
@@ -193,7 +193,7 @@ export default function TimelineScreen() {
   const { getDays, getFilteredSets, getStageColor, getStageName } = useFestival();
   const { getMyPick, getOtherPicks, getMyNote, getMyReminder, savePick } = usePicks();
   const clearPick = usePickClear(undoNotifier);
-  const announced = useAnnouncedLineup();
+  const announced = useAnnouncedLineup(useNow(60_000));
 
   // DC1 — search bar and the stage/my-picks + phase-action setup chrome fold
   // behind a compact icon row so the timeline owns the viewport on small

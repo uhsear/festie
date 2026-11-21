@@ -32,16 +32,23 @@ describe('createVenueGeocoder', () => {
     assert.deepEqual(queries, ['SeatGeek Stadium, Chicago, IL', 'SeatGeek Stadium']);
   });
 
-  it('returns null for an empty location, a failed request or out-of-range data', async () => {
-    const { geocodeVenue } = createVenueGeocoder({
-      fetchImpl: async () => {
-        throw new Error('network down');
-      },
-    });
+  it('returns null for an empty location, a miss or out-of-range data', async () => {
+    const { geocodeVenue } = createVenueGeocoder({ fetchImpl: async () => miss });
     assert.equal(await geocodeVenue(''), null);
     assert.equal(await geocodeVenue('Somewhere'), null);
     const bad = createVenueGeocoder({ fetchImpl: async () => hit('123', '0') });
     assert.equal(await bad.geocodeVenue('Nowhere'), null);
+  });
+
+  it('rejects on a thrown request or a non-OK response instead of reporting a miss', async () => {
+    const down = createVenueGeocoder({
+      fetchImpl: async () => {
+        throw new Error('network down');
+      },
+    });
+    await assert.rejects(down.geocodeVenue('Somewhere'), /network down/);
+    const limited = createVenueGeocoder({ fetchImpl: async () => ({ ok: false, status: 429, json: async () => [] }) });
+    await assert.rejects(limited.geocodeVenue('Somewhere'), /HTTP 429/);
   });
 });
 
@@ -61,6 +68,60 @@ describe('backfillVenueCoords', () => {
     assert.equal(filled, 1);
     assert.deepEqual(updates, [[1, 2, 'a']]);
     assert.equal(reported, 1);
+  });
+});
+
+describe('backfillVenueCoords not-found cache', () => {
+  const rows = [{ id: 'a', location: 'Found' }, { id: 'b', location: 'Lost' }];
+  const pool = { query: async (sql: string) => (sql.startsWith('SELECT') ? { rows } : { rowCount: 1 }) };
+  const fakeRedis = () => {
+    const store = new Map<string, string>();
+    return {
+      store,
+      get: async (key: string) => store.get(key) ?? null,
+      set: async (key: string, value: string) => {
+        store.set(key, value);
+        return 'OK';
+      },
+    };
+  };
+
+  it('does not look a cached miss up again on the next boot', async () => {
+    const redis = fakeRedis();
+    const calls: string[] = [];
+    const geocodeVenue = async (loc: string) => {
+      calls.push(loc);
+      return loc === 'Found' ? { latitude: 1, longitude: 2, guessed: false } : null;
+    };
+    await backfillVenueCoords({ pool, geocodeVenue, redis });
+    assert.deepEqual(calls, ['Found', 'Lost']);
+    calls.length = 0;
+    await backfillVenueCoords({ pool, geocodeVenue, redis });
+    assert.deepEqual(calls, ['Found']);
+  });
+
+  it('does not cache a failed lookup and stops the pass', async () => {
+    const redis = fakeRedis();
+    const calls: string[] = [];
+    const geocodeVenue = async (loc: string) => {
+      calls.push(loc);
+      throw new Error('HTTP 429');
+    };
+    assert.equal(await backfillVenueCoords({ pool, geocodeVenue, redis }), 0);
+    assert.deepEqual(calls, ['Found']);
+    assert.equal(redis.store.size, 0);
+  });
+
+  it('still looks a miss up when Redis is absent or fails', async () => {
+    const calls: string[] = [];
+    const geocodeVenue = async (loc: string) => {
+      calls.push(loc);
+      return null;
+    };
+    await backfillVenueCoords({ pool, geocodeVenue });
+    const broken = { get: async () => { throw new Error('down'); }, set: async () => { throw new Error('down'); } };
+    await backfillVenueCoords({ pool, geocodeVenue, redis: broken });
+    assert.deepEqual(calls, ['Found', 'Lost', 'Found', 'Lost']);
   });
 });
 

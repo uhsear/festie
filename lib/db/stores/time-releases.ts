@@ -9,7 +9,7 @@
 import type { Pool } from 'pg';
 
 /** A claim older than this with no `sent_at` is stuck, and the admin may reclaim it. */
-export const STUCK_AFTER_MINUTES = 10;
+const STUCK_AFTER_MINUTES = 10;
 
 export type ClaimedRelease = { date: string; eventKey: string };
 

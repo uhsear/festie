@@ -11,7 +11,7 @@ import type { Params } from '../lib/types/app-context';
 /**
  * Crew packing board (M2 logistics) — a shared "who's bringing what" checklist.
  * A new crew sub-resource cloning routes/crew-polls.ts exactly: userAuth +
- * getMember gate + rate limit + io.to('crew:'+id).emit + activity log.
+ * getMember gate + rate limit + emitter.toCrew(id, event) + activity log.
  */
 export default function createCrewPackingRoutes(deps: RouteDeps) {
   const {

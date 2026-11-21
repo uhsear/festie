@@ -27,7 +27,7 @@ function renderGrid(vpW: number, nowIndicator: number | null = null) {
       vpW={vpW}
       nowIndicator={nowIndicator}
       clashMarks={new Map()}
-      currentProfile={null}
+      canPick={false}
       currentFestival={null}
       gridRef={gridRef}
       getMyPick={() => null}

@@ -13,7 +13,7 @@ import { withTransaction } from './db/connection';
 import { lockFestival } from './db/stores/festival-lock';
 
 export const MAX_LINEUP_ENTRIES = 500;
-export const MAX_LINKED_SETS = 10;
+const MAX_LINKED_SETS = 10;
 
 const KEY_SEPARATOR = '\u0001';
 
@@ -178,12 +178,12 @@ function setNames(set: any, separator: string): string[] {
 }
 
 /** The index of the first day whose date equals dayDate, or -1 for Day TBA or a removed day. */
-export function entryDayIndex(entry: any, days: any[]): number {
+function entryDayIndex(entry: any, days: any[]): number {
   if (!entry?.dayDate) return -1;
   return (days ?? []).findIndex((day) => day?.date === entry.dayDate);
 }
 
-export type LineupState = 'announced' | 'scheduled' | 'cancelled';
+type LineupState = 'announced' | 'scheduled' | 'cancelled';
 
 export interface LineupCover {
   setIds: string[];
@@ -262,7 +262,7 @@ export function scheduleProgress(festival: any): ScheduleProgress | null {
   return actsTotal > 0 ? 'lineup' : null;
 }
 
-export const MAX_INTEREST_SETS = 10;
+const MAX_INTEREST_SETS = 10;
 // A release-day import can convert thousands of profiles; announce reads them this many at a time.
 const ANNOUNCE_CHUNK = 50;
 

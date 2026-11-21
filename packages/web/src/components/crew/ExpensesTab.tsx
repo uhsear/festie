@@ -16,14 +16,20 @@ import {
   writeOutcomeMessage,
   createSettleUpFlow,
   confirmPaidMessage,
-  spendingExpenses,
-  ledgerRows,
   settlementPayments,
   describePayment,
   formatCents,
   paymentsToConfirm,
   expenseTrailLine,
   expenseShareCents,
+  actualExpenses as selectActualExpenses,
+  plannedExpenses as selectPlannedExpenses,
+  sumExpenseAmounts,
+  visibleExpenses as selectVisibleExpenses,
+  nonZeroBalances as selectNonZeroBalances,
+  myBalance as selectMyBalance,
+  myPayments as selectMyPayments,
+  myReceipts as selectMyReceipts,
 } from '@festie/shared/utils';
 import { CREW_CURRENCIES, expenseCategoryFor } from '@festie/shared/constants';
 import { useToast } from '../../lib/toastContext';
@@ -31,7 +37,8 @@ import { cn } from '@/lib/utils';
 import Button from '../ui/Button';
 import EmptyState from '../ui/EmptyState';
 import StaleNote from './StaleNote';
-import Skeleton from '../ui/Skeleton';
+import Skeleton, { SkeletonGroup } from '../ui/Skeleton';
+import { loadErrorMessage } from './loadErrorMessage';
 import ExpenseItem from './ExpenseItem';
 import ExpenseForm from './ExpenseForm';
 import SettleUpCard, { type Balance } from './SettleUpCard';
@@ -92,6 +99,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     data: expenses = [],
     isLoading,
     isError,
+    error,
     refetch,
   } = useQuery<RawExpense[]>({
     queryKey: ['expenses', crewId],
@@ -254,34 +262,34 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
   // My net position from the netted plan, one actionable line per crew member:
   //   myPayments — "You owe {toName} {amt}" (settle-able by me)
   //   myReceipts — "{fromName} owes you {amt}" (they settle; I can send a reminder)
-  const myPayments = settlements.filter((s) => s.fromUserId === currentUserId);
-  const myReceipts = settlements.filter((s) => s.toUserId === currentUserId);
+  const myPayments = selectMyPayments(settlements, currentUserId);
+  const myReceipts = selectMyReceipts(settlements, currentUserId);
 
-  const myBalance = balances.find((b) => b.userId === currentUserId)?.balance ?? 0;
+  const myBalance = selectMyBalance(balances, currentUserId);
   // Actual spend feeds the ledger; planned is the forecast/budget total. Keep
   // them separate so a budget row never inflates "total spent".
-  const actualExpenses = spendingExpenses(expenses);
-  const plannedExpenses = expenses.filter((e) => e.planned);
+  const actualExpenses = selectActualExpenses(expenses);
+  const plannedExpenses = selectPlannedExpenses(expenses);
   const payments = settlementPayments(expenses);
   const nameOf = (userId: string) => {
     const m = members.find((x) => x.userId === userId);
     return m ? m.name || m.username : undefined;
   };
-  const totalSpent = actualExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
-  const totalPlanned = plannedExpenses.reduce((sum, e) => sum + Number(e.amount), 0);
+  const totalSpent = sumExpenseAmounts(actualExpenses);
+  const totalPlanned = sumExpenseAmounts(plannedExpenses);
   // N1: tween the headline total when the live ledger changes instead of hard-cutting.
   const animatedTotalSpent = useAnimatedNumber(totalSpent, { decimals: 2 });
-  const visibleExpenses = ledgerRows(expenses, view);
-  const nonZeroBalances = balances.filter((b) => Math.abs(b.balance) > 0.01);
+  const visibleExpenses = selectVisibleExpenses(expenses, view);
+  const nonZeroBalances = selectNonZeroBalances(balances);
   const toConfirm = paymentsToConfirm(expenses, currentUserId);
   const memberIds = members.map((m) => m.userId);
 
   if (isLoading)
     return (
-      <div className="px-4 space-y-2">
+      <SkeletonGroup className="px-4 space-y-2">
         <Skeleton variant="card" />
         <Skeleton variant="card" />
-      </div>
+      </SkeletonGroup>
     );
   if (isError && expenses.length === 0)
     return (
@@ -289,7 +297,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         <EmptyState
           icon={<DollarSign className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load expenses"
-          description="Something went wrong loading expenses."
+          description={loadErrorMessage(error, 'Something went wrong loading expenses.')}
           cta={{ label: 'Retry', onClick: () => refetch() }}
         />
       </div>
@@ -382,7 +390,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
                     Got it
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => confirm.mutate({ id: p.id, received: false, payer })}
                     disabled={confirm.isPending}
                     className="!py-1 !px-3 text-xs min-h-11"

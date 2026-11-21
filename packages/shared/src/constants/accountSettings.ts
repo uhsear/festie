@@ -48,6 +48,7 @@ export const ACCOUNT_COPY = {
   verifySendLink: 'Send link',
   verifyResendLink: 'Resend link',
   verifySendA11y: 'Send a confirmation link to your email',
+  deleteTitle: 'Delete Account',
   deleteFailed: "Couldn't delete account. Try again.",
   changePasswordFailed: "Couldn't change password. Try again.",
   devicesTitle: 'Signed-in devices',
@@ -78,6 +79,12 @@ export const ACCOUNT_COPY = {
   installHowTo: 'Show me how',
   installUnsupported: 'To install Festie, open festie.us in Safari on iPhone or Chrome on Android.',
   versionLine: (platform: string, version: string) => `Festie ${platform} · ${version}`,
+} as const;
+
+export const NOTIFICATION_TOPIC_COPY = {
+  mustSeeTitle: 'Must-see reminders',
+  mustSeeHint: 'Reminds you before every set you mark Must see.',
+  topicLabels: { crew: 'Crew picks', schedule: 'Schedule changes' },
 } as const;
 
 export const AVATAR_COPY = {
