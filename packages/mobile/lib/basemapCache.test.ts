@@ -207,6 +207,16 @@ describe('readCachedBase64', () => {
     expect(await readCachedBase64(URL_A)).toBeNull();
   });
 
+  it('applies the whole-file limit to a site-plan image, not to a .pmtiles archive', async () => {
+    const SITEPLAN = 'https://festie.us/uploads/siteplans/x.webp';
+    fs.files.set(basemapCacheFile(SITEPLAN).uri, 40 * 1024 * 1024);
+    expect(await readCachedBase64(SITEPLAN)).toBeNull();
+    // A 40 MiB archive is cached and read by range, so its size never blocks it.
+    fs.files.set(basemapCacheFile(URL_A).uri, 40 * 1024 * 1024);
+    expect(basemapCacheInfo(URL_A)).toMatchObject({ cached: true, bytes: 40 * 1024 * 1024 });
+    expect(await readArchiveRange(URL_A, 39 * 1024 * 1024, 4)).not.toBeNull();
+  });
+
   it('keeps an image URL extension so the site plan shares the cache', () => {
     expect(basemapCacheKey('https://festie.us/uploads/siteplans/x.webp')).toMatch(/^[0-9a-f]{8}\.webp$/);
     expect(basemapCacheKey(URL_A)).toMatch(/^[0-9a-f]{8}\.pmtiles$/);

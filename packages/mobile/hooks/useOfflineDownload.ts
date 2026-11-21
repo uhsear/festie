@@ -11,7 +11,6 @@ import {
   headContentLength,
 } from '@festie/shared/utils';
 import {
-  MAX_INLINE_BYTES,
   basemapCacheInfo,
   clearBasemapCache,
   ensureBasemapCached,
@@ -19,7 +18,6 @@ import {
 } from '../lib/basemapCache';
 
 const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
-const TOO_LARGE: SectionReadiness = { status: 'error', syncedAt: null };
 
 /**
  * The offline-map step. Deliberately NOT part of the shared readiness store:
@@ -32,11 +30,26 @@ const TOO_LARGE: SectionReadiness = { status: 'error', syncedAt: null };
  *
  * So this status is READ FROM THE FILESYSTEM on mount and after every attempt.
  */
-function sectionFromDisk(pmtilesUrl: string | null | undefined): SectionReadiness {
+export function sectionFromDisk(pmtilesUrl: string | null | undefined): SectionReadiness {
   const info = basemapCacheInfo(pmtilesUrl);
-  // The map document takes at most MAX_INLINE_BYTES from the file, so a bigger one is not offline-ready.
-  if (info.cached && info.bytes > MAX_INLINE_BYTES) return TOO_LARGE;
+  // No size gate: the archive is read by byte range (readArchiveRange), never whole.
   return info.cached ? { status: 'ready', syncedAt: info.syncedAt } : IDLE;
+}
+
+/**
+ * Saves the archive (and the site-plan overlay image, best effort: it is not part of the
+ * step) and re-reads the disk. ensureBasemapCached never throws and never publishes a short
+ * archive when the server reports a length, so a failure is simply "still not downloaded":
+ * the map keeps working online, and Retry re-runs this. No size check: the archive is read
+ * by byte range.
+ */
+export async function downloadOfflineMap(
+  pmtilesUrl: string,
+  siteplanUrl: string | null,
+): Promise<SectionReadiness> {
+  await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
+  const section = sectionFromDisk(pmtilesUrl);
+  return section.status === 'ready' ? section : { status: 'error', syncedAt: Date.now() };
 }
 
 function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | null) {
@@ -65,23 +78,7 @@ function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | n
   const download = useCallback(async () => {
     if (!pmtilesUrl) return;
     setSection({ status: 'syncing', syncedAt: null });
-    // Do not spend mobile data on an archive the map cannot read back offline.
-    const size = await headContentLength(pmtilesUrl);
-    if (size !== null && size > MAX_INLINE_BYTES) {
-      setSection(TOO_LARGE);
-      return;
-    }
-    // ensureBasemapCached never throws and never publishes a short archive when
-    // the server reports a length, so a failure here is simply "still not
-    // downloaded" — the map keeps working online, and Retry re-runs this.
-    // The site-plan overlay image is saved alongside, best effort: it is not part of the step.
-    await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
-    const info = basemapCacheInfo(pmtilesUrl);
-    setSection(
-      info.cached && info.bytes <= MAX_INLINE_BYTES
-        ? { status: 'ready', syncedAt: info.syncedAt }
-        : { status: 'error', syncedAt: Date.now() },
-    );
+    setSection(await downloadOfflineMap(pmtilesUrl, siteplanUrl));
   }, [pmtilesUrl, siteplanUrl]);
 
   return { section, download };
@@ -150,7 +147,6 @@ export function useOfflineDownload(festivalId: string) {
     hasMap: !!mapUrl,
     mapBytes: mapUrl ? mapBytes : null,
     mapReady: mapSection.status === 'ready',
-    mapTooLarge: mapBytes !== null && mapBytes > MAX_INLINE_BYTES,
     removeMap,
   };
 }
