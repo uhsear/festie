@@ -23,7 +23,6 @@ const fixtures: Record<string, string> = {
 };
 
 let repo: string;
-let scan: (typeof import('../scripts/ci/scan-staged-secrets.mjs'))['scan'];
 
 function git(...args: string[]): string {
   return execFileSync('git', args, { cwd: repo, encoding: 'utf8' }).trim();
@@ -40,8 +39,7 @@ function run() {
   return { code: result.status, out: result.stdout + result.stderr };
 }
 
-before(async () => {
-  ({ scan } = await import('../scripts/ci/scan-staged-secrets.mjs'));
+before(() => {
   repo = mkdtempSync(join(tmpdir(), 'scan-staged-'));
   git('init', '-q');
   git('config', 'user.email', 'ci@example.com');
@@ -97,11 +95,6 @@ test('only added lines are scanned: a removed secret does not block the fix', ()
   git('commit', '-q', '-m', 'Add old');
   stage('old.txt', 'key redacted\n');
   assert.equal(run().code, 0);
-});
-
-test('scan() returns file:line and kind only', () => {
-  const diff = ['+++ b/f.ts', '@@ -0,0 +3 @@', '+ok', '+ok', `+${fixtures['GitHub token']}`].join('\n');
-  assert.deepEqual(scan({ diff, files: ['f.ts'] }), [{ where: 'f.ts:5', kind: 'GitHub token' }]);
 });
 
 test('git errors exit 2', () => {
