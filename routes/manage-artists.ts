@@ -17,10 +17,9 @@
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
 import { ArtistError, viewerArtist, type ArtistViewer } from '../lib/db/stores/artists.js';
+import { mayWriteArtists } from '../lib/artist-viewer.js';
 
 type OrgRow = { id: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'active' | 'suspended' };
-
-const MAY_WRITE = (org: OrgRow) => org.role !== 'viewer' && org.status !== 'suspended';
 
 export default function createManageArtistsRoutes(deps: any) {
   const { express, log, stores, rateLimit, validate, validateQuery, validateParams, schemas, sendSuccess, sendError, ErrorCodes, getRequestIp } =
@@ -34,16 +33,21 @@ export default function createManageArtistsRoutes(deps: any) {
       const orgs: OrgRow[] = await stores.organizations.listForUser(req.user.userId);
       if (orgs.length === 0) return sendError(res, 403, 'Join an organization to use artists.', ErrorCodes.FORBIDDEN);
       const named = write ? req.body?.organizationId : undefined;
-      const acting = named ? orgs.find((org) => org.id === named) : orgs.find(MAY_WRITE) ?? orgs[0];
+      const acting = named ? orgs.find((org) => org.id === named) : orgs.find(mayWriteArtists) ?? orgs[0];
       if (!acting) return sendError(res, 404, 'Organization not found', ErrorCodes.NOT_FOUND);
-      if (write && !MAY_WRITE(acting)) {
+      if (write && !mayWriteArtists(acting)) {
         const message =
           acting.status === 'suspended'
             ? "Your organization's access is paused."
             : 'Only an owner or editor of your organization can change artists.';
         return sendError(res, 403, message, ErrorCodes.FORBIDDEN);
       }
-      const viewer: ArtistViewer = { userId: req.user.userId, organizationIds: orgs.map((org) => org.id), organizationId: acting.id };
+      const viewer: ArtistViewer = {
+        userId: req.user.userId,
+        organizationIds: orgs.map((org) => org.id),
+        organizationId: acting.id,
+        mayWrite: mayWriteArtists(acting),
+      };
       req.artistViewer = viewer;
       // The audit writer reads these two for the row's actor and organization.
       req.festivalRole = acting.role;

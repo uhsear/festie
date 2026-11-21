@@ -3,6 +3,11 @@
 
 import type { ArtistViewer } from './db/stores/artist-visibility';
 
+type OrgSeat = { id: string; role: 'owner' | 'editor' | 'viewer'; status: 'pending' | 'active' | 'suspended' };
+
+/** The one rule for who may change artists: an owner or editor of an organization that is not suspended. */
+export const mayWriteArtists = (org: Pick<OrgSeat, 'role' | 'status'>) => org.role !== 'viewer' && org.status !== 'suspended';
+
 /**
  * The artist viewer of a request: undefined for a platform admin (every artist is visible), otherwise the signed-in
  * member with every organization they belong to. `organizationId` is the one the request acts for: the festival's
@@ -10,15 +15,17 @@ import type { ArtistViewer } from './db/stores/artist-visibility';
  * Returns null for a caller that belongs to no organization.
  */
 export async function artistViewerOf(
-  stores: { organizations: { listForUser(userId: string): Promise<Array<{ id: string }>> } },
+  stores: { organizations: { listForUser(userId: string): Promise<OrgSeat[]> } },
   req: { isAdmin?: boolean; user?: { userId?: string }; organizationId?: string | null },
   preferred?: string | null,
 ): Promise<ArtistViewer | undefined | null> {
   if (req.isAdmin === true) return undefined;
   const userId = req.user?.userId;
   if (!userId) return null;
-  const organizationIds = (await stores.organizations.listForUser(userId)).map((org) => org.id);
-  if (organizationIds.length === 0) return null;
+  const orgs = await stores.organizations.listForUser(userId);
+  if (orgs.length === 0) return null;
+  const organizationIds = orgs.map((org) => org.id);
   const wanted = [req.organizationId, preferred].find((id) => !!id && organizationIds.includes(id));
-  return { userId, organizationIds, organizationId: wanted ?? organizationIds[0]! };
+  const acting = orgs.find((org) => org.id === wanted) ?? orgs[0]!;
+  return { userId, organizationIds, organizationId: acting.id, mayWrite: mayWriteArtists(acting) };
 }

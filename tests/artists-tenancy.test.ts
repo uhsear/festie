@@ -235,6 +235,28 @@ describe('editing an artist', { skip }, () => {
     assert.deepEqual(await lineupNames('fe-sh-b'), ['Shared Act'], 'the other tenant festival is untouched');
   });
 
+  test('only the acting organization counts as own: a viewer seat or a suspended organization elsewhere gives no direct edit', async () => {
+    const dual = await o.makeUser(server, `dual-${Date.now()}`);
+    await o.addMember(server, 'org-a', dual.id, 'editor');
+    await o.addMember(server, 'org-b', dual.id, 'viewer');
+    await o.addMember(server, 'org-s', dual.id, 'owner');
+    const viaViewerSeat = await seedArtist({ name: 'Seat Viewer' });
+    await festival('fe-seat-b', 'org-b', false, [{ id: viaViewerSeat, name: 'Seat Viewer' }]);
+    const viaSuspended = await seedArtist({ name: 'Seat Suspended' });
+    await festival('fe-seat-s', 'org-s', false, [{ id: viaSuspended, name: 'Seat Suspended' }]);
+    const own = await seedArtist({ name: 'Seat Own' });
+    await festival('fe-seat-a', 'org-a', false, [{ id: own, name: 'Seat Own' }]);
+    const edit = async (id: string, changes: object) =>
+      o.as(server, dual.token).patch(`${ARTISTS}/${id}`, { expectedUpdatedAt: await tokenOf(id), changes });
+    // The artist is visible through the other seat, but a write for organization A is a suggestion.
+    for (const id of [viaViewerSeat, viaSuspended]) {
+      const res = await edit(id, { name: 'Seat Rename' });
+      assert.equal(res.status, 202, JSON.stringify(res.body));
+      assert.notEqual((await artistRow(id)).name, 'Seat Rename');
+    }
+    assert.equal((await edit(own, { name: 'Seat Own Renamed' })).status, 200);
+  });
+
   test('an admin-only festival counts as another user, and a stale token is a 409', async () => {
     const id = await seedArtist({ name: 'Platform Shared' });
     await festival('fe-pl-a', 'org-a', false, [{ id, name: 'Platform Shared' }]);

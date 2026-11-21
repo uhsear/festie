@@ -46,7 +46,7 @@ export async function organizerVerdict(
   if (!(await viewerMask(client, viewer, [before.id])).has(before.id)) {
     throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
   }
-  if (touchesSpotify(changes)) return 'suggest';
+  if (touchesSpotify(changes) || !viewer.mayWrite) return 'suggest';
   // Every festival counts here, drafts and archived ones too: the answer is about who is affected, not who may be told.
   const uses = (await artistUses(client, [before.id])).get(before.id) ?? [];
   if (!uses.some((use) => useIsForeign(use, viewer))) return 'direct';

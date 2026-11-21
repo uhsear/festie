@@ -21,6 +21,8 @@ export interface ArtistViewer {
   organizationIds: string[];
   /** The organization a write is made for (an audit row and a suggestion carry it). One of `organizationIds`. */
   organizationId: string;
+  /** True when the user is an owner or editor of `organizationId` and it is not suspended. Only then may a write be direct. */
+  mayWrite: boolean;
 }
 
 /** SQL conditions over one artists row, written against the alias `a`. Params: the user id and the organization id list. */
@@ -71,7 +73,10 @@ export function useIsVisible(use: ArtistUse, viewer: ArtistViewer): boolean {
   return use.published && !use.deleted;
 }
 
-/** True when a use is on a festival that does not belong to the viewer's organizations, archived ones included. */
+/**
+ * True when a use is on a festival that is not the acting organization's, archived ones included. A write counts only the
+ * organization it is made for: a viewer seat or a suspended organization elsewhere gives no right to edit.
+ */
 export function useIsForeign(use: ArtistUse, viewer: ArtistViewer): boolean {
-  return !use.organizationId || !viewer.organizationIds.includes(use.organizationId);
+  return !viewer.mayWrite || use.organizationId !== viewer.organizationId;
 }
