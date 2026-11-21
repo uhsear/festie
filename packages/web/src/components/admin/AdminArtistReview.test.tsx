@@ -41,6 +41,8 @@ const item = (over: Record<string, unknown> = {}) => ({
   createdAt: '2026-11-21T12:00:00.000Z',
   decidedAt: null,
   festivalCount: null,
+  merge: null,
+  current: null,
   ...over,
 });
 
@@ -49,7 +51,7 @@ const render = () => renderWithQueryClient(<AdminArtistReview />, createTestQuer
 beforeEach(() => {
   vi.clearAllMocks();
   svc.fetchArtistReview.mockResolvedValue({ items: [item()], total: 1 });
-  svc.importArtistReview.mockResolvedValue({ added: 2, skipped: 1, total: 3 });
+  svc.importArtistReview.mockResolvedValue({ added: 2, refined: 0, skipped: 1, total: 3 });
   svc.approveArtistReview.mockResolvedValue({ status: 'approved', artistId: 'a1', festivalsUpdated: 2 });
   svc.rejectArtistReview.mockResolvedValue({ status: 'rejected' });
 });
@@ -117,14 +119,18 @@ describe('AdminArtistReview', () => {
   });
 
   it('asks before a merge and sends the festival count the admin saw', async () => {
-    svc.fetchArtistReview.mockResolvedValue({ items: [item({ kind: 'merge', artistName: 'YDG', festivalCount: 4 })], total: 1 });
+    const merge = { loserId: 'a-loser', loserName: 'YDG', survivorId: 'a-keep', survivorName: 'Young Dirty Gang (EDM)' };
+    svc.fetchArtistReview.mockResolvedValue({ items: [item({ kind: 'merge', artistName: 'YDG', festivalCount: 4, merge })], total: 1 });
     render();
-    await userEvent.click(await screen.findByRole('button', { name: 'Approve YDG' }));
+    expect(await screen.findByText('Merges YDG into Young Dirty Gang (EDM)')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Approve YDG' }));
     expect(svc.approveArtistReview).not.toHaveBeenCalled();
     const dialog = screen.getByRole('dialog');
-    expect(within(dialog).getByText(/on 4 festivals, past ones too. It cannot be undone/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/merges YDG into Young Dirty Gang \(EDM\), on 4 festivals, past ones too. It cannot be undone/)).toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Merge' }));
-    await waitFor(() => expect(svc.approveArtistReview).toHaveBeenCalledWith('rev-1', { candidateIndex: 0, acceptedFestivals: 4 }));
+    await waitFor(() =>
+      expect(svc.approveArtistReview).toHaveBeenCalledWith('rev-1', { candidateIndex: 0, acceptedFestivals: 4, expectedSurvivorId: 'a-keep' }),
+    );
   });
 
   it('shows a rename as from and to, and approves it without a link', async () => {
@@ -145,7 +151,7 @@ describe('AdminArtistReview', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Batch JSON' }), { target: { value: '{"generatedAt":"2026-11-21","items":[{"kind":"link"}]}' } });
     await userEvent.click(screen.getByRole('button', { name: 'Import' }));
     await waitFor(() => expect(svc.importArtistReview).toHaveBeenCalledWith({ generatedAt: '2026-11-21', items: [{ kind: 'link' }] }));
-    expect(toast).toHaveBeenCalledWith('Imported 2 new items, skipped 1 already in the queue.', 'success');
+    expect(toast).toHaveBeenCalledWith('Imported 2 new items, updated 0 pending, skipped 1 already in the queue.', 'success');
     await waitFor(() => expect(svc.fetchArtistReview.mock.calls.length).toBeGreaterThan(1));
   });
 

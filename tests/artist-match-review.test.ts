@@ -115,9 +115,21 @@ describe('artist review queue', { skip, concurrency: 1 }, () => {
   test('import is idempotent, keeps batch order, pages and filters by status', async () => {
     const items = [1, 2, 3].map((n) => item({ artistName: `Idem ${stamp} ${n}`, festival: `idem-${stamp}`, candidates: [candidate(n)] }));
     const first = await importItems(items).expect(200);
-    assert.deepEqual(first.body.data, { added: 3, skipped: 0, total: 3 });
+    assert.deepEqual(first.body.data, { added: 3, refined: 0, skipped: 0, total: 3 });
     const again = await importItems([...items, items[0]]).expect(200);
-    assert.deepEqual(again.body.data, { added: 0, skipped: 4, total: 4 });
+    assert.deepEqual(again.body.data, { added: 0, refined: 0, skipped: 4, total: 4 });
+
+    // A pending item takes refined candidates and a new note; a decided item does not.
+    const refinedItem = { ...items[0]!, candidates: [candidate(9, 'low')], note: 'second pass' };
+    const refined = await importItems([refinedItem]).expect(200);
+    assert.deepEqual(refined.body.data, { added: 0, refined: 1, skipped: 0, total: 1 });
+    const refinedRow = (await pool.query('SELECT candidates, note FROM artist_match_reviews WHERE artist_name = $1', [items[0]!.artistName])).rows[0];
+    assert.equal(refinedRow.note, 'second pass');
+    assert.equal(refinedRow.candidates[0].spotifyUrl, spotifyUrl(9));
+    assert.equal((await importItems([refinedItem]).expect(200)).body.data.refined, 0);
+    await pool.query(`UPDATE artist_match_reviews SET status = 'rejected' WHERE artist_name = $1`, [items[0]!.artistName]);
+    assert.deepEqual((await importItems([items[0]]).expect(200)).body.data, { added: 0, refined: 0, skipped: 1, total: 1 });
+    await pool.query(`UPDATE artist_match_reviews SET status = 'pending' WHERE artist_name = $1`, [items[0]!.artistName]);
     const { rows } = await pool.query('SELECT count(*)::int AS n FROM artist_match_reviews WHERE festival = $1', [`idem-${stamp}`]);
     assert.equal(rows[0].n, 3);
 
@@ -232,8 +244,9 @@ describe('artist review queue', { skip, concurrency: 1 }, () => {
 
     const listed = (await app.get(`${REVIEW}?limit=100`).expect(200)).body.data.items.find((entry: any) => entry.id === reviewId);
     assert.equal(listed.festivalCount, 1);
+    assert.deepEqual(listed.merge, { loserId, loserName: name, survivorId, survivorName: `${name} (survivor)` });
 
-    const noAuth = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 1 }).expect(403);
+    const noAuth = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 1, expectedSurvivorId: survivorId }).expect(403);
     assert.equal(noAuth.body.error.code, 'REAUTH_REQUIRED');
     await app.post('/api/v1/auth/reauth', { password: ADMIN_PASSWORD }).expect(200);
 
@@ -242,17 +255,69 @@ describe('artist review queue', { skip, concurrency: 1 }, () => {
     assert.equal((await reviewRow(reviewId)).status, 'pending');
     assert.equal((await artistRow(loserId)).merged_into, null);
 
-    const res = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 1 }).expect(200);
+    const noSurvivor = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 1 }).expect(400);
+    assert.match(noSurvivor.body.error.message, /expectedSurvivorId/);
+    const wrongSurvivor = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 1, expectedSurvivorId: loserId }).expect(409);
+    assert.match(wrongSurvivor.body.error.message, /not the one you reviewed/);
+    assert.equal((await reviewRow(reviewId)).status, 'pending');
+    assert.equal((await artistRow(loserId)).merged_into, null);
+
+    const res = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 1, expectedSurvivorId: survivorId }).expect(200);
     assert.equal(res.body.data.artistId, survivorId);
     assert.equal((await artistRow(loserId)).merged_into, survivorId);
     assert.equal((await reviewRow(reviewId)).status, 'approved');
     const copy = (await pool.query('SELECT artists FROM festival_sets WHERE id = $1', [`rev-merge-set-${stamp}`])).rows[0].artists[0];
     assert.equal(copy.id, survivorId);
-    const merged = await pool.query(`SELECT 1 FROM audit_log WHERE action = 'artist.merged' AND target_id = $1`, [survivorId]);
+    const merged = await pool.query(`SELECT details_json FROM audit_log WHERE action = 'artist.merged' AND target_id = $1`, [survivorId]);
     assert.equal(merged.rowCount, 1);
+    assert.equal(merged.rows[0].details_json.reviewId, reviewId);
+    assert.equal(merged.rows[0].details_json.via, 'artist-review');
+    const decided = await auditRows(`action = 'artist.review.decided' AND target_id = $1`, [reviewId]);
+    // The route's own audit rows store their details as a JSON string.
+    const decidedDetails = JSON.parse(decided[0].details_json);
+    assert.equal(decidedDetails.loserId, loserId);
+    assert.equal(decidedDetails.survivorId, survivorId);
 
     const lonely = await queue({ kind: 'merge', artistName: `Lonely ${stamp}`, artistIds: [await seedArtist(`Lonely ${stamp}`)], candidates: [candidate(52)] });
-    assert.match((await app.post(`${REVIEW}/${lonely}/approve`, { acceptedFestivals: 0 }).expect(409)).body.error.message, /merge target is unknown/);
+    const lonelyList = (await app.get(`${REVIEW}?limit=100`).expect(200)).body.data.items.find((entry: any) => entry.id === lonely);
+    assert.equal(lonelyList.merge, null);
+    assert.match((await app.post(`${REVIEW}/${lonely}/approve`, { acceptedFestivals: 0, expectedSurvivorId: 'x' }).expect(409)).body.error.message, /merge target is unknown/);
+  });
+
+  test('a merge whose loser already holds the Spotify link says so, and a merge keeps its id order', async () => {
+    const name = `Holder ${stamp}`;
+    const loserId = await seedArtist(name, { spotifyId: spotifyId(53), links: { spotify: spotifyUrl(53) } });
+    const reviewId = await queue({ kind: 'merge', artistName: name, artistIds: [loserId], candidates: [candidate(53)] });
+    const listed = (await app.get(`${REVIEW}?limit=100`).expect(200)).body.data.items.find((entry: any) => entry.id === reviewId);
+    assert.equal(listed.merge, null);
+    const refused = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 0, expectedSurvivorId: loserId }).expect(409);
+    assert.match(refused.body.error.message, /already holds this Spotify link/);
+    assert.equal((await reviewRow(reviewId)).status, 'pending');
+
+    const a = await seedArtist(`Order A ${stamp}`);
+    const b = await seedArtist(`Order B ${stamp}`);
+    const forward = { kind: 'merge', artistName: `Order ${stamp}`, festival: 'order', artistIds: [a, b] };
+    const result = await importItems([forward, { ...forward, artistIds: [b, a] }]).expect(200);
+    assert.equal(result.body.data.added, 2);
+  });
+
+  test('a link or rename refuses an artist that was renamed since the batch, and the row shows the current link', async () => {
+    const name = `Moved ${stamp}`;
+    const artistId = await seedArtist(name, { spotifyId: spotifyId(54), links: { spotify: spotifyUrl(54) } });
+    const linkId = await queue({ artistName: name, artistIds: [artistId], candidates: [candidate(55)] });
+    const renameId = await queue({ kind: 'rename', artistName: name, artistIds: [artistId], proposed: { from: name, to: `${name} Renamed` } });
+    const listed = (await app.get(`${REVIEW}?limit=100`).expect(200)).body.data.items;
+    assert.deepEqual(listed.find((entry: any) => entry.id === linkId).current, { name, spotifyUrl: spotifyUrl(54) });
+
+    await pool.query('UPDATE artists SET name = $2, name_key = $3 WHERE id = $1', [artistId, `Someone Else ${stamp}`, artistNameKey(`Someone Else ${stamp}`)]);
+    for (const id of [linkId, renameId]) {
+      const refused = await app.post(`${REVIEW}/${id}/approve`, {}).expect(409);
+      assert.match(refused.body.error.message, /is now named Someone Else/);
+      assert.equal((await reviewRow(id)).status, 'pending');
+    }
+    const row = await artistRow(artistId);
+    assert.equal(row.name, `Someone Else ${stamp}`);
+    assert.equal(row.spotify_id, spotifyId(54));
   });
 
   test('a merge that sees more festivals than the admin reviewed is refused and stays pending', async () => {
@@ -261,7 +326,7 @@ describe('artist review queue', { skip, concurrency: 1 }, () => {
     const survivorId = await seedArtist(`${name} two`);
     await seedFestival(pool, { id: `rev-count-${stamp}`, sets: [{ id: `rev-count-set-${stamp}`, artist: name, artists: [{ id: loserId, name, links: {} }] }] });
     const reviewId = await queue({ kind: 'merge', artistName: name, artistIds: [loserId, survivorId] });
-    const refused = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 0 }).expect(409);
+    const refused = await app.post(`${REVIEW}/${reviewId}/approve`, { acceptedFestivals: 0, expectedSurvivorId: survivorId }).expect(409);
     assert.match(refused.body.error.message, /more than the 0 you reviewed/);
     assert.equal((await reviewRow(reviewId)).status, 'pending');
     assert.equal((await artistRow(loserId)).merged_into, null);
@@ -282,5 +347,17 @@ describe('artist review queue', { skip, concurrency: 1 }, () => {
     await app.post(`${REVIEW}/rev-missing/approve`, {}).expect(404);
     const audited = await auditRows(`action = 'artist.review.decided' AND target_id = $1`, [reviewId]);
     assert.equal(audited.length, 1);
+  });
+
+  test('approving merges is limited to 10 a minute, as the Artists tab merge is, while links are not', async () => {
+    // Runs last: it spends the merge bucket. Refused for the missing re-auth or not, each call counts.
+    const merges = await Promise.all(Array.from({ length: 12 }, () => queue({ kind: 'merge' })));
+    const statuses: number[] = [];
+    for (const id of merges) statuses.push((await app.post(`${REVIEW}/${id}/approve`, {})).status);
+    assert.ok(statuses.includes(429), `a merge approval was rate limited: ${statuses.join(',')}`);
+    assert.ok(statuses.indexOf(429) <= 10, 'the limit is 10, not 60');
+
+    const link = await queue({ kind: 'link', artistName: `Unlimited ${stamp}`, candidates: [] });
+    assert.notEqual((await app.post(`${REVIEW}/${link}/approve`, {})).status, 429);
   });
 });

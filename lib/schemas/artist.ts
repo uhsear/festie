@@ -220,6 +220,8 @@ export const artistReviewApproveSchema = z.object({
   url: httpsUrl().optional(),
   // A merge only: how many festivals the admin saw in the preview. The server recounts and refuses a higher count.
   acceptedFestivals: z.number().int().min(0).max(10_000).optional(),
+  // A merge only: the artist the admin saw as the survivor. The server refuses the merge when it resolves to another.
+  expectedSurvivorId: identifier.optional(),
 });
 
 export const artistReviewRejectSchema = z.object({ note: z.string().trim().max(500).optional() });

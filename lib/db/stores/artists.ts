@@ -707,6 +707,8 @@ export function createArtistsStore(pool: Pool) {
       ip?: string | null;
       /** Join this open transaction instead of starting one. */
       client?: PoolClient;
+      /** Extra audit details that tie the merge to what asked for it (the artist review item). */
+      via?: Record<string, unknown>;
     }) {
       const { survivorId, loserId } = input;
       if (survivorId === loserId) throw new ArtistError(400, 'INVALID_INPUT', 'Pick two different artists to merge.');
@@ -844,6 +846,7 @@ export function createArtistsStore(pool: Pool) {
               lineupEntriesMoved: found.refs.lineup.length,
               pick: input.pick,
               festivalIds: festivalIds.slice(0, 200),
+              ...input.via,
             },
             AUDIT_ACTIONS.ARTIST_MERGED,
           );

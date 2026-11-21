@@ -79,6 +79,17 @@ function ReviewRow({ item, busy, onApprove, onReject }: RowProps) {
           </p>
         )}
         {item.note && <p className="text-xs text-text-muted break-words">{item.note}</p>}
+        {item.merge && (
+          <p className="text-xs text-text-secondary break-words">
+            Merges {item.merge.loserName} into {item.merge.survivorName}
+          </p>
+        )}
+        {item.current && (
+          <p className="text-xs text-text-secondary break-words">
+            Now: {item.current.name}
+            {item.kind === 'link' && ` (Spotify: ${item.current.spotifyUrl ?? 'none'})`}
+          </p>
+        )}
       </td>
       <td className="block md:table-cell md:p-3 text-sm text-text-secondary break-words">
         <span className="md:hidden text-text-muted">Festival: </span>
@@ -206,7 +217,10 @@ export default function AdminArtistReview() {
     setBusy(true);
     try {
       const result = await importArtistReview(parsed.batch);
-      toast(`Imported ${result.added} new ${result.added === 1 ? 'item' : 'items'}, skipped ${result.skipped} already in the queue.`, 'success');
+      toast(
+        `Imported ${result.added} new ${result.added === 1 ? 'item' : 'items'}, updated ${result.refined} pending, skipped ${result.skipped} already in the queue.`,
+        'success',
+      );
       setText('');
       setOffset(0);
       await refresh();
@@ -220,7 +234,11 @@ export default function AdminArtistReview() {
   const approve = async (item: ArtistReviewItem, pick: { candidateIndex: number; url?: string }) => {
     setBusy(true);
     try {
-      const body = { ...(item.candidates[pick.candidateIndex] ? { candidateIndex: pick.candidateIndex } : {}), ...(pick.url ? { url: pick.url } : {}), ...(item.kind === 'merge' ? { acceptedFestivals: item.festivalCount ?? 0 } : {}) };
+      const body = {
+        ...(item.candidates[pick.candidateIndex] ? { candidateIndex: pick.candidateIndex } : {}),
+        ...(pick.url ? { url: pick.url } : {}),
+        ...(item.kind === 'merge' ? { acceptedFestivals: item.festivalCount ?? 0, ...(item.merge ? { expectedSurvivorId: item.merge.survivorId } : {}) } : {}),
+      };
       const result = await withReauth(() => approveArtistReview(item.id, body), askPassword, { retryWrongPassword: true });
       if (result === null) return;
       toast(`Applied to ${item.artistName}. ${result.festivalsUpdated} ${result.festivalsUpdated === 1 ? 'festival' : 'festivals'} updated.`, 'success');
@@ -352,7 +370,7 @@ export default function AdminArtistReview() {
         title={merge ? `Merge ${merge.item.artistName}?` : ''}
         description={
           merge
-            ? `This merges the artist into the one that holds the link, on ${merge.item.festivalCount ?? 0} ${merge.item.festivalCount === 1 ? 'festival' : 'festivals'}, past ones too. It cannot be undone. You will be asked for your password.`
+            ? `This merges ${merge.item.merge?.loserName ?? 'the artist'} into ${merge.item.merge?.survivorName ?? 'the one that holds the link'}, on ${merge.item.festivalCount ?? 0} ${merge.item.festivalCount === 1 ? 'festival' : 'festivals'}, past ones too. It cannot be undone. You will be asked for your password.`
             : undefined
         }
         confirmLabel="Merge"

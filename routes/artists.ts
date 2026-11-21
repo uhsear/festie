@@ -492,10 +492,22 @@ export default function createArtistsRoutes(deps: RouteDeps) {
     }
   });
 
+  // A merge through the queue shares the Artists tab merge's bucket (10 a minute); link and rename keep the looser limit.
+  const reviewMergeLimit = rateLimit(10, 'artist-merge');
+  const limitReviewMerges = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const kind = await stores.artistMatchReview.kindOf((req.validatedParams as Params).id as string);
+      return kind === 'merge' ? reviewMergeLimit(req, res, next) : next();
+    } catch (error) {
+      return sendArtistError(res, error, 'approve the review item');
+    }
+  };
+
   router.post(
     '/review/:id/approve',
     rateLimit(60, 'artist-review-decide'),
     validateParams(schemas.genericIdParams),
+    limitReviewMerges,
     validate(schemas.artistReviewApprove),
     async (req: Request, res: Response) => {
       try {
@@ -508,7 +520,7 @@ export default function createArtistsRoutes(deps: RouteDeps) {
           ip: getRequestIp(req),
         });
         await afterSync(result.synced);
-        audit(AUDIT_ACTIONS.ARTIST_REVIEW_DECIDED, id, req, { decision: 'approved', artistId: result.artistId, festivals: result.synced.length }, 'artist_match_review');
+        audit(AUDIT_ACTIONS.ARTIST_REVIEW_DECIDED, id, req, { decision: 'approved', artistId: result.artistId, ...(result.loserId ? { survivorId: result.artistId, loserId: result.loserId } : {}), festivals: result.synced.length }, 'artist_match_review');
         return sendSuccess(res, { status: 'approved', artistId: result.artistId, festivalsUpdated: result.synced.length });
       } catch (error) {
         return sendArtistError(res, error, 'approve the review item');

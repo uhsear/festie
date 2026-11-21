@@ -32,6 +32,10 @@ export interface ArtistReviewItem {
   decidedAt: string | null;
   /** A pending merge only: the festivals that list either artist. Send it back as acceptedFestivals. */
   festivalCount: number | null;
+  /** A pending merge only: who is merged into whom. Send merge.survivorId back as expectedSurvivorId. */
+  merge: { loserId: string; loserName: string; survivorId: string; survivorName: string } | null;
+  /** A pending link or rename only: the artist as it is now. */
+  current: { name: string; spotifyUrl: string | null } | null;
 }
 
 export interface ArtistReviewPage {
@@ -45,10 +49,13 @@ export const fetchArtistReview = (status: ArtistReviewStatus | 'all' = 'pending'
   api.get<ArtistReviewPage>(`/admin/artists/review?status=${status}&limit=${limit}&offset=${offset}`);
 
 export const importArtistReview = (batch: unknown) =>
-  api.post<{ added: number; skipped: number; total: number }>('/admin/artists/review/import', batch);
+  api.post<{ added: number; refined: number; skipped: number; total: number }>('/admin/artists/review/import', batch);
 
-/** A link item sends the chosen candidate or a typed link. A merge also sends acceptedFestivals and needs a recent re-auth. */
-export const approveArtistReview = (id: string, body: { candidateIndex?: number; url?: string; acceptedFestivals?: number } = {}) =>
+/** A link item sends the chosen candidate or a typed link. A merge also sends acceptedFestivals and expectedSurvivorId, and needs a recent re-auth. */
+export const approveArtistReview = (
+  id: string,
+  body: { candidateIndex?: number; url?: string; acceptedFestivals?: number; expectedSurvivorId?: string } = {},
+) =>
   api.post<{ status: 'approved'; artistId: string; festivalsUpdated: number }>(`/admin/artists/review/${enc(id)}/approve`, body);
 
 export const rejectArtistReview = (id: string, note?: string) =>
