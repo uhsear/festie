@@ -131,6 +131,9 @@ packages/web/public/fonts/clash-display/
 # Internal docs: kept on the workstation and the server, never published.
 /docs/*
 !/docs/brand/
+!/docs/runbooks/
+/docs/runbooks/*
+!/docs/runbooks/ios-testing.md
 !/docs/REUSE.md
 !/docs/adrs/
 /docs/adrs/*
