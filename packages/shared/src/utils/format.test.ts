@@ -106,7 +106,7 @@ describe('formatTime follows the locale hour cycle', () => {
   });
 
   it('never uses a no-break space and returns non-time input unchanged', () => {
-    expect(formatTime('21:30', 'en-US')).not.toMatch(/[  ]/);
+    expect(formatTime('21:30', 'en-US')).not.toMatch(/[\u00a0\u202f]/);
     expect(formatTime('soon', 'en-US')).toBe('soon');
     expect(formatTimeOrRaw('21:30', 'de-DE')).toBe('21:30');
     expect(formatTimeOrRaw('after sunset', 'de-DE')).toBe('after sunset');
