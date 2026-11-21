@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, ScrollView, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
 import { api, uploadSiteplanImage } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import {
-  amenityGlyph,
-  amenityCount,
   buildAmenityFeature,
   appendAmenity,
   removeAmenity,
@@ -18,12 +22,9 @@ import {
   setZoneLabel as renameZone,
   parseLatLng,
   stageCoordFromTap,
-  AMENITY_PALETTE,
-  humanizeAmenityType,
   buildZoneFeature,
   appendZone,
   removeZone,
-  zoneCount,
   extractZones,
   ZONE_PALETTE,
   buildSiteplan,
@@ -33,17 +34,22 @@ import {
   isHttpsUrl,
   clampOpacity,
   SITEPLAN_DEFAULT_OPACITY,
-  SITEPLAN_CORNER_LABELS,
   SITEPLAN_CORNER_COUNT,
 } from '@festie/shared/utils';
 import type { AmenityType, Festival, FestivalMapConfig, Stage } from '@festie/shared/types';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
-import SectionLabel from '../../components/SectionLabel';
-import { ConfirmDialog, LabeledTextInput } from '../../components/admin';
-import OfflineMap from '../../components/OfflineMap';
+import { ConfirmDialog } from '../../components/admin';
 import type { AuthoringMode } from '../../lib/webviewBridge';
-import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
+import { useTokens } from '../../hooks/useTokens';
+import MapAuthoringPane from '../../components/admin/festival-map/MapAuthoringPane';
+import VenueSection from '../../components/admin/festival-map/VenueSection';
+import StageLocationsSection from '../../components/admin/festival-map/StageLocationsSection';
+import ZonesSection from '../../components/admin/festival-map/ZonesSection';
+import SitePlanSection from '../../components/admin/festival-map/SitePlanSection';
+import AmenitiesSection from '../../components/admin/festival-map/AmenitiesSection';
+import type { ArmedTarget, StageEdit, Vertex } from '../../components/admin/festival-map/types';
+import { useStyles } from '../../components/admin/festival-map/styles';
 
 /**
  * Admin — Festival MAP editor (Phase D). The geo-authoring counterpart to
@@ -100,57 +106,8 @@ interface FestivalDetail {
 
 const MAX_SITEPLAN_BYTES = 10 * 1024 * 1024;
 
-// Local editable stage shape (carries the pin). Mirrors festivalEditState.StageRow.
-interface StageEdit {
-  id: string;
-  name: string;
-  color: string;
-  latitude: number | null;
-  longitude: number | null;
-}
 
 const DEFAULT_STAGE_COLOR = '#6a6a88';
-
-// Discrete opacity steps for the site-plan overlay. React Native has no
-// `<input type=range>` and Festie ships no slider native module, so the editor
-// offers preset chips (pure JS, OTA-safe) instead of a continuous slider — the
-// default (SITEPLAN_DEFAULT_OPACITY = 0.6) is one of the stops.
-const SITEPLAN_OPACITY_PRESETS = [0.3, 0.45, 0.6, 0.75, 0.9] as const;
-
-// What the next placement tap will do. null = idle (no target armed).
-type ArmedTarget =
-  | { kind: 'stage'; stageId: string }
-  | { kind: 'amenity'; amenityType: AmenityType }
-  | { kind: 'zone' }
-  | { kind: 'siteplan' }
-  | { kind: 'venue' }
-  | { kind: 'move-amenity'; id: string }
-  | { kind: 'move-zone'; id: string }
-  | null;
-
-/** A single tapped vertex while drawing a zone (geo.ts {latitude, longitude}). */
-type Vertex = { latitude: number; longitude: number };
-
-/** Name field with a local draft so a trimmed commit never eats a typed space. Commits on every change: Save does not blur the field, so an end-editing commit would be lost. */
-function NameInput({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
-  const t = useTokens();
-  const styles = useStyles();
-  const [draft, setDraft] = useState(value);
-  return (
-    <TextInput
-      style={styles.nameInput}
-      value={draft}
-      onChangeText={(v) => {
-        setDraft(v);
-        onCommit(v);
-      }}
-      placeholderTextColor={t.colors.text.placeholder}
-      placeholder="Unnamed"
-      autoCorrect={false}
-      accessibilityLabel={`Name of ${label}`}
-    />
-  );
-}
 
 export default function FestivalMapEditorScreen() {
   const t = useTokens();
@@ -608,37 +565,18 @@ export default function FestivalMapEditorScreen() {
 
       {/* The map — half the screen; the toolbar scrolls beneath it. Authoring
           mode follows the armed target; a tap applies to that target. */}
-      <View style={styles.mapWrap}>
-        <OfflineMap
-          meetingPoints={[]}
-          festival={mapFestival}
-          authoringMode={authoringMode}
-          draftPoints={draftPoints}
-          onMapPress={handleMapPress}
-        />
-        {armed ? (
-          <View style={styles.armedBanner} pointerEvents="none">
-            <Ionicons name="locate-outline" size={14} color={t.colors.text.onLightAccent} />
-            <Text style={styles.armedBannerText} numberOfLines={1}>
-              {armed.kind === 'venue'
-                ? 'Tap the map at the venue'
-                : armed.kind === 'move-amenity'
-                  ? `Tap the map where ${amenityFeatures.find((f) => f.properties.id === armed.id)?.properties.label ?? 'it'} should go`
-                  : armed.kind === 'move-zone'
-                    ? `Tap the map where the centre of ${placedZones.find((z) => z.id === armed.id)?.label || 'the zone'} should go`
-                    : armed.kind === 'stage'
-                      ? `Tap the map to set ${stages.find((s) => s.id === armed.stageId)?.name || 'this stage'}’s location`
-                      : armed.kind === 'amenity'
-                        ? `Tap the map to drop a ${humanizeAmenityType(armed.amenityType)} marker`
-                        : armed.kind === 'siteplan'
-                          ? draftCorners.length >= SITEPLAN_CORNER_COUNT
-                            ? 'All 4 corners set — apply them below'
-                            : `Tap the ${SITEPLAN_CORNER_LABELS[draftCorners.length]} corner (${draftCorners.length}/${SITEPLAN_CORNER_COUNT})`
-                          : `Tap the map to add zone points (${draftVertices.length} added — need 3+)`}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+      <MapAuthoringPane
+        amenityFeatures={amenityFeatures}
+        armed={armed}
+        authoringMode={authoringMode}
+        draftCorners={draftCorners}
+        draftPoints={draftPoints}
+        draftVertices={draftVertices}
+        handleMapPress={handleMapPress}
+        mapFestival={mapFestival}
+        placedZones={placedZones}
+        stages={stages}
+      />
 
       <KeyboardAvoidingView style={styles.flex} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
@@ -650,450 +588,79 @@ export default function FestivalMapEditorScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Venue */}
-          <SectionLabel>Venue</SectionLabel>
-          <View style={styles.card}>
-            <Text style={styles.emptyHint}>
-              {venue
-                ? `The map and weather use ${venue.latitude.toFixed(5)}, ${venue.longitude.toFixed(5)}.`
-                : "No venue point yet. Festie looks up the location when you save the festival. If it can't find it, set the venue here."}
-            </Text>
-            <TouchableOpacity
-              onPress={armVenue}
-              style={[styles.armBtn, styles.zoneStartBtn, armed?.kind === 'venue' ? styles.armBtnActive : null]}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityState={{ selected: armed?.kind === 'venue' }}
-              accessibilityLabel={armed?.kind === 'venue' ? 'Cancel setting the venue' : 'Set the venue on the map'}
-            >
-              <Text style={[styles.armBtnText, armed?.kind === 'venue' ? styles.armBtnTextActive : null]}>
-                {armed?.kind === 'venue' ? 'Cancel' : 'Set on map'}
-              </Text>
-            </TouchableOpacity>
-            <LabeledTextInput
-              label="Venue coordinates"
-              value={venueText}
-              onChangeText={(v) => {
-                setVenueText(v);
-                setVenueError(null);
-              }}
-              placeholder="Paste coordinates, e.g. 28.53834, -81.37923"
-              autoCapitalize="none"
-              error={venueError}
-            />
-            <TouchableOpacity
-              onPress={applyVenueText}
-              disabled={venueText.trim() === ''}
-              style={[styles.armBtn, styles.zoneStartBtn, venueText.trim() === '' ? styles.btnDisabled : null]}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Use these coordinates as the venue"
-            >
-              <Text style={styles.armBtnText}>Use</Text>
-            </TouchableOpacity>
-          </View>
+          <VenueSection
+            applyVenueText={applyVenueText}
+            armVenue={armVenue}
+            armed={armed}
+            setVenueError={setVenueError}
+            setVenueText={setVenueText}
+            venue={venue}
+            venueError={venueError}
+            venueText={venueText}
+          />
 
           {/* Stage locations */}
-          <SectionLabel>Stage locations</SectionLabel>
-          <View style={styles.card}>
-            {stages.length === 0 ? (
-              <>
-                <Text style={styles.emptyHint}>This festival has no stages yet.</Text>
-                <TouchableOpacity
-                  onPress={() => (touched ? setShowLeaveConfirm(true) : goToFestivalEditor())}
-                  style={[styles.armBtn, styles.zoneStartBtn]}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Add stages in the festival editor"
-                >
-                  <Text style={styles.armBtnText}>Add stages</Text>
-                </TouchableOpacity>
-              </>
-            ) : (
-              stages.map((stage) => {
-                const pinned = typeof stage.latitude === 'number' && typeof stage.longitude === 'number';
-                const isArmed = armed?.kind === 'stage' && armed.stageId === stage.id;
-                return (
-                  <View key={stage.id} style={styles.stageRow}>
-                    <View style={[styles.swatch, { backgroundColor: stage.color }]} />
-                    <View style={styles.stageBody}>
-                      <Text style={styles.stageName} numberOfLines={1}>
-                        {stage.name || 'Untitled stage'}
-                      </Text>
-                      <Text style={styles.stageCoord} numberOfLines={1}>
-                        {pinned ? `${stage.latitude!.toFixed(5)}, ${stage.longitude!.toFixed(5)}` : 'No location'}
-                      </Text>
-                    </View>
-                    {pinned ? (
-                      <TouchableOpacity
-                        onPress={() => clearStagePin(stage.id)}
-                        style={styles.miniBtn}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Clear ${stage.name || 'stage'} location`}
-                      >
-                        <Ionicons name="trash-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
-                      </TouchableOpacity>
-                    ) : null}
-                    <TouchableOpacity
-                      onPress={() => armStage(stage.id)}
-                      style={[styles.armBtn, isArmed ? styles.armBtnActive : null]}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: isArmed }}
-                      accessibilityLabel={
-                        isArmed
-                          ? 'Cancel placing this stage'
-                          : `${pinned ? 'Move' : 'Set'} ${stage.name || 'stage'} location`
-                      }
-                    >
-                      <Text style={[styles.armBtnText, isArmed ? styles.armBtnTextActive : null]}>
-                        {isArmed ? 'Cancel' : pinned ? 'Move' : 'Set'}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                );
-              })
-            )}
-          </View>
+          <StageLocationsSection
+            armStage={armStage}
+            armed={armed}
+            clearStagePin={clearStagePin}
+            goToFestivalEditor={goToFestivalEditor}
+            setShowLeaveConfirm={setShowLeaveConfirm}
+            stages={stages}
+            touched={touched}
+          />
 
           {/* Zones (camping / VIP / no-go / parking) */}
-          <SectionLabel>Zones</SectionLabel>
-          <View style={styles.card}>
-            <Text style={styles.emptyHint}>
-              Pick a color, name the area, then tap the map to drop points. Finish with 3 or more.{' '}
-              {zoneCount(mapConfig)} drawn.
-            </Text>
-            <LabeledTextInput
-              label="Zone name"
-              value={zoneLabel}
-              onChangeText={setZoneLabel}
-              placeholder="e.g. Camping, VIP, No-go"
-              autoCapitalize="sentences"
-              hint="Shown as the zone's label tag."
-            />
-            <View style={styles.palette}>
-              {ZONE_PALETTE.map((preset) => {
-                const selected = zoneColor === preset.color;
-                return (
-                  <TouchableOpacity
-                    key={preset.color}
-                    onPress={() => {
-                      setZoneColor(preset.color);
-                      if (!zoneLabel.trim()) setZoneLabel(preset.label);
-                    }}
-                    style={[styles.paletteItem, selected ? { borderColor: preset.color, borderWidth: 2 } : null]}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    accessibilityLabel={`Use ${preset.label} color`}
-                  >
-                    <View style={[styles.zoneSwatch, { backgroundColor: preset.color }]} />
-                    <Text style={styles.paletteLabel} numberOfLines={1}>
-                      {preset.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {isDrawingZone ? (
-              <View style={styles.zoneControls}>
-                <Text style={styles.zonePointCount}>
-                  {draftVertices.length} {draftVertices.length === 1 ? 'point' : 'points'}
-                </Text>
-                <TouchableOpacity
-                  onPress={undoVertex}
-                  disabled={draftVertices.length === 0}
-                  style={[styles.zoneBtn, draftVertices.length === 0 ? styles.btnDisabled : null]}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Undo last zone point"
-                >
-                  <Text style={styles.zoneBtnText}>Undo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={finishZone}
-                  disabled={draftVertices.length < 3}
-                  style={[styles.zoneBtnPrimary, draftVertices.length < 3 ? styles.btnDisabled : null]}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Finish zone"
-                >
-                  <Text style={styles.zoneBtnPrimaryText}>Finish</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={cancelZone}
-                  style={styles.zoneBtnDanger}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel drawing this zone"
-                >
-                  <Text style={styles.zoneBtnDangerText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={startZone}
-                style={[styles.armBtn, styles.zoneStartBtn]}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel="Draw a zone"
-              >
-                <Text style={styles.armBtnText}>Draw a zone</Text>
-              </TouchableOpacity>
-            )}
-
-            {placedZones.length > 0 ? (
-              <View style={styles.placedList}>
-                {placedZones.map((z) => (
-                  <View key={z.id} style={styles.placedRow}>
-                    <View style={[styles.zoneSwatch, { backgroundColor: z.color }]} />
-                    <NameInput label={z.label || 'zone'} value={z.label} onCommit={(v) => renameZoneById(z.id, v)} />
-                    <TouchableOpacity
-                      onPress={() => armMoveZone(z.id)}
-                      style={styles.moveBtn}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: armed?.kind === 'move-zone' && armed.id === z.id }}
-                      accessibilityLabel={`Move ${z.label || 'zone'}`}
-                    >
-                      <Text style={styles.armBtnText}>
-                        {armed?.kind === 'move-zone' && armed.id === z.id ? 'Cancel' : 'Move'}
-                      </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => removeZoneById(z.id)}
-                      style={styles.miniBtn}
-                      activeOpacity={0.7}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${z.label || 'zone'}`}
-                    >
-                      <Ionicons name="close" size={t.iconSize.sm} color={t.colors.accent.coral} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-          </View>
+          <ZonesSection
+            armMoveZone={armMoveZone}
+            armed={armed}
+            cancelZone={cancelZone}
+            draftVertices={draftVertices}
+            finishZone={finishZone}
+            isDrawingZone={isDrawingZone}
+            mapConfig={mapConfig}
+            placedZones={placedZones}
+            removeZoneById={removeZoneById}
+            renameZoneById={renameZoneById}
+            setZoneColor={setZoneColor}
+            setZoneLabel={setZoneLabel}
+            startZone={startZone}
+            undoVertex={undoVertex}
+            zoneColor={zoneColor}
+            zoneLabel={zoneLabel}
+          />
 
           {/* Site plan overlay */}
-          <SectionLabel>Site plan overlay</SectionLabel>
-          <View style={styles.card}>
-            <Text style={styles.emptyHint}>
-              Upload the organiser's site-plan image (PNG, JPEG or WebP, up to 10 MB), or paste an https link. Then mark
-              the four corners: top-left, top-right, bottom-right, bottom-left. Got a PDF? Save the page as a PNG first.
-            </Text>
-            <TouchableOpacity
-              onPress={() => void pickAndUploadSiteplan()}
-              disabled={uploading}
-              style={[styles.armBtn, styles.zoneStartBtn, uploading ? styles.btnDisabled : null]}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel="Upload a site-plan image"
-            >
-              <Text style={styles.armBtnText}>{uploading ? 'Uploading…' : 'Upload image'}</Text>
-            </TouchableOpacity>
-            {uploadNote ? (
-              <Text style={uploadNote.error ? styles.formError : styles.emptyHint} accessibilityLiveRegion="polite">
-                {uploadNote.text}
-              </Text>
-            ) : null}
-            <LabeledTextInput
-              label="Site-plan image URL"
-              value={siteplanUrl}
-              onChangeText={onSiteplanUrlChange}
-              placeholder="https://…/site-plan.png"
-              keyboardType="url"
-              autoCapitalize="none"
-              maxLength={2048}
-              error={
-                siteplanUrl.trim() !== '' && !isHttpsUrl(siteplanUrl) ? 'Image link must start with https://' : null
-              }
-            />
-
-            {isPlacingSiteplan ? (
-              <View style={styles.zoneControls}>
-                <Text style={styles.zonePointCount}>
-                  {draftCorners.length}/{SITEPLAN_CORNER_COUNT} corners
-                </Text>
-                <TouchableOpacity
-                  onPress={undoCorner}
-                  disabled={draftCorners.length === 0}
-                  style={[styles.zoneBtn, draftCorners.length === 0 ? styles.btnDisabled : null]}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Undo last corner"
-                >
-                  <Text style={styles.zoneBtnText}>Undo</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={applySiteplanCorners}
-                  disabled={draftCorners.length !== SITEPLAN_CORNER_COUNT || !isHttpsUrl(siteplanUrl)}
-                  style={[
-                    styles.zoneBtnPrimary,
-                    draftCorners.length !== SITEPLAN_CORNER_COUNT || !isHttpsUrl(siteplanUrl)
-                      ? styles.btnDisabled
-                      : null,
-                  ]}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Apply the four corners"
-                >
-                  <Text style={styles.zoneBtnPrimaryText}>Apply</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={cancelSiteplanCorners}
-                  style={styles.zoneBtnDanger}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel placing corners"
-                >
-                  <Text style={styles.zoneBtnDangerText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                onPress={startSiteplanCorners}
-                disabled={!isHttpsUrl(siteplanUrl)}
-                style={[styles.armBtn, styles.zoneStartBtn, !isHttpsUrl(siteplanUrl) ? styles.btnDisabled : null]}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityLabel={committedSiteplan ? 'Re-place site-plan corners' : 'Set site-plan corners'}
-              >
-                <Text style={styles.armBtnText}>{committedSiteplan ? 'Re-place corners' : 'Set corners'}</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Opacity presets — only meaningful once an overlay is committed. */}
-            {committedSiteplan ? (
-              <View style={styles.opacityBlock}>
-                <Text style={styles.zonePointCount}>Opacity: {Math.round(siteplanOpacity * 100)}%</Text>
-                <View style={styles.palette}>
-                  {SITEPLAN_OPACITY_PRESETS.map((op) => {
-                    const selected = Math.round(siteplanOpacity * 100) === Math.round(op * 100);
-                    return (
-                      <TouchableOpacity
-                        key={op}
-                        onPress={() => onSiteplanOpacityChange(op)}
-                        style={[styles.opacityChip, selected ? styles.opacityChipOn : null]}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        accessibilityLabel={`Set overlay opacity to ${Math.round(op * 100)} percent`}
-                      >
-                        <Text style={[styles.opacityChipText, selected ? styles.opacityChipTextOn : null]}>
-                          {Math.round(op * 100)}%
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            ) : null}
-
-            {committedSiteplan ? (
-              <View style={styles.placedList}>
-                <View style={styles.placedRow}>
-                  <Text style={styles.placedLabel} numberOfLines={1}>
-                    Overlay set ({SITEPLAN_CORNER_COUNT} corners)
-                  </Text>
-                  <TouchableOpacity
-                    onPress={removeSiteplanOverlay}
-                    style={styles.miniBtn}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityLabel="Remove site-plan overlay"
-                  >
-                    <Ionicons name="close" size={t.iconSize.sm} color={t.colors.accent.coral} />
-                  </TouchableOpacity>
-                </View>
-              </View>
-            ) : null}
-          </View>
+          <SitePlanSection
+            applySiteplanCorners={applySiteplanCorners}
+            cancelSiteplanCorners={cancelSiteplanCorners}
+            committedSiteplan={committedSiteplan}
+            draftCorners={draftCorners}
+            isPlacingSiteplan={isPlacingSiteplan}
+            onSiteplanOpacityChange={onSiteplanOpacityChange}
+            onSiteplanUrlChange={onSiteplanUrlChange}
+            pickAndUploadSiteplan={pickAndUploadSiteplan}
+            removeSiteplanOverlay={removeSiteplanOverlay}
+            siteplanOpacity={siteplanOpacity}
+            siteplanUrl={siteplanUrl}
+            startSiteplanCorners={startSiteplanCorners}
+            undoCorner={undoCorner}
+            uploadNote={uploadNote}
+            uploading={uploading}
+          />
 
           {/* Amenities */}
-          <SectionLabel>Amenities</SectionLabel>
-          <View style={styles.card}>
-            <Text style={styles.emptyHint}>
-              Pick a type, optionally name it, then tap the map to drop it. {amenityCount(mapConfig)} placed.
-            </Text>
-            <LabeledTextInput
-              label="Label (optional)"
-              value={amenityLabel}
-              onChangeText={setAmenityLabel}
-              placeholder="e.g. North water station"
-              autoCapitalize="sentences"
-              hint="Used for the marker's popup. Blank uses the type name."
-            />
-            <View style={styles.palette}>
-              {AMENITY_PALETTE.map((type) => {
-                const { glyph, color } = amenityGlyph(type);
-                const isArmed = armed?.kind === 'amenity' && armed.amenityType === type;
-                return (
-                  <TouchableOpacity
-                    key={type}
-                    onPress={() => armAmenity(type)}
-                    style={[styles.paletteItem, isArmed ? { borderColor: color, borderWidth: 2 } : null]}
-                    activeOpacity={0.7}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: isArmed }}
-                    accessibilityLabel={`${isArmed ? 'Cancel placing' : 'Place'} ${humanizeAmenityType(type)}`}
-                  >
-                    <View style={[styles.paletteGlyph, { backgroundColor: color }]}>
-                      <Text style={styles.paletteGlyphText}>{glyph}</Text>
-                    </View>
-                    <Text style={styles.paletteLabel} numberOfLines={1}>
-                      {humanizeAmenityType(type)}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {/* Placed amenities list (remove individual markers). */}
-            {amenityFeatures.length > 0 ? (
-              <View style={styles.placedList}>
-                {amenityFeatures.map((f) => {
-                  const { glyph, color } = amenityGlyph(f.properties.amenityType);
-                  return (
-                    <View key={f.properties.id} style={styles.placedRow}>
-                      <View style={[styles.placedGlyph, { backgroundColor: color }]}>
-                        <Text style={styles.paletteGlyphText}>{glyph}</Text>
-                      </View>
-                      <NameInput
-                        label={f.properties.label}
-                        value={f.properties.label}
-                        onCommit={(v) => renameAmenityById(f.properties.id, v)}
-                      />
-                      <TouchableOpacity
-                        onPress={() => armMoveAmenity(f.properties.id)}
-                        style={styles.moveBtn}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityState={{
-                          selected: armed?.kind === 'move-amenity' && armed.id === f.properties.id,
-                        }}
-                        accessibilityLabel={`Move ${f.properties.label}`}
-                      >
-                        <Text style={styles.armBtnText}>
-                          {armed?.kind === 'move-amenity' && armed.id === f.properties.id ? 'Cancel' : 'Move'}
-                        </Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => removeAmenityById(f.properties.id)}
-                        style={styles.miniBtn}
-                        activeOpacity={0.7}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${f.properties.label}`}
-                      >
-                        <Ionicons name="close" size={t.iconSize.sm} color={t.colors.accent.coral} />
-                      </TouchableOpacity>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : null}
-          </View>
+          <AmenitiesSection
+            amenityFeatures={amenityFeatures}
+            amenityLabel={amenityLabel}
+            armAmenity={armAmenity}
+            armMoveAmenity={armMoveAmenity}
+            armed={armed}
+            mapConfig={mapConfig}
+            removeAmenityById={removeAmenityById}
+            renameAmenityById={renameAmenityById}
+            setAmenityLabel={setAmenityLabel}
+          />
 
           {formError ? (
             <Text style={styles.formError} accessibilityLiveRegion="polite">
@@ -1155,305 +722,3 @@ export default function FestivalMapEditorScreen() {
     </View>
   );
 }
-
-const useStyles = makeStyles((t) => ({
-  screen: {
-    flex: 1,
-    backgroundColor: t.colors.bg.primary,
-  },
-  flex: {
-    flex: 1,
-  },
-  mapWrap: {
-    height: 300,
-    width: '100%',
-  },
-  armedBanner: {
-    position: 'absolute',
-    top: t.spacing[3],
-    alignSelf: 'center',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[2],
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.accent.aqua,
-    maxWidth: '90%',
-  },
-  armedBannerText: {
-    ...typeStyle('micro'),
-    color: t.colors.text.onLightAccent,
-  },
-  scroll: {
-    width: '100%',
-    maxWidth: 600,
-    alignSelf: 'center',
-    paddingHorizontal: t.spacing[4],
-    paddingTop: t.spacing[3],
-    gap: t.spacing[2],
-  },
-  card: {
-    backgroundColor: t.colors.bg.secondary,
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    padding: t.spacing[4],
-    gap: t.spacing[3],
-  },
-  emptyHint: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  // Stage rows -----------------------------------------------------------------
-  stageRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-  },
-  swatch: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: t.colors.border.light,
-  },
-  stageBody: {
-    flex: 1,
-    gap: 2,
-  },
-  stageName: {
-    ...typeStyle('body', 600),
-    color: t.colors.text.primary,
-  },
-  stageCoord: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
-  armBtn: {
-    minHeight: 40,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.aqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  armBtnActive: {
-    backgroundColor: t.colors.accent.aqua,
-  },
-  armBtnText: {
-    ...typeStyle('caption', 600),
-    color: t.colors.accent.aqua,
-  },
-  armBtnTextActive: {
-    color: t.colors.text.onLightAccent,
-  },
-  miniBtn: {
-    minHeight: 40,
-    minWidth: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Amenity palette ------------------------------------------------------------
-  palette: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: t.spacing[2],
-  },
-  paletteItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    paddingHorizontal: t.spacing[2],
-    paddingVertical: t.spacing[1],
-    borderRadius: t.radii.pill,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.primary,
-    minHeight: 40,
-  },
-  paletteGlyph: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#ffffff',
-  },
-  paletteGlyphText: {
-    fontSize: 13,
-    lineHeight: 16,
-  },
-  paletteLabel: {
-    ...typeStyle('caption'),
-    color: t.colors.text.primary,
-  },
-  // Zone drawing ---------------------------------------------------------------
-  zoneSwatch: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#ffffff',
-  },
-  zoneStartBtn: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: t.spacing[4],
-  },
-  zoneControls: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    gap: t.spacing[2],
-  },
-  zonePointCount: {
-    ...typeStyle('caption', 600),
-    color: t.colors.text.secondary,
-  },
-  zoneBtn: {
-    minHeight: 40,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zoneBtnText: {
-    ...typeStyle('caption', 600),
-    color: t.colors.text.secondary,
-  },
-  zoneBtnPrimary: {
-    minHeight: 40,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    backgroundColor: t.colors.accent.aqua,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zoneBtnPrimaryText: {
-    ...typeStyle('caption', 600),
-    color: t.colors.text.onLightAccent,
-  },
-  zoneBtnDanger: {
-    minHeight: 40,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.accent.coral,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  zoneBtnDangerText: {
-    ...typeStyle('caption', 600),
-    color: t.colors.accent.coral,
-  },
-  // Site-plan opacity presets --------------------------------------------------
-  opacityBlock: {
-    gap: t.spacing[2],
-  },
-  opacityChip: {
-    minHeight: 40,
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.pill,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  opacityChipOn: {
-    borderColor: t.colors.accent.aqua,
-    backgroundColor: t.colors.accent.aqua,
-  },
-  opacityChipText: {
-    ...typeStyle('caption', 600),
-    color: t.colors.text.secondary,
-  },
-  opacityChipTextOn: {
-    color: t.colors.text.onLightAccent,
-  },
-  nameInput: {
-    ...typeStyle('caption'),
-    color: t.colors.text.primary,
-    flex: 1,
-    minHeight: 40,
-    paddingHorizontal: t.spacing[2],
-    borderRadius: t.radii.default,
-    borderWidth: 1,
-    borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.primary,
-  },
-  moveBtn: {
-    minHeight: 40,
-    paddingHorizontal: t.spacing[2],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Placed amenities -----------------------------------------------------------
-  placedList: {
-    gap: t.spacing[2],
-    borderTopWidth: 1,
-    borderTopColor: t.colors.border.default,
-    paddingTop: t.spacing[3],
-  },
-  placedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-  },
-  placedGlyph: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: '#ffffff',
-  },
-  placedLabel: {
-    ...typeStyle('caption'),
-    color: t.colors.text.primary,
-    flex: 1,
-  },
-  // Actions --------------------------------------------------------------------
-  formError: {
-    ...typeStyle('caption'),
-    color: t.colors.text.danger,
-    paddingHorizontal: t.spacing[1],
-  },
-  actions: {
-    flexDirection: 'row',
-    gap: t.spacing[3],
-    marginTop: t.spacing[2],
-  },
-  actionBtn: {
-    flex: 1,
-    minHeight: 48,
-    borderRadius: t.radii.default,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: t.spacing[4],
-  },
-  cancelBtn: {
-    backgroundColor: t.colors.bg.secondary,
-    borderWidth: 1,
-    borderColor: t.colors.border.light,
-  },
-  cancelBtnText: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.primary,
-  },
-  saveBtn: {
-    backgroundColor: t.colors.accent.aqua,
-  },
-  saveBtnText: {
-    ...typeStyle('label', 600),
-    color: t.colors.text.onLightAccent,
-  },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-}));

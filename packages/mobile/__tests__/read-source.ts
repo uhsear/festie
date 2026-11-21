@@ -13,6 +13,7 @@ const SPLIT_SCREENS: Record<string, string[]> = {
   'app/(tabs)/index.tsx': ['components/schedule'],
   'app/(tabs)/picks.tsx': ['components/picks', 'hooks/usePicksCalendar.ts'],
   'app/admin/festival-edit.tsx': ['components/admin/festival-edit'],
+  'app/admin/festival-map.tsx': ['components/admin/festival-map'],
 };
 
 const readPart = (rel: string): string[] =>
