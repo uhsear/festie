@@ -26,6 +26,8 @@ import {
   isHttpsUrl,
   clampOpacity,
   SITEPLAN_DEFAULT_OPACITY,
+  isPmtilesInput,
+  setOfflineBasemap,
   SITEPLAN_CORNER_LABELS,
   SITEPLAN_CORNER_COUNT,
 } from '@festie/shared/utils';
@@ -35,6 +37,7 @@ import { useUnsavedChangesGuard } from '../../hooks/useUnsavedChangesGuard';
 import { cn } from '../../lib/utils';
 import Button from '../ui/Button';
 import MapAmenitiesPanel from './MapAmenitiesPanel';
+import MapBasemapPanel from './MapBasemapPanel';
 import MapSiteplanPanel from './MapSiteplanPanel';
 import MapZonesPanel from './MapZonesPanel';
 import type { ArmedTarget, Vertex } from './festivalMapEditorTypes';
@@ -123,6 +126,9 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
   const [siteplanUrl, setSiteplanUrl] = useState('');
   const [siteplanOpacity, setSiteplanOpacity] = useState<number>(SITEPLAN_DEFAULT_OPACITY);
   const [draftCorners, setDraftCorners] = useState<Vertex[]>([]);
+  // Offline basemap: the typed file and credit. A value that is not valid is shown but never put in mapConfig.
+  const [basemapUrl, setBasemapUrl] = useState('');
+  const [basemapCredit, setBasemapCredit] = useState('');
   const isPlacingSiteplan = armed?.kind === 'siteplan';
   // Snapshot of what was loaded or last saved; the editor is dirty when it differs.
   const [snapshot, setSnapshot] = useState<string | null>(null);
@@ -159,6 +165,8 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
       const existingSp = extractSiteplan(full.mapConfig ?? null);
       setSiteplanUrl(existingSp?.imageUrl ?? '');
       setSiteplanOpacity(existingSp?.opacity ?? SITEPLAN_DEFAULT_OPACITY);
+      setBasemapUrl(full.mapConfig?.offlineBasemap?.pmtilesUrl ?? '');
+      setBasemapCredit(full.mapConfig?.offlineBasemap?.attribution ?? '');
     } catch {
       setLoadError(true);
     } finally {
@@ -318,6 +326,14 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
     setArmed(null);
   };
   const removeZoneById = (zoneId: string) => editMapConfig((prev) => removeZone(prev, zoneId));
+
+  const onBasemapChange = (url: string, credit: string) => {
+    setBasemapUrl(url);
+    setBasemapCredit(credit);
+    const value = url.trim();
+    if (value === '') editMapConfig((prev) => (prev ? setOfflineBasemap(prev, null) : prev));
+    else if (isPmtilesInput(value)) editMapConfig((prev) => setOfflineBasemap(prev, value, credit));
+  };
 
   // ── Site-plan overlay controls (Phase 4B) ──────────────────────────────────
   // The committed site plan (corners + url + opacity), if any.
@@ -628,6 +644,9 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
         onCancelCorners={cancelSiteplanCorners}
         onRemoveOverlay={removeSiteplanOverlay}
       />}
+
+      {/* Offline map. Organizations cannot set it: the server only accepts files Festie hosts for admins. */}
+      {scope === 'admin' && <MapBasemapPanel url={basemapUrl} attribution={basemapCredit} onChange={onBasemapChange} />}
 
       {/* Amenities */}
       <MapAmenitiesPanel
