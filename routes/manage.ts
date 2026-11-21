@@ -19,7 +19,7 @@ import { OrganizationError } from '../lib/db/stores/organizations.js';
 import { sendOrganizationMemberEmail } from '../lib/email.js';
 import { publishChecklist, submitBlockers } from '../lib/helpers/validation.js';
 import { appOrigin } from '../lib/notifications/links.js';
-import { ENGAGEMENT_MIN_JOINED, organizerEngagement } from '../lib/organizer-engagement.js';
+import { ENGAGEMENT_MIN_JOINED, organizerAudience, organizerEngagement } from '../lib/organizer-engagement.js';
 import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organizer-rules.js';
 import { verifiedOrganizationOnly, type FestivalAction } from '../lib/app-context/session.js';
 
@@ -486,6 +486,15 @@ export default function createManageRoutes(
     },
   );
 
+  // The audience counts an audit row carries (alerts and announcements). An organizer sees one only from 20 people up.
+  const AUDIENCE_KEYS = ['notifiedPeople', 'people', 'recipients'];
+  const withoutSmallAudiences = (details: any) => {
+    if (!details || typeof details !== 'object') return details ?? null;
+    return Object.fromEntries(
+      Object.entries(details).filter(([key, value]) => !(AUDIENCE_KEYS.includes(key) && typeof value === 'number' && organizerAudience(value) === null)),
+    );
+  };
+
   // What happened in the organization: its members' edits and Festie's actions on its festivals. Teammates show by
   // display name (owner decision 9), Festie staff as "Festie support", and a Festie row carries no details.
   router.get(
@@ -515,7 +524,7 @@ export default function createManageRoutes(
             targetId: row.targetId,
             createdAt: row.createdAt,
             actor: (byMember && row.actorId && labels.get(row.actorId)) || 'Festie support',
-            details: byMember ? (row.details ?? null) : null,
+            details: byMember ? withoutSmallAudiences(row.details) : null,
           };
         });
         return sendSuccess(res, entries, { limit, nextCursor });

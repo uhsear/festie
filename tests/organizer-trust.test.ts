@@ -265,6 +265,23 @@ describe('Integration: organizer trust tier', { skip, concurrency: 1 }, () => {
       assert.equal(text.includes('actorId'), false);
     });
 
+    test('the activity view hides an audience count below 20 people and keeps a larger one', async () => {
+      const { server, users } = await boot();
+      const row = (id: string, count: number) =>
+        o.sql(
+          server,
+          `INSERT INTO audit_log (id, actor_type, actor_id, action, target_type, target_id, details_json, organization_id)
+           VALUES ($1, 'organizer', $2, 'festival.updated', 'festival', 'f-a', $3::jsonb, 'org-a')`,
+          [id, users.editorA.id, JSON.stringify({ notifiedPeople: count, people: count, recipients: count, name: 'Kept' })],
+        );
+      await row('aud-small', 3);
+      await row('aud-large', 25);
+      const view = await o.as(server, users.ownerA.token).get(`${MANAGE}/organizations/org-a/audit`);
+      const byId = new Map<string, any>(view.body.data.map((entry: any) => [entry.id, entry]));
+      assert.deepEqual(byId.get('aud-small').details, { name: 'Kept' });
+      assert.deepEqual(byId.get('aud-large').details, { notifiedPeople: 25, people: 25, recipients: 25, name: 'Kept' });
+    });
+
     test('only an owner of that organization reads it', async () => {
       const { server, users } = await boot();
       assert.equal((await o.as(server, users.editorA.token).get(`${MANAGE}/organizations/org-a/audit`)).status, 403);

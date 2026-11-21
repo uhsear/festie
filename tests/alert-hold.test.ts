@@ -33,11 +33,11 @@ const sets = (shift: number) =>
 const day = (shift: number) => [{ label: 'Sat', date: '2026-04-11', sets: sets(shift) }];
 
 type Actor = 'admin' | 'editor';
-type PutOptions = { verified?: boolean; runAvailable?: boolean; geocodeVenue?: (location: string) => Promise<unknown> };
+type PutOptions = { verified?: boolean; runAvailable?: boolean; pickers?: number; geocodeVenue?: (location: string) => Promise<unknown> };
 
-// The festival router with a member or an admin behind festivalAccess, one picker on set s0. A verified member
+// The festival router with a member or an admin behind festivalAccess, `pickers` (default one) on set s0. A verified member
 // sends at once while a run is available this hour (takeAlertRun), and is held past the cap.
-function buildPut(actor: Actor, { verified = false, runAvailable = true, geocodeVenue }: PutOptions = {}) {
+function buildPut(actor: Actor, { verified = false, runAvailable = true, pickers = 1, geocodeVenue }: PutOptions = {}) {
   const existing: any = { id: 'f-1', name: 'Fest', publishedAt: '2026-01-01T00:00:00.000Z', location: 'Field', latitude: 1, longitude: 1, stages, days: day(0) };
   const hold = mock.fn(async (_id: string, alert: any) => ({ held: alert.changes.length, people: 1 }));
   const scheduleChanged = mock.fn(async (_arg: any) => {});
@@ -65,7 +65,7 @@ function buildPut(actor: Actor, { verified = false, runAvailable = true, geocode
     rateLimit: pass,
     stores: {
       festivals: { countOnSets: async () => 0, update },
-      profiles: { pickersBySet: async () => new Map([['s0', ['u1']]]) },
+      profiles: { pickersBySet: async () => new Map([['s0', Array.from({ length: pickers }, (_, i) => `u${i + 1}`)]]) },
       timeReleases: { releasedDates: async () => new Set<string>() },
       festivalReview: { hold, takeAlertRun, alertRunsLeft },
       // The artist viewer of a member request reads the member's organizations.
@@ -102,7 +102,7 @@ describe('a save that moves a picked set', () => {
     assert.equal(scheduleChanged.mock.callCount(), 1);
     assert.equal(hold.mock.callCount(), 0);
     assert.deepEqual(takeAlertRun.mock.calls[0]!.arguments, ['f-1', 3]);
-    assert.deepEqual(res.body.data.scheduleNotice, { changes: 2, people: 1, notified: true });
+    assert.deepEqual(res.body.data.scheduleNotice, { changes: 2, notified: true });
   });
 
   test('by a verified organization past the hourly cap is held for an admin like an unverified one', async () => {
@@ -110,17 +110,17 @@ describe('a save that moves a picked set', () => {
     const res = await request(app).put('/f-1').send(move).expect(200);
     assert.equal(scheduleChanged.mock.callCount(), 0);
     assert.equal(hold.mock.callCount(), 1);
-    assert.deepEqual(res.body.data.scheduleNotice, { changes: 2, people: 1, notified: false, held: true });
+    assert.deepEqual(res.body.data.scheduleNotice, { changes: 2, notified: false, held: true });
     assert.ok(audits.some((row) => row.action === 'festival.alert_held'));
   });
 
   test('a dry run reports the count a save would tell and writes nothing', async () => {
     const verified = buildPut('editor', { verified: true });
     const sent = await request(verified.app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
-    assert.deepEqual(sent.body.data, { dryRun: true, scheduleNotice: { changes: 2, people: 1, notified: true }, runsLeft: 2 });
+    assert.deepEqual(sent.body.data, { dryRun: true, scheduleNotice: { changes: 2, notified: true }, runsLeft: 2 });
     const unverified = buildPut('editor');
     const held = await request(unverified.app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
-    assert.deepEqual(held.body.data, { dryRun: true, scheduleNotice: { changes: 2, people: 1, notified: false, held: true } });
+    assert.deepEqual(held.body.data, { dryRun: true, scheduleNotice: { changes: 2, notified: false, held: true } });
     const admin = buildPut('admin');
     const adminRun = await request(admin.app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
     assert.deepEqual(adminRun.body.data, { dryRun: true, scheduleNotice: { changes: 2, people: 1, notified: true } });
@@ -139,9 +139,23 @@ describe('a save that moves a picked set', () => {
     assert.equal(festivalId, 'f-1');
     assert.deepEqual(alert.changes.map((c: any) => [c.kind, c.setId]), [['moved', 's0'], ['moved', 's1']]);
     assert.deepEqual([...alert.pickersBySet], [['s0', ['u1']]]);
-    assert.deepEqual(res.body.data.scheduleNotice, { changes: 2, people: 1, notified: false, held: true });
+    assert.deepEqual(res.body.data.scheduleNotice, { changes: 2, notified: false, held: true });
     assert.ok(audits.some((row) => row.action === 'festival.alert_held'), 'the hold is audited');
     assert.equal(audits.find((row) => row.action === 'festival.updated')?.actorType, 'organizer');
+  });
+
+  test('an organizer gets no exact audience below 20 people, in a dry run or a save; an admin and a large audience do', async () => {
+    for (const verified of [true, false]) {
+      const { app } = buildPut('editor', { verified, pickers: 3 });
+      const dry = await request(app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
+      assert.ok(!('people' in dry.body.data.scheduleNotice) && !('marked' in dry.body.data.scheduleNotice), JSON.stringify(dry.body.data));
+      const saved = await request(app).put('/f-1').send(move).expect(200);
+      assert.ok(!('people' in saved.body.data.scheduleNotice), JSON.stringify(saved.body.data.scheduleNotice));
+    }
+    const admin = await request(buildPut('admin', { pickers: 3 }).app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
+    assert.equal(admin.body.data.scheduleNotice.people, 3);
+    const large = await request(buildPut('editor', { verified: true, pickers: 25 }).app).put('/f-1').send({ ...move, dryRun: true }).expect(200);
+    assert.equal(large.body.data.scheduleNotice.people, 25);
   });
 
   test('by a platform admin still sends and holds nothing', async () => {

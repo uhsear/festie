@@ -356,7 +356,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
             scope,
           );
           const notice = dry?.scheduleNotice;
-          if (notice?.notified && notice.people > 0) {
+          if (notice?.notified) {
             setPendingAlert({ text: describeAlertConfirm(notice.people, dry?.runsLeft) });
             return;
           }

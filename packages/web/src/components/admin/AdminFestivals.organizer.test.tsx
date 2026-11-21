@@ -208,6 +208,14 @@ describe('AdminFestivals in organizer mode', () => {
       expect(mockPut.mock.calls[1][1]).not.toHaveProperty('dryRun');
     });
 
+    it('still confirms when the dry run hides a count below 20 people', async () => {
+      mockPut.mockResolvedValueOnce({ dryRun: true, scheduleNotice: { changes: 2, notified: true }, runsLeft: 2 });
+      render([org({ verified: true })]);
+      await userEvent.click(await screen.findByRole('button', { name: 'save form' }));
+      expect(await screen.findByText(/This save tells a small group of people that a set they picked moved or was removed/)).toBeInTheDocument();
+      expect(mockPut).toHaveBeenCalledTimes(1);
+    });
+
     it('saves at once when the dry run says nobody would be told', async () => {
       mockPut.mockResolvedValueOnce({ dryRun: true, scheduleNotice: { changes: 0, people: 0, notified: false } });
       mockPut.mockResolvedValueOnce(undefined);

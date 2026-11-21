@@ -47,6 +47,11 @@ describe('notificationSettings', () => {
     expect(describeScheduleNotice({ changes: 2, people: 12, notified: true, marked: 8 })).toBe(
       'Saved. 12 people will get an alert: 8 marked a cancelled act and 4 picked or set a reminder on the changed sets, unless they turned schedule alerts off.',
     );
+    // An organizer's answer carries no count below 20 people.
+    expect(describeScheduleNotice({ changes: 1, notified: true })).toBe(
+      'Saved. People who picked or set a reminder on the changed sets will get an alert, unless they turned schedule alerts off.',
+    );
+    expect(describeScheduleNotice({ changes: 1, notified: false })).toBe('Saved without alerts.');
     expect(describeScheduleNotice({ changes: 1, people: 2, notified: true, marked: 2 })).toBe(
       'Saved. 2 people will get an alert: 2 marked a cancelled act, unless they turned schedule alerts off.',
     );

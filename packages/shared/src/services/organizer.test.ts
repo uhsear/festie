@@ -205,5 +205,6 @@ describe('the trust tier calls and wording', () => {
     expect(describeAlertConfirm(1)).toBe('This save tells 1 person that a set they picked moved or was removed.');
     expect(describeAlertConfirm(40, 2)).toBe('This save tells 40 people that a set they picked moved or was removed.');
     expect(describeAlertConfirm(40, 0)).toContain('used its alerts for this hour');
+    expect(describeAlertConfirm(undefined)).toBe('This save tells a small group of people that a set they picked moved or was removed.');
   });
 });

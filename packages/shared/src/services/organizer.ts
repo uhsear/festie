@@ -199,8 +199,8 @@ export const describeEngagementCount = (count: number | null, minCount = 5): str
   count === null ? `fewer than ${minCount}` : String(count);
 
 /** The line above a verified organization's save when it would alert people: the count it must confirm. */
-export const describeAlertConfirm = (people: number, runsLeft?: number): string => {
-  const who = people === 1 ? '1 person' : `${people} people`;
+export const describeAlertConfirm = (people: number | undefined, runsLeft?: number): string => {
+  const who = people === undefined ? 'a small group of people' : people === 1 ? '1 person' : `${people} people`;
   const cap = runsLeft === 0 ? ' This festival has used its alerts for this hour, so Festie will send them after a check.' : '';
   return `This save tells ${who} that a set they picked moved or was removed.${cap}`;
 };

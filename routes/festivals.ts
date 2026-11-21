@@ -15,6 +15,7 @@ import { firstRuleMessage, organizerFestivalRules } from '../lib/schemas/organiz
 import { coverLineup, scheduleProgress } from '../lib/lineup.js';
 import { resolveArtistRefs, type RefsResult } from '../lib/artist-refs.js';
 import { artistViewerOf } from '../lib/artist-viewer.js';
+import { organizerAudience } from '../lib/organizer-engagement.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
 import { ArtistError } from '../lib/db/stores/artists.js';
 import type { Request, Response } from 'express';
@@ -285,6 +286,15 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
     const pickers = new Set([...pickersBySet.values()].flat());
     const marked = new Set([...interestedByEntry.values()].flat().filter((userId) => !pickers.has(userId))).size;
     return { people: pickers.size + marked, marked };
+  }
+
+  // What a response says about the audience. An organizer gets a size only from ENGAGEMENT_MIN_JOINED up and never
+  // a smaller one (owner decision 4), so a count cannot point at a few people. An admin sees the raw counts.
+  function audienceFields(asMember: boolean, people: number, marked: number) {
+    if (!asMember) return { people, ...(marked > 0 ? { marked } : {}) };
+    const shownPeople = organizerAudience(people);
+    const shownMarked = organizerAudience(marked);
+    return { ...(shownPeople !== null ? { people: shownPeople } : {}), ...(shownMarked !== null ? { marked: shownMarked } : {}) };
   }
 
   // The cancel line of the removal confirm: what cancelling these acts takes away and who hears about it.
@@ -647,10 +657,9 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
             dryRun: true,
             scheduleNotice: {
               changes: changes.length + cancelled.length,
-              people: audience.people,
               notified: wanted && (!asMember || verifiedMember),
               ...(wanted && asMember && !verifiedMember ? { held: true } : {}),
-              ...(audience.marked > 0 ? { marked: audience.marked } : {}),
+              ...audienceFields(asMember, audience.people, audience.marked),
             },
             ...(verifiedMember
               ? { runsLeft: await stores.festivalReview.alertRunsLeft(existingFestival.id, config.ORGANIZER_SCHEDULE_ALERT_HOURLY_CAP) }
@@ -746,10 +755,9 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
         const verified = organizer && (req as any).orgVerified === true;
         const scheduleNotice = {
           changes: changes.length + cancelled.length,
-          people,
           notified: notified && (!organizer || verified),
           ...(notified && organizer && !verified ? { held: true } : {}),
-          ...(marked > 0 ? { marked } : {}),
+          ...audienceFields(organizer, people, marked),
         };
         log.info('festival:updated', { festivalId: festival.id, name: festival.name });
         let alertHeld = false;
