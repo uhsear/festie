@@ -918,6 +918,9 @@ describe('festival access: organization cells', { skip }, () => {
       ['ownerA', `DELETE ${MANAGE}/f-a/publish-request`, 404],
       ['ownerA', `POST ${MANAGE}/f-a/publish`, 404],
       ['admin', 'GET /api/v1/manage/me', 404],
+      ['admin', 'GET /api/v1/admin/organizations', 404],
+      ['admin', 'GET /api/v1/admin/organizations/review-queue', 404],
+      ['admin', 'POST /api/v1/admin/organizations', 404],
       ['ownerA', `GET ${ARTISTS}?q=a`, 404],
       ['ownerA', `POST ${ARTISTS}`, 404],
       ['anon', `GET ${MANAGE}/f-a`, 404],
@@ -926,6 +929,10 @@ describe('festival access: organization cells', { skip }, () => {
       ['admin', 'PUT /api/v1/festivals/f-a', 400],
     ];
     assert.deepEqual(await runCells(server, tokensOf(users, adminToken), cells), []);
+    const me = await o.as(server, users.ownerA.token).get('/api/v1/auth/me');
+    assert.equal(me.status, 200);
+    assert.deepEqual(me.body.data.organizations, []);
+    assert.equal(me.body.data.organizerPlatform, false);
   });
 
   // The artist routes (routes/manage-artists.ts) are not festival-scoped: a read needs any role in an organization that

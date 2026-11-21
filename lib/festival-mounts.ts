@@ -36,7 +36,6 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
   const adminAnnouncementRoutes = createAdminAnnouncementRoutes(deps);
   const publicAnnouncementRoutes = createPublicAnnouncementRoutes(deps);
   const adminSiteplanRoutes = createAdminSiteplanRoutes(deps);
-  const organizationsRoutes = createOrganizationsRoutes(deps);
   const adminGuard = [deps.adminAuth];
   const forwarded = {
     festivals: festivalRoutes,
@@ -45,8 +44,9 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
     announcements: adminAnnouncementRoutes,
     lineupAnnounce: lineupAnnounceRoutes,
   };
+  const organizerOn = deps.config.ORGANIZER_PLATFORM_ENABLED === true;
   const manage: FestivalMount[] =
-    deps.config.ORGANIZER_PLATFORM_ENABLED === true
+    organizerOn
       ? [
           {
             prefix: '/api/v1/manage',
@@ -63,6 +63,10 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
           },
         ]
       : [];
+  // The admin organizations router is part of the flagged surface: off means no tab, no queue and no member routes.
+  const adminOrganizations: FestivalMount[] = organizerOn
+    ? [{ prefix: '/api/v1/admin/organizations', guards: adminGuard, router: createOrganizationsRoutes(deps) }]
+    : [];
   return [
     { prefix: '/api/v1/admin', guards: [], router: adminSiteplanRoutes },
     { prefix: '/api/v1/admin/festivals', guards: adminGuard, router: festivalRoutes },
@@ -74,7 +78,7 @@ export function buildFestivalMounts(deps: any): FestivalMount[] {
     { prefix: '/api/v1/admin/festivals', guards: adminGuard, router: adminAnnouncementRoutes },
     { prefix: '/api/v1/festivals', guards: [], router: publicAnnouncementRoutes },
     { prefix: '/api/v1/festivals', guards: [], router: festivalRoutes },
-    { prefix: '/api/v1/admin/organizations', guards: adminGuard, router: organizationsRoutes },
+    ...adminOrganizations,
     ...manage,
   ];
 }

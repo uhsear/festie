@@ -56,7 +56,11 @@ function AdminPanelInner() {
     { id: 'analytics', label: 'Analytics', icon: <TrendingUp /> },
     { id: 'organizations', label: 'Organizations', icon: <Building2 /> },
     { id: 'backfill', label: 'Artist backfill', icon: <DatabaseZap /> },
-  ] as Array<{ id: AdminTab; label: string; icon: React.ReactNode }>;
+  ].filter((t) => t.id !== 'organizations' || user.organizerPlatform !== false) as Array<{
+    id: AdminTab;
+    label: string;
+    icon: React.ReactNode;
+  }>;
 
   const renderContent = () => {
     switch (activeTab) {

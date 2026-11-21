@@ -663,6 +663,8 @@ export const authEnvelopeResponseSchema = z.object({
       }),
     )
     .optional(),
+  // GET /auth/me only: false while ORGANIZER_PLATFORM_ENABLED is off, so the web client hides the organizer surfaces.
+  organizerPlatform: z.boolean().optional(),
 });
 
 // ════════════════════════════════════════════════════════════════════════════

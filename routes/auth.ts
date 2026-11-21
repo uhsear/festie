@@ -297,13 +297,18 @@ export default function createAuthRoutes(deps: any): Router {
         : (await deps.getProfiles()).filter((p: any) => p.userId === req.user.userId);
       const pendingEmail = await depStores.emailTokens.getPendingEmailChange(user.id, user.email ?? null);
       // Read only, for the account menu link to /manage. Claiming a pending membership happens in GET /manage/me.
-      const organizations = (await depStores.organizations.listForUser(user.id)).map(
-        ({ id, name, role, status, verified }: any) => ({ id, name, role, status, verified }),
-      );
+      // With the platform off there is no /manage to link to, so skip the query and tell the client to hide the tab.
+      const organizerPlatform = config.ORGANIZER_PLATFORM_ENABLED === true;
+      const organizations = organizerPlatform
+        ? (await depStores.organizations.listForUser(user.id)).map(
+            ({ id, name, role, status, verified }: any) => ({ id, name, role, status, verified }),
+          )
+        : [];
       return sendSuccess(res, {
         user: serializePublicUser(user),
         roles,
         organizations,
+        organizerPlatform,
         festivals: profiles.map((p: any) => ({ festivalId: p.festivalId, profileId: p.id })),
         pendingEmail,
       });

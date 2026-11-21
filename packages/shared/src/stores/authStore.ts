@@ -342,11 +342,12 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
         roles?: string[];
         pendingEmail?: string | null;
         organizations?: User['organizations'];
+        organizerPlatform?: boolean;
       }>('/auth/me');
       if (response && response.user) {
         const isAdmin = response.roles?.includes('admin') || response.user.isAdmin || false;
         set({
-          user: { ...response.user, isAdmin, pendingEmail: response.pendingEmail ?? null, ...(response.organizations?.length ? { organizations: response.organizations } : {}) },
+          user: { ...response.user, isAdmin, pendingEmail: response.pendingEmail ?? null, ...(response.organizations?.length ? { organizations: response.organizations } : {}), ...(response.organizerPlatform === undefined ? {} : { organizerPlatform: response.organizerPlatform }) },
           isAdmin,
           sessionChecked: true,
         });

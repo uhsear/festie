@@ -2657,6 +2657,7 @@ export type components = {
                 status: "pending" | "active" | "suspended";
                 verified: boolean;
             }[];
+            organizerPlatform?: boolean;
             pendingEmail?: string | null;
             reactivated?: boolean;
             refreshToken?: string;
@@ -3207,6 +3208,7 @@ export type components = {
                 status: "pending" | "active" | "suspended";
                 verified: boolean;
             }[];
+            organizerPlatform?: boolean;
             pendingEmail?: string | null;
             reactivated?: boolean;
             refreshToken?: string;

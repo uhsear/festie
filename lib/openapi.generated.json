@@ -2843,6 +2843,9 @@
               ],
               "additionalProperties": false
             }
+          },
+          "organizerPlatform": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -2960,6 +2963,9 @@
               ],
               "additionalProperties": false
             }
+          },
+          "organizerPlatform": {
+            "type": "boolean"
           }
         },
         "required": [

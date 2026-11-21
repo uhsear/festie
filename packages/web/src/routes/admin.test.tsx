@@ -12,9 +12,14 @@ vi.mock('../components/admin/useAdminSearch', () => ({
   useAdminSearch: () => [{ tab: 'dashboard' }, vi.fn()],
 }));
 vi.mock('../components/admin/AdminLayout', () => ({
-  default: ({ title, children }: { title: string; children: React.ReactNode }) => (
+  default: ({ title, tabs, children }: { title: string; tabs: Array<{ id: string; label: string }>; children: React.ReactNode }) => (
     <div data-testid="admin-layout">
       <h1>{title}</h1>
+      <ul aria-label="tabs">
+        {tabs.map((tab) => (
+          <li key={tab.id}>{tab.label}</li>
+        ))}
+      </ul>
       {children}
     </div>
   ),
@@ -61,6 +66,22 @@ describe('AdminPanel route gate', () => {
     render(<AdminPanel />);
     expect(screen.queryByText('Access Denied')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Admin Panel' })).toBeInTheDocument();
+    expect(await screen.findByText('dashboard content')).toBeInTheDocument();
+  });
+
+  it('shows the Organizations tab unless the server reports the organizer platform off', async () => {
+    useAuthStore.setState({ user: { ...baseUser, isAdmin: true } as never });
+    const { unmount } = render(<AdminPanel />);
+    expect(screen.getByText('Organizations')).toBeInTheDocument();
+    unmount();
+    useAuthStore.setState({ user: { ...baseUser, isAdmin: true, organizerPlatform: true } as never });
+    const second = render(<AdminPanel />);
+    expect(screen.getByText('Organizations')).toBeInTheDocument();
+    second.unmount();
+    useAuthStore.setState({ user: { ...baseUser, isAdmin: true, organizerPlatform: false } as never });
+    render(<AdminPanel />);
+    expect(screen.queryByText('Organizations')).not.toBeInTheDocument();
+    expect(screen.getByText('Audit Log')).toBeInTheDocument();
     expect(await screen.findByText('dashboard content')).toBeInTheDocument();
   });
 });

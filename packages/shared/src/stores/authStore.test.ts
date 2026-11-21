@@ -551,6 +551,15 @@ describe('authStore', () => {
       expect(useAuthStore.getState().user?.organizations).toEqual(orgs);
     });
 
+    it('keeps the server flag that says the organizer platform is off, and leaves it unset when /auth/me omits it', async () => {
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser, organizations: [], organizerPlatform: false });
+      await useAuthStore.getState().checkSession();
+      expect(useAuthStore.getState().user?.organizerPlatform).toBe(false);
+      vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser });
+      await useAuthStore.getState().checkSession();
+      expect(useAuthStore.getState().user?.organizerPlatform).toBeUndefined();
+    });
+
     it('drops them once the user has none', async () => {
       vi.mocked(api.get).mockResolvedValueOnce({ user: mockUser, organizations: orgs });
       await useAuthStore.getState().checkSession();
