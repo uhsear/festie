@@ -32,12 +32,13 @@ import { acceptProviderToken, ProviderRejection } from '../lib/oauth/accept';
 // in lib/types/request.ts. Importing the types barrel pulls in its global
 // side-effect so this module sees the augmented Request.
 import type {} from '../lib/types';
+import type { RouteDeps } from '../lib/types';
 
 /**
  * Track a failed login attempt: increment metrics, record per-user failure,
  * and lock the account if the failure threshold is reached.
  */
-async function handleLoginFailure(user: any, deps: any) {
+async function handleLoginFailure(user: any, deps: RouteDeps) {
   const { stores, config, log, state } = deps;
   if (state?.metrics) {
     state.metrics.authFailures = (state.metrics.authFailures || 0) + 1;
@@ -69,7 +70,7 @@ function computeSessionOpaqueId(tokenHash: string) {
  * Disconnect sockets belonging to a user whose session token hash matches
  * `targetTokenHash`, emitting a revocation event before disconnecting.
  */
-async function disconnectSessionSockets(userId: string, targetTokenHash: string, reason: string, deps: any) {
+async function disconnectSessionSockets(userId: string, targetTokenHash: string, reason: string, deps: RouteDeps) {
   const { io, hashSessionToken: hashToken, fetchRevocationSockets } = deps;
   for (const socket of await fetchRevocationSockets(io)) {
     if (socket.data?.userId === userId) {
@@ -82,7 +83,7 @@ async function disconnectSessionSockets(userId: string, targetTokenHash: string,
   }
 }
 
-export default function createAuthRoutes(deps: any): Router {
+export default function createAuthRoutes(deps: RouteDeps): Router {
   const {
     express,
     config,

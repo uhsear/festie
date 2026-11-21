@@ -9,11 +9,12 @@
  */
 
 import { Router } from 'express';
+import type { RouteDeps } from '../lib/types';
 
 // Paths the app opens. Keep in step with the Android intent filter in packages/mobile/app.json.
 const APP_PATHS = ['/set/*', '/reset-password', '/join/*', '/s/*', '/compare', '/crew', '/crew-plan', '/friend-picks'];
 
-export default function createDeepLinkRoutes(deps: any) {
+export default function createDeepLinkRoutes(deps: RouteDeps) {
   const { config, sendError, ErrorCodes } = deps;
   const router = Router();
 

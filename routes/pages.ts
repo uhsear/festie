@@ -13,13 +13,14 @@ import { buildFestivalOgSvg } from '../lib/helpers/share-og-image.js';
 import { renderInviteJoinPage, renderInviteErrorPage, renderInviteIcs, INVITE_ERROR_MESSAGES } from '../lib/invite-pages.js';
 import { loadInvitePreview } from '../lib/invite-preview.js';
 import { actsDayCoverage } from '../lib/lineup.js';
+import type { RouteDeps } from '../lib/types';
 
 // Public festival page slug (migration 094). Checked before any query; upper case fails too.
 const SLUG_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const isFestivalSlug = (slug: string) => slug.length <= 80 && SLUG_RE.test(slug);
 const STATIC_ASSET_PATH = /\.(?:txt|xml|json|map|js|css|png|jpe?g|gif|webp|svg|ico|woff2?|webmanifest)$/i;
 
-export default function createPageRoutes(deps: any) {
+export default function createPageRoutes(deps: RouteDeps) {
   const {
     express, config, rateLimit, pool, log, stores, getFestivalById,
     _sendError, _ErrorCodes,

@@ -65,7 +65,7 @@ async function build(over: Parameters<typeof makeApp>[0] = {}) {
   const { default: createRoutes } = await import('../routes/crew-days.js');
   const app = express();
   app.use(express.json());
-  app.use('/', createRoutes(made.deps));
+  app.use('/', createRoutes(made.deps as any));
   return { app, ...made };
 }
 

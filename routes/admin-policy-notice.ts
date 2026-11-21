@@ -7,6 +7,7 @@
  * policy_notice_sends so a re-run never mails a user twice. The first send of a noticeId pins its content hash in
  * policy_notices, and only one notice may be sent in any 24 hours, so a reused or second id cannot mail new text.
  */
+import type { AdminMountArgs } from '../lib/types/admin-ctx.js';
 import { createHash } from 'node:crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { sendPolicyNoticeEmail } from '../lib/email.js';
@@ -25,7 +26,7 @@ const ELIGIBLE_SQL = `
   WHERE u.deleted_at IS NULL AND u.email IS NOT NULL AND u.email_verified_at IS NOT NULL
     AND NOT EXISTS (SELECT 1 FROM policy_notice_sends s WHERE s.notice_id = $1 AND s.user_id = u.id)`;
 
-export default function mountAdminPolicyNoticeRoutes({ router, deps, ctx }: any): void {
+export default function mountAdminPolicyNoticeRoutes({ router, deps, ctx }: AdminMountArgs<'adminWriteLimit'>): void {
   const { log, config, setNoStore, sendSuccess, sendError, ErrorCodes, adminAuth, stores, schemas, validate, requireRecentAuth, getRequestIp, rateLimit } = deps;
   const { adminWriteLimit } = ctx;
   const sendNotice = deps.sendPolicyNoticeEmail ?? sendPolicyNoticeEmail;

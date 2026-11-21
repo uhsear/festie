@@ -16,6 +16,7 @@
 
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
+import type { RouteDeps } from '../lib/types';
 
 const MAX_LATE_MS = 60_000;
 const MAX_AHEAD_MS = 14 * 24 * 60 * 60 * 1000;
@@ -27,7 +28,7 @@ function toPublic(row: any) {
   return { id, festivalId, severity, title, body, screen, sentAt };
 }
 
-export function createAdminAnnouncementRoutes(deps: any) {
+export function createAdminAnnouncementRoutes(deps: RouteDeps) {
   const {
     express,
     log,
@@ -177,7 +178,7 @@ export function createAdminAnnouncementRoutes(deps: any) {
   return router;
 }
 
-export function createPublicAnnouncementRoutes(deps: any) {
+export function createPublicAnnouncementRoutes(deps: RouteDeps) {
   const { express, log, rateLimit, sanitizeIdentifier, sendSuccess, sendError, ErrorCodes, stores, getFestivalById, setNoStore } =
     deps;
 

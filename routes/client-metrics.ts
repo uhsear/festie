@@ -14,6 +14,7 @@
 
 import { Router } from 'express';
 import { webVitalsBeaconSchema } from '../lib/schemas.js';
+import type { RouteDeps } from '../lib/types';
 
 // Sane upper bounds (seconds for timing metrics, unitless for CLS).
 // web-vitals ships LCP/FCP/INP/TTFB in milliseconds; we convert to seconds
@@ -35,7 +36,7 @@ const VALID_NAV_TYPES: ReadonlySet<string> = new Set([
   'navigate', 'reload', 'back-forward', 'back-forward-cache', 'prerender', 'restore',
 ]);
 
-export default function createClientMetricsRoutes(deps: any) {
+export default function createClientMetricsRoutes(deps: RouteDeps) {
   const { log, rateLimit, promMetrics } = deps;
   const router = Router();
 

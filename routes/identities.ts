@@ -16,6 +16,7 @@ import type { Identity, IdentityProvider } from '../lib/db/stores/identities';
 import { revokeAppleToken } from '../lib/oauth/revoke-user';
 import { acceptProviderToken, OAUTH_MESSAGES, ProviderRejection } from '../lib/oauth/accept';
 import type {} from '../lib/types';
+import type { RouteDeps } from '../lib/types';
 
 const MESSAGES = {
   PROVIDER_ALREADY_LINKED: 'You already linked an account from this provider. Unlink it first.',
@@ -34,7 +35,7 @@ const publicIdentity = (i: Identity) => ({
 // Thrown inside the unlink transaction so the delete rolls back.
 class LastSignInMethod extends Error {}
 
-export default function createIdentityRoutes(deps: any): Router {
+export default function createIdentityRoutes(deps: RouteDeps): Router {
   const {
     express,
     log,

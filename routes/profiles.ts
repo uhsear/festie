@@ -4,8 +4,9 @@
 import { paginateArray } from '../lib/pagination.js';
 import { ensureFestivalProfile } from '../lib/festival-profile.js';
 import { coverLineup } from '../lib/lineup.js';
+import type { RouteDeps } from '../lib/types';
 
-export default function createProfilesRoutes(deps: any) {
+export default function createProfilesRoutes(deps: RouteDeps) {
   const {
     express, log,
     userAuth, adminAuth, setNoStore,

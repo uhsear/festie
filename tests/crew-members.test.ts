@@ -159,7 +159,7 @@ function makeDeps(overrides: any = {}) {
 async function buildApp(overrides: any = {}) {
   const deps = makeDeps(overrides);
   const { default: createCrewMemberRoutes } = await import('../routes/crew-members.js');
-  const router = createCrewMemberRoutes(deps);
+  const router = createCrewMemberRoutes(deps as any);
   const app = express();
   app.use(express.json());
   app.use('/', router);
@@ -1084,7 +1084,7 @@ describe('routes/crew-members.js — POST /:crewId/members (admin force-add)', (
       });
       next();
     });
-    app.use('/', createCrewMemberRoutes(deps));
+    app.use('/', createCrewMemberRoutes(deps as any));
 
     await request(app).post('/crew-1/members').send({ userId: 'user-3' }).expect(200);
 

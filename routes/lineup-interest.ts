@@ -1,3 +1,4 @@
+import type { RouteDeps } from '../lib/types';
 /**
  * Copyright (c) 2026 Asir Khan. All rights reserved.
  * All Rights Reserved. See the LICENSE file.
@@ -10,7 +11,7 @@
  * Counts only: the marks themselves are private to their owner and never leave the profile serializer.
  */
 
-export default function createLineupInterestRoute(deps: any) {
+export default function createLineupInterestRoute(deps: RouteDeps) {
   const { express, log, festivalAccess, setNoStore, sanitizeIdentifier, sendSuccess, sendError, ErrorCodes, stores } = deps;
 
   const router = express.Router();

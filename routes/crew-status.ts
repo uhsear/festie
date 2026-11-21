@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
+import type { RouteDeps } from '../lib/types';
 
 /**
  * Crew member status (M5: last-synced "on my way / ETA to [meeting point]").
@@ -12,12 +13,12 @@ import { crewMembership } from '../lib/app-context/session';
  * reconnect (PUT is idempotent — one row per crew member, upsert-replaced).
  *
  * A new crew sub-resource cloning routes/crew-polls.ts / routes/crew-packing.ts:
- * userAuth + getMember gate + rate limit + io.to('crew:'+id).emit. Mounted by
+ * userAuth + getMember gate + rate limit + emitter.toCrew(id, event). Mounted by
  * routes/crews.ts. Two endpoints:
  *   PUT  /:crewId/status  — upsert MY own status (the member can only set their own)
  *   GET  /:crewId/status  — list the crew's statuses (honest staleness rendered client-side)
  */
-export default function createCrewStatusRoutes(deps: any) {
+export default function createCrewStatusRoutes(deps: RouteDeps) {
   const {
     log,
     userAuth,

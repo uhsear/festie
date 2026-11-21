@@ -568,7 +568,7 @@ describe('profiles: festival list reads picks only', () => {
       validateParams: () => (req: any, _res: any, next: any) => { req.validatedParams = req.params; next(); },
       validateQuery: () => (req: any, _res: any, next: any) => { req.validatedQuery = req.query; next(); },
       stores,
-    });
+    } as any);
     const app = express();
     app.use('/profiles', router);
     return { app, stores };

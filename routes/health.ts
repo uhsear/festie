@@ -27,8 +27,9 @@ import { Router } from 'express';
 import createHealthCoreRoutes from './health-core.js';
 import createAdminStatusRoutes from './admin-status.js';
 import createAdminMetricsRoutes from './admin-metrics.js';
+import type { RouteDeps } from '../lib/types';
 
-export default function createHealthRoutes(deps: any) {
+export default function createHealthRoutes(deps: RouteDeps) {
   const router = Router();
 
   // 1. Health-core owns the client-metrics counters.

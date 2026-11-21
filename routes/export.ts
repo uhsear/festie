@@ -14,8 +14,9 @@ import path from 'path';
 import fs from 'fs';
 import { Worker } from 'worker_threads';
 import { buildExportHtml } from '../lib/helpers/export-utils.js';
+import type { RouteDeps } from '../lib/types';
 
-export default function createExportRoutes(deps: any) {
+export default function createExportRoutes(deps: RouteDeps) {
   const {
     express, log,
     userAuth, setNoStore,

@@ -17,6 +17,7 @@
 
 import { Router, json } from 'express';
 import { clientPerfBeaconSchema, validate } from '../lib/schemas.js';
+import type { RouteDeps } from '../lib/types';
 
 // A CSP report's URLs can carry query strings (invite or friend-link tokens).
 // Log only the directive fields, with each URL cut back to origin and path.
@@ -39,7 +40,7 @@ export function redactCspReport(body: any) {
   return out;
 }
 
-export default function createHealthRoutes(deps: any) {
+export default function createHealthRoutes(deps: RouteDeps) {
   const {
     log,
     stores, pool,

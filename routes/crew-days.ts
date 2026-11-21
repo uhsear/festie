@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { crewMembership } from '../lib/app-context/session';
+import type { RouteDeps } from '../lib/types';
 
 /**
  * Crew days (090): which festival days each member attends.
@@ -10,7 +11,7 @@ import { crewMembership } from '../lib/app-context/session';
  *   GET /:crewId/days  — every current member's answers
  *   PUT /:crewId/days  — replace MY full answer set (idempotent, offline replay-safe)
  */
-export default function createCrewDaysRoutes(deps: any) {
+export default function createCrewDaysRoutes(deps: RouteDeps) {
   const {
     log,
     userAuth,

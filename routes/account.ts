@@ -268,6 +268,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     schemas,
     validate,
     io,
+    emitter,
     stores,
     invalidateUserCache,
   } = deps;
@@ -573,7 +574,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
       const cleared: Array<{ crew_id: string; still_member: boolean }> =
         await stores.crewStatus.clearLocationsForUser(userId);
       for (const { still_member: stillMember, ...status } of cleared) {
-        if (stillMember) io.to('crew:' + status.crew_id).emit('crew:status-updated', { crewId: status.crew_id, status });
+        if (stillMember) emitter.toCrew(status.crew_id, 'crew:status-updated', { crewId: status.crew_id, status });
       }
 
       log.info('account:stop-sharing', { userId, clearedStatusLocations: cleared.length });

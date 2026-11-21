@@ -29,6 +29,7 @@ import {
 import { acceptProviderToken, isProviderEnabled, OAUTH_MESSAGES, ProviderRejection } from '../lib/oauth/accept';
 import { sha256hex } from '../lib/oauth/verify';
 import type {} from '../lib/types';
+import type { RouteDeps } from '../lib/types';
 
 const NONCE_TTL_SECONDS = 600;
 const SIGNUP_TTL_SECONDS = 900;
@@ -64,7 +65,7 @@ function usernameBase(name: string | null, email: string | null): string {
   return base.length >= 2 ? base : 'festie-fan';
 }
 
-export default function createOAuthRoutes(deps: any): Router {
+export default function createOAuthRoutes(deps: RouteDeps): Router {
   const {
     express,
     config,

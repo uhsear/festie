@@ -5,7 +5,9 @@
  * Extracted from routes/admin.js during the 2026-04-14 file-size split.
  * Mounts: /audit
  */
-export default function mountAdminAuditRoutes({ router, deps, ctx }: any): void {
+import type { AdminMountArgs } from '../lib/types/admin-ctx.js';
+
+export default function mountAdminAuditRoutes({ router, deps, ctx }: AdminMountArgs<'enrichAuditEntries'>): void {
   const {
     log,
     setNoStore,
