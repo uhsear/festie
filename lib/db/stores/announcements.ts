@@ -168,13 +168,30 @@ export function createAnnouncementsStore(pool: Pool) {
       return rowCount ?? 0;
     },
 
-    /** Mark due rows sent and return them. SKIP LOCKED lets parallel workers claim disjoint rows. */
+    /**
+     * Mark due rows sent and return them. SKIP LOCKED lets parallel workers claim disjoint rows. An organization's row
+     * is judged by the organization's state now, not when it was queued: a suspended organization's row stays unsent
+     * (the late sweep cancels it), and one that is no longer verified shows its banner without a push.
+     */
     async claimDue(limit = 10): Promise<AnnouncementRow[]> {
       const { rows } = await pool.query(
         `
   UPDATE festival_announcements
   SET
-    sent_at = NOW()
+    sent_at = NOW(),
+    push = push
+    AND (
+      organization_id IS NULL
+      OR EXISTS (
+        SELECT
+          1
+        FROM
+          organizations o
+        WHERE
+          o.id = festival_announcements.organization_id
+          AND o.verified_at IS NOT NULL
+      )
+    )
   WHERE
     id IN (
       SELECT
@@ -185,6 +202,18 @@ export function createAnnouncementsStore(pool: Pool) {
         sent_at IS NULL
         AND cancelled_at IS NULL
         AND send_at <= NOW()
+        AND (
+          organization_id IS NULL
+          OR NOT EXISTS (
+            SELECT
+              1
+            FROM
+              organizations o
+            WHERE
+              o.id = festival_announcements.organization_id
+              AND o.status = 'suspended'
+          )
+        )
       ORDER BY
         send_at
       LIMIT
