@@ -383,7 +383,7 @@ export default function createManageRoutes(
           return sendError(res, 403, 'Only Festie can add an owner. Contact Festie.', ErrorCodes.FORBIDDEN);
         }
         const cap = byOwner(req) ? config.ORGANIZER_MEMBER_ADD_DAILY_CAP : undefined;
-        const added = await stores.organizations.addByEmail(req.organizationId, email, role, req.user.userId, cap);
+        const added = await stores.organizations.addByEmail(req.organizationId, email, role, req.user.userId, cap, { byOwner: byOwner(req) });
         if (added.kind === 'member') {
           await writeAudit(req, AUDIT_ACTIONS.ORGANIZATION_MEMBER_ADDED, 'organization', req.organizationId, { userId: added.userId, role, via: 'owner' });
         } else {

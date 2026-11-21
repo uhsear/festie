@@ -171,6 +171,35 @@ describe('owner-run members: roles and removal', { skip }, () => {
     assert.deepEqual(roles.rows.map((r: any) => r.role), ['owner', 'owner']);
   });
 
+  test('an owner never overwrites or consumes a pending owner invitation; Festie may', async () => {
+    const { server, users, adminToken } = await boot();
+    const owner = o.as(server, users.ownerA.token);
+    const invite = (email: string, role = 'owner') =>
+      o.sql(server, 'INSERT INTO organization_pending_members (organization_id, email, role) VALUES ($1, $2, $3) ON CONFLICT (organization_id, email) DO UPDATE SET role = EXCLUDED.role', ['org-a', email, role]);
+    const pendingRole = async (email: string) => (await o.sql(server, "SELECT role FROM organization_pending_members WHERE organization_id = 'org-a' AND email = $1", [email])).rows[0]?.role;
+
+    // An address with no account: the owner's add as editor must not demote the owner invitation.
+    await invite('future-boss@example.com');
+    const demote = await owner.post(`${ORG}/members`, { email: 'future-boss@example.com', role: 'editor' });
+    assert.equal(demote.status, 403, JSON.stringify(demote.body));
+    assert.match(demote.body.error.message, /Only Festie/);
+    assert.equal(await pendingRole('future-boss@example.com'), 'owner');
+
+    // A confirmed account whose address still holds an owner invitation: the add must not delete that invitation.
+    const person = await o.makeUser(server, `invitee-${Date.now()}`);
+    await invite(person.email);
+    assert.equal((await owner.post(`${ORG}/members`, { email: person.email, role: 'viewer' })).status, 403);
+    assert.equal(await pendingRole(person.email), 'owner');
+    assert.equal((await o.sql(server, 'SELECT 1 FROM organization_members WHERE organization_id = $1 AND user_id = $2', ['org-a', person.id])).rowCount, 0);
+
+    // A lower invitation can still be replaced by an owner; Festie can replace an owner invitation.
+    await invite('later@example.com', 'viewer');
+    assert.equal((await owner.post(`${ORG}/members`, { email: 'later@example.com', role: 'editor' })).status, 201);
+    assert.equal(await pendingRole('later@example.com'), 'editor');
+    assert.equal((await o.as(server, adminToken).post(`${ORG}/members`, { email: 'future-boss@example.com', role: 'editor' })).status, 201);
+    assert.equal(await pendingRole('future-boss@example.com'), 'editor');
+  });
+
   test('removing a member closes their access on the next request; removing a pending address removes the invitation', async () => {
     const { server, users } = await boot();
     const owner = o.as(server, users.ownerA.token);

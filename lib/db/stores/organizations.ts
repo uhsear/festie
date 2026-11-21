@@ -173,12 +173,28 @@ export function createOrganizationsStore(pool: Pool) {
     /**
      * Adds a member by email. A confirmed, live account becomes a member at once. Any other address
      * (no account, or an unconfirmed one) is stored as pending and claimed by GET /manage/me.
+     * An owner (`byOwner`) never adds an owner and never replaces or consumes a pending owner invitation: only Festie does.
      */
-    async addByEmail(organizationId: string, rawEmail: string, role: OrgRole, addedBy: string | null, dailyCap?: number) {
+    async addByEmail(
+      organizationId: string,
+      rawEmail: string,
+      role: OrgRole,
+      addedBy: string | null,
+      dailyCap?: number,
+      { byOwner = false } = {},
+    ) {
       const email = rawEmail.trim().toLowerCase();
       return withTransaction(pool, async (client) => {
         // requireOrg locks the organization row, so two owners adding at once cannot both pass the cap.
         await requireOrg(client, organizationId);
+        if (byOwner) {
+          if (role === 'owner') throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
+          const { rowCount: ownerInvites } = await client.query(
+            "SELECT 1 FROM organization_pending_members WHERE organization_id = $1 AND email = $2 AND role = 'owner'",
+            [organizationId, email],
+          );
+          if (ownerInvites) throw new OrganizationError(403, OWNER_CHANGE_REFUSAL, 'FORBIDDEN');
+        }
         if (dailyCap !== undefined) {
           const { rows: sent } = await client.query(
             "SELECT COUNT(*)::int AS n FROM organization_member_emails WHERE organization_id = $1 AND created_at > NOW() - INTERVAL '24 hours'",
