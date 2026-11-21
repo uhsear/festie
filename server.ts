@@ -97,7 +97,7 @@ validateStartupConfig(_bootConfig);
 // the two bundles: this copy adopts the preload's client instead of calling
 // Sentry.init again. tests/sentry-preload.test.ts proves both cases.
 import { initSentry, sentry } from './lib/sentry';
-initSentry({ release: _bootConfig.APP_VERSION || 'dev' });
+initSentry({ release: _bootConfig.SENTRY_RELEASE || _bootConfig.APP_VERSION || 'dev' });
 
 import { createAppContext, buildContentSecurityPolicy, collectInlineHashes, loadConfig } from './lib/app-context';
 import { configureMiddleware } from './lib/middleware';
