@@ -81,7 +81,7 @@ export async function unregisterPushOnSignOut(): Promise<void> {
     const token = await AsyncStorage.getItem(TOKEN_KEY);
     if (token) await api.delete('/notifications/token', { body: { token } }).catch(() => {});
     localRemindersGuard.reset();
-    await AsyncStorage.multiRemove([TOKEN_KEY, LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
+    await AsyncStorage.removeMany([TOKEN_KEY, LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
     await Notifications.cancelAllScheduledNotificationsAsync();
   } catch (e) {
     Sentry.captureException(e);
@@ -256,7 +256,7 @@ export function useMobilePush(): MobilePush {
       });
       await AsyncStorage.setItem(TOKEN_KEY, token);
       localRemindersGuard.reset();
-      await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
+      await AsyncStorage.removeMany([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       setRegistered(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't enable notifications. Try again.");
@@ -276,7 +276,7 @@ export function useMobilePush(): MobilePush {
         await api.delete('/notifications/token', { body: { token } });
         await AsyncStorage.removeItem(TOKEN_KEY);
         localRemindersGuard.reset();
-        await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
+        await AsyncStorage.removeMany([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       }
       setRegistered(false);
     } catch (err) {

@@ -38,12 +38,13 @@ export default function LockscreenStaleBanner() {
       }
       let cancelled = false;
       const dayIndexes = [...new Set([...days.map((d, i) => d.dayIndex ?? i), ...sets.map((s) => s.dayIndex ?? 0)])];
-      AsyncStorage.multiGet(dayIndexes.map((d) => lockscreenSavedKey(festivalId, d)))
+      const keys = dayIndexes.map((d) => lockscreenSavedKey(festivalId, d));
+      AsyncStorage.getMany(keys)
         .then((rows) => {
           if (cancelled) return;
           const now = Date.now();
-          for (const [, raw] of rows) {
-            const record = parseSavedImageRecord(raw);
+          for (const key of keys) {
+            const record = parseSavedImageRecord(rows[key] ?? null);
             if (!record || savedImageExpired(record, sets, days, now, timeZone)) continue;
             const text = lockscreenChangeText(lockscreenChanges(record, sets, stages, b2bSeparator));
             if (text) {

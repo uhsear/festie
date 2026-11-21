@@ -440,13 +440,15 @@ export default function PicksImageScreen() {
       const byDay = new Map<number, string[]>();
       for (const p of saved.pages) byDay.set(p.dayIndex, [...(byDay.get(p.dayIndex) ?? []), ...p.setIds]);
       const savedAt = Date.now();
-      const rows: [string, string][] = [...byDay].map(([dayIndex, setIds]) => [
-        lockscreenSavedKey(festival.id, dayIndex),
-        JSON.stringify(
-          lockscreenSnapshot({ festivalId: festival.id, dayIndex, setIds, sets, b2bSeparator: festival.b2bSeparator, savedAt }),
-        ),
-      ]);
-      AsyncStorage.multiSet(rows).catch((err: unknown) => console.warn('picks image: could not record the saved image', err));
+      const rows = Object.fromEntries(
+        [...byDay].map(([dayIndex, setIds]) => [
+          lockscreenSavedKey(festival.id, dayIndex),
+          JSON.stringify(
+            lockscreenSnapshot({ festivalId: festival.id, dayIndex, setIds, sets, b2bSeparator: festival.b2bSeparator, savedAt }),
+          ),
+        ]),
+      );
+      AsyncStorage.setMany(rows).catch((err: unknown) => console.warn('picks image: could not record the saved image', err));
     },
     [festival, sets],
   );
