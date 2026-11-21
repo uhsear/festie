@@ -62,7 +62,6 @@ import {
 } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
 import { useTokens, makeStyles, typeStyle, useLargeText, typeScaleCap, MAX_FONT_SCALE } from '../../hooks/useTokens';
-import DisplayWords from '../../components/DisplayWords';
 import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
@@ -78,6 +77,8 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import RatingButtons from '../../components/RatingButtons';
 import ClashPrompt from '../../components/ClashPrompt';
+import ArtistSheetHost from '../../components/ArtistSheetHost';
+import { ArtistNameButton, ArtistNameRuns } from '../../components/ArtistName';
 import AlsoPickedSection from '../../components/AlsoPickedSection';
 import AlsoPlaysSection from '../../components/AlsoPlaysSection';
 import SetContextSection from '../../components/SetContextSection';
@@ -496,7 +497,8 @@ export default function SetDetailScreen() {
   }
 
   return (
-    <View style={styles.container} accessibilityViewIsModal>
+    <View style={styles.container} accessibilityViewIsModal testID="set-sheet">
+      <ArtistSheetHost inSetSheet />
       {/* Faux drag handle removed — the native formSheet (SDK 56) renders a real
           grabber (sheetGrabberVisible). Share and close sit in their own header
           row, not floating over the content: absolutely positioned, they covered
@@ -548,7 +550,7 @@ export default function SetDetailScreen() {
           ) : null}
           <View style={styles.artistText}>
             <Text style={styles.artist} accessibilityRole="header" maxFontSizeMultiplier={typeScaleCap('display-lg')}>
-              <DisplayWords text={artistName} fontSize={styles.artist.fontSize} />
+              <ArtistNameRuns set={set} separator={b2bSeparator} displayFontSize={styles.artist.fontSize} />
             </Text>
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
           </View>
@@ -906,7 +908,7 @@ export default function SetDetailScreen() {
               if (visible.length === 0) return null;
               return (
                 <View key={`${entry.name}-${i}`}>
-                  {isB2B ? <Text style={styles.sectionLabel}>{entry.name}</Text> : null}
+                  {isB2B ? <ArtistNameButton name={entry.name} textStyle={styles.sectionLabel} /> : null}
                   <View style={styles.linkRow}>
                     {visible.map(([key, url]) => (
                       <TouchableOpacity
@@ -1031,6 +1033,7 @@ function CloseButton({ onPress, style }: { onPress: () => void; style?: StylePro
       activeOpacity={0.7}
       accessibilityRole="button"
       accessibilityLabel="Close detail"
+      testID="set-sheet-close"
       hitSlop={8}
     >
       <Ionicons name="close" size={t.iconSize.md} color={t.colors.text.secondary} />

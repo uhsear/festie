@@ -15,7 +15,7 @@
 // `@festie/shared`. No React, no WebView, no shared transitive deps — keep it
 // unit-testable.
 
-import { File, Directory, Paths } from 'expo-file-system';
+import { File, Directory, FileMode, Paths, type FileHandle } from 'expo-file-system';
 import { createBasemapEnsurer, headContentLength } from '@festie/shared/utils';
 
 // All cached basemaps live under a single subdir of the OS cache directory so
@@ -43,15 +43,16 @@ export function basemapCacheKey(pmtilesUrl: string): string {
   return `${(h >>> 0).toString(16).padStart(8, '0')}.${ext}`;
 }
 
-// shortcut: the map document receives the whole archive as one base64 string, so
-// archives above this size keep the remote URL. Raise it, or stream ranges over the
-// WebView bridge, if a festival ever ships a bigger extract.
+// shortcut: a small cached image (the site plan) is handed to the map as one data URL,
+// so files above this size are skipped. Use a ranged read like readArchiveRange if a
+// festival ever ships a bigger image.
 export const MAX_INLINE_BYTES = 24 * 1024 * 1024;
 
 /**
  * The cached file's bytes as base64, or null when it is missing, empty or larger
  * than MAX_INLINE_BYTES. The map document cannot read `file://` itself: WebKit's
- * fetch rejects the scheme, so the bytes are handed over instead.
+ * fetch rejects the scheme, so the bytes are handed over instead. For the PMTiles
+ * archive use readArchiveRange, which never loads the whole file.
  */
 export async function readCachedBase64(url: string | null | undefined): Promise<string | null> {
   if (!url) return null;
@@ -61,6 +62,57 @@ export async function readCachedBase64(url: string | null | undefined): Promise<
     return await file.base64();
   } catch {
     return null;
+  }
+}
+
+// A pmtiles read is a header, one directory or one tile, each far below this. The
+// document is ours, but a request is still untrusted input, so it is capped.
+export const MAX_RANGE_BYTES = 8 * 1024 * 1024;
+
+const BASE64_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+/** Standard base64 of raw bytes. Hand-rolled so it does not depend on a Hermes `btoa`. */
+export function bytesToBase64(bytes: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < bytes.length; i += 3) {
+    const b0 = bytes[i] ?? 0;
+    const b1 = bytes[i + 1] ?? 0;
+    const b2 = bytes[i + 2] ?? 0;
+    out += BASE64_ALPHABET[b0 >> 2];
+    out += BASE64_ALPHABET[((b0 & 3) << 4) | (b1 >> 4)];
+    out += i + 1 < bytes.length ? BASE64_ALPHABET[((b1 & 15) << 2) | (b2 >> 6)] : '=';
+    out += i + 2 < bytes.length ? BASE64_ALPHABET[b2 & 63] : '=';
+  }
+  return out;
+}
+
+/**
+ * One byte range of the cached archive, as base64, for the map document's
+ * `archive-range` request. Null when the range is invalid, past the end, or the
+ * file is gone, so the document's read fails and the map keeps its other tiles.
+ * Reads only the requested slice: the archive is never held in memory whole.
+ */
+export async function readArchiveRange(
+  pmtilesUrl: string | null | undefined,
+  offset: unknown,
+  length: unknown,
+): Promise<string | null> {
+  if (!pmtilesUrl) return null;
+  if (!Number.isSafeInteger(offset) || !Number.isSafeInteger(length)) return null;
+  const start = offset as number;
+  const want = length as number;
+  if (start < 0 || want <= 0 || want > MAX_RANGE_BYTES) return null;
+  let handle: FileHandle | null = null;
+  try {
+    const file = basemapCacheFile(pmtilesUrl);
+    if (!file.exists || start >= file.size) return null;
+    handle = file.open(FileMode.ReadOnly);
+    handle.offset = start;
+    return bytesToBase64(await handle.readBytes(Math.min(want, file.size - start)));
+  } catch {
+    return null;
+  } finally {
+    handle?.close();
   }
 }
 
@@ -144,12 +196,20 @@ function attemptToken(): string {
  */
 export function ensureBasemapCached(pmtilesUrl: string): Promise<string | null> {
   if (typeof pmtilesUrl !== 'string' || !/^https:\/\//i.test(pmtilesUrl)) return Promise.resolve(null);
+  removedByUser.delete(pmtilesUrl);
   return ensurer.ensure(pmtilesUrl);
 }
 
 // One in-flight download per URL. Both callers (map open, Download button) await
 // the same promise instead of racing two transfers for the same archive.
 const ensurer = createBasemapEnsurer(downloadOnce);
+
+// shortcut: the "user deleted this" flag lives in memory, so a restart may download the map again
+// on the next open. Persist it if that proves to cost people mobile data.
+const removedByUser = new Set<string>();
+
+/** True after the user deleted this download, until an explicit download asks for it again. */
+export const isBasemapRemoved = (url: string | null | undefined): boolean => !!url && removedByUser.has(url);
 
 /** Runs after any archive attempt settles, so every mounted download hook re-reads the disk. */
 export const subscribeBasemapCache = ensurer.subscribe;
@@ -207,10 +267,13 @@ async function downloadOnce(pmtilesUrl: string): Promise<string | null> {
  * refresh). Never throws. Returns true if a file was removed.
  */
 export function clearBasemapCache(pmtilesUrl: string): boolean {
+  removedByUser.add(pmtilesUrl);
   try {
     const file = basemapCacheFile(pmtilesUrl);
     if (file.exists) {
       file.delete();
+      // Mounted download cards re-read the disk, so the map step drops back to "not saved".
+      ensurer.notify();
       return true;
     }
   } catch {

@@ -16,6 +16,7 @@ import {
   zoneOffsetMsAt,
   zonedWallTimeToMs,
 } from './setStatus';
+import { formatClock } from './format';
 import { nextMeetingOccurrence } from './meetingTime';
 import { isPeerStale } from './liveLocation';
 import { timeAgo } from './timeAgo';
@@ -176,16 +177,9 @@ export function selectNowNext({
   };
 }
 
-/** `8:00 PM` in the festival zone (the same form as `formatTime`), or device-local when no zone is known. */
+/** `8:00 PM` (`20:00` where the locale uses a 24-hour clock) in the festival zone, the same form as `formatTime`; device-local when no zone is known. */
 export function fmtZonedClock(ms: number, timeZone?: string): string {
-  // Newer ICU puts a narrow no-break space before AM/PM; formatTime uses a plain space.
-  return new Intl.DateTimeFormat('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-    ...(timeZone ? { timeZone } : {}),
-  })
-    .format(new Date(ms))
-    .replace(/\s/g, ' ');
+  return formatClock(ms, timeZone);
 }
 
 /** Short weekday plus clock, e.g. `Sat 8:00 PM`, in the festival zone. */

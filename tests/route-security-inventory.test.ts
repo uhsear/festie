@@ -250,6 +250,7 @@ test('artist routes stay admin only, validated and rate limited', () => {
     [
       'artists.ts GET /',
       'artists.ts GET /:id/impact',
+      'artists.ts GET /review',
       'artists.ts GET /suggestions',
       'artists.ts PATCH /:id',
       'artists.ts POST /',
@@ -257,6 +258,9 @@ test('artist routes stay admin only, validated and rate limited', () => {
       'artists.ts POST /:id/verify',
       'artists.ts POST /backfill',
       'artists.ts POST /match',
+      'artists.ts POST /review/:id/approve',
+      'artists.ts POST /review/:id/reject',
+      'artists.ts POST /review/import',
       'artists.ts POST /spotify-candidates',
       'artists.ts POST /spotify-picks',
       'artists.ts POST /spotify-refresh',

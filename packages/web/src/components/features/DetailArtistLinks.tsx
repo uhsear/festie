@@ -1,5 +1,6 @@
 import React from 'react';
 import { platformLabel, isSafeExternalUrl } from '@festie/shared/utils';
+import { ArtistNameButton } from './ArtistName';
 
 interface Props {
   artistLinks: Array<{ name: string; links: Record<string, string> }>;
@@ -31,7 +32,11 @@ export default function DetailArtistLinks({ artistLinks, isB2B, genres, hideLink
         <div>
           {artistLinks.map((a, i) => (
             <React.Fragment key={a.name + i}>
-              {isB2B && <div className="mt-1.5 text-xs font-semibold text-text-secondary">{a.name}</div>}
+              {isB2B && (
+                <div className="mt-1.5 text-xs font-semibold text-text-secondary">
+                  <ArtistNameButton name={a.name} />
+                </div>
+              )}
               <div className="py-1 pb-2 text-[length:var(--font-size-14)] flex flex-wrap gap-2.5">
                 {Object.entries(a.links || {})
                   .filter(([platform, url]) => !(platform === 'spotify' && hideLink && url === hideLink.url))

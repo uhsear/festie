@@ -1,9 +1,5 @@
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-
-const root = join(__dirname, '..');
-const read = (p: string) => readFileSync(join(root, p), 'utf8');
+import { read } from '../__tests__/read-source';
 
 describe('empty states are wired to EmptyState with an illustration', () => {
   it.each([

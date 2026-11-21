@@ -26,7 +26,25 @@ export async function basemapCacheInfo(url: string): Promise<{ cached: boolean; 
 
 export const basemapSize = headContentLength;
 
-async function downloadOnce(url: string): Promise<EnsureResult> {
+/** Counts the bytes of a response body as the cache reads it, so the card can show a percentage. */
+function withProgress(res: Response, total: number | null, report: (fraction: number) => void): Response {
+  if (!res.body || !total) return res;
+  const reader = res.body.getReader();
+  let loaded = 0;
+  const stream = new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) return controller.close();
+      loaded += value.byteLength;
+      report(loaded / total);
+      controller.enqueue(value);
+    },
+    cancel: (reason) => reader.cancel(reason),
+  });
+  return new Response(stream, { status: res.status, statusText: res.statusText, headers: res.headers });
+}
+
+async function downloadOnce(url: string, report: (fraction: number) => void): Promise<EnsureResult> {
   const bytes = await basemapSize(url);
   try {
     const est = await navigator.storage?.estimate?.();
@@ -36,7 +54,7 @@ async function downloadOnce(url: string): Promise<EnsureResult> {
     const res = await fetch(url);
     if (!res.ok) return { ok: false, reason: 'network', bytes };
     const cache = await caches.open(OFFLINE_MAP_CACHE);
-    await cache.put(url, res);
+    await cache.put(url, withProgress(res, bytes, report));
     const keys = await cache.keys();
     // shortcut: drops the oldest archive past 3, upgrade to an LRU if users keep more festivals
     if (keys.length > MAX_ARCHIVES && keys[0]) await cache.delete(keys[0]);
@@ -53,3 +71,16 @@ const ensurer = createBasemapEnsurer(downloadOnce);
 /** Runs after any archive attempt settles, so every mounted download hook re-reads the cache. */
 export const subscribeBasemapCache = ensurer.subscribe;
 export const ensureBasemapCached = ensurer.ensure;
+/** Fraction (0 to 1) of the running download of this archive, or null when none is running. */
+export const basemapProgress = ensurer.progress;
+
+/** Delete a festival's downloaded archive. Returns whether one was removed. */
+export async function removeBasemap(url: string): Promise<boolean> {
+  try {
+    return await (await caches.open(OFFLINE_MAP_CACHE)).delete(url);
+  } catch {
+    return false;
+  } finally {
+    ensurer.notify();
+  }
+}

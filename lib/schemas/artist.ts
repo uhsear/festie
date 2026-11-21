@@ -169,3 +169,62 @@ export const spotifyBackfillSchema = z
     setIds: z.array(identifier).max(500).optional(),
   })
   .default({});
+
+// ── Artist review queue (admin) ──────────────────────────────────
+// A researched batch of link, merge and rename proposals. Every URL is https, so no javascript: or data: link
+// reaches the page. A Spotify candidate must sit on open.spotify.com; the artist-link rules check its shape on approval.
+const httpsUrl = (host?: string) =>
+  z
+    .string()
+    .max(500)
+    .refine((value) => {
+      try {
+        const url = new URL(value);
+        return url.protocol === 'https:' && !url.username && !url.password && (host ? url.hostname === host : true);
+      } catch {
+        return false;
+      }
+    }, host ? `Must be an https URL on ${host}` : 'Must be a well-formed https URL');
+
+const ARTIST_REVIEW_KINDS = ['link', 'merge', 'rename'] as const;
+
+const artistReviewCandidate = z.object({
+  // A rename carries no link, so an empty string is allowed.
+  spotifyUrl: z.union([z.literal(''), httpsUrl('open.spotify.com')]),
+  otherUrls: z.array(httpsUrl()).max(20).default([]),
+  confidence: z.enum(['high', 'medium', 'low']),
+  evidence: z.string().max(2000).default(''),
+});
+
+const artistReviewItem = z.object({
+  kind: z.enum(ARTIST_REVIEW_KINDS),
+  artistName: z.string().trim().min(1).max(300),
+  festival: z.string().max(300).default(''),
+  artistIds: z.array(identifier).max(10).default([]),
+  candidates: z.array(artistReviewCandidate).max(10).default([]),
+  proposed: z.object({ from: z.string().max(500).default(''), to: z.string().max(500).default('') }).default({ from: '', to: '' }),
+  note: z.string().max(2000).default(''),
+});
+
+export const artistReviewImportSchema = z.object({
+  generatedAt: z.string().min(1).max(40),
+  items: z.array(artistReviewItem).min(1).max(200),
+});
+
+export const artistReviewListQuerySchema = z.object({
+  status: z.enum(['pending', 'approved', 'rejected', 'all']).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+  offset: z.coerce.number().int().min(0).max(100_000).optional(),
+});
+
+export const artistReviewApproveSchema = z.object({
+  // Which candidate to apply, or a link typed over it. A link item needs one of the two.
+  candidateIndex: z.number().int().min(0).max(9).optional(),
+  url: httpsUrl().optional(),
+  // A merge only: how many festivals the admin saw in the preview. The server recounts and refuses a higher count.
+  acceptedFestivals: z.number().int().min(0).max(10_000).optional(),
+  // A merge only: the artist the admin saw as the survivor. The server refuses the merge when it resolves to another.
+  expectedSurvivorId: identifier.optional(),
+});
+
+export const artistReviewRejectSchema = z.object({ note: z.string().trim().max(500).optional() });

@@ -39,3 +39,50 @@ describe('createBasemapEnsurer', () => {
     expect(cb).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('createBasemapEnsurer progress and notify', () => {
+  it('reports clamped progress while a download runs and clears it after', async () => {
+    let finish: () => void = () => {};
+    const { ensure, progress, subscribe } = createBasemapEnsurer(
+      (_url, report) =>
+        new Promise<number>((resolve) => {
+          report(0.25);
+          report(7);
+          finish = () => resolve(1);
+        }),
+    );
+    const cb = vi.fn();
+    subscribe(cb);
+    const run = ensure('u');
+    expect(progress('u')).toBe(1);
+    expect(progress('other')).toBeNull();
+    expect(cb).toHaveBeenCalledTimes(2);
+    finish();
+    await run;
+    expect(progress('u')).toBeNull();
+  });
+
+  it('tells subscribers only when a whole percent changes', () => {
+    const { ensure, subscribe } = createBasemapEnsurer(
+      (_url, report) =>
+        new Promise<number>(() => {
+          report(0.251);
+          report(0.255);
+          report(0.259);
+          report(0.26);
+        }),
+    );
+    const cb = vi.fn();
+    subscribe(cb);
+    void ensure('u');
+    expect(cb).toHaveBeenCalledTimes(2);
+  });
+
+  it('notify runs the subscribers without a download', () => {
+    const { notify, subscribe } = createBasemapEnsurer(async () => 0);
+    const cb = vi.fn();
+    subscribe(cb);
+    notify();
+    expect(cb).toHaveBeenCalledTimes(1);
+  });
+});

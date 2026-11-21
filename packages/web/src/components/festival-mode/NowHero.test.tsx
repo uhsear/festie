@@ -39,13 +39,13 @@ describe('NowHero walk time', () => {
     renderHero({ minutes: 6, late: false, label: '6 min walk' });
     const hero = screen.getByTestId('fm-next-hero');
     expect(hero).toHaveTextContent('Head to Main · 6 min walk');
-    expect(hero.getAttribute('aria-label')).toContain(', 6 minute walk. Open details');
+    expect(screen.getByRole('button', { name: /, 6 minute walk\. Open details$/ })).toBeInTheDocument();
   });
 
   it('turns the countdown coral when the walk is late', () => {
     renderHero({ minutes: 120, late: true, label: '120 min walk' });
     expect(screen.getByText('in 1h 30m')).toHaveClass('text-accent-coral');
-    expect(screen.getByTestId('fm-next-hero').getAttribute('aria-label')).toContain(', leave now');
+    expect(screen.getByRole('button', { name: /, leave now\. Open details$/ })).toBeInTheDocument();
   });
 
   it('keeps the plain stage line without a walk', () => {

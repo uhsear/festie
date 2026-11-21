@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { previewPlanImport } from './planImport';
+import { describe, it, expect, vi } from 'vitest';
+import { applyPlanImport, previewPlanImport } from './planImport';
 import { PLAN_SNAPSHOT_VERSION, type PlanSnapshot } from './planSnapshot';
 
 function snapshot(picks: PlanSnapshot['picks'], festivalId = 'f1'): PlanSnapshot {
@@ -88,5 +88,30 @@ describe('previewPlanImport', () => {
       { currentFestivalId: 'f1', picks: {}, setIds },
     );
     expect(p.toAdd).toEqual([{ setId: 'd', priority: 'must' }]);
+  });
+});
+
+describe('applyPlanImport', () => {
+  it('saves one batch per priority and sums the real changed counts', async () => {
+    const preview = previewPlanImport(
+      snapshot([
+        { setId: 'a', priority: 'must' },
+        { setId: 'b', priority: 'want' },
+        { setId: 'c', priority: 'must' },
+      ]),
+      { currentFestivalId: 'f1', picks: {}, setIds },
+    );
+    const save = vi.fn(async (ids: string[]) => ids.length);
+    expect(await applyPlanImport(preview, save)).toBe(3);
+    expect(save).toHaveBeenCalledTimes(2);
+    expect(save).toHaveBeenCalledWith(['a', 'c'], 'must');
+    expect(save).toHaveBeenCalledWith(['b'], 'want-to-see');
+  });
+
+  it('writes nothing for an empty preview', async () => {
+    const save = vi.fn(async () => 0);
+    const preview = previewPlanImport(snapshot([{ setId: 'a', priority: 'must' }], 'other'), { currentFestivalId: 'f1', picks: {}, setIds });
+    expect(await applyPlanImport(preview, save)).toBe(0);
+    expect(save).not.toHaveBeenCalled();
   });
 });

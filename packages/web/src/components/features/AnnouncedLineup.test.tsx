@@ -23,12 +23,19 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 
+import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import AnnouncedLineupView from './AnnouncedLineup';
+import ArtistSheetHost from './ArtistSheetHost';
 
 // The routes compute the model once and pass it in; the tests do the same.
 function AnnouncedLineup() {
-  return <AnnouncedLineupView model={useAnnouncedLineup(NOW)} />;
+  return (
+    <>
+      <AnnouncedLineupView model={useAnnouncedLineup(NOW)} />
+      <ArtistSheetHost />
+    </>
+  );
 }
 
 const entry = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
@@ -201,6 +208,9 @@ describe('AnnouncedLineup', () => {
 });
 
 describe('AnnouncedLineup interest marks', () => {
+  beforeEach(() => {
+    useArtistSheetStore.setState({ target: null, isOpen: false });
+  });
   const COPY = 'Marked acts become want-to-see picks when sets are out. Your crew sees your picks.';
   const interestedRow = (id: string, name: string, status: string, extra: Record<string, unknown> = {}) => ({
     entry: entry(id, name),
@@ -230,6 +240,22 @@ describe('AnnouncedLineup interest marks', () => {
     expect(screen.getAllByRole('button', { name: /^Interested in / }).map((b) => b.getAttribute('aria-label'))).toEqual([
       'Interested in Open Act',
     ]);
+  });
+
+  it('leaves the Interested toggle out of the artist sheet of a cancelled act', async () => {
+    setFestival([entry('3', 'Gone Act', { status: 'cancelled' })]);
+    render(<AnnouncedLineup />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open Gone Act' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: 'Interested in Gone Act' })).toBeNull();
+  });
+
+  it('puts the Interested toggle in the artist sheet of an announced act', async () => {
+    setFestival([entry('1', 'Open Act')]);
+    render(<AnnouncedLineup />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open Open Act' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Interested in Open Act' })).toBeInTheDocument();
   });
 
   it('a tap calls the store toggle for that act, and a filled toggle reads pressed', async () => {
@@ -286,11 +312,34 @@ describe('AnnouncedLineup interest marks', () => {
       entry('2', 'Plain Act', { artists: [{ name: 'Plain Act', genres: ['House'] }] }),
     ]);
     render(<AnnouncedLineup />);
-    await userEvent.click(screen.getByRole('button', { name: 'Spotify Act details' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open Spotify Act' }));
     const dialog = await screen.findByRole('dialog');
     const link = within(dialog).getByTestId('spotify-attribution');
     expect(link).toHaveAttribute('href', page);
     expect(link).toHaveAccessibleName('Listen on Spotify');
+  });
+
+  it('a search result opens its artist sheet', async () => {
+    setFestival([entry('1', 'Alpha', { artists: [{ name: 'Alpha', genres: ['Techno'] }] }), entry('4', 'Beta')]);
+    state.searchQuery = 'alp';
+    render(<AnnouncedLineup />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open Alpha' }));
+    expect(within(await screen.findByRole('dialog')).getByText('Techno')).toBeInTheDocument();
+  });
+
+  it('opens each artist of a B2B act on its own, and a timed act still links to its set', async () => {
+    setFestival(
+      [entry('1', 'Ana b2b Bo', { artists: [{ name: 'Ana' }, { name: 'Bo', genres: ['Garage'] }] })],
+      [set('s1', 'Ana b2b Bo', 0, '20:00')],
+    );
+    state.searchQuery = '';
+    render(<AnnouncedLineup />);
+    await userEvent.click(screen.getByRole('button', { name: 'Full lineup' }));
+    expect(screen.getByRole('link', { name: /Ana b2b Bo/ })).toHaveAttribute('href', '/set/s1');
+    await userEvent.click(screen.getByRole('button', { name: 'Open Bo' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Garage')).toBeInTheDocument();
+    expect(within(dialog).queryByText('Ana')).not.toBeInTheDocument();
   });
 
   it('tapping an act without a set opens its sheet with links, an Interested toggle, and closes again', async () => {
@@ -300,7 +349,7 @@ describe('AnnouncedLineup interest marks', () => {
       }),
     ]);
     render(<AnnouncedLineup />);
-    await userEvent.click(screen.getByRole('button', { name: 'Open Act details' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Open Open Act' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('House')).toBeInTheDocument();
     expect(within(dialog).getByRole('link', { name: 'Spotify' })).toHaveAttribute('href', 'https://open.spotify.com/a');

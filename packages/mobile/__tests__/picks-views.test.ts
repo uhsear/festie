@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { read as readSource } from './read-source';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
@@ -6,7 +7,7 @@ const root = join(__dirname, '..');
 const read = (rel: string) => readFileSync(join(root, rel), 'utf8');
 
 describe('T21 mobile Picks views (source guard)', () => {
-  const picks = read('app/(tabs)/picks.tsx');
+  const picks = readSource('app/(tabs)/picks.tsx');
 
   it('picks.tsx wires My day, plan lists, clash cards and stages', () => {
     for (const needle of ['buildMyDay', 'buildPlanList', '<ClashCards', 'stages']) {

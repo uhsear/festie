@@ -10,6 +10,7 @@ import { artistDisplayName, fmtDurationMinutes, formatTime } from '@festie/share
 import type { ConflictGroup } from '@festie/shared/utils';
 import { duration as motionDuration } from '@festie/shared/tokens';
 import { COPY, clashCount } from '@festie/shared/constants';
+import { ArtistNameRuns, artistOpenActions } from './ArtistName';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
@@ -197,6 +198,7 @@ function ClashCard({
               onPress={() => router.push(`/set/${pick.set.id}`)}
               accessibilityRole="button"
               accessibilityLabel={`Open details for ${name}`}
+              {...artistOpenActions(pick.set, separator)}
             >
               <View style={[styles.clashPriorityDot, { backgroundColor: priorityColor(t, pick.priority) }]} />
               <Text
@@ -204,7 +206,7 @@ function ClashCard({
                 numberOfLines={2}
                 maxFontSizeMultiplier={MAX_FONT_SCALE}
               >
-                {name}
+                <ArtistNameRuns set={pick.set} separator={separator} />
               </Text>
               {recommended ? (
                 <View style={styles.tag}>

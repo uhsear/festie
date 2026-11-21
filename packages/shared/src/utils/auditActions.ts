@@ -35,6 +35,8 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'artist.backfill.run': 'Artist ids backfilled',
   'artist.suggested': 'Artist change suggested',
   'artist.suggestion.decided': 'Artist suggestion decided',
+  'artist.review.imported': 'Artist review batch imported',
+  'artist.review.decided': 'Artist review decided',
   'policy_notice.started': 'Policy notice send started',
   'policy_notice.sent': 'Policy notice emailed',
   'user.role.granted': 'Role granted',

@@ -150,6 +150,28 @@ describe('ManageTeam', () => {
     );
   });
 
+  it('locks the name of a verified organization for its owner', async () => {
+    mockGet.mockResolvedValue(detail({ verified: true }));
+    render();
+    const form = await screen.findByRole('form', { name: 'Organization profile' });
+    expect(within(form).getByLabelText(/^Name/)).toBeDisabled();
+    expect(within(form).getByText('Verified organizations can only be renamed by Festie support.')).toBeInTheDocument();
+    expect(within(form).getByLabelText(/^Display name/)).toBeEnabled();
+  });
+
+  it('leaves a locked name out of the save, so a rename by support meanwhile does not block it', async () => {
+    mockGet.mockResolvedValue(detail({ verified: true }));
+    mockPut.mockResolvedValue(detail({ verified: true }));
+    render();
+    const form = await screen.findByRole('form', { name: 'Organization profile' });
+    await userEvent.type(within(form).getByLabelText(/^Contact email/), 'booking@venue.example');
+    await userEvent.click(within(form).getByRole('button', { name: /^Save/ }));
+    await waitFor(() => expect(mockPut).toHaveBeenCalled());
+    const body = mockPut.mock.calls[0]![1] as Record<string, unknown>;
+    expect(body).not.toHaveProperty('name');
+    expect(body.contactEmail).toBe('booking@venue.example');
+  });
+
   it('offers Retry when the team cannot load', async () => {
     mockGet.mockRejectedValueOnce(new Error('network'));
     render();

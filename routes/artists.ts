@@ -497,6 +497,85 @@ export default function createArtistsRoutes(deps: RouteDeps) {
     },
   );
 
+  /**
+   * The artist review queue: researched link, merge and rename proposals (a batch imported as JSON) that an admin
+   * approves one by one. An approval goes through the same edit and merge code as the Artists tab, in one
+   * transaction with the item. A merge needs a recent re-auth, as the Artists tab's merge does.
+   */
+  router.post('/review/import', rateLimit(10, 'artist-review-import'), validate(schemas.artistReviewImport), async (req: Request, res: Response) => {
+    try {
+      const batch = req.validatedBody as z.infer<typeof schemas.artistReviewImport>;
+      const result = await stores.artistMatchReview.importBatch(batch, req.user?.userId ?? null);
+      audit(AUDIT_ACTIONS.ARTIST_REVIEW_IMPORTED, 'import', req, { generatedAt: batch.generatedAt, ...result }, 'artist_match_review');
+      return sendSuccess(res, result);
+    } catch (error) {
+      return sendArtistError(res, error, 'import the review batch');
+    }
+  });
+
+  router.get('/review', validateQuery(schemas.artistReviewList), async (req: Request, res: Response) => {
+    try {
+      const { status, limit, offset } = req.validatedQuery as Query;
+      return sendSuccess(res, await stores.artistMatchReview.list({ status: status ?? 'pending', limit: limit ?? 50, offset: offset ?? 0 }));
+    } catch (error) {
+      return sendArtistError(res, error, 'load the review queue');
+    }
+  });
+
+  // A merge through the queue shares the Artists tab merge's bucket (10 a minute); link and rename keep the looser limit.
+  const reviewMergeLimit = rateLimit(10, 'artist-merge');
+  const limitReviewMerges = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const kind = await stores.artistMatchReview.kindOf((req.validatedParams as Params).id as string);
+      return kind === 'merge' ? reviewMergeLimit(req, res, next) : next();
+    } catch (error) {
+      return sendArtistError(res, error, 'approve the review item');
+    }
+  };
+
+  router.post(
+    '/review/:id/approve',
+    rateLimit(60, 'artist-review-decide'),
+    validateParams(schemas.genericIdParams),
+    limitReviewMerges,
+    validate(schemas.artistReviewApprove),
+    async (req: Request, res: Response) => {
+      try {
+        const id = (req.validatedParams as Params).id as string;
+        const body = req.validatedBody as z.infer<typeof schemas.artistReviewApprove>;
+        const result = await stores.artistMatchReview.approve(id, {
+          ...body,
+          recentAuth: deps.hasRecentAuth(req),
+          userId: req.user?.userId ?? null,
+          ip: getRequestIp(req),
+        });
+        await afterSync(result.synced);
+        audit(AUDIT_ACTIONS.ARTIST_REVIEW_DECIDED, id, req, { decision: 'approved', artistId: result.artistId, ...(result.loserId ? { survivorId: result.artistId, loserId: result.loserId } : {}), festivals: result.synced.length }, 'artist_match_review');
+        return sendSuccess(res, { status: 'approved', artistId: result.artistId, festivalsUpdated: result.synced.length });
+      } catch (error) {
+        return sendArtistError(res, error, 'approve the review item');
+      }
+    },
+  );
+
+  router.post(
+    '/review/:id/reject',
+    rateLimit(60, 'artist-review-decide'),
+    validateParams(schemas.genericIdParams),
+    validate(schemas.artistReviewReject),
+    async (req: Request, res: Response) => {
+      try {
+        const id = (req.validatedParams as Params).id as string;
+        const { note } = req.validatedBody as z.infer<typeof schemas.artistReviewReject>;
+        await stores.artistMatchReview.reject(id, { note: note ?? null, userId: req.user?.userId ?? null });
+        audit(AUDIT_ACTIONS.ARTIST_REVIEW_DECIDED, id, req, { decision: 'rejected', note: note ?? null }, 'artist_match_review');
+        return sendSuccess(res, { status: 'rejected' });
+      } catch (error) {
+        return sendArtistError(res, error, 'reject the review item');
+      }
+    },
+  );
+
   // An organizer's artist stays unverified until an admin says otherwise; another tenant never gets it linked by name until then.
   router.post('/:id/verify', rateLimit(60, 'artist-verify'), validateParams(schemas.genericIdParams), async (req: Request, res: Response) => {
     try {

@@ -26,7 +26,7 @@ import Avatar from './Avatar';
 import Button from './Button';
 import LiveDot from './LiveDot';
 import SectionLabel from './SectionLabel';
-import DisplayWords from './DisplayWords';
+import { ArtistNameRuns, artistOpenActions } from './ArtistName';
 
 /**
  * Building blocks of the day-of Now & Next screen (app/festival-mode.tsx):
@@ -102,9 +102,10 @@ export function NowHero({
           onPress={() => onOpenSet(set)}
           accessibilityRole="button"
           accessibilityLabel={`${name(set)} playing now${stage ? ` at ${stage}` : ''}, ${fmtTimeLeft(end, nowMs)}. Open details`}
+          {...artistOpenActions(set, b2bSeparator)}
         >
           <Text style={s.artist}>
-            <DisplayWords text={name(set)} fontSize={s.artist.fontSize} />
+            <ArtistNameRuns set={set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
           </Text>
           {stage ? <Text style={s.secondary}>{stage}</Text> : null}
           <View style={s.metaRow}>
@@ -175,10 +176,11 @@ export function NowHero({
         onPress={() => onOpenSet(next.set)}
         accessibilityRole="button"
         accessibilityLabel={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}${walkA11y}. Open details`}
+        {...artistOpenActions(next.set, b2bSeparator)}
       >
         <SectionLabel style={s.flushLabel}>Next</SectionLabel>
         <Text style={s.artist}>
-          <DisplayWords text={name(next.set)} fontSize={s.artist.fontSize} />
+          <ArtistNameRuns set={next.set} separator={b2bSeparator} displayFontSize={s.artist.fontSize} />
         </Text>
         <View style={s.nextRow}>
           {stage ? (
@@ -432,10 +434,13 @@ export function UpNext({
               onPress={() => onOpenSet(set)}
               accessibilityRole="button"
               accessibilityLabel={`${name}${stage ? ` at ${stage}` : ''}, ${startsIn}. Open details`}
+              {...artistOpenActions(set, b2bSeparator)}
             >
               <Text style={[s.figure, s.timeCol]}>{fmtZonedClock(start, timeZone)}</Text>
               <View style={s.flex}>
-                <Text style={s.rowTitle}>{name}</Text>
+                <Text style={s.rowTitle}>
+                  <ArtistNameRuns set={set} separator={b2bSeparator} />
+                </Text>
                 {stage ? (
                   <Text style={s.rowMeta} numberOfLines={1}>
                     {stage}

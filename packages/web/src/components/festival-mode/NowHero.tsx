@@ -16,6 +16,7 @@ import { COPY } from '@festie/shared/constants';
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import Button from '../ui/Button';
 import { cn } from '@/lib/utils';
+import ArtistName, { RowOpenButton } from '../features/ArtistName';
 
 // Countdown turns coral and bold when a set is this close, so "go now" reads
 // at a glance in a crowd.
@@ -45,7 +46,7 @@ function startsInWords(startsAt: number, nowMs: number, timeZone: string | undef
 }
 
 const card =
-  'block w-full text-left rounded-xl border bg-bg-card p-4 cursor-pointer transition-[background-color,transform] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover active:scale-[0.985] motion-reduce:transition-none motion-reduce:active:scale-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+  'relative block w-full text-left rounded-xl border bg-bg-card p-4 transition-[background-color,transform] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover active:scale-[0.985] motion-reduce:transition-none motion-reduce:active:scale-100';
 
 function Quiet({ icon, title, body, action }: { icon: ReactNode; title: string; body?: string; action?: ReactNode }) {
   return (
@@ -91,16 +92,17 @@ export default function NowHero({
         {current.map(({ set, end }: DayOfSet) => {
           const stage = getStageName(set.stageId) || '';
           return (
-            <button
+            <div
               key={set.id}
-              type="button"
               data-testid="fm-now-card"
-              onClick={() => onOpenSet(set)}
-              aria-label={`${name(set)} playing now${stage ? ` at ${stage}` : ''}, ${fmtTimeLeft(end, nowMs)}. Open details`}
               className={cn(card, 'border-accent-coral/60 bg-coral-ring shadow-[0_6px_24px_-8px_rgba(var(--accent-coral-rgb),0.45)]')}
             >
+              <RowOpenButton
+                onClick={() => onOpenSet(set)}
+                label={`${name(set)} playing now${stage ? ` at ${stage}` : ''}, ${fmtTimeLeft(end, nowMs)}. Open details`}
+              />
               <span className="block font-display font-bold text-2xl leading-tight text-text-primary break-words">
-                {name(set)}
+                <ArtistName set={set} separator={b2bSeparator} />
               </span>
               {stage && <span className="block type-label text-text-secondary mt-1">{stage}</span>}
               <span className="flex flex-wrap items-baseline gap-x-3 gap-y-1 mt-2">
@@ -109,7 +111,7 @@ export default function NowHero({
                 </span>
                 <span className="type-numeral text-text-secondary">{fmtTimeLeft(end, nowMs)}</span>
               </span>
-            </button>
+            </div>
           );
         })}
       </div>
@@ -161,16 +163,14 @@ export default function NowHero({
     const mins = Math.floor((next.start - nowMs) / 60_000);
     const imminent = mins <= IMMINENT_MIN;
     body = (
-      <button
-        type="button"
-        data-testid="fm-next-hero"
-        onClick={() => onOpenSet(next.set)}
-        aria-label={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${fmtStartsIn(next.start, nowMs, timeZone)}${walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : ''}. Open details`}
-        className={cn(card, 'border-border')}
-      >
+      <div data-testid="fm-next-hero" className={cn(card, 'border-border')}>
+        <RowOpenButton
+          onClick={() => onOpenSet(next.set)}
+          label={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${fmtStartsIn(next.start, nowMs, timeZone)}${walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : ''}. Open details`}
+        />
         <span className="block type-micro text-text-secondary">Next</span>
         <span className="block font-display font-bold text-2xl leading-tight text-text-primary break-words mt-1">
-          {name(next.set)}
+          <ArtistName set={next.set} separator={b2bSeparator} />
         </span>
         <span className="flex flex-wrap items-end justify-between gap-x-4 gap-y-2 mt-3">
           {stage && (
@@ -191,7 +191,7 @@ export default function NowHero({
             <span className="type-numeral text-text-secondary">{fmtZonedClock(next.start, timeZone)}</span>
           </span>
         </span>
-      </button>
+      </div>
     );
   } else {
     body = (

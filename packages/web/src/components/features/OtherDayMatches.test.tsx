@@ -25,8 +25,8 @@ describe('OtherDayMatches', () => {
     );
     expect(screen.getByText('Also on Saturday')).toBeInTheDocument();
     expect(screen.getByText('Also on Sunday')).toBeInTheDocument();
-    expect(screen.getByText('Alpha · Main Stage · 9:00 PM')).toBeInTheDocument();
-    expect(screen.getByText('Beta · Main Stage · TBA')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show Alpha on Saturday' }).parentElement).toHaveTextContent('Alpha · Main Stage · 9:00 PM');
+    expect(screen.getByRole('button', { name: 'Show Beta on Sunday' }).parentElement).toHaveTextContent('Beta · Main Stage · TBA');
   });
 
   it('selects the day on row tap', async () => {

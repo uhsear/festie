@@ -4,6 +4,7 @@
 import { z } from 'zod';
 import { ALLOWED_LINK_PLATFORMS, MAX_ARTISTS_PER_SET } from '../constants';
 import { isIanaTimeZone } from './account';
+import { TILES_PATH_RE } from '../tiles';
 
 // ── Festival schemas (admin) ───────────────────────────────────────
 const stageSchema = z.object({
@@ -179,7 +180,15 @@ const siteplanSchema = z
 // host allowlist before the WebView ever loads it.
 const offlineBasemapSchema = z
   .object({
-    pmtilesUrl: z.string().url().max(2048).startsWith('https://', 'PMTiles URL must be https'),
+    // A same-origin /tiles/<name>.pmtiles path (self-hosted, see lib/tiles.ts) or an https URL.
+    // The festival routes store the path as an absolute URL, so clients only ever see https.
+    pmtilesUrl: z.union(
+      [
+        z.string().regex(TILES_PATH_RE),
+        z.string().url().max(2048).startsWith('https://', 'PMTiles URL must be https'),
+      ],
+      { message: 'PMTiles URL must be https or a /tiles/<name>.pmtiles path' },
+    ),
     attribution: z.string().max(500).optional(),
   })
   .strict();

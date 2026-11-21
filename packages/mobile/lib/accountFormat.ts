@@ -8,8 +8,10 @@
  * formatting (formatFestivalDate, formatDateSpan) lives in @festie/shared/utils.
  */
 
+import { formatTime } from '@festie/shared/utils';
+
 /**
- * Format a 24h 'HH:MM' clock string into a 12h label like "11:00 PM" / "8:00 AM".
+ * Format a 24h 'HH:MM' clock string in the device locale's hour cycle: "11:00 PM" / "8:00 AM", or "23:00" / "08:00" on a 24-hour clock.
  * Returns the raw input on any parse miss so a caption never blanks. Used by the
  * quiet-hours caption so it reflects the stored DND window instead of a
  * hardcoded "11 PM – 8 AM".
@@ -18,13 +20,8 @@ export function formatClockTime(hhmm: string | null | undefined): string | null 
   if (!hhmm) return null;
   const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm.trim());
   if (!m) return hhmm;
-  let hour = Number(m[1]);
-  const minutes = m[2];
-  if (hour < 0 || hour > 23 || Number(minutes) > 59) return hhmm;
-  const period = hour >= 12 ? 'PM' : 'AM';
-  hour = hour % 12;
-  if (hour === 0) hour = 12;
-  return `${hour}:${minutes} ${period}`;
+  if (Number(m[1]) > 23 || Number(m[2]) > 59) return hhmm;
+  return formatTime(`${m[1]}:${m[2]}`);
 }
 
 /**

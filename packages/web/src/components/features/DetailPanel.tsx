@@ -292,6 +292,8 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 primaryArtist={primaryArtist}
                 stageColor={stageColor}
                 setArtist={set.artist}
+                set={set}
+                separator={b2bSeparator}
               />
               {spotifyAttribution && <SpotifyAttribution href={spotifyAttribution.href} />}
 

@@ -92,7 +92,7 @@ describe('MyDayList', () => {
   it('calls onOpenSet with the set when a row is clicked', () => {
     const onOpenSet = vi.fn();
     render(<MyDayList myDay={myDay} onOpenSet={onOpenSet} />);
-    fireEvent.click(screen.getByRole('button', { name: /Fisher/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Fisher/ }));
     expect(onOpenSet).toHaveBeenCalledWith(setA);
   });
 });

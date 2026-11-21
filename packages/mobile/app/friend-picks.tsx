@@ -19,6 +19,7 @@ import { priorityIconName } from '../lib/prioritySymbol';
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
+import { ArtistNameButton } from '../components/ArtistName';
 
 const BAD_LINK = "This link can't be read. Ask your friend to send it again.";
 const NOT_FOUND = 'This link no longer works. Ask your friend for a new one.';
@@ -313,9 +314,7 @@ export default function FriendPicksScreen() {
           </TouchableOpacity>
         ) : null}
         <View style={styles.rowBody}>
-          <Text style={styles.artist} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={2}>
-            {row.artist}
-          </Text>
+          <ArtistNameButton name={row.artist} textStyle={styles.artist} numberOfLines={2} />
           <View style={styles.meta}>
             <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               {row.time}

@@ -56,6 +56,7 @@ export * from './lineupCover';
 export * from './lineupInterest';
 export * from './lineupPaste';
 export * from './setArtists';
+export * from './artistSheet';
 export * from './festivalAdmin';
 export * from './festivalSeries';
 export * from './navigation';

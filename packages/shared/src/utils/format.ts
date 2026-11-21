@@ -61,20 +61,86 @@ export function formatDateSpan(start: string | null | undefined, end: string | n
   return a || b;
 }
 
-export function formatTime(t: string | undefined): string {
+const hourCycles = new Map<string, boolean>();
+
+/**
+ * True when the locale writes clock times on a 24-hour clock (de-DE, en-GB), false for a 12-hour one (en-US).
+ * With no `locale` it reads the runtime locale: the browser language on web, the device language on mobile.
+ * A runtime that reports no hour cycle counts as 12-hour, the format Festie used before it followed the locale.
+ */
+export function uses24HourClock(locale?: string): boolean {
+  const key = locale ?? '';
+  let is24 = hourCycles.get(key);
+  if (is24 === undefined) {
+    const { hourCycle, hour12 } = new Intl.DateTimeFormat(locale, { hour: 'numeric' }).resolvedOptions();
+    is24 = hourCycle ? hourCycle === 'h23' || hourCycle === 'h24' : hour12 === false;
+    hourCycles.set(key, is24);
+  }
+  return is24;
+}
+
+const clockFormats = new Map<string, Intl.DateTimeFormat>();
+
+// A formatter without a time zone captures the device zone when it is built, so only a named zone is cached:
+// a phone that changes zone must not keep showing the old one.
+function clockFormat(timeZone?: string, locale?: string): Intl.DateTimeFormat {
+  const key = `${locale ?? ''}|${timeZone ?? ''}`;
+  const cached = timeZone ? clockFormats.get(key) : undefined;
+  if (cached) return cached;
+  const is24 = uses24HourClock(locale);
+  const format = new Intl.DateTimeFormat(locale, {
+    hour: is24 ? '2-digit' : 'numeric',
+    minute: '2-digit',
+    ...(is24 ? { hourCycle: 'h23' as const } : {}),
+    ...(timeZone ? { timeZone } : {}),
+  });
+  if (timeZone) clockFormats.set(key, format);
+  return format;
+}
+
+/**
+ * The clock time of an instant in `timeZone` (the device zone when omitted), in the locale's hour cycle:
+ * "9:30 PM" for en-US, "21:30" for en-GB and de-DE. Always a plain space before AM/PM, never ICU's no-break space.
+ */
+export function formatClock(ms: number, timeZone?: string, locale?: string): string {
+  return clockFormat(timeZone, locale).format(ms).replace(/\s/g, ' ');
+}
+
+/**
+ * Shows a festival wall-clock "HH:MM" in the locale's hour cycle. The value is a plain time of day, so it goes
+ * through a fixed UTC date: the device zone never moves it. Input that is not a time comes back unchanged.
+ */
+export function formatTime(t: string | undefined, locale?: string): string {
   if (!t) return '';
   const [hh = '0', mm = '00'] = t.split(':');
-  let hr = parseInt(hh, 10);
-  const ap = hr >= 12 ? 'PM' : 'AM';
-  hr = hr % 12 || 12;
-  return `${hr}:${mm} ${ap}`;
+  const hour = parseInt(hh, 10);
+  const minute = parseInt(mm, 10);
+  if (Number.isNaN(hour) || Number.isNaN(minute)) return t;
+  return formatClock(Date.UTC(2000, 0, 1, hour, minute), 'UTC', locale);
+}
+
+/** Like formatTime, but split in the time and its AM/PM marker ("9:30" and "PM"; the marker is empty on a 24-hour clock). */
+export function formatTimeParts(t: string | undefined, locale?: string): { time: string; period: string } {
+  const whole = formatTime(t, locale);
+  const [hh = '0', mm = '00'] = (t ?? '').split(':');
+  if (!t || whole === t) return { time: whole, period: '' };
+  const parts = clockFormat('UTC', locale).formatToParts(Date.UTC(2000, 0, 1, parseInt(hh, 10), parseInt(mm, 10)));
+  const clean = (value: string) => value.replace(/\s/g, ' ');
+  const time = parts.filter((p) => p.type !== 'dayPeriod').map((p) => clean(p.value)).join('').trim();
+  return { time, period: clean(parts.find((p) => p.type === 'dayPeriod')?.value ?? '') };
+}
+
+/** The time for a tight label: on a 12-hour clock a whole hour drops its minutes ("9 PM"); 24-hour times keep them ("21:00"). */
+export function formatTimeCompact(t: string | undefined, locale?: string): string {
+  const whole = formatTime(t, locale);
+  return uses24HourClock(locale) ? whole : whole.replace(':00', '');
 }
 
 const HHMM = /^\d{2}:\d{2}$/;
 
-/** Formats an HH:MM value as 12h time; free-text values pass through unchanged. */
-export function formatTimeOrRaw(t: string): string {
-  return HHMM.test(t) ? formatTime(t) : t;
+/** Formats an HH:MM value in the locale's hour cycle; free-text values pass through unchanged. */
+export function formatTimeOrRaw(t: string, locale?: string): string {
+  return HHMM.test(t) ? formatTime(t, locale) : t;
 }
 
 export function timeToMinutes(t: string | undefined): number {

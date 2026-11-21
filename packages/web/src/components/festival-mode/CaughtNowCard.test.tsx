@@ -65,8 +65,9 @@ describe('CaughtNowCard', () => {
 
   it('wraps a long artist name instead of cutting it to one line', () => {
     renderCard();
-    expect(screen.getByText('Odesza')).toHaveClass('line-clamp-2');
-    expect(screen.getByText('Odesza')).not.toHaveClass('truncate');
+    const name = screen.getByText('Odesza').closest('.line-clamp-2');
+    expect(name).not.toBeNull();
+    expect(name).not.toHaveClass('truncate');
   });
 
   it('lists live and recently ended picks with meta', () => {

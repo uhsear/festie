@@ -15,14 +15,14 @@
  * synthetic row and nothing else.
  *
  * It fails closed: the URL comes only from SEED_DATABASE_URL (never DATABASE_URL), the database
- * name must end in _staging or _test, and "festival_planner" is refused by name. The guard runs
+ * name must end in _staging or _test, and "festival_planner" is refused by name. The guard runs // secret-scan: allow names the guarded production database on purpose
  * before any connection opens. The festival must exist already (load it with the normal tools).
  */
 
 import { Client, Pool } from 'pg';
 
 const PRIORITIES = ['must', 'want-to-see', 'maybe'];
-const PRODUCTION_DATABASE = 'festival_planner';
+const PRODUCTION_DATABASE = 'festival_planner'; // secret-scan: allow names the guarded production database on purpose
 const ID_PREFIX = 'synth-';
 const BATCH = 500;
 

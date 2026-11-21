@@ -9,6 +9,8 @@ const require = createRequire(import.meta.url);
 
 // Injected by scripts/build.mjs (esbuild define); undefined when running from source under tsx.
 declare const __APP_VERSION__: string | undefined;
+// Same mechanism: the git sha the bundle was built from, so Sentry events match the deploy marker.
+declare const __GIT_SHA__: string | undefined;
 
 /**
  * SHA-256 certificates allowed to open festie.us links in the Android app (us.festie.app).
@@ -185,6 +187,7 @@ export const DEFAULTS = {
   METRICS_TOKEN: '',
   SENTRY_TRACES_RATE: 0.05,
   SENTRY_PROFILES_RATE: 0,
+  SENTRY_RELEASE: '', // env, else the build-time git sha; Sentry falls back to APP_VERSION
   FESTIE_ENV_LABEL: '',
   APP_VERSION: '', // loaded from package.json at boot
 } as const;
@@ -317,6 +320,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   DATA_DIR: string;
   DATABASE_URL: string;
   PUBLIC_DIR: string;
+  TILES_DIR: string;
   WEB_DIST: string;
   PUBLIC_ORIGIN: string;
   ALLOWED_ORIGINS: string[];
@@ -456,6 +460,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   METRICS_TOKEN: string;
   SENTRY_TRACES_RATE: number;
   SENTRY_PROFILES_RATE: number;
+  SENTRY_RELEASE: string;
   FESTIE_ENV_LABEL: string;
   APP_VERSION: string;
   SESSION_SECRET: string;
@@ -467,6 +472,8 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   const publicDir = path.resolve(
     overrides.PUBLIC_DIR || process.env.PUBLIC_DIR || path.join(import.meta.dirname, '..', 'public'),
   );
+  const rawTilesDir = overrides.TILES_DIR ?? process.env.TILES_DIR ?? '';
+  const tilesDir = rawTilesDir ? path.resolve(rawTilesDir) : '';
   const webDist = path.resolve(
     overrides.WEB_DIST || process.env.WEB_DIST || path.join(publicDir, '..', 'packages', 'web', 'dist'),
   );
@@ -524,6 +531,8 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     DATA_DIR: dataDir,
     DATABASE_URL: databaseUrl,
     PUBLIC_DIR: publicDir,
+    // Directory of self-hosted .pmtiles files served at /tiles/<name>.pmtiles. Empty = feature off (404).
+    TILES_DIR: tilesDir,
     WEB_DIST: webDist,
     PUBLIC_ORIGIN: publicOrigin,
     ALLOWED_ORIGINS: [...allowedOrigins],
@@ -941,6 +950,10 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     SENTRY_PROFILES_RATE: Number(
       overrides.SENTRY_PROFILES_RATE ?? process.env.SENTRY_PROFILES_RATE ?? DEFAULTS.SENTRY_PROFILES_RATE,
     ),
+    SENTRY_RELEASE: String(
+      overrides.SENTRY_RELEASE || process.env.SENTRY_RELEASE
+        || (typeof __GIT_SHA__ === 'string' ? __GIT_SHA__ : '') || DEFAULTS.SENTRY_RELEASE,
+    ).trim(),
     FESTIE_ENV_LABEL: String(
       overrides.FESTIE_ENV_LABEL ?? process.env.FESTIE_ENV_LABEL ?? DEFAULTS.FESTIE_ENV_LABEL,
     ).trim().toUpperCase().slice(0, 20),

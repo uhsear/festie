@@ -8,6 +8,7 @@ import {
   type GridNavCell,
   type GridNavKey,
   type GridCrewAvatars,
+  fmtAxisHour,
 } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
 import { useUIStore } from '@festie/shared/stores/uiStore';
@@ -18,12 +19,6 @@ import TimelineGridCell from './TimelineGridCell';
 const SLOT_MINUTES = 15;
 
 const NAV_KEYS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Home', 'End']);
-
-function fmtHour(hh: number, mm: number): string {
-  const h = hh % 12 || 12;
-  const suffix = hh < 12 ? 'a' : 'p';
-  return mm === 0 ? `${h}${suffix}` : `${h}:${String(mm).padStart(2, '0')}${suffix}`;
-}
 
 interface TimelineStaticLayerProps {
   visibleStages: Stage[];
@@ -74,7 +69,6 @@ const TimelineStaticLayer = React.memo(function TimelineStaticLayerImpl({
       {/* Time labels on left axis */}
       {Array.from({ length: timeBounds.totalSlots }, (_, i) => {
         const mins = timeBounds.minMin + i * SLOT_MINUTES;
-        const hh = Math.floor(mins / 60) % 24;
         const mm = mins % 60;
         const show = mm === 0 || mm === 30;
         return (
@@ -97,7 +91,7 @@ const TimelineStaticLayer = React.memo(function TimelineStaticLayerImpl({
               borderBottom: mm === 0 ? '1px solid var(--color-border-light)' : '1px solid var(--color-border)',
             }}
           >
-            {show ? fmtHour(hh, mm) : ''}
+            {show ? fmtAxisHour(mins) : ''}
           </div>
         );
       })}

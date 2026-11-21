@@ -16,7 +16,7 @@ describe('crew tabs share keys with @festie/shared', () => {
   });
 
   it('Open map row sits after SOS and before the status block', () => {
-    const src = read('app/(tabs)/crew.tsx');
+    const src = read('components/crew/CrewFindTab.tsx');
     const map = src.indexOf('crew-action-map');
     expect(map).toBeGreaterThan(src.indexOf('<CrewSos'));
     expect(map).toBeLessThan(src.indexOf('<CrewStatus'));

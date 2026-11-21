@@ -69,3 +69,22 @@ export function previewPlanImport(
   }
   return preview;
 }
+
+/**
+ * Write a previewed import through the store's offline-queued `bulkSavePicks`, one coalesced call per priority.
+ * Returns the number of picks that really changed. Web and mobile both call this, so they write the same way.
+ */
+export async function applyPlanImport(
+  preview: PlanImportPreview,
+  bulkSavePicks: (setIds: string[], priority: Priority) => Promise<number>,
+): Promise<number> {
+  const byPriority = new Map<Priority, string[]>();
+  for (const { setId, priority } of preview.toAdd) {
+    const list = byPriority.get(priority) ?? [];
+    list.push(setId);
+    byPriority.set(priority, list);
+  }
+  let added = 0;
+  for (const [priority, setIds] of byPriority) added += await bulkSavePicks(setIds, priority);
+  return added;
+}
