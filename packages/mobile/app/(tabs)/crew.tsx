@@ -36,6 +36,8 @@ import {
   DEFAULT_CREW_TAB,
   parseCrewTab,
   openPollIds,
+  openPollCount,
+  hasUnsettledBalance,
   balanceCents,
 } from '@festie/shared/utils';
 import type { Crew, CrewMember, CrewOverlap, FestivalSet } from '@festie/shared/types';
@@ -682,9 +684,9 @@ export default function CrewScreen() {
   // Badge counts derived from already-loaded crew data (no extra fetch):
   // open polls = polls not yet closed; unsettled = current user has a
   // non-zero expense balance (owes or is owed).
-  const openPollCount = polls.filter((p) => !p.closed).length;
+  const openPolls = openPollCount(polls);
   const myBalance = expenseBalances.find((b) => b.userId === user.id)?.balance ?? 0;
-  const hasUnsettledBalance = Math.abs(myBalance) > 0.01;
+  const unsettled = hasUnsettledBalance(myBalance);
 
   // Plan-tab at-a-glance counts (derived from already-loaded crew data, no extra
   // fetch): how many packing items still need a claimer, and how many rides are
@@ -845,7 +847,7 @@ export default function CrewScreen() {
           setError(null);
           setCrewTab(tab);
         }}
-        badges={{ plan: openPollCount, money: hasUnsettledBalance }}
+        badges={{ plan: openPolls, money: unsettled }}
       />
 
       {crewTab === 'members' ? (
@@ -903,7 +905,7 @@ export default function CrewScreen() {
           handleToggleOverlap={handleToggleOverlap}
           inviteCard={inviteCard}
           isOwner={isOwner}
-          openPollCount={openPollCount}
+          openPollCount={openPolls}
           overlapBusy={overlapBusy}
           overlapEntries={overlapEntries}
           overlapError={overlapError}
@@ -933,7 +935,7 @@ export default function CrewScreen() {
         <CrewMoneyTab
           crew={crew}
           crewRefreshControl={crewRefreshControl}
-          hasUnsettledBalance={hasUnsettledBalance}
+          hasUnsettledBalance={unsettled}
           inviteCard={inviteCard}
           members={members}
           tabBodyStyle={tabBodyStyle}

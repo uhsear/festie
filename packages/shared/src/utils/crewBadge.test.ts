@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { crewTabBadge, badgeA11yLabel, balanceCents, openPollIds } from './crewBadge';
+import {
+  crewTabBadge,
+  badgeA11yLabel,
+  balanceCents,
+  hasUnsettledBalance,
+  openPollCount,
+  openPollIds,
+} from './crewBadge';
 
 const poll = (id: string, extra: Record<string, unknown> = {}) => ({ id, closed: false, votes: [], ...extra });
 const base = { myBalance: 0, userId: 'u1', seen: undefined };
@@ -63,5 +70,26 @@ describe('badgeA11yLabel', () => {
     expect(badgeA11yLabel('Crew', { count: 2, dot: false })).toBe('Crew, 2 new');
     expect(badgeA11yLabel('Crew', { count: 0, dot: true })).toBe('Crew, needs attention');
     expect(badgeA11yLabel('Crew', { count: 0, dot: false })).toBe('Crew');
+  });
+});
+
+describe('openPollCount', () => {
+  it('counts only the polls that are not closed', () => {
+    expect(openPollCount([poll('a'), poll('b', { closed: true }), poll('c', { closed: null })])).toBe(2);
+    expect(openPollCount([])).toBe(0);
+  });
+});
+
+describe('hasUnsettledBalance', () => {
+  it('flags a balance above one cent in either direction', () => {
+    expect(hasUnsettledBalance(12.5)).toBe(true);
+    expect(hasUnsettledBalance(-0.02)).toBe(true);
+  });
+
+  it('treats a missing, zero or one-cent balance as settled', () => {
+    expect(hasUnsettledBalance(undefined)).toBe(false);
+    expect(hasUnsettledBalance(null)).toBe(false);
+    expect(hasUnsettledBalance(0)).toBe(false);
+    expect(hasUnsettledBalance(0.01)).toBe(false);
   });
 });
