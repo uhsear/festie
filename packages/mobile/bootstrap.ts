@@ -6,6 +6,8 @@
 //
 // This module is imported FIRST in app/_layout.tsx so configureStorage runs
 // before the stores barrel is evaluated.
+// Pinned to 3.x (the 1.6.0 native line) while Expo SDK 58 bundles 2.x, so the package is in
+// expo.install.exclude. Expo Go ships the 2.x native module and cannot run this app; use a dev client.
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { configureStorage, configureSecureStorage } from '@festie/shared/platform';

@@ -87,7 +87,8 @@
   "expo": {
     "install": {
       "exclude": [
-        "@expo/config-plugins"
+        "@expo/config-plugins",
+        "@react-native-async-storage/async-storage"
       ]
     }
   }
