@@ -24,6 +24,8 @@ vi.mock('@festie/shared/stores', () => ({
 }));
 
 import InboxView from './inbox';
+import { useFestivalStore } from '@festie/shared/stores/festivalStore';
+import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 
 const items: InboxItem[] = [
   {
@@ -90,5 +92,21 @@ describe('InboxView', () => {
     render(<InboxView />);
     expect(screen.getByText("Couldn't load your notifications.")).toBeTruthy();
     expect(screen.getByText('Set soon')).toBeTruthy();
+  });
+
+  it('opens the artist sheet from the artist a notification is about, without opening the set', () => {
+    useFestivalStore.setState({
+      sets: [{ id: 's1', festivalId: 'f', stageId: 'st', artist: 'Fisher', startTime: '', endTime: '', createdAt: '', updatedAt: '' }],
+    });
+    render(<InboxView />);
+    fireEvent.click(screen.getByRole('button', { name: 'Open Fisher' }));
+    expect(useArtistSheetStore.getState().target?.title).toBe('Fisher');
+    expect(navigate).not.toHaveBeenCalled();
+    useFestivalStore.setState({ sets: [] });
+  });
+
+  it('shows no artist line when the set is not loaded', () => {
+    render(<InboxView />);
+    expect(screen.queryByRole('button', { name: /^Open Fisher/ })).toBeNull();
   });
 });

@@ -1,8 +1,10 @@
-import { useMemo } from 'react';
+import { Fragment, useMemo } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useInterestedRows } from '@festie/shared/hooks/useInterest';
-import { lineupDays, lineupEntryBadge, lineupEntryName, markedWithoutSet } from '@festie/shared/utils';
+import { lineupDays, lineupEntryBadge, markedWithoutSet } from '@festie/shared/utils';
+import { lineupEntrySegments } from '@festie/shared/utils/artistSheet';
 import { useNow } from '../../hooks/useSetStatus';
+import { ArtistNameButton } from './ArtistName';
 
 /**
  * The Picks tab group "Marked, no set yet": acts the user marked that no set covers. Each row has the
@@ -25,7 +27,14 @@ export default function MarkedNoSet({ className }: { className?: string }) {
       <ul className="flex flex-col">
         {rows.map((row) => (
           <li key={row.entry.id} className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-1">
-            <span className="text-base font-medium text-text-primary">{lineupEntryName(row.entry, festival?.b2bSeparator)}</span>
+            <span className="inline-flex flex-wrap items-baseline gap-x-1 min-h-11 text-base font-medium text-text-primary">
+              {lineupEntrySegments(row.entry, festival?.b2bSeparator, true).map((seg, i) => (
+                <Fragment key={`${seg.label}-${i}`}>
+                  {i > 0 && <span>{festival?.b2bSeparator || 'b2b'}</span>}
+                  <ArtistNameButton target={seg.target}>{seg.label}</ArtistNameButton>
+                </Fragment>
+              ))}
+            </span>
             {lineupEntryBadge(row.entry, row.cover, lineup, festival?.publishedAt, nowMs).map((badge) => (
               <span key={badge.kind} className="rounded-full border border-border px-2 py-0.5 text-xs text-text-secondary">
                 {badge.text}

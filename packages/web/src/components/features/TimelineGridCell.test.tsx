@@ -52,7 +52,7 @@ function bounds(el: HTMLElement) {
 }
 
 describe('TimelineGridCell artist name', () => {
-  function renderNamed(set: FestivalSet, onSetClick = vi.fn()) {
+  function renderNamed(set: FestivalSet, onSetClick = vi.fn(), over: { compact?: boolean; spanSlots?: number } = {}) {
     useArtistSheetStore.setState({ target: null, isOpen: false });
     render(
       <TimelineGridCell
@@ -61,11 +61,11 @@ describe('TimelineGridCell artist name', () => {
         stageColor="#ff3366"
         columnIndex={0}
         topSlot={0}
-        spanSlots={4}
+        spanSlots={over.spanSlots ?? 4}
         rowHeight={ROW_HEIGHT}
         myPick={null}
         crew={undefined}
-        compact={false}
+        compact={over.compact ?? false}
         tabbable
         canPick
         festival={null}
@@ -85,6 +85,26 @@ describe('TimelineGridCell artist name', () => {
     expect(onSetClick).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: /^a, .* to .*, Main$/ }));
     expect(onSetClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('leaves a short tile to the cell button so a tap still opens the set', () => {
+    const onSetClick = renderNamed(makeSet('a'), vi.fn(), { spanSlots: 1 });
+    expect(screen.queryByRole('button', { name: 'Open a' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^a, / }));
+    expect(onSetClick).toHaveBeenCalledTimes(1);
+    expect(useArtistSheetStore.getState().isOpen).toBe(false);
+  });
+
+  it('leaves a compact tile to the cell button', () => {
+    const onSetClick = renderNamed(makeSet('a'), vi.fn(), { compact: true });
+    expect(screen.queryByRole('button', { name: 'Open a' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /^a, / }));
+    expect(onSetClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the name target the size of the text on a full tile', () => {
+    renderNamed(makeSet('a'));
+    expect(screen.getByRole('button', { name: 'Open a' }).className).not.toContain('before:-inset-y-3');
   });
 
   it('opens each B2B artist on its own', () => {

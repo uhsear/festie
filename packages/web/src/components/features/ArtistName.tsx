@@ -10,7 +10,10 @@ const BUTTON_CLASS =
   'inline text-left align-baseline p-0 m-0 bg-transparent border-0 text-inherit font-[inherit] cursor-pointer ' +
   'hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua focus-visible:rounded-sm ' +
   // The 44px touch target comes from a pseudo-element, so the name keeps its text size and line layout.
-  'relative before:content-[""] before:absolute before:-inset-x-1 before:-inset-y-3 pointer-events-auto';
+  'relative pointer-events-auto';
+
+// A name inside a small tile that is itself the open-set target must not grow a hit area that covers the tile.
+const SLOP_CLASS = 'before:content-[""] before:absolute before:-inset-x-1 before:-inset-y-3';
 
 /** One artist name as its own button. It opens the artist sheet and never triggers a clickable parent. */
 export function ArtistNameButton({
@@ -21,6 +24,7 @@ export function ArtistNameButton({
   tabIndex,
   onKeyDown,
   onFocus,
+  slop = true,
 }: {
   name?: string;
   target?: ArtistSheetTarget;
@@ -30,6 +34,8 @@ export function ArtistNameButton({
   tabIndex?: number;
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
+  /** Grow the hit area to 44px tall. Turn it off where the name shares a small tile with another target. */
+  slop?: boolean;
 }) {
   const open = useArtistSheetStore((s) => s.open);
   const resolved = target ?? artistTargetFromName(name ?? '');
@@ -37,7 +43,7 @@ export function ArtistNameButton({
     <button
       type="button"
       aria-label={`Open ${resolved.title}`}
-      className={cn(BUTTON_CLASS, className)}
+      className={cn(BUTTON_CLASS, slop && SLOP_CLASS, className)}
       onClick={(e) => {
         e.stopPropagation();
         open(resolved);
@@ -71,6 +77,7 @@ export default function ArtistName({
   tabIndex?: number;
   onKeyDown?: React.KeyboardEventHandler<HTMLButtonElement>;
   onFocus?: React.FocusEventHandler<HTMLButtonElement>;
+  slop?: boolean;
 }) {
   const segments = artistNameSegments(set, separator);
   const sep = separator || 'b2b';

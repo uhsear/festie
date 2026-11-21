@@ -242,6 +242,22 @@ describe('AnnouncedLineup interest marks', () => {
     ]);
   });
 
+  it('leaves the Interested toggle out of the artist sheet of a cancelled act', async () => {
+    setFestival([entry('3', 'Gone Act', { status: 'cancelled' })]);
+    render(<AnnouncedLineup />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open Gone Act' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByRole('button', { name: 'Interested in Gone Act' })).toBeNull();
+  });
+
+  it('puts the Interested toggle in the artist sheet of an announced act', async () => {
+    setFestival([entry('1', 'Open Act')]);
+    render(<AnnouncedLineup />);
+    await userEvent.click(screen.getByRole('button', { name: 'Open Open Act' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('button', { name: 'Interested in Open Act' })).toBeInTheDocument();
+  });
+
   it('a tap calls the store toggle for that act, and a filled toggle reads pressed', async () => {
     setFestival([entry('1', 'Open Act'), entry('2', 'Marked Act')]);
     interest.marks = { '2': { state: 'open' } };

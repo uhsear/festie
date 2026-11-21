@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 import { useInterest } from '@festie/shared/hooks/useInterest';
@@ -43,7 +44,7 @@ export default function ArtistSheetHost() {
   const isOpen = useArtistSheetStore((s) => s.isOpen);
   const close = useArtistSheetStore((s) => s.close);
   const sets = useFestivalStore((s) => s.sets);
-  const shown = target ? enrichArtistTarget(target, sets ?? []) : null;
+  const shown = useMemo(() => (target ? enrichArtistTarget(target, sets ?? []) : null), [target, sets]);
   return (
     <Sheet open={isOpen} onOpenChange={(next) => !next && close()} title={shown?.title ?? ''}>
       {shown && (

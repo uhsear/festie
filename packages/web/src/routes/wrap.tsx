@@ -34,6 +34,7 @@ import SegmentedTablist from '../components/ui/SegmentedTablist';
 import { RATING_META } from '../lib/ratingIcon';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { Sparkles, Trophy, Share2, Users } from 'lucide-react';
+import { ArtistNameButton } from '../components/features/ArtistName';
 
 export default function WrapPage() {
   return (
@@ -287,7 +288,7 @@ function WrapPageInner() {
                   className="flex items-center gap-3 py-2 border-b border-border last:border-b-0 first:pt-0 last:pb-0"
                 >
                   <RatingTag rating={s.rating} compact />
-                  <span className="flex-1 min-w-0 text-sm text-text-primary break-words [overflow-wrap:anywhere] line-clamp-2">{artistOf(s)}</span>
+                  <span className="flex-1 min-w-0 text-sm text-text-primary break-words [overflow-wrap:anywhere] line-clamp-2"><ArtistNameButton name={artistOf(s)} /></span>
                   {s.stageName && <span className="text-xs text-text-muted">{s.stageName}</span>}
                 </div>
               ))}
@@ -465,7 +466,7 @@ function CrewWrapTab({
           <div className="rounded-xl bg-bg-card border border-border p-4 space-y-2">
             {wrap.setsSeenTogether.slice(0, 10).map((s) => (
               <div key={s.setId} className="flex items-center gap-3">
-                <span className="flex-1 min-w-0 text-sm text-text-primary break-words [overflow-wrap:anywhere] line-clamp-2">{artistOf(s)}</span>
+                <span className="flex-1 min-w-0 text-sm text-text-primary break-words [overflow-wrap:anywhere] line-clamp-2"><ArtistNameButton name={artistOf(s)} /></span>
                 <span className="text-xs font-semibold text-accent-aqua">{s.count} loved it</span>
               </div>
             ))}
@@ -495,7 +496,7 @@ function CrewWrapTab({
                           const Icon = RATING_META[s.rating]?.Icon ?? Trophy;
                           return <Icon className="w-3 h-3" aria-hidden="true" />;
                         })()}
-                        {artistOf(s)}
+                        <ArtistNameButton name={artistOf(s)} />
                       </span>
                     ))}
                   </div>

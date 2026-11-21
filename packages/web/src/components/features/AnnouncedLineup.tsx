@@ -16,6 +16,7 @@ import {
   selectLineupEntries,
 } from '@festie/shared/utils';
 import type { AnnouncedLineupModel, InterestRow, LineupView } from '@festie/shared/utils';
+import { lineupEntrySegments } from '@festie/shared/utils/artistSheet';
 import { useNow } from '../../hooks/useSetStatus';
 import { ArtistNameButton } from './ArtistName';
 import { InterestToggle, sheetButtonClass as buttonClass } from './ArtistSheetHost';
@@ -95,28 +96,19 @@ function LineupRow({ entry, textClass, ctx }: { entry: LineupEntry; textClass: s
   const badges = lineupEntryBadge(entry, entryCover, ctx.days, ctx.festival?.publishedAt, ctx.nowMs);
   const first = entryCover.state === 'scheduled' ? lineupCoveringSets(entryCover, ctx.sets)[0] : undefined;
   const nameClass = cn(textClass, entryCover.state === 'cancelled' && 'line-through text-text-muted');
-  const split = entry.artists.length > 1 && name === entry.artists.map((a) => a.name).join(` ${ctx.festival?.b2bSeparator || 'b2b'} `);
+  const segments = lineupEntrySegments(entry, ctx.festival?.b2bSeparator, entryCover.state === 'announced');
 
   return (
     <li className="flex flex-wrap items-baseline gap-x-2 gap-y-1 py-1">
       <span className="inline-flex flex-wrap items-baseline gap-x-1 min-h-11 text-text-primary">
-        {split ? (
-          entry.artists.map((artist, i) => (
-            <React.Fragment key={artist.id ?? `${artist.name}-${i}`}>
-              {i > 0 && <span className={nameClass}>{ctx.festival?.b2bSeparator || 'b2b'}</span>}
-              <ArtistNameButton target={{ title: artist.name, artists: [artist] }} className={nameClass}>
-                {artist.name}
-              </ArtistNameButton>
-            </React.Fragment>
-          ))
-        ) : (
-          <ArtistNameButton
-            target={{ title: name, artists: entry.artists, entryId: entry.id }}
-            className={nameClass}
-          >
-            {name}
-          </ArtistNameButton>
-        )}
+        {segments.map((seg, i) => (
+          <React.Fragment key={`${seg.label}-${i}`}>
+            {i > 0 && <span className={nameClass}>{ctx.festival?.b2bSeparator || 'b2b'}</span>}
+            <ArtistNameButton target={seg.target} className={nameClass}>
+              {seg.label}
+            </ArtistNameButton>
+          </React.Fragment>
+        ))}
       </span>
       {first && (
         <Link

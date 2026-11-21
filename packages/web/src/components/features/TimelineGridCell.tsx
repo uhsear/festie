@@ -187,13 +187,19 @@ function TimelineGridCell({
           )}
           title={dn}
         >
-          <ArtistName
-            set={set}
-            separator={festival?.b2bSeparator}
-            tabIndex={tabIndex}
-            onKeyDown={(e) => onNavKey(e, set.id)}
-            onFocus={() => onActivate(set.id)}
-          />
+          {compact || isShort ? (
+            // A short or compact tile is mostly name. The cell button is its only target; the name opens from the set sheet.
+            dn
+          ) : (
+            <ArtistName
+              set={set}
+              separator={festival?.b2bSeparator}
+              slop={false}
+              tabIndex={tabIndex}
+              onKeyDown={(e) => onNavKey(e, set.id)}
+              onFocus={() => onActivate(set.id)}
+            />
+          )}
         </span>
         {/* Time label: compact format so the end time fits; wraps between start and end, never clips. */}
         <span
