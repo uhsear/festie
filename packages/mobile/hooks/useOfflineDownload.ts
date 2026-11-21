@@ -10,9 +10,16 @@ import {
   extractSiteplan,
   headContentLength,
 } from '@festie/shared/utils';
-import { basemapCacheInfo, clearBasemapCache, ensureBasemapCached, subscribeBasemapCache } from '../lib/basemapCache';
+import {
+  MAX_INLINE_BYTES,
+  basemapCacheInfo,
+  clearBasemapCache,
+  ensureBasemapCached,
+  subscribeBasemapCache,
+} from '../lib/basemapCache';
 
 const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
+const TOO_LARGE: SectionReadiness = { status: 'error', syncedAt: null };
 
 /**
  * The offline-map step. Deliberately NOT part of the shared readiness store:
@@ -27,6 +34,8 @@ const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
  */
 function sectionFromDisk(pmtilesUrl: string | null | undefined): SectionReadiness {
   const info = basemapCacheInfo(pmtilesUrl);
+  // The map document takes at most MAX_INLINE_BYTES from the file, so a bigger one is not offline-ready.
+  if (info.cached && info.bytes > MAX_INLINE_BYTES) return TOO_LARGE;
   return info.cached ? { status: 'ready', syncedAt: info.syncedAt } : IDLE;
 }
 
@@ -56,6 +65,12 @@ function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | n
   const download = useCallback(async () => {
     if (!pmtilesUrl) return;
     setSection({ status: 'syncing', syncedAt: null });
+    // Do not spend mobile data on an archive the map cannot read back offline.
+    const size = await headContentLength(pmtilesUrl);
+    if (size !== null && size > MAX_INLINE_BYTES) {
+      setSection(TOO_LARGE);
+      return;
+    }
     // ensureBasemapCached never throws and never publishes a short archive when
     // the server reports a length, so a failure here is simply "still not
     // downloaded" — the map keeps working online, and Retry re-runs this.
@@ -63,7 +78,9 @@ function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | n
     await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
     const info = basemapCacheInfo(pmtilesUrl);
     setSection(
-      info.cached ? { status: 'ready', syncedAt: info.syncedAt } : { status: 'error', syncedAt: Date.now() },
+      info.cached && info.bytes <= MAX_INLINE_BYTES
+        ? { status: 'ready', syncedAt: info.syncedAt }
+        : { status: 'error', syncedAt: Date.now() },
     );
   }, [pmtilesUrl, siteplanUrl]);
 
@@ -107,7 +124,8 @@ export function useOfflineDownload(festivalId: string) {
   }, [mapUrl]);
   const removeMap = useCallback(() => {
     if (mapUrl) clearBasemapCache(mapUrl);
-  }, [mapUrl]);
+    if (siteplanUrl) clearBasemapCache(siteplanUrl);
+  }, [mapUrl, siteplanUrl]);
 
   const download = useCallback(() => {
     void downloadForOffline(festivalId, activeCrewId ?? undefined);
@@ -132,6 +150,7 @@ export function useOfflineDownload(festivalId: string) {
     hasMap: !!mapUrl,
     mapBytes: mapUrl ? mapBytes : null,
     mapReady: mapSection.status === 'ready',
+    mapTooLarge: mapBytes !== null && mapBytes > MAX_INLINE_BYTES,
     removeMap,
   };
 }

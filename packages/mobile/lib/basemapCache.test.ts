@@ -60,7 +60,7 @@ vi.mock('expo-file-system', () => {
   return { File, Directory, Paths: { cache: 'file:///cache' } };
 });
 
-const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, clearBasemapCache, subscribeBasemapCache, readCachedBase64, MAX_INLINE_BYTES } = await import(
+const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, clearBasemapCache, subscribeBasemapCache, readCachedBase64, isBasemapRemoved, MAX_INLINE_BYTES } = await import(
   './basemapCache'
 );
 
@@ -204,5 +204,14 @@ describe('clearBasemapCache', () => {
     expect(clearBasemapCache(URL_A)).toBe(false);
     expect(cb).toHaveBeenCalledTimes(1);
     off();
+  });
+
+  it('remembers a user delete until an explicit download asks for the file again', async () => {
+    await ensureBasemapCached(URL_A);
+    expect(isBasemapRemoved(URL_A)).toBe(false);
+    clearBasemapCache(URL_A);
+    expect(isBasemapRemoved(URL_A)).toBe(true);
+    await ensureBasemapCached(URL_A);
+    expect(isBasemapRemoved(URL_A)).toBe(false);
   });
 });

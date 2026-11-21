@@ -138,7 +138,7 @@ function StepRow({
 export default function OfflineReadinessCard({ festivalId }: Props) {
   const t = useTokens();
   const styles = useCardStyles();
-  const { steps, summary, download, isDownloading, hasMap, mapBytes, mapReady, removeMap } = useOfflineDownload(festivalId);
+  const { steps, summary, download, isDownloading, hasMap, mapBytes, mapReady, mapTooLarge, removeMap } = useOfflineDownload(festivalId);
   const [expanded, setExpanded] = useState(false);
 
   // 30s tick so "synced N ago" keeps advancing from the device clock.
@@ -149,6 +149,9 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
   }, []);
 
   if (summary.hidden) return null;
+
+  // The size is visible in the header, before the details open, so people can decide before they download.
+  const sizeNote = hasMap && !mapReady && mapBytes != null ? ` (map ${Math.max(1, Math.round(mapBytes / 1_000_000))} MB)` : '';
 
   const icon =
     summary.overall === 'ready' ? (
@@ -166,7 +169,7 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
       <View style={styles.header}>
         <View style={styles.statusIcon}>{icon}</View>
         <Text style={styles.statusText} numberOfLines={2}>
-          {offlineStatusLabel(summary)}
+          {offlineStatusLabel(summary) + sizeNote}
         </Text>
         <TouchableOpacity
           onPress={download}
@@ -202,7 +205,7 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
             {hasMap
               ? `Saves the schedule, your picks, crew plan, weather, artist art and the festival map so they work with no signal.${
                   mapBytes != null ? ` The map is ${Math.max(1, Math.round(mapBytes / 1_000_000))} MB.` : ''
-                }`
+                }${mapTooLarge ? ' That is too large to save for offline use on this phone.' : ''}`
               : 'Saves the schedule, your picks, crew plan, weather and artist art so they work with no signal. The map needs signal at this festival.'}
           </Text>
           <View style={styles.stepList} accessibilityRole="list">
