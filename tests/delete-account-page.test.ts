@@ -49,7 +49,7 @@ describe('GET /delete-account', () => {
     for (const url of ['/delete-account', '/delete-account.html']) {
       const res = await server.request.get(url);
       assert.equal(res.status, 200, url);
-      assert.match(res.headers['content-type'], /text\/html/);
+      assert.match(String(res.headers['content-type']), /text\/html/);
       assert.match(res.text, /Delete your Festie account/);
     }
   });

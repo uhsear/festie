@@ -37,7 +37,7 @@ async function main() {
   const config = loadConfig();
   const pool = new Pool({ connectionString: config.DATABASE_URL });
   const log = {
-    info: (message: string, meta?: unknown) => console.log(message, JSON.stringify(meta ?? {})),
+    info: (message: string, meta?: unknown) => process.stdout.write(`${message} ${JSON.stringify(meta ?? {})}\n`),
     warn: (message: string, meta?: unknown) => console.warn(message, JSON.stringify(meta ?? {})),
     error: (message: string, meta?: unknown) => console.error(message, JSON.stringify(meta ?? {})),
   };

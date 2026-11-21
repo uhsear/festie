@@ -338,7 +338,7 @@ export default function createArtistsRoutes(deps: RouteDeps) {
       const missing = spotifyKeysMissing(res);
       if (missing) return missing;
       const { synced, ...counts } = await refreshStaleSpotifyArtists({
-        stores,
+        stores: { artists: stores.artists },
         config,
         log,
         userId: req.user?.userId ?? null,
