@@ -121,12 +121,13 @@ export function buildMapHtml(
   /** The app theme: Daylight swaps the document ground and the chip/popup chrome to the light palette. */
   theme: ThemePreference = 'stage',
   /**
-   * The saved PMTiles archive, base64-encoded, plus the URL the style's
-   * `pmtiles://` source names. The document serves tiles from these bytes in
-   * memory, because WebKit's fetch cannot read a `file://` archive. No CSP or
-   * file access is widened for it.
+   * The saved PMTiles archive: the URL the style's `pmtiles://` source names.
+   * WebKit's fetch cannot read a `file://` archive, so the document asks React
+   * Native for each byte range it needs (an `archive-range` message, answered
+   * through `window.__festieArchiveChunk`). The archive is never embedded or
+   * sent whole, and no CSP or file access is widened for it.
    */
-  inlineArchive: { url: string; base64: string } | null = null,
+  savedArchive: { url: string } | null = null,
 ): string {
   const ui = documentChrome(theme);
   // center is numeric, non-user-controlled coords — safe to template. Still run
@@ -141,7 +142,7 @@ export function buildMapHtml(
   // Phase 3A/3B: load the pmtiles UMD when a vector basemap is configured — either
   // a remote https archive (pmtilesOrigin set) OR a local cached file:// archive
   // (localBasemap set). With neither, the map is the online OpenFreeMap style.
-  const usePmtiles = pmtilesOrigin != null || localBasemap || inlineArchive != null;
+  const usePmtiles = pmtilesOrigin != null || localBasemap || savedArchive != null;
   // Phase 3A CSP widening (the one security-sensitive change). When — and only
   // when — a festival has a REMOTE offline basemap, we add its EXACT https origin
   // to connect-src (the archive is byte-range fetched via fetch()) and img-src (a
@@ -193,7 +194,6 @@ export function buildMapHtml(
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
   <style>${MAPLIBRE_CSS_SRC}</style>
   ${pmtilesScriptTag}
-  ${inlineArchive ? `<script id="festie-basemap" type="text/plain">${inlineArchive.base64.replace(/[^A-Za-z0-9+/=]/g, '')}</script>` : ''}
   <script id="mlgl-shared" type="text/plain">${MAPLIBRE_SHARED_SRC}</script>
   <script id="mlgl-worker" type="text/plain">${MAPLIBRE_WORKER_SRC}</script>
   <script id="mlgl-main" type="text/plain">${MAPLIBRE_JS_SRC}</script>
@@ -317,7 +317,7 @@ export function buildMapHtml(
     // festival configured one) + whether the pmtiles protocol must be registered.
     var STYLE = ${styleJson};
     var USE_PMTILES = ${usePmtiles ? 'true' : 'false'};
-    var INLINE_ARCHIVE_URL = ${safeJsonForScript(inlineArchive ? inlineArchive.url : null)};
+    var SAVED_ARCHIVE_URL = ${safeJsonForScript(savedArchive ? savedArchive.url : null)};
     // Tracks whether meeting-point pins exist, so live peer/SOS auto-framing only
     // kicks in when there are no pins to anchor the view. Updated by __festieSetPins.
     var HAD_PINS = false;
@@ -335,15 +335,37 @@ export function buildMapHtml(
     // setters keep this top-level copy in step for renderPins/renderMapData.
     var PLACE_TAPS = true;
 
-    // The saved archive, decoded once into memory and read by byte range.
-    function inlineArchiveSource(url) {
-      var bin = atob(document.getElementById('festie-basemap').textContent);
+    // The saved archive is read by byte range over the bridge. RN owns the file
+    // and answers each request with that slice as base64, so no message or string
+    // is ever the size of the archive. An unanswered read times out so a tile
+    // fetch cannot hang the map.
+    var ARCHIVE_READS = {};
+    var ARCHIVE_SEQ = 0;
+    var ARCHIVE_READ_TIMEOUT_MS = 20000;
+    window.__festieArchiveChunk = function (id, b64) {
+      var read = ARCHIVE_READS[id];
+      if (!read) return;
+      delete ARCHIVE_READS[id];
+      clearTimeout(read.timer);
+      if (typeof b64 !== 'string') { read.reject(new Error('archive range unavailable')); return; }
+      var bin = atob(b64);
       var bytes = new Uint8Array(bin.length);
       for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      read.resolve({ data: bytes.buffer });
+    };
+    function bridgedArchiveSource(url) {
       return {
         getKey: function () { return url; },
         getBytes: function (offset, length) {
-          return Promise.resolve({ data: bytes.buffer.slice(offset, offset + length) });
+          return new Promise(function (resolve, reject) {
+            var id = ++ARCHIVE_SEQ;
+            var timer = setTimeout(function () {
+              delete ARCHIVE_READS[id];
+              reject(new Error('archive range timed out'));
+            }, ARCHIVE_READ_TIMEOUT_MS);
+            ARCHIVE_READS[id] = { resolve: resolve, reject: reject, timer: timer };
+            post({ type: 'archive-range', id: id, offset: offset, length: length });
+          });
         }
       };
     }
@@ -614,7 +636,7 @@ export function buildMapHtml(
         if (USE_PMTILES && typeof pmtiles !== 'undefined' && pmtiles.Protocol) {
           try {
             var protocol = new pmtiles.Protocol();
-            if (INLINE_ARCHIVE_URL) protocol.add(new pmtiles.PMTiles(inlineArchiveSource(INLINE_ARCHIVE_URL)));
+            if (SAVED_ARCHIVE_URL) protocol.add(new pmtiles.PMTiles(bridgedArchiveSource(SAVED_ARCHIVE_URL)));
             maplibregl.addProtocol('pmtiles', protocol.tile);
           } catch (e) {}
         }

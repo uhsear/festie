@@ -61,7 +61,7 @@ import AppPressable from './AppPressable';
 import { useNow } from '../hooks/useNow';
 import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '../lib/webviewBridge';
 import type { AuthoringMode } from '../lib/webviewBridge';
-import { basemapCacheInfo, ensureBasemapCached, readCachedBase64 } from '../lib/basemapCache';
+import { basemapCacheInfo, ensureBasemapCached, readArchiveRange, readCachedBase64 } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
 import { compassHref, peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
@@ -162,7 +162,7 @@ const MAP_ORIGIN_WHITELIST = [
  * active festival needs and no wider; with no offline basemap it's null and the
  * guard is byte-for-byte the prior behaviour.
  *
- * `file://` is always rejected: a saved archive reaches the document as bytes.
+ * `file://` is always rejected: a saved archive reaches the document as byte ranges over the bridge.
  */
 function makeShouldStartLoad(extraHost: string | string[] | null) {
   return function onShouldStartLoadWithRequest(req: ShouldStartLoadRequest): boolean {
@@ -720,13 +720,14 @@ export default function OfflineMap({
   // We store the cached result TAGGED with the URL it was cached for; a switch to
   // a different festival is handled by comparing that tag against the current URL
   // during render (below) — no synchronous reset-in-effect needed.
-  // The document gets the archive's BYTES, not its file:// URI: WebKit's fetch
+  // The document reads the archive by byte range over the bridge (see the
+  // 'archive-range' message below), not through its file:// URI: WebKit's fetch
   // rejects file://, so on iOS every tile failed and the map drew pins on a blank
   // ground. Keyed by the local URI, which the style's pmtiles:// source names.
-  const [cachedBasemap, setCachedBasemap] = useState<{ url: string; uri: string; base64: string } | null>(null);
-  // When the archive is already on disk, hold the WebView until its bytes are read.
-  // Starting on the remote archive and swapping documents a moment later left the
-  // first open half-drawn.
+  const [cachedBasemap, setCachedBasemap] = useState<{ url: string; uri: string } | null>(null);
+  // When the archive is already on disk, hold the WebView until the cache check
+  // settles. Starting on the remote archive and swapping documents a moment later
+  // left the first open half-drawn.
   const archiveOnDisk = useMemo(
     () => (remotePmtilesUrl ? basemapCacheInfo(remotePmtilesUrl).cached : false),
     [remotePmtilesUrl],
@@ -736,10 +737,9 @@ export default function OfflineMap({
   useEffect(() => {
     let cancelled = false;
     if (!remotePmtilesUrl) return;
-    void ensureBasemapCached(remotePmtilesUrl).then(async (uri) => {
-      const base64 = uri ? await readCachedBase64(remotePmtilesUrl) : null;
+    void ensureBasemapCached(remotePmtilesUrl).then((uri) => {
       if (cancelled) return;
-      if (uri && base64) setCachedBasemap({ url: remotePmtilesUrl, uri, base64 });
+      if (uri) setCachedBasemap({ url: remotePmtilesUrl, uri });
       setCheckedArchiveUrl(remotePmtilesUrl);
     });
     return () => {
@@ -778,7 +778,7 @@ export default function OfflineMap({
 
   // The remote host is permitted in the CSP/allowlist ONLY while we're still
   // reading the remote archive. Once the local copy is in use, no remote origin
-  // is needed (and isn't added) — the map reads the embedded bytes.
+  // is needed (and isn't added) — the map reads byte ranges of the saved file.
   const offlineBasemapHost = usingLocalBasemap ? null : remoteBasemapHost;
 
   // Phase 4B: the host of the configured site-plan image, if any. Threaded into
@@ -806,7 +806,7 @@ export default function OfflineMap({
         false,
         siteplanImageHost,
         theme,
-        localArchive ? { url: localArchive.uri, base64: localArchive.base64 } : null,
+        localArchive ? { url: localArchive.uri } : null,
       ),
     [center, mapStyle, offlineBasemapHost, siteplanImageHost, theme, localArchive],
   );
@@ -814,7 +814,7 @@ export default function OfflineMap({
   // Navigation guard + origin whitelist, widened by EXACTLY the festival's
   // PMTiles host (remote mode) and/or the site-plan image host — default-deny
   // preserved; only configured origins are ever added. The WebView never needs
-  // file access: a saved archive arrives as bytes inside the document.
+  // file access: a saved archive arrives as byte ranges over the bridge.
   const extraHosts = useMemo(
     () => [offlineBasemapHost, siteplanImageHost].filter((h): h is string => !!h),
     [offlineBasemapHost, siteplanImageHost],
@@ -891,9 +891,11 @@ export default function OfflineMap({
         latitude?: number;
         longitude?: number;
         on?: boolean;
-        id?: string;
+        id?: string | number;
         label?: string;
         kind?: string;
+        offset?: number;
+        length?: number;
       } = {};
       try {
         msg = JSON.parse(e.nativeEvent.data);
@@ -955,6 +957,17 @@ export default function OfflineMap({
         ) {
           onMapPress({ latitude, longitude });
         }
+      } else if (msg.type === 'archive-range') {
+        // The document asks for one slice of the saved archive. The message is untrusted: it
+        // can only name an offset and a length of the one archive this map opened, and
+        // readArchiveRange validates and caps both.
+        const readId = msg.id;
+        if (typeof readId !== 'number' || !Number.isSafeInteger(readId)) return;
+        void readArchiveRange(localArchive?.url, msg.offset, msg.length).then((chunk) => {
+          webRef.current?.injectJavaScript(
+            `window.__festieArchiveChunk && window.__festieArchiveChunk(${readId}, ${chunk === null ? 'null' : JSON.stringify(chunk)}); true;`,
+          );
+        });
       } else if (msg.type === 'error') {
         // Only a load/init failure means "no map" → fall back. A transient
         // pin/peer/recenter glitch must NOT tear the whole map down.
@@ -971,7 +984,7 @@ export default function OfflineMap({
           fallBack();
       }
     },
-    [fallBack, onMapPress, interactive, allPins, selectPin],
+    [fallBack, onMapPress, interactive, allPins, selectPin, localArchive],
   );
 
   // Arm a load timeout on load start: if the document never signals 'ready'
