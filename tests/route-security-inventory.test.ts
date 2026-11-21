@@ -64,6 +64,7 @@ const PUBLIC_ROUTES: Record<string, string> = {
   'pages.ts GET /reset-password': TOKEN_LINK,
   'pages.ts GET /privacy': 'Static legal page.',
   'pages.ts GET /terms': 'Static legal page.',
+  'pages.ts GET /delete-account': 'Static page; deletion instructions that must be readable without signing in.',
   'pages.ts GET /security-whitepaper': 'Static page.',
   'pages.ts GET /{*splat}': 'SPA shell fallback; the API routes do the auth.',
   'ratings.ts GET /festival/:festivalId/all': 'Per-set counts and averages only; no user ids or notes.',

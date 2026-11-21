@@ -13,4 +13,5 @@ signing in unlocks saved picks, crew planning, and the post-festival Wrap recap.
 - /crew — plan with your crew (sign in required)
 - /wrap — post-festival recap (after the festival ends)
 - /account — profile and settings
+- /delete-account — how to delete your account (public page, no sign-in needed)
 - /login, /register — authentication

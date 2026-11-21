@@ -101,6 +101,7 @@ export default defineConfig({
         navigateFallback: 'index.html',
         navigateFallbackDenylist: [
           /^\/privacy/,
+          /^\/delete-account/,
           /^\/terms/,
           /^\/security-whitepaper/,
           /\.html$/,
