@@ -36,6 +36,22 @@ export function sectionFromDisk(pmtilesUrl: string | null | undefined): SectionR
   return info.cached ? { status: 'ready', syncedAt: info.syncedAt } : IDLE;
 }
 
+/**
+ * Saves the archive (and the site-plan overlay image, best effort: it is not part of the
+ * step) and re-reads the disk. ensureBasemapCached never throws and never publishes a short
+ * archive when the server reports a length, so a failure is simply "still not downloaded":
+ * the map keeps working online, and Retry re-runs this. No size check: the archive is read
+ * by byte range.
+ */
+export async function downloadOfflineMap(
+  pmtilesUrl: string,
+  siteplanUrl: string | null,
+): Promise<SectionReadiness> {
+  await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
+  const section = sectionFromDisk(pmtilesUrl);
+  return section.status === 'ready' ? section : { status: 'error', syncedAt: Date.now() };
+}
+
 function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | null) {
   // Seed from disk during the first render rather than setting state inside an
   // effect: the cache is readable synchronously, so an effect would render IDLE
@@ -62,13 +78,7 @@ function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | n
   const download = useCallback(async () => {
     if (!pmtilesUrl) return;
     setSection({ status: 'syncing', syncedAt: null });
-    // ensureBasemapCached never throws and never publishes a short archive when
-    // the server reports a length, so a failure here is simply "still not
-    // downloaded" — the map keeps working online, and Retry re-runs this.
-    // The site-plan overlay image is saved alongside, best effort: it is not part of the step.
-    await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
-    const info = basemapCacheInfo(pmtilesUrl);
-    setSection(info.cached ? { status: 'ready', syncedAt: info.syncedAt } : { status: 'error', syncedAt: Date.now() });
+    setSection(await downloadOfflineMap(pmtilesUrl, siteplanUrl));
   }, [pmtilesUrl, siteplanUrl]);
 
   return { section, download };

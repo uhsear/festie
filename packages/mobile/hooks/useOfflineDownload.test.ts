@@ -34,15 +34,29 @@ vi.mock('expo-file-system', () => {
 });
 vi.mock('react-native', () => ({ Platform: { OS: 'android' } }));
 vi.mock('@festie/shared/stores', () => ({}));
+// Stand-in for the transfer: lands a 40 MiB archive at the cache path, as a real download would.
+vi.mock('../lib/basemapCache', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../lib/basemapCache')>();
+  return {
+    ...real,
+    ensureBasemapCached: vi.fn(async (url: string) => {
+      fs.files.set(real.basemapCacheFile(url).uri, 40 * 1024 * 1024);
+      return 'file:///cache/x';
+    }),
+  };
+});
 
-const { sectionFromDisk } = await import('./useOfflineDownload');
-const { basemapCacheFile, readCachedBase64, MAX_INLINE_BYTES } = await import('../lib/basemapCache');
+const { sectionFromDisk, downloadOfflineMap } = await import('./useOfflineDownload');
+const { basemapCacheFile, ensureBasemapCached } = await import('../lib/basemapCache');
 
 const PMTILES = 'https://festie.us/uploads/basemaps/big-2026.pmtiles';
 const SITEPLAN = 'https://festie.us/uploads/siteplans/big-2026.webp';
 const MIB = 1024 * 1024;
 
-beforeEach(() => fs.files.clear());
+beforeEach(() => {
+  fs.files.clear();
+  vi.mocked(ensureBasemapCached).mockClear();
+});
 
 describe('offline map readiness size gate', () => {
   it('counts a 40 MiB cached .pmtiles archive as offline-ready', () => {
@@ -50,10 +64,16 @@ describe('offline map readiness size gate', () => {
     expect(sectionFromDisk(PMTILES)).toEqual({ status: 'ready', syncedAt: 1_700_000_000_000 });
   });
 
-  it('still refuses a 40 MiB site-plan image, which is handed to the map whole', async () => {
-    fs.files.set(basemapCacheFile(SITEPLAN).uri, 40 * MIB);
-    expect(40 * MIB).toBeGreaterThan(MAX_INLINE_BYTES);
-    expect(await readCachedBase64(SITEPLAN)).toBeNull();
+  it('downloads a 40 MiB archive without refusing it and ends ready', async () => {
+    const ready = await downloadOfflineMap(PMTILES, null);
+    expect(ensureBasemapCached).toHaveBeenCalledWith(PMTILES);
+    expect(ready).toEqual({ status: 'ready', syncedAt: 1_700_000_000_000 });
+  });
+
+  it('ends in error when the archive did not land on disk', async () => {
+    vi.mocked(ensureBasemapCached).mockResolvedValueOnce(null);
+    expect((await downloadOfflineMap(PMTILES, SITEPLAN)).status).toBe('error');
+    expect(ensureBasemapCached).toHaveBeenCalledWith(SITEPLAN);
   });
 
   it('reports a missing archive as idle', () => {

@@ -20,7 +20,7 @@ Use this procedure to make the offline basemap file for one festival. The file i
 
    `pmtiles` reads only the byte ranges it needs from a remote source. A site of a few kilometres at zoom 15 is typically a few tens of megabytes.
 
-   The phone app can save an extract for offline use only up to 24 MiB. A larger file works online but shows "too large to save for offline use" in the app. Check the size with `ls -l fest-2026.pmtiles`. If it is above 24 MiB, run the extract again with a lower `--maxzoom` or a smaller box, until the file fits.
+   The phone app reads the archive by byte range, so it has no app-side size limit. Do not cut zoom levels or coverage to make the file smaller. The download is the whole file, so a large extract uses mobile data. The app shows the file size before the download, so people can decide. Check the size with `ls -l fest-2026.pmtiles`.
 
 2. Check the file.
 
