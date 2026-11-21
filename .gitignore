@@ -136,6 +136,9 @@ packages/web/public/fonts/clash-display/
 /docs/adrs/*
 !/docs/adrs/README.md
 !/docs/adrs/template.md
+!/docs/security/
+/docs/security/*
+!/docs/security/secret-handling.md
 packages/*/CLAUDE.md
 packages/*/DESIGN.md
 packages/*/PRODUCT.md
