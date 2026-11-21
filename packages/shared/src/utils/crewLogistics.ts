@@ -3,6 +3,7 @@
  * claimed item and a taken seat read the same on both platforms.
  */
 import type { CrewMember, CrewPackingItem, CrewRideOffer, FestivalDay } from '../types';
+import { formatClock } from './format';
 import { createDateInLocalFrame, zonedWallTimeToMs } from './setStatus';
 
 type PackingClaimInput = Pick<CrewPackingItem, 'claimed' | 'brought_by' | 'packed'>;
@@ -125,10 +126,7 @@ export function rideTimeLabel(
     const zone = timeZone ? { timeZone } : {};
     const d = new Date(ms);
     const day = new Intl.DateTimeFormat('en-US', { ...zone, weekday: 'short' }).format(d);
-    const time = new Intl.DateTimeFormat('en-US', { ...zone, hour: 'numeric', minute: '2-digit' })
-      .format(d)
-      .replace(/\u202f/g, ' ');
-    return `${day} ${time}`;
+    return `${day} ${formatClock(ms, timeZone)}`;
   }
   return offer.depart_at || null;
 }

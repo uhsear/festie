@@ -1,7 +1,7 @@
 import type { FestivalSet, Priority, Stage } from '../types/domain';
 import { clashBadgeBySetId, detectConflicts } from './conflicts';
 import { contrastRatioRgb, parseHex, toHex } from './contrast';
-import { artistDisplayName, formatTime } from './format';
+import { artistDisplayName, formatTime, formatTimeCompact, formatTimeParts } from './format';
 import {
   LOCKSCREEN_ZONES,
   POSTER_TOP_U,
@@ -509,7 +509,7 @@ function baseRows(items: Item[], ctx: Ctx): BaseRow[] {
   return items.map((it, i) => {
     const stage = ctx.stageById.get(it.set.stageId);
     const colors = stageColors(stage, input.theme);
-    const [time = '', period = ''] = formatTime(it.set.startTime).split(' ');
+    const { time, period } = formatTimeParts(it.set.startTime);
     const badge = clashes.get(it.set.id);
     const members = (input.mode === 'crew' ? (input.crewOverlap?.[it.set.id]?.members ?? []) : []).filter(
       (m) => m.userId !== input.selfUserId,
@@ -518,7 +518,7 @@ function baseRows(items: Item[], ctx: Ctx): BaseRow[] {
       setId: it.set.id,
       time,
       period,
-      until: `to ${formatTime(it.set.endTime).replace(/ [AP]M$/, '')}`,
+      until: `to ${formatTimeParts(it.set.endTime).time}`,
       ...splitTag(artistDisplayName(it.set, input.festival.b2bSeparator).normalize('NFC')),
       artistColor: it.priority === 'maybe' ? palette.maybe : palette.text,
       glyphColor: it.priority ? glyphColor[it.priority] : null,
@@ -935,7 +935,7 @@ export function buildLockscreenModel(input: LockscreenInput): LockscreenModel {
             const ids = items.slice(at, at + p.rows.length);
             at += p.rows.length;
             const lastEnd = ids.reduce((a, b) => (b.end > a.end ? b : a));
-            const tail = pages.length > 1 ? `to ${formatTime(lastEnd.set.endTime).replace(':00', '')}` : '';
+            const tail = pages.length > 1 ? `to ${formatTimeCompact(lastEnd.set.endTime)}` : '';
             return { body: p as LockscreenPageModel['body'], ids, tail };
           });
         })();

@@ -10,6 +10,7 @@ import {
   decodePlanSnapshot,
   extractPlanSnapshotText,
   previewPlanImport,
+  applyPlanImport,
   formatTime,
   type PlanSnapshot,
   type PlanImportPreview,
@@ -68,21 +69,6 @@ function buildPreview(snapshot: PlanSnapshot): ScanPreview {
     if (!dup) meetingTarget = { id: crew.activeCrew.id, name: crew.activeCrew.name };
   }
   return { snapshot, preview, meetingTarget };
-}
-
-/** Write the previewed picks, one coalesced offline-queued PUT per priority. Returns the real changed count. */
-async function addPreviewedPicks(preview: PlanImportPreview): Promise<number> {
-  const byPriority = new Map<Priority, string[]>();
-  for (const { setId, priority } of preview.toAdd) {
-    const list = byPriority.get(priority) ?? [];
-    list.push(setId);
-    byPriority.set(priority, list);
-  }
-  let added = 0;
-  for (const [priority, setIds] of byPriority) {
-    added += await useFestivalDataStore.getState().bulkSavePicks(setIds, priority);
-  }
-  return added;
 }
 
 async function addMeetingPoint(snapshot: PlanSnapshot, crewId: string): Promise<void> {
@@ -163,7 +149,7 @@ export default function PlanQRScan() {
     if (!scan) return;
     setPhase('importing');
     try {
-      setAdded(await addPreviewedPicks(scan.preview));
+      setAdded(await applyPlanImport(scan.preview, useFestivalDataStore.getState().bulkSavePicks));
       setPhase('done');
     } catch {
       setErrorMsg("Couldn't save the plan to this device. Try again.");
