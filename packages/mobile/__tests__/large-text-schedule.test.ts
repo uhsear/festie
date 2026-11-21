@@ -16,6 +16,19 @@ describe('T10 schedule large-text guards', () => {
     expect(src).not.toContain('adjustsFontSizeToFit');
   });
 
+  it('SegmentedControl sizes slots to content and keeps the 44 target, so Timeline is not cut', () => {
+    const src = read('components/SegmentedControl.tsx');
+    const slot = src.match(/segmentSlot: \{([^}]*)\}/)![1]!;
+    expect(slot).toContain('flexGrow: 1');
+    expect(slot).toContain("flexBasis: 'auto'");
+    expect(slot).not.toMatch(/flex: 1/);
+    const segment = src.match(/\n {2}segment: \{([^}]*)\}/)![1]!;
+    expect(segment).toContain('minWidth: 44');
+    expect(segment).toContain('minHeight: 44');
+    expect(src).toContain("typeStyle('label')");
+    expect(src).not.toMatch(/letterSpacing|fontWeight/);
+  });
+
   it('FestivalList caps the name and allows two location lines', () => {
     const src = read('components/FestivalList.tsx');
     expect(src).toContain("typeScaleCap('title')");

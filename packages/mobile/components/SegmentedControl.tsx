@@ -172,18 +172,23 @@ const useStyles = makeStyles((t) => ({
     borderRadius: t.radii.pill,
     backgroundColor: t.colors.accent.aqua,
   },
+  // Size to content, then share the leftover equally. Equal flex:1 slots gave the
+  // short labels ("Cards", "Grid") room they did not need and cut "Timeline" to
+  // "Timel…" on a 360dp screen at a large font scale.
   segmentSlot: {
-    flex: 1,
+    flexGrow: 1,
+    flexShrink: 1,
+    flexBasis: 'auto',
   },
   segment: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: t.spacing[2],
-    // spacing[2] (was [3]): tighter side padding frees room for the longest
-    // label ("Timeline") to clear the flex:1 half-track at 360dp; the active
-    // aqua fill still reads as a comfortable pill.
-    paddingHorizontal: t.spacing[2],
+    // spacing[1]: tight side padding keeps the longest label ("Timeline") whole
+    // at 360dp and a large font scale; minWidth keeps the 44 touch target.
+    paddingHorizontal: t.spacing[1],
+    minWidth: 44,
     borderRadius: t.radii.pill,
     minHeight: 44, // WCAG 2.5.5 / Apple HIG minimum touch target
   },
