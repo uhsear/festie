@@ -17,6 +17,7 @@ import {
   parseLineupView,
   searchLineupEntries,
   selectLineupEntries,
+  spotifyAttributionFor,
 } from '@festie/shared/utils';
 import type { AnnouncedLineupModel, InterestRow, LineupView } from '@festie/shared/utils';
 import { useNow } from '../hooks/useNow';
@@ -24,6 +25,7 @@ import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Avatar from './Avatar';
 import SegmentedControl from './SegmentedControl';
 import SheetShell from './SheetShell';
+import SpotifyAttribution from './SpotifyAttribution';
 
 const INTEREST_COPY = 'Marked acts become want-to-see picks when sets are out. Your crew sees your picks.';
 
@@ -88,6 +90,7 @@ function ArtistSheet({ entry, name, onClose }: { entry: LineupEntry | null; name
                       {artist.genres.join(' · ')}
                     </Text>
                   ) : null}
+                  {spotifyAttributionFor([artist]) ? <SpotifyAttribution href={spotifyAttributionFor([artist])!.href} /> : null}
                   <View style={styles.linkRow}>
                     {artistLinkEntries(artist.links).map((link) => (
                       <TouchableOpacity

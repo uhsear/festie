@@ -45,7 +45,7 @@ export default function DetailArtistLinks({ artistLinks, isB2B, genres, hideLink
                       rel="noopener noreferrer"
                       className="inline-flex items-center min-h-11 text-[length:var(--font-size-14)] text-accent-aqua no-underline hover:underline"
                     >
-                      {platformLabel(platform) + ' ↗'}
+                      {(platform === 'spotify' ? 'Open Spotify' : platformLabel(platform)) + ' ↗'}
                     </a>
                   ))}
               </div>

@@ -461,6 +461,36 @@ describe('DetailPanel', () => {
     expect(screen.getByTestId('spotify-section')).toHaveTextContent(status);
   });
 
+  it('attributes Spotify photos and genres with the Spotify logo and a link back to the artist page', () => {
+    const page = 'https://open.spotify.com/artist/abc123';
+    render(
+      <DetailPanel
+        {...defaultProps}
+        set={makeSet({
+          artist: 'Daft Punk',
+          artists: [{ name: 'Daft Punk', photo: 'https://i.scdn.co/image/abc', genres: ['house'], links: { spotify: page } }],
+        } as Partial<FestivalSet>)}
+      />,
+    );
+    const link = screen.getByTestId('spotify-attribution');
+    expect(link).toHaveAttribute('href', page);
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAccessibleName('Listen on Spotify');
+    const logos = Array.from(link.querySelectorAll('img'));
+    expect(logos.map((img) => img.getAttribute('src'))).toEqual(['/spotify/Full_Logo_White_RGB.svg', '/spotify/Full_Logo_Black_RGB.svg']);
+    for (const img of logos) expect(Number(img.getAttribute('width'))).toBeGreaterThanOrEqual(70);
+  });
+
+  it('shows no Spotify attribution when no photo or genre came from Spotify', () => {
+    render(
+      <DetailPanel
+        {...defaultProps}
+        set={makeSet({ artist: 'Local Act', artists: [{ name: 'Local Act', photo: 'https://art.festie.us/a.jpg' }] } as Partial<FestivalSet>)}
+      />,
+    );
+    expect(screen.queryByTestId('spotify-attribution')).not.toBeInTheDocument();
+  });
+
   it('hides the Listen section without a Spotify artist link', () => {
     render(<DetailPanel {...defaultProps} />);
     expect(screen.queryByTestId('spotify-section')).not.toBeInTheDocument();

@@ -279,6 +279,20 @@ describe('AnnouncedLineup interest marks', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Interested (0)' }));
     expect(screen.getByText('You have not marked any acts yet.')).toBeInTheDocument();
   });
+  it('attributes a Spotify photo or genres in the act sheet with the logo and a link to the artist page', async () => {
+    const page = 'https://open.spotify.com/artist/abc123';
+    setFestival([
+      entry('1', 'Spotify Act', { artists: [{ name: 'Spotify Act', photo: 'https://i.scdn.co/image/1', genres: ['House'], links: { spotify: page } }] }),
+      entry('2', 'Plain Act', { artists: [{ name: 'Plain Act', genres: ['House'] }] }),
+    ]);
+    render(<AnnouncedLineup />);
+    await userEvent.click(screen.getByRole('button', { name: 'Spotify Act details' }));
+    const dialog = await screen.findByRole('dialog');
+    const link = within(dialog).getByTestId('spotify-attribution');
+    expect(link).toHaveAttribute('href', page);
+    expect(link).toHaveAccessibleName('Listen on Spotify');
+  });
+
   it('tapping an act without a set opens its sheet with links, an Interested toggle, and closes again', async () => {
     setFestival([
       entry('1', 'Open Act', {

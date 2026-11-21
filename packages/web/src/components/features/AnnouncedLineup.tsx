@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useInterest, useInterestedRows } from '@festie/shared/hooks/useInterest';
-import type { Festival, FestivalSet, LineupEntry, Stage } from '@festie/shared/types';
+import type { Artist, Festival, FestivalSet, LineupEntry, Stage } from '@festie/shared/types';
 import {
   LINEUP_VIEW_KEY,
   artistLinkEntries,
@@ -15,11 +15,13 @@ import {
   parseLineupView,
   searchLineupEntries,
   selectLineupEntries,
+  spotifyAttributionFor,
 } from '@festie/shared/utils';
 import type { AnnouncedLineupModel, InterestRow, LineupView } from '@festie/shared/utils';
 import { useNow } from '../../hooks/useSetStatus';
 import Avatar from '../ui/Avatar';
 import Sheet from '../ui/Sheet';
+import SpotifyAttribution from './SpotifyAttribution';
 import { cn } from '../../lib/utils';
 
 
@@ -101,6 +103,12 @@ function InterestToggle({ entryId, name, onMarked }: { entryId: string; name: st
   );
 }
 
+/** The Spotify logo and link back under an artist whose photo or genres came from Spotify. */
+function ArtistSpotifyAttribution({ artist }: { artist: Artist }) {
+  const attribution = spotifyAttributionFor([artist]);
+  return attribution ? <SpotifyAttribution href={attribution.href} /> : null;
+}
+
 /** An announced act with no linked set: each artist's photo, genres and links, plus the Interested toggle. */
 function ArtistSheet({ entry, name, open, onOpenChange }: { entry: LineupEntry; name: string; open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
@@ -114,6 +122,7 @@ function ArtistSheet({ entry, name, open, onOpenChange }: { entry: LineupEntry; 
               {artist.genres && artist.genres.length > 0 && (
                 <span className="text-sm text-text-secondary">{artist.genres.join(' · ')}</span>
               )}
+              <ArtistSpotifyAttribution artist={artist} />
               <div className="flex flex-wrap gap-2">
                 {artistLinkEntries(artist.links).map((link) => (
                   <a

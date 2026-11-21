@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist, stageCoord, resolveFestivalTimeZone, MAP_COPY } from '@festie/shared/utils';
+import { formatTime, artistDisplayName, hasSetStarted, buildSetUrl, formatSetWhen, primarySpotifyArtist, spotifyAttributionFor, stageCoord, resolveFestivalTimeZone, MAP_COPY } from '@festie/shared/utils';
 import { useDebouncedNote, useSpotifyPreview, usePickClear, useCanPick, useSetMove, useViewAs } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
@@ -12,6 +12,7 @@ import RatingButtons from './RatingButtons';
 import DetailArtistHeader from './DetailArtistHeader';
 import DetailArtistLinks from './DetailArtistLinks';
 import DetailSpotifySection from './DetailSpotifySection';
+import SpotifyAttribution from './SpotifyAttribution';
 import DetailReminderNotePanel from './DetailReminderNotePanel';
 import ClashPrompt from './ClashPrompt';
 import DetailPriorityPicker from './DetailPriorityPicker';
@@ -104,6 +105,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
   const status = useSetStatus(set);
   const { status: spotifyStatus, preview: spotifyPreview } = useSpotifyPreview(set.id);
   const spotifyArtist = primarySpotifyArtist(set);
+  const spotifyAttribution = spotifyAttributionFor(set.artists);
   const canRemind = !!set.startTime && !(currentFestival && hasSetStarted(set, currentFestival, festivalDays));
 
   // Open the player once the preview is ready, when the card's Listen button asked for it.
@@ -291,6 +293,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
                 stageColor={stageColor}
                 setArtist={set.artist}
               />
+              {spotifyAttribution && <SpotifyAttribution href={spotifyAttribution.href} />}
 
               <div className="text-base text-text-secondary tabular-nums" data-testid="set-when">
                 {formatSetWhen(set, festivalDays, status)}
