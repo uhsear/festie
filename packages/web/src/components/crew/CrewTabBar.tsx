@@ -49,7 +49,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
             if (typeof badge === 'number' && badge > 0) {
               return (
                 <span
-                  className="ml-0.5 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[10px] font-semibold leading-none text-center"
+                  className="ml-0.5 min-w-4 shrink-0 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[10px] font-semibold leading-none text-center"
                   aria-label={`${badge} open`}
                 >
                   {badge}
