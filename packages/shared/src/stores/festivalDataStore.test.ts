@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { useFestivalDataStore } from './festivalDataStore';
 import { useFestivalUIStore } from './festivalUIStore';
 import { useAuthStore } from './authStore';
@@ -70,6 +70,10 @@ describe('festivalDataStore', () => {
     vi.clearAllMocks();
     // Default: no auth user
     useAuthStore.setState({ user: null, userToken: null });
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   describe('initial state', () => {
@@ -1262,27 +1266,70 @@ describe('festivalDataStore', () => {
       expect(state._profilesCachedAt).toBeGreaterThanOrEqual(before);
     });
 
+    // The festival GET answers through api.get; the Date header reaches the store via onResponse.
+    const mockFestivalResponse = (date: string | null) =>
+      vi.mocked(api.get).mockImplementationOnce(async (_path, options) => {
+        options?.onResponse?.({ headers: new Headers(date ? { Date: date } : {}) } as Response);
+        return { ...mockFestival, stages: [], days: [] } as never;
+      });
+
     it('keeps the prior _festivalCachedAt when a 200 arrives while offline (service-worker cache)', async () => {
       // Web: the SW answers GET /festivals/:id from cache with no network, so the 200 is not fresh data.
       useUIStore.setState({ offlineMode: true });
       const lastRealFetch = Date.now() - 10 * 60_000;
-      useFestivalDataStore.setState({ _festivalCachedAt: lastRealFetch, _cachedFestivalId: 'fest-1' });
-      vi.mocked(api.get).mockResolvedValueOnce({ ...mockFestival, stages: [], days: [] });
+      useFestivalDataStore.setState({
+        currentFestival: mockFestival,
+        _festivalCachedAt: lastRealFetch,
+        _cachedFestivalId: 'fest-1',
+      });
+      mockFestivalResponse(null);
 
       await useFestivalDataStore.getState().selectFestival('fest-1');
 
       expect(useFestivalDataStore.getState()._festivalCachedAt).toBe(lastRealFetch);
     });
 
+    it("does not carry another festival's _festivalCachedAt into an offline festival switch", async () => {
+      useUIStore.setState({ offlineMode: true });
+      useFestivalDataStore.setState({
+        currentFestival: { ...mockFestival, id: 'fest-other' },
+        _festivalCachedAt: Date.now() - 60_000,
+        _cachedFestivalId: 'fest-other',
+      });
+      mockFestivalResponse(null);
+
+      await useFestivalDataStore.getState().selectFestival('fest-1');
+
+      expect(useFestivalDataStore.getState()._festivalCachedAt).toBeNull();
+    });
+
     it('does not stamp _festivalCachedAt for a cached 200 when the OS reports offline', async () => {
       vi.stubGlobal('navigator', { onLine: false });
       useFestivalDataStore.setState({ _festivalCachedAt: null });
-      vi.mocked(api.get).mockResolvedValueOnce({ ...mockFestival, stages: [], days: [] });
+      mockFestivalResponse(null);
 
       await useFestivalDataStore.getState().selectFestival('fest-1');
-      vi.unstubAllGlobals();
 
       expect(useFestivalDataStore.getState()._festivalCachedAt).toBeNull();
+    });
+
+    it('stamps the response Date when a cached 200 arrives while the browser still reports online', async () => {
+      // Dead connection, navigator.onLine true, offlineMode false: only the Date header shows the age.
+      const cachedAt = Date.now() - 20 * 60_000;
+      mockFestivalResponse(new Date(cachedAt).toUTCString());
+
+      await useFestivalDataStore.getState().selectFestival('fest-1');
+
+      expect(useFestivalDataStore.getState()._festivalCachedAt).toBe(Math.floor(cachedAt / 1000) * 1000);
+    });
+
+    it('stamps now when the response Date is within device clock skew', async () => {
+      const before = Date.now();
+      mockFestivalResponse(new Date(before - 30_000).toUTCString());
+
+      await useFestivalDataStore.getState().selectFestival('fest-1');
+
+      expect(useFestivalDataStore.getState()._festivalCachedAt).toBeGreaterThanOrEqual(before);
     });
 
     it('preserves persisted allProfiles offline ONLY when they belong to this festival', async () => {

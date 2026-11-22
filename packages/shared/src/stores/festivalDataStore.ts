@@ -233,6 +233,8 @@ export function selectMyInterests(state: FestivalDataState): Record<string, Inte
 // views read ({ id, userId, name, picks }) — never notes/reminders/etag — and
 // capped to MAX_CACHED_PROFILES so a large festival can't bloat the blob.
 const MAX_CACHED_PROFILES = 60;
+// Device-clock slack before a response Date counts as older than now.
+const RESPONSE_DATE_SKEW_MS = 2 * 60_000;
 
 /** Strip a profile down to the crew-overlap/digest essentials for persistence. */
 function slimProfileForCache(p: Profile): Pick<Profile, 'id' | 'userId' | 'name' | 'picks'> {
@@ -482,7 +484,14 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
     set({ isLoading: true, error: null, currentFestivalId: festivalId });
     try {
       // Festival detail is public; profiles require auth (401 for guests).
-      const detail = await withRetry(() => api.get<FestivalDetailResponse>(`/festivals/${festivalId}`));
+      let responseDate = null as string | null;
+      const detail = await withRetry(() =>
+        api.get<FestivalDetailResponse>(`/festivals/${festivalId}`, {
+          onResponse: (res) => {
+            responseDate = res.headers.get('Date');
+          },
+        }),
+      );
       let profiles: Profile[] = [];
       let pickCounts: Record<string, number> | null = null;
       let profilesFetchFailed = false;
@@ -539,11 +548,23 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         return;
       }
 
-      // A 200 while offline is the web service worker answering GET /festivals/:id
-      // from cache, not a server fetch. Show the data but never stamp it fresh:
-      // the freshness label keeps the age of the last real fetch (same rule as
-      // api.markOnlineAndDrain, which refuses to treat that 200 as reachability).
+      // The festival GET is answered by the web service worker (StaleWhileRevalidate), so a 200
+      // is not proof of a fresh fetch, online or off. A cached response keeps the Date header of the
+      // server reply it stored: stamp that, so the label shows the real age. Without a usable Date,
+      // fall back to the offline signal: offline never stamps fresh, and the previous stamp only
+      // carries over when it belongs to this same festival.
       const servedOffline = isOffline() || (typeof navigator !== 'undefined' && navigator.onLine === false);
+      const now = Date.now();
+      const serverMs = responseDate ? Date.parse(responseDate) : NaN;
+      let festivalCachedAt: number | null;
+      if (Number.isFinite(serverMs)) {
+        // Inside the skew window a fresh reply from a slightly-off device clock still reads "just now".
+        festivalCachedAt = now - serverMs > RESPONSE_DATE_SKEW_MS ? serverMs : now;
+      } else if (servedOffline) {
+        festivalCachedAt = prevState.currentFestival?.id === festivalId ? prevState._festivalCachedAt : null;
+      } else {
+        festivalCachedAt = now;
+      }
 
       set({
         // Re-assert the id alongside the data: an async persist rehydration
@@ -560,7 +581,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         pickCounts: pickCounts ?? (prevState._cachedFestivalId === festivalId ? prevState.pickCounts : {}),
         currentProfile,
         isLoading: false,
-        _festivalCachedAt: servedOffline ? prevState._festivalCachedAt : Date.now(),
+        _festivalCachedAt: festivalCachedAt,
         _cachedFestivalId: festivalId,
         _profilesCachedAt: profilesAreFresh ? Date.now() : prevState._profilesCachedAt,
         pickSync: {},
