@@ -43,6 +43,13 @@ beforeEach(() => {
 });
 
 describe('SosRaiseButton', () => {
+  it('does not promise a compass: the web has none', async () => {
+    const user = userEvent.setup();
+    render(<SosRaiseButton crewId="c1" />);
+    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
+    expect(screen.getByRole('dialog').textContent).not.toMatch(/compass/i);
+  });
+
   it('confirms before sending, then raises with the message and toasts success', async () => {
     const user = userEvent.setup();
     raiseSosSpy.mockResolvedValueOnce({});

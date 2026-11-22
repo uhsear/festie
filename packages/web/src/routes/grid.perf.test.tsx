@@ -31,7 +31,6 @@ vi.mock('@festie/shared/stores/festivalModeStore', () => ({
   useFestivalModeStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel({ lowPowerMode: false })),
 }));
 
-vi.mock('../components/features/LastSyncedBadge', () => ({ default: () => null }));
 vi.mock('../components/features/LowPowerIndicator', () => ({ default: () => null }));
 
 vi.mock('../components/layout/RefreshableView', () => ({

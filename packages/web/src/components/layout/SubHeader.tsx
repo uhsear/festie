@@ -29,7 +29,7 @@ import { DISCOVER_COPY, FESTIVAL_STATUS_LABEL, genreChipLabel } from '@festie/sh
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
-import SaveStatusChip from '../features/SaveStatusChip';
+import ScheduleStatusLine from '../features/ScheduleStatusLine';
 import SpotifyAttribution from '../features/SpotifyAttribution';
 import FestivalPicker from './FestivalPicker';
 import { isSchedulePath } from './ScheduleViewSwitcher';
@@ -344,7 +344,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           </div>
         )}
 
-        {currentProfile && <SaveStatusChip />}
+        {(currentProfile || onSchedulePath) && <ScheduleStatusLine showFreshness={onSchedulePath} />}
 
         {/* Artist search. Sits before the filters in the DOM so it shares the day-tab row from md up; phones keep it last. */}
         {showSearch && (

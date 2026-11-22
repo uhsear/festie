@@ -29,8 +29,7 @@ import PhaseHomeActions from '../PhaseHomeActions';
 import FestivalReadyCard from '../FestivalReadyCard';
 import ScheduleDayChips from '../ScheduleDayChips';
 import ScheduleResultsRow from '../ScheduleResultsRow';
-import FreshnessChip from '../FreshnessChip';
-import SaveStatusChip from '../SaveStatusChip';
+import ScheduleStatusLine from '../ScheduleStatusLine';
 import OfflineStatusChip from '../OfflineStatusChip';
 import { useStyles } from './styles';
 import type { UseViewAsReturn } from '@festie/shared/hooks';
@@ -160,8 +159,7 @@ export default function ScheduleControls({
       matching the crew tab's chip. Driven by festivalDataStore's
       _festivalCachedAt; renders nothing until the schedule is cached once. */}
   <View style={[styles.freshnessRow, { paddingHorizontal: hPad }]}>
-    <FreshnessChip surface="schedule" />
-    {currentProfile ? <SaveStatusChip /> : null}
+    <ScheduleStatusLine showSave={!!currentProfile} />
     {/* Cards and fallback views support pull-to-refresh. Timeline owns both
         scroll axes, so narrow phones need this compact manual action after
         the header sheds secondary icons to preserve the festival title. */}

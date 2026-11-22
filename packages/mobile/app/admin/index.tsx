@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert, useWindowDimensions } from 'react-native';
+import { View, Text, ScrollView, RefreshControl, TouchableOpacity, Alert, Linking, useWindowDimensions } from 'react-native';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -74,6 +74,7 @@ import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
  */
 
 const RECENT_ACTIVITY_ROWS = 5;
+const WEB_ADMIN_URL = 'https://festie.us/admin';
 const LARGE_FONT_SCALE = 1.3;
 const HEALTH_DETAILS_HEADING = 'This server process. A restart resets these numbers.';
 const HEALTH_ICONS = {
@@ -548,6 +549,19 @@ export default function AdminScreen() {
               </TouchableOpacity>
             ))}
           </View>
+          <Text style={styles.webNote}>
+            Organizations, artist backfill and the artist review queue are on the web admin.
+          </Text>
+          <TouchableOpacity
+            style={styles.webNoteLink}
+            activeOpacity={0.7}
+            onPress={() => void Linking.openURL(WEB_ADMIN_URL)}
+            accessibilityRole="link"
+            accessibilityLabel="Open the web admin at festie.us/admin"
+          >
+            <Text style={styles.webNoteLinkText}>festie.us/admin</Text>
+            <Ionicons name="open-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
+          </TouchableOpacity>
 
           {/* Recent admin activity — five rows, the rest on the audit screen */}
           <SectionLabel>Recent admin activity</SectionLabel>
@@ -735,6 +749,23 @@ export default function AdminScreen() {
 }
 
 const useStyles = makeStyles((t) => ({
+  webNote: {
+    ...typeStyle('caption'),
+    color: t.colors.text.secondary,
+    paddingHorizontal: t.spacing[1],
+  },
+  webNoteLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: t.spacing[1],
+    minHeight: 44,
+    paddingHorizontal: t.spacing[1],
+  },
+  webNoteLinkText: {
+    ...typeStyle('label', 600),
+    color: t.colors.accent.aqua,
+  },
   screen: {
     flex: 1,
     backgroundColor: t.colors.bg.primary,
