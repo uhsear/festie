@@ -42,7 +42,7 @@ export const ANNOUNCEMENT_COPY = {
     cancel: 'Keep',
     confirm: 'Take down',
   },
-  queued: (n: number) => `Announcement queued for ${people(n)}.`,
+  queued: (n: number | null) => (n === null ? 'Announcement queued.' : `Announcement queued for ${people(n)}.`),
   scheduled: (when: string) => `Announcement scheduled for ${when}.`,
   cancelledToast: 'Announcement cancelled',
   takenDownToast: 'Banner taken down',

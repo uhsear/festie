@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FestivalAnnouncements from './FestivalAnnouncements';
+import { useToast } from '../../lib/toastContext';
 
 const api = vi.hoisted(() => ({ adminList: vi.fn(), create: vi.fn(), cancel: vi.fn() }));
 vi.mock('@festie/shared/services/announcements', () => ({ announcementsApi: api }));
@@ -188,6 +189,8 @@ describe('FestivalAnnouncements for an organization owner', () => {
     await waitFor(() =>
       expect(api.create).toHaveBeenCalledWith('f1', { severity: 'info', title: 'Hello', body: 'World', screen: 'home' }, 'manage'),
     );
+    // The audience is hidden under the floor, so the toast must not state a count.
+    await waitFor(() => expect(useToast().toast).toHaveBeenCalledWith('Announcement queued.', 'success'));
   });
 
   it('a verified organization sees no banner-only note and its confirm says a push goes out', async () => {

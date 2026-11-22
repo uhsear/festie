@@ -79,7 +79,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName, scope 
         },
         scope,
       );
-      toast(sendAt ? COPY.scheduled(new Date(sendAt).toLocaleString()) : COPY.queued(res.recipients ?? 0), 'success');
+      toast(sendAt ? COPY.scheduled(new Date(sendAt).toLocaleString()) : COPY.queued(res.recipients ?? null), 'success');
       setTitle('');
       setMessage('');
       setSendAtLocal('');
