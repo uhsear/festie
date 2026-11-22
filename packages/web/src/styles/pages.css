@@ -252,12 +252,6 @@
   min-width: 0;
   width: 100%;
 }
-@media (min-width: 1024px) {
-  .stage-filter-scroll {
-    width: auto;
-    flex: 1 1 0%;
-  }
-}
 .stage-filter-scroll .filter-stage {
   -webkit-mask-image: none;
   mask-image: none;

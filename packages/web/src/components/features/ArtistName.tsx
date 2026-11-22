@@ -7,7 +7,7 @@ import type { FestivalSet } from '@festie/shared/types';
 import { cn } from '../../lib/utils';
 
 const BUTTON_CLASS =
-  'inline text-left align-baseline p-0 m-0 bg-transparent border-0 text-inherit font-[inherit] text-[length:inherit] leading-[inherit] cursor-pointer ' +
+  'artist-name-btn inline text-left align-baseline p-0 m-0 bg-transparent border-0 text-inherit font-[inherit] text-[length:inherit] leading-[inherit] cursor-pointer ' +
   'hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua focus-visible:rounded-sm ' +
   // The 44px touch target comes from a pseudo-element, so the name keeps its text size and line layout.
   'relative pointer-events-auto';
