@@ -141,9 +141,9 @@ const PAGE_STYLE = `
     .fp-cta {
       display: inline-flex; align-items: center; justify-content: center;
       min-height: 2.75rem; margin-top: 1.25rem; padding: 0.75rem 1.5rem;
-      background: #ff3366; color: #fff; text-decoration: none; border-radius: 0.5rem; font-weight: 600; font-size: 0.9375rem;
+      background: #d6154f; color: #fff; text-decoration: none; border-radius: 0.5rem; font-weight: 600; font-size: 0.9375rem;
     }
-    .fp-cta:hover { background: #e62e5c; }
+    .fp-cta:hover { background: #c01d3a; }
     .fp-hint { font-size: 0.8125rem; color: #888; margin-top: 0.5rem; }
     .fp-section { margin-bottom: 1.5rem; }
     h2 { font-size: 1rem; font-weight: 700; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 0.5rem; }
@@ -152,7 +152,7 @@ const PAGE_STYLE = `
     .fp-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.375rem; }
     .fp-sets { list-style: none; display: flex; flex-direction: column; gap: 0.375rem; }
     .fp-set { border-radius: 0.5rem; padding: 0.625rem 0.75rem; }
-    .fp-set-time { font-size: 0.75rem; color: #888; font-weight: 500; }
+    .fp-set-time { font-size: 0.75rem; color: #999; font-weight: 500; }
     .fp-set-artist { font-size: 0.9375rem; font-weight: 600; margin: 0.125rem 0; overflow-wrap: anywhere; }
     .fp-set-stage { font-size: 0.75rem; color: #aaa; }
     .fp-empty { color: #888; font-size: 0.875rem; padding: 0.5rem 0; }
