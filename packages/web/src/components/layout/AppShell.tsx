@@ -67,6 +67,9 @@ const dayOnlySubHeaderRoutes = ['/compare'];
 // Routes that keep ONLY the festival selector.
 const festivalOnlySubHeaderRoutes = ['/wrap', '/picks'];
 
+// Routes whose content fills the shell (grid, timeline, map); a footer would shrink them.
+const FILL_SHELL_PATHS = ['/grid', '/timeline', '/map'];
+
 export default function AppShell() {
   const location = useLocation();
   // Runs on every route, including sign-in pages that render no Header, so a first visit follows the OS theme.
@@ -200,9 +203,10 @@ export default function AppShell() {
             <Suspense fallback={<RouteFallback />}>
               <PageTransition>
                 <Outlet />
+                {/* Inside the wrapper so it flows after content taller than the viewport. */}
+                {isGuest && !FILL_SHELL_PATHS.includes(location.pathname) && <GuestFooter />}
               </PageTransition>
             </Suspense>
-            {isGuest && <GuestFooter />}
           </main>
         </div>
 

@@ -11,7 +11,7 @@ const linkClass = cn(
 export default function GuestFooter() {
   const { ariaLabel, privacy, terms, help, privacyPath, termsPath, helpHref } = GUEST_LEGAL_COPY;
   return (
-    <footer aria-label={ariaLabel} className="flex flex-wrap items-center justify-center py-4" data-guest-footer>
+    <footer aria-label={ariaLabel} className="shrink-0 flex flex-wrap items-center justify-center py-4" data-guest-footer>
       <a href={privacyPath} target="_blank" rel="noopener noreferrer" className={linkClass}>
         {privacy}
       </a>

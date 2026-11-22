@@ -17,6 +17,13 @@ describe('guest legal footer (source-level guards)', () => {
     expect(src).toContain('Linking.openURL(helpHref)');
   });
 
+  it('handles a failed mail or browser open and lets caption text scale fully', () => {
+    expect(src).toMatch(/Linking\.openURL\(helpHref\)\.catch\(/);
+    expect(src).toContain('ACCOUNT_COPY.contactSupportNoMail(SUPPORT_EMAIL)');
+    expect(src).not.toMatch(/void Linking\.openURL/);
+    expect(src).not.toContain('maxFontSizeMultiplier');
+  });
+
   it('shows on login and on the festival picker for guests only', () => {
     expect(read('app/(auth)/login.tsx')).toContain('<GuestLegalFooter />');
     const list = read('components/FestivalList.tsx');

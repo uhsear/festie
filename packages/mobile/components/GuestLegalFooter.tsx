@@ -1,8 +1,8 @@
-import { View, Text, TouchableOpacity, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, Linking, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
-import { GUEST_LEGAL_COPY } from '@festie/shared/constants';
-import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { ACCOUNT_COPY, GUEST_LEGAL_COPY, SUPPORT_EMAIL } from '@festie/shared/constants';
+import { makeStyles, typeStyle } from '../hooks/useTokens';
 
 const SITE = 'https://festie.us';
 
@@ -38,7 +38,7 @@ async function openPage(path: string) {
     await WebBrowser.openBrowserAsync(url);
   } catch (err) {
     console.warn('guest footer: in-app browser failed', err);
-    void Linking.openURL(url);
+    Linking.openURL(url).catch((e) => console.warn('guest footer: browser fallback failed', e));
   }
 }
 
@@ -50,7 +50,15 @@ export default function GuestLegalFooter() {
   const items = [
     { label: privacy, hint: 'Opens the privacy policy', onPress: () => router.push('/privacy') },
     { label: terms, hint: 'Opens the terms of service in a browser', onPress: () => void openPage(termsPath) },
-    { label: help, hint: 'Opens an email to support', onPress: () => void Linking.openURL(helpHref) },
+    {
+      label: help,
+      hint: 'Opens an email to support',
+      // No mail account set up: show the address instead of a dead tap (same fallback as Account).
+      onPress: () =>
+        Linking.openURL(helpHref).catch(() =>
+          Alert.alert(ACCOUNT_COPY.contactSupport, ACCOUNT_COPY.contactSupportNoMail(SUPPORT_EMAIL)),
+        ),
+    },
   ];
   return (
     <View style={styles.row} accessibilityLabel={ariaLabel} testID="guest-legal-footer">
@@ -68,9 +76,7 @@ export default function GuestLegalFooter() {
             accessibilityLabel={item.label}
             accessibilityHint={item.hint}
           >
-            <Text style={styles.linkText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              {item.label}
-            </Text>
+            <Text style={styles.linkText}>{item.label}</Text>
           </TouchableOpacity>
         </View>
       ))}
