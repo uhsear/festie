@@ -178,6 +178,13 @@ describe('CrewMap', () => {
     expect(screen.getByText(/this festival isn.t mapped yet/i)).toBeInTheDocument();
   });
 
+  it('leads with "isn\'t mapped yet" when a festival is selected but has nothing to plot', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    render(<CrewMap meetingPoints={[]} festival={{ id: 'f1' } as unknown as Festival} />);
+    expect(screen.getByText("This festival isn't mapped yet")).toBeInTheDocument();
+    expect(screen.queryByText('No mapped meeting points yet')).not.toBeInTheDocument();
+  });
+
   it('renders the map container (not the empty state) when at least one pin has coords', () => {
     extractMeetingPointPins.mockReturnValue([
       {

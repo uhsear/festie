@@ -746,6 +746,14 @@ export default function CrewMap({
 
   // ── Empty state: nothing to plot ───────────────────────────────────────────
   if (!shouldRenderMap) {
+    // With a festival selected and nothing to plot, the real reason is that it has no map data.
+    if (festival) {
+      return (
+        <div className="px-1">
+          <EmptyState icon={<MapPin className="w-12 h-12" aria-hidden="true" />} title="This festival isn't mapped yet" />
+        </div>
+      );
+    }
     return (
       <div className="px-1">
         <EmptyState

@@ -151,7 +151,7 @@ function MapViewInner() {
         </div>
       )}
       {!hasCrew && (
-        <p className="text-sm text-text-muted">
+        <p className="text-center text-sm text-text-muted">
           {user ? (
             <>
               Join a <Link to="/crew" className="underline">crew</Link> to see friends and meeting points here.
