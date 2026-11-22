@@ -72,6 +72,8 @@ describe('day parts', () => {
   it('names the night after midnight', () => {
     expect(dayPartTitle('after-midnight', 'Saturday')).toBe('After midnight (Saturday night)');
     expect(dayPartTitle('late-night', 'Saturday')).toBe('Late night');
+    // 6:00 to 16:59 includes mornings, so the part must not be called Afternoon.
+    expect(dayPartTitle('afternoon', 'Saturday')).toBe('Daytime');
     expect(nightLabelFor(DAYS[0]!)).toBe('Saturday');
     expect(nightLabelFor(DAYS[1]!)).toBe('Sunday');
   });
@@ -87,7 +89,7 @@ describe('buildMyDay', () => {
     ];
     const day = myDay(sets);
     expect(day.sections.map((s) => s.title)).toEqual([
-      'Afternoon',
+      'Daytime',
       'Evening',
       'Late night',
       'After midnight (Saturday night)',

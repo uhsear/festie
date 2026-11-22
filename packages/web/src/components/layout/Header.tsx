@@ -274,7 +274,7 @@ export default function Header() {
         ) : (
           <Link
             to="/login"
-            search={{ next: location.href }}
+            search={{ next: location.pathname === '/p' ? '/p' : location.href }}
             className={cn(
               'inline-flex items-center justify-center min-h-11 min-w-11 px-4 rounded-lg no-underline whitespace-nowrap',
               'text-accent-aqua text-[length:var(--font-size-14)] font-semibold tracking-[0.3px]',

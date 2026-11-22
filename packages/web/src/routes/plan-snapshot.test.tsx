@@ -25,6 +25,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@festie/shared/services', () => ({
   api: { get: (...args: unknown[]) => apiGet(...args) },
+  isApiClientError: (err: unknown) => !!err && typeof err === 'object' && 'status' in err,
 }));
 
 vi.mock('@festie/shared/stores', () => ({
@@ -144,6 +145,17 @@ describe('PlanSnapshotPage', () => {
     );
     render(<PlanSnapshotPage />);
     await waitFor(() => expect(screen.getByText('2 picks are no longer in the lineup.')).toBeInTheDocument());
+    expect(screen.getByText(/1 set$/)).toBeInTheDocument();
+  });
+
+  it('says the festival is gone on a 404, not that the viewer is offline', async () => {
+    apiGet.mockRejectedValue({ status: 404 });
+    setHash(snapshotHash([{ setId: 'set-1', priority: 'want' }]));
+    render(<PlanSnapshotPage />);
+    expect(await screen.findByText('This festival is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByText('Connect to the internet to see set names and times.')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Add to my plan' })).toBeNull();
+    expect(screen.getByText(/0 sets$/)).toBeInTheDocument();
   });
 
   it('renders the Plan B line from a v2 code', async () => {
@@ -196,7 +208,18 @@ describe('PlanSnapshotPage', () => {
       expect(bulkSavePicks).not.toHaveBeenCalled();
       // The picks never go into the return path, which is a query string the server and its logs see.
       expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).not.toContain(hash);
+      // Stashed when the page opens, so it survives the page re-mounting while the router leaves it.
+      expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
       await userEvent.click(screen.getByRole('link', { name: 'Sign in' }));
+      expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
+    });
+
+    it('keeps the stash when the page re-mounts before sign-in finishes', () => {
+      apiGet.mockResolvedValue(festival);
+      const hash = snapshotHash([{ setId: 'set-1', priority: 'must' }]);
+      setHash(hash);
+      render(<PlanSnapshotPage />).unmount();
+      render(<PlanSnapshotPage />);
       expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
     });
 
@@ -217,6 +240,27 @@ describe('PlanSnapshotPage', () => {
       render(<PlanSnapshotPage />);
       expect(screen.getByRole('heading', { name: 'Snap Fest' })).toBeInTheDocument();
       expect(screen.getByText(/20 sets$/)).toBeInTheDocument();
+      // Still signed out: the stash stays until sign-in finishes.
+      expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
+    });
+
+    it('keeps the stash when the page re-mounts at /login with no hash and nobody signed in', () => {
+      apiGet.mockResolvedValue(festival);
+      const hash = snapshotHash([{ setId: 'set-1', priority: 'must' }]);
+      setHash(hash);
+      render(<PlanSnapshotPage />).unmount();
+      setHash('');
+      render(<PlanSnapshotPage />);
+      expect(screen.getByRole('heading', { name: 'Snap Fest' })).toBeInTheDocument();
+      expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
+    });
+
+    it('drops the stash once the viewer is signed in', () => {
+      apiGet.mockResolvedValue(festival);
+      sessionStorage.setItem('fk.pendingPlanSnapshot', snapshotHash([{ setId: 'set-1', priority: 'must' }]));
+      authState.user = { id: 'u1' };
+      setHash('');
+      render(<PlanSnapshotPage />);
       expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBeNull();
     });
 

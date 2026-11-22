@@ -120,6 +120,11 @@ export default function CalendarDialog() {
             <p className="text-xs text-text-muted">
               Anyone with this calendar link can see your picks. If it leaks, reset your links in Account.
             </p>
+            <RadixDialog.Close asChild>
+              <Button variant="ghost" size="sm" type="button">
+                Done
+              </Button>
+            </RadixDialog.Close>
           </div>
         ) : (
           <div className="flex flex-col gap-2">

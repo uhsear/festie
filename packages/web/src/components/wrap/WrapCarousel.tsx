@@ -75,14 +75,14 @@ export default function WrapCarousel({ cards, festivalName, byline, sharing, onS
         {reachedEnd && index === cards.length - 1 && <ConfettiBurst />}
       </div>
 
-      <div className="flex items-center justify-center gap-2">
+      <div className="flex flex-wrap items-center justify-center gap-2">
         <IconButton
           label="Previous card"
           icon={<ChevronLeft className="w-5 h-5" />}
           onClick={() => goTo(index - 1)}
           disabled={index === 0}
         />
-        <div className="flex items-center">
+        <div className="flex flex-wrap items-center justify-center">
           {cards.map((card, i) => (
             <button
               key={card.kind}
@@ -90,7 +90,7 @@ export default function WrapCarousel({ cards, festivalName, byline, sharing, onS
               aria-label={`Card ${i + 1} of ${cards.length}`}
               aria-current={i === index ? 'true' : undefined}
               onClick={() => goTo(i)}
-              className="min-h-11 min-w-6 flex items-center justify-center"
+              className="min-h-11 min-w-11 flex items-center justify-center rounded-lg focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
             >
               <span
                 className={`block h-2 w-2 rounded-full ${i === index ? 'bg-accent-aqua' : 'bg-border-light'}`}
