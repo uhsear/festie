@@ -5,7 +5,7 @@
 import { OFFLINE_MAP_CACHE } from '@festie/shared/pwa/runtimeCaching';
 import { createBasemapEnsurer, headContentLength } from '@festie/shared/utils';
 
-export type EnsureResult = { ok: true } | { ok: false; reason: 'quota' | 'network'; bytes: number | null };
+export type EnsureResult = { ok: true } | { ok: false; reason: 'quota' | 'network'; bytes: number | null; freeBytes?: number | null };
 
 const MAX_ARCHIVES = 3;
 
@@ -49,7 +49,7 @@ async function downloadOnce(url: string, report: (fraction: number) => void): Pr
   try {
     const est = await navigator.storage?.estimate?.();
     if (bytes !== null && est?.quota != null && est.usage != null && est.quota - est.usage < bytes) {
-      return { ok: false, reason: 'quota', bytes };
+      return { ok: false, reason: 'quota', bytes, freeBytes: est.quota - est.usage };
     }
     const res = await fetch(url);
     if (!res.ok) return { ok: false, reason: 'network', bytes };

@@ -1,10 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, renderHook, waitFor } from '@testing-library/react';
 import type { Festival, PeerLocation, SosEntry } from '@festie/shared/types';
 import { useSosMarkers } from './crew-map/useSosMarkers';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { usePeerMarkers } from './crew-map/usePeerMarkers';
 import { useStageMarkers } from './crew-map/useStageMarkers';
+import { useAmenityMarkers } from './crew-map/useAmenityMarkers';
 import type { GlRefObject, MapRefObject, GlMarker } from './crew-map/mapDom';
 
 // --- Mocks ---
@@ -119,6 +120,20 @@ vi.mock('lucide-react', () => ({
   Loader2: () => <span data-testid="locating-spinner" />,
 }));
 
+const basemap = vi.hoisted(() => ({ cached: false }));
+vi.mock('../../lib/basemapCache', () => ({
+  basemapSupported: () => true,
+  basemapCacheInfo: vi.fn(async () => ({ cached: basemap.cached, syncedAt: null })),
+}));
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import CrewMap from './CrewMap';
 
 const POINT_WITH_COORDS = {
@@ -159,10 +174,18 @@ describe('CrewMap', () => {
     expect(screen.getByText('Click Set location, then click the map.')).toBeInTheDocument();
   });
 
-  it('surfaces the honest "not mapped yet" note in the empty state', () => {
+  it('keeps the add-a-location hint on the Meet tab map of an unmapped festival', () => {
     extractMeetingPointPins.mockReturnValue([]);
-    render(<CrewMap meetingPoints={[]} />);
-    expect(screen.getByText(/this festival isn.t mapped yet/i)).toBeInTheDocument();
+    render(<CrewMap hasList meetingPoints={[]} festival={{ id: 'f1' } as unknown as Festival} />);
+    expect(screen.getByText("This festival isn't mapped yet")).toBeInTheDocument();
+    expect(screen.getByText(/add a location to a meeting point/i)).toBeInTheDocument();
+  });
+
+  it('leads with "isn\'t mapped yet" when a festival is selected but has nothing to plot', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    render(<CrewMap meetingPoints={[]} festival={{ id: 'f1' } as unknown as Festival} />);
+    expect(screen.getByText("This festival isn't mapped yet")).toBeInTheDocument();
+    expect(screen.queryByText('No mapped meeting points yet')).not.toBeInTheDocument();
   });
 
   it('renders the map container (not the empty state) when at least one pin has coords', () => {
@@ -191,6 +214,15 @@ describe('CrewMap', () => {
     rerender(<CrewMap meetingPoints={[]} authoring canvasClassName="h-96" />);
     expect(screen.getByLabelText(label)).toHaveClass('h-96');
     expect(screen.getByLabelText(label)).not.toHaveClass('h-72');
+  });
+
+  it('fills its parent instead of a fixed height when fill is set', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    render(<CrewMap meetingPoints={[]} authoring fill />);
+    const canvas = screen.getByLabelText('Crew map with meeting points and live locations');
+    expect(canvas).toHaveClass('h-full');
+    expect(canvas).not.toHaveClass('h-72');
+    expect(canvas.parentElement).toHaveClass('flex-1');
   });
 
   it('derives pins from the provided meeting points via the shared util', () => {
@@ -427,6 +459,43 @@ async function renderReadyMap(props: Partial<React.ComponentProps<typeof CrewMap
   return view;
 }
 
+describe('CrewMap offline basemap notice', () => {
+  const withBasemap = {
+    id: 'f1',
+    mapConfig: { offlineBasemap: { pmtilesUrl: 'https://cdn.example.com/a.pmtiles' } },
+  } as unknown as Festival;
+
+  beforeEach(() => {
+    hasOfflineBasemap.mockReturnValue(true);
+    pmtilesImport.mockReturnValue({ Protocol: class { tile = vi.fn(); } });
+    extractMeetingPointPins.mockReturnValue([
+      { id: 'mp1', kind: 'meeting-point', label: 'Main Gate', sublabel: '', latitude: 41.88, longitude: -87.62 },
+    ]);
+  });
+  afterEach(() => useUIStore.setState({ offlineMode: false }));
+
+  it('says the base map is not saved when offline and it was never downloaded', async () => {
+    basemap.cached = false;
+    useUIStore.setState({ offlineMode: true });
+    render(<CrewMap meetingPoints={[]} festival={withBasemap} />);
+    expect(await screen.findByText(/Base map not saved/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Picks' })).toHaveAttribute('href', '/picks');
+  });
+
+  it('stays quiet when the base map is saved, and when online', async () => {
+    basemap.cached = true;
+    useUIStore.setState({ offlineMode: true });
+    const { unmount } = render(<CrewMap meetingPoints={[]} festival={withBasemap} />);
+    await waitFor(() => expect(mapInstances).toHaveLength(1));
+    expect(screen.queryByText(/Base map not saved/)).toBeNull();
+    unmount();
+    basemap.cached = false;
+    useUIStore.setState({ offlineMode: false });
+    render(<CrewMap meetingPoints={[]} festival={withBasemap} />);
+    expect(screen.queryByText(/Base map not saved/)).toBeNull();
+  });
+});
+
 describe('CrewMap place card and Nearest', () => {
   beforeEach(stubGeolocation);
 
@@ -464,6 +533,12 @@ describe('CrewMap place card and Nearest', () => {
     expect(screen.queryByRole('button', { name: 'Show my location' })).toBeNull();
   });
 
+  it('offers a Skip map markers button that moves focus to Show my location', async () => {
+    await renderReadyMap();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip map markers' }));
+    expect(screen.getByRole('button', { name: 'Show my location' })).toHaveFocus();
+  });
+
   it('adds the self dot only once a fix exists', async () => {
     await renderReadyMap();
     expect(markerElements.some((el) => el.classList.contains('festie-self-marker'))).toBe(false);
@@ -494,6 +569,15 @@ describe('CrewMap place card and Nearest', () => {
     expect(screen.getByRole('region', { name: /Crew map/ }).parentElement).toContainElement(status);
     expect(status).toHaveTextContent("Can't get a GPS fix");
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('says a blocked location once while the way bar already says it', async () => {
+    extractStagePins.mockReturnValue([STAGE_PIN]);
+    await renderReadyMap({ focusPinId: 's1' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Show the way' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+    act(() => watchPosition.mock.calls[0]![1]({ code: 1 }));
+    expect(screen.getAllByText(/Location is off or blocked/)).toHaveLength(1);
   });
 
   it('says how far a distant fix is and Show festival flies back to the venue', async () => {
@@ -588,6 +672,31 @@ describe('useStageMarkers place selection', () => {
     parent.appendChild(marker.element);
     marker.element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(parentClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useAmenityMarkers keyboard order', () => {
+  it('keeps amenity markers keyboard focusable', () => {
+    const made: HTMLElement[] = [];
+    class FakeMarker {
+      constructor(opts: { element: HTMLElement }) {
+        made.push(opts.element);
+      }
+      setLngLat() {
+        return this;
+      }
+      addTo() {
+        return this;
+      }
+    }
+    const mapRef = { current: {} } as unknown as MapRefObject;
+    const glRef = { current: { Marker: FakeMarker } } as unknown as GlRefObject;
+    const markersRef = { current: [] as GlMarker[] };
+    renderHook(() =>
+      useAmenityMarkers(mapRef, glRef, 'ready', [amenity('a1', 'water', 'Water')] as never, 'a1', markersRef, vi.fn() as never),
+    );
+    expect(made[0]!.getAttribute('tabindex')).toBe('0');
+    expect(made[0]!.getAttribute('role')).toBe('button');
   });
 });
 

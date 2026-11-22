@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import OfflineReadinessCard from './OfflineReadinessCard';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { buildOfflineSteps, summarizeOffline } from '@festie/shared/utils';
 import type { FestivalPhase } from '@festie/shared/utils';
 
@@ -20,12 +21,13 @@ const ready: Sec = { status: 'ready', syncedAt: Date.now() };
 
 function setState(
   sections: Partial<Record<'schedule' | 'picks' | 'crew' | 'weather' | 'art', Sec>>,
-  opts: { map?: Sec | null; mapDetail?: string; phase?: FestivalPhase | null; mapBytes?: number | null; mapProgress?: number | null } = {},
+  opts: { map?: Sec | null; mapMessage?: string | null; phase?: FestivalPhase | null; mapBytes?: number | null; mapProgress?: number | null } = {},
 ) {
   const full = { schedule: idle, picks: idle, crew: idle, weather: idle, art: idle, ...sections };
-  const steps = buildOfflineSteps(full, { hasCrew: true, map: opts.map ?? null, mapDetail: opts.mapDetail });
+  const steps = buildOfflineSteps(full, { hasCrew: true, map: opts.map ?? null });
   h.state = {
     mapProgress: opts.mapProgress ?? null,
+    mapMessage: opts.mapMessage ?? null,
     mapReady: opts.map?.status === 'ready',
     removeMap: h.removeMap,
     steps,
@@ -61,13 +63,19 @@ describe('OfflineReadinessCard', () => {
     expect(within(list).getAllByRole('listitem')).toHaveLength(5);
   });
 
-  it('shows the map row, size and coral detail when the festival has a map', () => {
-    setState({}, { map: { status: 'error', syncedAt: 1 }, mapDetail: 'Not enough space for the map (4 MB). Free up space, then retry.', mapBytes: 4_200_000 });
+  it('shows the map row and size when the festival has a map', () => {
+    setState({}, { map: { status: 'error', syncedAt: 1 }, mapBytes: 4_200_000 });
     render(<OfflineReadinessCard festivalId="fest-1" />);
     open();
     expect(screen.getByText('Offline map')).toBeInTheDocument();
     expect(screen.getByText(/festival map so they work with no signal\. The map is 4 MB\./)).toBeInTheDocument();
-    expect(screen.getByText(/Not enough space for the map/)).toHaveClass('text-accent-coral');
+  });
+
+  it('says why the map was not saved without opening the details', () => {
+    const message = 'Not enough free space to save the map (needs 5 MB, 1 MB free). Free up some space and try again.';
+    setState({}, { map: { status: 'error', syncedAt: 1 }, mapMessage: message, mapBytes: 4_200_000 });
+    render(<OfflineReadinessCard festivalId="fest-1" />);
+    expect(screen.getByRole('alert')).toHaveTextContent(message);
   });
 
   it('reads Available offline and Update when everything is ready', () => {
@@ -84,6 +92,28 @@ describe('OfflineReadinessCard', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: /retry weather/i }));
     expect(h.download).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the action and asks for a connection while offline', () => {
+    useUIStore.setState({ offlineMode: true });
+    try {
+      render(<OfflineReadinessCard festivalId="fest-1" />);
+      expect(screen.getByRole('button', { name: 'Connect to download' })).toBeDisabled();
+    } finally {
+      useUIStore.setState({ offlineMode: false });
+    }
+  });
+
+  it('hides the per-step Retry buttons while offline', () => {
+    setState({ schedule: ready, picks: ready, crew: ready, art: ready, weather: { status: 'error', syncedAt: null } });
+    useUIStore.setState({ offlineMode: true });
+    try {
+      render(<OfflineReadinessCard festivalId="fest-1" />);
+      open();
+      expect(screen.queryByRole('button', { name: /retry weather/i })).toBeNull();
+    } finally {
+      useUIStore.setState({ offlineMode: false });
+    }
   });
 
   it('calls download from the action button', () => {

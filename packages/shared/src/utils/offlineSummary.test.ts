@@ -28,6 +28,10 @@ describe('summarizeOffline', () => {
     expect(offlineActionLabel(s)).toBe('Update');
     expect(offlineStatusLabel(s, 1000)).toContain('Available offline · synced');
   });
+  it('offline, the action asks for a connection unless a download is already running', () => {
+    expect(offlineActionLabel(summarizeOffline(steps(all('ready')), 'live'), true)).toBe('Connect to download');
+    expect(offlineActionLabel(summarizeOffline(steps(all('syncing')), 'live'), true)).toBe('Downloading…');
+  });
   it('map ready alone counts as downloaded', () => {
     const s = summarizeOffline(steps(undefined, r('ready')), 'live');
     expect(s.hasDownloaded).toBe(true);

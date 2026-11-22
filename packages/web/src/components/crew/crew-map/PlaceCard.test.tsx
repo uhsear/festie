@@ -79,6 +79,22 @@ describe('PlaceCard', () => {
     expect(screen.queryByText('Copied')).toBeNull();
   });
 
+  it('says so when the link cannot be copied, then clears the message', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderCard();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Could not copy the link.');
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.queryByRole('status')).toBeNull();
+  });
+
   it('uses navigator.share when present', async () => {
     const share = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'share', { configurable: true, value: share });

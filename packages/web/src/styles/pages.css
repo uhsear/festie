@@ -30,6 +30,10 @@
   -webkit-overflow-scrolling: touch;
   min-height: calc(100dvh - 180px);
 }
+/* The map fills the space the shell gives it; a floor taller than that clips the bottom of the page. */
+#main-content:has(.map-page) {
+  min-height: 0;
+}
 .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
 }

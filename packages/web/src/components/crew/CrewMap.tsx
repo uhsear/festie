@@ -35,9 +35,12 @@ import {
   type NearestStep,
   type MapPin as Pin,
 } from '@festie/shared/utils';
+import { Link } from '@tanstack/react-router';
+import { OFFLINE_MAP_COPY } from '@festie/shared/constants';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import EmptyState from '../ui/EmptyState';
+import { basemapCacheInfo, basemapSupported } from '../../lib/basemapCache';
 import { relAge, type MapLibre, type PursueTarget } from './crew-map/mapDom';
 import { useGeolocationWatch } from './crew-map/useGeolocationWatch';
 import { useSelfMarker } from './crew-map/useSelfMarker';
@@ -133,6 +136,8 @@ interface Props {
   draftPoints?: { latitude: number; longitude: number }[];
   /** Height classes for the map canvas. Defaults to the 288 px crew-tab size. */
   canvasClassName?: string;
+  /** Fill the height the parent gives it (a flex column) instead of a fixed canvas height. */
+  fill?: boolean;
   /** A stage pin id to fly to and open on arrival (from "Show stage on map"). */
   focusPinId?: string | null;
   /** Called once the focus was applied, so the caller can clear its search param. */
@@ -172,12 +177,14 @@ export default function CrewMap({
   draftPoints,
   authoring = false,
   canvasClassName = 'h-72',
+  fill = false,
   focusPinId,
   onFocusHandled,
   onSetMeetingPoint,
   hasList = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const locateButtonRef = useRef<HTMLButtonElement | null>(null);
   // 'pending' until we know whether the GL library mounted; flips to 'error' on
   // a load/init failure so we never leave a blank canvas behind. 'ready' once the
   // map's `load` fired — marker effects gate on it.
@@ -560,6 +567,26 @@ export default function CrewMap({
   // the per-concern hooks re-add their layers when it reports ready again.
   const theme = useUIStore((s) => s.theme);
 
+  // Offline with an offline basemap that was never downloaded: the pins and site plan
+  // draw over a blank canvas and MapLibre reports nothing, so say what is missing.
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const mapConfig = festival?.mapConfig;
+  const basemapUrl = hasOfflineBasemap(mapConfig) && basemapSupported() ? (mapConfig?.offlineBasemap.pmtilesUrl ?? null) : null;
+  const [basemapMissing, setBasemapMissing] = useState(false);
+  useEffect(() => {
+    if (!offlineMode || !basemapUrl) {
+      setBasemapMissing(false);
+      return;
+    }
+    let live = true;
+    void basemapCacheInfo(basemapUrl).then((info) => {
+      if (live) setBasemapMissing(!info.cached);
+    });
+    return () => {
+      live = false;
+    };
+  }, [offlineMode, basemapUrl]);
+
   // ── Map lifecycle: create once when there's content; tear down on unmount ──
   useEffect(() => {
     if (!shouldRenderMap || !containerRef.current) return;
@@ -723,16 +750,16 @@ export default function CrewMap({
 
   // ── Empty state: nothing to plot ───────────────────────────────────────────
   if (!shouldRenderMap) {
+    // With a festival selected and nothing to plot, the real reason is that it has no map data.
+    // Where a member can add a location (the Meet tab), keep saying how.
+    const canAddLocation = hasList || !!onMapClick;
     return (
       <div className="px-1">
         <EmptyState
           icon={<MapPin className="w-12 h-12" aria-hidden="true" />}
-          title="No mapped meeting points yet"
-          description="Add a location to a meeting point to see it here."
+          title={festival ? "This festival isn't mapped yet" : 'No mapped meeting points yet'}
+          description={!festival || canAddLocation ? 'Add a location to a meeting point to see it here.' : undefined}
         />
-        {!hasStages && !hasAmenities && (
-          <p className="text-xs text-text-muted text-center mt-2">This festival isn&apos;t mapped yet.</p>
-        )}
       </div>
     );
   }
@@ -754,21 +781,43 @@ export default function CrewMap({
   const nudgePeer =
     liveTarget && liveTarget.id.startsWith('peer:') ? peers.find((p) => `peer:${p.userId}` === liveTarget.id) : undefined;
   const showPursueOverlay = status === 'ready' && !!liveTarget && !showPlaceCard;
+  // The way bar already shows the location problem while it waits for a fix; do not say it twice.
+  const wayBarSaysLocation = showPursueOverlay && !selfCoord && awaitingFix;
 
   return (
-    <div className="space-y-2">
-      <div className="relative rounded-lg overflow-hidden border border-border bg-bg-secondary">
+    <div className={fill ? 'flex min-h-0 flex-1 flex-col gap-2' : 'space-y-2'}>
+      {basemapMissing && (
+        <p role="status" className="text-xs text-text-secondary">
+          {OFFLINE_MAP_COPY.basemapNotSaved}{' '}
+          <Link to="/picks" className="text-accent-aqua underline">
+            Open Picks
+          </Link>
+        </p>
+      )}
+      <div
+        className={`relative rounded-lg overflow-hidden border border-border bg-bg-secondary ${fill ? 'min-h-[320px] flex-1' : ''}`}
+      >
+        {/* Markers sit inside the canvas, so Tab crosses every one before the controls below it. */}
+        {interactive && status === 'ready' && (
+          <button
+            type="button"
+            onClick={() => locateButtonRef.current?.focus()}
+            className="sr-only focus:not-sr-only focus:absolute focus:left-14 focus:top-2 focus:z-20 focus:rounded-lg focus:border focus:border-border focus:bg-bg-elevated focus:px-3 focus:py-2 focus:text-xs focus:text-text-primary"
+          >
+            Skip map markers
+          </button>
+        )}
         <div
           ref={containerRef}
-          className={`festie-map-canvas ${canvasClassName} w-full`}
+          className={`festie-map-canvas ${fill ? 'h-full' : canvasClassName} w-full`}
           role="region"
           tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: focus enables arrow-key map pan/zoom (see aria-describedby help below); rule only exempts role=tabpanel
           aria-label="Crew map with meeting points and live locations"
           aria-describedby="festie-map-help"
         />
         <p id="festie-map-help" className="sr-only">
-          Interactive map. Use Tab to reach map markers, then Enter or Space to open one. Tap a crew member, stage,
-          amenity or meeting point to see what it is and how far it is. Choose Show the way for a direction arrow,
+          Interactive map. Use Tab to reach map markers, then Enter or Space to open one. To skip the markers, use the
+          Skip map markers button. Tap a crew member, stage, amenity or meeting point to see what it is and how far it is. Choose Show the way for a direction arrow,
           distance and walking time. While the map is focused, use the arrow keys to pan and the plus and minus keys to
           zoom.{hasList ? ' The List view shows every meeting point and is fully keyboard accessible.' : ''}
         </p>
@@ -796,6 +845,7 @@ export default function CrewMap({
 
         {interactive && status === 'ready' && (
           <button
+            ref={locateButtonRef}
             type="button"
             onClick={showMyLocation}
             className="absolute left-2 top-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-elevated/95 text-text-primary shadow-lg hover:border-accent-aqua"
@@ -812,7 +862,7 @@ export default function CrewMap({
 
         {/* ── Location status over the map, next to the button: below the canvas it sat
             behind the bottom nav on a phone, so a failed tap looked like nothing happened. */}
-        {interactive && status !== 'error' && (awaitingFix || farNoticeM !== null) && (
+        {interactive && status !== 'error' && (awaitingFix || farNoticeM !== null) && !wayBarSaysLocation && (
           <div
             role="status"
             className="absolute left-14 right-14 top-2 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border bg-bg-elevated/95 px-3 py-2 text-xs text-text-secondary shadow-lg"
@@ -896,7 +946,8 @@ export default function CrewMap({
             ) : (
               <Navigation className="w-7 h-7 shrink-0 text-text-muted opacity-50" aria-hidden="true" />
             )}
-            <div className="min-w-0 flex-1" role="status" aria-live="polite">
+            {/* basis-40 keeps the text column wide; the nudge and close buttons wrap to a second row on a phone. */}
+            <div className="min-w-[9rem] flex-1 basis-40" role="status" aria-live="polite">
               {selfCoord && pursuit ? (
                 <p className="truncate text-sm text-text-primary">
                   <span className="font-semibold">{liveTarget.label}</span>

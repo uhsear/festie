@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useAuthStore, useCrewStore, useLiveLocationStore, useFestivalDataStore } from '@festie/shared/stores';
 import { COPY, FIND_FRIEND_COPY, LIVE_LOCATION } from '@festie/shared/constants';
-import { festivalLoadState, isPeerStale } from '@festie/shared/utils';
+import { festivalLoadState, isPeerStale, mapCrewHintCopy } from '@festie/shared/utils';
+import { useMapCrew } from '@festie/shared/hooks';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
@@ -136,7 +137,9 @@ export default function MapScreen() {
     });
   }, []);
 
-  const crewLayers = Boolean(user && activeCrew);
+  // A crew belongs to one festival, but the selected festival follows the Lineup tab.
+  const { crew: mapCrew, otherFestivalName } = useMapCrew();
+  const crewLayers = Boolean(user && mapCrew);
   const hasCompassPoint = crewLayers && (meetingPoints ?? []).some((p) => p && p.active !== false && hasCoords(p));
   const now = useNow();
   const hasLivePeer = peers.some((p) => p.userId !== user?.id && !isPeerStale(p.serverAt, now, LIVE_LOCATION.STALE_MS));
@@ -180,7 +183,7 @@ export default function MapScreen() {
 
   return (
     <View testID="map-screen" style={styles.screen}>
-      <ScreenHeader title="Map" subtitle={activeCrew?.name} icon="map-outline" right={compassButton} />
+      <ScreenHeader title="Map" subtitle={crewLayers ? activeCrew?.name : undefined} icon="map-outline" right={compassButton} />
       <View style={styles.chipBar}>
         <FreshnessChip surface="crew" />
         <OfflineStatusChip />
@@ -190,9 +193,7 @@ export default function MapScreen() {
       </View>
       {!crewLayers ? (
         <Text style={styles.crewHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {user
-            ? 'Join a crew to see friends and meeting points here.'
-            : 'Sign in and join a crew to see friends and meeting points here.'}
+          {mapCrewHintCopy(!!user, otherFestivalName)}
         </Text>
       ) : null}
       <OfflineMap

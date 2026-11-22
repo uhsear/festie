@@ -166,6 +166,27 @@ export function festivalForCrew<F extends { id: string }>(
   return !crew?.festivalId || crew.festivalId === currentFestival.id ? currentFestival : null;
 }
 
+/**
+ * The crew whose layers the map shows for the selected festival: the active crew when it
+ * fits, else another real (not offline-join placeholder) crew of that festival.
+ */
+export function crewForFestival<C extends { id: string; festivalId?: string | null; _optimistic?: boolean }>(
+  crews: C[],
+  activeCrew: C | null | undefined,
+  festival: { id: string } | null | undefined,
+): C | null {
+  if (!festival) return null;
+  if (activeCrew && festivalForCrew(activeCrew, festival)) return activeCrew;
+  return crews.find((c) => !c._optimistic && c.festivalId === festival.id) ?? null;
+}
+
+/** What the map says in place of crew layers: sign-in, no crew, or a crew that belongs to another festival. */
+export function mapCrewHintCopy(signedIn: boolean, otherFestivalName: string | null): string {
+  if (!signedIn) return 'Sign in and join a crew to see friends and meeting points here.';
+  if (otherFestivalName) return `Your crew is for ${otherFestivalName}. Switch to that festival on the Lineup tab to see it here.`;
+  return 'Join a crew to see friends and meeting points here.';
+}
+
 /** The crew's festival name from the festival list, else the current festival when it matches. */
 export function crewFestivalName(
   crew: Pick<Crew, 'festivalId'> | null,
