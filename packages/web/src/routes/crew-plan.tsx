@@ -32,7 +32,7 @@ import ArtistName from '../components/features/ArtistName';
 // Per-priority badge tint using the priority tokens (must=coral, want=aqua,
 // maybe=amber). Static literal class strings so Tailwind detects them.
 const PRIORITY_BADGE: Record<Priority, string> = {
-  must: 'bg-priority-must/15 text-priority-must',
+  must: 'bg-priority-must/10 text-priority-must',
   'want-to-see': 'bg-priority-want/15 text-priority-want',
   maybe: 'bg-priority-maybe/15 text-priority-maybe',
 };
@@ -314,9 +314,7 @@ function CrewPlanContent() {
                               {PRIORITY_LABEL[g.priority]}
                             </span>
                             <span className="min-w-0 break-words">
-                              <span className="text-text-primary font-medium">
-                                <ArtistName set={g.set} />
-                              </span>
+                              <span className="text-text-primary font-medium">{artistDisplayName(g.set)}</span>
                               <span className="text-text-secondary tabular-nums"> · {formatSetTimeRange(g.set) || 'TBA'}</span>
                               {stageName && <span className="text-text-secondary"> · {stageName}</span>}
                               <span className="text-text-secondary"> · {memberSummary(g.names)}</span>
