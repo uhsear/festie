@@ -266,7 +266,7 @@ export default function SetEditor({
         type="button"
         onClick={onRemove}
         className="col-span-2 md:col-span-1 px-2 py-1.5 md:py-0 min-h-11 md:min-w-11 rounded bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
-        aria-label={`Remove ${setName}`}
+        aria-label={`Remove set: ${setName}`}
       >
         <span className="md:hidden">Remove set</span>
         <span className="hidden md:inline">×</span>

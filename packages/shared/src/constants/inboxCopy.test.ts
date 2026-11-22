@@ -12,6 +12,11 @@ describe('inboxCopy', () => {
     expect(inboxRowLabel({ title: 'Third', body: 'Bloom.' }, '7m ago', false)).toBe('Third. Bloom. 7m ago.');
   });
 
+  it('inboxRowLabel adds no period after a part that ends in ? or !', () => {
+    expect(inboxRowLabel({ title: 'Doors', body: 'Gates open?' }, '7m ago', false)).toBe('Doors. Gates open? 7m ago.');
+    expect(inboxRowLabel({ title: 'Set change!', body: 'Moved' }, '1h ago', true)).toBe('Set change! Moved. 1h ago. Unread.');
+  });
+
   it('inboxRowLabel names the festival and the unread state', () => {
     expect(inboxRowLabel({ title: 'Shuttle update', body: 'Runs late', festivalName: 'EDC Orlando' }, '1h ago', true)).toBe(
       'Shuttle update. Runs late. EDC Orlando. 1h ago. Unread.',

@@ -387,7 +387,7 @@ export default function FestivalEditForm({
     <div ref={rootRef} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6 space-y-6">
       <fieldset
         disabled={readOnly}
-        className="m-0 min-w-0 space-y-6 border-0 p-0 [&_:is(input,select,textarea):disabled]:cursor-not-allowed [&_:is(input,select,textarea):disabled]:opacity-60"
+        className="m-0 min-w-0 space-y-6 border-0 p-0 [&_:is(input,select,textarea,button):disabled]:cursor-not-allowed [&_:is(input,select,textarea,button):disabled]:opacity-60"
       >
       <legend className="sr-only">Festival details</legend>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -627,8 +627,9 @@ export default function FestivalEditForm({
         <div className="space-y-3">
           {(formData.days || []).map((day, dayIndex) => {
             const visibleSets = filterLineup(day.sets || [], formData.stages || [], query);
+            // A viewer's expand button sits in the disabled fieldset, so every day opens for reading.
             const expanded =
-              expandedDays.has(day.id) || dayHasIssue(day, dayIndex) || (filtering && visibleSets.length > 0);
+              readOnly || expandedDays.has(day.id) || dayHasIssue(day, dayIndex) || (filtering && visibleSets.length > 0);
             return (
               <div
                 key={day.id}

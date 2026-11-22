@@ -13,7 +13,7 @@ export const INBOX_COPY = {
 
 /**
  * Screen-reader text for one inbox row. A title or body that already ends in a period would read as "..", so the
- * trailing periods go before the sentences are joined.
+ * trailing periods go before the sentences are joined. A part that ends in "?" or "!" keeps it and gets no period.
  */
 export function inboxRowLabel(
   item: { title: string; body: string; festivalName?: string | null },
@@ -22,7 +22,8 @@ export function inboxRowLabel(
 ): string {
   const bare = (s: string) => s.trim().replace(/\.+$/, '');
   const parts = [bare(item.title), bare(item.body), ...(item.festivalName ? [bare(item.festivalName)] : []), ago];
-  return `${parts.join('. ')}.${unread ? ` ${INBOX_COPY.unreadA11y}.` : ''}`;
+  const sentence = (part: string) => (/[?!]$/.test(part) ? part : `${part}.`);
+  return `${parts.map(sentence).join(' ')}${unread ? ` ${INBOX_COPY.unreadA11y}.` : ''}`;
 }
 
 /** Bell count text: null for 0, '9+' over 9. */
