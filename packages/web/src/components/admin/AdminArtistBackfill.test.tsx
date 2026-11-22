@@ -58,7 +58,7 @@ describe('AdminArtistBackfill', () => {
     await dryRunWith(stopReport);
     expect(runArtistBackfill).toHaveBeenCalledWith('dry-run');
     expect(screen.getByText('Artists to create')).toBeTruthy();
-    const stop = screen.getByRole('region', { name: 'STOP' });
+    const stop = screen.getByRole('region', { name: 'Check before you run' });
     expect(within(stop).getByText(/fest-one \| set-1 \| Zed Zebra -> Zed Zebras/)).toBeTruthy();
     expect(screen.getByText(/Artist records to fill from Spotify \(1\)/)).toBeTruthy();
   });
@@ -66,8 +66,8 @@ describe('AdminArtistBackfill', () => {
   it('shows REVIEW findings without a STOP', async () => {
     render(<AdminArtistBackfill />);
     await dryRunWith(cleanReport);
-    expect(screen.getByRole('region', { name: 'REVIEW' })).toBeTruthy();
-    expect(screen.queryByRole('region', { name: 'STOP' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Look these over' })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: 'Check before you run' })).toBeNull();
     expect(screen.getByText('Nothing stops the run.')).toBeTruthy();
   });
 
@@ -77,7 +77,7 @@ describe('AdminArtistBackfill', () => {
     expect(screen.getByText(/Run a dry run first/)).toBeTruthy();
     await dryRunWith(stopReport);
     expect((runButton() as HTMLButtonElement).disabled).toBe(true);
-    fireEvent.click(screen.getByLabelText('I reviewed the STOP items'));
+    fireEvent.click(screen.getByLabelText('I checked the items above'));
     expect((runButton() as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -178,10 +178,12 @@ describe('AdminArtistBackfill', () => {
 
   it('runs Verify on demand and shows failed checks', async () => {
     render(<AdminArtistBackfill />);
-    runArtistBackfill.mockResolvedValueOnce({ mode: 'verify', result: { ok: false, checks: [{ name: 'ids present', ok: false, details: '3 missing' }], skipped: [] } });
+    runArtistBackfill.mockResolvedValueOnce({ mode: 'verify', result: { ok: false, checks: [{ name: 'ids', ok: false, details: ['3 missing', { festivalId: 'f1', name: 'Zed' }] }], skipped: [] } });
     fireEvent.click(screen.getByRole('button', { name: 'Verify' }));
     expect(await screen.findByText('Verify failed')).toBeTruthy();
-    expect(screen.getByText(/FAIL ids present: 3 missing/)).toBeTruthy();
+    expect(screen.getByText(/Failed: Every artist name has an artist record/)).toBeTruthy();
+    expect(screen.getByText('3 missing')).toBeTruthy();
+    expect(screen.getByText('f1 | Zed')).toBeTruthy();
     expect(runArtistBackfill).toHaveBeenCalledWith('verify');
   });
 });

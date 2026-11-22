@@ -86,8 +86,8 @@ function ReportLists({ report, stopKinds, reviewKinds }: { report: BackfillRepor
         <details key={key} className="rounded-lg border border-glass-border p-2">
           <summary className="cursor-pointer min-h-11 flex items-center text-sm text-text-primary">
             {backfillLabel(key)} ({entries.length})
-            {stopKinds.has(key) && <span className="ml-2 text-accent-coral">STOP</span>}
-            {!stopKinds.has(key) && reviewKinds.has(key) && <span className="ml-2 text-text-muted">review</span>}
+            {stopKinds.has(key) && <span className="ml-2 text-accent-coral">Check first</span>}
+            {!stopKinds.has(key) && reviewKinds.has(key) && <span className="ml-2 text-text-muted">Look over</span>}
           </summary>
           <ul className="list-none p-0 max-h-64 overflow-auto space-y-1 text-xs break-words text-text-secondary">
             {entries.slice(0, MAX_LIST_ROWS).map((entry, i) => (
@@ -115,8 +115,8 @@ function Counts({ counts }: { counts: Record<string, number> }) {
 }
 
 /**
- * Admin, web only: the artist id backfill. Dry run shows what would change and sorts it into STOP and REVIEW.
- * Run needs a dry run younger than 15 minutes, a ticked box when STOP items exist, a confirm step and a recent
+ * Admin, web only: the artist id backfill. Dry run shows what would change and sorts it into items to check and items to look over.
+ * Run needs a dry run younger than 15 minutes, a ticked box when there are items to check, a confirm step and a recent
  * password check. After a run it verifies and plans again: a second plan with nothing to write proves it stuck.
  */
 export default function AdminArtistBackfill() {
@@ -255,8 +255,14 @@ export default function AdminArtistBackfill() {
           <ul className="list-none p-0 break-words">
             {verify.checks.map((c) => (
               <li key={c.name} className={c.ok ? 'text-text-secondary' : 'text-accent-coral'}>
-                {c.ok ? 'ok' : 'FAIL'} {c.name}
-                {c.ok || c.details == null ? '' : `: ${typeof c.details === 'string' ? c.details : JSON.stringify(c.details)}`}
+                {c.ok ? 'Passed' : 'Failed'}: {backfillLabel(c.name)}
+                {!c.ok && c.details != null && (
+                  <ul className="list-disc pl-5 text-xs">
+                    {(Array.isArray(c.details) ? c.details : [c.details]).map((d, i) => (
+                      <li key={i}>{typeof d === 'string' ? d : describeBackfillEntry(d)}</li>
+                    ))}
+                  </ul>
+                )}
               </li>
             ))}
           </ul>
@@ -271,15 +277,15 @@ export default function AdminArtistBackfill() {
             {stale && <span className="text-accent-coral">It is older than 15 minutes. Run it again before you run the backfill.</span>}
           </p>
           {counts && <Counts counts={counts} />}
-          <FindingList title="STOP" items={review.stop} tone="stop" />
-          <FindingList title="REVIEW" items={review.review} tone="review" />
+          <FindingList title="Check before you run" items={review.stop} tone="stop" />
+          <FindingList title="Look these over" items={review.review} tone="review" />
           {review.stop.length === 0 && <p className="text-sm text-accent-aqua">Nothing stops the run.</p>}
           <ReportLists report={dry.report} stopKinds={stopKinds} reviewKinds={reviewKinds} />
 
           {stopCount > 0 && (
             <label className="flex items-start gap-2 min-h-11 text-sm text-text-primary">
               <input type="checkbox" className="mt-1" checked={reviewed} onChange={(e) => setReviewed(e.target.checked)} />
-              <span>I reviewed the STOP items</span>
+              <span>I checked the items above</span>
             </label>
           )}
         </div>
@@ -290,7 +296,7 @@ export default function AdminArtistBackfill() {
       </Button>
       {dry === null && <p className="text-xs text-text-muted">Run a dry run first. The backfill needs one from the last 15 minutes.</p>}
       {dry !== null && !stale && stopCount > 0 && !reviewed && (
-        <p className="text-xs text-text-muted">Tick “I reviewed the STOP items” to turn on the run.</p>
+        <p className="text-xs text-text-muted">Tick “I checked the items above” to turn on the run.</p>
       )}
 
       {outcome && (
@@ -303,7 +309,7 @@ export default function AdminArtistBackfill() {
           {countOf(outcome.run.conflicts) > 0 && <p className="text-accent-coral">Conflicts: {countOf(outcome.run.conflicts)}</p>}
           {outcome.verify && (
             <p className={outcome.verify.ok ? 'text-accent-aqua' : 'text-accent-coral'}>
-              {outcome.verify.ok ? 'Verify passed.' : `Verify failed: ${outcome.verify.checks.filter((c) => !c.ok).map((c) => c.name).join(', ')}`}
+              {outcome.verify.ok ? 'Verify passed.' : `Verify failed: ${outcome.verify.checks.filter((c) => !c.ok).map((c) => backfillLabel(c.name)).join(', ')}`}
             </p>
           )}
           {outcome.second &&

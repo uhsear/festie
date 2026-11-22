@@ -100,6 +100,7 @@ describe('backfillLabel', () => {
   it('names the report keys in plain words and passes unknown keys through', () => {
     expect(backfillLabel('legacyFlatOnlySets')).toBe('Sets with only an old single name');
     expect(backfillLabel('b2bSplits')).toBe('B2B names split into separate artists');
+    expect(backfillLabel('second dry run')).toBe('A second dry run finds nothing left to change');
     expect(backfillLabel('somethingNew')).toBe('somethingNew');
   });
 });

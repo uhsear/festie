@@ -173,6 +173,10 @@ const BACKFILL_LABELS: Readonly<Record<string, string>> = {
   splitLinksToPlace: 'Links to place after a B2B split',
   rowFills: 'Artist records to fill from Spotify',
   copyRefreshes: 'Copies to refresh',
+  // The names of the Verify checks.
+  counts: 'Sets and lineup entries match the run',
+  ids: 'Every artist name has an artist record',
+  'second dry run': 'A second dry run finds nothing left to change',
 };
 
 /** Plain words for a backfill report key. A key this file does not know shows as it came. */
