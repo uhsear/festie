@@ -146,6 +146,14 @@ export default function ResetPasswordScreen() {
             onPress={() => router.replace('/(auth)/forgot-password')}
             style={styles.button}
           />
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={() => router.replace('/(auth)/login')}
+            accessibilityRole="link"
+            accessibilityLabel={AUTH_COPY.backToSignIn}
+          >
+            <Text style={styles.linkText}>{AUTH_COPY.backToSignIn}</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
