@@ -23,6 +23,13 @@ describe('ArtistName', () => {
     expect(container).toHaveTextContent('Ana b2b Bo');
   });
 
+  it('inherits the surrounding font size and line height, not the browser button default', () => {
+    render(<ArtistNameButton name="Ana" />);
+    const cls = screen.getByRole('button').className;
+    expect(cls).toContain('text-[length:inherit]');
+    expect(cls).toContain('leading-[inherit]');
+  });
+
   it('keeps a billed name as one button that lists every artist in the sheet', async () => {
     const set = makeFestivalSet({ displayName: 'The Duo', artists: [{ name: 'Ana' }, { name: 'Bo' }] });
     render(

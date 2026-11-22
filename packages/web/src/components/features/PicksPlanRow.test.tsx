@@ -114,6 +114,19 @@ describe('PicksPlanRow', () => {
     expect(savePick).not.toHaveBeenCalled();
   });
 
+  // jsdom has no layout, so this pins the classes that give the name its own full-width line on a phone.
+  it('keeps the artist name on its own line on phones, with time and stage wrapped under it', () => {
+    render(<PicksPlanRow set={set} hasClash={false} />);
+    const nameBlock = screen.getByText('Odesza').closest('.order-1');
+    const meta = screen.getByTestId('stage-badge').parentElement;
+    expect(nameBlock).not.toBeNull();
+    expect(nameBlock?.parentElement?.className).toContain('flex-col');
+    expect(nameBlock?.className).toContain('min-w-0');
+    expect(meta).not.toBe(nameBlock?.parentElement);
+    expect(meta?.className).toContain('flex-wrap');
+    expect(meta?.className).toContain('sm:contents');
+  });
+
   it('opens the set panel from the main button', () => {
     render(<PicksPlanRow set={set} hasClash={false} />);
     fireEvent.click(screen.getByRole('button', { name: /^Odesza,/ }));

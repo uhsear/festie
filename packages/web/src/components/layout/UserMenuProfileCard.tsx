@@ -53,16 +53,13 @@ export default function UserMenuProfileCard({ user }: UserMenuProfileCardProps) 
           <div className="text-xs text-accent-aqua max-w-full overflow-hidden text-ellipsis whitespace-nowrap">
             @{user.username}
           </div>
-          <div className="flex flex-wrap gap-[var(--space-3)]">
-            <span className="inline-flex items-center gap-[var(--space-2)] px-2 py-[3px] rounded-full bg-[var(--color-overlay-2)] border border-border-light text-[length:var(--font-size-12)] font-bold tracking-[.4px] uppercase text-text-secondary">
-              Account
-            </span>
-            {user.isAdmin && (
+          {user.isAdmin && (
+            <div className="flex flex-wrap gap-[var(--space-3)]">
               <span className="inline-flex items-center gap-[var(--space-2)] px-2 py-[3px] rounded-full bg-[rgba(var(--accent-coral-rgb),.12)] border border-[rgba(var(--accent-coral-rgb),.25)] text-[length:var(--font-size-12)] font-bold tracking-[.4px] uppercase text-accent-coral">
                 Admin
               </span>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 

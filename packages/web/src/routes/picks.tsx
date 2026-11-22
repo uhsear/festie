@@ -14,6 +14,7 @@ import PriorityIcon from '../components/ui/PriorityIcon';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
+import RovingGroup from '../components/ui/RovingGroup';
 import RefreshableView from '../components/layout/RefreshableView';
 import PickBulkActions from '../components/PickBulkActions';
 import OfflineReadinessCard from '../components/features/OfflineReadinessCard';
@@ -61,6 +62,10 @@ const chipClass = (active: boolean) =>
       ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover'
       : 'border-border text-text-secondary hover:bg-bg-card-hover'
   }`;
+
+// 44px touch targets, matching the filter chips beside them.
+const SEGMENT_CLASS =
+  'rounded-full px-3 min-h-11 text-xs font-semibold cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2';
 
 function PicksViewInner() {
   const navigate = useNavigate();
@@ -198,13 +203,15 @@ function PicksViewInner() {
   ];
   const viewTabRow =
     hasAnyPicks || reminderItems.length > 0 || noteItems.length > 0 ? (
-      <div role="tablist" aria-label="Picks views" className="flex gap-2 mb-3 overflow-x-auto">
+      <RovingGroup key="picks-view-tabs" itemRole="tab" role="tablist" aria-label="Picks views" className="flex gap-2 mb-3 overflow-x-auto">
         {viewTabs.map((tab) => (
           <button
             key={tab.id}
+            id={`picks-tab-${tab.id}`}
             type="button"
             role="tab"
             aria-selected={view === tab.id}
+            aria-controls="picks-view-panel"
             className={cn(
               'min-h-[44px] px-4 rounded-full border text-sm font-medium whitespace-nowrap cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
               view === tab.id
@@ -216,7 +223,7 @@ function PicksViewInner() {
             {tab.label}
           </button>
         ))}
-      </div>
+      </RovingGroup>
     ) : null;
 
   // Reminders and notes can exist without picks, so these lists skip the empty state.
@@ -226,12 +233,14 @@ function PicksViewInner() {
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
           {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
           {viewTabRow}
-          <PlanNotesList
-            kind={view}
-            items={view === 'reminders' ? reminderItems : noteItems}
-            days={days}
-            onOpenSet={setDetailSet}
-          />
+          <div role="tabpanel" id="picks-view-panel" aria-labelledby={`picks-tab-${view}`}>
+            <PlanNotesList
+              kind={view}
+              items={view === 'reminders' ? reminderItems : noteItems}
+              days={days}
+              onOpenSet={setDetailSet}
+            />
+          </div>
         </div>
       </RefreshableView>
     );
@@ -248,6 +257,7 @@ function PicksViewInner() {
           {viewTabRow}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
+          <div {...(viewTabRow ? { role: 'tabpanel', id: 'picks-view-panel', 'aria-labelledby': `picks-tab-${view}` } : {})}>
           <PickBulkActions />
           <ListenList
             sets={pickedSets}
@@ -262,6 +272,7 @@ function PicksViewInner() {
             description="Browse the lineup and tap the sets you want to see."
             cta={{ label: 'Browse the lineup', onClick: () => navigate({ to: '/cards' }) }}
           />
+          </div>
         </div>
       </RefreshableView>
     );
@@ -293,6 +304,7 @@ function PicksViewInner() {
         <CrewSuggestionStrip />
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
 
+        <div role="tabpanel" id="picks-view-panel" aria-labelledby={`picks-tab-${view}`}>
         {view === 'myday' && myDayGroups && myDayGroups.length === 0 && (
           <EmptyState
             icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
@@ -332,7 +344,8 @@ function PicksViewInner() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
-          <div
+          <RovingGroup
+            itemRole="radio"
             role="radiogroup"
             aria-label="Group picks by"
             className="inline-flex rounded-full border border-border p-0.5"
@@ -344,15 +357,15 @@ function PicksViewInner() {
                 role="radio"
                 aria-checked={groupMode === m.value}
                 onClick={() => setGroupMode(m.value)}
-                className={`rounded-full px-3 min-h-8 text-xs font-semibold cursor-pointer transition-colors ${
+                className={`${SEGMENT_CLASS} ${
                   groupMode === m.value ? 'bg-bg-card-hover text-accent-aqua' : 'text-text-secondary'
                 }`}
               >
                 {m.label}
               </button>
             ))}
-          </div>
-          <div role="radiogroup" aria-label="Order sets" className="inline-flex rounded-full border border-border p-0.5">
+          </RovingGroup>
+          <RovingGroup itemRole="radio" role="radiogroup" aria-label="Order sets" className="inline-flex rounded-full border border-border p-0.5">
             {ORDERS.map((o) => (
               <button
                 key={o.value}
@@ -360,33 +373,34 @@ function PicksViewInner() {
                 role="radio"
                 aria-checked={order === o.value}
                 onClick={() => setOrder(o.value)}
-                className={`rounded-full px-3 min-h-8 text-xs font-semibold cursor-pointer transition-colors ${
+                className={`${SEGMENT_CLASS} ${
                   order === o.value ? 'bg-bg-card-hover text-accent-aqua' : 'text-text-secondary'
                 }`}
               >
                 {o.label}
               </button>
             ))}
-          </div>
+          </RovingGroup>
           <div className="relative flex-1 min-w-[160px]">
             <Search
               className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none"
               aria-hidden="true"
             />
             <input
-              type="search"
+              type="text"
+              inputMode="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter picks by artist or stage"
+              placeholder="Filter picks"
               aria-label="Filter my picks"
-              className="w-full min-h-11 rounded-full border border-border-input bg-bg-card pl-9 pr-9 text-sm"
+              className="w-full min-h-11 rounded-full border border-border-input bg-bg-card pl-9 pr-11 text-sm"
             />
             {search && (
               <button
                 type="button"
                 aria-label="Clear search"
                 onClick={() => setSearch('')}
-                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-8 min-w-8 items-center justify-center text-text-muted cursor-pointer"
+                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -470,6 +484,7 @@ function PicksViewInner() {
         })}
           </>
         )}
+        </div>
       </div>
     </RefreshableView>
   );

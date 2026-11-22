@@ -32,7 +32,7 @@ interface StageBadgeProps {
 // role (10px / 600 / 0.08em caps) at spacing[2]/spacing[1] padding.
 const VARIANT_CLASS: Record<StageBadgeVariant, string> = {
   chip: 'inline-flex items-center rounded-full px-3 py-2 text-xs font-semibold cursor-pointer border-2 border-transparent transition-[color,background-color,border-color,box-shadow] duration-200',
-  pick: 'type-micro inline-block rounded-full px-2 py-1',
+  pick: 'type-micro inline-block max-w-full truncate align-middle rounded-full px-2 py-1',
   default: 'type-micro inline-block rounded-full px-2 py-1',
 };
 
@@ -204,7 +204,7 @@ export default function StageBadge({
   const activeClass = variant === 'chip' && active ? 'border-current' : '';
 
   return (
-    <span className={cn(variantClass, activeClass, className)} style={{ ...baseStyle, ...style }}>
+    <span className={cn(variantClass, activeClass, className)} style={{ ...baseStyle, ...style }} title={variant === 'pick' ? stageName : undefined}>
       {stageName}
     </span>
   );

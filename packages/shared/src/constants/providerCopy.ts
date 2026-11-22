@@ -5,7 +5,7 @@ export const PROVIDER_COPY = {
   linkApple: 'Link Apple',
   divider: 'or',
   finishTitle: 'Finish creating your account',
-  finishBody: 'Pick a username your crew will see. You can change your display name later.',
+  finishBody: 'Pick a username your crew will see. Your username is permanent. You can change your display name later.',
   finishButton: 'Create account',
   signupExpired: 'Sign-up took too long. Start again.',
   emailInUse: 'An account already uses this email. Sign in with your password, then link this provider in Account.',

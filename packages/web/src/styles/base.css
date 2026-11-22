@@ -10,6 +10,12 @@
     margin: 0;
     padding: 0;
   }
+
+  /* Preflight is off, so lists would show browser bullets. Utilities such as list-disc still win. */
+  ul,
+  ol {
+    list-style: none;
+  }
 }
 
 /* A button resets its text style to the browser default. This layered reset hands the wrapper's full style down to

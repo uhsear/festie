@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { api } from '@festie/shared/services';
+import { api, isApiClientError } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { COPY, PRIORITY_LABELS, planBLine, signInTo } from '@festie/shared/constants';
 import type { Festival, FestivalDay, FestivalSet, Priority, Stage } from '@festie/shared/types';
@@ -23,7 +23,7 @@ interface FestivalDetailResponse extends Festival {
   days: (FestivalDay & { label?: string; sets: FestivalSet[] })[];
 }
 
-type LoadState = 'loading' | 'ready' | 'offline';
+type LoadState = 'loading' | 'ready' | 'offline' | 'gone';
 
 interface Row {
   key: string;
@@ -34,7 +34,8 @@ interface Row {
 }
 
 // The hash waits here (this tab only) while a signed-out visitor signs in, and /p reads it back. It never goes
-// into the sign-in return path: that is a query string, which reaches the server and its logs.
+// into the sign-in return path: that is a query string, which reaches the server and its logs. Every sign-in
+// link on /p returns to plain /p, so the stash is written when the page opens, not when one link is tapped.
 const PENDING_PLAN_KEY = 'fk.pendingPlanSnapshot';
 
 function readHash(): string {
@@ -52,7 +53,7 @@ const BUTTON =
 const PRIMARY = `${BUTTON} bg-accent-aqua text-[var(--text-on-light-accent)]`;
 
 /** Add-to-my-plan for a signed-in viewer, or a sign-in prompt that returns to this same link. Nothing is written until Add. */
-function ImportPlan({ snapshot, hash }: { snapshot: PlanSnapshot; hash: string }) {
+function ImportPlan({ snapshot }: { snapshot: PlanSnapshot }) {
   const { toast, toastUndo, toastError } = useToast();
   const user = useAuthStore((s) => s.user);
   const currentFestivalId = useFestivalStore((s) => s.currentFestivalId);
@@ -63,13 +64,6 @@ function ImportPlan({ snapshot, hash }: { snapshot: PlanSnapshot; hash: string }
   const loadFailed = useFestivalStore((s) => !!s.error);
   const currentProfile = storeProfile?.festivalId === snapshot.festivalId ? storeProfile : null;
   const [busy, setBusy] = useState(false);
-  const stashHash = () => {
-    try {
-      sessionStorage.setItem(PENDING_PLAN_KEY, hash);
-    } catch {
-      // Without storage the visitor lands on /p with no plan and opens the link again.
-    }
-  };
 
   const preview = useMemo(
     () =>
@@ -106,10 +100,10 @@ function ImportPlan({ snapshot, hash }: { snapshot: PlanSnapshot; hash: string }
       <>
         <p className="text-[length:var(--font-size-14)] text-text-primary">{signInTo('add these picks to your plan')}</p>
         <div className="flex gap-2 flex-wrap">
-          <Link to="/login" search={{ next: '/p' }} onClick={stashHash} className={PRIMARY}>
+          <Link to="/login" search={{ next: '/p' }} className={PRIMARY}>
             {COPY.auth.signIn}
           </Link>
-          <Link to="/register" search={{ next: '/p' }} onClick={stashHash} className={`${BUTTON} border border-border-subtle text-text-primary`}>
+          <Link to="/register" search={{ next: '/p' }} className={`${BUTTON} border border-border-subtle text-text-primary`}>
             {COPY.auth.createAccount}
           </Link>
         </div>
@@ -178,14 +172,18 @@ function ImportPlan({ snapshot, hash }: { snapshot: PlanSnapshot; hash: string }
  */
 export default function PlanSnapshotPage() {
   const [hash] = useState(readHash);
-  // The stash has done its job once the hash is in state. Clearing it here, not in readHash, keeps StrictMode's double init safe.
+  const user = useAuthStore((s) => s.user);
+  // A signed-out visitor opening the link keeps the hash for the trip through sign-in. While signed out the stash
+  // stays, even when the URL has no hash: the page re-mounts at /login?next=/p and must not delete what it just read.
+  // It is dropped once the viewer is signed in. Clearing here, not in readHash, keeps StrictMode's double init safe.
   useEffect(() => {
     try {
-      sessionStorage.removeItem(PENDING_PLAN_KEY);
+      if (user) sessionStorage.removeItem(PENDING_PLAN_KEY);
+      else if (window.location.hash) sessionStorage.setItem(PENDING_PLAN_KEY, hash);
     } catch {
-      // sessionStorage unavailable: nothing was stashed
+      // sessionStorage unavailable: the visitor opens the link again after signing in
     }
-  }, []);
+  }, [user, hash]);
   const decoded = useMemo(() => decodePlanSnapshot(hash), [hash]);
   const snapshot = decoded.ok ? decoded.data : null;
   const [festival, setFestival] = useState<FestivalDetailResponse | null>(null);
@@ -202,8 +200,8 @@ export default function PlanSnapshotPage() {
         setFestival(data);
         setState('ready');
       })
-      .catch(() => {
-        if (!cancelled) setState('offline');
+      .catch((err: unknown) => {
+        if (!cancelled) setState(isApiClientError(err) && err.status === 404 ? 'gone' : 'offline');
       });
     return () => {
       cancelled = true;
@@ -243,7 +241,8 @@ export default function PlanSnapshotPage() {
     );
   }
 
-  const count = snapshot.picks.length;
+  // Once the lineup loads, count only the sets still in it, so the header matches the rows and the footer line.
+  const count = state === 'gone' ? 0 : snapshot.picks.length - (state === 'ready' ? missing : 0);
   const mp = snapshot.meetingPoint;
   const planB = 'planB' in snapshot ? snapshot.planB : undefined;
 
@@ -277,6 +276,10 @@ export default function PlanSnapshotPage() {
         </p>
       )}
 
+      {state === 'gone' && (
+        <p className="text-[length:var(--font-size-14)] text-text-secondary">This festival is no longer available.</p>
+      )}
+
       {groups.map((g) => (
         <section key={g.label} aria-label={g.label}>
           <h2 className="type-subheading text-text-primary">{g.label}</h2>
@@ -301,7 +304,7 @@ export default function PlanSnapshotPage() {
         </p>
       )}
 
-      <ImportPlan snapshot={snapshot} hash={hash} />
+      {state !== 'gone' && <ImportPlan snapshot={snapshot} />}
 
       <div className="flex flex-col gap-2 pt-2">
         <Link

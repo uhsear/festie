@@ -170,7 +170,7 @@ function QuietHoursEditor({ start, end }: { start: string; end: string }) {
           />
         </label>
       </div>
-      {invalid ? <p className="text-xs text-danger mt-1">Start and end can't be the same.</p> : null}
+      {invalid ? <p className="text-xs text-[var(--color-text-danger)] mt-1">Start and end can't be the same.</p> : null}
     </div>
   );
 }
@@ -385,7 +385,7 @@ function PrefsSubsection() {
         </>
       )}
       {error ? (
-        <p role="alert" className="text-xs text-danger mt-2">
+        <p role="alert" className="text-xs text-[var(--color-text-danger)] mt-2">
           {error}
         </p>
       ) : null}
