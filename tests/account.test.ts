@@ -296,6 +296,43 @@ describe('account: soft-delete', { concurrency: 1, skip }, () => {
 });
 
 // ──────────────────────────────────────────────────────────────────────────
+// Payment handles
+// ──────────────────────────────────────────────────────────────────────────
+
+describe('account: payment handles', { concurrency: 1, skip }, () => {
+  test('an unchanged legacy handle does not block editing another one', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const username = uniqueUsername('legacyh');
+    const user = await registerUser(server, username);
+
+    // A cashtag saved under the old trim-only rules, which the current rules reject.
+    const pool = new Pool({ connectionString: server.databaseUrl });
+    try {
+      await pool.query('UPDATE users SET cashapp_cashtag = $1 WHERE username = $2', ['jane_doe', username]);
+    } finally {
+      await pool.end();
+    }
+
+    const put = (body: Record<string, string>) =>
+      server.request
+        .put('/api/v1/account/payment-handles')
+        .set('x-user-token', user.token)
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .send(body);
+
+    // An older client resends all three fields.
+    const res = await put({ venmoHandle: 'jane-v', cashappCashtag: 'jane_doe', paypalHandle: '' });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.data.user.venmoHandle, 'jane-v');
+    assert.equal(res.body.data.user.cashappCashtag, 'jane_doe');
+
+    // A changed value is still validated.
+    assert.equal((await put({ cashappCashtag: 'jane.doe' })).status, 400);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────
 // GDPR data export
 // ──────────────────────────────────────────────────────────────────────────
 

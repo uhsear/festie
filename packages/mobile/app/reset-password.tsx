@@ -86,7 +86,7 @@ const useStyles = makeStyles((t) => ({
   },
   // CTA layout only — fill/ink/disabled live in components/Button (F8).
   button: { marginTop: t.spacing[2] },
-  linkButton: { marginTop: t.spacing[5], alignItems: 'center' as const },
+  linkButton: { marginTop: t.spacing[5], alignItems: 'center' as const, justifyContent: 'center' as const, minHeight: 44 },
   linkText: {
     ...typeStyle('label', 600),
     color: t.colors.accent.aqua,
@@ -146,6 +146,14 @@ export default function ResetPasswordScreen() {
             onPress={() => router.replace('/(auth)/forgot-password')}
             style={styles.button}
           />
+          <TouchableOpacity
+            style={styles.linkButton}
+            onPress={() => router.replace('/(auth)/login')}
+            accessibilityRole="link"
+            accessibilityLabel={AUTH_COPY.backToSignIn}
+          >
+            <Text style={styles.linkText}>{AUTH_COPY.backToSignIn}</Text>
+          </TouchableOpacity>
         </View>
       </View>
     );
