@@ -50,7 +50,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
           Display name
         </h3>
 
-        <form onSubmit={handleDisplayNameChange} className="flex gap-2">
+        <form onSubmit={handleDisplayNameChange} className="flex items-start gap-2">
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
