@@ -25,6 +25,7 @@ export const ACCOUNT_COPY = {
   adminHint: 'Dashboard, activity & festivals',
   privacyTitle: 'Privacy Policy',
   privacyHint: 'How we handle your data',
+  displayNamePlaceholder: 'How your name appears to your crew',
   emailLabel: 'Email',
   emailNotSet: 'Not set',
   emailResend: 'Resend verification',

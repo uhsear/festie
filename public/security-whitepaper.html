@@ -60,7 +60,7 @@
         }
         a {
             color: #00e5a0;
-            text-decoration: none;
+            text-decoration: underline;
             transition: color 0.2s ease;
         }
         a:hover {
@@ -116,6 +116,10 @@
         .table-scroll {
             max-width: 100%;
             overflow-x: auto;
+        }
+        .table-scroll:focus-visible {
+            outline: 2px solid #00e5a0;
+            outline-offset: 2px;
         }
         table {
             width: 100%;
@@ -204,7 +208,9 @@
     </style>
 </head>
 <body>
+    <nav aria-label="Back to the app">
     <a href="/" class="back-link">← Back to Festie</a>
+    </nav>
 
     <header>
         <h1>Security Whitepaper</h1>
@@ -298,7 +304,7 @@
             </ul>
 
             <h3>Account Lockout & Brute-Force Protection</h3>
-            <div class="table-scroll">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Account lockout and brute-force protection">
             <table>
                 <thead>
                     <tr>
@@ -415,7 +421,7 @@
             <p>Multi-layered rate limiting protects against brute-force attacks, DDoS, and resource exhaustion attacks.</p>
 
             <h3>Rate Limiting Tiers</h3>
-            <div class="table-scroll">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Rate limiting tiers">
             <table>
                 <thead>
                     <tr>
@@ -508,7 +514,7 @@
             </ul>
 
             <h3>Data Retention Policy</h3>
-            <div class="table-scroll">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Data retention policy">
             <table>
                 <thead>
                     <tr>
@@ -644,7 +650,7 @@
             </div>
 
             <h3>Retention Policy</h3>
-            <div class="table-scroll">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Backup retention by backup type">
             <table>
                 <thead>
                     <tr>
@@ -770,7 +776,7 @@
             </ol>
 
             <h3>Severity Classification</h3>
-            <div class="table-scroll">
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Severity classification">
             <table>
                 <thead>
                     <tr>

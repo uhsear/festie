@@ -52,7 +52,7 @@ function setup(sets: unknown[], picks: Record<string, string>, initialMode?: 'fu
     selectedDay: 0,
   });
   render(<ScheduleImageDialog initialMode={initialMode} />);
-  fireEvent.click(screen.getByRole('button', { name: initialMode ? 'Lock screen image' : 'Save my picks as an image' }));
+  fireEvent.click(screen.getByRole('button', { name: initialMode ? 'Lock screen image' : 'Save image' }));
   // The dialog opens on Lock screen; most cases here exercise the Story shape.
   if (!initialMode && story) fireEvent.click(screen.getByRole('button', { name: 'Story' }));
 }
@@ -85,7 +85,7 @@ describe('ScheduleImageDialog', () => {
       selectedDay: 0,
     });
     render(<ScheduleImageDialog />);
-    fireEvent.click(screen.getByRole('button', { name: 'Save my picks as an image' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save image' }));
     fireEvent.click(screen.getByRole('button', { name: 'Story' }));
     expect(screen.getByRole('button', { name: 'Save image' })).toBeInTheDocument();
     expect(screen.queryByText("A web page with your picks and your crew's schedules, ready to print.")).toBeNull();

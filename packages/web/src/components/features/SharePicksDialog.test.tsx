@@ -53,7 +53,7 @@ function setState({
 }
 
 function open() {
-  fireEvent.click(screen.getByRole('button', { name: 'Share my picks' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Share picks' }));
 }
 
 describe('SharePicksDialog', () => {
@@ -66,7 +66,7 @@ describe('SharePicksDialog', () => {
 
   it('renders the trigger as "Share picks"', () => {
     render(<SharePicksDialog />);
-    expect(screen.getByRole('button', { name: 'Share my picks' })).toHaveTextContent('Share picks');
+    expect(screen.getByRole('button', { name: 'Share picks' })).toHaveTextContent('Share picks');
   });
 
   it('keeps its title and closes on Escape', async () => {

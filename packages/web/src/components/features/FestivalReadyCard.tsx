@@ -69,6 +69,7 @@ export default function FestivalReadyCard({ ready }: Props) {
                   {item.label}
                 </span>
                 {!item.done && <span className="block text-xs text-text-muted">{item.hint}</span>}
+                <span className="sr-only">{item.done ? ', done' : ', not done yet'}</span>
               </span>
               {to && <ChevronRight className="w-4 h-4 flex-shrink-0 text-text-muted" aria-hidden="true" />}
             </>
@@ -78,7 +79,6 @@ export default function FestivalReadyCard({ ready }: Props) {
               {to ? (
                 <button
                   type="button"
-                  aria-label={item.a11y}
                   onClick={() => navigate({ to })}
                   className="flex w-full items-center gap-3 py-2 min-h-11 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
                 >

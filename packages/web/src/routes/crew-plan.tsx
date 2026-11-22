@@ -252,10 +252,10 @@ function CrewPlanContent() {
                     <Link
                       to="/set/$setId"
                       params={{ setId: e.set.id }}
-                      aria-label={`Open ${artistDisplayName(e.set)} set`}
                       className="inline-flex items-center min-h-11 hover:underline"
                     >
                       · {e.count} of {e.total} picked it
+                      <span className="sr-only">, open {artistDisplayName(e.set)} set</span>
                     </Link>
                   </li>
                 ))}
@@ -359,10 +359,10 @@ function CrewPlanContent() {
                   <Link
                     to="/set/$setId"
                     params={{ setId: e.set.id }}
-                    aria-label={`Open ${artistDisplayName(e.set)} set`}
                     className="text-text-secondary hover:underline"
                   >
                     {e.count} of {e.total} want this
+                    <span className="sr-only">, open {artistDisplayName(e.set)} set</span>
                   </Link>
                 </li>
               ))}

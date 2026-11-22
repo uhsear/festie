@@ -47,12 +47,46 @@ describe('useFestivalReady', () => {
     expect(result.current.visible).toBe(false);
   });
 
-  it('is visible before the festival once the hidden flag resolves', async () => {
+  it('is visible on the first render when storage answers synchronously', () => {
+    setup(upcoming);
+    const { result } = renderHook(() => useFestivalReady(false, NOW));
+    expect(result.current.visible).toBe(true);
+    expect(result.current.progressLabel).toBe('0 of 4 done');
+  });
+
+  it('stays hidden on the first render when the flag was saved as hidden', () => {
+    setup(upcoming);
+    mem.set('festie_ready_hidden:f1', '1');
+    const { result } = renderHook(() => useFestivalReady(false, NOW));
+    expect(result.current.visible).toBe(false);
+  });
+
+  it('is visible before the festival once an async hidden flag resolves', async () => {
+    configureStorage({
+      getItem: async (k) => mem.get(k) ?? null,
+      setItem: (k, v) => {
+        mem.set(k, v);
+      },
+      removeItem: (k) => {
+        mem.delete(k);
+      },
+    });
     setup(upcoming);
     const { result } = renderHook(() => useFestivalReady(false, NOW));
     expect(result.current.visible).toBe(false);
     await waitFor(() => expect(result.current.visible).toBe(true));
-    expect(result.current.progressLabel).toBe('0 of 4 done');
+  });
+
+  it('reads async storage once per festival and handles a failed read without an unhandled rejection', async () => {
+    const getItem = vi.fn(() => Promise.reject(new Error('storage down')));
+    configureStorage({ getItem, setItem: () => {}, removeItem: () => {} });
+    setup(upcoming);
+    const { result, rerender } = renderHook(() => useFestivalReady(false, NOW));
+    rerender();
+    rerender();
+    await waitFor(() => expect(result.current.visible).toBe(true));
+    // One read from the render-time peek and one from the effect, however many renders ran.
+    expect(getItem).toHaveBeenCalledTimes(2);
   });
 
   it('is not visible while the festival is in progress', async () => {

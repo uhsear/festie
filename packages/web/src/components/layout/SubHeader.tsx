@@ -255,7 +255,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {showDayTabs && (
           <div
             className={cn(
-              'day-tabs-scroll relative min-w-0',
+              // The time-zone label wraps under the chips on a narrow row instead of being cut off.
+              'day-tabs-scroll relative min-w-0 flex flex-wrap items-center gap-x-[var(--space-3)] gap-y-1',
               dayCanScrollLeft && 'fade-left',
               dayCanScrollRight && 'fade-right',
             )}
@@ -264,7 +265,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
               ref={dayScrollRef}
               className={cn(
                 'day-tabs hover-scroll',
-                'flex gap-[var(--space-3)] snap-x snap-mandatory scroll-smooth touch-pan-y overflow-x-auto scrollbar-hide min-w-0',
+                'flex gap-[var(--space-3)] snap-x snap-mandatory scroll-smooth touch-pan-y overflow-x-auto scrollbar-hide min-w-0 max-w-full',
               )}
               role="group"
               aria-label="Festival days"
@@ -337,10 +338,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   {`+${hiddenDays.length} hidden`}
                 </button>
               )}
-              {timeLabel && (
-                <span className="self-center shrink-0 whitespace-nowrap text-xs text-text-muted">{timeLabel}</span>
-              )}
             </div>
+            {timeLabel && <span className="shrink-0 whitespace-nowrap text-xs text-text-muted">{timeLabel}</span>}
           </div>
         )}
 

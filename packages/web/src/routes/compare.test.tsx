@@ -146,6 +146,7 @@ describe('CompareView', () => {
     mocks.crewState = { ...mocks.crewState, status: 'error', crew: null as never };
     render(<CompareView />);
     expect(screen.getByText("Couldn't load your crew")).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: "Couldn't load your crew" })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mocks.crewState.retry).toHaveBeenCalled();
   });
@@ -153,7 +154,7 @@ describe('CompareView', () => {
   it('shows "No crew yet" with no crews', () => {
     mocks.crewState = { ...mocks.crewState, status: 'none', crew: null as never };
     render(<CompareView />);
-    expect(screen.getByText('No crew yet')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'No crew yet' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create or join a crew' })).toBeInTheDocument();
   });
 

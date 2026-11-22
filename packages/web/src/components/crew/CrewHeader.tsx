@@ -30,17 +30,17 @@ export default function CrewHeader({ crew, members, onOpenMembers }: CrewHeaderP
       <button
         type="button"
         onClick={onOpenMembers}
-        aria-label={`See all ${count} members`}
         className="flex items-center min-h-11 shrink-0 rounded-full"
       >
-        <span className="flex -space-x-2">
+        <span className="flex -space-x-2" aria-hidden="true">
           {members.slice(0, MAX_FACES).map((m) => (
             <span key={m.userId} className="rounded-full ring-2 ring-surface">
               <Avatar name={m.name || m.username || 'User'} size="sm" />
             </span>
           ))}
         </span>
-        {extra > 0 && <span className="ml-1 text-xs font-semibold text-text-secondary">+{extra}</span>}
+        {extra > 0 && <span aria-hidden="true" className="ml-1 text-xs font-semibold text-text-secondary">+{extra}</span>}
+        <span className="sr-only">See all {count} members</span>
       </button>
     </header>
   );

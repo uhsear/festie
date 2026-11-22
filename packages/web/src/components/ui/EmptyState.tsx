@@ -19,6 +19,8 @@ interface EmptyStateProps {
     onClick: () => void;
   };
   className?: string;
+  /** Heading level of the title. Defaults to 2; a page with no other content passes 1. */
+  headingLevel?: 1 | 2 | 3;
 }
 
 export default function EmptyState({
@@ -29,7 +31,9 @@ export default function EmptyState({
   illustration,
   secondaryCta,
   className,
+  headingLevel = 2,
 }: EmptyStateProps) {
+  const Heading = `h${headingLevel}` as const;
   // Read the ink from the tokens, not the DOM: data-theme is applied in a later effect.
   const theme = useUIStore((s) => s.theme);
   const ink = (theme === 'daylight' ? colorsDaylight : colors).text.secondary;
@@ -60,7 +64,7 @@ export default function EmptyState({
           )
         )}
 
-        <h3 className="empty-state-title type-title font-semibold text-text-primary">{title}</h3>
+        <Heading className="empty-state-title type-title font-semibold text-text-primary">{title}</Heading>
 
         {description && (
           <p className="empty-state-description text-sm text-text-secondary max-w-[280px]">{description}</p>
