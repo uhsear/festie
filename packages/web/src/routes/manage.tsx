@@ -61,7 +61,8 @@ function ManagePageInner() {
       />
     );
   } else if (me.data.organizations.length === 0) {
-    body = (
+    // An unconfirmed email is why nothing shows yet; the banner above already says so.
+    body = !me.data.emailConfirmed ? null : (
       <EmptyState
         title="You are not part of an organization on Festie yet."
         description="If a venue added you, sign in with the email address they used."
@@ -80,7 +81,11 @@ function ManagePageInner() {
                 Organization
                 <select
                   value={current.id}
-                  onChange={(e) => setOrgId(e.target.value)}
+                  onChange={(e) => {
+                    setOrgId(e.target.value);
+                    // The next organization may not offer the open tab (Activity is owner-only).
+                    setSection('festivals');
+                  }}
                   className="min-h-11 rounded-lg border border-glass-border bg-bg-card px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
                 >
                   {organizations.map((o) => (

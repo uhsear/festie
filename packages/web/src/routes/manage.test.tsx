@@ -68,6 +68,29 @@ describe('/manage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Resend email' }));
     await waitFor(() => expect(resendVerification).toHaveBeenCalled());
     expect(toast).toHaveBeenCalledWith(expect.any(String), 'success');
+    expect(screen.queryByText('You are not part of an organization on Festie yet.')).not.toBeInTheDocument();
+  });
+
+  it('returns to the Festivals tab when the organization changes to one without Activity', async () => {
+    mockGet.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/manage/me'
+          ? {
+              emailConfirmed: true,
+              organizations: [
+                { id: 'o1', name: 'Venue A', role: 'owner', status: 'active', verified: false },
+                { id: 'o2', name: 'Venue B', role: 'editor', status: 'active', verified: false },
+              ],
+            }
+          : [],
+      ),
+    );
+    render();
+    await userEvent.click(await screen.findByRole('button', { name: 'Activity' }));
+    expect(screen.getByRole('button', { name: 'Activity' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.selectOptions(screen.getByLabelText('Organization'), 'o2');
+    expect(screen.getByRole('button', { name: 'Festivals' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Activity' })).not.toBeInTheDocument();
   });
 
   it('offers Retry when the organizations cannot load', async () => {
