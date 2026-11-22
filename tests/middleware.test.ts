@@ -954,3 +954,66 @@ describe('middleware: request log error detail', () => {
     assert.equal(lines[0].errorMessage, 'Could not load');
   });
 });
+
+describe('middleware: NUL in input (SEC-NUL-500)', () => {
+  const makeApp = () => {
+    const { app } = makeMiddlewareApp();
+    app.all('/api/v1/echo/:id', (_req: any, res: any) => res.json({ ok: true }));
+    return app;
+  };
+
+  it('answers 400 INVALID_INPUT for an encoded NUL in the path', async () => {
+    const res = await request(makeApp()).get('/api/v1/echo/ab%00cd').expect(400);
+    assert.equal(res.body.error.code, ErrorCodes.INVALID_INPUT);
+  });
+
+  it('answers 400 for an encoded NUL in the query string', async () => {
+    await request(makeApp()).get('/api/v1/echo/x?q=a%00b').expect(400);
+  });
+
+  it('answers 400 for a NUL in a top-level body string, so the unauthenticated login body is covered', async () => {
+    await request(makeApp()).post('/api/v1/echo/x').send({ username: 'bad\u0000name', password: 'x' }).expect(400);
+  });
+
+  it('answers 400 for a NUL nested in arrays and objects, and in a key', async () => {
+    const app = makeApp();
+    await request(app).post('/api/v1/echo/x').send({ question: 'q', options: ['a', 'b\u0000'] }).expect(400);
+    await request(app).post('/api/v1/echo/x').send({ a: { b: [{ c: 'd\u0000' }] } }).expect(400);
+    await request(app).post('/api/v1/echo/x').send({ 'k\u0000': 'v' }).expect(400);
+  });
+
+  it('lets ordinary input, including an escaped backslash-zero, through', async () => {
+    const app = makeApp();
+    await request(app).get('/api/v1/echo/ab%2500cd?q=%E2%9C%93').expect(200);
+    await request(app).post('/api/v1/echo/x').send({ note: 'a\\u0000b', n: 1, ok: true, nothing: null, list: ['x'] }).expect(200);
+  });
+});
+
+describe('middleware: request log path (SEC-LOG-PII)', () => {
+  it('logs a join-preview invite code as a placeholder', async () => {
+    const lines: any[] = [];
+    const { app } = makeMiddlewareApp({ ctx: { log: { info: (_m: string, meta: any) => lines.push(meta), warn() {}, error() {} } } });
+    app.get('/api/v1/crews/join-preview/:code', (_req: any, res: any) => res.json({ ok: true }));
+
+    await request(app).get('/api/v1/crews/join-preview/SECRETCODE1?x=1').expect(200);
+    assert.equal(lines[0].path, '/api/v1/crews/join-preview/:code');
+  });
+});
+
+describe('middleware: idempotency skips auth routes (SEC-IDEMP-TOKEN-CACHE)', () => {
+  it('never stores or replays a response from /api/v1/auth', async () => {
+    const { app } = makeMiddlewareApp();
+    let runs = 0;
+    app.post('/api/v1/auth/login', (_req: any, res: any) => res.json({ token: `t${++runs}` }));
+    app.post('/api/v1/other', (_req: any, res: any) => res.json({ n: ++runs }));
+
+    const first = await request(app).post('/api/v1/auth/login').set('Idempotency-Key', 'k1').send({});
+    const second = await request(app).post('/api/v1/auth/login').set('Idempotency-Key', 'k1').send({});
+    assert.notEqual(first.body.token, second.body.token);
+    assert.equal(second.headers['x-idempotency-replayed'], undefined);
+
+    await request(app).post('/api/v1/other').set('Idempotency-Key', 'k2').send({});
+    const replay = await request(app).post('/api/v1/other').set('Idempotency-Key', 'k2').send({});
+    assert.equal(replay.headers['x-idempotency-replayed'], 'true');
+  });
+});

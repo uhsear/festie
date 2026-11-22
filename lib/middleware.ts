@@ -85,6 +85,8 @@ function createIdempotencyMiddleware({
   function middleware(req: IdempotencyRequest, looseRes: Partial<IdempotencyResponse>, next: NextFunction) {
     const res = looseRes as IdempotencyResponse;
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    // Auth responses carry session and refresh tokens; never store them for replay.
+    if (`${req.baseUrl ?? ''}${req.path ?? ''}`.startsWith('/api/v1/auth')) return next();
     const key = req.headers['idempotency-key'];
     if (!key || typeof key !== 'string' || key.length > 128) return next();
     if (!resolveUserId) return handle(clientIp(req));
@@ -191,6 +193,25 @@ function createIdempotencyMiddleware({
   }
 
   return { middleware, cache, timer };
+}
+
+/** True when any string, or object key, in a parsed JSON body holds U+0000, which Postgres text columns cannot store. */
+function bodyHasNul(body: unknown): boolean {
+  const pending: unknown[] = [body];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      if (value.includes('\u0000')) return true;
+    } else if (Array.isArray(value)) {
+      pending.push(...value);
+    } else if (value && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        if (key.includes('\u0000')) return true;
+        pending.push(child);
+      }
+    }
+  }
+  return false;
 }
 
 /**
@@ -369,6 +390,17 @@ function configureMiddleware(app: Application, ctx: AppContext) {
       }
       next();
     });
+  });
+
+  // ── NUL bytes ─────────────────────────────────────────────────────────
+  // Postgres rejects U+0000 in text (22021), which would surface as a retryable 500 on any route
+  // that stores or looks up the value. Refuse it once here instead of in each route. The raw
+  // `%00` check covers path params and the query string. The body walk is bounded by JSON_LIMIT.
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+    if (/%00/.test(req.originalUrl) || bodyHasNul(req.body)) {
+      return sendError(res, 400, 'Input contains a null character. Remove it and try again.', ErrorCodes.INVALID_INPUT);
+    }
+    next();
   });
 
   // ── Avatar static files ───────────────────────────────────────────────
@@ -589,7 +621,8 @@ function configureMiddleware(app: Application, ctx: AppContext) {
       const duration = Date.now() - start;
       const meta: Record<string, unknown> = {
         method: req.method,
-        path: (req.originalUrl || req.path || '').split('?')[0],
+        // An invite code in the path is a live credential; keep it out of the log.
+        path: (req.originalUrl || req.path || '').split('?')[0].replace(/\/join-preview\/[^/]+/, '/join-preview/:code'),
         status: res.statusCode,
         ms: duration,
         ip: getRequestIp(req),
@@ -641,8 +674,8 @@ function configureMiddleware(app: Application, ctx: AppContext) {
   app.use('/api/v1/auth/login', authRateLimit);
   app.use('/api/v1/auth/register', authRateLimit);
   // L7: extend the strict Redis-backed (cluster-accurate) auth limiter across
-  // the full credential surface, not just login/register.
-  app.use('/api/v1/auth/refresh-token', authRateLimit);
+  // the credential surface. refresh-token is not here: it is silent session
+  // renewal, so its own route limiter keys by refresh token instead of one shared IP bucket.
   app.use('/api/v1/auth/forgot-password', authRateLimit);
   app.use('/api/v1/auth/reset-password', authRateLimit);
   app.use('/api/v1/profiles', rateLimit(config.PROFILE_RATE_LIMIT_MAX, 'profiles', { anonIpCap: false }));

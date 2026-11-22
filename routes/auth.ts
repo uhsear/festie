@@ -370,7 +370,7 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
   // ── POST /refresh-token — exchange refresh token for new session + new refresh token ──
   router.post(
     '/refresh-token',
-    rateLimit(20, 'refresh-token'),
+    rateLimit(20, 'refresh-token', { keyFromBody: (req: any) => req.body?.refreshToken }),
     validate(schemas.refreshToken),
     async (req: Request, res: Response) => {
       try {
