@@ -111,7 +111,7 @@ export default function AccountIdentityCard() {
               type="button"
               onClick={() => setConfirmRemove(true)}
               disabled={offlineMode || busy !== null}
-              className="text-accent-aqua hover:underline disabled:opacity-60 min-h-6"
+              className="text-accent-aqua hover:underline disabled:opacity-60 min-h-11"
             >
               {AVATAR_COPY.remove}
             </button>
