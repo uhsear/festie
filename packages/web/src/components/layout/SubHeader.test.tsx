@@ -281,6 +281,24 @@ describe('SubHeader guarded My picks and hidden days', () => {
   });
 });
 
+describe('SubHeader My picks scope', () => {
+  afterEach(() => {
+    mockPathname = '/cards';
+  });
+
+  it.each(['/compare', '/wrap', '/crew-plan', '/picks'])('hides My picks on %s, which ignore the filter', (path) => {
+    mockPathname = path;
+    render(<SubHeader dayOnly={true} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Show only my picks' })).not.toBeInTheDocument();
+  });
+
+  it.each(['/', '/cards', '/timeline', '/grid'])('shows My picks on %s', (path) => {
+    mockPathname = path;
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('button', { name: 'Show only my picks' })).toBeInTheDocument();
+  });
+});
+
 describe('SubHeader route scope', () => {
   afterEach(() => {
     mockPathname = '/cards';
