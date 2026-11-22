@@ -16,6 +16,19 @@ import { festivalPhase } from '../utils/festivalTime';
 
 const hiddenKey = (festivalId: string) => `festie_ready_hidden:${festivalId}`;
 
+/**
+ * The hidden flag when the storage adapter answers synchronously (web localStorage), else null.
+ * Reading it during render lets the card appear in the same paint as the content around it instead of one frame later.
+ */
+function peekHidden(festivalId: string): boolean | null {
+  try {
+    const raw = getStorage().getItem(hiddenKey(festivalId));
+    return raw instanceof Promise ? null : raw === '1';
+  } catch {
+    return null;
+  }
+}
+
 /** Drives the "Festival ready" checklist card. Visible only before the festival, to signed-in users. */
 export function useFestivalReady(
   notificationsAllowed: boolean,
@@ -86,11 +99,12 @@ export function useFestivalReady(
     offlineReady: isFestivalDownloaded(readiness),
   });
 
+  const resolvedHidden = hidden ?? (festivalId ? peekHidden(festivalId) : null);
   const visible =
     !!user &&
     !!currentFestival &&
     festivalPhase(currentFestival, days, now) === 'pre' &&
-    hidden === false &&
+    resolvedHidden === false &&
     doneCount < total;
 
   return { visible, items, doneCount, total, progressLabel: formatReadyProgress(doneCount, total), hide };
