@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { displayNameError } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -23,7 +24,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
   const [displayName, setDisplayName] = useState(user.name || '');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
   // Mirrors the server's noMarkup rule so the message shows while typing, not only after a failed save.
-  const markupError = /[<>]/.test(displayName) ? 'Names cannot contain < or >' : undefined;
+  const markupError = displayNameError(displayName) ?? undefined;
 
   const handleDisplayNameChange = async (e: React.FormEvent) => {
     e.preventDefault();

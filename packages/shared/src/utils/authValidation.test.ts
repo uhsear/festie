@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { usernameError, validateNewPassword, registerErrorField } from './authValidation';
+import { displayNameError, usernameError, validateNewPassword, registerErrorField } from './authValidation';
 import { AUTH_COPY } from '../constants/authCopy';
 
 describe('usernameError', () => {
@@ -46,5 +46,13 @@ describe('registerErrorField', () => {
     ['Maximum users reached', null],
   ])('%s -> %s', (msg, field) => {
     expect(registerErrorField(msg)).toBe(field);
+  });
+});
+
+describe('displayNameError', () => {
+  it('flags angle brackets and accepts ordinary names', () => {
+    expect(displayNameError('a<b')).toBe('Names cannot contain < or >');
+    expect(displayNameError('a>b')).toBe('Names cannot contain < or >');
+    expect(displayNameError('Jane Doe')).toBeNull();
   });
 });
