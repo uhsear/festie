@@ -241,7 +241,7 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
                   label={label}
                   section={section}
                   tick={tick}
-                  onRetry={section.status === 'error' ? download : undefined}
+                  onRetry={section.status === 'error' && !offlineMode ? download : undefined}
                 />
                 {detail ? <Text style={styles.detail}>{detail}</Text> : null}
               </View>

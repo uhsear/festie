@@ -104,6 +104,18 @@ describe('OfflineReadinessCard', () => {
     }
   });
 
+  it('hides the per-step Retry buttons while offline', () => {
+    setState({ schedule: ready, picks: ready, crew: ready, art: ready, weather: { status: 'error', syncedAt: null } });
+    useUIStore.setState({ offlineMode: true });
+    try {
+      render(<OfflineReadinessCard festivalId="fest-1" />);
+      open();
+      expect(screen.queryByRole('button', { name: /retry weather/i })).toBeNull();
+    } finally {
+      useUIStore.setState({ offlineMode: false });
+    }
+  });
+
   it('calls download from the action button', () => {
     render(<OfflineReadinessCard festivalId="fest-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Download' }));
