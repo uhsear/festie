@@ -6,10 +6,10 @@ appId: us.festie.app
 # Always keep a last screenshot, so a failed run shows where it stopped.
 onFlowComplete:
   - takeScreenshot: zz-last
-# ios-e2e.yml passes the secrets as -e TEST_USERNAME / -e TEST_PASSWORD (as android-smoke does).
+# ios-e2e.yml passes -e TEST_*; the EAS workflow e2e-ios.yml exports only MAESTRO_TEST_*, which Maestro imports.
 env:
-  TEST_USERNAME: ${TEST_USERNAME}
-  TEST_PASSWORD: ${TEST_PASSWORD}
+  TEST_USERNAME: ${TEST_USERNAME || MAESTRO_TEST_USERNAME}
+  TEST_PASSWORD: ${TEST_PASSWORD || MAESTRO_TEST_PASSWORD}
 ---
 - launchApp:
     clearState: true
@@ -106,7 +106,7 @@ env:
 - tapOn:
     text: "Not Now"
     optional: true
-# hideKeyboard above keeps this honest: with the keyboard down, a failed login
+# The subtitle taps above keep this honest: with the keyboard down, a failed login
 # still shows this subtitle, so notVisible can't false-pass the way it did while
 # the keyboard covered it. The picks-screen assertion later is the real auth gate.
 - extendedWaitUntil:
