@@ -193,6 +193,53 @@ describe('lib/sentry.js', () => {
     });
   });
 
+  describe('invite-code scrubbing hooks', () => {
+    const path = '/api/v1/crews/join-preview/SECRETCODE';
+    const redacted = '/api/v1/crews/join-preview/:code';
+    const urlKeys = ['url', 'http.url', 'url.full', 'http.target', 'url.path'];
+    const urlData = () => Object.fromEntries(urlKeys.map((k) => [k, `https://festie.us${path}`]));
+
+    it('scrubErrorEvent keeps header scrubbing and redacts url and transaction', () => {
+      const out = sentryModule.scrubErrorEvent({
+        request: { url: `https://festie.us${path}`, headers: { cookie: 'a', authorization: 'b', accept: 'x' } },
+        transaction: `GET ${path}`,
+      });
+      assert.equal(out.request.url, `https://festie.us${redacted}`);
+      assert.equal(out.transaction, `GET ${redacted}`);
+      assert.deepEqual(out.request.headers, { accept: 'x' });
+    });
+
+    it('scrubTransactionEvent redacts url, transaction, span descriptions and span url data', () => {
+      const out = sentryModule.scrubTransactionEvent({
+        request: { url: `https://festie.us${path}` },
+        transaction: `GET ${path}`,
+        spans: [{ description: `GET ${path}`, data: urlData() }, { description: 'db' }],
+      });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+      assert.equal(out.spans[0].description, `GET ${redacted}`);
+      assert.equal(out.spans[1].description, 'db');
+    });
+
+    it('scrubSpan redacts description and url data', () => {
+      const out = sentryModule.scrubSpan({ description: `GET ${path}`, data: urlData() });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+    });
+
+    it('scrubBreadcrumb redacts message and data.url', () => {
+      const out = sentryModule.scrubBreadcrumb({ message: `GET ${path}`, data: { url: `https://festie.us${path}`, status_code: 200 } });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+      assert.equal(out.data.status_code, 200);
+    });
+
+    it('composeHook runs ours first and then the caller hook on the scrubbed value', () => {
+      const seen: any[] = [];
+      const hook = sentryModule.composeHook(sentryModule.scrubBreadcrumb, (b: any) => { seen.push(b); return b; });
+      hook({ message: path });
+      assert.equal(seen[0].message, redacted);
+      assert.equal(sentryModule.composeHook(sentryModule.scrubBreadcrumb, () => null)({ message: path }), null);
+    });
+  });
+
   describe('initSentry — data collection', () => {
     it('keeps the v10 sendDefaultPii:false baseline under @sentry/node 11', () => {
       const result = sentryModule.initSentry({ dsn: 'https://fake@sentry.io/1' });

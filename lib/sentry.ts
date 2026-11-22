@@ -17,6 +17,56 @@ let Sentry: any = null;
 let initialized = false;
 let noop = true;
 
+const URL_DATA_KEYS = ['url', 'http.url', 'url.full', 'http.target', 'url.path'];
+
+function redactIfString(value: unknown) {
+  return typeof value === 'string' ? redactInviteCodePath(value) : value;
+}
+
+function redactUrlData(data: any) {
+  if (!data || typeof data !== 'object') return;
+  for (const key of URL_DATA_KEYS) if (key in data) data[key] = redactIfString(data[key]);
+}
+
+/** Runs `ours` first, then the caller's hook on its result. A null from either drops the item. */
+function composeHook(ours: (item: any) => any, theirs?: (item: any, hint?: any) => any) {
+  return (item: any, hint?: any) => {
+    const scrubbed = ours(item);
+    return scrubbed == null || typeof theirs !== 'function' ? scrubbed : theirs(scrubbed, hint);
+  };
+}
+
+function scrubErrorEvent(event: any) {
+  // Strip obvious PII paths
+  if (event.request && event.request.headers) {
+    delete event.request.headers.cookie;
+    delete event.request.headers.authorization;
+  }
+  // An invite code in the URL is a live credential.
+  if (event.request) event.request.url = redactIfString(event.request.url);
+  event.transaction = redactIfString(event.transaction);
+  return event;
+}
+
+function scrubSpan(span: any) {
+  span.description = redactIfString(span.description);
+  redactUrlData(span.data);
+  return span;
+}
+
+function scrubTransactionEvent(event: any) {
+  if (event.request) event.request.url = redactIfString(event.request.url);
+  event.transaction = redactIfString(event.transaction);
+  if (Array.isArray(event.spans)) for (const span of event.spans) scrubSpan(span);
+  return event;
+}
+
+function scrubBreadcrumb(breadcrumb: any) {
+  breadcrumb.message = redactIfString(breadcrumb.message);
+  redactUrlData(breadcrumb.data);
+  return breadcrumb;
+}
+
 function initSentry(options: any = {}) {
   if (initialized) return Sentry;
   initialized = true;
@@ -48,6 +98,7 @@ function initSentry(options: any = {}) {
     return Sentry;
   }
 
+  const extra = options.extra ?? {};
   try {
     Sentry.init({
       dsn,
@@ -74,18 +125,13 @@ function initSentry(options: any = {}) {
         queues: false,
         graphQL: { document: false, variables: false },
       },
-      beforeSend(event: any) {
-        // Strip obvious PII paths
-        if (event.request && event.request.headers) {
-          delete event.request.headers.cookie;
-          delete event.request.headers.authorization;
-        }
-        // An invite code in the URL is a live credential.
-        if (typeof event.request?.url === 'string') event.request.url = redactInviteCodePath(event.request.url);
-        if (typeof event.transaction === 'string') event.transaction = redactInviteCodePath(event.transaction);
-        return event;
-      },
-      ...options.extra,
+      ...extra,
+      // Ours run first and always; a caller hook sees the scrubbed value and cannot replace them.
+      beforeSend: composeHook(scrubErrorEvent, extra.beforeSend),
+      beforeSendTransaction: composeHook(scrubTransactionEvent, extra.beforeSendTransaction),
+      beforeBreadcrumb: composeHook(scrubBreadcrumb, extra.beforeBreadcrumb),
+      // traceLifecycle is 'static', so the span callback takes a SpanJSON through withStaticSpan.
+      beforeSendSpan: Sentry.withStaticSpan(composeHook(scrubSpan, extra.beforeSendSpan)),
     });
     noop = false;
     console.debug('[sentry] initialized', { env: options.environment || cfg().NODE_ENV, release: options.release || cfg().SENTRY_RELEASE || cfg().APP_VERSION });
@@ -181,4 +227,4 @@ const sentry = {
   get raw() { return Sentry; },
 };
 
-export { initSentry, sentry };
+export { initSentry, sentry, scrubErrorEvent, scrubTransactionEvent, scrubSpan, scrubBreadcrumb, composeHook };
