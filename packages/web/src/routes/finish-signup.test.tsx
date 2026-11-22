@@ -94,8 +94,8 @@ describe('FinishSignupPage', () => {
     render(<FinishSignupPage />);
     await fill(user, '1995-01-01');
     await waitFor(() => expect(mockToast).toHaveBeenCalled());
-    expect(mockToast.mock.calls[0][0]).toContain('ada@example.com');
-    expect(mockToast.mock.calls[0][1]).toBe('success');
+    expect(mockToast.mock.calls[0]?.[0]).toContain('ada@example.com');
+    expect(mockToast.mock.calls[0]?.[1]).toBe('success');
   });
 
   it('sends the ?ref= source stored on this visit', async () => {
