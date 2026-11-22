@@ -115,7 +115,7 @@ function StepRow({
  * the same offline-honesty pattern as FreshnessChip.
  */
 export default function OfflineReadinessCard({ festivalId, className }: Props) {
-  const { steps, summary, download, isDownloading, mapBytes, hasMap, mapProgress, mapReady, removeMap } =
+  const { steps, summary, download, isDownloading, mapBytes, hasMap, mapProgress, mapReady, mapMessage, removeMap } =
     useOfflineDownload(festivalId);
   const [expanded, setExpanded] = useState(false);
 
@@ -206,6 +206,12 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
           <ChevronDown className={cn('w-4 h-4 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />
         </button>
       </div>
+
+      {mapMessage && (
+        <p role="alert" className="pb-2 text-xs text-accent-coral">
+          {mapMessage}
+        </p>
+      )}
 
       {expanded && (
         <div className="pb-3">

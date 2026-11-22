@@ -3,6 +3,7 @@ import { useOfflineReadinessStore } from '@festie/shared/stores/offlineReadiness
 import type { SectionReadiness } from '@festie/shared/stores/offlineReadinessStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
+import { OFFLINE_MAP_COPY } from '@festie/shared/constants';
 import { buildOfflineSteps, summarizeOffline, festivalPhase, hasOfflineBasemap, extractSiteplan } from '@festie/shared/utils';
 import {
   basemapCacheInfo,
@@ -15,8 +16,6 @@ import {
 } from '../lib/basemapCache';
 
 const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
-
-const toMb = (bytes: number) => Math.max(1, Math.round(bytes / 1_000_000));
 
 /** Offline download state for one festival: the shared store sections plus the web-only map archive. */
 export function useOfflineDownload(festivalId: string) {
@@ -32,7 +31,7 @@ export function useOfflineDownload(festivalId: string) {
 
   const [mapSection, setMapSection] = useState<SectionReadiness>(IDLE);
   const [mapBytes, setMapBytes] = useState<number | null>(null);
-  const [quotaFailed, setQuotaFailed] = useState(false);
+  const [quotaFailure, setQuotaFailure] = useState<{ bytes: number | null; freeBytes: number | null } | null>(null);
   const [mapProgress, setMapProgress] = useState<number | null>(null);
 
   useEffect(() => {
@@ -68,14 +67,14 @@ export function useOfflineDownload(festivalId: string) {
       await store;
       return;
     }
-    setQuotaFailed(false);
+    setQuotaFailure(null);
     setMapSection({ status: 'syncing', syncedAt: null });
     // The service worker stores the site-plan overlay as it passes; best effort.
     const siteplanUrl = extractSiteplan(mapConfig)?.imageUrl;
     if (siteplanUrl) void fetch(siteplanUrl).catch(() => undefined);
     const map = ensureBasemapCached(mapUrl).then(async (result) => {
       if (!result.ok && result.reason === 'quota') {
-        setQuotaFailed(true);
+        setQuotaFailure({ bytes: result.bytes, freeBytes: result.freeBytes ?? null });
         if (result.bytes != null) setMapBytes(result.bytes);
       }
       const info = await basemapCacheInfo(mapUrl);
@@ -90,15 +89,17 @@ export function useOfflineDownload(festivalId: string) {
     if (mapUrl) await removeBasemap(mapUrl);
   }, [mapUrl]);
 
-  const mapDetail =
-    quotaFailed && mapSection.status === 'error'
-      ? `Not enough space for the map (${mapBytes != null ? toMb(mapBytes) : '?'} MB). Free up space, then retry.`
-      : undefined;
+  // Why the map was not saved. Only while the step is in error, so a later success or reset clears it.
+  const mapMessage =
+    mapUrl && quotaFailure && mapSection.status === 'error'
+      ? quotaFailure.bytes != null
+        ? OFFLINE_MAP_COPY.notEnoughSpace(quotaFailure.bytes, quotaFailure.freeBytes ?? 0)
+        : OFFLINE_MAP_COPY.notEnoughSpaceUnknownSize
+      : null;
 
   const steps = buildOfflineSteps(readiness, {
     hasCrew: !!activeCrewId,
     map: mapUrl ? mapSection : null,
-    mapDetail,
   });
   const summary = summarizeOffline(steps, festivalPhase(currentFestival, days));
   const isDownloading = downloadingFestivalId === festivalId || mapSection.status === 'syncing';
@@ -112,6 +113,7 @@ export function useOfflineDownload(festivalId: string) {
     hasMap: !!mapUrl,
     mapProgress,
     mapReady: mapSection.status === 'ready',
+    mapMessage,
     removeMap,
   };
 }

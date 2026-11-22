@@ -12,6 +12,10 @@ describe('offlineMapCopy', () => {
     expect(OFFLINE_MAP_COPY.notEnoughSpace(100_000_001, 99_999_999)).toContain('needs 101 MB, 99 MB free');
   });
 
+  it('has a message for an unknown archive size', () => {
+    expect(OFFLINE_MAP_COPY.notEnoughSpaceUnknownSize).toContain('Not enough free space');
+  });
+
   it('siteplan note keeps the base map promise', () => {
     expect(OFFLINE_MAP_COPY.siteplanNeedsConnection).toContain('base map still works offline');
   });
