@@ -63,7 +63,8 @@ import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '..
 import type { AuthoringMode } from '../lib/webviewBridge';
 import { basemapCacheInfo, ensureBasemapCached, isBasemapRemoved, readArchiveRange, readCachedBase64 } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
-import { decideLoadFailure } from '../lib/mapLoadRecovery';
+import { initialRecovery, loadTimeoutMs, reduceRecovery } from '../lib/mapLoadRecovery';
+import type { RecoveryEvent } from '../lib/mapLoadRecovery';
 import { compassHref, peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
 import MapPlaceCard from './MapPlaceCard';
@@ -182,11 +183,6 @@ function makeShouldStartLoad(extraHost: string | string[] | null) {
     return isAllowedMapHost(host, extraHost);
   };
 }
-
-// If the document hasn't signalled "ready" within this window we assume the
-// WebView never came up (it no longer means "no CDN" — the runtime is inlined)
-// and fall back to the list. Generous to tolerate a slow device.
-const LOAD_TIMEOUT_MS = 8000;
 
 // With no GPS fix this long after the watch starts, say the signal is weak
 // (the watch stays alive, so a late fix still turns location on).
@@ -870,44 +866,37 @@ export default function OfflineMap({
   const fitBoundsRef = useRef(false);
   const framedSosRef = useRef<Set<string>>(new Set());
 
-  const fellBackRef = useRef(false);
-  // The in-flight load timer (`timeoutRef`, declared below) is replaced by each onLoadStart
-  // (the WebView can fire it repeatedly) so timers never stack, and cleared on unmount.
-  const fallBack = useCallback(() => {
-    if (fellBackRef.current) return;
-    fellBackRef.current = true;
-    setPhase('fallback');
-  }, []);
+  // The in-flight load timer is replaced by each onLoadStart (the WebView can fire it
+  // repeatedly) so timers never stack, and cleared on unmount.
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Remounting the WebView (a new `key`) starts a fresh renderer process. The first WebView of
-  // a cold app can lose its renderer or miss the load window; one automatic remount covers that
-  // before the banner shows. The count resets on a manual retry.
+  // a cold app can stall past the load window or lose its renderer; lib/mapLoadRecovery decides
+  // when to remount once and when to show the banner. `recoveryRef` is its state.
   const [webviewKey, setWebviewKey] = useState(0);
-  const autoRemountsRef = useRef(0);
+  const recoveryRef = useRef(initialRecovery);
   const webviewPhaseRef = useRef(webviewPhase);
   useEffect(() => {
     webviewPhaseRef.current = webviewPhase;
   }, [webviewPhase]);
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Every "the WebView did not come up" signal (load error, HTTP error, document init error,
-  // load timeout, lost renderer) lands here: remount once, then fall back to the list.
-  const handleLoadFailure = useCallback(() => {
-    if (fellBackRef.current) return;
-    if (decideLoadFailure(autoRemountsRef.current) === 'fallback') {
-      fallBack();
-      return;
+  const applyRecovery = useCallback((event: RecoveryEvent) => {
+    const { state, action } = reduceRecovery(recoveryRef.current, event);
+    recoveryRef.current = state;
+    if (action === 'remount') {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+      setPhase('loading');
+      setWebviewKey((k) => k + 1);
+    } else if (action === 'fallback') {
+      setPhase('fallback');
+    } else if (action === 'reload') {
+      setPhase('loading');
     }
-    autoRemountsRef.current += 1;
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
-    timeoutRef.current = null;
-    setPhase('loading');
-    setWebviewKey((k) => k + 1);
-  }, [fallBack]);
-  // Clears the latched failure and remounts the WebView (phase 'loading').
-  const retryMap = useCallback(() => {
-    autoRemountsRef.current = 0;
-    fellBackRef.current = false;
-    setPhase('loading');
   }, []);
+  // Every "the WebView did not come up" signal (load error, HTTP error, document init error,
+  // lost renderer) lands here.
+  const handleLoadFailure = useCallback(() => applyRecovery({ type: 'failure', now: Date.now() }), [applyRecovery]);
+  // Clears the latched failure and remounts the WebView (phase 'loading').
+  const retryMap = useCallback(() => applyRecovery({ type: 'retry' }), [applyRecovery]);
 
   const onMessage = useCallback(
     (e: WebViewMessageEvent) => {
@@ -930,7 +919,8 @@ export default function OfflineMap({
         return;
       }
       if (msg.type === 'ready') {
-        if (!fellBackRef.current) {
+        if (!recoveryRef.current.fellBack) {
+          applyRecovery({ type: 'ready', now: Date.now() });
           fitBoundsRef.current = false;
           framedSosRef.current = new Set();
           setPlacing(false);
@@ -1013,35 +1003,43 @@ export default function OfflineMap({
           handleLoadFailure();
       }
     },
-    [handleLoadFailure, onMapPress, interactive, allPins, selectPin, localArchive],
+    [applyRecovery, handleLoadFailure, onMapPress, interactive, allPins, selectPin, localArchive],
   );
 
   // Arm a load timeout on load start: if the document never signals 'ready'
-  // within the window we assume the WebView never came up and fall back to the
-  // list. (Pre-vendoring this doubled as the "no CDN" probe; it no longer does —
-  // canRenderMap covers offline-with-no-archive.)
+  // within the window we assume the WebView never came up, remount once, then fall
+  // back to the list (windows: lib/mapLoadRecovery). (Pre-vendoring this doubled as
+  // the "no CDN" probe; it no longer does — canRenderMap covers offline-with-no-archive.)
   const armTimeout = useCallback(() => {
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
-      if (webviewPhaseRef.current === 'loading') handleLoadFailure();
-    }, LOAD_TIMEOUT_MS);
-  }, [handleLoadFailure]);
+      applyRecovery({ type: 'timeout', now: Date.now(), loading: webviewPhaseRef.current === 'loading' });
+    }, loadTimeoutMs(recoveryRef.current));
+  }, [applyRecovery]);
 
-  // Clear any pending fallback timer when the component unmounts.
+  // Clear any pending load timer when the component unmounts.
   useEffect(() => {
     return () => {
       if (timeoutRef.current) clearTimeout(timeoutRef.current);
     };
   }, []);
 
+  // Going offline (the canRenderMap override) hides the WebView: a timer that fires now would
+  // spend the remount budget on a load nobody is waiting for.
+  useEffect(() => {
+    if (phase !== 'fallback' || !timeoutRef.current) return;
+    clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+  }, [phase]);
+
   // If we fell back only because there was nothing to plot or because no basemap
-  // was reachable (NOT a load/init error — fellBackRef tracks real failures), try
+  // was reachable (NOT a load/init error — recoveryRef.fellBack tracks real failures), try
   // the map once live markers, meeting points or festival map data show up. Also
   // re-arms the WebView after a canRenderMap override: coming back online with
   // webviewPhase stuck at 'map' would otherwise skip the reload the remount needs.
   useEffect(() => {
-    if (phase === 'fallback' && !fellBackRef.current && hasAnythingToPlot) {
+    if (phase === 'fallback' && !recoveryRef.current.fellBack && hasAnythingToPlot) {
       setPhase('loading');
     }
   }, [phase, hasAnythingToPlot]);

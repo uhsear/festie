@@ -7,7 +7,7 @@ const src = readFileSync(join(__dirname, '..', 'components/OfflineMap.tsx'), 'ut
 describe('OfflineMap audit source guards', () => {
   it('offers a retry after a load failure instead of latching the fallback', () => {
     expect(src).toContain('const retryMap = useCallback');
-    expect(src).toContain("fellBackRef.current = false;\n    setPhase('loading');");
+    expect(src).toContain("applyRecovery({ type: 'retry' })");
     expect(src).toContain('label="Retry map"');
     expect(src).toContain("The map didn't load.");
   });
@@ -18,9 +18,8 @@ describe('OfflineMap audit source guards', () => {
     expect(src).toContain('onContentProcessDidTerminate={handleLoadFailure}');
     expect(src).toContain('onError={handleLoadFailure}');
     expect(src).toContain('onHttpError={handleLoadFailure}');
-    expect(src).toContain("decideLoadFailure(autoRemountsRef.current) === 'fallback'");
-    // a manual retry restores the automatic remount
-    expect(src).toContain('autoRemountsRef.current = 0;\n    fellBackRef.current = false;');
+    // the budget, timer gate and retry reset live in lib/mapLoadRecovery (unit-tested there)
+    expect(src).toContain("applyRecovery({ type: 'timeout'");
   });
 
   it('replays one-shot framing and disarms placement when the document reloads', () => {
