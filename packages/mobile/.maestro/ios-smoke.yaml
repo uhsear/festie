@@ -122,6 +122,9 @@ env:
 - assertVisible:
     id: "segment-cards"
     selected: true
+# The default day depends on the run date, so pick Saturday before asserting it.
+- tapOn:
+    text: "Day: Saturday.*"
 - assertVisible:
     text: "Day: Saturday.*"
     selected: true
@@ -204,7 +207,7 @@ env:
     timeout: 30000
 - extendedWaitUntil:
     visible:
-      text: "No crew picks yet|Couldn't load crew picks|No picks on this day yet|Day: Saturday"
+      text: "No crew picks yet|Couldn't load crew picks|No picks on this day yet|Day: Saturday.*"
     timeout: 30000
 - assertNotVisible:
     text: "^No crew$"
