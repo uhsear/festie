@@ -21,7 +21,7 @@ export const expenseAmount = z
   .number()
   .min(0.01)
   .max(99_999_999.99)
-  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-4, 'Use at most 2 decimal places.');
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-4, 'Use at most 2 decimal places');
 
 export const expenseCreateSchema = z
   .object({
