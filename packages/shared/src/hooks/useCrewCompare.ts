@@ -78,7 +78,6 @@ export function useCrewCompare(sort: 'time' | 'mix', ready = false): CrewCompare
   }, [festivalId]);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: refresh() flips the refreshing flag before its async profiles GET; not derivable from render inputs
     if (ready) void refresh();
   }, [refresh, ready]);
 
