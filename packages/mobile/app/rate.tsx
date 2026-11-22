@@ -92,18 +92,20 @@ export default function RateScreen() {
 
   const header = <Stack.Screen options={{ title: 'Rate your night', headerShown: true }} />;
 
-  const fullListLink = festivalId ? (
-    <TouchableOpacity
-      onPress={() => router.push({ pathname: '/caught', params: { festival: festivalId } })}
-      style={[styles.fullList, { paddingBottom: insets.bottom + t.spacing[2] }]}
-      accessibilityRole="link"
-      accessibilityLabel="See the full list"
-    >
-      <Text style={styles.fullListText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        See the full list
-      </Text>
-    </TouchableOpacity>
-  ) : null;
+  // Under the empty states the link is the last item, so it clears the gesture bar; atop the rating card it must not.
+  const fullListLink = (clearBottomInset: boolean) =>
+    festivalId ? (
+      <TouchableOpacity
+        onPress={() => router.push({ pathname: '/caught', params: { festival: festivalId } })}
+        style={[styles.fullList, clearBottomInset && { paddingBottom: insets.bottom + t.spacing[2] }]}
+        accessibilityRole="link"
+        accessibilityLabel="See the full list"
+      >
+        <Text style={styles.fullListText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          See the full list
+        </Text>
+      </TouchableOpacity>
+    ) : null;
 
   if (!festivalId) {
     return (
@@ -155,7 +157,7 @@ export default function RateScreen() {
           title="Nothing to rate right now"
           message="Sets you picked show up here after they end."
         />
-        {fullListLink}
+        {fullListLink(true)}
       </View>
     );
   }
@@ -177,7 +179,7 @@ export default function RateScreen() {
                 : router.replace('/(tabs)/picks'),
           }}
         />
-        {fullListLink}
+        {fullListLink(true)}
       </View>
     );
   }
@@ -187,7 +189,7 @@ export default function RateScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {header}
-      {fullListLink}
+      {fullListLink(false)}
       <Text style={styles.progress} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {`${index + 1} of ${data.sets.length}`}
       </Text>
