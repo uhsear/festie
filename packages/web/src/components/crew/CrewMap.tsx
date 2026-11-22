@@ -808,7 +808,7 @@ export default function CrewMap({
           aria-describedby="festie-map-help"
         />
         <p id="festie-map-help" className="sr-only">
-          Interactive map. Use Tab to reach map markers, then Enter or Space to open one. Tap a crew member, stage,
+          Interactive map. Use Tab to reach stage, meeting point and crew markers, then Enter or Space to open one. Use the Nearest buttons for amenities. Tap a crew member, stage,
           amenity or meeting point to see what it is and how far it is. Choose Show the way for a direction arrow,
           distance and walking time. While the map is focused, use the arrow keys to pan and the plus and minus keys to
           zoom.{hasList ? ' The List view shows every meeting point and is fully keyboard accessible.' : ''}

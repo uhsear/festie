@@ -4,6 +4,7 @@ import type { Festival, PeerLocation, SosEntry } from '@festie/shared/types';
 import { useSosMarkers } from './crew-map/useSosMarkers';
 import { usePeerMarkers } from './crew-map/usePeerMarkers';
 import { useStageMarkers } from './crew-map/useStageMarkers';
+import { useAmenityMarkers } from './crew-map/useAmenityMarkers';
 import type { GlRefObject, MapRefObject, GlMarker } from './crew-map/mapDom';
 
 // --- Mocks ---
@@ -640,6 +641,31 @@ describe('useStageMarkers place selection', () => {
     parent.appendChild(marker.element);
     marker.element.dispatchEvent(new MouseEvent('click', { bubbles: true }));
     expect(parentClick).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useAmenityMarkers keyboard order', () => {
+  it('keeps amenity markers out of the Tab order', () => {
+    const made: HTMLElement[] = [];
+    class FakeMarker {
+      constructor(opts: { element: HTMLElement }) {
+        made.push(opts.element);
+      }
+      setLngLat() {
+        return this;
+      }
+      addTo() {
+        return this;
+      }
+    }
+    const mapRef = { current: {} } as unknown as MapRefObject;
+    const glRef = { current: { Marker: FakeMarker } } as unknown as GlRefObject;
+    const markersRef = { current: [] as GlMarker[] };
+    renderHook(() =>
+      useAmenityMarkers(mapRef, glRef, 'ready', [amenity('a1', 'water', 'Water')] as never, 'a1', markersRef, vi.fn() as never),
+    );
+    expect(made[0]!.getAttribute('tabindex')).toBe('-1');
+    expect(made[0]!.getAttribute('role')).toBe('button');
   });
 });
 
