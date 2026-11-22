@@ -58,4 +58,16 @@ describe('the activity view of an organization', { skip }, () => {
     assert.doesNotMatch(shown, /f-sec-b-draft/);
     assert.doesNotMatch(shown, /festivalsUpdated|festivalIds/);
   });
+
+  test('records one row for one festival create, not a second generic one', async () => {
+    const { server, users } = await boot();
+    const created = await o.as(server, users.ownerA.token).post(`${MANAGE}/festivals`, { organizationId: 'org-a', name: 'One Row Fest' });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    // The generic audit middleware writes on the response's finish event, so give it time to land.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const rows = (
+      await o.sql(server, "SELECT action FROM audit_log WHERE actor_id = $1 AND action IN ('festival.created', 'festivals.created')", [users.ownerA.id])
+    ).rows;
+    assert.deepEqual(rows.map((r: any) => r.action), ['festival.created']);
+  });
 });

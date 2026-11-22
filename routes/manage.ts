@@ -149,6 +149,8 @@ export default function createManageRoutes(
         detailsJson: JSON.stringify(details),
         ip: getRequestIp(req),
       });
+      // Tells the generic audit middleware this request already has its row, so one action is one row.
+      if (req.res?.locals) req.res.locals.auditWritten = true;
     } catch (error) {
       log.warn('manage audit write failed', { action, error: (error as Error).message });
     }
