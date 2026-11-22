@@ -77,9 +77,13 @@ function BeaconScreen() {
       <p className="text-xl">{BEACON_COPY.prompt}</p>
       <p className="text-base">{BEACON_COPY.footer}</p>
       <Dialog.Close asChild>
-        <Button variant="secondary" size="lg" className="min-h-14 min-w-40">
+        {/* Fixed dark fill and white ring: the screen flashes through avatar colours, so a themed button can vanish. */}
+        <button
+          type="button"
+          className="min-h-14 min-w-40 rounded-full border-2 border-white bg-[#080810] px-8 text-lg font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+        >
           {BEACON_COPY.done}
-        </Button>
+        </button>
       </Dialog.Close>
     </Dialog.Content>
   );
@@ -91,7 +95,7 @@ export function BeaconButton() {
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <Button variant="secondary" fullWidth className="!h-auto flex-col !items-start text-left py-2">
+        <Button variant="secondary" fullWidth className="!h-auto flex-col !items-start !rounded-lg !px-3 text-left py-2">
           <span className="font-semibold">{BEACON_COPY.button}</span>
           <span className="text-xs text-text-muted font-normal whitespace-normal">{BEACON_COPY.buttonHint}</span>
         </Button>
