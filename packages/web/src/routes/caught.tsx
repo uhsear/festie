@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
-import { api, fetchWrap, markCaught } from '@festie/shared/services';
+import { api, fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
+import { WRAP_STATE_COPY } from '@festie/shared/constants';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { FestivalDay, FestivalSet, Stage } from '@festie/shared/types';
 import type { WrapResponse } from '@festie/shared/types';
@@ -13,6 +14,7 @@ import {
   findSetsToAdd,
   formatTime,
   isWrapUnlocked,
+  isWrapUpcoming,
   lineupFromDays,
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
@@ -65,7 +67,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
   const { toastError } = useToast();
   const [announcement, setAnnouncement] = useState('');
 
-  const { data, isLoading, isError, refetch } = useQuery<WrapResponse>({
+  const { data, error, isLoading, isError, refetch } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId],
     queryFn: () => fetchWrap(festivalId),
   });
@@ -94,6 +96,15 @@ function CaughtList({ festivalId }: { festivalId: string }) {
   const checklist = useMemo(() => (data ? buildCaughtChecklist(data) : null), [data]);
 
   if (isError) {
+    if (isApiClientError(error) && error.status === 404) {
+      return (
+        <EmptyState
+          icon={<Music className="w-9 h-9" aria-hidden="true" />}
+          title={WRAP_STATE_COPY.notFound.title}
+          description={WRAP_STATE_COPY.notFound.description}
+        />
+      );
+    }
     return (
       <EmptyState
         icon={<Music className="w-9 h-9" aria-hidden="true" />}
@@ -107,6 +118,16 @@ function CaughtList({ festivalId }: { festivalId: string }) {
       <div className="max-w-[560px] mx-auto w-full space-y-3 py-4">
         <Skeleton variant="card" />
       </div>
+    );
+  }
+
+  if (isWrapUpcoming(data.festival)) {
+    return (
+      <EmptyState
+        icon={<Music className="w-9 h-9" aria-hidden="true" />}
+        title={WRAP_STATE_COPY.notStarted.title}
+        description={WRAP_STATE_COPY.notStarted.description}
+      />
     );
   }
 

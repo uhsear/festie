@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { fetchWrap, markCaught } from '@festie/shared/services';
+import { fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
+import { WRAP_STATE_COPY } from '@festie/shared/constants';
 import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
-import { formatTime, isWrapUnlocked, selectSetsToRate } from '@festie/shared/utils';
+import { formatTime, isWrapUnlocked, isWrapUpcoming, selectSetsToRate } from '@festie/shared/utils';
 import type { WrapFestival, WrapPlannedSet } from '@festie/shared/types';
 import EmptyState from '../components/EmptyState';
 import Button from '../components/Button';
@@ -37,6 +38,7 @@ export default function RateScreen() {
 
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [reload, setReload] = useState(0);
   const [index, setIndex] = useState(0);
   const [seenId, setSeenId] = useState<string | null>(null);
@@ -53,8 +55,10 @@ export default function RateScreen() {
         setData({ festival: res.festival, sets: selectSetsToRate(res.planned, res.festival) });
         setError(false);
       })
-      .catch(() => {
-        if (!cancelled) setError(true);
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setNotFound(isApiClientError(e) && e.status === 404);
+        setError(true);
       });
     return () => {
       cancelled = true;
@@ -117,6 +121,19 @@ export default function RateScreen() {
     );
   }
 
+  if (error && !data && notFound) {
+    return (
+      <View style={styles.screen}>
+        {header}
+        <EmptyState
+          icon="musical-notes-outline"
+          title={WRAP_STATE_COPY.notFound.title}
+          message={WRAP_STATE_COPY.notFound.description}
+        />
+      </View>
+    );
+  }
+
   if (error && !data) {
     return (
       <View style={styles.screen}>
@@ -141,6 +158,19 @@ export default function RateScreen() {
       <View style={[styles.screen, styles.centered]}>
         {header}
         <ActivityIndicator color={t.colors.accent.aqua} />
+      </View>
+    );
+  }
+
+  if (isWrapUpcoming(data.festival)) {
+    return (
+      <View style={styles.screen}>
+        {header}
+        <EmptyState
+          icon="musical-notes-outline"
+          title={WRAP_STATE_COPY.notStarted.title}
+          message={WRAP_STATE_COPY.notStarted.description}
+        />
       </View>
     );
   }

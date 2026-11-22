@@ -451,6 +451,15 @@ export const ONBOARDING_COPY = {
   signIn: 'Sign in',
 } as const;
 
+/** Rate and What you caught: a festival id the server does not know, and a festival that has not started. */
+export const WRAP_STATE_COPY = {
+  notFound: { title: 'Festival not found', description: 'This link points to a festival that no longer exists.' },
+  notStarted: {
+    title: "The festival hasn't started",
+    description: 'Come back once the festival starts to rate sets and mark what you caught.',
+  },
+} as const;
+
 export const INTRO_REPLAY_COPY = {
   title: 'How Festie works',
   hint: 'Replay the intro',

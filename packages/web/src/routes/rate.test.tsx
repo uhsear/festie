@@ -6,7 +6,8 @@ import RatePage from './rate';
 const mocks = vi.hoisted(() => ({
   toRate: [] as unknown[],
   unlocked: true,
-  fail: false,
+  fail: false as boolean | 'notFound',
+  upcoming: false,
   markCaught: vi.fn(async () => ({})),
 }));
 
@@ -30,9 +31,11 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('motion/react', () => ({ useReducedMotion: () => true }));
 vi.mock('@festie/shared/services', () => ({
   fetchWrap: vi.fn(async () => {
+    if (mocks.fail === 'notFound') throw { status: 404 };
     if (mocks.fail) throw new Error('boom');
     return { planned: [], festival: { id: 'f1', days: [{ date: '2026-04-24', label: 'Friday' }] } };
   }),
+  isApiClientError: (e: unknown) => !!e && typeof e === 'object' && 'status' in e,
   markCaught: mocks.markCaught,
 }));
 vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toastError: vi.fn() }) }));
@@ -43,6 +46,7 @@ vi.mock('@festie/shared/stores', () => ({
 vi.mock('@festie/shared/utils', () => ({
   selectSetsToRate: () => mocks.toRate,
   isWrapUnlocked: () => mocks.unlocked,
+  isWrapUpcoming: () => mocks.upcoming,
   formatTime: (t: string) => t,
 }));
 vi.mock('../components/features/RatingButtons', () => ({
@@ -78,6 +82,7 @@ describe('RatePage', () => {
     mocks.toRate = sets;
     mocks.unlocked = true;
     mocks.fail = false;
+    mocks.upcoming = false;
     mocks.markCaught.mockClear();
   });
 
@@ -169,5 +174,21 @@ describe('RatePage', () => {
     renderPage();
     expect(await screen.findByText("Couldn't load your sets")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('says the festival is not found on a 404, not that there is nothing to rate', async () => {
+    mocks.fail = 'notFound';
+    renderPage();
+    expect(await screen.findByText('Festival not found')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing to rate right now')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it('asks the user to come back once an upcoming festival starts', async () => {
+    mocks.upcoming = true;
+    mocks.toRate = [];
+    renderPage();
+    expect(await screen.findByText("The festival hasn't started")).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'See the full list' })).toBeNull();
   });
 });
