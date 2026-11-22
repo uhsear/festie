@@ -184,6 +184,7 @@ export default function CrewMap({
   hasList = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const locateButtonRef = useRef<HTMLButtonElement | null>(null);
   // 'pending' until we know whether the GL library mounted; flips to 'error' on
   // a load/init failure so we never leave a blank canvas behind. 'ready' once the
   // map's `load` fired — marker effects gate on it.
@@ -750,23 +751,15 @@ export default function CrewMap({
   // ── Empty state: nothing to plot ───────────────────────────────────────────
   if (!shouldRenderMap) {
     // With a festival selected and nothing to plot, the real reason is that it has no map data.
-    if (festival) {
-      return (
-        <div className="px-1">
-          <EmptyState icon={<MapPin className="w-12 h-12" aria-hidden="true" />} title="This festival isn't mapped yet" />
-        </div>
-      );
-    }
+    // Where a member can add a location (the Meet tab), keep saying how.
+    const canAddLocation = hasList || !!onMapClick;
     return (
       <div className="px-1">
         <EmptyState
           icon={<MapPin className="w-12 h-12" aria-hidden="true" />}
-          title="No mapped meeting points yet"
-          description="Add a location to a meeting point to see it here."
+          title={festival ? "This festival isn't mapped yet" : 'No mapped meeting points yet'}
+          description={!festival || canAddLocation ? 'Add a location to a meeting point to see it here.' : undefined}
         />
-        {!hasStages && !hasAmenities && (
-          <p className="text-xs text-text-muted text-center mt-2">This festival isn&apos;t mapped yet.</p>
-        )}
       </div>
     );
   }
@@ -804,6 +797,16 @@ export default function CrewMap({
       <div
         className={`relative rounded-lg overflow-hidden border border-border bg-bg-secondary ${fill ? 'min-h-[320px] flex-1' : ''}`}
       >
+        {/* Markers sit inside the canvas, so Tab crosses every one before the controls below it. */}
+        {interactive && status === 'ready' && (
+          <button
+            type="button"
+            onClick={() => locateButtonRef.current?.focus()}
+            className="sr-only focus:not-sr-only focus:absolute focus:left-14 focus:top-2 focus:z-20 focus:rounded-lg focus:border focus:border-border focus:bg-bg-elevated focus:px-3 focus:py-2 focus:text-xs focus:text-text-primary"
+          >
+            Skip map markers
+          </button>
+        )}
         <div
           ref={containerRef}
           className={`festie-map-canvas ${fill ? 'h-full' : canvasClassName} w-full`}
@@ -813,8 +816,8 @@ export default function CrewMap({
           aria-describedby="festie-map-help"
         />
         <p id="festie-map-help" className="sr-only">
-          Interactive map. Use Tab to reach stage, meeting point and crew markers, then Enter or Space to open one. Use the Nearest buttons for amenities. Tap a crew member, stage,
-          amenity or meeting point to see what it is and how far it is. Choose Show the way for a direction arrow,
+          Interactive map. Use Tab to reach map markers, then Enter or Space to open one. To skip the markers, use the
+          Skip map markers button. Tap a crew member, stage, amenity or meeting point to see what it is and how far it is. Choose Show the way for a direction arrow,
           distance and walking time. While the map is focused, use the arrow keys to pan and the plus and minus keys to
           zoom.{hasList ? ' The List view shows every meeting point and is fully keyboard accessible.' : ''}
         </p>
@@ -842,6 +845,7 @@ export default function CrewMap({
 
         {interactive && status === 'ready' && (
           <button
+            ref={locateButtonRef}
             type="button"
             onClick={showMyLocation}
             className="absolute left-2 top-2 z-10 inline-flex h-11 w-11 items-center justify-center rounded-full border border-border bg-bg-elevated/95 text-text-primary shadow-lg hover:border-accent-aqua"

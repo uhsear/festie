@@ -41,9 +41,7 @@ export function useAmenityMarkers(
       el.style.setProperty('--amenity-color', color);
       el.setAttribute('aria-label', `${p.amenityType ? humanizeAmenityType(p.amenityType) : 'Amenity'}: ${p.label}`);
       el.setAttribute('role', 'button');
-      // Up to a few dozen amenities would otherwise sit in front of every other control in Tab order.
-      // Keyboard users reach amenities through the Nearest and filter chips.
-      el.setAttribute('tabindex', '-1');
+      el.setAttribute('tabindex', '0');
       el.textContent = glyph;
       const marker = new gl.Marker({ element: el }).setLngLat([p.longitude, p.latitude]).addTo(map);
       if (selectRef.current) {

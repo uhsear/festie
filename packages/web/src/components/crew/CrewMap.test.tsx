@@ -173,10 +173,11 @@ describe('CrewMap', () => {
     expect(screen.getByText('Click Set location, then click the map.')).toBeInTheDocument();
   });
 
-  it('surfaces the honest "not mapped yet" note in the empty state', () => {
+  it('keeps the add-a-location hint on the Meet tab map of an unmapped festival', () => {
     extractMeetingPointPins.mockReturnValue([]);
-    render(<CrewMap meetingPoints={[]} />);
-    expect(screen.getByText(/this festival isn.t mapped yet/i)).toBeInTheDocument();
+    render(<CrewMap hasList meetingPoints={[]} festival={{ id: 'f1' } as unknown as Festival} />);
+    expect(screen.getByText("This festival isn't mapped yet")).toBeInTheDocument();
+    expect(screen.getByText(/add a location to a meeting point/i)).toBeInTheDocument();
   });
 
   it('leads with "isn\'t mapped yet" when a festival is selected but has nothing to plot', () => {
@@ -517,6 +518,12 @@ describe('CrewMap place card and Nearest', () => {
     expect(screen.queryByRole('button', { name: 'Show my location' })).toBeNull();
   });
 
+  it('offers a Skip map markers button that moves focus to Show my location', async () => {
+    await renderReadyMap();
+    fireEvent.click(screen.getByRole('button', { name: 'Skip map markers' }));
+    expect(screen.getByRole('button', { name: 'Show my location' })).toHaveFocus();
+  });
+
   it('adds the self dot only once a fix exists', async () => {
     await renderReadyMap();
     expect(markerElements.some((el) => el.classList.contains('festie-self-marker'))).toBe(false);
@@ -654,7 +661,7 @@ describe('useStageMarkers place selection', () => {
 });
 
 describe('useAmenityMarkers keyboard order', () => {
-  it('keeps amenity markers out of the Tab order', () => {
+  it('keeps amenity markers keyboard focusable', () => {
     const made: HTMLElement[] = [];
     class FakeMarker {
       constructor(opts: { element: HTMLElement }) {
@@ -673,7 +680,7 @@ describe('useAmenityMarkers keyboard order', () => {
     renderHook(() =>
       useAmenityMarkers(mapRef, glRef, 'ready', [amenity('a1', 'water', 'Water')] as never, 'a1', markersRef, vi.fn() as never),
     );
-    expect(made[0]!.getAttribute('tabindex')).toBe('-1');
+    expect(made[0]!.getAttribute('tabindex')).toBe('0');
     expect(made[0]!.getAttribute('role')).toBe('button');
   });
 });
