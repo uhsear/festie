@@ -6,6 +6,8 @@ import { isApiClientError, parseRetryAfterMs } from '../services/errors';
 export const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 1000;
 const RETRY_CAP_MS = 30_000;
+// The offline flag clears before the radio is usable, so the reload at reconnect can fail; one more try follows.
+export const RECONNECT_RETRY_MS = 5000;
 
 /** 429, 5xx and network failures can clear on their own; 4xx client errors cannot. */
 export function isTransientError(err: unknown): boolean {
@@ -79,10 +81,23 @@ export function useCrewSections(crewId: string | undefined): { error: string | n
   // Offline, the loaders fail by design; do not leave that failure on screen until the next timed retry.
   const offlineMode = useUIStore((s) => s.offlineMode);
   const wasOffline = useRef(offlineMode);
+  const reconnectReload = useRef(false);
   useEffect(() => {
-    if (wasOffline.current && !offlineMode && error) reload();
+    if (wasOffline.current && !offlineMode && error) {
+      reconnectReload.current = true;
+      reload();
+    }
     wasOffline.current = offlineMode;
   }, [offlineMode, error, reload]);
+
+  useEffect(() => {
+    if (!error || offlineMode || !reconnectReload.current) return;
+    const timer = setTimeout(() => {
+      reconnectReload.current = false;
+      reload();
+    }, RECONNECT_RETRY_MS);
+    return () => clearTimeout(timer);
+  }, [error, offlineMode, reload]);
 
   return { error, reload };
 }

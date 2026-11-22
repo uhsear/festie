@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useCrewSections, retryDelayMs } from '../useCrewSections';
+import { useCrewSections, retryDelayMs, RECONNECT_RETRY_MS } from '../useCrewSections';
 import { useCrewStore } from '../../stores/crewStore';
 import { useUIStore } from '../../stores/uiStore';
 
@@ -88,6 +88,21 @@ describe('useCrewSections', () => {
     loaders.loadRides!.mockResolvedValue(undefined);
     await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(0); });
     expect(loaders.loadRides).toHaveBeenCalledTimes(before + 1);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('tries once more when the reload at reconnect also fails', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    const { result } = renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(result.current.error).toBe('Failed to load: rides');
+    // Back online but the network is not ready yet: the reload at reconnect fails as well.
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(RECONNECT_RETRY_MS - 100); });
+    expect(result.current.error).toBe('Failed to load: rides');
+    loaders.loadRides!.mockResolvedValue(undefined);
+    await act(async () => { await vi.advanceTimersByTimeAsync(RECONNECT_RETRY_MS + 100); });
     expect(result.current.error).toBeNull();
   });
 
