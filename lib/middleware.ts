@@ -663,6 +663,9 @@ function configureMiddleware(app: Application, ctx: AppContext) {
   app.use('/api', (req: Request, res: Response, next: NextFunction) =>
     req.method === 'POST' && req.path === '/v1/metrics/web-vitals' ? next() : globalLimiter(req, res, next));
 
+  app.use('/api/v1/auth/login', authRateLimit);
+  app.use('/api/v1/auth/register', authRateLimit);
+
   // ── NUL bytes ─────────────────────────────────────────────────────────
   // Postgres rejects U+0000 in text (22021), which would surface as a retryable 500 on any route
   // that stores or looks up the value. Refuse it once here instead of in each route. The raw
@@ -676,9 +679,9 @@ function configureMiddleware(app: Application, ctx: AppContext) {
     next();
   });
 
-  // L7: the strict Redis-backed (cluster-accurate) auth limiter covers the password-reset surface.
-  // login, register and refresh-token are not here: one shared IP bucket would lock out everyone behind a
-  // venue or carrier NAT, so their route limiters key by username or refresh token and add a wider per-IP cap.
+  // L7: extend the strict Redis-backed (cluster-accurate) auth limiter across
+  // the full credential surface, not just login/register.
+  app.use('/api/v1/auth/refresh-token', authRateLimit);
   app.use('/api/v1/auth/forgot-password', authRateLimit);
   app.use('/api/v1/auth/reset-password', authRateLimit);
   app.use('/api/v1/profiles', rateLimit(config.PROFILE_RATE_LIMIT_MAX, 'profiles', { anonIpCap: false }));

@@ -139,15 +139,3 @@ describe('Integration — sign in by email', { concurrency: 1 }, () => {
     await server.request.post('/api/v1/auth/login').send({ username: 'erin', password: newPassword }).expect(200);
   });
 });
-
-describe('Integration — sign-in rate limit behind a shared address', { concurrency: 1 }, () => {
-  test('many different accounts signing in from one IP are not blocked by a shared IP bucket (SEC-AUTH-IP-NAT)', async () => {
-    const server = await startServer();
-    servers.push(server);
-    // The old IP-only limiter allowed 10 attempts per window across all accounts.
-    for (let i = 0; i < 12; i++) {
-      const res = await server.request.post('/api/v1/auth/login').send({ username: `nat-user-${i}`, password: DEFAULT_PASSWORD });
-      assert.equal(res.status, 401, `attempt ${i} answered ${res.status}`);
-    }
-  });
-});

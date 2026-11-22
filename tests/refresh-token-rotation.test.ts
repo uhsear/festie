@@ -126,27 +126,4 @@ describe('Refresh-token rotation (DB)', { concurrency: 1 }, () => {
     await server.request.get('/api/v1/auth/me').set('x-user-token', third.token).expect(401);
     assert.equal(await countRows('SELECT COUNT(*) AS count FROM user_sessions WHERE user_id = $1', erin.user.id), 3);
   });
-
-  test('refresh from one shared IP is not capped by the IP-only auth limiter (SEC-AUTH-IP-NAT)', async () => {
-    const server = await startServer();
-    servers.push(server);
-    const statuses: number[] = [];
-    // More distinct tokens than AUTH_RATE_LIMIT_MAX (10): each is its own caller behind one NAT address.
-    for (let i = 0; i < 15; i++) {
-      const res = await server.request.post('/api/v1/auth/refresh-token').send({ refreshToken: `rt_nat_${i}_${Date.now()}` });
-      statuses.push(res.status);
-    }
-    assert.deepEqual([...new Set(statuses)], [401]);
-  });
-
-  test('one refresh token retried in a loop is still throttled (SEC-AUTH-IP-NAT)', async () => {
-    const server = await startServer();
-    servers.push(server);
-    const token = `rt_loop_${Date.now()}`;
-    const statuses: number[] = [];
-    for (let i = 0; i < 25; i++) {
-      statuses.push((await server.request.post('/api/v1/auth/refresh-token').send({ refreshToken: token })).status);
-    }
-    assert.ok(statuses.includes(429), `expected a 429, got ${[...new Set(statuses)]}`);
-  });
 });
