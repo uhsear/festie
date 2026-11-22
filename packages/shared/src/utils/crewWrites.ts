@@ -34,7 +34,7 @@ export function writeOutcomeMessage(outcome: WriteOutcome, sentMessage: string):
 }
 
 /** Row marker for a queued write that permanently failed (it sits in uiStore.failedSync). */
-export const FAILED_ROW_LABEL = "Couldn't send — tap Review at the top to retry";
+export const FAILED_ROW_LABEL = "Couldn't send — tap the \"couldn't sync\" banner at the top to retry";
 
 /** True while an entity is a local placeholder whose create has not reached the server. */
 export function isPending(item: { _optimistic?: boolean } | null | undefined): boolean {
