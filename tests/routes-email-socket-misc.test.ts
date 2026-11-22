@@ -1775,8 +1775,19 @@ describe('routes/calendar-sync', () => {
     const first = await request(app).get('/cal/cal-tok-1.ics').expect(200);
     const second = await request(app).get('/cal/cal-tok-1.ics').expect(200);
     assert.equal(first.text, second.text, 'an unchanged feed is byte-stable');
-    assert.match(first.text, new RegExp(`SEQUENCE:${Date.parse(edited) / 1000}\\r\\n`));
+    assert.match(first.text, new RegExp(`SEQUENCE:${(Date.parse(edited) - Date.UTC(2026, 0, 1)) / 1000}\\r\\n`));
     assert.match(first.text, /DTSTAMP:20261101T120000Z/);
+  });
+
+  test('GET /cal/:token.ics — SEQUENCE stays above the old minute-based values when no edit time is known', async () => {
+    const deps = buildCalDeps();
+    const base = await (buildCalDeps().stores.festivals.getById as any)();
+    deps.stores.festivals.getById = mock.fn(async () => ({ ...base, updatedAt: undefined }));
+    const { createCalendarFeedRoute } = await import('../routes/calendar-sync.js');
+    const app = mountApp(createCalendarFeedRoute(deps));
+
+    const res = await request(app).get('/cal/cal-tok-1.ics').expect(200);
+    assert.match(res.text, /SEQUENCE:10000\r\n/);
   });
 
   test('GET /cal/:token.ics — 404 when token not found', async () => {

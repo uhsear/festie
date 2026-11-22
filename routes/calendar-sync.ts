@@ -8,6 +8,8 @@
 import { Router } from 'express';
 import { buildVCalendar, buildIcsEventsFromPicks } from '../lib/helpers/ics-builder.js';
 
+const SEQUENCE_EPOCH_MS = Date.UTC(2026, 0, 1);
+
 export default function createCalendarSyncRoutes(deps: any) {
   const router = Router();
   const { stores, userAuth, sendSuccess, sendError, ErrorCodes, log, sanitizeIdentifier, config, rateLimit } = deps;
@@ -83,7 +85,9 @@ export function createCalendarFeedRoute(deps: any) {
       // SEQUENCE and DTSTAMP follow the newest edit of the festival or the picks, so an unchanged feed
       // is byte-stable and a poll does not mark every event as revised.
       const editedMs = Math.max(Date.parse(festival.updatedAt) || 0, Date.parse(profile.updatedAt) || 0);
-      const sequence = Math.floor(editedMs / 1000);
+      // Seconds since 2026-01-01 keep SEQUENCE inside RFC 5545's 32-bit INTEGER until 2094. The floor sits above
+      // the 0-9999 values an earlier build sent, so a feed with no edit time still reads as newer.
+      const sequence = Math.max(10000, Math.floor((editedMs - SEQUENCE_EPOCH_MS) / 1000));
       const dtstamp = editedMs ? new Date(editedMs).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '') : undefined;
       for (const event of events) {
         (event as any).sequence = sequence;
