@@ -27,11 +27,20 @@ export function createRatingsRoutes(deps: RouteDeps) {
   // never joined answers like a missing set, so draft set ids are not an oracle.
   async function canRateSet(userId: string, setId: string): Promise<boolean> {
     const { rows } = await stores.pool.query(
-      `SELECT 1
-         FROM festival_sets fs
-         JOIN festivals f ON f.id = fs.festival_id AND f.deleted_at IS NULL AND f.published_at IS NOT NULL
-         JOIN festival_profiles fp ON fp.festival_id = f.id AND fp.user_id = $2 AND fp.deleted_at IS NULL
-        WHERE fs.id = $1`,
+      `
+  SELECT
+    1
+  FROM
+    festival_sets fs
+    JOIN festivals f ON f.id = fs.festival_id
+    AND f.deleted_at IS NULL
+    AND f.published_at IS NOT NULL
+    JOIN festival_profiles fp ON fp.festival_id = f.id
+    AND fp.user_id = $2
+    AND fp.deleted_at IS NULL
+  WHERE
+    fs.id = $1
+`,
       [setId, userId],
     );
     return rows.length > 0;

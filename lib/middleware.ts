@@ -622,7 +622,7 @@ function configureMiddleware(app: Application, ctx: AppContext) {
       const meta: Record<string, unknown> = {
         method: req.method,
         // An invite code in the path is a live credential; keep it out of the log.
-        path: (req.originalUrl || req.path || '').split('?')[0].replace(/\/join-preview\/[^/]+/, '/join-preview/:code'),
+        path: (req.originalUrl || req.path || '').split('?')[0]!.replace(/\/join-preview\/[^/]+/, '/join-preview/:code'),
         status: res.statusCode,
         ms: duration,
         ip: getRequestIp(req),
