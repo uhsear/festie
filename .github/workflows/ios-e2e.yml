@@ -36,6 +36,10 @@ on:
         description: 'TEMPORARY: replace the app with a bare probe screen and run the probe flow'
         type: boolean
         default: false
+      probe_mode:
+        description: 'TEMPORARY: bare | no-intro'
+        type: string
+        default: 'bare'
   workflow_call:
     inputs:
       ref:
@@ -172,8 +176,15 @@ jobs:
           boot_timeout_seconds: 180
           boot_retries: 3
 
+      - name: Drop the first-run intro (TEMPORARY)
+        if: inputs.probe == true && inputs.probe_mode == 'no-intro'
+        working-directory: packages/mobile
+        run: |
+          sed -i '' 's|<FirstRunIntro onDone={dismissIntro} />|null|' app/_layout.tsx
+          grep -c 'FirstRunIntro onDone' app/_layout.tsx || true
+
       - name: Swap in bare probe app (TEMPORARY)
-        if: inputs.probe == true
+        if: inputs.probe == true && inputs.probe_mode == 'bare'
         working-directory: packages/mobile
         run: |
           cat > app/_layout.tsx <<'EOT'
@@ -326,7 +337,9 @@ jobs:
           MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > maestro-ios-hierarchy-probe-45s.json || true
           grep -c '"attributes"' maestro-ios-hierarchy-probe-45s.json || true
           grep -E '"(resource-id|accessibilityText)" : "[^"]+"' maestro-ios-hierarchy-probe-45s.json || true
-          MAESTRO_CLI_NO_ANALYTICS=1 maestro test .maestro/ios-probe.yaml --test-output-dir="$PWD/maestro-ios-debug" || true
+          PROBE=.maestro/ios-probe.yaml
+          if [ "${{ inputs.probe_mode }}" = "no-intro" ]; then PROBE=.maestro/ios-probe-nointro.yaml; fi
+          MAESTRO_CLI_NO_ANALYTICS=1 maestro test $PROBE --test-output-dir="$PWD/maestro-ios-debug" || true
           MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > maestro-ios-hierarchy.json || true
 
       - name: Run Maestro flows (iOS)

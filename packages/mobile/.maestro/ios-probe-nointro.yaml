@@ -1,0 +1,9 @@
+# TEMPORARY probe (gap/ios): real app without the intro overlay.
+appId: us.festie.app
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      id: "festival-card-.*"
+    timeout: 90000
