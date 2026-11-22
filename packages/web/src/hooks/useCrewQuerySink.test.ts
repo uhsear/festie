@@ -237,8 +237,8 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     vi.mocked(api.get).mockImplementation(() => new Promise(() => {}));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const sink = buildCrewQuerySink(queryClient);
-    sink.onPollVoted('c1', 'p');
-    sink.onMeetingPointUpsert('c1');
+    sink.onPollClosed('c1', 'p');
+    sink.onMeetingPointUpsert('c1', { id: 'mp' } as never);
     await queryClient.cancelQueries();
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(warn).not.toHaveBeenCalled();
