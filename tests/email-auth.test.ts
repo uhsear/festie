@@ -104,13 +104,19 @@ describe('email-auth: forgot-password', { concurrency: 1 }, () => {
     // Verify a token row exists
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });
     try {
-      const { rows } = await pool.query(
-        `SELECT COUNT(*)::int AS c FROM password_reset_tokens t
-           JOIN users u ON u.id = t.user_id
-          WHERE u.username = $1 AND t.used_at IS NULL`,
-        [username],
-      );
-      assert.ok(rows[0].c >= 1, 'expected at least one active reset token');
+      // The route answers before it writes the token, so poll for the row.
+      let count = 0;
+      for (let attempt = 0; attempt < 40 && count < 1; attempt++) {
+        const { rows } = await pool.query(
+          `SELECT COUNT(*)::int AS c FROM password_reset_tokens t
+             JOIN users u ON u.id = t.user_id
+            WHERE u.username = $1 AND t.used_at IS NULL`,
+          [username],
+        );
+        count = rows[0].c;
+        if (count < 1) await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.ok(count >= 1, 'expected at least one active reset token');
     } finally {
       await pool.end();
     }

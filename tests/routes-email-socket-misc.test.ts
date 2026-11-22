@@ -258,6 +258,55 @@ describe('routes/email-auth', () => {
     assert.ok(!JSON.stringify(warn.mock.calls).includes('alice@test.com'), 'the address must not be logged at warn');
   });
 
+  test('POST /forgot-password — answers before the lookup and send finish, so latency does not reveal an account (SEC-FORGOT-TIMING)', async () => {
+    const known = buildEmailAuthDeps();
+    known.stores.emailTokens.findUserByEmail = mock.fn(
+      () => new Promise((resolve) => setTimeout(() => resolve({ id: 'user-1', username: 'alice', email: 'alice@test.com' }), 600)),
+    );
+    const unknown = buildEmailAuthDeps();
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+
+    const timed = async (deps: any, email: string) => {
+      const start = Date.now();
+      await request(mountApp(createEmailAuthRoutes(deps))).post('/forgot-password').send({ email }).expect(200);
+      return Date.now() - start;
+    };
+    const knownMs = await timed(known, 'alice@test.com');
+    const unknownMs = await timed(unknown, 'nobody@test.com');
+
+    assert.ok(knownMs < 300, `known email took ${knownMs} ms, it waited on the lookup`);
+    assert.ok(unknownMs < 150, `unknown email took ${unknownMs} ms, it still sleeps`);
+    // The detached work still finishes.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    assert.ok(known.stores.emailTokens.invalidateResetTokens.mock.calls.length >= 1);
+  });
+
+  test('POST /forgot-password — a failure in the detached work is logged and the answer stays 200', async () => {
+    const error = mock.fn();
+    const deps = buildEmailAuthDeps({ log: { ...makeLog(), error } });
+    deps.stores.emailTokens.findUserByEmail = mock.fn(async () => {
+      throw new Error('db down');
+    });
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+
+    await request(mountApp(createEmailAuthRoutes(deps))).post('/forgot-password').send({ email: 'alice@test.com' }).expect(200);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.ok(error.mock.calls.some((c: any) => c.arguments[0] === 'forgot-password failed'));
+  });
+
+  test('POST /forgot-password — the request log line carries the user id, not the address (SEC-LOG-PII)', async () => {
+    const info = mock.fn();
+    const deps = buildEmailAuthDeps({ log: { ...makeLog(), info } });
+    deps.stores.emailTokens.findUserByEmail = mock.fn(async () => ({ id: 'user-1', username: 'alice', email: 'alice@test.com' }));
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+
+    await request(mountApp(createEmailAuthRoutes(deps))).post('/forgot-password').send({ email: 'alice@test.com' }).expect(200);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const line = info.mock.calls.find((c: any) => c.arguments[0] === 'forgot-password:requested');
+    assert.ok(line, 'expected the forgot-password:requested line');
+    assert.deepEqual(line.arguments[1], { userId: 'user-1' });
+  });
+
   test('POST /forgot-password — per-email rate limit kicks in after 3 attempts', async () => {
     const deps = buildEmailAuthDeps();
     deps.stores.emailTokens.findUserByEmail = mock.fn(async () => ({
@@ -276,20 +325,6 @@ describe('routes/email-auth', () => {
     }
     // 4th request exceeds the per-email limiter (3/hour) and gets 429
     const res = await request(app).post('/forgot-password').send({ email: 'ratelimit-test@test.com' }).expect(429);
-    assert.equal(res.body.data, null);
-  });
-
-  test('POST /forgot-password — returns 500 on unexpected error', async () => {
-    const deps = buildEmailAuthDeps();
-    deps.stores.emailTokens.findUserByEmail = mock.fn(async () => {
-      throw new Error('DB down');
-    });
-    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
-    const router = createEmailAuthRoutes(deps);
-    const app = mountApp(router);
-
-    const res = await request(app).post('/forgot-password').send({ email: 'err@test.com' }).expect(500);
-
     assert.equal(res.body.data, null);
   });
 
