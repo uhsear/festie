@@ -207,29 +207,31 @@ export default function CrewMembersTab({
                 <TouchableOpacity
                   testID="crew-action-share-invite"
                   onPress={() => handleShareInvite(crew.inviteCode!, crew.name)}
-                  style={styles.iconButton}
+                  style={styles.inviteActionButton}
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel="Share invite link"
                 >
                   <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+                  <Text style={styles.inviteActionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>Share</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   testID="crew-action-show-invite-qr"
                   onPress={() => setInviteQrOpen(true)}
-                  style={styles.iconButton}
+                  style={styles.inviteActionButton}
                   activeOpacity={0.7}
                   accessibilityRole="button"
                   accessibilityLabel="Show QR code"
                 >
                   <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
+                  <Text style={styles.inviteActionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>QR code</Text>
                 </TouchableOpacity>
                 {isOwner ? (
                   <TouchableOpacity
                     testID="crew-action-regenerate-invite"
                     onPress={() => handleRegenerate(crew.id)}
                     disabled={regenBusy}
-                    style={styles.iconButton}
+                    style={styles.inviteActionButton}
                     activeOpacity={0.7}
                     accessibilityRole="button"
                     accessibilityLabel="Regenerate invite code"
@@ -239,6 +241,7 @@ export default function CrewMembersTab({
                     ) : (
                       <Ionicons name="refresh" size={16} color={t.colors.accent.aqua} />
                     )}
+                    <Text style={styles.inviteActionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>New code</Text>
                   </TouchableOpacity>
                 ) : null}
               </View>
