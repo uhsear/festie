@@ -33,10 +33,14 @@ describe('ScheduleStatusLine', () => {
     mockCachedAt = Date.now();
     mockOffline = false;
     render(<ScheduleStatusLine showFreshness />);
-    const lines = screen.getAllByRole('status');
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toHaveTextContent('Updated just now');
-    expect(lines[0]).toHaveTextContent('Saved');
+    const line = screen.getByTestId('schedule-status-line');
+    expect(line).toHaveTextContent('Updated just now');
+    expect(line).toHaveTextContent('Saved');
+    // Only the save state is a live region: the minute-by-minute freshness text must not be announced.
+    const live = screen.getAllByRole('status');
+    expect(live).toHaveLength(1);
+    expect(live[0]).toHaveTextContent('Saved');
+    expect(live[0]).not.toHaveTextContent('Updated');
   });
 
   it('keeps the offline-ready note and the pending-sync state while offline', () => {
@@ -44,7 +48,7 @@ describe('ScheduleStatusLine', () => {
     mockCachedAt = Date.now();
     mockOffline = true;
     render(<ScheduleStatusLine showFreshness />);
-    expect(screen.getByRole('status')).toHaveTextContent('Updated just now · Offline-ready');
+    expect(screen.getByTestId('schedule-status-line')).toHaveTextContent('Updated just now · Offline-ready');
     expect(screen.getByRole('status')).toHaveTextContent('Offline, will sync');
     mockOffline = false;
   });
@@ -53,18 +57,18 @@ describe('ScheduleStatusLine', () => {
     mockStatus = null;
     mockCachedAt = Date.now();
     render(<ScheduleStatusLine showFreshness={false} />);
-    expect(screen.getByRole('status')).not.toHaveTextContent('Updated');
+    expect(screen.getByTestId('schedule-status-line')).not.toHaveTextContent('Updated');
   });
 
   it('keeps its fixed height when idle, so Saved appearing shifts nothing', () => {
     mockStatus = null;
     mockCachedAt = null;
     const idle = render(<ScheduleStatusLine showFreshness />);
-    expect(screen.getByRole('status')).toHaveClass('h-6');
-    expect(screen.getByRole('status')).toHaveTextContent('');
+    expect(screen.getByTestId('schedule-status-line')).toHaveClass('h-6');
+    expect(screen.getByTestId('schedule-status-line')).toHaveTextContent('');
     idle.unmount();
     mockStatus = { kind: 'saved', label: 'Saved' };
     render(<ScheduleStatusLine showFreshness />);
-    expect(screen.getByRole('status')).toHaveClass('h-6');
+    expect(screen.getByTestId('schedule-status-line')).toHaveClass('h-6');
   });
 });

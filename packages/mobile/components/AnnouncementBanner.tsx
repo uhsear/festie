@@ -18,8 +18,6 @@ interface AnnouncementBannerProps {
   onActiveChange?: (active: boolean) => void;
 }
 
-/** Past this many characters two lines may not hold the body, in case the platform reports only the clamped lines. */
-const LONG_BODY_CHARS = 120;
 const BODY_LINES = 2;
 
 /** The announcement text column. Keyed by id at the call site, so a new announcement starts collapsed. */
@@ -29,7 +27,7 @@ function AnnouncementText({ a, kicker, label }: { a: FestivalAnnouncement; kicke
   const [expanded, setExpanded] = useState(false);
   const [measuredLines, setMeasuredLines] = useState(0);
   const urgent = a.severity === 'urgent';
-  const canExpand = measuredLines > BODY_LINES || a.body.length > LONG_BODY_CHARS;
+  const canExpand = measuredLines > BODY_LINES;
   const readLabel = expanded ? ANNOUNCEMENT_COPY.banner.readLess : ANNOUNCEMENT_COPY.banner.readMore;
 
   return (
@@ -44,11 +42,19 @@ function AnnouncementText({ a, kicker, label }: { a: FestivalAnnouncement; kicke
         <Text
           style={s.text}
           numberOfLines={expanded ? undefined : BODY_LINES}
-          onTextLayout={(e) => setMeasuredLines(e.nativeEvent.lines.length)}
         >
           {a.body}
         </Text>
       </View>
+      {/* iOS reports only the clamped lines, so count them on an unclamped hidden copy. */}
+      <Text
+        style={[s.text, s.measure]}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        onTextLayout={(e) => setMeasuredLines(e.nativeEvent.lines.length)}
+      >
+        {a.body}
+      </Text>
       {canExpand ? (
         <AppPressable
           style={s.readMore}
@@ -174,6 +180,12 @@ const useStyles = makeStyles((t) => ({
   text: {
     ...typeStyle('body'),
     color: t.colors.text.secondary,
+  },
+  measure: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    opacity: 0,
   },
   action: {
     minWidth: 44,

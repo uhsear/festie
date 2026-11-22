@@ -42,8 +42,6 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
 
   return (
     <span
-      role="status"
-      aria-live="polite"
       data-testid="schedule-status-line"
       className="ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium text-text-muted"
     >
@@ -53,12 +51,15 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
           {offlineReady ? ' · Offline-ready' : ''}
         </span>
       )}
-      {status && Icon && (
-        <span data-testid="save-status-chip" className={cn('inline-flex items-center gap-1', amber && 'text-accent-amber')}>
-          <Icon className={cn('w-3 h-3', spins && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />
-          {status.label}
-        </span>
-      )}
+      {/* Live region on the save state only; "Updated N ago" changes every minute and must not be announced. */}
+      <span role="status" aria-live="polite" className="inline-flex items-center">
+        {status && Icon && (
+          <span data-testid="save-status-chip" className={cn('inline-flex items-center gap-1', amber && 'text-accent-amber')}>
+            <Icon className={cn('w-3 h-3', spins && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />
+            {status.label}
+          </span>
+        )}
+      </span>
     </span>
   );
 }

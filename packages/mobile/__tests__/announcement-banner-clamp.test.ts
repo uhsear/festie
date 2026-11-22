@@ -9,6 +9,15 @@ describe('AnnouncementBanner body clamp', () => {
     expect(src).toContain('numberOfLines={expanded ? undefined : BODY_LINES}');
   });
 
+  it('measures the line count on a hidden unclamped copy, with no character guess', () => {
+    expect(src).not.toContain('LONG_BODY_CHARS');
+    const measure = src.slice(src.indexOf('style={[s.text, s.measure]}'), src.indexOf('{canExpand ? ('));
+    expect(measure).toContain('onTextLayout');
+    expect(measure).not.toContain('numberOfLines');
+    expect(measure).toContain('accessibilityElementsHidden');
+    expect(src).toContain('canExpand = measuredLines > BODY_LINES;');
+  });
+
   it('Read more is a labelled button with expanded state, outside the grouped text so it stays focusable', () => {
     const grouped = src.slice(src.indexOf('accessibilityRole="summary"'), src.indexOf('{canExpand ? ('));
     expect(grouped).not.toContain('readMore');

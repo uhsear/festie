@@ -116,9 +116,9 @@ describe('AnnouncementBanner', () => {
     it('is keyboard operable', async () => {
       setOverflow(true);
       render(<AnnouncementBanner />);
-      await userEvent.tab();
       const more = screen.getByRole('button', { name: 'Read more' });
-      more.focus();
+      for (let i = 0; i < 10 && document.activeElement !== more; i++) await userEvent.tab();
+      expect(more).toHaveFocus();
       await userEvent.keyboard('{Enter}');
       expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
     });
