@@ -13,6 +13,7 @@ export const crewCopy = {
   deleted: (crew: string) => `Deleted ${crew}`,
   transferred: (name: string) => `${name} now owns the crew`,
   inviteRegenerated: 'New invite code ready',
+  inviteCrewFull: 'Crew is full. Remove a member to invite.',
   renamed: 'Crew renamed',
   added: (username: string) => `Added ${username}`,
   noUserCalled: (q: string) => `No user called "${q}". Check the spelling.`,

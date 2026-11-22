@@ -18,9 +18,11 @@ interface CrewInviteBarProps {
   isOwner: boolean;
   /** ISO timestamp from the crew's `inviteExpiresAt`; omitted when the invite does not expire. */
   expiresAt?: string | null;
+  memberCount?: number;
+  maxMembers?: number | null;
 }
 
-export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, expiresAt }: CrewInviteBarProps) {
+export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, expiresAt, memberCount, maxMembers }: CrewInviteBarProps) {
   const { toast, toastError } = useToast();
   const regenerateInvite = useCrewStore((s) => s.regenerateInvite);
   const setCrewLocked = useCrewStore((s) => s.setCrewLocked);
@@ -68,6 +70,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
 
   const expiry = formatInviteExpiry(expiresAt);
   const expiryText = expiry === 'Expired' && !isOwner ? 'Expired. Ask the crew owner for a new link.' : expiry;
+  const full = memberCount != null && !!maxMembers && memberCount >= maxMembers;
   const canNativeShare = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
   const handleRegenerate = useCallback(async () => {
@@ -164,6 +167,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
           />
         </div>
       )}
+      {full && <p className="text-xs text-text-secondary">{crewCopy.inviteCrewFull}</p>}
       <div role="status">
         {inviteLocked && (
           <p className="text-xs text-text-secondary inline-flex items-center gap-1">

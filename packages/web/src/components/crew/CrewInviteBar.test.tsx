@@ -60,6 +60,17 @@ describe('CrewInviteBar', () => {
     expect(screen.getByRole('button', { name: 'Regenerate invite code' })).toBeInTheDocument();
   });
 
+  it('says the crew is full at the cap and keeps the code visible', () => {
+    renderBar({ memberCount: 30, maxMembers: 30 });
+    expect(screen.getByText('Crew is full. Remove a member to invite.')).toBeInTheDocument();
+    expect(screen.getByText('K7XQ2M')).toBeInTheDocument();
+  });
+
+  it('stays quiet below the cap', () => {
+    renderBar({ memberCount: 29, maxMembers: 30 });
+    expect(screen.queryByText('Crew is full. Remove a member to invite.')).not.toBeInTheDocument();
+  });
+
   it('shows the QR button to a non-owner', () => {
     renderBar();
     expect(screen.getByRole('button', { name: 'Show QR code' })).toBeInTheDocument();
