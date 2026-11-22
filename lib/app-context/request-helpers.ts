@@ -27,6 +27,7 @@
 import net from 'net';
 
 import { parseCookies } from '../helpers';
+import { redactInviteCodePath } from '../helpers/sanitize.js';
 
 export const MUTATING_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 export const TRUSTED_MUTATION_HEADER = 'x-festie-request';
@@ -167,7 +168,7 @@ export function createRequestHelpers({
     const origin = req.headers.origin;
     if (origin) {
       if (isAllowedOrigin(origin, req.get('host'))) return next();
-      log.warn('csrf:origin-blocked', { origin, host: req.get('host'), method: req.method, path: req.path });
+      log.warn('csrf:origin-blocked', { origin, host: req.get('host'), method: req.method, path: redactInviteCodePath(req.path) });
       return sendError(res, 403, 'Invalid origin', ErrorCodes.FORBIDDEN);
     }
     // No Origin header below this point.
@@ -181,7 +182,7 @@ export function createRequestHelpers({
     if (!hasCookie && hasDirectAuthHeader(req)) return next();
     if (hasTrustedMutationHeader(req)) return next();
     if (!hasCookie) return next();
-    log.warn('csrf:missing-origin', { method: req.method, path: req.path, ip: getRequestIp(req) });
+    log.warn('csrf:missing-origin', { method: req.method, path: redactInviteCodePath(req.path), ip: getRequestIp(req) });
     return sendError(res, 403, 'Missing trusted origin', ErrorCodes.FORBIDDEN);
   }
 

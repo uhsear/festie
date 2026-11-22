@@ -324,6 +324,9 @@ describe('lib/sentry.js', () => {
         // anything this task's logic does).
         next(new Error(`boom-${Math.random()}`));
       });
+      app.get('/api/v1/crews/join-preview/:code', (_req: any, _res: any, next: any) => {
+        next(new Error(`join-boom-${Math.random()}`));
+      });
       app.get('/api/v1/anon', (_req: any, _res: any, next: any) => {
         next(new Error(`anon-boom-${Math.random()}`));
       });
@@ -389,6 +392,16 @@ describe('lib/sentry.js', () => {
         assert.equal(event.request.headers.cookie, undefined);
         assert.equal(event.request.headers.authorization, undefined);
       }
+    });
+
+    it('redacts an invite code from the event url and transaction', async () => {
+      const { app, getCapturedEvent } = makeApp(sentryModule);
+      await request(app).get('/api/v1/crews/join-preview/SECRETCODE');
+
+      const event = await getCapturedEvent();
+      assert.ok(event, 'expected an event to have been captured');
+      assert.ok(event.request?.url, 'expected a request url');
+      assert.ok(!JSON.stringify(event).includes('SECRETCODE'), 'invite code leaked into the event');
     });
   });
 });

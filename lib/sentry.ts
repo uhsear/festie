@@ -7,6 +7,7 @@
 
 import { createRequire } from 'module';
 import { loadConfig } from './config.js';
+import { redactInviteCodePath } from './helpers/sanitize.js';
 
 let _loaded: ReturnType<typeof loadConfig> | undefined;
 const cfg = () => (_loaded ??= loadConfig());
@@ -79,6 +80,9 @@ function initSentry(options: any = {}) {
           delete event.request.headers.cookie;
           delete event.request.headers.authorization;
         }
+        // An invite code in the URL is a live credential.
+        if (typeof event.request?.url === 'string') event.request.url = redactInviteCodePath(event.request.url);
+        if (typeof event.transaction === 'string') event.transaction = redactInviteCodePath(event.transaction);
         return event;
       },
       ...options.extra,

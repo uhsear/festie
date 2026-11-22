@@ -201,6 +201,11 @@ describe('helpers/sanitize: getLogSafeRequestInfo', () => {
     assert.equal(result.path, '/api/users/1');
     assert.equal(result.ip, '1.2.3.4');
   });
+
+  it('redacts an invite code from the path', () => {
+    const req = { method: 'GET', path: '/api/v1/crews/join-preview/SECRET1', ip: '1.2.3.4', headers: {} };
+    assert.equal(getLogSafeRequestInfo(req).path, '/api/v1/crews/join-preview/:code');
+  });
 });
 
 describe('helpers/sanitize: redactInviteCodePath', () => {
