@@ -34,20 +34,21 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     (async () => {
-      const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-      const existing = windows[0];
-      if (!existing) {
-        await self.clients.openWindow(target.href);
-        return;
+      // Only a controlled window can be navigated, so an uncontrolled one is left alone and the deep link opens fresh.
+      const windows = await self.clients.matchAll({ type: 'window' });
+      const existing =
+        windows.find((w) => w.focused) || windows.find((w) => w.visibilityState === 'visible') || windows[0];
+      let navigated = null;
+      if (existing && typeof existing.navigate === 'function') {
+        try {
+          navigated = await existing.navigate(target.href);
+        } catch {
+          // Navigation refused: fall through to openWindow.
+        }
       }
-      await existing.focus();
-      if (typeof existing.navigate !== 'function') return;
-      try {
-        await existing.navigate(target.href);
-      } catch {
-        // An uncontrolled window cannot be navigated; open the deep link instead.
-        await self.clients.openWindow(target.href);
-      }
+      // focus() and openWindow() share one per-click allowance in Chromium, so call only one of them.
+      if (navigated) await navigated.focus();
+      else await self.clients.openWindow(target.href);
     })(),
   );
 });
