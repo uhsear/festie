@@ -5,10 +5,10 @@ import { useRovingTabs } from '@/hooks/useRovingTabs';
 import { cn } from '@/lib/utils';
 
 const TAB_ICONS: Record<CrewTabKey, React.ReactNode> = {
-  find: <MapPin className="w-4 h-4" aria-hidden="true" />,
-  members: <Users className="w-4 h-4" aria-hidden="true" />,
-  plan: <CalendarClock className="w-4 h-4" aria-hidden="true" />,
-  money: <Banknote className="w-4 h-4" aria-hidden="true" />,
+  find: <MapPin className="w-4 h-4 shrink-0" aria-hidden="true" />,
+  members: <Users className="w-4 h-4 shrink-0" aria-hidden="true" />,
+  plan: <CalendarClock className="w-4 h-4 shrink-0" aria-hidden="true" />,
+  money: <Banknote className="w-4 h-4 shrink-0" aria-hidden="true" />,
 };
 
 interface CrewTabBarProps {
@@ -58,7 +58,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
             }
             if (badge === true) {
               return (
-                <span className="ml-0.5 w-1.5 h-1.5 rounded-full bg-accent-coral" aria-label="Unsettled balance" />
+                <span className="ml-0.5 w-1.5 h-1.5 shrink-0 rounded-full bg-accent-coral" aria-label="Unsettled balance" />
               );
             }
             return null;
