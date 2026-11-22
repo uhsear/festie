@@ -205,7 +205,7 @@ export default function createManageRoutes(
     validate(deps.schemas.organizerFestivalCreate),
     async (req: any, res: any) => {
       try {
-        const { organizationId, ...input } = req.validatedBody;
+        const { organizationId, seriesId: _seriesId, ...input } = req.validatedBody;
         if (req.festivalRole !== 'admin') {
           const counts = await stores.organizations.festivalCounts(organizationId);
           if (req.orgStatus === 'pending' && counts.drafts >= config.ORGANIZER_PENDING_FESTIVAL_CAP) {
