@@ -295,7 +295,7 @@ export default function AdminCrews() {
                       ) : !members || members.length === 0 ? (
                         <p className="text-xs text-text-muted italic">No members.</p>
                       ) : (
-                        <ul className="space-y-1.5">
+                        <ul className="list-none p-0 space-y-1.5">
                           {members.map((m) => (
                             <li key={m.userId} className="flex items-center gap-2 text-xs text-text-secondary">
                               {memberAvatarUrl(m) ? (

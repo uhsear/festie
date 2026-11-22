@@ -179,7 +179,7 @@ export default function AdminAudit() {
         {parsed.tokens.length === 0 ? (
           <p className="text-xs text-text-muted">{EXAMPLE_LINE}</p>
         ) : (
-          <ul className="flex flex-wrap gap-2">
+          <ul className="list-none p-0 flex flex-wrap gap-2">
             {parsed.tokens.map((token) => (
               <li
                 key={token.raw}

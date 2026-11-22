@@ -54,13 +54,13 @@ function FindingList({ title, items, tone }: { title: string; items: BackfillFin
       <h3 className="text-sm font-semibold">
         {title} ({items.length})
       </h3>
-      <ul className="space-y-2 text-sm">
+      <ul className="list-none p-0 space-y-2 text-sm">
         {items.map((item) => (
           <li key={item.kind}>
             <div className="font-medium">
               {item.kind}: {item.count}
             </div>
-            <ul className="text-xs break-words text-text-secondary">
+            <ul className="list-none p-0 text-xs break-words text-text-secondary">
               {item.examples.map((example, i) => (
                 <li key={i}>{example}</li>
               ))}
@@ -85,7 +85,7 @@ function ReportLists({ report, stopKinds, reviewKinds }: { report: BackfillRepor
             {stopKinds.has(key) && <span className="ml-2 text-accent-coral">STOP</span>}
             {!stopKinds.has(key) && reviewKinds.has(key) && <span className="ml-2 text-text-muted">review</span>}
           </summary>
-          <ul className="max-h-64 overflow-auto space-y-1 text-xs break-words text-text-secondary">
+          <ul className="list-none p-0 max-h-64 overflow-auto space-y-1 text-xs break-words text-text-secondary">
             {entries.slice(0, MAX_LIST_ROWS).map((entry, i) => (
               <li key={i}>{describeBackfillEntry(entry)}</li>
             ))}
@@ -247,7 +247,7 @@ export default function AdminArtistBackfill() {
       {verify && (
         <section aria-label="Verify result" className="rounded-lg border border-glass-border p-3 space-y-1 text-sm">
           <h3 className={verify.ok ? 'text-accent-aqua' : 'text-accent-coral'}>{verify.ok ? 'Verify passed' : 'Verify failed'}</h3>
-          <ul className="break-words">
+          <ul className="list-none p-0 break-words">
             {verify.checks.map((c) => (
               <li key={c.name} className={c.ok ? 'text-text-secondary' : 'text-accent-coral'}>
                 {c.ok ? 'ok' : 'FAIL'} {c.name}
