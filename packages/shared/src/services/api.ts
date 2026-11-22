@@ -5,6 +5,7 @@ import { canQueueOnEdgeError } from './errors';
 import { legacyPickBody } from './pickDeltas';
 import { enqueueMutation, drainQueue } from './offlineQueue';
 import { getOfflineQueue } from './offlineQueueRegistry';
+import { describeMutation } from '../utils/mutationLabel';
 
 type AuthMode = 'cookie' | 'bearer';
 
@@ -161,7 +162,7 @@ function randomId(): string {
 async function enqueueOfflineMutation<T>(path: string, method: string, options: ApiOptions): Promise<T> {
   // POST creates stay distinct; PUT/PATCH/DELETE coalesce per-resource.
   const clientId = options.clientId ?? (method === 'POST' ? `POST:${path}:${randomId()}` : `${method}:${path}`);
-  const label = options.offlineLabel ?? `${method} ${path}`;
+  const label = options.offlineLabel ?? describeMutation(method, path, options.body);
   const body = options.body;
   // PUT/PATCH/DELETE clientIds are per-resource, so two different offline edits share one
   // clientId. Key each queued version separately: the server caches a key for 5 min and would
@@ -175,7 +176,7 @@ async function enqueueOfflineMutation<T>(path: string, method: string, options: 
   // one durable queue surface per platform.
   const webQueue = getOfflineQueue();
   if (webQueue) {
-    await webQueue.queueMutation({ type: 'api', url: path, method, body, clientId, idempotencyKey });
+    await webQueue.queueMutation({ type: 'api', url: path, method, body, clientId, idempotencyKey, label });
   } else {
     // Native: offlineQueue only uses api inside functions, so the api <-> offlineQueue cycle is safe.
     await enqueueMutation({

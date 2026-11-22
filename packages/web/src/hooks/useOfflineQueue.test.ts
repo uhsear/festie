@@ -405,6 +405,23 @@ describe('useOfflineQueue — localStorage fallback', () => {
     expect(ui.failedSync).toEqual([expect.objectContaining({ clientId: 'srv-1', error: 'Server error' })]);
   });
 
+  it('a surfaced failure uses the queued label, else a plain-words name with the meeting point label', async () => {
+    const { result } = renderHook(() => useOfflineQueue());
+    await act(async () => {
+      await result.current.queueMutation({
+        clientId: 'mp-1', type: 'api', url: '/crews/c1/meeting-points', method: 'POST', body: { label: 'Doomed one' },
+      });
+      await result.current.queueMutation({
+        clientId: 'pick-1', type: 'api', url: '/profiles/p1', method: 'PUT', body: {}, label: 'Update picks',
+      });
+    });
+    const apiFn = vi.fn().mockRejectedValue(Object.assign(new Error('Not a crew member'), { status: 403 }));
+    await act(async () => {
+      await result.current.processQueue(apiFn);
+    });
+    expect(ui.failedSync.map((f) => f.label)).toEqual(['Add meeting point: Doomed one', 'Update picks']);
+  });
+
   it('a surfaced failure is in storage and comes back after hydrate', async () => {
     const { result } = renderHook(() => useOfflineQueue());
     await act(async () => {
