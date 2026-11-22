@@ -251,29 +251,32 @@ export default function createNotificationsStore(pool: Pool, _utils: any) {
     // retention_cleanup() (migration 119) purges notification_log rows older than 90 days; the inbox reads the newest 50.
     async listInbox(userId: string, limit: number = 50) {
       // data holds only these four keys, so SOS coordinates in data_json are never returned.
+      // festivalName comes from the festival the row names, so two festivals' rows tell apart.
       const result = await pool.query(
         `
         SELECT
-          id,
-          type,
-          title,
-          body,
-          created_at AS "createdAt",
+          nl.id,
+          nl.type,
+          nl.title,
+          nl.body,
+          nl.created_at AS "createdAt",
           jsonb_strip_nulls(
             jsonb_build_object(
-              'deepLink', data_json ->> 'deepLink',
-              'setId', data_json ->> 'setId',
-              'festivalId', data_json ->> 'festivalId',
-              'crewId', data_json ->> 'crewId'
+              'deepLink', nl.data_json ->> 'deepLink',
+              'setId', nl.data_json ->> 'setId',
+              'festivalId', nl.data_json ->> 'festivalId',
+              'crewId', nl.data_json ->> 'crewId'
             )
-          ) AS data
+          ) AS data,
+          f.name AS "festivalName"
         FROM
-          notification_log
+          notification_log nl
+          LEFT JOIN festivals f ON f.id = nl.data_json ->> 'festivalId'
         WHERE
-          user_id = $1
-          AND platform = 'inbox'
+          nl.user_id = $1
+          AND nl.platform = 'inbox'
         ORDER BY
-          created_at DESC
+          nl.created_at DESC
         LIMIT
           $2
       `,

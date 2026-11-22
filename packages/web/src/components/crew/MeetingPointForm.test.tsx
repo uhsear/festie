@@ -49,6 +49,13 @@ describe('MeetingPointForm', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
 
+  it('shows the time error in place of the Past hint and blocks Add', () => {
+    setup({ meetAt: '2020-01-01T10:00', meetAtError: 'Pick a time in the future.' });
+    expect(screen.getByRole('alert')).toHaveTextContent('Pick a time in the future.');
+    expect(screen.queryByText('Moves to Past 30 minutes after the meet time.')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+  });
+
   it('offers the daily toggle only for a timed point', async () => {
     const props = setup({ meetAt: '2026-01-01T10:00' });
     await userEvent.click(screen.getByRole('switch', { name: /Repeats daily/ }));

@@ -314,9 +314,7 @@ function CrewPlanContent() {
                               {PRIORITY_LABEL[g.priority]}
                             </span>
                             <span className="min-w-0 break-words">
-                              <span className="text-text-primary font-medium">
-                                <ArtistName set={g.set} />
-                              </span>
+                              <span className="text-text-primary font-medium">{artistDisplayName(g.set)}</span>
                               <span className="text-text-secondary tabular-nums"> · {formatSetTimeRange(g.set) || 'TBA'}</span>
                               {stageName && <span className="text-text-secondary"> · {stageName}</span>}
                               <span className="text-text-secondary"> · {memberSummary(g.names)}</span>

@@ -12,6 +12,7 @@ import {
   selectActiveSos,
   selectCrewWhereabouts,
   selectNowNext,
+  showsFestivalWeather,
   sosHeadline,
   sosWhen,
   zonedCalendarDayDiff,
@@ -109,6 +110,18 @@ describe('selectNowNext', () => {
       'after',
     );
     expect(selectNowNext({ sets: SETS, days: [], picks, nowMs: 0 }).phase).toBe('none');
+  });
+});
+
+describe('showsFestivalWeather', () => {
+  const at = (date: string) => selectNowNext({ sets: SETS, days: DAYS, nowMs: ny(date, '12:00'), timeZone: TZ });
+  it('hides current weather after the festival and months before it', () => {
+    expect(showsFestivalWeather(at('2026-09-07'), ny('2026-09-07', '12:00'))).toBe(false);
+    expect(showsFestivalWeather(at('2026-04-05'), ny('2026-04-05', '12:00'))).toBe(false);
+  });
+  it('shows it during the festival and in the last days before it', () => {
+    expect(showsFestivalWeather(at('2026-09-04'), ny('2026-09-04', '12:00'))).toBe(true);
+    expect(showsFestivalWeather(at('2026-09-02'), ny('2026-09-02', '12:00'))).toBe(true);
   });
 });
 

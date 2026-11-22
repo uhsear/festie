@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchCrewExpenses, fetchCrewSettlementPlan, createCrewExpense, deleteCrewExpense } from '@festie/shared/services';
 import { useCrewStore } from '@festie/shared/stores';
+import { remindedUserIdsToday } from '@festie/shared/utils/crewManage';
 import type {
   SettleCrewExpenseRequest,
   CreateCrewExpenseRequest,
@@ -205,10 +206,15 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     onError: (e) => toastError(e, "Couldn't update the payment. Try again."),
   });
 
+  // The server allows one reminder per person per day. The crew store marks a sent one, or a 409 saying so,
+  // so the button stays ended across tab switches.
+  const remindedOn = useCrewStore((s) => s.remindedOn);
+  const remindedUserIds = useMemo(() => remindedUserIdsToday(remindedOn, crewId), [remindedOn, crewId]);
   const remind = useMutation({
     mutationFn: ({ userId }: { userId: string; name: string }) => remindPayment(crewId, userId),
-    onSuccess: (outcome, { name }) =>
-      toast(writeOutcomeMessage(outcome, `Reminder sent to ${name}.`), outcome === 'queued' ? 'info' : 'success'),
+    onSuccess: (outcome, { name }) => {
+      toast(writeOutcomeMessage(outcome, `Reminder sent to ${name}.`), outcome === 'queued' ? 'info' : 'success');
+    },
     onError: (e) => toastError(e, "Couldn't send the reminder. Try again."),
   });
 
@@ -420,6 +426,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           currency={currency}
           settlePending={settle.isPending}
           remindPending={remind.isPending}
+          remindedUserIds={remindedUserIds}
           onPay={setPaidTarget}
           onRemind={(userId, name) => remind.mutate({ userId, name })}
         />

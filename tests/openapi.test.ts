@@ -396,6 +396,7 @@ const ALLOWLIST: Record<string, string> = {
   'POST /api/v1/auth/reauth': 'undocumented: public route not yet in the spec',
   'POST /api/v1/auth/resend-verification': 'undocumented: public route not yet in the spec',
   'POST /api/v1/auth/reset-password': 'undocumented: public route not yet in the spec',
+  'POST /api/v1/auth/verify-email': 'undocumented: public route not yet in the spec',
   'POST /api/v1/auth/set-password': 'undocumented: public route not yet in the spec',
   'POST /api/v1/auth/unsubscribe': 'undocumented: public route not yet in the spec',
   'POST /api/v1/auth/verify': 'undocumented: public route not yet in the spec',

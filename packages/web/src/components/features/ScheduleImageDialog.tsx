@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ImageDown, Smartphone } from 'lucide-react';
-import { useFestivalStore } from '@festie/shared/stores';
+import { selectMyPicks, useFestivalStore } from '@festie/shared/stores';
 import { fetchPrintableSchedule } from '@festie/shared/services';
 import { COPY } from '@festie/shared/constants';
 import {
@@ -50,7 +50,8 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
   const stages = useFestivalStore((s) => s.stages);
   const days = useFestivalStore((s) => s.days);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
-  const picks = profile?.picks;
+  // A guest has no profile: the picks on this device draw the image just the same.
+  const picks = useFestivalStore(selectMyPicks) ?? undefined;
 
   const timedDays = useMemo(
     () => new Set(sets.filter((s) => picks?.[s.id] && HAS_TIME.test(s.startTime ?? '')).map((s) => s.dayIndex ?? 0)),
@@ -67,7 +68,7 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
     [festival, sets, stages, days, picks, dayIndex, format],
   );
 
-  if (!festival || !profile) return null;
+  if (!festival) return null;
   if (initialMode) {
     return (
       <>
@@ -113,6 +114,7 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
   };
 
   const downloadPrintable = async () => {
+    if (!profile) return;
     setPrintBusy(true);
     try {
       const html = await fetchPrintableSchedule(festival.id, profile.id);
@@ -228,14 +230,16 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
             None of your picks have a set time yet, so there is nothing to draw.
           </p>
         )}
-        <div className="space-y-2">
-          <Button variant="secondary" size="sm" type="button" fullWidth onClick={downloadPrintable} isLoading={printBusy}>
-            {COPY.picks.printable}
-          </Button>
-          <p className="text-xs text-text-muted">
-            A web page with your picks and your crew&apos;s schedules, ready to print.
-          </p>
-        </div>
+        {profile && (
+          <div className="space-y-2">
+            <Button variant="secondary" size="sm" type="button" fullWidth onClick={downloadPrintable} isLoading={printBusy}>
+              {COPY.picks.printable}
+            </Button>
+            <p className="text-xs text-text-muted">
+              A web page with your picks and your crew&apos;s schedules, ready to print.
+            </p>
+          </div>
+        )}
       </Dialog>
     </>
   );

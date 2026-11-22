@@ -10,6 +10,7 @@ import {
   isFixRecent,
   resolveFestivalTimeZone,
   selectNowNext,
+  showsFestivalWeather,
   stageCoord,
   walkToStage,
 } from '@festie/shared/utils';
@@ -113,9 +114,9 @@ function FestivalModeViewInner() {
 
   return (
     <div className={PAGE} data-testid="festival-mode-view">
-      <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3 mb-4 min-w-0">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 mb-4 min-w-0">
         <h1 className="type-display-lg text-text-primary min-w-0 break-words">{currentFestival.name}</h1>
-        <div className="flex items-center justify-between gap-2 sm:justify-start sm:shrink-0">
+        <div className="flex items-center gap-2 shrink-0">
           {user && crew && <SosRaiseButton crewId={crew.id} compact />}
           <LowPowerIndicator />
           <div className="flex flex-col items-end">
@@ -147,9 +148,11 @@ function FestivalModeViewInner() {
               walk={walk}
             />
           </div>
-          <div className="order-1">
-            <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
-          </div>
+          {showsFestivalWeather(selection, nowMs) ? (
+            <div className="order-1">
+              <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
+            </div>
+          ) : null}
           {user ? (
             <div className="order-1">
               <CaughtNowCard

@@ -641,6 +641,15 @@ export default function createCrewRoutes(deps: RouteDeps) {
           updateData.name = crew.name;
         }
         if (body.maxMembers !== undefined) {
+          const memberCount = await stores.crews.getMemberCount(crewId);
+          if (body.maxMembers < memberCount) {
+            return sendError(
+              res,
+              400,
+              `The crew already has ${memberCount} members. Remove members first, or set the limit to ${memberCount} or more.`,
+              ErrorCodes.INVALID_INPUT,
+            );
+          }
           updateData.maxMembers = body.maxMembers;
         } else {
           updateData.maxMembers = crew.maxMembers;

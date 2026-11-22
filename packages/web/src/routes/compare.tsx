@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewCompare, useCrewFestival, useFestival, usePicks } from '@festie/shared/hooks';
@@ -35,11 +35,15 @@ function CompareViewInner() {
 
   const { status, crew, retry: retryCrew } = useActiveCrew();
   const { state: festivalState, festivalName, retry: retryFestival } = useCrewFestival(crew);
-  const { columns, rows, freeTogether, split, together, notThere, timeZone } = useCrewCompare(sort);
+  const ready = festivalState === 'match' && status === 'ready';
+  const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, loading, error, refresh } = useCrewCompare(
+    sort,
+    ready,
+  );
   const days = useFestivalStore((s) => s.days);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { savePick } = usePicks();
-  const { toastError } = useToast();
+  const { toast, toastError } = useToast();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)');
@@ -55,6 +59,12 @@ function CompareViewInner() {
     },
     [festivalId, savePick, toastError],
   );
+
+  // A failed refresh keeps a grid that already loaded; only an empty grid gets the full-screen error.
+  useEffect(() => {
+    if (error && rows.length > 0) toast(error, 'error');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast once per error; rows.length is read at error time only
+  }, [error]);
 
   if (!user) return <GuestTeaser mode="crew" />;
 
@@ -129,6 +139,40 @@ function CompareViewInner() {
     );
   }
 
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto py-8 text-center text-sm text-text-secondary" role="status">
+        Loading crew picks…
+      </div>
+    );
+  }
+
+  // With everyone else Not going, keep the screen so the day selector can reach another day.
+  if (alone) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <EmptyState
+          icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          title="No crew picks yet"
+          description="Once your crewmates save picks for this festival, their schedules show up here side by side."
+        />
+      </div>
+    );
+  }
+
+  if (error && rows.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <EmptyState
+          icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          title="Couldn't load crew picks"
+          description={error}
+          cta={{ label: 'Try again', onClick: () => void refresh() }}
+        />
+      </div>
+    );
+  }
+
   const b2bSeparator = currentFestival?.b2bSeparator;
 
   return (
@@ -193,7 +237,7 @@ function CompareViewInner() {
           </div>
         ) : (
           <div
-            className="max-w-6xl mx-auto mt-2 overflow-x-auto"
+            className="max-w-6xl mx-auto mt-2 overflow-auto max-h-[70dvh]"
             role="region"
             aria-label="Crew picks by set"
             tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: keeps this overflow-x-auto table keyboard-scrollable; rule only exempts role=tabpanel
@@ -201,7 +245,7 @@ function CompareViewInner() {
             <table className="w-full border-separate border-spacing-0">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-[var(--letter-spacing-caps)] text-text-muted">
-                  <th scope="col" className="sticky left-0 bg-bg-primary z-10 py-2 pr-3 min-w-[180px]">
+                  <th scope="col" className="sticky left-0 top-0 bg-bg-primary z-30 py-2 pr-3 min-w-[180px]">
                     Set
                   </th>
                   {columns.map((c) => (

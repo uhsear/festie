@@ -146,6 +146,12 @@ describe('expenseAmountError', () => {
     expect(expenseAmountError('.')).toBe('Enter an amount of at least $0.01');
     expect(expenseAmountError('-3')).toBe('Enter an amount of at least $0.01');
   });
+  it('refuses a third decimal that the server would reject', () => {
+    expect(expenseAmountError('1.005')).toBe('Use at most 2 decimal places');
+    expect(expenseAmountError('10.005')).toBe('Use at most 2 decimal places');
+    expect(expenseAmountError('1.07')).toBeUndefined();
+    expect(expenseAmountError('0.07')).toBeUndefined();
+  });
   it('explains an amount above the server bound', () => {
     expect(expenseAmountError('999999999')).toBe("Amount can't be more than $99,999,999.99");
   });

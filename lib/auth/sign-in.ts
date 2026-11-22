@@ -9,7 +9,7 @@
 
 import crypto from 'crypto';
 import type { Request, Response } from 'express';
-import { sendVerificationEmail } from '../email';
+import { sendVerificationEmail, verifyEmailUrl } from '../email';
 import { TOS_VERSION } from '../constants';
 import { DELETED_USER_ID } from '../db/stores/users';
 import { describeDevice } from '../helpers/device-label';
@@ -56,7 +56,7 @@ export async function createUserWithProfile(userData: any, deps: any) {
         "INSERT INTO email_verification_tokens (user_id, token_hash, email, expires_at) VALUES ($1, $2, $3, NOW() + ($4 || ' hours')::INTERVAL)",
         [user.id, tokenHash, cleanEmail, config.EMAIL_VERIFY_TOKEN_TTL_HOURS],
       );
-      const verifyUrl = `${config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
+      const verifyUrl = verifyEmailUrl(config, verifyToken);
       await sendVerificationEmail({ to: cleanEmail, username: cleanUsername, verifyUrl, config, log });
     } catch (emailErr: any) {
       log.error('register:verify-email-send-failed', { error: emailErr.message, userId: user.id });

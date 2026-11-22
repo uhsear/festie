@@ -28,6 +28,8 @@ interface SettleUpCardProps {
   currency: string;
   settlePending: boolean;
   remindPending: boolean;
+  /** Members already reminded this session; the server allows one reminder per person per day. */
+  remindedUserIds?: ReadonlySet<string>;
   onPay: (settlement: CrewSettlement) => void;
   onRemind: (userId: string, name: string) => void;
 }
@@ -43,6 +45,7 @@ export default function SettleUpCard({
   currency,
   settlePending,
   remindPending,
+  remindedUserIds,
   onPay,
   onRemind,
 }: SettleUpCardProps) {
@@ -114,10 +117,10 @@ export default function SettleUpCard({
               <Button
                 variant="secondary"
                 onClick={() => onRemind(s.fromUserId, s.fromName)}
-                disabled={remindPending}
+                disabled={remindPending || !!remindedUserIds?.has(s.fromUserId)}
                 className="!py-1 !px-3 text-xs min-h-11"
               >
-                Remind {s.fromName}
+                {remindedUserIds?.has(s.fromUserId) ? 'Reminded today' : `Remind ${s.fromName}`}
               </Button>
             </div>
           ))}

@@ -99,7 +99,8 @@ export default function Toaster() {
   // iOS native sheets (the formSheet set screen) cover the root view, so an
   // Undo toast fired from a sheet would sit hidden behind it. The overlay window
   // floats above them and passes touches outside the toasts through.
-  return Platform.OS === 'ios' ? <FullWindowOverlay>{host}</FullWindowOverlay> : host;
+  // Mounted only while a toast shows: an empty overlay window hides the whole app from iOS accessibility.
+  return Platform.OS === 'ios' && visible.length > 0 ? <FullWindowOverlay>{host}</FullWindowOverlay> : host;
 }
 
 const useStyles = makeStyles((t) => ({

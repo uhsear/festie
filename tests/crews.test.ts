@@ -758,7 +758,7 @@ describe('routes/crews.ts -- DELETE /:crewId feed push (mocked deps)', () => {
 
 // T54: owner lock and Plan B on the serialized crew. Mock-based, no database.
 describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
-  async function buildApp(opts: { role?: string; previewCrew?: any } = {}) {
+  async function buildApp(opts: { role?: string; previewCrew?: any; memberCount?: number } = {}) {
     const { schemas } = await import('../lib/schemas.js');
     const { ErrorCodes } = await import('../lib/response.js');
     const emit = mock.fn();
@@ -818,6 +818,7 @@ describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
           getExpiredByInviteCode: mock.fn(async () => null),
           getMember: mock.fn(async () => ({ userId: 'owner-1', role: opts.role ?? 'owner' })),
           getMembers: mock.fn(async () => [{ userId: 'owner-1', username: 'boss', role: 'owner' }]),
+          getMemberCount: mock.fn(async () => opts.memberCount ?? 1),
           update,
         },
       },
@@ -855,6 +856,18 @@ describe('routes/crews.ts -- invite lock and Plan B (mocked deps)', () => {
     assert.equal(unlocked.body.data.inviteLocked, false);
     assert.equal(unlocked.body.data.inviteCode, 'ABC123');
     assert.equal(unlocked.body.data.inviteExpiresAt, '2026-12-01T00:00:00.000Z');
+  });
+
+  test('the owner cannot set the cap below the current member count', async () => {
+    const { app, update } = await buildApp({ memberCount: 30 });
+    const res = await request(app).put('/crew-1').send({ maxMembers: 5 });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'INVALID_INPUT');
+    assert.match(res.body.error.message, /30 members/);
+    assert.equal(update.mock.callCount(), 0);
+
+    const ok = await request(app).put('/crew-1').send({ maxMembers: 30 });
+    assert.equal(ok.status, 200);
   });
 
   test('a member cannot lock the crew', async () => {

@@ -34,7 +34,7 @@ const DEFAULT_MEETING_POINT = {
   type: 'during',
   meet_at: null,
   stage_reference: null,
-  created_at: '2026-05-08T00:00:00.000Z',
+  created_at: '2099-05-08T00:00:00.000Z',
   active: true,
 };
 
@@ -50,7 +50,7 @@ function makeDeps(overrides: any = {}) {
       meetingPoints: {
         listByCrew: mock.fn(async () => []),
         countByCrew: mock.fn(async () => 0),
-        create: mock.fn(async (data: any) => ({ ...data, active: true, createdAt: '2026-05-08T00:00:00.000Z' })),
+        create: mock.fn(async (data: any) => ({ ...data, active: true, createdAt: '2099-05-08T00:00:00.000Z' })),
         getById: mock.fn(async () => null),
         update: mock.fn(async (id: any, data: any) => ({ ...DEFAULT_MEETING_POINT, ...data, id })),
         deactivate: mock.fn(async () => {}),
@@ -455,7 +455,7 @@ describe('routes/crew-meeting-points.js -- GET /:crewId/meeting-points/past', ()
 // =====================================================================
 describe('routes/crew-meeting-points.js -- POST /:crewId/meeting-points', () => {
   test('creates meeting point for crew member', async () => {
-    const createFn = mock.fn(async (data: any) => ({ ...data, active: true, createdAt: '2026-05-08T00:00:00.000Z' }));
+    const createFn = mock.fn(async (data: any) => ({ ...data, active: true, createdAt: '2099-05-08T00:00:00.000Z' }));
     const { app } = await buildApp({
       stores: {
         crews: {
@@ -524,7 +524,7 @@ describe('routes/crew-meeting-points.js -- POST /:crewId/meeting-points', () => 
 
   test('calculates expiresAt as meetAt + 30 minutes when meetAt is provided', async () => {
     const createFn = mock.fn(async (data: any) => data);
-    const meetAt = '2026-06-15T14:00:00.000Z';
+    const meetAt = '2099-06-15T14:00:00.000Z';
     const expectedExpiry = new Date(new Date(meetAt).getTime() + 30 * 60_000).toISOString();
 
     const { app } = await buildApp({
@@ -549,7 +549,7 @@ describe('routes/crew-meeting-points.js -- POST /:crewId/meeting-points', () => 
   // expireStale() would deactivate it after the first occurrence.
   test('leaves expiresAt null for a recurring point even when meetAt is provided', async () => {
     const createFn = mock.fn(async (data: any) => data);
-    const meetAt = '2026-06-15T14:00:00.000Z';
+    const meetAt = '2099-06-15T14:00:00.000Z';
 
     const { app } = await buildApp({
       stores: {
@@ -773,9 +773,9 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/meeting-points/:mpId', (
           meetingPoints: {
             getById: mock.fn(async () => ({
               ...DEFAULT_MEETING_POINT,
-              meet_at: '2026-06-15T14:00:00.000Z',
+              meet_at: '2099-06-15T14:00:00.000Z',
               recurs_daily: false,
-              expires_at: '2026-06-15T14:30:00.000Z',
+              expires_at: '2099-06-15T14:30:00.000Z',
             })),
             update: updateFn,
           },
@@ -798,9 +798,9 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/meeting-points/:mpId', (
           meetingPoints: {
             getById: mock.fn(async () => ({
               ...DEFAULT_MEETING_POINT,
-              meet_at: '2026-06-15T14:00:00.000Z',
+              meet_at: '2099-06-15T14:00:00.000Z',
               recurs_daily: false,
-              expires_at: '2026-06-15T14:30:00.000Z',
+              expires_at: '2099-06-15T14:30:00.000Z',
             })),
             update: updateFn,
           },
@@ -808,10 +808,10 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/meeting-points/:mpId', (
       },
     });
 
-    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-06-15T20:00:00.000Z' });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2099-06-15T20:00:00.000Z' });
 
     assert.equal(res.status, 200);
-    assert.equal((updateFn.mock.calls as any[])[0].arguments[1].expiresAt, '2026-06-15T20:30:00.000Z');
+    assert.equal((updateFn.mock.calls as any[])[0].arguments[1].expiresAt, '2099-06-15T20:30:00.000Z');
   });
 
   test('a label-only edit on a recurring point keeps expires_at null', async () => {
@@ -823,7 +823,7 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/meeting-points/:mpId', (
           meetingPoints: {
             getById: mock.fn(async () => ({
               ...DEFAULT_MEETING_POINT,
-              meet_at: '2026-06-15T15:00:00.000Z',
+              meet_at: '2099-06-15T15:00:00.000Z',
               recurs_daily: true,
               expires_at: null,
             })),
@@ -1182,7 +1182,7 @@ describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
     const { app } = await buildApp({ crewNotify, stores: { crews: member, activity: { log } } });
     const res = await request(app)
       .post('/crew-1/meeting-points')
-      .send({ label: 'Main Stage', location: 'Left', meetAt: '2026-05-08T20:00:00.000Z' });
+      .send({ label: 'Main Stage', location: 'Left', meetAt: '2099-05-08T20:00:00.000Z' });
     assert.equal(res.status, 201);
     assert.equal((log.mock.calls as any[])[0].arguments[0].type, 'meeting-point-added');
     assert.equal((log.mock.calls as any[])[0].arguments[0].detail, 'Main Stage');
@@ -1217,16 +1217,54 @@ describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
         crews: {
           ...member,
           meetingPoints: {
-            getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, meet_at: new Date('2026-05-08T21:00:00.000Z') })),
+            getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, meet_at: new Date('2099-05-08T21:00:00.000Z') })),
           },
         },
       },
     });
     const res = await request(app)
       .put('/crew-1/meeting-points/mp-1')
-      .send({ label: 'New name', meetAt: '2026-05-08T21:00:00.000Z' });
+      .send({ label: 'New name', meetAt: '2099-05-08T21:00:00.000Z' });
     assert.equal(res.status, 200);
     assert.equal(crewNotify.now.mock.calls.length, 0);
+  });
+
+  test('refuses a one-shot meet time that already passed on create, but not a daily one', async () => {
+    const createFn = mock.fn(async (data: any) => data);
+    const { app } = await buildApp({
+      stores: {
+        crews: {
+          getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })),
+          meetingPoints: { countByCrew: mock.fn(async () => 0), create: createFn },
+        },
+      },
+    });
+    const past = '2020-01-01T10:00:00.000Z';
+    const res = await request(app).post('/crew-1/meeting-points').send({ label: 'Tree', location: 'North', meetAt: past });
+    assert.equal(res.status, 400);
+    assert.equal(createFn.mock.calls.length, 0);
+    const daily = await request(app)
+      .post('/crew-1/meeting-points')
+      .send({ label: 'Tree', location: 'North', meetAt: past, recursDaily: true });
+    assert.equal(daily.status, 201);
+  });
+
+  test('refuses moving a one-shot meet time into the past, but allows an edit that leaves an old time alone', async () => {
+    const past = '2020-01-01T10:00:00.000Z';
+    const { app } = await buildApp({
+      stores: {
+        crews: {
+          ...member,
+          meetingPoints: {
+            getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT, meet_at: past, recurs_daily: false })),
+          },
+        },
+      },
+    });
+    const moved = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2020-01-02T10:00:00.000Z' });
+    assert.equal(moved.status, 400);
+    const renamed = await request(app).put('/crew-1/meeting-points/mp-1').send({ label: 'New name', meetAt: past });
+    assert.equal(renamed.status, 200);
   });
 
   test('update that changes meetAt pushes', async () => {
@@ -1237,11 +1275,11 @@ describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
         crews: { ...member, meetingPoints: { getById: mock.fn(async () => ({ ...DEFAULT_MEETING_POINT })) } },
       },
     });
-    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T21:00:00.000Z' });
+    const res = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2099-05-08T21:00:00.000Z' });
     assert.equal(res.status, 200);
     const push = (crewNotify.now.mock.calls as any[])[0].arguments[0];
-    assert.equal(push.key, 'mp-move:mp-1:2026-05-08T21:00:00.000Z:Near the food trucks::');
-    assert.equal(push.meetAt, '2026-05-08T21:00:00.000Z');
+    assert.equal(push.key, 'mp-move:mp-1:2099-05-08T21:00:00.000Z:Near the food trucks::');
+    assert.equal(push.meetAt, '2099-05-08T21:00:00.000Z');
     assert.equal(push.userIds, undefined, 'no taps: the whole crew hears about the move');
     assert.match(push.text, /^testuser moved .+ to$/);
   });
@@ -1275,8 +1313,8 @@ describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
     const { app } = await buildApp({ crewNotify: slow, stores });
     const created = await request(app)
       .post('/crew-1/meeting-points')
-      .send({ label: 'A', location: 'B', meetAt: '2026-05-08T20:00:00.000Z' });
-    const updated = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T21:00:00.000Z' });
+      .send({ label: 'A', location: 'B', meetAt: '2099-05-08T20:00:00.000Z' });
+    const updated = await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2099-05-08T21:00:00.000Z' });
     const removed = await request(app).delete('/crew-1/meeting-points/mp-1');
     assert.deepEqual([created.status, updated.status, removed.status], [201, 200, 200]);
     assert.equal(slow.now.mock.callCount(), 3);
@@ -1286,7 +1324,7 @@ describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
     const failed = await buildApp({ crewNotify: failing, stores, log: { warn } });
     const res = await request(failed.app)
       .post('/crew-1/meeting-points')
-      .send({ label: 'A', location: 'B', meetAt: '2026-05-08T20:00:00.000Z' });
+      .send({ label: 'A', location: 'B', meetAt: '2099-05-08T20:00:00.000Z' });
     assert.equal(res.status, 201);
     await new Promise((r) => setImmediate(r));
     assert.equal(warn.mock.callCount(), 1);
@@ -1300,7 +1338,7 @@ describe('routes/crew-meeting-points.js -- feed rows and pushes', () => {
     });
     const created = await request(app)
       .post('/crew-1/meeting-points')
-      .send({ label: 'A', location: 'B', meetAt: '2026-05-08T20:00:00.000Z' });
+      .send({ label: 'A', location: 'B', meetAt: '2099-05-08T20:00:00.000Z' });
     assert.equal(created.status, 201);
     const updated = await request(app).put('/crew-1/meeting-points/mp-1').send({ location: 'Elsewhere' });
     assert.equal(updated.status, 200);
@@ -1369,10 +1407,10 @@ describe("routes/crew-meeting-points.js -- I'll be there alerts", () => {
       crewNotify,
       stores: { crews: { ...member, meetingPoints: { getById: tapped(['user-2']) } } },
     });
-    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T21:00:00.000Z' });
-    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T22:00:00.000Z' });
+    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2099-05-08T21:00:00.000Z' });
+    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2099-05-08T22:00:00.000Z' });
     assert.equal(send.mock.callCount(), 2);
-    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2026-05-08T22:00:00.000Z' });
+    await request(app).put('/crew-1/meeting-points/mp-1').send({ meetAt: '2099-05-08T22:00:00.000Z' });
     assert.equal(send.mock.callCount(), 2, 'the repeat of the same move is deduped');
     const userIds = (send.mock.calls as any[]).map((c) => c.arguments[0].userId);
     assert.deepEqual(userIds, ['user-2', 'user-2']);
@@ -1499,7 +1537,7 @@ describe('routes/crew-meeting-points.js -- Home Base Plan B', () => {
 //  T54: meeting point edit trail ("Edited by ana, was ...")
 // =====================================================================
 describe('routes/crew-meeting-points.js -- edit trail', () => {
-  const OLD_AT = '2026-06-15T15:00:00.000Z';
+  const OLD_AT = '2099-06-15T15:00:00.000Z';
   const member = { getMember: mock.fn(async () => ({ userId: 'user-1', role: 'member' })) };
 
   async function put(body: any, existing: any = {}) {
@@ -1528,16 +1566,16 @@ describe('routes/crew-meeting-points.js -- edit trail', () => {
   }
 
   test('a rename never changes the time and writes no trail or push', async () => {
-    const existing = { meet_at: new Date(OLD_AT), recurs_daily: false, expires_at: '2026-06-15T15:30:00.000Z' };
+    const existing = { meet_at: new Date(OLD_AT), recurs_daily: false, expires_at: '2099-06-15T15:30:00.000Z' };
     const { data, crewNotify } = await put({ label: 'Tree (north)' }, existing);
     assert.equal('meetAt' in data, false);
-    assert.equal(data.expiresAt, '2026-06-15T15:30:00.000Z');
+    assert.equal(data.expiresAt, '2099-06-15T15:30:00.000Z');
     assertNoTrail(data);
     assert.equal(crewNotify.now.mock.calls.length, 0);
   });
 
   test('a time-only change writes editWas.meetAt as the old ISO instant', async () => {
-    const { data } = await put({ meetAt: '2026-06-15T20:00:00.000Z' }, { meet_at: new Date(OLD_AT) });
+    const { data } = await put({ meetAt: '2099-06-15T20:00:00.000Z' }, { meet_at: new Date(OLD_AT) });
     assert.equal(data.editedBy, 'user-1');
     assert.ok(!Number.isNaN(Date.parse(data.editedAt)));
     assert.deepEqual(data.editWas, { meetAt: OLD_AT });
@@ -1550,7 +1588,7 @@ describe('routes/crew-meeting-points.js -- edit trail', () => {
   });
 
   test('a time and place change writes both keys', async () => {
-    const { data } = await put({ location: 'North gate', meetAt: '2026-06-15T20:00:00.000Z' }, { meet_at: OLD_AT });
+    const { data } = await put({ location: 'North gate', meetAt: '2099-06-15T20:00:00.000Z' }, { meet_at: OLD_AT });
     assert.deepEqual(data.editWas, { location: 'Near the food trucks', meetAt: OLD_AT });
   });
 
@@ -1560,7 +1598,7 @@ describe('routes/crew-meeting-points.js -- edit trail', () => {
   });
 
   test('setting a time on a point with none writes meetAt null', async () => {
-    const { data } = await put({ meetAt: '2026-06-15T20:00:00.000Z' }, { meet_at: null });
+    const { data } = await put({ meetAt: '2099-06-15T20:00:00.000Z' }, { meet_at: null });
     assert.deepEqual(data.editWas, { meetAt: null });
   });
 
@@ -1584,7 +1622,7 @@ describe('routes/crew-meeting-points.js -- edit trail', () => {
       ...DEFAULT_MEETING_POINT,
       location: 'North gate',
       edited_by: 'user-1',
-      edited_at: '2026-06-15T19:00:00.000Z',
+      edited_at: '2099-06-15T19:00:00.000Z',
       edit_was: { location: 'Near the food trucks' },
       editor_name: 'ana',
     };

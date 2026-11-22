@@ -176,6 +176,11 @@ export async function sendPasswordResetEmail({ to, username, resetUrl, config, l
   return sendEmail({ to, subject: 'Reset your Festie password', html, text, config, log, _client, type: 'password_reset', redis });
 }
 
+/** Link in a verification or email-change mail. It opens the web confirm page: a GET must never consume the token, because mail scanners prefetch links. */
+export function verifyEmailUrl(config: { PUBLIC_ORIGIN: string }, token: string): string {
+  return `${config.PUBLIC_ORIGIN}/verify-email?token=${token}`;
+}
+
 /**
  * Send email verification email.
  */
