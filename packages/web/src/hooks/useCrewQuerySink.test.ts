@@ -233,6 +233,18 @@ describe('buildCrewQuerySink (direct mapping)', () => {
     useCrewStore.setState({ polls: [], meetingPoints: [] });
   });
 
+  it('does not warn when a newer event cancels the in-flight reload', async () => {
+    vi.mocked(api.get).mockImplementation(() => new Promise(() => {}));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const sink = buildCrewQuerySink(queryClient);
+    sink.onPollVoted('c1', 'p');
+    sink.onMeetingPointUpsert('c1');
+    await queryClient.cancelQueries();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(warn).not.toHaveBeenCalled();
+    warn.mockRestore();
+  });
+
   it('warns and keeps the store when the fetch fails', async () => {
     vi.mocked(api.get).mockRejectedValue(new Error('offline'));
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
