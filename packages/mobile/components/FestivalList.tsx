@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ScrollView, RefreshControl, Share } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Sentry from '@sentry/react-native';
-import { useFestivalDataStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
 import { COPY, DISCOVER_COPY, FESTIVAL_STATUS_LABEL, FESTIVAL_SHARE_COPY } from '@festie/shared/constants';
 import type { Festival } from '@festie/shared/types';
 import { buildFestivalPageUrl, formatFestivalDateRange, festivalStatus, groupFestivalsByStatus, partitionSeriesBlocks, splitBySeries, type FestivalStatus } from '@festie/shared/utils';
@@ -12,6 +12,7 @@ import Button from './Button';
 import EmptyState from './EmptyState';
 import { Skeleton } from './Skeleton';
 import FollowButton from './FollowButton';
+import GuestLegalFooter from './GuestLegalFooter';
 
 // Status pill styling. The list endpoint now provides startDate/endDate, so a
 // festival classifies as upcoming/ongoing/past. Returns null when undetermined.
@@ -314,6 +315,7 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   const festivals = useFestivalDataStore((s) => s.festivals);
   const isLoading = useFestivalDataStore((s) => s.isLoading);
   const error = useFestivalDataStore((s) => s.error);
+  const isGuest = useAuthStore((s) => !s.user);
   const loadFestivals = useFestivalDataStore((s) => s.loadFestivals);
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const haptics = useHaptics();
@@ -442,11 +444,14 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
       ItemSeparatorComponent={ListSeparator}
       refreshControl={refreshControl}
       ListFooterComponent={
-        selectError ? (
-          <Text style={styles.selectError} accessibilityRole="alert">
-            Couldn&apos;t load that festival. Check your signal and try again.
-          </Text>
-        ) : undefined
+        <>
+          {selectError ? (
+            <Text style={styles.selectError} accessibilityRole="alert">
+              Couldn&apos;t load that festival. Check your signal and try again.
+            </Text>
+          ) : null}
+          {isGuest ? <GuestLegalFooter /> : null}
+        </>
       }
     />
   );

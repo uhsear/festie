@@ -150,6 +150,22 @@ describe('AppShell', () => {
     expect(screen.queryByText('Browsing as guest.')).not.toBeInTheDocument();
   });
 
+  it('shows the legal footer to guests and hides it once signed in', () => {
+    mockUser = null;
+    const { unmount } = render(<AppShell />);
+    expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy.html');
+    unmount();
+    mockUser = { id: 'u1', username: 'asir' };
+    render(<AppShell />);
+    expect(screen.queryByRole('link', { name: 'Privacy' })).not.toBeInTheDocument();
+  });
+
+  it('shows the legal footer on sign-in pages', () => {
+    mockPathname = '/login';
+    render(<AppShell />);
+    expect(screen.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms.html');
+  });
+
   it('renders auth screen layout for /login route', () => {
     mockPathname = '/login';
     render(<AppShell />);
