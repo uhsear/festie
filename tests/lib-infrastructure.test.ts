@@ -10,6 +10,7 @@ import {
   augmentWithTraceId,
 } from '../lib/tracing.js';
 import { isLeader, getWorkerId } from '../lib/process-role.js';
+import { scrubErrorEvent, redactDeep, composeHook } from '../lib/sentry.js';
 
 // ---------------------------------------------------------------------------
 // 1. lib/tracing.js — pure functions, no mocking needed
@@ -193,6 +194,102 @@ describe('lib/sentry.js', () => {
     });
   });
 
+  describe('invite-code scrubbing hooks', () => {
+    const path = '/api/v1/crews/join-preview/SECRETCODE';
+    const redacted = '/api/v1/crews/join-preview/:code';
+    const urlKeys = ['url', 'http.url', 'url.full', 'http.target', 'url.path'];
+    const urlData = () => Object.fromEntries(urlKeys.map((k) => [k, `https://festie.us${path}`]));
+
+    it('scrubErrorEvent keeps header scrubbing and redacts url and transaction', () => {
+      const out = scrubErrorEvent({
+        request: { url: `https://festie.us${path}`, headers: { cookie: 'a', authorization: 'b', accept: 'x' } },
+        transaction: `GET ${path}`,
+      });
+      assert.equal(out.request.url, `https://festie.us${redacted}`);
+      assert.equal(out.transaction, `GET ${redacted}`);
+      assert.deepEqual(out.request.headers, { accept: 'x' });
+    });
+
+    it('scrubErrorEvent redacts referer, query string, message and exception values', () => {
+      const out = scrubErrorEvent({
+        request: { url: 'https://festie.us/x', query_string: `next=${path}`, headers: { referer: `https://festie.us${path}`, Referer: `https://festie.us${path}` } },
+        message: `failed ${path}`,
+        exception: { values: [{ value: `GET ${path} failed` }, { type: 'Error' }] },
+      });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+      assert.equal(out.exception.values[0].value, `GET ${redacted} failed`);
+    });
+
+    it('redactDeep redacts transaction referer, query string and trace context data', () => {
+      const out = redactDeep({
+        request: { query_string: `next=${path}`, headers: { referer: `https://festie.us${path}` } },
+        contexts: { trace: { data: urlData() } },
+      });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+    });
+
+    it('redactDeep redacts transaction url, transaction, span descriptions and span url data', () => {
+      const out = redactDeep({
+        request: { url: `https://festie.us${path}` },
+        transaction: `GET ${path}`,
+        spans: [{ description: `GET ${path}`, data: urlData() }, { description: 'db' }],
+      });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+      assert.equal(out.spans[0]?.description, `GET ${redacted}`);
+      assert.equal(out.spans[1]?.description, 'db');
+    });
+
+    it('redactDeep redacts span description and url data', () => {
+      const out = redactDeep({ description: `GET ${path}`, data: urlData() });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+    });
+
+    it('redactDeep redacts breadcrumb message and data.url', () => {
+      const out = redactDeep({ message: `GET ${path}`, data: { url: `https://festie.us${path}`, status_code: 200 } });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+      assert.equal(out.data.status_code, 200);
+    });
+
+    it('redactDeep reaches nested extra values, arrays and non-string query strings', () => {
+      const out = redactDeep({ extra: { a: { b: [`x ${path}`, { c: `https://festie.us${path}` }] } }, request: { query_string: [['next', path]] }, n: 1 });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+      assert.equal(out.n, 1);
+    });
+
+    it('redactDeep survives a cycle and a very deep object', () => {
+      const cyclic: any = { url: path };
+      cyclic.self = cyclic;
+      const out = redactDeep(cyclic);
+      assert.equal(out.url, redacted);
+      assert.equal(out.self, '[Circular]');
+      let deep: any = { leaf: path };
+      for (let i = 0; i < 50_000; i++) deep = { next: deep };
+      assert.doesNotThrow(() => redactDeep(deep));
+    });
+
+    it('redactDeep keeps the priority fields redacted when extra overflows the node budget', () => {
+      const extra: Record<string, string> = {};
+      for (let i = 0; i < 3000; i++) extra[`k${i}`] = path;
+      const out = redactDeep({
+        extra,
+        request: { url: `https://festie.us${path}` },
+        spans: [{ description: `GET ${path}` }],
+      });
+      assert.equal(out.request.url, `https://festie.us${redacted}`);
+      assert.equal(out.spans[0]?.description, `GET ${redacted}`);
+      assert.equal(out.extra.k2999, '[Filtered]');
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+    });
+
+    it('composeHook runs ours first and then the caller hook on the scrubbed value', () => {
+      const seen: any[] = [];
+      const hook = composeHook(redactDeep, (b: any) => { seen.push(b); return b; });
+      hook({ message: path });
+      assert.equal(seen[0].message, redacted);
+      assert.equal(composeHook(redactDeep, () => null)({ message: path }), null);
+    });
+  });
+
   describe('initSentry — data collection', () => {
     it('keeps the v10 sendDefaultPii:false baseline under @sentry/node 11', () => {
       const result = sentryModule.initSentry({ dsn: 'https://fake@sentry.io/1' });
@@ -324,6 +421,9 @@ describe('lib/sentry.js', () => {
         // anything this task's logic does).
         next(new Error(`boom-${Math.random()}`));
       });
+      app.get('/api/v1/crews/join-preview/:code', (_req: any, _res: any, next: any) => {
+        next(new Error(`join-boom-${Math.random()}`));
+      });
       app.get('/api/v1/anon', (_req: any, _res: any, next: any) => {
         next(new Error(`anon-boom-${Math.random()}`));
       });
@@ -389,6 +489,16 @@ describe('lib/sentry.js', () => {
         assert.equal(event.request.headers.cookie, undefined);
         assert.equal(event.request.headers.authorization, undefined);
       }
+    });
+
+    it('redacts an invite code from the event url and transaction', async () => {
+      const { app, getCapturedEvent } = makeApp(sentryModule);
+      await request(app).get('/api/v1/crews/join-preview/SECRETCODE');
+
+      const event = await getCapturedEvent();
+      assert.ok(event, 'expected an event to have been captured');
+      assert.ok(event.request?.url, 'expected a request url');
+      assert.ok(!JSON.stringify(event).includes('SECRETCODE'), 'invite code leaked into the event');
     });
   });
 });

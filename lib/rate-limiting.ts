@@ -25,6 +25,7 @@ import crypto from 'crypto';
 import { loadConfig } from './config.js';
 import { redisRateCheck as redisRateCheckFn } from './redis.js';
 import { MAX_SHARE_WINDOW_MS } from './live-location-cache.js';
+import { redactInviteCodePath } from './helpers/sanitize.js';
 
 const FALLBACK_WARN_INTERVAL_MS = 30_000;
 // Guests behind one festival IP keep their own token buckets; one caller cycling tokens is capped per IP.
@@ -243,7 +244,7 @@ function createRateLimiters({
             log.warn('rate-limit:exceeded', {
               scope: result.fallback ? rateLimitKey : `${scope}:${rateLimitKey}`,
               ip: getRequestIp(req),
-              path: req.path,
+              path: redactInviteCodePath(req.path),
               userId: req.user?.userId,
               ...(result.fallback ? { fallback: true } : {}),
             });
@@ -289,7 +290,7 @@ function createRateLimiters({
           log.warn('rate-limit:exceeded', {
             scope: rateLimitKey,
             ip: getRequestIp(req),
-            path: req.path,
+            path: redactInviteCodePath(req.path),
             userId: req.user?.userId,
             ...(result.fallback ? { fallback: true } : {}),
           });
@@ -310,7 +311,7 @@ function createRateLimiters({
           const result = await redisLimiter.check(ip);
           if (!result.fallback) {
             if (result.limited) {
-              log.warn('rate-limit:exceeded', { scope: `auth:${ip}`, ip, path: req.path, userId: req.user?.userId });
+              log.warn('rate-limit:exceeded', { scope: `auth:${ip}`, ip, path: redactInviteCodePath(req.path), userId: req.user?.userId });
               res.set('Retry-After', String(Math.max(1, Math.ceil(result.resetMs / 1000))));
               promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
               return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
@@ -335,7 +336,7 @@ function createRateLimiters({
         log.warn('rate-limit:exceeded', {
           scope: `auth:${ip}`,
           ip,
-          path: req.path,
+          path: redactInviteCodePath(req.path),
           userId: req.user?.userId,
           fallback: true,
         });
