@@ -257,6 +257,16 @@ export default function CrewScreen() {
     router.setParams({ joined: undefined });
   }, [joinedParam, activeCrew, showNotice, router]);
 
+  // Joining while in another crew: if that crew is still the active one, switch to the joined crew
+  // so the notice above can show and the screen is not left on the wrong crew.
+  const joinSelected = useRef<string | null>(null);
+  useEffect(() => {
+    if (!joinedParam || crewLoading || activeCrew?.id === joinedParam) return;
+    if (joinSelected.current === joinedParam || !crews.some((c) => c.id === joinedParam)) return;
+    joinSelected.current = joinedParam; // once per join, so a failed select cannot loop
+    selectCrew(joinedParam).catch((err) => Sentry.captureException(err));
+  }, [joinedParam, crewLoading, activeCrew?.id, crews, selectCrew]);
+
   // /(tabs)/crew?sheet=join opens the Crews sheet in Join mode, once per link:
   // the param is cleared so a later activeCrew change cannot reopen it.
   const hasActiveCrew = !!activeCrew;

@@ -43,6 +43,7 @@ vi.mock('@festie/shared/utils', async () => {
 
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }) }));
 
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import CrewStatus from './CrewStatus';
 
 const row = (user_id: string, status: string, hoursAgo: number) => ({
@@ -86,6 +87,17 @@ describe('CrewStatus', () => {
     renderStatus();
     expect(await screen.findByText("Couldn't load crew status")).toBeInTheDocument();
     expect(screen.getByText(OFFLINE_COPY)).toBeInTheDocument();
+  });
+
+  it('keeps the cached statuses and shows a small note, not the error panel, when the load fails in offline mode', async () => {
+    useUIStore.setState({ offlineMode: true });
+    h.statuses = [row('sam', 'here', 1)];
+    h.loadStatuses.mockRejectedValue(offlineError());
+    renderStatus();
+    expect(await screen.findByText(/You're offline\. Showing the last saved status\./)).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load crew status")).not.toBeInTheDocument();
+    expect(screen.getByText('sam', { exact: false })).toBeInTheDocument();
+    useUIStore.setState({ offlineMode: false });
   });
 
   it('says the server failed when the load fails with a 5xx', async () => {

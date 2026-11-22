@@ -925,10 +925,11 @@ export default function CrewMap({
           />
         )}
 
+        {/* bottom-9 on this and the place card leaves the attribution button visible. */}
         {/* ── Pursue overlay: directional arrow + label "Alex · 210 m NE · ~3 min". */}
         {showPursueOverlay && (
           <div
-            className="absolute left-2 bottom-2 right-2 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
+            className="absolute left-2 bottom-9 right-2 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
             style={{ borderColor: pursueIsSos ? 'var(--color-accent-coral)' : 'var(--color-accent-aqua)' }}
           >
             {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (
@@ -983,8 +984,8 @@ export default function CrewMap({
 
       {/* ── Nearest-X quick controls: show the way to the closest medical / water / toilet. */}
       {hasAmenities && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-xs text-text-muted">{MAP_COPY.nearest}</span>
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-labelledby="map-nearest-label">
+          <span id="map-nearest-label" className="text-xs text-text-muted">{MAP_COPY.nearest}</span>
           {NEAREST_AMENITY_TYPES.map((type) => {
             const { glyph } = amenityGlyph(type);
             const name = humanizeAmenityType(type);
@@ -1019,6 +1020,7 @@ export default function CrewMap({
       {/* ── Amenity filter chips: toggle each category on/off (local only). */}
       {hasAmenities && (
         <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="Filter amenities by category">
+          <span className="text-xs text-text-muted">Show on map</span>
           {MAP_AMENITY_CATEGORIES.filter((type) => amenityPins.some((p) => p.amenityType === type)).map((type) => {
             const { glyph } = amenityGlyph(type);
             const name = humanizeAmenityType(type);

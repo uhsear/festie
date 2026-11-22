@@ -10,6 +10,7 @@ import {
 } from '@festie/shared';
 import { useCurrentPosition, useAutoArrive, useFestival } from '@festie/shared/hooks';
 import { useFestivalStore } from '@festie/shared/stores';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import {
   CREW_STATUS_PRESETS,
   arrivedMessage,
@@ -87,6 +88,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
   const loadStatuses = useCrewStore((s) => s.loadStatuses);
   const updateMyStatus = useCrewStore((s) => s.updateMyStatus);
   const crewMembers = useCrewStore((s) => s.crewMembers);
+  const offlineMode = useUIStore((s) => s.offlineMode);
 
   const sets = useFestivalStore((s) => s.sets);
   const days = useFestivalStore((s) => s.days);
@@ -414,13 +416,19 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
         </form>
       )}
 
+      {/* Offline the failed load is expected: keep the cached list and say so in one line, as the crew sections do. */}
+      {loadError && offlineMode && (
+        <p role="status" className="text-xs text-text-muted">
+          You're offline. Showing the last saved status.
+        </p>
+      )}
       {/* Crew status list with HONEST staleness. */}
       {loading ? (
         <SkeletonGroup className="space-y-2">
           <Skeleton variant="card" />
           <Skeleton variant="card" />
         </SkeletonGroup>
-      ) : loadError ? (
+      ) : loadError && !offlineMode ? (
         <EmptyState
           icon={<Navigation className="w-12 h-12" aria-hidden="true" />}
           title="Couldn't load crew status"

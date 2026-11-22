@@ -171,6 +171,17 @@ describe('useRealtimeStoreSync: event handlers', () => {
     expect(selectCrew).toHaveBeenCalledWith('c1');
   });
 
+  it('re-selects the active crew when a member leaves or the crew is renamed', () => {
+    mount();
+    socket.fire('crew:member-left', { crewId: 'c1' });
+    flush();
+    expect(selectCrew).toHaveBeenCalledTimes(1);
+    expect(selectCrew).toHaveBeenLastCalledWith('c1');
+    socket.fire('crew:updated', { crewId: 'c1' });
+    flush();
+    expect(selectCrew).toHaveBeenCalledTimes(2);
+  });
+
   it('applies a crew status only for the open crew', () => {
     mount();
     socket.fire('crew:status-updated', { status: { crew_id: 'other' } });
