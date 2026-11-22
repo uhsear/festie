@@ -199,7 +199,8 @@ export const MAX_FONT_SCALE = 1.4;
 export const LARGE_TEXT_SCALE = 1.3;
 
 export function isLargeText(fontScale: number): boolean {
-  return fontScale >= LARGE_TEXT_SCALE;
+  // Android reports the scale as a 32-bit float, so a 1.3 setting arrives as 1.29999995.
+  return fontScale >= LARGE_TEXT_SCALE - 0.001;
 }
 
 /** True at large OS text: hide decorative images or move buttons onto their own line. */
