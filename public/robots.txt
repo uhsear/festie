@@ -9,6 +9,5 @@ Disallow: /uploads/
 Disallow: /admin
 Disallow: /reset-password
 Disallow: /reset/
-Disallow: /join/
 
 Sitemap: https://festie.us/sitemap.xml

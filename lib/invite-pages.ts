@@ -132,6 +132,7 @@ export function renderInviteJoinPage({
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
   <meta name="description" content="${escapeHtml(description)}">
+  <meta name="robots" content="noindex">
   <meta name="theme-color" content="#0a0a0a">
   <meta property="og:title" content="${title}">
   <meta property="og:description" content="${escapeHtml(description)}">
@@ -191,6 +192,7 @@ export function renderInviteErrorPage(origin: string, message: string) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>This invite doesn't work</title>
+  <meta name="robots" content="noindex">
   <meta name="theme-color" content="#0a0a0a">
   <style>${PAGE_STYLE}${LIGHT_STYLE}
   </style>
