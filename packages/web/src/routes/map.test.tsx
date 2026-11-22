@@ -5,6 +5,7 @@ const h = vi.hoisted(() => ({
   festival: null as unknown,
   user: null as unknown,
   crew: null as unknown,
+  otherFestival: null as string | null,
   useQuery: vi.fn(),
   useActiveCrew: vi.fn(),
   crewMapProps: vi.fn(),
@@ -39,9 +40,9 @@ vi.mock('@festie/shared/stores', () => {
 });
 
 vi.mock('@festie/shared/hooks', () => ({
-  useActiveCrew: () => {
+  useMapCrew: () => {
     h.useActiveCrew();
-    return { crew: h.crew };
+    return { crew: h.crew, otherFestivalName: h.otherFestival };
   },
 }));
 
@@ -90,6 +91,7 @@ beforeEach(() => {
   h.festival = { id: 'f1', name: 'Fest' };
   h.user = null;
   h.crew = null;
+  h.otherFestival = null;
   h.search = {};
   h.error = null;
   h.queryError = false;
@@ -153,7 +155,8 @@ describe('MapView', () => {
     h.user = { id: 'u1' };
     render(<MapView />);
     await screen.findByTestId('crew-map');
-    expect(screen.getByRole('link', { name: 'crew' })).toHaveAttribute('href', '/crew');
+    expect(screen.getByText(/Join a crew to see friends/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Crew' })).toHaveAttribute('href', '/crew');
   });
 
   it('fetches meeting points under the shared cache key for a crew member', async () => {
@@ -199,13 +202,15 @@ describe('MapView', () => {
 
   it('hides crew layers and SOS when the crew belongs to another festival', async () => {
     h.user = { id: 'u1' };
-    h.crew = { id: 'c1', festivalId: 'other-fest' };
+    h.crew = null;
+    h.otherFestival = 'Wasteland';
     render(<MapView />);
     await screen.findByTestId('crew-map');
     expect(h.crewMapProps.mock.calls[0]![0].meetingPoints).toHaveLength(0);
     expect(screen.queryByRole('button', { name: 'SOS' })).not.toBeInTheDocument();
     expect(h.useQuery).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
-    expect(screen.getByRole('link', { name: 'crew' })).toBeInTheDocument();
+    expect(screen.getByText(/Your crew is for Wasteland/)).toBeInTheDocument();
+    expect(screen.queryByText('freshness-chip')).not.toBeInTheDocument();
   });
 
   it('keeps crew layers when the crew belongs to the selected festival', async () => {
@@ -217,8 +222,9 @@ describe('MapView', () => {
     expect(screen.getByRole('button', { name: 'SOS' })).toBeInTheDocument();
   });
 
-  it('shows the freshness and offline-download chips for a signed-in user only', async () => {
+  it('shows the freshness chip for a crew member and the offline chip for any signed-in user', async () => {
     h.user = { id: 'u1' };
+    h.crew = { id: 'c1', festivalId: 'f1' };
     const { unmount } = render(<MapView />);
     await screen.findByTestId('crew-map');
     expect(screen.getByText('freshness-chip')).toBeInTheDocument();

@@ -4,11 +4,11 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
-import { useActiveCrew } from '@festie/shared/hooks';
+import { useMapCrew } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { Map as MapIcon } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
-import { festivalForCrew, festivalLoadState } from '@festie/shared/utils';
+import { festivalLoadState, mapCrewHintCopy } from '@festie/shared/utils';
 import EmptyState from '../components/ui/EmptyState';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -42,10 +42,8 @@ function MapViewInner() {
     [currentFestival, festivalStages],
   );
   const user = useAuthStore((s) => s.user);
-  // Also selects the first crew, so a hard load of /map joins the crew room without a visit to /crew.
-  const { crew: activeCrew } = useActiveCrew();
-  // A crew belongs to one festival, but the selected festival follows the Lineup tab.
-  const mapCrew = activeCrew && festivalForCrew(activeCrew, currentFestival) ? activeCrew : null;
+  // The crew for the selected festival; also joins the crew room on a hard load of /map.
+  const { crew: mapCrew, otherFestivalName } = useMapCrew();
   const crewId = user && mapCrew ? mapCrew.id : '';
   const hasCrew = crewId !== '';
 
@@ -102,12 +100,12 @@ function MapViewInner() {
   const showSosRow = hasCrew && !sosList.some((e) => e.userId === user?.id);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-2 px-4 py-2">
+    <div className="map-page flex h-full min-h-0 flex-col gap-2 px-4 py-2">
       <h1 className="sr-only">Map</h1>
       {/* So a user offline can see how stale the shown pins are, as on mobile. */}
       {user && (
         <div className="flex flex-wrap items-center gap-2">
-          <FreshnessChip surface="crew" />
+          {hasCrew && <FreshnessChip surface="crew" />}
           <OfflineStatusChip />
         </div>
       )}
@@ -147,12 +145,11 @@ function MapViewInner() {
       )}
       {!hasCrew && (
         <p className="text-center text-sm text-text-muted">
-          {user ? (
-            <>
-              Join a <Link to="/crew" className="underline">crew</Link> to see friends and meeting points here.
-            </>
-          ) : (
-            'Sign in and join a crew to see friends and meeting points here.'
+          {mapCrewHintCopy(!!user, otherFestivalName)}{' '}
+          {user && (
+            <Link to="/crew" className="underline">
+              Open Crew
+            </Link>
           )}
         </p>
       )}

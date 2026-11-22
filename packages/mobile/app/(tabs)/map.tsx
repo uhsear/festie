@@ -6,7 +6,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useAuthStore, useCrewStore, useLiveLocationStore, useFestivalDataStore } from '@festie/shared/stores';
 import { COPY, FIND_FRIEND_COPY, LIVE_LOCATION } from '@festie/shared/constants';
-import { festivalLoadState, isPeerStale } from '@festie/shared/utils';
+import { festivalLoadState, isPeerStale, mapCrewHintCopy } from '@festie/shared/utils';
+import { useMapCrew } from '@festie/shared/hooks';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
@@ -21,7 +22,6 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenHeader from '../../components/ScreenHeader';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
-import { festivalForCrew } from '../../lib/crewFestival';
 
 /** Sweep stale peers off the map on this cadence while the screen is mounted. */
 const SWEEP_INTERVAL_MS = 15_000;
@@ -138,7 +138,8 @@ export default function MapScreen() {
   }, []);
 
   // A crew belongs to one festival, but the selected festival follows the Lineup tab.
-  const crewLayers = Boolean(user && activeCrew && festivalForCrew(activeCrew, currentFestival));
+  const { crew: mapCrew, otherFestivalName } = useMapCrew();
+  const crewLayers = Boolean(user && mapCrew);
   const hasCompassPoint = crewLayers && (meetingPoints ?? []).some((p) => p && p.active !== false && hasCoords(p));
   const now = useNow();
   const hasLivePeer = peers.some((p) => p.userId !== user?.id && !isPeerStale(p.serverAt, now, LIVE_LOCATION.STALE_MS));
@@ -192,9 +193,7 @@ export default function MapScreen() {
       </View>
       {!crewLayers ? (
         <Text style={styles.crewHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {user
-            ? 'Join a crew to see friends and meeting points here.'
-            : 'Sign in and join a crew to see friends and meeting points here.'}
+          {mapCrewHintCopy(!!user, otherFestivalName)}
         </Text>
       ) : null}
       <OfflineMap
