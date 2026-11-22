@@ -4,6 +4,7 @@ import { describeMutation } from './mutationLabel';
 describe('describeMutation', () => {
   it('names picks and notes writes instead of the raw profile path', () => {
     expect(describeMutation('PUT', '/profiles/prof-1')).toBe('Update picks');
+    expect(describeMutation('POST', '/profiles', { festivalId: 'f1' })).toBe('Join festival');
   });
 
   it('puts the meeting point label in the text so two rows differ', () => {

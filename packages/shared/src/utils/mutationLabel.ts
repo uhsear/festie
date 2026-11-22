@@ -47,6 +47,8 @@ export function describeMutation(method: string | undefined, url: string | undef
   const segments = path.split('/').filter(Boolean);
   for (let i = segments.length - 1; i >= 0; i--) {
     const segment = segments[i]!;
+    // POST /profiles creates the profile (joins a festival); picks are PUT to /profiles/:id.
+    if (segment === 'profiles' && m === 'POST') return 'Join festival';
     const fixed = FIXED_LABELS[segment];
     if (fixed) return fixed;
     const noun = NOUNS[segment];
