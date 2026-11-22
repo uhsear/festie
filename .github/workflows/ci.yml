@@ -390,6 +390,9 @@ jobs:
       - run: npm ci
       - name: Cross-workspace version parity (syncpack)
         run: npx syncpack lint
+      # Legal pages ship on every deploy, so a [TODO placeholder must never reach main.
+      - name: Legal text has no placeholders
+        run: npm run check:legal
 
       # ── API schema drift gate ────────────────────────────────────────────────
       # Save the committed spec BEFORE regenerating so oasdiff can compare the
