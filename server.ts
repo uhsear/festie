@@ -116,6 +116,7 @@ import { createReengagementTriggers } from './lib/notifications/reengagement';
 import { createReengagementQueue } from './lib/notifications/reengagement-queue';
 import createPageRoutes from './routes/pages';
 import { createLogger } from './lib/logger';
+import { redactInviteCodePath } from './lib/helpers/sanitize';
 import { isLeader, getWorkerId } from './lib/process-role';
 import {
   createMetrics,
@@ -370,7 +371,7 @@ function installErrorHandling(app: Express, ctx: AppContext) {
           log.error('unhandled request error (repeated)', {
             error: error.message,
             method: req.method,
-            path: req.path,
+            path: redactInviteCodePath(req.path),
             reqId: (req as any).id,
             traceId: (req as any).traceId,
             status,
@@ -386,12 +387,12 @@ function installErrorHandling(app: Express, ctx: AppContext) {
           count: 1,
           firstSeen: Date.now(),
           message: error.message,
-          path: req.path,
+          path: redactInviteCodePath(req.path),
         });
         const meta: any = {
           error: error.message,
           method: req.method,
-          path: req.path,
+          path: redactInviteCodePath(req.path),
           reqId: (req as any).id,
           traceId: (req as any).traceId,
           status,
@@ -404,7 +405,7 @@ function installErrorHandling(app: Express, ctx: AppContext) {
       const meta: any = {
         error: error.message,
         method: req.method,
-        path: req.path,
+        path: redactInviteCodePath(req.path),
         reqId: (req as any).id,
         traceId: (req as any).traceId,
         status,

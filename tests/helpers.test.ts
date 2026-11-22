@@ -13,6 +13,7 @@ import {
   stripBom,
   encodeContentDispositionFilename,
   createAuditLog,
+  redactInviteCodePath,
 } from '../lib/helpers/sanitize.js';
 
 import {
@@ -199,6 +200,38 @@ describe('helpers/sanitize: getLogSafeRequestInfo', () => {
     assert.equal(result.method, 'DELETE');
     assert.equal(result.path, '/api/users/1');
     assert.equal(result.ip, '1.2.3.4');
+  });
+
+  it('redacts an invite code from the path', () => {
+    const req = { method: 'GET', path: '/api/v1/crews/join-preview/SECRET1', ip: '1.2.3.4', headers: {} };
+    assert.equal(getLogSafeRequestInfo(req).path, '/api/v1/crews/join-preview/:code');
+  });
+});
+
+describe('helpers/sanitize: redactInviteCodePath', () => {
+  it('replaces the code in join-preview and legacy join paths, with or without a prefix', () => {
+    assert.equal(redactInviteCodePath('/api/v1/crews/join-preview/ABC123'), '/api/v1/crews/join-preview/:code');
+    assert.equal(redactInviteCodePath('/api/v1/crews/join/ABC123'), '/api/v1/crews/join/:code');
+    assert.equal(redactInviteCodePath('/join/ABC123'), '/join/:code');
+    assert.equal(redactInviteCodePath('/join-preview/ABC123'), '/join-preview/:code');
+  });
+
+  it('redacts regardless of letter case', () => {
+    assert.equal(redactInviteCodePath('/API/V1/CREWS/JOIN-PREVIEW/CODE'), '/API/V1/CREWS/JOIN-PREVIEW/:code');
+    assert.equal(redactInviteCodePath('/Join/CODE'), '/Join/:code');
+  });
+
+  it('redacts every code in a string that holds more than one', () => {
+    assert.equal(
+      redactInviteCodePath('https://festie.us/join/AAA1 from https://festie.us/crews/join-preview/BBB2'),
+      'https://festie.us/join/:code from https://festie.us/crews/join-preview/:code',
+    );
+    assert.equal(redactInviteCodePath('/join/AAA1'), '/join/:code'); // a second call on a global regex must not skip
+  });
+
+  it('leaves other paths unchanged', () => {
+    assert.equal(redactInviteCodePath('/api/v1/crews/join'), '/api/v1/crews/join');
+    assert.equal(redactInviteCodePath('/api/v1/crews/abc/members'), '/api/v1/crews/abc/members');
   });
 });
 

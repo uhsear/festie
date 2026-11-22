@@ -219,3 +219,27 @@ describe('AvatarPool: encoded output contract', () => {
     assert.equal(md.height, 32);
   });
 });
+
+describe('AvatarPool: decoder errors (SEC-ERR-LEAK-SHARP)', () => {
+  let pool: any;
+  afterEach(async () => {
+    if (pool) await pool.terminate();
+  });
+
+  it('answers a fixed message for an undecodable image and keeps the decoder text as detail', async () => {
+    pool = new AvatarPool();
+    const config = { AVATAR_MAX_PIXELS: 4000 * 4000, AVATAR_SIZE: 256, AVATAR_WEBP_QUALITY: 80 };
+    const inputs = [
+      Buffer.concat([Buffer.from('GIF89a'), Buffer.alloc(8, 0xff)]),
+      Buffer.from('<html>not an image</html>'),
+    ];
+    for (const input of inputs) {
+      await assert.rejects(pool.process(input, config), (err: any) => {
+        assert.equal(err.message, 'We could not read that image');
+        assert.equal(err.statusCode, 400);
+        assert.ok(typeof err.detail === 'string' && err.detail.length > 0, 'the decoder text stays available for the server log');
+        return true;
+      });
+    }
+  });
+});

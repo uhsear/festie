@@ -561,6 +561,7 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       const user = await registerUser(server, 'seen-most-' + stamp);
       const other = await registerUser(server, 'seen-most-other-' + stamp);
       const profile = await joinFestivalProfile(server, user.token);
+      await joinFestivalProfile(server, user.token, fest2);
       const rate = (setId: string, rating: number) =>
         server.request
           .post(`/api/v1/ratings/${setId}`)
@@ -592,6 +593,7 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       await rate(id('x2'), 2);
 
       // Another user's marks never count for this user.
+      await joinFestivalProfile(server, other.token);
       await markCaught(server, other.token, 'set-b', true);
       await markCaught(server, other.token, 'set-d', true);
 
@@ -654,5 +656,59 @@ describe('Integration — Ratings', { concurrency: 1 }, () => {
       .get(`/api/v1/ratings/crew-wrap/${crew.id}/fest-1`)
       .set('x-user-token', outsider.token)
       .expect(403);
+  });
+
+  test('rating and marking caught need a profile for the festival, and a published festival (SEC-RATINGS-OPEN)', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const stamp = Date.now();
+    const draftId = `draft-${stamp}`;
+    const draftSet = `draft-set-${stamp}`;
+    const outsider = await registerUser(server, 'ratings-open-o-' + stamp);
+    const member = await registerUser(server, 'ratings-open-m-' + stamp);
+    await joinFestivalProfile(server, member.token);
+
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    try {
+      await pool.query(
+        'INSERT INTO festivals (id, name, location, published_at) VALUES ($1, $2, $3, NULL)',
+        [draftId, 'Draft Fest', 'Nowhere'],
+      );
+      await pool.query('INSERT INTO festival_stages (festival_id, id, name, color, sort_order) VALUES ($1, $2, $3, $4, 0)', [draftId, 'main', 'Main', '#ff3366']);
+      await pool.query('INSERT INTO festival_days (festival_id, day_index, label, date) VALUES ($1, 0, $2, $3)', [draftId, 'Friday', '2026-06-05']);
+      await pool.query(
+        "INSERT INTO festival_sets (id, festival_id, day_index, artist, stage_id, start_time, end_time, sort_order) VALUES ($1, $2, 0, $3, 'main', $4, $5, 0)",
+        [draftSet, draftId, 'Hidden', '10:00', '11:00'],
+      );
+      const memberId = (await pool.query('SELECT id FROM users WHERE username = $1', ['ratings-open-m-' + stamp])).rows[0].id;
+      await pool.query(
+        'INSERT INTO festival_profiles (id, user_id, festival_id, name) VALUES ($1, $2, $3, $4)',
+        [`draft-profile-${stamp}`, memberId, draftId, 'Member'],
+      );
+
+      // No profile for fest-1: refused with the same body as a missing set.
+      const noProfile = await server.request.post('/api/v1/ratings/set-a').set('x-user-token', outsider.token).send({ rating: 1 }).expect(404);
+      assert.equal(noProfile.body.error.message, 'Set not found');
+      await server.request.put('/api/v1/ratings/set-a/caught').set('x-user-token', outsider.token).send({ caught: true }).expect(404);
+
+      // A profile row on a draft festival still cannot rate it.
+      await server.request.post(`/api/v1/ratings/${draftSet}`).set('x-user-token', member.token).send({ rating: 5 }).expect(404);
+      await server.request.put(`/api/v1/ratings/${draftSet}/caught`).set('x-user-token', member.token).send({ caught: true }).expect(404);
+
+      // A joined member of a published festival still can.
+      await server.request.post('/api/v1/ratings/set-a').set('x-user-token', member.token).send({ rating: 4 }).expect(200);
+      await server.request.put('/api/v1/ratings/set-a/caught').set('x-user-token', member.token).send({ caught: true }).expect(200);
+
+      // The public aggregate never lists a draft festival's sets, even for rows already stored.
+      await pool.query('INSERT INTO set_ratings (user_id, set_id, rating) VALUES ($1, $2, 5)', [memberId, draftSet]);
+      const draftAgg = await server.request.get(`/api/v1/ratings/festival/${draftId}/all`).expect(200);
+      assert.deepEqual(draftAgg.body.data.ratings, []);
+      const missingAgg = await server.request.get('/api/v1/ratings/festival/no-such-festival/all').expect(200);
+      assert.deepEqual(missingAgg.body.data.ratings, []);
+      const liveAgg = await server.request.get('/api/v1/ratings/festival/fest-1/all').expect(200);
+      assert.equal(liveAgg.body.data.ratings.length, 1);
+    } finally {
+      await pool.end();
+    }
   });
 });

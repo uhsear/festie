@@ -7,6 +7,7 @@
 
 import { createRequire } from 'module';
 import { loadConfig } from './config.js';
+import { redactInviteCodePath } from './helpers/sanitize.js';
 
 let _loaded: ReturnType<typeof loadConfig> | undefined;
 const cfg = () => (_loaded ??= loadConfig());
@@ -15,6 +16,62 @@ const _require = createRequire(import.meta.url);
 let Sentry: any = null;
 let initialized = false;
 let noop = true;
+
+const REDACT_MAX_DEPTH = 8;
+const REDACT_MAX_NODES = 2000;
+// Walked first, so a huge `extra` cannot use up the node budget before the fields that carry URLs.
+const REDACT_PRIORITY_KEYS = ['request', 'transaction', 'message', 'exception', 'spans', 'breadcrumbs'];
+
+interface RedactState { nodes: number; ancestors: Set<object> }
+
+function redactNode(value: unknown, depth: number, state: RedactState): unknown {
+  if (value === null || (typeof value !== 'string' && typeof value !== 'object')) return value;
+  if (ArrayBuffer.isView(value)) return value;
+  // Fail closed: a value past a cap is dropped, never passed through unredacted.
+  if (++state.nodes > REDACT_MAX_NODES) return '[Filtered]';
+  if (typeof value === 'string') return redactInviteCodePath(value);
+  if (state.ancestors.has(value)) return '[Circular]';
+  if (depth >= REDACT_MAX_DEPTH) return '[Filtered]';
+  state.ancestors.add(value);
+  const holder = value as Record<string, unknown>;
+  for (const key of Object.keys(holder)) holder[key] = redactNode(holder[key], depth + 1, state);
+  state.ancestors.delete(value);
+  return value;
+}
+
+/**
+ * Replaces every string inside an object or array with its invite-code-redacted form, in place, and returns the value.
+ * Bounded so a hostile or huge event cannot hang the process: a value below depth 8 or after 2000 visited nodes
+ * becomes '[Filtered]', and a cycle becomes '[Circular]'. The request, transaction, message, exception,
+ * trace context, spans and breadcrumbs are walked before the rest of the event.
+ */
+function redactDeep<T>(value: T): T {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return redactNode(value, 0, { nodes: 0, ancestors: new Set() }) as T;
+  const root = value as Record<string, any>;
+  const state: RedactState = { nodes: 0, ancestors: new Set([root]) };
+  if (root.contexts?.trace) root.contexts.trace = redactNode(root.contexts.trace, 2, state);
+  const order = [...REDACT_PRIORITY_KEYS.filter((key) => key in root), ...Object.keys(root).filter((key) => !REDACT_PRIORITY_KEYS.includes(key))];
+  for (const key of order) root[key] = redactNode(root[key], 1, state);
+  return value;
+}
+
+/** Runs `ours` first, then the caller's hook on its result. A null from either drops the item. */
+function composeHook(ours: (item: any) => any, theirs?: (item: any, hint?: any) => any) {
+  return (item: any, hint?: any) => {
+    const scrubbed = ours(item);
+    return scrubbed == null || typeof theirs !== 'function' ? scrubbed : theirs(scrubbed, hint);
+  };
+}
+
+function scrubErrorEvent(event: any) {
+  // Strip obvious PII paths
+  if (event.request && event.request.headers) {
+    delete event.request.headers.cookie;
+    delete event.request.headers.authorization;
+  }
+  // An invite code in a URL, referer, message or any other field is a live credential.
+  return redactDeep(event);
+}
 
 function initSentry(options: any = {}) {
   if (initialized) return Sentry;
@@ -47,6 +104,7 @@ function initSentry(options: any = {}) {
     return Sentry;
   }
 
+  const extra = options.extra ?? {};
   try {
     Sentry.init({
       dsn,
@@ -73,15 +131,13 @@ function initSentry(options: any = {}) {
         queues: false,
         graphQL: { document: false, variables: false },
       },
-      beforeSend(event: any) {
-        // Strip obvious PII paths
-        if (event.request && event.request.headers) {
-          delete event.request.headers.cookie;
-          delete event.request.headers.authorization;
-        }
-        return event;
-      },
-      ...options.extra,
+      ...extra,
+      // Ours run first and always; a caller hook sees the scrubbed value and cannot replace them.
+      beforeSend: composeHook(scrubErrorEvent, extra.beforeSend),
+      beforeSendTransaction: composeHook(redactDeep, extra.beforeSendTransaction),
+      beforeBreadcrumb: composeHook(redactDeep, extra.beforeBreadcrumb),
+      // traceLifecycle is 'static', so the span callback takes a SpanJSON through withStaticSpan.
+      beforeSendSpan: Sentry.withStaticSpan(composeHook(redactDeep, extra.beforeSendSpan)),
     });
     noop = false;
     console.debug('[sentry] initialized', { env: options.environment || cfg().NODE_ENV, release: options.release || cfg().SENTRY_RELEASE || cfg().APP_VERSION });
@@ -177,4 +233,4 @@ const sentry = {
   get raw() { return Sentry; },
 };
 
-export { initSentry, sentry };
+export { initSentry, sentry, scrubErrorEvent, redactDeep, composeHook };
