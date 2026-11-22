@@ -33,8 +33,8 @@ describe('RatingButtons', () => {
 
   it('marks the saved rating and captions it', async () => {
     renderButtons();
-    const fire = await screen.findByRole('radio', { name: 'Fire (5 of 5)' });
-    await vi.waitFor(() => expect(fire).toHaveAttribute('aria-checked', 'true'));
+    const fire = await screen.findByRole('button', { name: 'Fire (5 of 5)' });
+    await vi.waitFor(() => expect(fire).toHaveAttribute('aria-pressed', 'true'));
     expect(screen.getByText('You rated this: Fire (5 of 5)')).toBeInTheDocument();
   });
 
@@ -51,22 +51,33 @@ describe('RatingButtons', () => {
   it('posts no note when only the rating changes', async () => {
     const onRated = vi.fn();
     renderButtons({ onRated });
-    fireEvent.click(await screen.findByRole('radio', { name: 'Good (4 of 5)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Good (4 of 5)' }));
     await vi.waitFor(() => expect(api.post).toHaveBeenCalledWith('/ratings/s1', { rating: 4 }, { clientId: 'rate-s1' }));
     await vi.waitFor(() => expect(onRated).toHaveBeenCalledWith(4));
   });
 
   it('removes the current rating with the deterministic clientId', async () => {
     renderButtons();
-    const fire = await screen.findByRole('radio', { name: 'Fire (5 of 5)' });
-    await vi.waitFor(() => expect(fire).toHaveAttribute('aria-checked', 'true'));
+    const fire = await screen.findByRole('button', { name: 'Fire (5 of 5)' });
+    await vi.waitFor(() => expect(fire).toHaveAttribute('aria-pressed', 'true'));
     fireEvent.click(fire);
     await vi.waitFor(() => expect(api.delete).toHaveBeenCalledWith('/ratings/s1', { clientId: 'rate-s1' }));
   });
 
+  it('uses aria-disabled, not disabled, while saving so keyboard focus stays on the button', async () => {
+    renderButtons();
+    const good = await screen.findByRole('button', { name: 'Good (4 of 5)' });
+    good.focus();
+    fireEvent.click(good);
+    expect(good).toHaveAttribute('aria-disabled', 'true');
+    expect(good).not.toBeDisabled();
+    expect(good).toHaveFocus();
+    await vi.waitFor(() => expect(good).not.toHaveAttribute('aria-disabled'));
+  });
+
   it('hides the memory field when showMemory is false', async () => {
     renderButtons({ showMemory: false });
-    await screen.findByRole('radio', { name: 'Fire (5 of 5)' });
+    await screen.findByRole('button', { name: 'Fire (5 of 5)' });
     expect(screen.queryByRole('button', { name: 'Add a memory' })).not.toBeInTheDocument();
   });
 });

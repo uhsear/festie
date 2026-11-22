@@ -100,7 +100,7 @@ function LinkSection({ festivalId, festivalName }: { festivalId: string; festiva
               href={state.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-text-primary"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-border px-3 text-sm font-semibold text-text-primary focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
             >
               Open
             </a>

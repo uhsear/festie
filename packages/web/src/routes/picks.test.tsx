@@ -357,6 +357,34 @@ describe('PicksView', () => {
     expect(screen.getByRole('tab', { name: 'My day' })).toHaveAttribute('aria-selected', 'true');
   });
 
+  it('moves between the view tabs and the group radios with the arrow keys, one tab stop each', () => {
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    const allPicks = screen.getByRole('tab', { name: 'All picks' });
+    expect(allPicks).toHaveAttribute('aria-controls', 'picks-view-panel');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'picks-view-panel');
+    allPicks.focus();
+    fireEvent.keyDown(allPicks, { key: 'ArrowRight' });
+    expect(screen.getByRole('tab', { name: 'My day' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'picks-tab-myday');
+    fireEvent.click(screen.getByRole('tab', { name: 'All picks' }));
+
+    const group = screen.getByRole('radiogroup', { name: 'Group picks by' });
+    const radios = within(group).getAllByRole('radio');
+    expect(radios.map((r) => r.tabIndex)).toEqual([0, ...radios.slice(1).map(() => -1)]);
+    radios[0]!.focus();
+    fireEvent.keyDown(radios[0]!, { key: 'ArrowRight' });
+    expect(radios[1]).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('uses a plain text field, not a search field, so the browser adds no second clear button', () => {
+    setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
+    render(<PicksView />);
+    const field = screen.getByLabelText('Filter my picks');
+    expect(field).toHaveAttribute('type', 'text');
+    expect(field).toHaveAttribute('inputmode', 'search');
+  });
+
   it('My day lists each day with picks once and dayless picks in one group', () => {
     setStoreState({
       sets: [
