@@ -43,7 +43,9 @@ vi.mock('@festie/shared/hooks', () => ({
 vi.mock('./Header', () => ({ default: () => <div data-testid="header">Header</div> }));
 vi.mock('./BottomNav', () => ({ default: () => <div data-testid="bottom-nav">BottomNav</div> }));
 vi.mock('./SubHeader', () => ({ default: () => <div data-testid="sub-header">SubHeader</div> }));
-vi.mock('./PageTransition', () => ({ default: ({ children }: { children: React.ReactNode }) => <>{children}</> }));
+vi.mock('./PageTransition', () => ({
+  default: ({ children }: { children: React.ReactNode }) => <div data-testid="page-transition">{children}</div>,
+}));
 vi.mock('../features/DetailPanel', () => ({ default: () => <div data-testid="detail-panel" /> }));
 vi.mock('../features/OfflineBanner', () => ({ default: () => null }));
 vi.mock('../features/UpdatePrompt', () => ({ default: () => null }));
@@ -148,6 +150,36 @@ describe('AppShell', () => {
     mockUser = null;
     render(<AppShell />);
     expect(screen.queryByText('Browsing as guest.')).not.toBeInTheDocument();
+  });
+
+  it('shows the legal footer to guests and hides it once signed in', () => {
+    mockUser = null;
+    const { unmount } = render(<AppShell />);
+    expect(screen.getByRole('link', { name: 'Privacy' })).toHaveAttribute('href', '/privacy.html');
+    unmount();
+    mockUser = { id: 'u1', username: 'asir' };
+    render(<AppShell />);
+    expect(screen.queryByRole('link', { name: 'Privacy' })).not.toBeInTheDocument();
+  });
+
+  it('renders the guest footer inside the page wrapper so it follows long content', () => {
+    render(<AppShell />);
+    expect(screen.getByTestId('page-transition')).toContainElement(screen.getByRole('contentinfo', { name: 'Legal and help' }));
+  });
+
+  it('skips the guest footer on the grid, timeline and map, which fill the shell', () => {
+    for (const path of ['/grid', '/timeline', '/map']) {
+      mockPathname = path;
+      const r = render(<AppShell />);
+      expect(screen.queryByRole('contentinfo', { name: 'Legal and help' })).not.toBeInTheDocument();
+      r.unmount();
+    }
+  });
+
+  it('shows the legal footer on sign-in pages', () => {
+    mockPathname = '/login';
+    render(<AppShell />);
+    expect(screen.getByRole('link', { name: 'Terms' })).toHaveAttribute('href', '/terms.html');
   });
 
   it('renders auth screen layout for /login route', () => {
