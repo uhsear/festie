@@ -169,7 +169,8 @@ describe('pages: /join/:code', () => {
     assert.equal(res._redirectUrl, null);
     assert.equal(res._headers['Content-Type'], 'text/html; charset=utf-8');
     assert.equal(res._headers['Cache-Control'], 'public, max-age=60');
-    assert.equal(res._headers['Content-Security-Policy'], "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    assert.equal(res._headers['Content-Security-Policy'], "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    assert.equal(res._headers['X-Robots-Tag'], 'noindex');
   });
 
   it('returns 404 with the error page for an unknown code', async () => {
