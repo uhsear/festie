@@ -50,8 +50,15 @@ describe('FestivalEditForm in organizer mode', () => {
     expect(group).toContainElement(screen.getByLabelText('Festival Name'));
     expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Discard' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
     expect(screen.queryByText('Attendees are alerted after Festie checks the change.')).not.toBeInTheDocument();
+  });
+
+  it('shows a plain disabled Save when nothing changed', () => {
+    render(<FestivalEditForm {...props} mode="organizer" changes={{ ...props.changes, total: 0 }} />);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
   });
 
   it('shows Save for an editor', () => {

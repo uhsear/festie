@@ -139,7 +139,7 @@ describe('FestivalEditForm lineup tools', () => {
     );
     expect((screen.getByText('Save 2 changes') as HTMLButtonElement).disabled).toBe(false);
     rerender(<FestivalEditForm {...baseProps} formData={{ name: 'Fest' }} setFormData={vi.fn()} />);
-    expect((screen.getByText('Save 0 changes') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('reports the notify checkbox', () => {
