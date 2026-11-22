@@ -37,7 +37,7 @@ on:
         type: boolean
         default: false
       probe_mode:
-        description: 'TEMPORARY: bare | no-intro'
+        description: 'TEMPORARY: bare | no-intro | stack | tabs'
         type: string
         default: 'bare'
   workflow_call:
@@ -182,6 +182,22 @@ jobs:
         run: |
           sed -i '' 's|<FirstRunIntro onDone={dismissIntro} />|null|' app/_layout.tsx
           grep -c 'FirstRunIntro onDone' app/_layout.tsx || true
+
+      - name: Swap in router probe app (TEMPORARY)
+        if: inputs.probe == true && (inputs.probe_mode == 'stack' || inputs.probe_mode == 'tabs')
+        working-directory: packages/mobile
+        run: |
+          P=.maestro/probe
+          find app -mindepth 1 -maxdepth 1 ! -name _layout.tsx -exec rm -r {} +
+          cp $P/stack-layout.tsx app/_layout.tsx
+          if [ "${{ inputs.probe_mode }}" = "stack" ]; then
+            cp $P/probe-screen.tsx app/index.tsx
+          else
+            mkdir -p "app/(tabs)"
+            cp $P/tabs-layout.tsx "app/(tabs)/_layout.tsx"
+            cp $P/probe-screen.tsx "app/(tabs)/index.tsx"
+            cp $P/probe-screen.tsx "app/(tabs)/two.tsx"
+          fi
 
       - name: Swap in bare probe app (TEMPORARY)
         if: inputs.probe == true && inputs.probe_mode == 'bare'
