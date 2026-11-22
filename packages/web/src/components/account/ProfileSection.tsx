@@ -55,7 +55,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="How your name appears to your crew"
+            placeholder="How your crew sees you"
             aria-label="Display name"
             error={markupError}
             className="flex-1"
@@ -78,7 +78,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
         {user.username ? (
           <div className="flex items-center gap-2 pt-1 text-sm text-text-secondary">
             <AtSign className="w-4 h-4 shrink-0" aria-hidden="true" />
-            <span className="truncate">
+            <span className="min-w-0 break-words">
               <span className="text-text-primary font-medium">@{user.username}</span>
               <span className="text-text-muted"> · username can’t be changed</span>
             </span>
