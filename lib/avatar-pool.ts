@@ -70,6 +70,7 @@ export class AvatarPool {
         if (msg.error) {
           const err: any = new Error(msg.error);
           err.statusCode = msg.statusCode || 400;
+          err.detail = msg.detail;
           task.reject(err);
         } else {
           task.resolve(Buffer.from(msg.result));
