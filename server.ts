@@ -55,9 +55,8 @@ function validateStartupConfig(config: any) {
   }
 
   // 3. Production must not ship weak/default SESSION_SECRET (only enforced when key exists on config).
-  // NOTE: SESSION_SECRET is not currently used for HMAC signing — session tokens are opaque random
-  // strings hashed with SHA-256 server-side. This check ensures the key is pre-provisioned so
-  // HMAC-signed sessions can be introduced without a redeployment. See ADR-004.
+  // NOTE: SESSION_SECRET keys the HMAC of client IPs in the per-IP login lockout. Rotating it resets those
+  // counters. Session tokens are opaque random strings hashed with SHA-256, not signed. See ADR-004.
   if (isProd && Object.prototype.hasOwnProperty.call(config, 'SESSION_SECRET')) {
     if (!config.SESSION_SECRET || config.SESSION_SECRET === 'change-me') {
       throw new Error(

@@ -979,11 +979,9 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     ).trim().toUpperCase().slice(0, 20),
     APP_VERSION: overrides.APP_VERSION || process.env.APP_VERSION || APP_VERSION || DEFAULTS.APP_VERSION,
 
-    // SESSION_SECRET: reserved for future HMAC-signed session tokens.
-    // Currently NOT used cryptographically — session tokens are random opaque
-    // strings stored server-side (SHA-256 hashed). The production startup
-    // check in server.ts ensures this is set to a strong value so the key is
-    // available when session signing is introduced without a redeployment.
+    // SESSION_SECRET keys the HMAC that hashes client IPs for the per-IP login lockout (lib/helpers/ip-key.ts).
+    // Rotating it resets every per-IP lockout counter. Session tokens themselves are random opaque
+    // strings stored server-side (SHA-256 hashed), not signed with it.
     // See ADR-004 for the CSRF/session security design rationale.
     SESSION_SECRET: overrides.SESSION_SECRET || process.env.SESSION_SECRET || '',
   };

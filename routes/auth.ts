@@ -208,10 +208,11 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
         const user = await createUserWithProfile({ cleanUsername, passwordHash, newUserId, cleanEmail, dateOfBirth }, deps);
         await countSignupRef((req.validatedBody as any).ref, deps);
 
-        const token = await createUserSession(user.id, user.username, deviceOf(req));
+        const familyId = createOpaqueId('rtf');
+        const token = await createUserSession(user.id, user.username, deviceOf(req), null, familyId);
         setNoStore(res);
         setUserSessionCookie(res, token);
-        const refreshToken = await issueRefreshToken(user.id, token, deps);
+        const refreshToken = await issueRefreshToken(user.id, token, deps, familyId);
 
         const { serializePublicUser } = deps;
         const _roles = await stores.roles.getUserRoles(user.id);
@@ -399,10 +400,7 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
       // Issue the new session first so a DB failure cannot leave the client with none
       const { disconnectSessionTokens } = deps;
       const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req), req.userToken ?? null);
-      // Keep the renewed session tied to its refresh-token family, so a reuse revocation still reaches it
-      if (req.userToken) {
-        await stores.refreshTokens?.rebindSession(deps.hashSessionToken(req.userToken), deps.hashSessionToken(token));
-      }
+      // The renewed session inherits its family id inside the create transaction; the old session's refresh tokens die with it
       if (req.userToken) {
         // Disconnect sockets still using the old token to prevent stale connections
         await disconnectSessionTokens([req.userToken], io);
@@ -438,6 +436,7 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
     // The family id of a pre-migration token is its own token hash, so log a digest, never the id itself.
     const familyId = crypto.createHash('sha256').update(rotated.familyId).digest('hex').slice(0, 16);
     log.warn('auth:refresh-reuse', { userId: rotated.userId, familyId });
+    if (sessionHashes.length === 0) return;
     const revoked = new Set(sessionHashes);
     for (const socket of await deps.fetchRevocationSockets(io)) {
       const sessionToken = socket.data?.userSessionToken;
@@ -484,7 +483,7 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
         }
 
         // Issue new session token
-        const newSessionToken = await createUserSession(user.id, user.username, deviceOf(req));
+        const newSessionToken = await createUserSession(user.id, user.username, deviceOf(req), null, stored.familyId);
         setUserSessionCookie(res, newSessionToken);
 
         const newRefreshToken = createOpaqueId('rt');

@@ -202,6 +202,24 @@ describe('refresh-token reuse', { concurrency: 1 }, () => {
     await refresh(server, user.refreshToken).expect(401);
     await refresh(server, r1.refreshToken).expect(401);
   });
+  test('a refresh token bound to a session renewed through POST /auth/refresh stops working', async () => {
+    const server = await boot();
+    const user = await registerUser(server, 'renewdies');
+    await server.request.post('/api/v1/auth/refresh').set('x-user-token', user.token).expect(200);
+    await refresh(server, user.refreshToken).expect(401);
+  });
+
+  test('reuse revokes only its own family, not another sign-in', async () => {
+    const server = await boot();
+    const user = await registerUser(server, 'famiso');
+    const other = (await login(server, '198.51.100.41', 'famiso').expect(200)).body.data;
+    const r1 = (await refresh(server, user.refreshToken).expect(200)).body.data;
+    await server.request.post('/api/v1/auth/refresh').set('x-user-token', r1.token).expect(200);
+    await age(user.user.id);
+    await refresh(server, user.refreshToken).expect(401);
+    await server.request.get('/api/v1/auth/me').set('x-user-token', other.token).expect(200);
+    await refresh(server, other.refreshToken).expect(200);
+  });
   test('reuse also kills a session renewed through POST /auth/refresh', async () => {
     const server = await boot();
     const user = await registerUser(server, 'renewed');

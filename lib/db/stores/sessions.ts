@@ -3,7 +3,7 @@ import { withTransaction } from '../connection';
 
 export default function createSessionsStore(pool: Pool, _utils: any) {
   const sessions: any = {
-    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser, deviceLabel, replaceToken }: any) {
+    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser, deviceLabel, replaceToken, familyId }: any) {
       return withTransaction(pool, async (client) => {
         await client.query(
           `
@@ -14,12 +14,32 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
               username,
               created_at,
               last_access,
-              device_label
+              device_label,
+              family_id
             )
           VALUES
-            ($1, $2, $3, $4, $5, $6)
+            (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              COALESCE(
+                $7::text,
+                (
+                  SELECT
+                    family_id
+                  FROM
+                    user_sessions
+                  WHERE
+                    token = $8::text
+                    AND user_id = $2
+                )
+              )
+            )
         `,
-          [token, userId, username, createdAt, lastAccess, deviceLabel ?? null],
+          [token, userId, username, createdAt, lastAccess, deviceLabel ?? null, familyId ?? null, replaceToken ?? null],
         );
 
         // A rotating session leaves in the same transaction so it never counts toward eviction
@@ -214,21 +234,21 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
       );
       return result.rows[0] ?? null;
     },
-    // Revoke every token of a family and delete the sessions they minted. Returns those session token hashes.
+    // Revoke every token of a family and delete its sessions: those stamped with the family id (this covers
+    // sessions renewed through POST /auth/refresh) and those the family's tokens minted. Returns the deleted session hashes.
     async revokeFamily(familyId: string): Promise<string[]> {
-      const result = await pool.query(
-        'UPDATE refresh_tokens SET revoked = TRUE WHERE (family_id = $1 OR token = $1) RETURNING session_token AS "sessionToken"',
-        [familyId],
-      );
-      const sessionTokens = result.rows.map((row: any) => row.sessionToken).filter(Boolean);
-      if (sessionTokens.length > 0) {
-        await pool.query('DELETE FROM user_sessions WHERE token = ANY($1::text[])', [sessionTokens]);
-      }
-      return sessionTokens;
-    },
-    // A renewed session (POST /auth/refresh) takes over the refresh tokens of the session it replaces.
-    async rebindSession(oldSessionToken: string, newSessionToken: string) {
-      await pool.query('UPDATE refresh_tokens SET session_token = $2 WHERE session_token = $1', [oldSessionToken, newSessionToken]);
+      return withTransaction(pool, async (client) => {
+        const tokens = await client.query(
+          'UPDATE refresh_tokens SET revoked = TRUE WHERE (family_id = $1 OR token = $1) RETURNING session_token AS "sessionToken"',
+          [familyId],
+        );
+        const sessionTokens = tokens.rows.map((row: any) => row.sessionToken).filter(Boolean);
+        const deleted = await client.query(
+          'DELETE FROM user_sessions WHERE family_id = $1 OR token = ANY($2::text[]) RETURNING token',
+          [familyId, sessionTokens],
+        );
+        return deleted.rows.map((row: any) => row.token);
+      });
     },
     async revokeAll(userId: string) {
       await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 AND revoked = FALSE', [userId]);

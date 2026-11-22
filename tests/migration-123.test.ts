@@ -7,7 +7,7 @@ import { after, before, describe, test } from 'node:test';
 import { Pool } from 'pg';
 import { ensureTestSchema, TEST_DATABASE_URL, skip } from './_test-schema';
 
-// Migration 123 adds refresh_tokens.family_id (existing tokens become their own family) and login_failure_ips.
+// Migration 123 adds refresh_tokens.family_id (existing tokens act as their own family through COALESCE) and login_failure_ips.
 // It runs twice without error, is ASCII only and holds no BEGIN or COMMIT (the runner wraps each file itself).
 
 const SQL = fs.readFileSync(
@@ -38,7 +38,7 @@ describe('migration 123 refresh-token family and per-IP login failures', () => {
       await pool.end();
     });
 
-    test('applies twice and backfills a token without a family as its own family', async () => {
+    test('applies twice, adds the family columns and leaves a token without a family NULL', async () => {
       await pool.query(
         `INSERT INTO refresh_tokens (token, user_id, expires_at, family_id) VALUES ('m123-old', $1, NOW() + interval '1 day', NULL)`,
         [userId],
@@ -46,7 +46,9 @@ describe('migration 123 refresh-token family and per-IP login failures', () => {
       await pool.query(SQL);
       await pool.query(SQL);
       const { rows } = await pool.query(`SELECT family_id FROM refresh_tokens WHERE token = 'm123-old'`);
-      assert.equal(rows[0].family_id, 'm123-old');
+      assert.equal(rows[0].family_id, null);
+      const cols = await pool.query(`SELECT 1 FROM information_schema.columns WHERE table_name = 'user_sessions' AND column_name = 'family_id'`);
+      assert.equal(cols.rows.length, 1);
     });
 
     test('login_failure_ips keeps one row per (user, ip)', async () => {
