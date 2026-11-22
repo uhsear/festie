@@ -37,6 +37,15 @@ describe('Dialog', () => {
     expect(screen.getByRole('button', { name: 'Inside' })).toBeInTheDocument();
   });
 
+  it('uses an opaque surface and an overlay level that stacks nested dialogs', () => {
+    renderDialog();
+    const dialog = screen.getByRole('dialog', { name: 'Rename crew' });
+    expect(dialog.className).toContain('bg-bg-secondary');
+    expect(dialog.className).not.toContain('bg-bg-card');
+    const overlay = document.querySelector('[data-state="open"].fixed.inset-0');
+    expect(overlay?.className).toContain('z-[var(--z-modal)]');
+  });
+
   it('calls onOpenChange(false) on Escape', async () => {
     const onOpenChange = vi.fn();
     renderDialog(onOpenChange);
