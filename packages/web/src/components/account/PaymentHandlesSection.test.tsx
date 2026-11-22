@@ -46,4 +46,12 @@ describe('PaymentHandlesSection', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
     expect(mockUpdate).toHaveBeenCalledWith({ venmoHandle: 'sam', cashappCashtag: '', paypalHandle: '' });
   });
+
+  it('shows a failed save inline', async () => {
+    mockUpdate.mockRejectedValue(new Error('rejected'));
+    render(<PaymentHandlesSection />);
+    await userEvent.type(screen.getByLabelText('Venmo username'), 'bad handle!!');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+  });
 });
