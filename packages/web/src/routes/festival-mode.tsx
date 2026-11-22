@@ -113,9 +113,9 @@ function FestivalModeViewInner() {
 
   return (
     <div className={PAGE} data-testid="festival-mode-view">
-      <div className="flex items-baseline justify-between gap-3 mb-4 min-w-0">
-        <h1 className="type-display-lg text-text-primary min-w-0 [overflow-wrap:anywhere]">{currentFestival.name}</h1>
-        <div className="flex items-center gap-2 shrink-0">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-3 mb-4 min-w-0">
+        <h1 className="type-display-lg text-text-primary min-w-0 break-words">{currentFestival.name}</h1>
+        <div className="flex items-center justify-between gap-2 sm:justify-start sm:shrink-0">
           {user && crew && <SosRaiseButton crewId={crew.id} compact />}
           <LowPowerIndicator />
           <div className="flex flex-col items-end">
