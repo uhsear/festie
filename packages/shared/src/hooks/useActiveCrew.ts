@@ -35,12 +35,19 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
     track(useCrewStore.getState().loadCrews());
   }, [user, crews.length, crewLoading, track]);
 
-  // Same deps as the old web crew page, so a failed select does not loop.
   // Skip an offline-join placeholder: it has no server crew to select until the join replays.
   const firstCrewId = crews.find((c) => !c._optimistic)?.id;
+  // Auto-select each crew once: crewLoading is a dep, so a failed select would otherwise retry forever.
+  const autoSelectedId = useRef<string | null>(null);
   useEffect(() => {
+    if (crew) {
+      autoSelectedId.current = null;
+      return;
+    }
     // A pending select of another crew clears activeCrew; do not override it with the first crew.
-    if (user && !crew && firstCrewId && !crewLoading) track(useCrewStore.getState().selectCrew(firstCrewId));
+    if (!user || !firstCrewId || crewLoading || autoSelectedId.current === firstCrewId) return;
+    autoSelectedId.current = firstCrewId;
+    track(useCrewStore.getState().selectCrew(firstCrewId));
   }, [user, crew, firstCrewId, crewLoading, track]);
 
   // A persisted activeCrew is a cold-start read cache; refetch it once per crew so members
