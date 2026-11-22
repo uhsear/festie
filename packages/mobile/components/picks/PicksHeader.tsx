@@ -55,39 +55,37 @@ export default function PicksHeader({
   return (
 <View>
   {!user ? <GuestPicksBanner /> : null}
-  {user ? (
-    <View style={[styles.headerActions, largeText && styles.headerActionsLarge]}>
-      {calendarButton}
-      <TouchableOpacity
-        style={[styles.calendarButton, largeText && styles.calendarButtonLarge, noPicks && styles.calendarButtonDisabled]}
-        onPress={() => router.push('/picks-image')}
-        disabled={noPicks}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: noPicks }}
-        accessibilityLabel="Save my picks as an image"
-      >
-        <Ionicons name="image-outline" size={16} color={t.colors.accent.aqua} />
-        <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-          {COPY.picks.saveImage}
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.calendarButton, largeText && styles.calendarButtonLarge, !currentFestival && styles.calendarButtonDisabled]}
-        onPress={handleSharePicks}
-        disabled={!currentFestival}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !currentFestival }}
-        accessibilityLabel="Share my picks"
-      >
-        <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
-        <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-          {COPY.picks.share}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  ) : null}
+  <View style={[styles.headerActions, largeText && styles.headerActionsLarge]}>
+    {calendarButton}
+    <TouchableOpacity
+      style={[styles.calendarButton, largeText && styles.calendarButtonLarge, noPicks && styles.calendarButtonDisabled]}
+      onPress={() => router.push('/picks-image')}
+      disabled={noPicks}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: noPicks }}
+      accessibilityLabel="Save my picks as an image"
+    >
+      <Ionicons name="image-outline" size={16} color={t.colors.accent.aqua} />
+      <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+        {COPY.picks.saveImage}
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[styles.calendarButton, largeText && styles.calendarButtonLarge, !currentFestival && styles.calendarButtonDisabled]}
+      onPress={handleSharePicks}
+      disabled={!currentFestival}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !currentFestival }}
+      accessibilityLabel="Share my picks"
+    >
+      <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+      <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+        {COPY.picks.share}
+      </Text>
+    </TouchableOpacity>
+  </View>
   {currentFestival && (
     <View style={styles.offlineCard}>
       <OfflineReadinessCard festivalId={currentFestival.id} />

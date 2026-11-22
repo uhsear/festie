@@ -19,7 +19,7 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore, useCrewStore, useFestivalDataStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
+import { selectMyPicks, useAuthStore, useCrewStore, useFestivalDataStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
 import { COPY, PRIORITY_LABEL } from '@festie/shared/constants';
 import { fetchPrintableSchedule, mapErrorToUserMessage } from '@festie/shared/services';
 import { useCrewOverlapStatus } from '@festie/shared/hooks';
@@ -205,7 +205,8 @@ export default function PicksImageScreen() {
   const activeCrew = useCrewStore((s) => s.activeCrew);
   const crewOverlap = useCrewStore((s) => s.crewOverlap);
   const selfUserId = useAuthStore((s) => s.user?.id);
-  const picks = profile?.picks;
+  // A guest has no profile: the picks on this device draw the image just the same.
+  const picks = useFestivalDataStore(selectMyPicks) ?? undefined;
 
   const [shape, setShape] = useState<Shape>('lockscreen');
   const [mode, setMode] = useState<LockscreenMode>(isMode(modeParam) ? modeParam : 'picks');

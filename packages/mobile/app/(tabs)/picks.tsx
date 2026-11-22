@@ -18,6 +18,7 @@ import {
   useAuthStore,
   useCrewStore,
   useFestivalDataStore,
+  useUIStore,
   selectMyPicks,
 } from '@festie/shared/stores';
 import { usePicks, useFestival, usePicksPlan, usePickClear, useBulkAddPicks } from '@festie/shared/hooks';
@@ -563,10 +564,16 @@ export default function PicksScreen() {
     />;
 
   // One share hub (link, QR, scan, text). Open even with no picks so Scan QR is reachable.
+  // The share link is a server page, so a guest is asked to sign in first.
   const handleSharePicks = useCallback(() => {
     haptics.tap();
+    if (!user) {
+      useUIStore.getState().showToast('Sign in to share your picks.', { kind: 'info' });
+      router.push('/(auth)/login');
+      return;
+    }
     router.push({ pathname: '/plan-share', params: { tab: 'link' } });
-  }, [router, haptics]);
+  }, [router, haptics, user]);
 
   // "Listen before you go": every pick by day with Spotify link-outs. No Spotify sign-in.
   const listenList = useMemo(
