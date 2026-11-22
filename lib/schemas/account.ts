@@ -22,6 +22,13 @@ export const resetPasswordPublicSchema = z.object({
   confirmPassword: z.string().min(8).max(100),
 });
 
+export const verifyEmailSchema = z.object({
+  token: z
+    .string()
+    .regex(/^[a-f0-9]{64}$/, 'Invalid token')
+    .max(64),
+});
+
 // ════════════════════════════════════════════════════════════════════════════════
 // Notification & Push Schemas
 // ════════════════════════════════════════════════════════════════════════════════

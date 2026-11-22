@@ -18,6 +18,7 @@ import {
   useAuthStore,
   useCrewStore,
   useFestivalDataStore,
+  useUIStore,
   selectMyPicks,
 } from '@festie/shared/stores';
 import { usePicks, useFestival, usePicksPlan, usePickClear, useBulkAddPicks } from '@festie/shared/hooks';
@@ -35,11 +36,11 @@ import {
   listenListText,
   buildMyDay,
   buildPlanList,
-  buildPicksRows,
+  filterPickMap,
+  filterPlanListItems,
   isSetScheduled,
   clashBadgeBySetId,
   fmtZonedClock,
-  foldSearch,
   spotifyAttributionFor,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
@@ -203,13 +204,7 @@ export default function PicksScreen() {
 
   const listRows = useMemo<Row[]>(() => {
     if (activePlanList) {
-      const q = foldSearch(search.trim());
-      const items = (activePlanList === 'reminders' ? reminderItems : noteItems).filter(
-        (item) =>
-          !q ||
-          foldSearch(artistDisplayName(item.set, separator)).includes(q) ||
-          foldSearch(getStageName(item.set.stageId) || '').includes(q),
-      );
+      const items = filterPlanListItems(activePlanList === 'reminders' ? reminderItems : noteItems, search, stages);
       const out: Row[] = [];
       const known = new Set(days.map((d) => d.index));
       const emit = (groupId: string, label: string, groupItems: PlanListItem[]) => {
@@ -229,20 +224,14 @@ export default function PicksScreen() {
 
     // My day covers the picks the current filter and search leave in the plan.
     // Membership ignores collapsed groups in By day / By priority, which emit only their header.
-    const eligible = buildPicksRows({
+    const visiblePicks = filterPickMap({
       sets,
       picks: myPicks ?? undefined,
-      days: storeDays,
       stages,
-      groupMode: 'day',
       filter: effectiveFilter,
       search,
-      collapsed: new Set(),
       clashIds: conflictIds,
-      compare: () => 0,
     });
-    const visiblePicks: Record<string, Priority> = {};
-    for (const row of eligible) if (row.kind === 'set' && myPicks?.[row.set.id]) visiblePicks[row.set.id] = myPicks[row.set.id]!;
     const out: Row[] = [];
     days.forEach((day) => {
       const myDay = buildMyDay({
@@ -563,10 +552,16 @@ export default function PicksScreen() {
     />;
 
   // One share hub (link, QR, scan, text). Open even with no picks so Scan QR is reachable.
+  // The share link is a server page, so a guest is asked to sign in first.
   const handleSharePicks = useCallback(() => {
     haptics.tap();
+    if (!user) {
+      useUIStore.getState().showToast('Sign in to share your picks.', { kind: 'info' });
+      router.push('/(auth)/login');
+      return;
+    }
     router.push({ pathname: '/plan-share', params: { tab: 'link' } });
-  }, [router, haptics]);
+  }, [router, haptics, user]);
 
   // "Listen before you go": every pick by day with Spotify link-outs. No Spotify sign-in.
   const listenList = useMemo(

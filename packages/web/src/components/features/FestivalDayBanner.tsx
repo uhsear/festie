@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { COPY } from '@festie/shared/constants';
+import { useUrgentBannerShowing } from '@festie/shared/hooks';
 import { useHaptics } from '../../hooks/useHaptics';
 
 /**
@@ -21,8 +22,10 @@ export default function FestivalDayBanner() {
     }
   });
   const { select } = useHaptics();
+  // An SOS or urgent announcement is the only banner that matters then; the nudge returns when it clears.
+  const urgentShowing = useUrgentBannerShowing();
 
-  if (dismissed) return null;
+  if (dismissed || urgentShowing) return null;
 
   const dismiss = () => {
     try {

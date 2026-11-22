@@ -36,7 +36,7 @@ import { cn } from '../../lib/utils';
 import { SocketContext } from '../../lib/socketContext';
 import { useThemeSync } from '../../lib/theme';
 
-const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password'];
+const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password', '/verify-email'];
 
 // Centered branded loader for lazy-route chunk loads. Replaces the bare
 // "Loading..." text the Suspense boundaries used to fall back to.

@@ -30,7 +30,6 @@ import OtherDayMatches from '../components/features/OtherDayMatches';
 import TBASection from '../components/timeline/TBASection';
 import AnnouncedLineup from '../components/features/AnnouncedLineup';
 import TimelineLegend from '../components/timeline/TimelineLegend';
-import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
 import GridToolbar from '../components/grid/GridToolbar';
 import ScheduleImageDialog from '../components/features/ScheduleImageDialog';
@@ -367,7 +366,6 @@ function GridViewInner() {
                 />
                 <ScheduleImageDialog initialMode="full" />
                 <LowPowerIndicator />
-                <LastSyncedBadge surface="schedule" />
               </div>
             </div>
           </div>

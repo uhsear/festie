@@ -17,6 +17,7 @@ export * from './useClashResolver';
 export * from './useCurrentPosition';
 export * from './useRevocationRealtime';
 export * from './useDayOf';
+export * from './useUrgentBanner';
 export * from './useUndoableRemove';
 export * from './useDebouncedNote';
 export * from './useSaveStatus';

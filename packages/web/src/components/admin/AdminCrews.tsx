@@ -250,12 +250,14 @@ export default function AdminCrews() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleToggleExpand(crew.id)}
+                      aria-label={`${isExpanded ? 'Hide' : 'View'} ${crew.name}`}
                       className="text-xs px-3 py-1.5 min-h-11 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
                     >
                       {isExpanded ? 'Hide' : 'View'}
                     </button>
                     <button
                       onClick={() => handleDelete(crew.id)}
+                      aria-label={`Delete ${crew.name}`}
                       className="text-xs px-3 py-1.5 min-h-11 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
                     >
                       Delete
@@ -272,7 +274,8 @@ export default function AdminCrews() {
                           <span>Invite code {crew.inviteCode}</span>
                           <button
                             onClick={() => copyInviteCode(crew.inviteCode!)}
-                            className="px-2 py-0.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
+                            aria-label={`Copy invite code for ${crew.name}`}
+                            className="inline-flex items-center min-h-11 px-3 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
                           >
                             Copy
                           </button>
@@ -323,7 +326,8 @@ export default function AdminCrews() {
                               ) : (
                                 <button
                                   onClick={() => setRemoveTarget({ crewId: crew.id, member: m })}
-                                  className="ml-auto px-2 py-0.5 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
+                                  aria-label={`Remove ${m.username || m.userId} from ${crew.name}`}
+                                  className="ml-auto inline-flex items-center min-h-11 px-3 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
                                 >
                                   Remove
                                 </button>
