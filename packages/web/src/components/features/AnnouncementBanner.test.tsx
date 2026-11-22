@@ -55,6 +55,16 @@ describe('AnnouncementBanner', () => {
     expect(screen.getByText('Urgent · From Festie')).toBeInTheDocument();
   });
 
+  it('announces an urgent announcement assertively and an info one politely', () => {
+    state.items = [fa({ severity: 'urgent' })];
+    const { unmount } = render(<AnnouncementBanner />);
+    expect(screen.getByTestId('announcement-banner')).toHaveAttribute('role', 'alert');
+    unmount();
+    state.items = [fa()];
+    render(<AnnouncementBanner />);
+    expect(screen.getByTestId('announcement-banner')).toHaveAttribute('role', 'status');
+  });
+
   it('has no Open link for home', () => {
     state.items = [fa({ screen: 'home' })];
     render(<AnnouncementBanner />);
