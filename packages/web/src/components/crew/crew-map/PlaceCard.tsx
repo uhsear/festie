@@ -87,7 +87,7 @@ export default function PlaceCard({
       ref={cardRef}
       role="dialog"
       aria-label={place.name}
-      className="absolute left-2 right-2 bottom-2 z-10 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
+      className="absolute left-2 right-2 bottom-9 z-10 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
       style={{ borderColor: 'var(--color-accent-aqua)' }}
     >
       <div className="flex items-start gap-2">

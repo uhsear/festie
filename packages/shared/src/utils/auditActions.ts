@@ -64,6 +64,7 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'login.created': 'Signed in',
   'reauth.created': 'Confirmed password',
   'import-lineup.created': 'Lineup checked',
+  'crews.created': 'Crew created',
   'unknown.created': 'Other activity',
   'unknown.updated': 'Other activity',
   'unknown.replaced': 'Other activity',
