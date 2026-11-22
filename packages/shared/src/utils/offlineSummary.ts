@@ -9,6 +9,12 @@ export interface OfflineSummary {
   /** Any step ready, the map step included. */
   hasDownloaded: boolean;
   lastSyncedAt: number | null;
+  /** Any step failed. Only this makes a partial download a fault; otherwise steps are just not saved yet. */
+  hasError: boolean;
+  savedCount: number;
+  totalCount: number;
+  /** Labels of the steps not saved yet. */
+  pending: string[];
   /** Past festival and nothing saved. */
   hidden: boolean;
 }
@@ -38,16 +44,21 @@ export function summarizeOffline(steps: OfflineStep[], phase: FestivalPhase | nu
   const statuses = steps.map((s) => s.section.status);
   const ready = steps.filter((s) => s.section.status === 'ready');
   const hasDownloaded = ready.length > 0;
+  const hasError = statuses.includes('error');
   let overall: OfflineOverall;
   if (statuses.includes('syncing')) overall = 'syncing';
   else if (steps.length > 0 && ready.length === steps.length) overall = 'ready';
-  else if (!hasDownloaded && !statuses.includes('error')) overall = 'none';
+  else if (!hasDownloaded && !hasError) overall = 'none';
   else overall = 'partial';
   const synced = ready.map((s) => s.section.syncedAt).filter((t): t is number => t != null);
   return {
     overall,
     hasDownloaded,
     lastSyncedAt: synced.length ? Math.max(...synced) : null,
+    hasError,
+    savedCount: ready.length,
+    totalCount: steps.length,
+    pending: steps.filter((s) => s.section.status !== 'ready').map((s) => s.label),
     hidden: phase === 'post' && !hasDownloaded && overall !== 'syncing',
   };
 }
@@ -64,7 +75,10 @@ export function offlineStatusLabel(summary: OfflineSummary, nowMs?: number): str
       const ago = summary.lastSyncedAt == null ? 'just now' : agoFrom(summary.lastSyncedAt, nowMs);
       return `Available offline · synced ${ago}`;
     }
-    case 'partial': return 'Offline download incomplete';
+    case 'partial':
+      return summary.hasError
+        ? 'Offline download incomplete'
+        : `Download for offline · ${summary.savedCount} of ${summary.totalCount} saved`;
     default: return 'Download for offline';
   }
 }
@@ -73,7 +87,7 @@ export function offlineActionLabel(summary: OfflineSummary): string {
   switch (summary.overall) {
     case 'syncing': return 'Downloading…';
     case 'ready': return 'Update';
-    case 'partial': return 'Retry';
+    case 'partial': return summary.hasError ? 'Retry' : 'Download';
     default: return 'Download';
   }
 }

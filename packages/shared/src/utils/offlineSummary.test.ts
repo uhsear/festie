@@ -38,6 +38,19 @@ describe('summarizeOffline', () => {
     expect(s.overall).toBe('partial');
     expect(offlineActionLabel(s)).toBe('Retry');
   });
+  it('partial without an error is neutral: counts saved steps and names the pending ones', () => {
+    const s = summarizeOffline(steps({ ...all('idle'), schedule: r('ready'), picks: r('ready') }), 'live');
+    expect(s.overall).toBe('partial');
+    expect(s.hasError).toBe(false);
+    expect(s.pending).toEqual(['Crew plan', 'Weather', 'Artist art']);
+    expect(offlineStatusLabel(s)).toBe('Download for offline · 2 of 5 saved');
+    expect(offlineActionLabel(s)).toBe('Download');
+  });
+  it('partial with an error keeps the incomplete wording and Retry', () => {
+    const s = summarizeOffline(steps({ ...all('idle'), schedule: r('ready'), art: r('error') }), 'live');
+    expect(s.hasError).toBe(true);
+    expect(offlineStatusLabel(s)).toBe('Offline download incomplete');
+  });
   it('any syncing is syncing', () => {
     expect(summarizeOffline(steps({ ...all('ready'), weather: r('syncing') }), 'live').overall).toBe('syncing');
   });

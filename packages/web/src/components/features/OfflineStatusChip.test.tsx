@@ -77,8 +77,15 @@ describe('OfflineStatusChip', () => {
     expect(h.download).toHaveBeenCalledTimes(1);
   });
 
-  it('shows a retry button for a partial download', () => {
-    setHook('partial');
+  it('shows a neutral download button when steps are only unsaved', () => {
+    setHook('partial', { hasError: false, savedCount: 2, totalCount: 5 });
+    render(<OfflineStatusChip />);
+    fireEvent.click(screen.getByRole('button', { name: 'Download for offline · 2 of 5 saved' }));
+    expect(h.download).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows a retry button when a step failed', () => {
+    setHook('partial', { hasError: true });
     render(<OfflineStatusChip />);
     fireEvent.click(screen.getByRole('button', { name: 'Offline download incomplete · Retry' }));
     expect(h.download).toHaveBeenCalledTimes(1);

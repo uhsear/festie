@@ -30,12 +30,13 @@ function Chip({ festivalId, remind }: { festivalId: string; remind: boolean }) {
   if (summary.hidden) return null;
 
   const { overall } = summary;
-  const label =
-    overall === 'partial' ? 'Offline download incomplete · Retry' : offlineStatusLabel(summary);
-  const icon =
-    overall === 'ready' ? 'checkmark-circle' : overall === 'partial' ? 'alert-circle' : 'download-outline';
-  const iconColor =
-    overall === 'ready' ? t.colors.accent.aqua : overall === 'partial' ? t.colors.accent.coral : t.colors.text.muted;
+  // Coral and "incomplete" only when a step failed; unsaved steps are neutral.
+  const failed = overall === 'partial' && summary.hasError;
+  const label = failed ? 'Offline download incomplete · Retry' : offlineStatusLabel(summary);
+  const a11yLabel =
+    overall === 'partial' && summary.pending.length ? `${label}. Not saved yet: ${summary.pending.join(', ')}` : label;
+  const icon = overall === 'ready' ? 'checkmark-circle' : failed ? 'alert-circle' : 'download-outline';
+  const iconColor = overall === 'ready' ? t.colors.accent.aqua : failed ? t.colors.accent.coral : t.colors.text.muted;
 
   const content = (
     <>
@@ -65,7 +66,7 @@ function Chip({ festivalId, remind }: { festivalId: string; remind: boolean }) {
         onPress={download}
         disabled={isDownloading}
         accessibilityRole="button"
-        accessibilityLabel={label}
+        accessibilityLabel={a11yLabel}
         accessibilityState={{ busy: isDownloading, disabled: isDownloading }}
         activeOpacity={0.8}
       >

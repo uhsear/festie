@@ -41,11 +41,13 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
   }
 
   const label =
-    summary.overall === 'partial'
+    summary.overall === 'partial' && summary.hasError
       ? 'Offline download incomplete · Retry'
-      : isDownloading || summary.overall === 'syncing'
-        ? 'Downloading for offline…'
-        : 'Download for offline';
+      : summary.overall === 'partial'
+        ? offlineStatusLabel(summary)
+        : isDownloading || summary.overall === 'syncing'
+          ? 'Downloading for offline…'
+          : 'Download for offline';
   const busy = isDownloading || summary.overall === 'syncing';
 
   // The web side of the day-before reminder: from 18:00 festival time on the
