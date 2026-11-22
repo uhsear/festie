@@ -26,6 +26,7 @@ import { loadConfig } from './config.js';
 import { redisRateCheck as redisRateCheckFn } from './redis.js';
 import { MAX_SHARE_WINDOW_MS } from './live-location-cache.js';
 import { redactInviteCodePath } from './helpers/sanitize.js';
+import { clientIpKey } from './helpers/ip-key.js';
 
 const FALLBACK_WARN_INTERVAL_MS = 30_000;
 // Guests behind one festival IP keep their own token buckets; one caller cycling tokens is capped per IP.
@@ -304,9 +305,11 @@ function createRateLimiters({
     };
   }
 
-  function createAuthRateLimiter(map: any, redisLimiter: any, max: number = config.AUTH_RATE_LIMIT_MAX, scopePrefix = 'auth') {
+  function createAuthRateLimiter(map: any, redisLimiter: any, max: number = config.AUTH_RATE_LIMIT_MAX, scopePrefix = 'auth', keyIp = false) {
     return async (req: any, res: any, next: any) => {
-      const ip = getRequestIp(req);
+      const rawIp = getRequestIp(req);
+      // Login keys IPv6 by /64: one client rotating addresses in its prefix must not get a fresh budget each time.
+      const ip = keyIp ? clientIpKey(rawIp) : rawIp;
       if (redisLimiter) {
         try {
           const result = await redisLimiter.check(ip);
@@ -412,6 +415,7 @@ function createRateLimiters({
     redisLoginIpRateLimiter,
     config.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
     'auth-login-ip',
+    true,
   );
 
   return {

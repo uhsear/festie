@@ -179,8 +179,9 @@ export function createBackgroundTasks(ctx: any, { io }: any) {
           'DELETE FROM refresh_tokens WHERE expires_at < NOW() OR (revoked = TRUE AND rotated_at IS NULL)',
         );
         const deviceTokensPurged = await stores.deviceTokens.deleteExpired();
-        if (resetPurged > 0 || verifyPurged > 0 || refreshPurged > 0 || deviceTokensPurged > 0) {
-          log.info('token cleanup', { resetPurged, verifyPurged, refreshPurged, deviceTokensPurged });
+        const loginIpsPurged = await stores.loginFailures.purgeStaleIps(config.LOGIN_LOCKOUT_MS);
+        if (resetPurged > 0 || verifyPurged > 0 || refreshPurged > 0 || deviceTokensPurged > 0 || loginIpsPurged > 0) {
+          log.info('token cleanup', { resetPurged, verifyPurged, refreshPurged, deviceTokensPurged, loginIpsPurged });
         }
         recordJobRun('token_cleanup', true);
       } catch (err: any) {

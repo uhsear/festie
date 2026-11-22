@@ -131,6 +131,7 @@ export const DEFAULTS = {
   API_VERSION: '1',
   REFRESH_TOKEN_TTL: 90 * 24 * 60 * 60 * 1000,
   MAX_LOGIN_FAILURES: 10,
+  LOGIN_GLOBAL_LOCK_FAILURES: 50,
   LOGIN_LOCKOUT_MS: 15 * 60 * 1000,
   PROFILE_RATE_LIMIT_MAX: 60,
   OVERLAP_RATE_LIMIT_MAX: 30,
@@ -418,6 +419,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   EMAIL_UNSUBSCRIBE_SECRET: string;
   REFRESH_TOKEN_TTL: number;
   MAX_LOGIN_FAILURES: number;
+  LOGIN_GLOBAL_LOCK_FAILURES: number;
   LOGIN_LOCKOUT_MS: number;
   PROFILE_RATE_LIMIT_MAX: number;
   OVERLAP_RATE_LIMIT_MAX: number;
@@ -472,6 +474,11 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   const APP_VERSION: string =
     typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : require('../package.json').version;
 
+  const maxLoginFailures = readInt(
+    overrides.MAX_LOGIN_FAILURES || process.env.MAX_LOGIN_FAILURES,
+    DEFAULTS.MAX_LOGIN_FAILURES,
+    1,
+  );
   const nodeEnv = overrides.NODE_ENV || process.env.NODE_ENV || 'development';
   const publicDir = path.resolve(
     overrides.PUBLIC_DIR || process.env.PUBLIC_DIR || path.join(import.meta.dirname, '..', 'public'),
@@ -826,10 +833,15 @@ export function loadConfig(overrides: Record<string, any> = {}): {
       DEFAULTS.REFRESH_TOKEN_TTL,
       60000,
     ),
-    MAX_LOGIN_FAILURES: readInt(
-      overrides.MAX_LOGIN_FAILURES || process.env.MAX_LOGIN_FAILURES,
-      DEFAULTS.MAX_LOGIN_FAILURES,
-      1,
+    MAX_LOGIN_FAILURES: maxLoginFailures,
+    // Account-wide lock across all IPs. Kept above MAX_LOGIN_FAILURES so it never pre-empts the per-IP lock.
+    LOGIN_GLOBAL_LOCK_FAILURES: Math.max(
+      readInt(
+        overrides.LOGIN_GLOBAL_LOCK_FAILURES || process.env.LOGIN_GLOBAL_LOCK_FAILURES,
+        DEFAULTS.LOGIN_GLOBAL_LOCK_FAILURES,
+        1,
+      ),
+      maxLoginFailures + 1,
     ),
     LOGIN_LOCKOUT_MS: readInt(
       overrides.LOGIN_LOCKOUT_MS || process.env.LOGIN_LOCKOUT_MS,

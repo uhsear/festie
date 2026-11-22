@@ -1,7 +1,9 @@
 import { after, afterEach, describe, test, mock } from 'node:test';
 import { assert, Pool, TEST_DATABASE_URL, startServer, registerUser } from './_integration-helpers';
 import { createRateLimiters } from '../lib/rate-limiting.js';
-import { LOGIN_GLOBAL_LOCK_FAILURES, REFRESH_REUSE_GRACE_MS } from '../routes/auth';
+import { REFRESH_REUSE_GRACE_MS } from '../routes/auth';
+import { loadConfig } from '../lib/config.js';
+import createSessionsStore from '../lib/db/stores/sessions';
 
 // Owner decisions: login limits (per-(IP, username) bucket plus a per-IP cap), account lockout counted per
 // (account, client IP) with a higher global threshold, and refresh-token reuse revoking the whole family.
@@ -16,6 +18,7 @@ after(async () => {
   await pool.end();
 });
 
+const LOGIN_GLOBAL_LOCK_FAILURES = loadConfig({ DATABASE_URL: TEST_DATABASE_URL }).LOGIN_GLOBAL_LOCK_FAILURES;
 const PASSWORD = 'Str0ngTest!Pw';
 const login = (server: any, ip: string, username: string, password = PASSWORD) =>
   server.request.post('/api/v1/auth/login').set('CF-Connecting-IP', ip).send({ username, password });
@@ -35,6 +38,13 @@ describe('login limits', { concurrency: 1 }, () => {
     await login(server, '203.0.113.9', 'nobody5').expect(429);
     // Another IP is unaffected.
     await login(server, '203.0.113.10', 'nobody6').expect(401);
+  });
+
+  test('the login IP cap treats every address in one IPv6 /64 as one client', async () => {
+    const server = await boot({ AUTH_LOGIN_IP_RATE_LIMIT_MAX: 3 });
+    for (let i = 0; i < 3; i++) await login(server, `2001:db8:5:6::${i + 1}`, `nobody${i}`).expect(401);
+    await login(server, '2001:db8:5:6:ffff::9', 'nobody9').expect(429);
+    await login(server, '2001:db8:5:7::1', 'nobody10').expect(401);
   });
 
   test('register keeps the strict IP-only limiter', async () => {
@@ -191,5 +201,44 @@ describe('refresh-token reuse', { concurrency: 1 }, () => {
     await age(user.user.id);
     await refresh(server, user.refreshToken).expect(401);
     await refresh(server, r1.refreshToken).expect(401);
+  });
+  test('reuse also kills a session renewed through POST /auth/refresh', async () => {
+    const server = await boot();
+    const user = await registerUser(server, 'renewed');
+    const t0 = user.refreshToken;
+    const r1 = (await refresh(server, t0).expect(200)).body.data;
+    // A thief holding r1's session renews it the way every first-party client does.
+    const renewed = (await server.request.post('/api/v1/auth/refresh').set('x-user-token', r1.token).expect(200)).body.data;
+    await server.request.get('/api/v1/auth/me').set('x-user-token', renewed.token).expect(200);
+    await age(user.user.id);
+
+    await refresh(server, t0).expect(401);
+
+    await server.request.get('/api/v1/auth/me').set('x-user-token', renewed.token).expect(401);
+  });
+});
+
+describe('stale per-IP failure rows', { concurrency: 1 }, () => {
+  test('purgeStaleIps deletes old unlocked rows and keeps recent or locked ones', async () => {
+    const server = await boot();
+    const user = await registerUser(server, 'purgeme');
+    const id = user.user.id;
+    const row = (ip: string, ago: string, lock: string | null) =>
+      pool.query(
+        `INSERT INTO login_failure_ips (user_id, ip_hash, consecutive_failures, last_failure_at, locked_until)
+         VALUES ($1, $2, 1, NOW() - $3::interval, ${lock ? `NOW() + $4::interval` : 'NULL'})`,
+        lock ? [id, ip, ago, lock] : [id, ip, ago],
+      );
+    await row('old-unlocked', '1 hour', null);
+    await row('old-expired-lock', '1 hour', null);
+    await pool.query(`UPDATE login_failure_ips SET locked_until = NOW() - interval '1 minute' WHERE ip_hash = 'old-expired-lock'`);
+    await row('old-still-locked', '1 hour', '5 minutes');
+    await row('recent', '1 minute', null);
+
+    const store = createSessionsStore(pool as any, {});
+    await store.loginFailures.purgeStaleIps(15 * 60 * 1000);
+
+    const left = (await pool.query('SELECT ip_hash FROM login_failure_ips WHERE user_id = $1 ORDER BY ip_hash', [id])).rows.map((r: any) => r.ip_hash);
+    assert.deepEqual(left, ['old-still-locked', 'recent']);
   });
 });

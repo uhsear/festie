@@ -433,7 +433,7 @@ function installErrorHandling(app: Express, ctx: AppContext) {
 
 /** Boot-time DB housekeeping: expired-token purge and venue coordinate backfill (leader instance only). */
 function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
-  const { pool } = ctx;
+  const { pool, config } = ctx;
 
   // ── Startup token purge ──────────────────────────────────────────
   // Same leader-election guard as the periodic token cleanup in
@@ -446,12 +446,17 @@ function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
       pool.query('DELETE FROM password_reset_tokens WHERE expires_at < NOW()'),
       pool.query('DELETE FROM email_verification_tokens WHERE expires_at < NOW()'),
       pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR (revoked = TRUE AND rotated_at IS NULL)'),
+      pool.query(
+        "DELETE FROM login_failure_ips WHERE last_failure_at < NOW() - make_interval(secs => $1) AND (locked_until IS NULL OR locked_until < NOW())",
+        [config.LOGIN_LOCKOUT_MS / 1000],
+      ),
     ])
       .then((purged: any[]) => {
         log.info('startup token purge completed', {
           resetTokens: purged[0].rowCount,
           verifyTokens: purged[1].rowCount,
           refreshTokens: purged[2].rowCount,
+          loginFailureIps: purged[3].rowCount,
         });
       })
       .catch((err: any) => {

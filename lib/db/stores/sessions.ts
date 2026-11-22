@@ -226,6 +226,10 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
       }
       return sessionTokens;
     },
+    // A renewed session (POST /auth/refresh) takes over the refresh tokens of the session it replaces.
+    async rebindSession(oldSessionToken: string, newSessionToken: string) {
+      await pool.query('UPDATE refresh_tokens SET session_token = $2 WHERE session_token = $1', [oldSessionToken, newSessionToken]);
+    },
     async revokeAll(userId: string) {
       await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 AND revoked = FALSE', [userId]);
     },
@@ -268,7 +272,7 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
     async lock(userId: string, lockedUntil: any) {
       await pool.query('UPDATE login_failures SET locked_until = $1 WHERE user_id = $2', [lockedUntil, userId]);
     },
-    // Per (account, client IP): ipHash is a SHA-256 hex digest of the client IP.
+    // Per (account, client IP): ipHash is an HMAC-SHA-256 hex digest of the client IP (IPv6: its /64), keyed with SESSION_SECRET.
     async recordIp(userId: string, ipHash: string) {
       await pool.query(
         `
@@ -290,6 +294,15 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
         [userId, ipHash],
       );
       return result.rows[0] || null;
+    },
+    // Rows nobody refreshed within the lockout window and that hold no active lock: they no longer count.
+    async purgeStaleIps(windowMs: number) {
+      const result = await pool.query(
+        `DELETE FROM login_failure_ips
+         WHERE last_failure_at < NOW() - make_interval(secs => $1) AND (locked_until IS NULL OR locked_until < NOW())`,
+        [windowMs / 1000],
+      );
+      return result.rowCount ?? 0;
     },
     async lockIp(userId: string, ipHash: string, lockedUntil: any) {
       await pool.query('UPDATE login_failure_ips SET locked_until = $1 WHERE user_id = $2 AND ip_hash = $3', [

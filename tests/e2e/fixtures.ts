@@ -182,6 +182,8 @@ async function startServer() {
     // Auth counters live in Redis and outlive each test's server, so every test in the run shares one budget per address.
     // The 10 per 5 minutes default starved later registrations (Too many tries); raise it above what any run uses.
     AUTH_RATE_LIMIT_MAX: '1000',
+    // Login has its own per-IP cap (30 per 5 minutes by default), shared across the run the same way.
+    AUTH_LOGIN_IP_RATE_LIMIT_MAX: '1000',
   });
 
   await new Promise<void>((resolve) => planner.server.listen(0, '127.0.0.1', resolve));

@@ -33,16 +33,17 @@ import { acceptProviderToken, ProviderRejection } from '../lib/oauth/accept';
 // side-effect so this module sees the augmented Request.
 import type {} from '../lib/types';
 import type { RouteDeps } from '../lib/types';
+import { clientIpKey } from '../lib/helpers/ip-key';
 
 // Failed attempts count per (account, client IP): reaching MAX_LOGIN_FAILURES locks the account for that IP
-// only. The account-wide total across all IPs locks every IP, and only at this much higher threshold.
-export const LOGIN_GLOBAL_LOCK_FAILURES = 50;
+// only. The account-wide total across all IPs locks every IP, and only at the higher LOGIN_GLOBAL_LOCK_FAILURES.
 // A refresh token spent this recently is a racing tab or a retry, not a replay: refuse it, revoke nothing.
 export const REFRESH_REUSE_GRACE_MS = 10_000;
 
-// SHA-256 of the client IP: the per-IP failure table never stores a raw address.
+// HMAC of the client IP (IPv6 reduced to its /64), keyed with SESSION_SECRET: the per-IP failure table never
+// stores a raw address, and without the key the small IPv4 space cannot be brute-forced back out of it.
 function ipKeyOf(req: Request, deps: RouteDeps) {
-  return crypto.createHash('sha256').update(String(deps.getRequestIp(req))).digest('hex');
+  return crypto.createHmac('sha256', String(deps.config.SESSION_SECRET)).update(clientIpKey(String(deps.getRequestIp(req)))).digest('hex');
 }
 
 /**
@@ -96,7 +97,7 @@ async function handleLoginFailure(user: any, ipKey: string, deps: RouteDeps) {
         record: () => lf.record(user.id),
         lock: (until) => lf.lock(user.id, until),
       },
-      LOGIN_GLOBAL_LOCK_FAILURES,
+      config.LOGIN_GLOBAL_LOCK_FAILURES,
       deps,
     );
     if (globalLocked) log.warn('account locked', { userId: user.id, failures: globalLocked });
@@ -282,7 +283,7 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
       if (await checkAccountLockout(user, ipKey, res)) return;
 
       // Account-wide cap across all IPs. It must not undercut the per-IP lock: one IP may not shut an account out.
-      if (user && !deps.consumeUserAuthRateLimit(user.id, LOGIN_GLOBAL_LOCK_FAILURES)) {
+      if (user && !deps.consumeUserAuthRateLimit(user.id, deps.config.LOGIN_GLOBAL_LOCK_FAILURES)) {
         const jitter = 100 + Math.floor(Math.random() * 100);
         return setTimeout(
           () => sendError(res, 429, 'Too many login attempts for this account', ErrorCodes.RATE_LIMITED),
@@ -398,6 +399,10 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
       // Issue the new session first so a DB failure cannot leave the client with none
       const { disconnectSessionTokens } = deps;
       const token = await createUserSession(req.user.userId, req.user.username, deviceOf(req), req.userToken ?? null);
+      // Keep the renewed session tied to its refresh-token family, so a reuse revocation still reaches it
+      if (req.userToken) {
+        await stores.refreshTokens?.rebindSession(deps.hashSessionToken(req.userToken), deps.hashSessionToken(token));
+      }
       if (req.userToken) {
         // Disconnect sockets still using the old token to prevent stale connections
         await disconnectSessionTokens([req.userToken], io);
