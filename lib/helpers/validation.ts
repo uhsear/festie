@@ -262,6 +262,8 @@ export interface ChecklistItem {
   label: string;
 }
 
+const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 /**
@@ -439,13 +441,13 @@ export function publishChecklist(config: any, festival: any, extras: { ambiguous
   const lineup: any[] = Array.isArray(festival?.lineup) ? festival.lineup : [];
   // A names-only festival can publish: announced acts need no stage, day split or set yet.
   const stagesItem: ChecklistItem = stages.length > 0
-    ? { key: 'stages', status: 'done', label: `${stages.length} stage(s)` }
+    ? { key: 'stages', status: 'done', label: plural(stages.length, 'stage') }
     : lineup.length > 0 && sets.length === 0
       ? { key: 'stages', status: 'warn', label: 'No stages yet. Add them before you add sets.' }
       : { key: 'stages', status: 'todo', label: 'Add at least one stage.' };
 
   const undated = dayLabels((day) => !/^\d{4}-\d{2}-\d{2}$/.test(String(day?.date ?? '')));
-  let daysItem: ChecklistItem = { key: 'days', status: 'done', label: `${days.length} day(s), each with a date` };
+  let daysItem: ChecklistItem = { key: 'days', status: 'done', label: `${plural(days.length, 'day')}, each with a date` };
   if (days.length === 0) daysItem = { key: 'days', status: 'todo', label: 'Add the festival days.' };
   else if (undated) daysItem = { key: 'days', status: 'todo', label: `Give every day a date. Missing: ${undated}.` };
 
@@ -455,7 +457,7 @@ export function publishChecklist(config: any, festival: any, extras: { ambiguous
     (cover) => cover.state === 'announced',
   );
   const setsItem: ChecklistItem = days.length > 0 && !emptyDays
-    ? { key: 'sets', status: 'done', label: `${sets.length} set(s)` }
+    ? { key: 'sets', status: 'done', label: plural(sets.length, 'set') }
     : days.length > 0 && hasUnscheduledActs
       ? {
           key: 'sets',
@@ -471,7 +473,7 @@ export function publishChecklist(config: any, festival: any, extras: { ambiguous
   const issues = validateFestivalIssues(config, festival);
   const errors: ChecklistItem = issues.length === 0
     ? { key: 'errors', status: 'done', label: 'No lineup problems' }
-    : { key: 'errors', status: 'todo', label: `Fix ${issues.length} lineup problem(s). First: ${issues[0]!.message}` };
+    : { key: 'errors', status: 'todo', label: `Fix ${plural(issues.length, 'lineup problem')}. First: ${issues[0]!.message}` };
 
   const unpinned = stages.filter((s: any) => typeof s?.latitude !== 'number' || typeof s?.longitude !== 'number');
   const pins: ChecklistItem = unpinned.length === 0
@@ -479,13 +481,13 @@ export function publishChecklist(config: any, festival: any, extras: { ambiguous
     : {
         key: 'pins',
         status: 'warn',
-        label: `${unpinned.length} stage(s) have no map pin: ${unpinned.map((s: any) => s?.name || s?.id).join(', ')}. Attendees won't see them on the map.`,
+        label: `${plural(unpinned.length, 'stage')} ${unpinned.length === 1 ? 'has' : 'have'} no map pin: ${unpinned.map((s: any) => s?.name || s?.id).join(', ')}. Attendees won't see them on the map.`,
       };
 
   const untimed = sets.filter((s: any) => !validateTime(s?.startTime)).length;
   const times: ChecklistItem = untimed === 0
     ? { key: 'times', status: 'done', label: 'Every set has a start time' }
-    : { key: 'times', status: 'warn', label: `${untimed} set(s) have no start time yet. They show as TBA.` };
+    : { key: 'times', status: 'warn', label: `${plural(untimed, 'set')} ${untimed === 1 ? 'has' : 'have'} no start time yet. ${untimed === 1 ? 'It shows' : 'They show'} as TBA.` };
 
   const overlapList = stageOverlapWarnings(festival);
   const overlaps: ChecklistItem = overlapList.length === 0

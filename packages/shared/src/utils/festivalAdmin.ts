@@ -1,5 +1,6 @@
 import { festivalStartMinutes, startsAfterMidnight } from './setStatus';
 import { timeAgo } from './timeAgo';
+import { pluralize } from './format';
 
 // FestivalIssueTarget, FestivalIssue and ChecklistItem mirror lib/helpers/validation.ts (server).
 export interface FestivalIssueTarget {
@@ -304,7 +305,7 @@ export function describeShiftResult(
   r: { shifted: number; skipped: number; crossedDayStart: number },
   minutes: number,
 ): string {
-  let msg = `Shifted ${r.shifted} set(s) by ${minutes > 0 ? '+' : ''}${minutes} min.`;
+  let msg = `Shifted ${pluralize(r.shifted, 'set')} by ${minutes > 0 ? '+' : ''}${minutes} min.`;
   if (r.skipped > 0) msg += ` ${r.skipped} had no time and were skipped.`;
   if (r.crossedDayStart > 0) msg += ` ${r.crossedDayStart} crossed 6 AM. Check which night they belong to.`;
   return msg;

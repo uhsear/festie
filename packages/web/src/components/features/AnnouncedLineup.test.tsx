@@ -352,8 +352,8 @@ describe('AnnouncedLineup interest marks', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Open Open Act' }));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByText('House')).toBeInTheDocument();
-    expect(within(dialog).getByRole('link', { name: 'Spotify' })).toHaveAttribute('href', 'https://open.spotify.com/a');
-    expect(within(dialog).queryByRole('link', { name: 'Website' })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Open Act on Spotify' })).toHaveAttribute('href', 'https://open.spotify.com/a');
+    expect(within(dialog).queryByRole('link', { name: 'Open Act on Website' })).not.toBeInTheDocument();
     await userEvent.click(within(dialog).getByRole('button', { name: 'Interested in Open Act' }));
     expect(interest.toggle).toHaveBeenCalledWith('1');
     await userEvent.click(within(dialog).getByRole('button', { name: 'Close' }));

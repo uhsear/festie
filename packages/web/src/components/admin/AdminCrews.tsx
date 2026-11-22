@@ -130,7 +130,7 @@ export default function AdminCrews() {
       const done = await withReauth(async () => {
         await api.delete<void>(`/admin/crews/${id}`);
         return true;
-      }, askPassword);
+      }, askPassword, { retryWrongPassword: true });
       if (done === null) return;
       setCrews(crews.filter((c) => c.id !== id));
       toast(`Deleted ${name}`, 'success');
@@ -250,13 +250,13 @@ export default function AdminCrews() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleToggleExpand(crew.id)}
-                      className="text-xs px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
+                      className="text-xs px-3 py-1.5 min-h-11 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
                     >
                       {isExpanded ? 'Hide' : 'View'}
                     </button>
                     <button
                       onClick={() => handleDelete(crew.id)}
-                      className="text-xs px-3 py-1.5 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
+                      className="text-xs px-3 py-1.5 min-h-11 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
                     >
                       Delete
                     </button>
@@ -295,7 +295,7 @@ export default function AdminCrews() {
                       ) : !members || members.length === 0 ? (
                         <p className="text-xs text-text-muted italic">No members.</p>
                       ) : (
-                        <ul className="space-y-1.5">
+                        <ul className="list-none p-0 space-y-1.5">
                           {members.map((m) => (
                             <li key={m.userId} className="flex items-center gap-2 text-xs text-text-secondary">
                               {memberAvatarUrl(m) ? (

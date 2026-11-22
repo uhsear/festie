@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { pluralize } from '@festie/shared/utils/format';
 import { lineupImportApi } from '@festie/shared/services/lineupImport';
 import type { FestivalScope } from '@festie/shared/services/festivalAdmin';
 import { undoReleaseWarning, type TimeReleasePanelData } from '@festie/shared/utils/timeReleases';
@@ -162,8 +163,8 @@ export default function LineupImportHistory({ festivalId, festivalName, refreshK
                     {item.createdBy ? ` by ${item.createdBy}` : ''}
                   </p>
                   <p className="text-text-muted">
-                    Added {item.counts.created} · Updated {item.counts.updated} · {item.counts.newStages} stages ·{' '}
-                    {item.counts.newDays} days
+                    Added {item.counts.created} · Updated {item.counts.updated} · {pluralize(item.counts.newStages, 'stage')} ·{' '}
+                    {pluralize(item.counts.newDays, 'day')}
                     {item.counts.announced || item.counts.announcedUpdated
                       ? ` · Announced ${item.counts.announced ?? 0} added, ${item.counts.announcedUpdated ?? 0} updated`
                       : ''}

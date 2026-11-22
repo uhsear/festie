@@ -214,7 +214,7 @@ export default function SetEditor({
             <button
               type="button"
               onClick={() => changeDrafts([...drafts, ''])}
-              className="text-xs text-accent-aqua hover:underline"
+              className="min-h-11 px-2 text-xs text-accent-aqua hover:underline"
             >
               + B2B artist
             </button>

@@ -558,7 +558,7 @@ export default function AdminScreen() {
                   key={a.id ?? i}
                   style={[styles.row, styles.rowDivider]}
                   accessibilityRole="text"
-                  accessibilityLabel={`${auditActionLabel(a.action)} by ${a.actorUsername ?? 'System'}, ${timeAgoFromIso(a.createdAt)}`}
+                  accessibilityLabel={`${auditActionLabel(a.action)}${a.status === 'failure' ? ' (failed)' : ''} by ${a.actorUsername ?? 'System'}, ${timeAgoFromIso(a.createdAt)}`}
                 >
                   <View style={styles.rowBody}>
                     <Text style={styles.rowTitle} numberOfLines={1}>
@@ -566,6 +566,7 @@ export default function AdminScreen() {
                     </Text>
                     <Text style={styles.rowHint} numberOfLines={1}>
                       {a.actorUsername ?? 'System'} · {timeAgoFromIso(a.createdAt)}
+                      {a.status === 'failure' ? ' · Failed' : ''}
                     </Text>
                   </View>
                 </View>

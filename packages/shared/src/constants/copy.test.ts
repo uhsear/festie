@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
-  COPY, FESTIVAL_STATUS_LABEL, MEETING_POINT_KINDS, clashChip, clashChipA11y, clashCount, clashPromptCopy, meetingPointKind,
+  COPY, FESTIVAL_STATUS_LABEL, MEETING_POINT_KINDS, clashChip, clashChipA11y, clashCount, clashPromptCopy, genreChipLabel,
+  meetingPointKind,
 } from './copy';
 
 // Mirrors MEETING_POINT_TYPES in lib/constants.ts:21; shared cannot import backend code.
@@ -101,5 +102,25 @@ describe('also plays copy', () => {
       clashChipA11y(3),
     ];
     for (const v of strings) expect(v).not.toMatch(/log in/i);
+  });
+});
+
+describe('genreChipLabel', () => {
+  it('capitalises every word and keeps acronyms upper case', () => {
+    expect(genreChipLabel('melodic dubstep')).toBe('Melodic Dubstep');
+    expect(genreChipLabel('edm')).toBe('EDM');
+    expect(genreChipLabel('uk garage')).toBe('UK Garage');
+    expect(genreChipLabel('dnb')).toBe('DnB');
+    expect(genreChipLabel('r&b')).toBe('R&B');
+    expect(genreChipLabel('deep-house')).toBe('Deep-House');
+  });
+  it('is stable on a label that is already cased', () => {
+    expect(genreChipLabel('Future Bass')).toBe('Future Bass');
+  });
+});
+
+describe('a11y names start with the visible text (WCAG 2.5.3)', () => {
+  it('names the jump-to-now control by its label first', () => {
+    expect(COPY.jumpToNow.a11y.startsWith(COPY.jumpToNow.label)).toBe(true);
   });
 });

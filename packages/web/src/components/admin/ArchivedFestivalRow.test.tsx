@@ -10,7 +10,7 @@ describe('ArchivedFestivalRow', () => {
     const item = { id: 'f1', name: 'Old Fest', location: 'Tampa', deletedAt: new Date().toISOString() } as ArchivedFestival;
     render(<ArchivedFestivalRow item={item} onRestore={onRestore} />);
     expect(screen.getByRole('heading', { name: 'Old Fest' })).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Restore Old Fest' }));
     expect(onRestore).toHaveBeenCalledTimes(1);
   });
 });

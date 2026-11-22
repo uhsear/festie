@@ -41,6 +41,7 @@ import {
   type GridCrewProfile,
   searchEmptyCopy,
   searchHiddenByFilters,
+  dayHasTimedSets,
   searchLineupEntries,
   searchOtherDays,
   type GridBounds,
@@ -431,7 +432,7 @@ export default function GridScreen() {
               onSavePick={setPick}
               onOpenDetail={openSet}
               defaultExpanded
-              allTba
+              allTba={!dayHasTimedSets(getCurrentDaySets())}
             />
             <AnnouncedLineup model={announced} hPad={t.spacing[4]} />
           </ScrollView>
@@ -632,7 +633,7 @@ export default function GridScreen() {
               onPress={() => void handleExport()}
               disabled={sharing}
               accessibilityRole="button"
-              accessibilityLabel="Export grid as image"
+              accessibilityLabel={COPY.grid.shareImageA11y}
               hitSlop={8}
               style={styles.headerButton}
             >

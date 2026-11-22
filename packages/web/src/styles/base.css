@@ -18,6 +18,18 @@
   }
 }
 
+/* A button resets its text style to the browser default. This layered reset hands the wrapper's full style down to
+   an artist name, and stays below the unlayered utilities so a caller's text-* and font-* classes still win. */
+@layer base {
+  .artist-name-btn {
+    font: inherit;
+    letter-spacing: inherit;
+    word-spacing: inherit;
+    text-transform: inherit;
+    text-shadow: inherit;
+  }
+}
+
 * {
   border-color: var(--color-border);
 }
