@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
+import { selectMyPicks, useAuthStore, useCrewStore, useFestivalStore } from '@festie/shared/stores';
 import { useCrewOverlapStatus } from '@festie/shared/hooks';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import {
@@ -98,7 +98,6 @@ export function deviceSize(): { width: number; height: number } {
 /** Lock-screen options: what to show, theme, phone size, a page preview, and saving every page. */
 export default function LockscreenPanel({ initialMode }: { initialMode: LockscreenMode }) {
   const festival = useFestivalStore((s) => s.currentFestival);
-  const profile = useFestivalStore((s) => s.currentProfile);
   const sets = useFestivalStore((s) => s.sets);
   const stages = useFestivalStore((s) => s.stages);
   const days = useFestivalStore((s) => s.days);
@@ -107,7 +106,7 @@ export default function LockscreenPanel({ initialMode }: { initialMode: Lockscre
   const crewOverlap = useCrewStore((s) => s.crewOverlap);
   const selfUserId = useAuthStore((s) => s.user?.id);
   const { toast, toastError } = useToast();
-  const picks = profile?.picks;
+  const picks = useFestivalStore(selectMyPicks) ?? undefined;
 
   const [mode, setMode] = useState<LockscreenMode>(initialMode === 'crew' && !hasCrew ? 'picks' : initialMode);
   const [saved] = useState(readSavedOptions);

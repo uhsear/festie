@@ -14,6 +14,7 @@ const storeState: Record<string, unknown> = {};
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+  selectMyPicks: (s: { currentProfile?: { picks?: unknown } }) => s.currentProfile?.picks ?? null,
 }));
 
 vi.mock('../hooks/useUndoNotifier', () => ({

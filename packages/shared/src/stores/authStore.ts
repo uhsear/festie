@@ -47,6 +47,8 @@ export interface AuthActions {
   checkSession: () => Promise<boolean>;
   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
   resetPassword: (request: { token: string; newPassword: string; confirmPassword: string }) => Promise<void>;
+  /** Consumes the emailed token. Throws the API error so the confirm page can show why the link failed. */
+  verifyEmail: (token: string) => Promise<{ email: string; sessionsRevoked: boolean }>;
   resendVerification: () => Promise<void>;
   /** `password` is omitted for a provider-only account, which confirms with a recent re-auth instead. */
   requestEmailChange: (email: string, password?: string) => Promise<string>;
@@ -398,6 +400,16 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     await api.post('/auth/reset-password', request);
     // The server revoked every session for the account, so the local copy is stale.
     if (get().user) await get().logout();
+  },
+
+  verifyEmail: async (token) => {
+    const result = await api.post<{ verified: true; email: string; sessionsRevoked: boolean }>('/auth/verify-email', { token });
+    // A moved login address revoked every session; otherwise refresh the signed-in user's verified flag.
+    if (get().user) {
+      if (result.sessionsRevoked) await get().logout();
+      else await get().checkSession();
+    }
+    return { email: result.email, sessionsRevoked: result.sessionsRevoked };
   },
 
   resendVerification: async () => {

@@ -19,7 +19,7 @@ import * as Sharing from 'expo-sharing';
 import { File, Paths } from 'expo-file-system';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useAuthStore, useCrewStore, useFestivalDataStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
+import { selectMyPicks, useAuthStore, useCrewStore, useFestivalDataStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
 import { COPY, PRIORITY_LABEL } from '@festie/shared/constants';
 import { fetchPrintableSchedule, mapErrorToUserMessage } from '@festie/shared/services';
 import { useCrewOverlapStatus } from '@festie/shared/hooks';
@@ -205,7 +205,8 @@ export default function PicksImageScreen() {
   const activeCrew = useCrewStore((s) => s.activeCrew);
   const crewOverlap = useCrewStore((s) => s.crewOverlap);
   const selfUserId = useAuthStore((s) => s.user?.id);
-  const picks = profile?.picks;
+  // A guest has no profile: the picks on this device draw the image just the same.
+  const picks = useFestivalDataStore(selectMyPicks) ?? undefined;
 
   const [shape, setShape] = useState<Shape>('lockscreen');
   const [mode, setMode] = useState<LockscreenMode>(isMode(modeParam) ? modeParam : 'picks');
@@ -895,23 +896,27 @@ export default function PicksImageScreen() {
             ) : null}
             {heading('Other formats')}
             <SegmentedControl options={SHAPE_OPTIONS} value={shape} onChange={setShape} accessibilityLabel="Format" />
-            <TouchableOpacity
-              style={[styles.secondaryButton, (printing || !festival || !profile) && styles.disabled]}
-              onPress={() => void handlePrintable()}
-              disabled={printing || !festival || !profile}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: printing || !festival || !profile }}
-              accessibilityLabel={COPY.picks.printable}
-            >
-              {printing ? <ActivityIndicator size="small" color={t.colors.accent.aqua} /> : null}
-              <Text style={styles.secondaryButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-                {COPY.picks.printable}
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              A web page with your picks and your crew's schedules, ready to print.
-            </Text>
+            {profile ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, (printing || !festival) && styles.disabled]}
+                  onPress={() => void handlePrintable()}
+                  disabled={printing || !festival}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: printing || !festival }}
+                  accessibilityLabel={COPY.picks.printable}
+                >
+                  {printing ? <ActivityIndicator size="small" color={t.colors.accent.aqua} /> : null}
+                  <Text style={styles.secondaryButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+                    {COPY.picks.printable}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  A web page with your picks and your crew's schedules, ready to print.
+                </Text>
+              </>
+            ) : null}
           </>
         ) : null}
 
