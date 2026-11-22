@@ -323,18 +323,12 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
         onMomentumScrollEnd={handleMomentumScrollEnd}
         style={styles.pager}
         contentContainerStyle={styles.pagerContent}
-        accessibilityRole="adjustable"
-        accessibilityLabel="Intro slides"
-        accessibilityValue={{ min: 1, max: steps.length, now: index + 1, text: `Step ${index + 1} of ${steps.length}` }}
-        accessibilityActions={[
-          { name: 'increment', label: 'Next step' },
-          { name: 'decrement', label: 'Previous step' },
-        ]}
-        onAccessibilityAction={(event) => handleAccessibilityAction(event.nativeEvent.actionName)}
       >
-        {steps.map((step) => (
+        {steps.map((step, i) => (
           <ScrollView
             key={step}
+            accessibilityElementsHidden={i !== index}
+            importantForAccessibility={i === index ? 'auto' : 'no-hide-descendants'}
             style={{ width: screenWidth }}
             contentContainerStyle={[styles.slide, largeText && styles.slideCentered]}
             showsVerticalScrollIndicator={false}
@@ -346,7 +340,20 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
       </ScrollView>
 
       <View style={styles.footer}>
-        <View style={styles.dots}>
+        {/* The adjustable role lives here, not on the pager: iOS folds an
+            adjustable element's children into one stop, which hid the slide copy. */}
+        <View
+          style={styles.dots}
+          accessible
+          accessibilityRole="adjustable"
+          accessibilityLabel="Intro slides"
+          accessibilityValue={{ min: 1, max: steps.length, now: index + 1, text: `Step ${index + 1} of ${steps.length}` }}
+          accessibilityActions={[
+            { name: 'increment', label: 'Next step' },
+            { name: 'decrement', label: 'Previous step' },
+          ]}
+          onAccessibilityAction={(event) => handleAccessibilityAction(event.nativeEvent.actionName)}
+        >
           {steps.map((step) => (
             <View key={step} style={[styles.dot, step === steps[index] && styles.dotActive]} />
           ))}
