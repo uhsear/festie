@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COPY } from '@festie/shared/constants';
-import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useTokens, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import GuestPicksBanner from '../GuestPicksBanner';
 import CrewSuggestionStrip from '../CrewSuggestionStrip';
 import RateNightBanner from '../RateNightBanner';
@@ -51,14 +51,15 @@ export default function PicksHeader({
   const styles = useStyles();
   const t = useTokens();
   const router = useRouter();
+  const largeText = useLargeText();
   return (
 <View>
   {!user ? <GuestPicksBanner /> : null}
   {user ? (
-    <View style={styles.headerActions}>
+    <View style={[styles.headerActions, largeText && styles.headerActionsLarge]}>
       {calendarButton}
       <TouchableOpacity
-        style={[styles.calendarButton, noPicks && styles.calendarButtonDisabled]}
+        style={[styles.calendarButton, largeText && styles.calendarButtonLarge, noPicks && styles.calendarButtonDisabled]}
         onPress={() => router.push('/picks-image')}
         disabled={noPicks}
         activeOpacity={0.8}
@@ -72,7 +73,7 @@ export default function PicksHeader({
         </Text>
       </TouchableOpacity>
       <TouchableOpacity
-        style={[styles.calendarButton, !currentFestival && styles.calendarButtonDisabled]}
+        style={[styles.calendarButton, largeText && styles.calendarButtonLarge, !currentFestival && styles.calendarButtonDisabled]}
         onPress={handleSharePicks}
         disabled={!currentFestival}
         activeOpacity={0.8}
