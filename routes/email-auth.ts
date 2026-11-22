@@ -116,6 +116,8 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
 
         // Answer before any lookup or send: a known and an unknown address then return in the same time.
         // That work is detached, so its failures are logged here and never reach the caller.
+        // Accepted risk: shutdown does not wait for it, so a restart in that window loses the email.
+        // The user can request another link, and the loss shows in the log.
         void sendResetLink(cleanEmail).catch((error: any) => log.error('forgot-password failed', { error: error.message }));
         return sendSuccess(res, { message: successMsg });
       } catch (error: any) {

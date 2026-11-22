@@ -982,6 +982,24 @@ describe('middleware: NUL in input (SEC-NUL-500)', () => {
     await request(app).post('/api/v1/echo/x').send({ 'k\u0000': 'v' }).expect(400);
   });
 
+  it('walks a large flat array without a stack overflow, and still finds a NUL at its end', async () => {
+    const { app } = makeMiddlewareApp({ config: { JSON_LIMIT: '8mb' } });
+    app.post('/api/v1/echo/x', (_req: any, res: any) => res.json({ ok: true }));
+    const zeros = new Array(1_500_000).fill(0);
+    await request(app).post('/api/v1/echo/x').send(zeros).expect(200);
+    await request(app).post('/api/v1/echo/x').send([...zeros, 'a b']).expect(400);
+  });
+
+  it('logs and counts a rejected request', async () => {
+    const lines: any[] = [];
+    const { app } = makeMiddlewareApp({ ctx: { log: { info() {}, warn: (m: string, meta: any) => m === 'request' && lines.push(meta), error() {} } } });
+    app.all('/api/v1/echo/:id', (_req: any, res: any) => res.json({ ok: true }));
+
+    await request(app).post('/api/v1/echo/x').send({ a: 'b ' }).expect(400);
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].status, 400);
+  });
+
   it('lets ordinary input, including an escaped backslash-zero, through', async () => {
     const app = makeApp();
     await request(app).get('/api/v1/echo/ab%2500cd?q=%E2%9C%93').expect(200);
@@ -997,6 +1015,28 @@ describe('middleware: request log path (SEC-LOG-PII)', () => {
 
     await request(app).get('/api/v1/crews/join-preview/SECRETCODE1?x=1').expect(200);
     assert.equal(lines[0].path, '/api/v1/crews/join-preview/:code');
+  });
+
+  it('logs the legacy /crews/join invite code as a placeholder', async () => {
+    const lines: any[] = [];
+    const { app } = makeMiddlewareApp({ ctx: { log: { info: (_m: string, meta: any) => lines.push(meta), warn() {}, error() {} } } });
+    app.get('/api/v1/crews/join/:code', (_req: any, res: any) => res.redirect(301, '/'));
+
+    await request(app).get('/api/v1/crews/join/SECRETCODE1').redirects(0).expect(301);
+    assert.equal(lines[0].path, '/api/v1/crews/join/:code');
+  });
+
+  it('keeps the invite code out of the request timeout log', async () => {
+    const lines: any[] = [];
+    const { app } = makeMiddlewareApp({
+      config: { REQUEST_TIMEOUT_MS: 50 },
+      ctx: { log: { info() {}, warn: (m: string, meta: any) => m === 'request timeout' && lines.push(meta), error() {} } },
+    });
+    app.use('/api', (_req: any, _res: any) => {});
+
+    await request(app).get('/api/v1/crews/join-preview/SECRETCODE1').expect(408);
+    assert.equal(lines.length, 1);
+    assert.equal(lines[0].path, '/v1/crews/join-preview/:code');
   });
 });
 
@@ -1015,5 +1055,16 @@ describe('middleware: idempotency skips auth routes (SEC-IDEMP-TOKEN-CACHE)', ()
     await request(app).post('/api/v1/other').set('Idempotency-Key', 'k2').send({});
     const replay = await request(app).post('/api/v1/other').set('Idempotency-Key', 'k2').send({});
     assert.equal(replay.headers['x-idempotency-replayed'], 'true');
+  });
+
+  it('matches the auth prefix in any case, as Express routing does', async () => {
+    const { app } = makeMiddlewareApp();
+    let runs = 0;
+    app.post('/api/v1/auth/login', (_req: any, res: any) => res.json({ token: `t${++runs}` }));
+
+    const first = await request(app).post('/api/v1/AUTH/login').set('Idempotency-Key', 'k3').send({});
+    const second = await request(app).post('/api/v1/AUTH/login').set('Idempotency-Key', 'k3').send({});
+    assert.notEqual(first.body.token, second.body.token);
+    assert.equal(second.headers['x-idempotency-replayed'], undefined);
   });
 });
