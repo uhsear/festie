@@ -203,6 +203,20 @@ a:focus-visible,
     background: Highlight;
     color: HighlightText;
   }
+  /* forced-color-adjust is inherited, so a child with its own colour (a badge, an icon) would keep it on the Highlight plate. */
+  [aria-pressed='true']:not(.day-tab-underline) *,
+  [aria-selected='true']:not(.day-tab-underline) *,
+  [aria-current='page']:not(.day-tab-underline) * {
+    color: inherit;
+    background-color: transparent;
+    border-color: currentColor;
+  }
+  /* An empty child is a dot, not a label, so it keeps a fill that contrasts with the plate. */
+  [aria-pressed='true']:not(.day-tab-underline) *:empty,
+  [aria-selected='true']:not(.day-tab-underline) *:empty,
+  [aria-current='page']:not(.day-tab-underline) *:empty {
+    background-color: currentColor;
+  }
   .card-priority-btn {
     border: 2px solid ButtonText;
   }
