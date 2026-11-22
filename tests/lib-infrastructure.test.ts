@@ -258,10 +258,26 @@ describe('lib/sentry.js', () => {
     it('redactDeep survives a cycle and a very deep object', () => {
       const cyclic: any = { url: path };
       cyclic.self = cyclic;
-      assert.equal(sentryModule.redactDeep(cyclic).url, redacted);
+      const out = sentryModule.redactDeep(cyclic);
+      assert.equal(out.url, redacted);
+      assert.equal(out.self, '[Circular]');
       let deep: any = { leaf: path };
       for (let i = 0; i < 50_000; i++) deep = { next: deep };
       assert.doesNotThrow(() => sentryModule.redactDeep(deep));
+    });
+
+    it('redactDeep keeps the priority fields redacted when extra overflows the node budget', () => {
+      const extra: Record<string, string> = {};
+      for (let i = 0; i < 3000; i++) extra[`k${i}`] = path;
+      const out = sentryModule.redactDeep({
+        extra,
+        request: { url: `https://festie.us${path}` },
+        spans: [{ description: `GET ${path}` }],
+      });
+      assert.equal(out.request.url, `https://festie.us${redacted}`);
+      assert.equal(out.spans[0].description, `GET ${redacted}`);
+      assert.equal(out.extra.k2999, '[Filtered]');
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
     });
 
     it('composeHook runs ours first and then the caller hook on the scrubbed value', () => {

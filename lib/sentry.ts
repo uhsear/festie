@@ -19,22 +19,39 @@ let noop = true;
 
 const REDACT_MAX_DEPTH = 8;
 const REDACT_MAX_NODES = 2000;
+// Walked first, so a huge `extra` cannot use up the node budget before the fields that carry URLs.
+const REDACT_PRIORITY_KEYS = ['request', 'transaction', 'message', 'exception', 'spans', 'breadcrumbs'];
+
+interface RedactState { nodes: number; ancestors: Set<object> }
+
+function redactNode(value: unknown, depth: number, state: RedactState): unknown {
+  if (value === null || (typeof value !== 'string' && typeof value !== 'object')) return value;
+  if (ArrayBuffer.isView(value)) return value;
+  // Fail closed: a value past a cap is dropped, never passed through unredacted.
+  if (++state.nodes > REDACT_MAX_NODES) return '[Filtered]';
+  if (typeof value === 'string') return redactInviteCodePath(value);
+  if (state.ancestors.has(value)) return '[Circular]';
+  if (depth >= REDACT_MAX_DEPTH) return '[Filtered]';
+  state.ancestors.add(value);
+  const holder = value as Record<string, unknown>;
+  for (const key of Object.keys(holder)) holder[key] = redactNode(holder[key], depth + 1, state);
+  state.ancestors.delete(value);
+  return value;
+}
 
 /**
  * Replaces every string inside an object or array with its invite-code-redacted form, in place, and returns the value.
- * Bounded so a hostile or huge event cannot hang the process: it stops below depth 8 and after 2000 visited nodes,
- * and a WeakSet skips cycles. Past those limits a string is left as is.
+ * Bounded so a hostile or huge event cannot hang the process: a value below depth 8 or after 2000 visited nodes
+ * becomes '[Filtered]', and a cycle becomes '[Circular]'. The request, transaction, message, exception,
+ * trace context, spans and breadcrumbs are walked before the rest of the event.
  */
-function redactDeep<T>(value: T, depth = 0, state = { nodes: 0, seen: new WeakSet<object>() }): T {
-  if (typeof value === 'string') return redactInviteCodePath(value) as T;
-  if (!value || typeof value !== 'object' || ArrayBuffer.isView(value)) return value;
-  if (depth >= REDACT_MAX_DEPTH || state.seen.has(value)) return value;
-  state.seen.add(value);
-  const holder = value as Record<string, unknown>;
-  for (const key of Object.keys(holder)) {
-    if (++state.nodes > REDACT_MAX_NODES) break;
-    holder[key] = redactDeep(holder[key], depth + 1, state);
-  }
+function redactDeep<T>(value: T): T {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return redactNode(value, 0, { nodes: 0, ancestors: new Set() }) as T;
+  const root = value as Record<string, any>;
+  const state: RedactState = { nodes: 0, ancestors: new Set([root]) };
+  if (root.contexts?.trace) root.contexts.trace = redactNode(root.contexts.trace, 2, state);
+  const order = [...REDACT_PRIORITY_KEYS.filter((key) => key in root), ...Object.keys(root).filter((key) => !REDACT_PRIORITY_KEYS.includes(key))];
+  for (const key of order) root[key] = redactNode(root[key], 1, state);
   return value;
 }
 
