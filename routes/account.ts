@@ -15,7 +15,7 @@ import type {
   paymentHandlesSchema,
   updateEmailSchema,
 } from '../lib/schemas';
-import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from '../lib/email';
+import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, verifyEmailUrl } from '../lib/email';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user';
 import type { Identity } from '../lib/db/stores/identities';
 import { collectAuthoredRecords } from '../lib/account-export-records';
@@ -743,7 +743,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           currentUser.email ?? null,
         );
 
-        const verifyUrl = `${deps.config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
+        const verifyUrl = verifyEmailUrl(deps.config, verifyToken);
         const confirmSent = await sendEmailChangeConfirmEmail({
           to: cleanEmail,
           username: currentUser.username,
