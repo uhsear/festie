@@ -5,8 +5,9 @@ import { useAuth } from '@festie/shared/hooks';
 import { mapErrorToUserMessage, setPassword, withReauth } from '@festie/shared/services';
 import { PROVIDER_COPY } from '@festie/shared/constants';
 import { PASSWORD_CHANGED_MESSAGE, useAuthStore, useUIStore } from '@festie/shared/stores';
-import { PASSWORD_RULES, passwordPolicyError, passwordStrength, validateNewPassword } from '@festie/shared/utils';
+import { PASSWORD_RULES, passwordPolicyError, validateNewPassword } from '@festie/shared/utils';
 import Button from './Button';
+import PasswordStrengthMeter from './PasswordStrengthMeter';
 import { useReauthPrompt } from './admin';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -152,8 +153,6 @@ function ChangePasswordForm() {
   const { changePassword } = useAuth();
   const offlineMode = useUIStore((s) => s.offlineMode);
   const user = useAuthStore((s) => s.user);
-  // weak→strong. All four map exactly onto existing semantic tokens.
-  const STRENGTH_COLORS = [t.colors.text.danger, t.colors.accent.amber, t.colors.accent.aqua, t.colors.accent.green];
 
   const [open, setOpen] = useState(false);
   const [current, setCurrent] = useState('');
@@ -237,7 +236,6 @@ function ChangePasswordForm() {
     }
   };
 
-  const strength = passwordStrength(next, { username: user?.username, email: user?.email });
   const matchState: 'none' | 'match' | 'mismatch' =
     confirm.length === 0 ? 'none' : confirm === next ? 'match' : 'mismatch';
   // Gate the CTA on a clean form the same way the sibling sections do, so the
@@ -308,25 +306,7 @@ function ChangePasswordForm() {
             </Text>
           ) : null}
 
-          {/* Strength meter — UX guidance only; the shared policy is authoritative. */}
-          {next.length > 0 ? (
-            <View style={styles.meterWrap} accessibilityRole="text" accessibilityLabel={`Password strength: ${strength.label}`}>
-              <View style={styles.meterTrack}>
-                {[0, 1, 2, 3].map((i) => (
-                  <View
-                    key={i}
-                    style={[
-                      styles.meterSeg,
-                      i < strength.score && { backgroundColor: STRENGTH_COLORS[Math.max(0, strength.score - 1)] },
-                    ]}
-                  />
-                ))}
-              </View>
-              <Text style={[styles.meterLabel, { color: STRENGTH_COLORS[Math.max(0, strength.score - 1)] }]}>
-                {strength.label}
-              </Text>
-            </View>
-          ) : null}
+          <PasswordStrengthMeter password={next} username={user?.username} email={user?.email} />
 
           <TextInput
             ref={confirmRef}
@@ -459,28 +439,6 @@ const useStyles = makeStyles((t) => ({
   },
   inputOk: {
     borderColor: t.colors.aquaAlpha[40],
-  },
-  meterWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    marginTop: -t.spacing[1],
-  },
-  meterTrack: {
-    flex: 1,
-    flexDirection: 'row',
-    gap: t.spacing[1],
-  },
-  meterSeg: {
-    flex: 1,
-    height: 4,
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.border.light,
-  },
-  meterLabel: {
-    ...typeStyle('caption'),
-    minWidth: 52,
-    textAlign: 'right',
   },
   metaRow: {
     flexDirection: 'row',

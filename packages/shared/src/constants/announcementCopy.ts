@@ -80,6 +80,8 @@ export const ANNOUNCEMENT_COPY = {
     kicker: (severity: AnnouncementSeverity) => (severity === 'urgent' ? 'Urgent · From Festie' : 'From Festie'),
     open: 'Open',
     dismiss: 'Dismiss announcement',
+    readMore: 'Read more',
+    readLess: 'Show less',
     label: (kicker: string, title: string, body: string) => `${kicker}: ${title}. ${body}`,
   },
 } as const;

@@ -77,13 +77,15 @@ describe('AdminCrews', () => {
 
   it('gives the owner no Remove and removes a member after confirm', async () => {
     render(<AdminCrews />);
-    await userEvent.click(await screen.findByRole('button', { name: 'View' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'View Sunset Squad' }));
     expect(await screen.findByText('Owner')).toBeInTheDocument();
-    const removes = screen.getAllByRole('button', { name: 'Remove' });
+    expect(screen.getByRole('button', { name: 'Copy invite code for Sunset Squad' })).toBeInTheDocument();
+    const removes = screen.getAllByRole('button', { name: /^Remove / });
     expect(removes).toHaveLength(1);
+    expect(removes[0]).toHaveAccessibleName('Remove bob from Sunset Squad');
     await userEvent.click(removes[0]!);
     expect(await screen.findByText('Remove @bob from Sunset Squad?')).toBeInTheDocument();
-    await userEvent.click(screen.getAllByRole('button', { name: 'Remove' }).at(-1)!);
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }));
     expect(mockRemove).toHaveBeenCalledWith('c1', 'u2');
   });
 
@@ -99,8 +101,8 @@ describe('AdminCrews', () => {
 
   it('deletes a crew through the password prompt', async () => {
     render(<AdminCrews />);
-    await userEvent.click(await screen.findByRole('button', { name: 'Delete' }));
-    await userEvent.click(screen.getAllByRole('button', { name: 'Delete' }).at(-1)!);
+    await userEvent.click(await screen.findByRole('button', { name: 'Delete Sunset Squad' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Delete' }));
     expect(mockWithReauth).toHaveBeenCalledTimes(1);
     expect(mockDelete).toHaveBeenCalledWith('/admin/crews/c1');
   });

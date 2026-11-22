@@ -6,6 +6,8 @@ import { isApiClientError, parseRetryAfterMs } from '../services/errors';
 export const RETRY_MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 1000;
 const RETRY_CAP_MS = 30_000;
+// The offline flag clears before the radio is usable, so the reload at reconnect can fail; one more try follows.
+export const RECONNECT_RETRY_MS = 5000;
 
 /** 429, 5xx and network failures can clear on their own; 4xx client errors cannot. */
 export function isTransientError(err: unknown): boolean {
@@ -45,8 +47,12 @@ export function useCrewSections(crewId: string | undefined): { error: string | n
   const [error, setError] = useState<string | null>(null);
   const run = useRef(0);
 
-  const reload = useCallback(() => {
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  // `afterReconnect` runs get one extra try, scheduled when that run settles, so Retry-After waits are never cut short.
+  const load = useCallback((afterReconnect: boolean) => {
     const id = ++run.current;
+    clearTimeout(retryTimer.current);
     if (!crewId) {
       setError(null);
       return;
@@ -61,28 +67,32 @@ export function useCrewSections(crewId: string | undefined): { error: string | n
       ['expenses', () => s.loadExpenses(crewId)],
     ];
     // The loaders share one store `error` field, so collect failures locally instead.
-    Promise.allSettled(sections.map(([, load]) => retryTransient(load, cancelled))).then((results) => {
+    Promise.allSettled(sections.map(([, loadSection]) => retryTransient(loadSection, cancelled))).then((results) => {
       if (cancelled()) return;
       const failed = sections.filter((_, i) => results[i]?.status === 'rejected').map(([name]) => name);
       setError(failed.length ? `Failed to load: ${failed.join(', ')}` : null);
+      if (afterReconnect && failed.length) retryTimer.current = setTimeout(() => load(false), RECONNECT_RETRY_MS);
     });
   }, [crewId]);
 
+  const reload = useCallback(() => load(false), [load]);
+
   useEffect(() => {
-    reload();
+    load(false);
     return () => {
       // eslint-disable-next-line react-hooks/exhaustive-deps -- run is a counter, not a DOM ref; cleanup must bump the current value
       run.current++;
+      clearTimeout(retryTimer.current);
     };
-  }, [reload]);
+  }, [load]);
 
   // Offline, the loaders fail by design; do not leave that failure on screen until the next timed retry.
   const offlineMode = useUIStore((s) => s.offlineMode);
   const wasOffline = useRef(offlineMode);
   useEffect(() => {
-    if (wasOffline.current && !offlineMode && error) reload();
+    if (wasOffline.current && !offlineMode && error) load(true);
     wasOffline.current = offlineMode;
-  }, [offlineMode, error, reload]);
+  }, [offlineMode, error, load]);
 
   return { error, reload };
 }

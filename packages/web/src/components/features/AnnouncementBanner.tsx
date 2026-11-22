@@ -1,10 +1,49 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { AlertTriangle } from 'lucide-react';
 import { ANNOUNCEMENT_COPY as COPY } from '@festie/shared/constants';
 import { useAnnouncementStore } from '@festie/shared/stores/announcementStore';
 import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
 import { announcementWebPath, pickBannerAnnouncement } from '@festie/shared/utils';
+
+/** The body clamps to two lines; "Read more" appears only when the text overflows, and expands it in place. */
+function ClampedBody({ text }: { text: string }) {
+  const ref = useRef<HTMLParagraphElement>(null);
+  const id = useId();
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el || expanded) return;
+    const measure = () => setOverflows(el.scrollHeight > el.clientHeight + 1);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [text, expanded]);
+
+  return (
+    <>
+      <p id={id} ref={ref} className={`text-text-secondary ${expanded ? '' : 'line-clamp-2'}`}>
+        {text}
+      </p>
+      {(overflows || expanded) && (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          aria-expanded={expanded}
+          aria-controls={id}
+          data-testid="announcement-banner-more"
+          className="type-caption font-semibold text-accent-aqua min-h-11 inline-flex items-center focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        >
+          {expanded ? COPY.banner.readLess : COPY.banner.readMore}
+        </button>
+      )}
+    </>
+  );
+}
 
 /**
  * Admin announcement banner ("From Festie") under the SOS banner. Loads when the
@@ -42,7 +81,7 @@ export default function AnnouncementBanner() {
       <div className="min-w-0 flex-1">
         <p className="type-caption text-text-secondary">{kicker}</p>
         <p className="font-semibold">{a.title}</p>
-        <p className="text-text-secondary">{a.body}</p>
+        <ClampedBody key={a.id} text={a.body} />
       </div>
       {a.screen !== 'home' && (
         <Link
