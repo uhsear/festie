@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWrap, markCaught } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { formatTime, isWrapUnlocked, selectSetsToRate } from '@festie/shared/utils';
@@ -31,6 +32,7 @@ export default function RateScreen() {
   const router = useRouter();
   const reduceMotion = useReduceMotion();
   const haptics = useHaptics();
+  const insets = useSafeAreaInsets();
   const { festival: festivalParam } = useLocalSearchParams<{ festival?: string }>();
   const currentFestivalId = useFestivalDataStore((s) => s.currentFestival?.id);
   const festivalId = festivalParam || currentFestivalId;
@@ -93,7 +95,7 @@ export default function RateScreen() {
   const fullListLink = festivalId ? (
     <TouchableOpacity
       onPress={() => router.push({ pathname: '/caught', params: { festival: festivalId } })}
-      style={styles.fullList}
+      style={[styles.fullList, { paddingBottom: insets.bottom + t.spacing[2] }]}
       accessibilityRole="link"
       accessibilityLabel="See the full list"
     >
