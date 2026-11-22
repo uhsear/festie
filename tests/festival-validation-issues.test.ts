@@ -199,14 +199,27 @@ describe('publishChecklist', () => {
     const map = byKey(publishChecklist(config, festival));
     for (const key of keys.filter((k) => k !== 'pins')) assert.equal(map[key].status, 'done', key);
     assert.equal(map.timeZone.label, 'Time zone: America/New_York');
-    assert.equal(map.stages.label, '2 stage(s)');
-    assert.equal(map.days.label, '2 day(s), each with a date');
-    assert.equal(map.sets.label, '2 set(s)');
+    assert.equal(map.stages.label, '2 stages');
+    assert.equal(map.days.label, '2 days, each with a date');
+    assert.equal(map.sets.label, '2 sets');
     assert.deepEqual(map.pins, {
       key: 'pins',
       status: 'warn',
-      label: "1 stage(s) have no map pin: Tent. Attendees won't see them on the map.",
+      label: "1 stage has no map pin: Tent. Attendees won't see them on the map.",
     });
+  });
+
+  test('uses the singular for one stage, day or set', () => {
+    const festival = {
+      name: 'Tiny',
+      timeZone: 'UTC',
+      stages: [stage('a', 'Main', { latitude: 1, longitude: 2 })],
+      days: [{ label: 'Friday', date: '2026-06-05', sets: [set('s1', 'X', 'a', '20:00', '21:00')] }],
+    };
+    const map = byKey(publishChecklist(config, festival));
+    assert.equal(map.stages.label, '1 stage');
+    assert.equal(map.days.label, '1 day, each with a date');
+    assert.equal(map.sets.label, '1 set');
   });
 
   test('names the days without sets or dates, and counts TBA sets and problems', () => {
@@ -225,9 +238,9 @@ describe('publishChecklist', () => {
     assert.deepEqual(map.errors, {
       key: 'errors',
       status: 'todo',
-      label: 'Fix 1 lineup problem(s). First: Set "Y" must reference a valid stage',
+      label: 'Fix 1 lineup problem. First: Set "Y" must reference a valid stage',
     });
-    assert.deepEqual(map.times, { key: 'times', status: 'warn', label: '1 set(s) have no start time yet. They show as TBA.' });
+    assert.deepEqual(map.times, { key: 'times', status: 'warn', label: '1 set has no start time yet. It shows as TBA.' });
   });
 
   describe('a festival with announced names', () => {

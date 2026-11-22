@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { SearchX } from 'lucide-react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { withReauth } from '@festie/shared/services/admin';
+import { pluralize } from '@festie/shared/utils/format';
 import {
   createOrganization,
   type AdminOrganization,
@@ -205,7 +206,7 @@ export default function AdminOrganizations() {
                       )}
                     </div>
                     <p className="text-xs text-text-muted">
-                      {org.kind}. {org.memberCount ?? 0} members, {org.pendingCount ?? 0} waiting to join, {org.festivalCount ?? 0} festivals
+                      {org.kind}. {pluralize(org.memberCount ?? 0, 'member')}, {org.pendingCount ?? 0} waiting to join, {pluralize(org.festivalCount ?? 0, 'festival')}
                       {org.ownerCount === 0 ? '. No owner yet.' : '.'}
                     </p>
                   </li>

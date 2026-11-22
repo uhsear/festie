@@ -114,6 +114,13 @@ describe('AdminOrganizations', () => {
     expect(screen.queryByText('Promoter B')).not.toBeInTheDocument();
   });
 
+  it('uses singular forms in the summary line', async () => {
+    svc.fetchOrganizations.mockResolvedValue([org({ memberCount: 1, pendingCount: 1, festivalCount: 1 })]);
+    render();
+    await screen.findByText('Venue A');
+    expect(document.body).toHaveTextContent('1 member, 1 waiting to join, 1 festival. No owner yet.');
+  });
+
   it('creates an organization and opens it', async () => {
     svc.createOrganization.mockResolvedValue(org({ id: 'o9', name: 'New Venue' }));
     render();
