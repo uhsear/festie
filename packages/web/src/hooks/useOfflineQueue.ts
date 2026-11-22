@@ -361,8 +361,10 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
 
   // Initialize on mount
   useEffect(() => {
-    pruneStaleEntries().catch(console.error);
-    getPendingCount()
+    // Count after the prune settles, so writes it is about to fail are not shown as pending.
+    pruneStaleEntries()
+      .catch(console.error)
+      .then(() => getPendingCount())
       .then((n) => {
         setPendingCount(n);
         setPendingSync(n);

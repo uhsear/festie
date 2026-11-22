@@ -170,6 +170,19 @@ describe('useOfflineQueue — localStorage fallback', () => {
     await waitFor(() => expect(ui.setPendingSync).toHaveBeenCalledWith(1));
   });
 
+  it('counts pending writes after the stale prune, so expired ones are not shown as pending', async () => {
+    const entry = (clientId: string, createdAt: number) => ({
+      clientId, type: 'api', url: '/api/profiles/p1', method: 'PUT', status: 'pending', retries: 0, createdAt,
+    });
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify([entry('old-1', Date.now() - 8 * 24 * 3600 * 1000), entry('fresh-1', Date.now())]),
+    );
+    renderHook(() => useOfflineQueue());
+    await waitFor(() => expect(ui.setPendingSync).toHaveBeenCalledWith(1));
+    expect(ui.setPendingSync).not.toHaveBeenCalledWith(2);
+  });
+
   it('removes a successfully replayed entry from localStorage (no re-send)', async () => {
     const { result } = renderHook(() => useOfflineQueue());
 
