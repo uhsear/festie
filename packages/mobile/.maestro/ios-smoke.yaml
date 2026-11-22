@@ -75,7 +75,9 @@ env:
 - tapOn:
     id: "login-username-input"
 - inputText: "${TEST_USERNAME}"
-- hideKeyboard
+# hideKeyboard fails on iOS ("Couldn't hide the keyboard"); tap the plain subtitle instead.
+- tapOn:
+    text: "Sign in to your account"
 # Focus the password field by its placeholder/label. Its testID doesn't resolve
 # on iOS — it's a secureTextEntry field nested in a row, and iOS hides secure
 # fields' accessibility identifiers from XCUITest (the top-level username id works).
