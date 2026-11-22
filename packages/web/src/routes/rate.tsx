@@ -2,10 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearch } from '@tanstack/react-router';
 import { useReducedMotion } from 'motion/react';
-import { fetchWrap, markCaught } from '@festie/shared/services';
+import { fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { WrapPlannedSet, WrapResponse } from '@festie/shared/types';
-import { formatTime, isWrapUnlocked, selectSetsToRate } from '@festie/shared/utils';
+import { WRAP_STATE_COPY } from '@festie/shared/constants';
+import { formatTime, isWrapUnlocked, isWrapUpcoming, selectSetsToRate } from '@festie/shared/utils';
 import { CheckCircle2, Music } from 'lucide-react';
 import EmptyState from '../components/ui/EmptyState';
 import Skeleton from '../components/ui/Skeleton';
@@ -56,11 +57,12 @@ function RateFlow({ festivalId }: { festivalId: string }) {
   const [queue, setQueue] = useState<WrapPlannedSet[] | null>(null);
   const [index, setIndex] = useState(0);
   const [seenId, setSeenId] = useState<string | null>(null);
+  const [anyRated, setAnyRated] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userId = useAuthStore((s) => s.user?.id);
   const { toastError } = useToast();
 
-  const { data, isLoading, isError, refetch } = useQuery<WrapResponse>({
+  const { data, error, isLoading, isError, refetch } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId],
     queryFn: () => fetchWrap(festivalId),
   });
@@ -84,7 +86,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
     timer.current = setTimeout(() => setIndex((i) => i + 1), reduceMotion ? 0 : ADVANCE_DELAY_MS);
   }, [reduceMotion]);
 
-  // Clearing the pending auto-advance keeps a quick Skip or Skipped from advancing twice.
+  // Clearing the pending auto-advance keeps a quick Next or Missed it from advancing twice.
   const advance = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     setIndex((i) => i + 1);
@@ -99,6 +101,15 @@ function RateFlow({ festivalId }: { festivalId: string }) {
   );
 
   if (isError) {
+    if (isApiClientError(error) && error.status === 404) {
+      return (
+        <EmptyState
+          icon={<Music className="w-9 h-9" aria-hidden="true" />}
+          title={WRAP_STATE_COPY.notFound.title}
+          description={WRAP_STATE_COPY.notFound.description}
+        />
+      );
+    }
     return (
       <EmptyState
         icon={<Music className="w-9 h-9" aria-hidden="true" />}
@@ -112,6 +123,15 @@ function RateFlow({ festivalId }: { festivalId: string }) {
       <div className="max-w-[480px] mx-auto w-full space-y-3">
         <Skeleton variant="card" />
       </div>
+    );
+  }
+  if (isWrapUpcoming(data.festival)) {
+    return (
+      <EmptyState
+        icon={<Music className="w-9 h-9" aria-hidden="true" />}
+        title={WRAP_STATE_COPY.notStarted.title}
+        description={WRAP_STATE_COPY.notStarted.description}
+      />
     );
   }
   if (queue.length === 0) {
@@ -136,8 +156,10 @@ function RateFlow({ festivalId }: { festivalId: string }) {
     return (
       <div className="max-w-[480px] mx-auto w-full flex flex-col items-center gap-4 py-10 text-center">
         <CheckCircle2 className="w-10 h-10 text-accent-aqua" aria-hidden="true" />
-        <h1 className="text-xl font-bold text-text-primary">All rated</h1>
-        <p className="text-sm text-text-secondary">Thanks. Your ratings go into your wrap.</p>
+        <h1 className="text-xl font-bold text-text-primary">{anyRated ? 'All rated' : "That's everything for now"}</h1>
+        <p className="text-sm text-text-secondary">
+          {anyRated ? 'Thanks. Your ratings go into your wrap.' : 'Rate any set from the full list whenever you like.'}
+        </p>
         <Link to="/caught" search={{ festival: festivalId }} className={listLinkClass}>
           See the full list
         </Link>
@@ -193,7 +215,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
             }}
             className={chipClass}
           >
-            Skipped
+            Missed it
           </button>
         </div>
         <div className="mt-4">
@@ -203,6 +225,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
             festivalId={festivalId}
             showMemory={false}
             onRated={() => {
+              setAnyRated(true);
               mark(set.setId, true);
               next();
             }}
@@ -215,7 +238,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
           onClick={advance}
           className="min-h-11 px-5 rounded-full border border-border text-sm font-semibold text-text-secondary cursor-pointer"
         >
-          Skip
+          Next
         </button>
       </div>
     </div>

@@ -13,5 +13,5 @@ export const RATING_META: Record<number, { Icon: LucideIcon; label: string }> = 
   4: { Icon: Smile, label: 'Good' },
   3: { Icon: ThumbsUp, label: 'Okay' },
   2: { Icon: Meh, label: 'Meh' },
-  1: { Icon: ThumbsDown, label: 'Skip' },
+  1: { Icon: ThumbsDown, label: 'Nope' },
 };

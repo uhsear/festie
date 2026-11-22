@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WrapCaughtSet, WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
-import { artistOf, buildWrapCards, sortRatingsForWrap, isWrapUnlocked, selectSetsToRate, summarizePlan, wrapByline, wrapCardShareText } from './wrap';
+import { artistOf, buildWrapCards, sortRatingsForWrap, isWrapUnlocked, isWrapUpcoming, selectSetsToRate, summarizePlan, wrapByline, wrapCardShareText } from './wrap';
 
 const festival: WrapFestival = {
   id: 'f1',
@@ -292,6 +292,14 @@ describe('isWrapUnlocked', () => {
   it('is locked during the festival and open after the last day', () => {
     expect(isWrapUnlocked(festival, new Date(Date.UTC(2026, 3, 25, 12, 0)))).toBe(false);
     expect(isWrapUnlocked(festival, new Date(Date.UTC(2026, 4, 5, 12, 0)))).toBe(true);
+  });
+});
+
+describe('isWrapUpcoming', () => {
+  it('is true only before the first day', () => {
+    expect(isWrapUpcoming(festival, new Date(Date.UTC(2026, 3, 1, 12, 0)))).toBe(true);
+    expect(isWrapUpcoming(festival, new Date(Date.UTC(2026, 3, 25, 12, 0)))).toBe(false);
+    expect(isWrapUpcoming(festival, new Date(Date.UTC(2026, 4, 5, 12, 0)))).toBe(false);
   });
 });
 

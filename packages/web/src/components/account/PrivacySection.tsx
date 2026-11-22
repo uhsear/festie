@@ -115,7 +115,7 @@ export default function PrivacySection() {
         href="/privacy.html"
         target="_blank"
         rel="noopener noreferrer"
-        className="inline-block text-sm text-accent-aqua underline"
+        className="inline-flex items-center min-h-11 text-sm text-accent-aqua underline"
       >
         {PRIVACY_COPY.policyLink}
       </a>

@@ -5,6 +5,7 @@ import { isApiClientError, mapErrorToUserMessage } from '@festie/shared/services
 import { AUTH_COPY, PROVIDER_COPY } from '@festie/shared/constants';
 import { REGISTER_COPY, isAtLeast18, registerErrorField, safeReturnPath, usernameError } from '@festie/shared/utils';
 import type { ProviderSignupPayload } from '@festie/shared/types';
+import { useToast } from '../lib/toastContext';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
@@ -53,6 +54,7 @@ function FinishSignupInner() {
 function FinishForm({ payload, next }: { payload: ProviderSignupPayload; next?: string }) {
   const navigate = useNavigate();
   const { completeProviderSignup } = useAuth();
+  const { toast } = useToast();
   // The store action does not set isLoading, so track the request here.
   const [isLoading, setIsLoading] = useState(false);
 
@@ -89,13 +91,19 @@ function FinishForm({ payload, next }: { payload: ProviderSignupPayload; next?: 
 
     setIsLoading(true);
     try {
-      await completeProviderSignup({
+      const { emailVerificationSent } = await completeProviderSignup({
         signupToken: payload.signupToken,
         username: username.trim(),
         dateOfBirth,
         tosAccepted: true,
         ref: readSignupRef(),
       });
+      const sent = emailVerificationSent && payload.email;
+      toast(
+        sent ? `${AUTH_COPY.accountCreated}. ${AUTH_COPY.checkEmailToConfirm(payload.email!)}` : AUTH_COPY.accountCreated,
+        'success',
+        sent ? 6000 : undefined,
+      );
       await (next ? navigate({ href: next }) : navigate({ to: '/cards' }));
     } catch (err) {
       if (isApiClientError(err) && err.code === 'SIGNUP_EXPIRED') {

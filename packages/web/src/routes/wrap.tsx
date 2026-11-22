@@ -308,7 +308,7 @@ function RatingTag({ rating, compact = false }: { rating: number; compact?: bool
   const Icon = meta?.Icon ?? Trophy;
   return (
     <span
-      className={`inline-flex items-center gap-1.5 text-text-secondary ${compact ? 'text-xs shrink-0' : 'mt-2 text-sm'}`}
+      className={`inline-flex items-center gap-1.5 text-text-secondary ${compact ? 'w-[4.5rem] text-xs shrink-0' : 'mt-2 text-sm'}`}
     >
       <Icon className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} aria-hidden="true" />
       {meta?.label ?? `${rating}/5`}

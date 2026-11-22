@@ -123,8 +123,8 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
   return (
     <div>
       <div
-        className={cn('flex items-start justify-center gap-2', compact && 'scale-90 origin-left')}
-        role="radiogroup"
+        className="flex items-start justify-center gap-2"
+        role="group"
         aria-label="Rate this set"
       >
         {RATINGS.map((r) => {
@@ -133,13 +133,13 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
             <div key={r.n} className="flex flex-col items-center gap-1">
               <button
                 type="button"
-                role="radio"
-                aria-checked={active}
+                aria-pressed={active}
                 aria-label={`${r.label} (${r.n} of 5)`}
-                disabled={busy}
+                aria-disabled={busy || undefined}
                 onClick={() => handleClick(r.n)}
                 className={cn(
-                  'w-11 h-11 rounded-full flex items-center justify-center transition-[background-color,box-shadow,transform]',
+                  'w-11 h-11 rounded-full flex items-center justify-center transition-[background-color,box-shadow,transform] cursor-pointer',
+                  'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                   active
                     ? 'bg-accent-amber/25 scale-110 shadow-[0_0_12px_theme(colors.accent-amber/40)] ring-2 ring-accent-amber/60 text-accent-amber'
                     : 'bg-bg-card/60 border border-border hover:border-border-light text-text-secondary',

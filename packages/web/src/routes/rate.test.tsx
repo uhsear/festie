@@ -6,7 +6,8 @@ import RatePage from './rate';
 const mocks = vi.hoisted(() => ({
   toRate: [] as unknown[],
   unlocked: true,
-  fail: false,
+  fail: false as boolean | 'notFound',
+  upcoming: false,
   markCaught: vi.fn(async () => ({})),
 }));
 
@@ -30,9 +31,11 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('motion/react', () => ({ useReducedMotion: () => true }));
 vi.mock('@festie/shared/services', () => ({
   fetchWrap: vi.fn(async () => {
+    if (mocks.fail === 'notFound') throw Object.assign(new Error('not found'), { status: 404 });
     if (mocks.fail) throw new Error('boom');
     return { planned: [], festival: { id: 'f1', days: [{ date: '2026-04-24', label: 'Friday' }] } };
   }),
+  isApiClientError: (e: unknown) => !!e && typeof e === 'object' && 'status' in e,
   markCaught: mocks.markCaught,
 }));
 vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toastError: vi.fn() }) }));
@@ -43,6 +46,7 @@ vi.mock('@festie/shared/stores', () => ({
 vi.mock('@festie/shared/utils', () => ({
   selectSetsToRate: () => mocks.toRate,
   isWrapUnlocked: () => mocks.unlocked,
+  isWrapUpcoming: () => mocks.upcoming,
   formatTime: (t: string) => t,
 }));
 vi.mock('../components/features/RatingButtons', () => ({
@@ -78,6 +82,7 @@ describe('RatePage', () => {
     mocks.toRate = sets;
     mocks.unlocked = true;
     mocks.fail = false;
+    mocks.upcoming = false;
     mocks.markCaught.mockClear();
   });
 
@@ -100,8 +105,8 @@ describe('RatePage', () => {
   it('links the full list from the flow, the All rated state and the empty state', async () => {
     renderPage();
     expect(await screen.findByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
   });
 
@@ -117,36 +122,45 @@ describe('RatePage', () => {
     expect(mocks.markCaught).toHaveBeenCalledWith('a', true, 'u1');
   });
 
-  it('Saw it marks the set without advancing, and Skipped marks it skipped and advances', async () => {
+  it('Saw it marks the set without advancing, and Missed it marks it as missed and advances', async () => {
     renderPage();
     await screen.findByText('Artist A');
     fireEvent.click(screen.getByRole('button', { name: 'Saw it' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', true, 'u1');
     expect(screen.getByRole('button', { name: 'Saw it' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Artist A')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Skipped' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', false, 'u1');
     expect(screen.getByText('Artist B')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Saw it' })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('Skip right after a rating cancels the pending auto-advance instead of skipping a second set', async () => {
+  it('Next right after a rating cancels the pending auto-advance instead of skipping a second set', async () => {
     renderPage();
     fireEvent.click(await screen.findByText('rate-five'));
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByText('Artist B')).toBeInTheDocument();
     expect(screen.queryByText('All rated')).toBeNull();
   });
 
-  it('skip advances, and a festival that is not over links back to picks', async () => {
+  it('next advances, and a festival that is not over links back to picks', async () => {
     mocks.unlocked = false;
     renderPage();
     await screen.findByText('Artist A');
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByText('Artist B')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('link', { name: 'Back to picks' })).toHaveAttribute('href', '/picks');
+  });
+
+  it('does not say All rated when every set was moved past without a rating', async () => {
+    renderPage();
+    await screen.findByText('Artist A');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it' }));
+    expect(screen.getByRole('heading', { name: "That's everything for now" })).toBeInTheDocument();
+    expect(screen.queryByText('All rated')).toBeNull();
   });
 
   it('shows the empty state when nothing needs rating', async () => {
@@ -160,5 +174,21 @@ describe('RatePage', () => {
     renderPage();
     expect(await screen.findByText("Couldn't load your sets")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+
+  it('says the festival is not found on a 404, not that there is nothing to rate', async () => {
+    mocks.fail = 'notFound';
+    renderPage();
+    expect(await screen.findByText('Festival not found')).toBeInTheDocument();
+    expect(screen.queryByText('Nothing to rate right now')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+  });
+
+  it('asks the user to come back once an upcoming festival starts', async () => {
+    mocks.upcoming = true;
+    mocks.toRate = [];
+    renderPage();
+    expect(await screen.findByText("The festival hasn't started")).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'See the full list' })).toBeNull();
   });
 });

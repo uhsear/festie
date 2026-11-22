@@ -2,7 +2,7 @@ import type { Festival, FestivalDay, FestivalSet, Priority } from '../types/doma
 import type { WrapCaughtSet, WrapCard, WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
 import { ConflictDetected, detectConflicts } from './conflicts';
 import { formatFestivalDateRange, pluralize, timeToMinutes } from './format';
-import { isFestivalOver, resolveFestivalTimeZone } from './festivalTime';
+import { festivalStatus, isFestivalOver, resolveFestivalTimeZone } from './festivalTime';
 import { getSetTimeBounds } from './setStatus';
 
 const UNKNOWN_ARTIST = 'Unknown artist';
@@ -27,6 +27,14 @@ export function isWrapUnlocked(festival: WrapFestival, now: Date = new Date()): 
     { id: festival.id, name: festival.name, timeZone: festival.timeZone } as Festival,
     festival.days,
     now,
+  );
+}
+
+/** True before the first festival day begins, so there is nothing to rate or mark yet. */
+export function isWrapUpcoming(festival: WrapFestival, now: Date = new Date()): boolean {
+  return (
+    festivalStatus({ id: festival.id, name: festival.name, timeZone: festival.timeZone } as Festival, festival.days, now) ===
+    'upcoming'
   );
 }
 

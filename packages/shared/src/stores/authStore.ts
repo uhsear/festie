@@ -559,11 +559,14 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
   },
 
   updatePaymentHandles: async (h) => {
-    const res = await api.put<{ user: User }>('/account/payment-handles', {
-      venmoHandle: h.venmoHandle.trim(),
-      cashappCashtag: h.cashappCashtag.trim(),
-      paypalHandle: h.paypalHandle.trim(),
-    });
+    // Send only the handles that changed, so a legacy value the user never opened is not re-validated.
+    const stored = get().user;
+    const body: Partial<typeof h> = {};
+    for (const key of ['venmoHandle', 'cashappCashtag', 'paypalHandle'] as const) {
+      const next = h[key].trim();
+      if (next !== (stored?.[key] ?? '')) body[key] = next;
+    }
+    const res = await api.put<{ user: User }>('/account/payment-handles', body);
     set((s) => ({
       user: s.user
         ? {
