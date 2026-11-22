@@ -150,3 +150,14 @@ describe('ProfileSection — Save button enablement', () => {
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
   });
 });
+
+describe('ProfileSection — inline display-name validation', () => {
+  it('flags angle brackets inline and blocks the save', async () => {
+    const user = userEvent.setup();
+    render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
+    await user.type(screen.getByLabelText('Display name'), '<b>');
+    expect(screen.getByText('Names cannot contain < or >')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(mockUpdateDisplayName).not.toHaveBeenCalled();
+  });
+});

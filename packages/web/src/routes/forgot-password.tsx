@@ -142,7 +142,7 @@ function ForgotPasswordPageInner() {
 
         {/* Back to login */}
         <div className="mt-6 text-center">
-          <Link to="/login" className="text-sm text-accent-aqua hover:opacity-75 transition-opacity">
+          <Link to="/login" className="inline-flex items-center min-h-11 text-sm text-accent-aqua hover:opacity-75 transition-opacity">
             {AUTH_COPY.backToSignIn}
           </Link>
         </div>

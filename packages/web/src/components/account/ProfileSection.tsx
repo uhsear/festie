@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { displayNameError } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
@@ -22,6 +23,8 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
 
   const [displayName, setDisplayName] = useState(user.name || '');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
+  // Mirrors the server's noMarkup rule so the message shows while typing, not only after a failed save.
+  const markupError = displayNameError(displayName) ?? undefined;
 
   const handleDisplayNameChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,12 +51,13 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
           Display name
         </h3>
 
-        <form onSubmit={handleDisplayNameChange} className="flex gap-2">
+        <form onSubmit={handleDisplayNameChange} className="flex items-start gap-2">
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="How your name appears to your crew"
             aria-label="Display name"
+            error={markupError}
             className="flex-1"
             autoComplete="name"
             maxLength={50}
@@ -63,7 +67,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
             variant="primary"
             size="md"
             isLoading={savingDisplayName}
-            disabled={offlineMode || !displayName.trim() || displayName.trim() === (user.name ?? '')}
+            disabled={offlineMode || !!markupError || !displayName.trim() || displayName.trim() === (user.name ?? '')}
             className="min-h-[44px] min-w-[44px]"
           >
             Save

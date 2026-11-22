@@ -16,7 +16,7 @@ type Values = Record<Key, string>;
 /**
  * Account settings for payment handles (Venmo / Cash App / PayPal). These power
  * the prefilled settle-up deep links in the crew expenses tab. All optional;
- * clearing a field removes it. A leading @/$ is normalized server-side.
+ * clearing a field removes it. A leading @/$ or a pasted profile URL is normalized server-side; other characters are rejected.
  */
 export default function PaymentHandlesSection() {
   const { toast } = useToast();
@@ -32,6 +32,7 @@ export default function PaymentHandlesSection() {
   };
   const [values, setValues] = useState<Values>(saved);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const dirty = PAYMENT_FIELDS.some((f) => values[f.key].trim() !== saved[f.key]);
 
@@ -39,6 +40,7 @@ export default function PaymentHandlesSection() {
     e.preventDefault();
     if (!dirty) return;
     setSaving(true);
+    setError(null);
     try {
       const res = await updatePaymentHandles({
         venmoHandle: values.venmoHandle.trim(),
@@ -53,7 +55,7 @@ export default function PaymentHandlesSection() {
       });
       toast(PAYMENT_COPY.saved, 'success');
     } catch (err) {
-      toast(mapErrorToUserMessage(err, PAYMENT_COPY.saveFailed), 'error');
+      setError(mapErrorToUserMessage(err, PAYMENT_COPY.saveFailed));
     } finally {
       setSaving(false);
     }
@@ -108,6 +110,11 @@ export default function PaymentHandlesSection() {
             </div>
           );
         })}
+        {error && (
+          <p role="alert" className="text-sm text-[var(--color-text-danger)]">
+            {error}
+          </p>
+        )}
         <Button type="submit" variant="primary" size="md" isLoading={saving} disabled={offlineMode || !dirty} className="min-h-[44px]">
           Save
         </Button>
