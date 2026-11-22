@@ -519,6 +519,9 @@ export default function createManageRoutes(
 
   // What happened in the organization: its members' edits and Festie's actions on its festivals. Teammates show by
   // display name (owner decision 9), Festie staff as "Festie support", and a Festie row carries no details.
+  // Only named actions show. The generic audit middleware also writes a nameless row for a dry-run save, a repeat
+  // publish request and a refused write; those would read as "Festivals replaced" with no festival.
+  const ACTIVITY_ACTIONS = Object.values(AUDIT_ACTIONS);
   router.get(
     '/organizations/:id/audit',
     orgAccess({ action: 'org.audit', param: 'id' }),
@@ -530,6 +533,7 @@ export default function createManageRoutes(
         const { cursor, limit } = req.validatedQuery;
         const { rows, nextCursor } = await stores.auditLog.query({
           organizationId: req.organizationId,
+          actions: ACTIVITY_ACTIONS,
           limit,
           cursor: cursor || null,
         });
