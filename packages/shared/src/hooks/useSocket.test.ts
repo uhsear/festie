@@ -62,4 +62,22 @@ describe('useSocket', () => {
     expect(createSocket).toHaveBeenCalledTimes(1);
     useAuthStore.setState({ user: null } as never);
   });
+
+  it('returns the live socket to the caller so listeners can attach to it', () => {
+    const { result, unmount } = renderHook(() => useSocket('fest-1'));
+    expect(result.current.socket).toBe(createSocket.mock.results[0]!.value);
+    unmount();
+  });
+
+  it('returns null again after the socket is torn down', () => {
+    const { result, rerender } = renderHook(() => useSocket('fest-1'));
+    expect(result.current.socket).not.toBeNull();
+    act(() => {
+      useFestivalDataStore.setState({ currentProfile: null } as never);
+      useAuthStore.setState({ user: { id: 'u1' } } as never);
+    });
+    rerender();
+    expect(result.current.socket).toBeNull();
+    useAuthStore.setState({ user: null } as never);
+  });
 });
