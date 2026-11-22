@@ -337,6 +337,11 @@ function PrefsSubsection() {
       </h3>
       {!loaded && isLoading ? (
         <SkeletonRows count={4} />
+      ) : !loaded && error ? (
+        // The server's real values never arrived; default switches would show settings the user never chose.
+        <Button variant="secondary" size="sm" onClick={() => loadPrefs().catch((err) => console.warn('Notification prefs load failed', err))}>
+          Try again
+        </Button>
       ) : (
         <>
           {visibleNotificationRows().map((row) => (
@@ -389,7 +394,7 @@ function PrefsSubsection() {
           {error}
         </p>
       ) : null}
-      <FestivalTopicsSubsection />
+      {loaded ? <FestivalTopicsSubsection /> : null}
     </div>
   );
 }

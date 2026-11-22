@@ -22,4 +22,11 @@ describe('admin screens', () => {
     const layout = readFileSync(join(here, '..', '_layout.tsx'), 'utf8');
     expect(layout).toContain("seg[0] === 'admin' && !!user && !isAdmin");
   });
+
+  it('crews names each button per crew and falls back to the user id', () => {
+    const src = readFileSync(join(here, 'crews.tsx'), 'utf8');
+    expect(src).toContain("accessibilityLabel={`${isExpanded ? 'Hide' : 'View'} ${crew.name}`}");
+    expect(src).toContain('accessibilityLabel={`Delete ${crew.name}`}');
+    expect(src).toContain('accessibilityLabel={`Remove ${m.username || m.userId} from ${crew.name}`}');
+  });
 });

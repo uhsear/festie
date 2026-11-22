@@ -329,6 +329,7 @@ export default function AdminCrewsScreen() {
                   size="sm"
                   icon={isExpanded ? 'chevron-up' : 'people-outline'}
                   onPress={() => toggleExpand(crew.id)}
+                  accessibilityLabel={`${isExpanded ? 'Hide' : 'View'} ${crew.name}`}
                   style={styles.flexBtn}
                 />
                 <Button
@@ -337,6 +338,7 @@ export default function AdminCrewsScreen() {
                   size="sm"
                   icon="trash-outline"
                   onPress={() => requestDeleteCrew(crew)}
+                  accessibilityLabel={`Delete ${crew.name}`}
                   style={styles.flexBtn}
                 />
               </View>
@@ -369,7 +371,7 @@ export default function AdminCrewsScreen() {
                             size="sm"
                             onPress={() => requestRemoveMember(crew, m)}
                             style={styles.removeBtn}
-                            accessibilityLabel={`Remove ${m.username}`}
+                            accessibilityLabel={`Remove ${m.username || m.userId} from ${crew.name}`}
                           />
                         )}
                       </View>
