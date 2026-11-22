@@ -15,6 +15,7 @@ const ROUTE_TITLES: Record<string, { page: string; festival: boolean }> = {
   '/wrap': { page: 'Wrap', festival: true },
   '/account': { page: 'Account', festival: false },
   '/admin': { page: 'Admin', festival: false },
+  '/manage': { page: 'Manage festivals', festival: false },
   '/map': { page: 'Map', festival: true },
   '/rate': { page: 'Rate sets', festival: true },
   '/caught': { page: 'Sets caught', festival: true },
