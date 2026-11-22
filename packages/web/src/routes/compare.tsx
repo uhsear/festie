@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore, useAuthStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewCompare, useCrewFestival, useFestival, usePicks } from '@festie/shared/hooks';
@@ -35,11 +35,15 @@ function CompareViewInner() {
 
   const { status, crew, retry: retryCrew } = useActiveCrew();
   const { state: festivalState, festivalName, retry: retryFestival } = useCrewFestival(crew);
-  const { columns, rows, freeTogether, split, together, notThere, timeZone } = useCrewCompare(sort);
+  const ready = festivalState === 'match' && status === 'ready';
+  const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, error, refresh } = useCrewCompare(
+    sort,
+    ready,
+  );
   const days = useFestivalStore((s) => s.days);
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const { savePick } = usePicks();
-  const { toastError } = useToast();
+  const { toast, toastError } = useToast();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)');
@@ -55,6 +59,12 @@ function CompareViewInner() {
     },
     [festivalId, savePick, toastError],
   );
+
+  // A failed refresh keeps a grid that already loaded; only an empty grid gets the full-screen error.
+  useEffect(() => {
+    if (error && rows.length > 0) toast(error, 'error');
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- toast once per error; rows.length is read at error time only
+  }, [error]);
 
   if (!user) return <GuestTeaser mode="crew" />;
 
@@ -120,6 +130,32 @@ function CompareViewInner() {
           title={`Couldn't open ${festivalName}`}
           description={`${crew.name} is planning ${festivalName}. Connect to the internet, then try again.`}
           cta={{ label: 'Try again', onClick: retryFestival }}
+        />
+      </div>
+    );
+  }
+
+  // With everyone else Not going, keep the screen so the day selector can reach another day.
+  if (alone) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <EmptyState
+          icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          title="No crew picks yet"
+          description="Once your crewmates save picks for this festival, their schedules show up here side by side."
+        />
+      </div>
+    );
+  }
+
+  if (error && rows.length === 0) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <EmptyState
+          icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          title="Couldn't load crew picks"
+          description={error}
+          cta={{ label: 'Try again', onClick: () => void refresh() }}
         />
       </div>
     );

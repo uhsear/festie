@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { useCrewCompare } from '../useCrewCompare';
 import { useCrewStore } from '../../stores/crewStore';
 import { useFestivalDataStore } from '../../stores/festivalDataStore';
@@ -51,6 +51,39 @@ beforeEach(() => {
   } as never);
   useFestivalUIStore.setState({ selectedDay: 0 });
   useCrewStore.setState({ crewDays: [] });
+});
+
+describe('useCrewCompare refresh', () => {
+  it('reloads the festival profiles once ready, and not before', async () => {
+    const loadProfiles = vi.fn(() => Promise.resolve());
+    useFestivalDataStore.setState({ loadProfiles } as never);
+    const { result, rerender } = renderHook(({ ready }) => useCrewCompare('time', ready), {
+      initialProps: { ready: false },
+    });
+    expect(loadProfiles).not.toHaveBeenCalled();
+    rerender({ ready: true });
+    await waitFor(() => expect(loadProfiles).toHaveBeenCalledWith('f1'));
+    await waitFor(() => expect(result.current.refreshing).toBe(false));
+    expect(result.current.error).toBeNull();
+  });
+
+  it('reports a failed load as an error that the next refresh clears', async () => {
+    const loadProfiles = vi.fn().mockRejectedValueOnce(new Error('boom')).mockResolvedValue(undefined);
+    useFestivalDataStore.setState({ loadProfiles } as never);
+    const { result } = renderHook(() => useCrewCompare('time', true));
+    await waitFor(() => expect(result.current.error).toBe('boom'));
+    await act(() => result.current.refresh());
+    expect(result.current.error).toBeNull();
+  });
+
+  it('is alone for a crew of one and not once a crewmate is in the grid', () => {
+    useCrewStore.setState({ crewMembers: [{ userId: 'me' }] } as never);
+    useFestivalDataStore.setState({ allProfiles: [profile('me', {})] as never, currentProfile: profile('me', {}) as never });
+    expect(renderHook(() => useCrewCompare('time')).result.current.alone).toBe(true);
+    useCrewStore.setState({ crewMembers: [{ userId: 'me' }, { userId: 'bo' }] } as never);
+    useFestivalDataStore.setState({ allProfiles: [profile('me', {}), profile('bo', {})] as never });
+    expect(renderHook(() => useCrewCompare('time')).result.current.alone).toBe(false);
+  });
 });
 
 describe('useCrewCompare', () => {
@@ -162,7 +195,7 @@ describe('useCrewCompare', () => {
           { userId: 'bo', dayIndex: 1, answer: 'no' },
         ],
       });
-      expect(run(0)).toEqual(baseline);
+      expect({ ...run(0), refresh: baseline.refresh }).toEqual(baseline);
     });
 
     it('leaves a member who said no out of split, together and free slots on that day only', () => {
@@ -180,7 +213,7 @@ describe('useCrewCompare', () => {
       expect(day0.freeTogether.map((f) => f.minutes)).toEqual([120, 180]);
 
       // Day 1 is unchanged: bo still fills 13:00-14:00.
-      expect(run(1)).toEqual(before1);
+      expect({ ...run(1), refresh: before1.refresh }).toEqual(before1);
     });
   });
 

@@ -9,13 +9,16 @@ describe('crew compare source guards', () => {
       'useCrewCompare(',
       'useCrewFestival(',
       'useActiveCrew(',
-      'loadProfiles(',
       'Most picked',
       'to my picks',
       'CrewCompareSummary',
     ]) {
       expect(src).toContain(needle);
     }
+  });
+  it('the shared hook owns the profile refresh the screen waits on', () => {
+    expect(read('app/crew-compare.tsx')).toContain('useCrewCompare(sort, ready)');
+    expect(read('../shared/src/hooks/useCrewCompare.ts')).toContain('loadProfiles(');
   });
   it('crew-compare no longer refreshes through loadOverlap', () => {
     expect(read('app/crew-compare.tsx')).not.toContain('loadOverlap(');

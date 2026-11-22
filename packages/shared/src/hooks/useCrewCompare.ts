@@ -1,4 +1,5 @@
-import { useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { mapErrorToUserMessage } from '../services/errors';
 import { useCrewStore } from '../stores/crewStore';
 import { useFestivalStore } from '../stores/festivalStore';
 import type { FestivalDay, FestivalSet, Priority, Profile } from '../types';
@@ -36,10 +37,20 @@ export interface CrewCompare {
   /** Others who said Not going on the selected day, in member order. */
   notThere: CrewCompareColumn[];
   timeZone: string | undefined;
+  /** No crewmate is in the grid and none is marked Not going: nothing to compare yet. */
+  alone: boolean;
+  refreshing: boolean;
+  /** Set when the last crew picks load failed; cleared when the next one starts. */
+  error: string | null;
+  refresh: () => Promise<void>;
 }
 
-/** The compare grid: one column per crew member (you first), one row per picked set on the selected day. */
-export function useCrewCompare(sort: 'time' | 'mix'): CrewCompare {
+/**
+ * The compare grid: one column per crew member (you first), one row per picked set on the selected day.
+ * It reloads the festival's profiles once `ready` is true (the crew and festival have settled), so the grid
+ * never relies on a stale cache; `refresh` reloads on demand.
+ */
+export function useCrewCompare(sort: 'time' | 'mix', ready = false): CrewCompare {
   const crewMembers = useCrewStore((s) => s.crewMembers);
   const crew = useCrewStore((s) => s.activeCrew);
   const sets = useFestivalStore((s) => s.sets) as FestivalSet[];
@@ -49,6 +60,27 @@ export function useCrewCompare(sort: 'time' | 'mix'): CrewCompare {
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const timeZone = useFestivalStore((s) => resolveFestivalTimeZone(s.currentFestival));
   const daysIndex = useCrewDaysIndex();
+  const festivalId = useFestivalStore((s) => s.currentFestival?.id);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const refresh = useCallback(async () => {
+    if (!festivalId) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      await useFestivalStore.getState().loadProfiles(festivalId);
+    } catch (err) {
+      setError(mapErrorToUserMessage(err, "Couldn't load crew picks."));
+    } finally {
+      setRefreshing(false);
+    }
+  }, [festivalId]);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: refresh() flips the refreshing flag before its async profiles GET; not derivable from render inputs
+    if (ready) void refresh();
+  }, [refresh, ready]);
 
   const profiles = useMemo(
     () =>
@@ -135,5 +167,7 @@ export function useCrewCompare(sort: 'time' | 'mix'): CrewCompare {
     [sets, days, dayProfiles, selectedDay, timeZone],
   );
 
-  return { columns, rows, freeTogether, split, together, notThere, timeZone };
+  const alone = columns.length <= 1 && notThere.length === 0;
+
+  return { columns, rows, freeTogether, split, together, notThere, timeZone, alone, refreshing, error, refresh };
 }
