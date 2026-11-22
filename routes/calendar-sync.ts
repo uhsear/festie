@@ -80,10 +80,14 @@ export function createCalendarFeedRoute(deps: any) {
       // Build event descriptors using the shared helper
       const events = buildIcsEventsFromPicks(festival, profile, origin);
 
-      // Add SEQUENCE so calendar apps detect changes on each refresh
-      const sequence = Math.floor(Date.now() / 60000) % 10000;
+      // SEQUENCE and DTSTAMP follow the newest edit of the festival or the picks, so an unchanged feed
+      // is byte-stable and a poll does not mark every event as revised.
+      const editedMs = Math.max(Date.parse(festival.updatedAt) || 0, Date.parse(profile.updatedAt) || 0);
+      const sequence = Math.floor(editedMs / 1000);
+      const dtstamp = editedMs ? new Date(editedMs).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '') : undefined;
       for (const event of events) {
         (event as any).sequence = sequence;
+        if (dtstamp) (event as any).dtstamp = dtstamp;
       }
 
       const ics = buildVCalendar(events, {
