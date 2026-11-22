@@ -6,6 +6,7 @@ import * as RadixDialog from '@radix-ui/react-dialog';
 import { CalendarPlus } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { fetchCalendarLinks } from '@festie/shared/services';
+import { CALENDAR_LINK_COPY } from '@festie/shared/constants';
 import { buildPicksIcsExport, describeIcsExport } from '@festie/shared/utils';
 import Button from '../ui/Button';
 import Dialog from '../ui/Dialog';
@@ -117,9 +118,7 @@ export default function CalendarDialog() {
             <Button variant="secondary" size="sm" type="button" onClick={() => copyLink(links.httpsUrl)}>
               {copied ? 'Copied' : 'Copy calendar link'}
             </Button>
-            <p className="text-xs text-text-muted">
-              Anyone with this calendar link can see your picks. If it leaks, reset your links in Account.
-            </p>
+            <p className="text-xs text-text-muted">{CALENDAR_LINK_COPY.privacy}</p>
             <RadixDialog.Close asChild>
               <Button variant="ghost" size="sm" type="button">
                 Done

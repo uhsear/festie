@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
-import { api } from '@festie/shared/services';
+import { api, mapErrorToUserMessage } from '@festie/shared/services';
 import { createSendGuard, isRateLimited } from '../lib/pushSendGuard';
 
 const TOKEN_KEY = 'festie-push-token';
@@ -259,7 +259,7 @@ export function useMobilePush(): MobilePush {
       await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       setRegistered(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't enable notifications. Try again.");
+      setError(mapErrorToUserMessage(err, "Couldn't enable notifications. Try again."));
       throw err;
     } finally {
       busyRef.current = false;
@@ -280,7 +280,7 @@ export function useMobilePush(): MobilePush {
       }
       setRegistered(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Couldn't disable notifications. Try again.");
+      setError(mapErrorToUserMessage(err, "Couldn't disable notifications. Try again."));
       throw err;
     } finally {
       setBusy(false);

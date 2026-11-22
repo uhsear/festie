@@ -433,12 +433,18 @@ export function DateField({ label, value, onChangeText, hint, editable = true }:
   );
 }
 
-export function TimeField({ label, value, onChangeText, hint, editable = true }: DateTimeFieldProps) {
+export interface TimeFieldProps extends DateTimeFieldProps {
+  /** A blank value is an error, and `errorText` replaces the admin wording ("or leave blank / TBA"). */
+  required?: boolean;
+  errorText?: string;
+}
+
+export function TimeField({ label, value, onChangeText, hint, editable = true, required = false, errorText = 'Use HH:MM (24h), or leave blank / “TBA”.' }: TimeFieldProps) {
   const t = useTokens();
   const styles = useStyles();
   const [focused, setFocused] = useState(false);
 
-  const showError = !isTbaFallback(value) && !isValidTime(value);
+  const showError = required ? !isValidTime(value) : !isTbaFallback(value) && !isValidTime(value);
 
   if (Platform.OS === 'android') {
     return (
@@ -449,7 +455,7 @@ export function TimeField({ label, value, onChangeText, hint, editable = true }:
         onChangeText={onChangeText}
         hint={hint}
         editable={editable}
-        error={showError ? 'Use HH:MM (24h), or leave blank / “TBA”.' : null}
+        error={showError ? errorText : null}
       />
     );
   }
@@ -474,7 +480,7 @@ export function TimeField({ label, value, onChangeText, hint, editable = true }:
       />
       {showError ? (
         <Text style={styles.error} accessibilityLiveRegion="polite">
-          Use HH:MM (24h), or leave blank / “TBA”.
+          {errorText}
         </Text>
       ) : hint ? (
         <Text style={styles.hint}>{hint}</Text>
