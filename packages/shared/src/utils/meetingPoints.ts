@@ -2,6 +2,15 @@ import type { CrewMeetingPoint } from '../types/domain';
 
 export const MEETING_POINT_PAST_HINT = 'Moves to Past 30 minutes after the meet time.';
 
+export const MEETING_POINT_PAST_ERROR = 'Pick a time in the future.';
+
+/** A one-shot meet time that has already passed. A daily point repeats at that time of day, so it stays valid. */
+export function meetAtIsPast(meetAt: string | null | undefined, recursDaily: boolean, nowMs: number): boolean {
+  if (!meetAt || recursDaily) return false;
+  const ms = Date.parse(meetAt);
+  return Number.isFinite(ms) && ms <= nowMs;
+}
+
 /** Google Maps link: the saved coordinates when the point has them, else its text location. */
 export function meetingPointDirectionsUrl(p: {
   latitude?: number | null;

@@ -16,7 +16,9 @@ import {
   QUEUED_WRITE_MESSAGE,
   splitMeetingPoints,
   meetingPointDirectionsUrl,
+  MEETING_POINT_PAST_ERROR,
   MEETING_POINT_PAST_HINT,
+  meetAtIsPast,
 } from '@festie/shared/utils';
 import { fetchPastMeetingPoints } from '@festie/shared/services';
 import type { CrewMeetingPoint, Festival, FestivalDay } from '@festie/shared/types';
@@ -323,7 +325,9 @@ export default function CrewMeetingPoints({
   const visiblePoints = meetingPoints.filter((p) => !hiddenIds.has(p.id));
   const { current, past } = splitMeetingPoints(visiblePoints, pastPoints, nowMs);
   // A picked day with no time would save an untimed point, so wait for the time.
-  const canCreate = !!label.trim() && !!location.trim() && (dayIndex === null || !!time);
+  // An edit that leaves the time alone may keep a time that has since passed.
+  const pastTime = (!editingId || timeTouched) && meetAtIsPast(meetAt, recursDaily, nowMs);
+  const canCreate = !!label.trim() && !!location.trim() && (dayIndex === null || !!time) && !pastTime;
 
   const renderRow = (point: CrewMeetingPoint, isPast: boolean) => {
     // A queued create has no server id yet, so it cannot be edited or removed.
@@ -573,7 +577,11 @@ export default function CrewMeetingPoints({
                   <Text style={styles.timeFieldText}>{timeLabel ?? 'Pick a time (or choose No time)'}</Text>
                 </TouchableOpacity>
               ) : null}
-              {dayIndex !== null && time && !recursDaily ? (
+              {pastTime ? (
+                <Text style={styles.pastError} accessibilityRole="alert">
+                  {MEETING_POINT_PAST_ERROR}
+                </Text>
+              ) : dayIndex !== null && time && !recursDaily ? (
                 <Text style={styles.pastHint}>{MEETING_POINT_PAST_HINT}</Text>
               ) : null}
               {dayIndex !== null && Platform.OS === 'ios' && showIosTimePicker ? (
@@ -840,6 +848,10 @@ const useStyles = makeStyles((t) => ({
   pastHint: {
     ...typeStyle('caption'),
     color: t.colors.text.muted,
+  },
+  pastError: {
+    ...typeStyle('caption'),
+    color: t.colors.text.danger,
   },
   pastHeading: {
     ...typeStyle('label'),

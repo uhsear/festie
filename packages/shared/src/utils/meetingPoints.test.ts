@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { meetingPointDirectionsUrl, splitMeetingPoints } from './meetingPoints';
+import { meetAtIsPast, meetingPointDirectionsUrl, splitMeetingPoints } from './meetingPoints';
 
 describe('meetingPointDirectionsUrl', () => {
   it('uses coordinates when present', () => {
@@ -30,5 +30,18 @@ describe('splitMeetingPoints', () => {
     );
     expect(current.map((p) => p.id)).toEqual(['live', 'daily']);
     expect(past.map((p) => p.id)).toEqual(['old', 'older', 'nodate']);
+  });
+});
+
+describe('meetAtIsPast', () => {
+  const now = Date.parse('2026-09-05T12:00:00Z');
+  it('flags a one-shot time at or before now', () => {
+    expect(meetAtIsPast('2026-09-05T11:59:00Z', false, now)).toBe(true);
+    expect(meetAtIsPast('2026-09-05T12:00:00Z', false, now)).toBe(true);
+  });
+  it('accepts a future time, no time, and a daily point whose first time has passed', () => {
+    expect(meetAtIsPast('2026-09-05T12:01:00Z', false, now)).toBe(false);
+    expect(meetAtIsPast(null, false, now)).toBe(false);
+    expect(meetAtIsPast('2026-09-04T12:00:00Z', true, now)).toBe(false);
   });
 });
