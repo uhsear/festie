@@ -88,11 +88,14 @@ export default function WrapScreen() {
   const current = cards[Math.min(cardIndex, Math.max(cards.length - 1, 0))];
 
   // The dots are the non-swipe way to move between cards (screen readers, switch control).
-  const goToCard = (i: number) => {
-    cardListRef.current?.scrollToIndex({ index: i, animated: !reduceMotion });
-    setCardIndex(i);
-    if (i === cards.length - 1) setReachedEnd(true);
-  };
+  const goToCard = useCallback(
+    (i: number) => {
+      cardListRef.current?.scrollToIndex({ index: i, animated: !reduceMotion });
+      setCardIndex(i);
+      if (i === cards.length - 1) setReachedEnd(true);
+    },
+    [cards.length, reduceMotion],
+  );
 
   const stageLabel = (s: WrapRatedSet): string => s.stageName || 'Stage';
 

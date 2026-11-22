@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@tanstack/react-router', () => ({ useSearch: () => mocks.search }));
 vi.mock('@festie/shared/services', () => {
   const load = async () => {
-    if (mocks.fail === 'notFound') throw { status: 404 };
+    if (mocks.fail === 'notFound') throw Object.assign(new Error('not found'), { status: 404 });
     if (mocks.fail) throw new Error('boom');
     return JSON.parse(JSON.stringify(mocks.wrap));
   };

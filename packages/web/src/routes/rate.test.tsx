@@ -31,7 +31,7 @@ vi.mock('@tanstack/react-router', () => ({
 vi.mock('motion/react', () => ({ useReducedMotion: () => true }));
 vi.mock('@festie/shared/services', () => ({
   fetchWrap: vi.fn(async () => {
-    if (mocks.fail === 'notFound') throw { status: 404 };
+    if (mocks.fail === 'notFound') throw Object.assign(new Error('not found'), { status: 404 });
     if (mocks.fail) throw new Error('boom');
     return { planned: [], festival: { id: 'f1', days: [{ date: '2026-04-24', label: 'Friday' }] } };
   }),
