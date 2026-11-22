@@ -305,6 +305,14 @@ describe('NotificationSection preferences', () => {
     expect(mockLoadPrefs).toHaveBeenCalledTimes(1);
   });
 
+  it('hides festival rows until the global prefs have loaded', () => {
+    topicsState = { festival: { id: 'f1', name: 'EDC' }, subs: { crew: true, schedule: true }, error: false };
+    resetStore({ error: 'Failed to load notification settings' });
+    render(<NotificationSection />);
+    expect(screen.queryByText('Only for EDC')).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
   it('does not throw if updatePrefs rejects (failure is swallowed)', async () => {
     const user = userEvent.setup();
     mockUpdatePrefs.mockRejectedValue(new Error('network'));
@@ -337,7 +345,7 @@ describe('NotificationSection preferences', () => {
   });
 
   it('disables the festival Crew picks switch when the global crewUpdates is off', () => {
-    resetStore({ prefs: { ...basePrefs, crewUpdates: false } });
+    resetStore({ prefs: { ...basePrefs, crewUpdates: false }, loaded: true });
     topicsState = { festival: { id: 'f1', name: 'EDC' }, subs: { crew: true, schedule: true }, error: false };
     render(<NotificationSection />);
     const switches = screen.getAllByRole('switch', { name: 'Crew picks' });
@@ -349,6 +357,7 @@ describe('NotificationSection preferences', () => {
 
   it('shows two skeleton rows while the festival topics load', () => {
     topicsState = { festival: { id: 'f1', name: 'EDC' }, subs: null, error: false };
+    resetStore({ loaded: true });
     render(<NotificationSection />);
     expect(screen.getByText('Only for EDC')).toBeInTheDocument();
     expect(screen.getAllByRole('status')).toHaveLength(1);

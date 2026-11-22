@@ -394,7 +394,7 @@ function PrefsSubsection() {
           {error}
         </p>
       ) : null}
-      <FestivalTopicsSubsection />
+      {loaded ? <FestivalTopicsSubsection /> : null}
     </div>
   );
 }

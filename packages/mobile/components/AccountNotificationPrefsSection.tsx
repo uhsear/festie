@@ -234,7 +234,6 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
             ))}
           </View>
         </View>
-        <FestivalTopicsRows />
       </>
     );
   }
@@ -250,7 +249,6 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
           </View>
           <Button label="Try again" variant="ghost" onPress={() => loadPrefs().catch(() => {})} />
         </View>
-        <FestivalTopicsRows />
       </>
     );
   }

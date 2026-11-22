@@ -8,4 +8,10 @@ describe('notification prefs that failed to load', () => {
     expect(src).toContain('if (loadFailed)');
     expect(src).toContain('label="Try again"');
   });
+
+  it('renders festival rows only after the global prefs loaded', () => {
+    const src = read('components/AccountNotificationPrefsSection.tsx');
+    const early = src.slice(src.indexOf('if (showSkeleton)'), src.indexOf('const rows = visibleNotificationRows()'));
+    expect(early).not.toContain('FestivalTopicsRows');
+  });
 });
