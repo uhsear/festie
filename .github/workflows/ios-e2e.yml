@@ -32,6 +32,10 @@ on:
         description: 'Boot the simulator and run the Maestro flows after the build'
         type: boolean
         default: true
+      probe:
+        description: 'TEMPORARY: replace the app with a bare probe screen and run the probe flow'
+        type: boolean
+        default: false
   workflow_call:
     inputs:
       ref:
@@ -168,6 +172,27 @@ jobs:
           boot_timeout_seconds: 180
           boot_retries: 3
 
+      - name: Swap in bare probe app (TEMPORARY)
+        if: inputs.probe == true
+        working-directory: packages/mobile
+        run: |
+          cat > app/_layout.tsx <<'EOT'
+          import { useState } from 'react';
+          import { Pressable, Text, View } from 'react-native';
+          export default function ProbeLayout() {
+            const [done, setDone] = useState(false);
+            return (
+              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
+                <Text testID="probe-text" style={{ color: '#fff', fontSize: 24 }}>Probe</Text>
+                <Pressable testID="probe-btn" onPress={() => setDone(true)} style={{ padding: 20, backgroundColor: '#0aa', marginTop: 20 }}>
+                  <Text style={{ color: '#fff' }}>Tap me</Text>
+                </Pressable>
+                {done ? <Text testID="probe-done" style={{ color: '#fff', marginTop: 20 }}>Done</Text> : null}
+              </View>
+            );
+          }
+          EOT
+
       # Generate the native ios/ project (CNG; ios/ is gitignored).
       # --no-install: pnpm already installed node_modules; don't let prebuild shell
       # out to npm and fight the pnpm layout. CocoaPods is installed separately below.
@@ -291,8 +316,21 @@ jobs:
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME/.maestro-install"
           echo "$HOME/.maestro-install/maestro/bin" >> "$GITHUB_PATH"
 
+      - name: Run probe flow (TEMPORARY)
+        if: inputs.probe == true
+        working-directory: packages/mobile
+        continue-on-error: true
+        run: |
+          xcrun simctl launch "${{ steps.sim.outputs.udid }}" us.festie.app || true
+          sleep 45
+          MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > maestro-ios-hierarchy-probe-45s.json || true
+          grep -c '"attributes"' maestro-ios-hierarchy-probe-45s.json || true
+          grep -E '"(resource-id|accessibilityText)" : "[^"]+"' maestro-ios-hierarchy-probe-45s.json || true
+          MAESTRO_CLI_NO_ANALYTICS=1 maestro test .maestro/ios-probe.yaml --test-output-dir="$PWD/maestro-ios-debug" || true
+          MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > maestro-ios-hierarchy.json || true
+
       - name: Run Maestro flows (iOS)
-        if: env.RUN_MAESTRO == 'true'
+        if: env.RUN_MAESTRO == 'true' && inputs.probe != true
         working-directory: packages/mobile
         env:
           # Passed to Maestro so the authed phase of the smoke runs; CI provides
@@ -340,7 +378,7 @@ jobs:
           exit "$status"
 
       - name: Verify route screenshot coverage
-        if: env.RUN_MAESTRO == 'true'
+        if: env.RUN_MAESTRO == 'true' && inputs.probe != true
         working-directory: packages/mobile
         run: |
           SCREENSHOT_DIR=maestro-ios-debug/screenshots
@@ -393,6 +431,7 @@ jobs:
             packages/mobile/maestro-ios-report.xml
             packages/mobile/maestro-ios-artist-report.xml
             packages/mobile/maestro-ios-hierarchy.json
+            packages/mobile/maestro-ios-hierarchy-probe-45s.json
             packages/mobile/maestro-ios-debug/**
             packages/mobile/maestro-ios-artist-debug/**
             !packages/mobile/maestro-ios-debug/commands-*.json
