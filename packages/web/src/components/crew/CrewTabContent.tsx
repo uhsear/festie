@@ -8,7 +8,7 @@ import PackingTab from './PackingTab';
 import RidesTab from './RidesTab';
 import ExpensesTab from './ExpensesTab';
 import ActivityTab from './ActivityTab';
-import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils';
+import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils/navigation';
 import type { CrewMember } from '@festie/shared/types';
 
 interface CrewTabContentProps {
