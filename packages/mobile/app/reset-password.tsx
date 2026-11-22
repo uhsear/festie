@@ -86,7 +86,7 @@ const useStyles = makeStyles((t) => ({
   },
   // CTA layout only — fill/ink/disabled live in components/Button (F8).
   button: { marginTop: t.spacing[2] },
-  linkButton: { marginTop: t.spacing[5], alignItems: 'center' as const },
+  linkButton: { marginTop: t.spacing[5], alignItems: 'center' as const, justifyContent: 'center' as const, minHeight: 44 },
   linkText: {
     ...typeStyle('label', 600),
     color: t.colors.accent.aqua,
