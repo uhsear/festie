@@ -202,7 +202,7 @@ export default function JoinInviteScreen() {
           </>
         ) : null}
 
-        {inviteDead && !user ? (
+        {(!validCode || inviteDead) && !user ? (
           <>
             <Button
               maxFontSizeMultiplier={MAX_FONT_SCALE}
