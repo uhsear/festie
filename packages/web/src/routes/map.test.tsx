@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
   sosList: [] as unknown[],
   error: null as string | null,
   queryError: false,
+  queryData: [{ id: 'mp1', label: 'Gate' }] as unknown[],
   refetch: vi.fn(),
   loadFestivals: vi.fn(),
   selectFestival: vi.fn(),
@@ -54,7 +55,7 @@ vi.mock('@festie/shared/stores/liveLocationStore', () => {
 vi.mock('@tanstack/react-query', () => ({
   useQuery: (opts: unknown) => {
     h.useQuery(opts);
-    return { data: [{ id: 'mp1', label: 'Gate' }], isError: h.queryError, refetch: h.refetch };
+    return { data: h.queryData, isError: h.queryError, refetch: h.refetch };
   },
 }));
 
@@ -92,6 +93,7 @@ beforeEach(() => {
   h.search = {};
   h.error = null;
   h.queryError = false;
+  h.queryData = [{ id: 'mp1', label: 'Gate' }];
   h.sosList = [];
 });
 
@@ -116,10 +118,20 @@ describe('MapView', () => {
     h.user = { id: 'u1' };
     h.crew = { id: 'c1' };
     h.queryError = true;
+    h.queryData = [];
     render(<MapView />);
     expect(screen.getByRole('alert')).toHaveTextContent("Couldn't load meeting points.");
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(h.refetch).toHaveBeenCalled();
+  });
+
+  it('says it shows saved meeting points, not an error, when a refetch failed but data exists', () => {
+    h.user = { id: 'u1' };
+    h.crew = { id: 'c1' };
+    h.queryError = true;
+    render(<MapView />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByText('Showing your saved meeting points.')).toBeInTheDocument();
   });
 
   it('renders the map for a guest with no meeting points and the guest line', async () => {

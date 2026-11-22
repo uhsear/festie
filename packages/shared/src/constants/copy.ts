@@ -35,6 +35,7 @@ export const COPY = {
   meetingPoint: {
     one: 'Meeting point', many: 'Meeting points', add: 'New meeting point', edit: 'Edit meeting point',
     noTime: 'no time', loadFailed: "Couldn't load meeting points.",
+    showingSaved: 'Showing your saved meeting points.',
   },
   auth: {
     signIn: 'Sign in', signingIn: 'Signing in…', createAccount: 'Create account',

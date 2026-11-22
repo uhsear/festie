@@ -139,7 +139,10 @@ function MapViewInner() {
           }
         />
       </Suspense>
-      {hasCrew && pointsFailed && (
+      {hasCrew && pointsFailed && points.length > 0 && (
+        <p className="text-sm text-text-muted">{COPY.meetingPoint.showingSaved}</p>
+      )}
+      {hasCrew && pointsFailed && points.length === 0 && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
           <p role="alert">{COPY.meetingPoint.loadFailed}</p>
           <button type="button" className="min-h-11 underline" onClick={() => void refetchPoints()}>
