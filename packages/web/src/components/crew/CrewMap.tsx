@@ -754,6 +754,8 @@ export default function CrewMap({
   const nudgePeer =
     liveTarget && liveTarget.id.startsWith('peer:') ? peers.find((p) => `peer:${p.userId}` === liveTarget.id) : undefined;
   const showPursueOverlay = status === 'ready' && !!liveTarget && !showPlaceCard;
+  // The way bar already shows the location problem while it waits for a fix; do not say it twice.
+  const wayBarSaysLocation = showPursueOverlay && !selfCoord && awaitingFix;
 
   return (
     <div className="space-y-2">
@@ -812,7 +814,7 @@ export default function CrewMap({
 
         {/* ── Location status over the map, next to the button: below the canvas it sat
             behind the bottom nav on a phone, so a failed tap looked like nothing happened. */}
-        {interactive && status !== 'error' && (awaitingFix || farNoticeM !== null) && (
+        {interactive && status !== 'error' && (awaitingFix || farNoticeM !== null) && !wayBarSaysLocation && (
           <div
             role="status"
             className="absolute left-14 right-14 top-2 z-10 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-border bg-bg-elevated/95 px-3 py-2 text-xs text-text-secondary shadow-lg"
@@ -896,7 +898,8 @@ export default function CrewMap({
             ) : (
               <Navigation className="w-7 h-7 shrink-0 text-text-muted opacity-50" aria-hidden="true" />
             )}
-            <div className="min-w-0 flex-1" role="status" aria-live="polite">
+            {/* basis-40 keeps the text column wide; the nudge and close buttons wrap to a second row on a phone. */}
+            <div className="min-w-[9rem] flex-1 basis-40" role="status" aria-live="polite">
               {selfCoord && pursuit ? (
                 <p className="truncate text-sm text-text-primary">
                   <span className="font-semibold">{liveTarget.label}</span>

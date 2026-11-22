@@ -481,6 +481,15 @@ describe('CrewMap place card and Nearest', () => {
     expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
   });
 
+  it('says a blocked location once while the way bar already says it', async () => {
+    extractStagePins.mockReturnValue([STAGE_PIN]);
+    await renderReadyMap({ focusPinId: 's1' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Show the way' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
+    act(() => watchPosition.mock.calls[0]![1]({ code: 1 }));
+    expect(screen.getAllByText(/Location is off or blocked/)).toHaveLength(1);
+  });
+
   it('says how far a distant fix is and Show festival flies back to the venue', async () => {
     await renderReadyMap();
     fireEvent.click(screen.getByRole('button', { name: 'Show my location' }));
