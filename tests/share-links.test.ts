@@ -58,6 +58,7 @@ async function cleanupById(pool: Pool) {
   await pool.query('DELETE FROM calendar_tokens WHERE festival_id = $1', [FEST_ID]);
   await pool.query('DELETE FROM festival_profile_picks WHERE profile_id IN (SELECT id FROM festival_profiles WHERE festival_id = $1)', [FEST_ID]);
   await pool.query('DELETE FROM festival_profiles WHERE festival_id = $1', [FEST_ID]);
+  await pool.query('DELETE FROM crews WHERE festival_id = $1', [FEST_ID]);
   await pool.query('DELETE FROM festival_sets WHERE festival_id = $1', [FEST_ID]);
   await pool.query('DELETE FROM festival_days WHERE festival_id = $1', [FEST_ID]);
   await pool.query('DELETE FROM festival_stages WHERE festival_id = $1', [FEST_ID]);
@@ -211,9 +212,14 @@ describe('revocable share links', { skip, concurrency: 1 }, () => {
     const aliceProfile = await joinWithPick(server, alice.token);
     await joinWithPick(server, bob.token);
 
+    const before = await server.request.get(`/api/v1/profiles/${FEST_ID}`).set('x-user-token', bob.token).expect(200);
+    assert.equal(before.body.data.find((p: { id: string }) => p.id === aliceProfile.id), undefined, 'a non-crew attendee is not listed');
+    const crew = (await server.request.post('/api/v1/crews').set('x-user-token', alice.token).send({ name: 'Listed', festivalId: FEST_ID }).expect(201)).body.data;
+    await server.request.post('/api/v1/crews/join').set('x-user-token', bob.token).send({ inviteCode: crew.inviteCode }).expect(200);
+
     const list = await server.request.get(`/api/v1/profiles/${FEST_ID}`).set('x-user-token', bob.token).expect(200);
     const seen = list.body.data.find((p: { id: string }) => p.id === aliceProfile.id);
-    assert.ok(seen, 'the attendee list exposes the profile id');
+    assert.ok(seen, 'the list exposes a crew mate profile id');
 
     const json = await server.request.get(`/s/${seen.id}/json`).expect(404);
     assert.equal(json.body.error.code, 'NOT_FOUND');
