@@ -86,6 +86,16 @@ describe('zoneOffsetMsAt cache', () => {
     spy.mockRestore();
   });
 
+  it('shares one entry across the milliseconds of a minute and returns a whole-second offset', () => {
+    const minute = Date.UTC(2031, 5, 1, 12, 7, 0);
+    const first = zoneOffsetMsAt(minute + 123, 'America/Denver');
+    expect(first).toBe(-6 * 3_600_000);
+    const spy = vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts');
+    expect(zoneOffsetMsAt(minute + 41_999, 'America/Denver')).toBe(first);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
   it('keeps zones apart and still follows a DST change', () => {
     const winter = Date.UTC(2031, 0, 15, 12, 0, 0);
     const summer = Date.UTC(2031, 6, 15, 12, 0, 0);
