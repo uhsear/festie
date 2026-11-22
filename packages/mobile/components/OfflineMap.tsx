@@ -61,7 +61,7 @@ import AppPressable from './AppPressable';
 import { useNow } from '../hooks/useNow';
 import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '../lib/webviewBridge';
 import type { AuthoringMode } from '../lib/webviewBridge';
-import { basemapCacheInfo, ensureBasemapCached, isBasemapRemoved, readArchiveRange, readCachedBase64 } from '../lib/basemapCache';
+import { basemapCacheInfo, checkArchiveSpace, ensureBasemapCached, isBasemapRemoved, readArchiveRange, readCachedBase64 } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
 import { compassHref, peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
@@ -739,11 +739,14 @@ export default function OfflineMap({
     if (!remotePmtilesUrl) return;
     // The user deleted this download: keep the remote map instead of fetching the archive again.
     if (isBasemapRemoved(remotePmtilesUrl)) return;
-    void ensureBasemapCached(remotePmtilesUrl).then((uri) => {
-      if (cancelled) return;
-      if (uri) setCachedBasemap({ url: remotePmtilesUrl, uri });
-      setCheckedArchiveUrl(remotePmtilesUrl);
-    });
+    // Same free-space guard as the card's Download button; a refused archive stays remote.
+    void checkArchiveSpace(remotePmtilesUrl)
+      .then((space) => (space.ok ? ensureBasemapCached(remotePmtilesUrl) : null))
+      .then((uri) => {
+        if (cancelled) return;
+        if (uri) setCachedBasemap({ url: remotePmtilesUrl, uri });
+        setCheckedArchiveUrl(remotePmtilesUrl);
+      });
     return () => {
       cancelled = true;
     };

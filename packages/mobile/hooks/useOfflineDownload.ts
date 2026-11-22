@@ -13,12 +13,11 @@ import {
 import {
   basemapCacheInfo,
   clearBasemapCache,
+  checkArchiveSpace,
   ensureBasemapCached,
-  freeDiskBytes,
   siteplanNeedsConnection,
   subscribeBasemapCache,
 } from '../lib/basemapCache';
-import { checkMapSpace } from '../lib/offlineMapGuard';
 
 const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
 
@@ -54,10 +53,8 @@ export async function downloadOfflineMap(
   pmtilesUrl: string,
   siteplanUrl: string | null,
 ): Promise<{ section: SectionReadiness; message: string | null }> {
-  if (sectionFromDisk(pmtilesUrl).status !== 'ready') {
-    const space = checkMapSpace(await headContentLength(pmtilesUrl), freeDiskBytes());
-    if (!space.ok) return { section: { status: 'error', syncedAt: Date.now() }, message: space.message };
-  }
+  const space = await checkArchiveSpace(pmtilesUrl);
+  if (!space.ok) return { section: { status: 'error', syncedAt: Date.now() }, message: space.message };
   await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
   const section = sectionFromDisk(pmtilesUrl);
   return { section: section.status === 'ready' ? section : { status: 'error', syncedAt: Date.now() }, message: null };
@@ -171,8 +168,9 @@ export function useOfflineDownload(festivalId: string) {
     hasMap: !!mapUrl,
     mapBytes: mapUrl ? mapBytes : null,
     mapReady: mapSection.status === 'ready',
-    // Why the map was not saved (not enough space), shown on the card.
-    mapMessage: mapUrl ? mapMessage : null,
+    // Why the map was not saved (not enough space). Only while the step is in error: a later
+    // success or a reset to idle must not leave the old refusal on the card.
+    mapMessage: mapUrl && mapSection.status === 'error' ? mapMessage : null,
     // The map is saved but the site-plan overlay still needs a connection.
     siteplanNeedsConnection:
       !!mapUrl && mapSection.status === 'ready' && siteplanNeedsConnection(siteplanUrl, siteplanBytes),

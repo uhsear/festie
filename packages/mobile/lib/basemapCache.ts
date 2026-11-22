@@ -17,6 +17,7 @@
 
 import { File, Directory, FileMode, Paths, type FileHandle } from 'expo-file-system';
 import { createBasemapEnsurer, headContentLength } from '@festie/shared/utils';
+import { checkMapSpace, type MapSpaceCheck } from './offlineMapGuard';
 
 // All cached basemaps live under a single subdir of the OS cache directory so
 // (a) they're co-located + easy to scope `allowingReadAccessToURL` to, and (b)
@@ -67,6 +68,15 @@ export function freeDiskBytes(): number | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Free-space check for downloading an archive, shared by the card's Download button and the map screen so
+ * neither starts a transfer the phone cannot hold. A saved archive needs no check. One HEAD for the length.
+ */
+export async function checkArchiveSpace(archiveUrl: string): Promise<MapSpaceCheck> {
+  if (basemapCacheInfo(archiveUrl).cached) return { ok: true };
+  return checkMapSpace(await headContentLength(archiveUrl), freeDiskBytes());
 }
 
 /**

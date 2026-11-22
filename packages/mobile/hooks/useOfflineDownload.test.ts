@@ -47,7 +47,7 @@ vi.mock('../lib/basemapCache', async (importOriginal) => {
 });
 
 const { sectionFromDisk, downloadOfflineMap } = await import('./useOfflineDownload');
-const { basemapCacheFile, ensureBasemapCached } = await import('../lib/basemapCache');
+const { basemapCacheFile, ensureBasemapCached, checkArchiveSpace } = await import('../lib/basemapCache');
 
 const PMTILES = 'https://festie.us/uploads/basemaps/big-2026.pmtiles';
 const SITEPLAN = 'https://festie.us/uploads/siteplans/big-2026.webp';
@@ -121,5 +121,13 @@ describe('free-space check before the map download', () => {
     vi.stubGlobal('fetch', head(300 * MIB));
     fs.free = 1 * MIB;
     expect((await downloadOfflineMap(PMTILES, null)).section.status).toBe('ready');
+  });
+
+  it('gives the map screen the same answer through checkArchiveSpace', async () => {
+    vi.stubGlobal('fetch', head(300 * MIB));
+    fs.free = 320 * MIB;
+    expect((await checkArchiveSpace(PMTILES)).ok).toBe(false);
+    fs.free = 400 * MIB;
+    expect((await checkArchiveSpace(PMTILES)).ok).toBe(true);
   });
 });
