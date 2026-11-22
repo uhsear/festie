@@ -123,7 +123,7 @@ describe('FestivalAnnouncements', () => {
     const user = userEvent.setup();
     api.adminList.mockResolvedValue({ festivalName: 'Fest', recipients: 3, announcements: [row()] });
     renderIt();
-    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: /^Cancel: / }));
     await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('f1', 'a1', 'admin'));
   });
 
@@ -135,7 +135,7 @@ describe('FestivalAnnouncements', () => {
       announcements: [row({ sentAt: new Date(Date.now() - 60_000).toISOString(), recipientCount: 2 })],
     });
     renderIt();
-    await user.click(await screen.findByRole('button', { name: 'Take down banner' }));
+    await user.click(await screen.findByRole('button', { name: /^Take down banner: / }));
     expect(api.cancel).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('button', { name: 'Take down' }));
     await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('f1', 'a1', 'admin'));
@@ -150,7 +150,7 @@ describe('FestivalAnnouncements', () => {
     });
     renderIt();
     expect(await screen.findByText(/^Sent /)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Take down banner' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Take down banner: / })).not.toBeInTheDocument();
   });
 
   it('load fails, shows the error, disables submit, Retry reloads', async () => {

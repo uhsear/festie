@@ -112,6 +112,7 @@ export default function DayEditor({
           </span>
           <button
             onClick={onRemoveDay}
+            aria-label={`Remove ${day.label || 'day'}`}
             className="px-2 py-2 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
           >
             Remove
@@ -139,7 +140,7 @@ export default function DayEditor({
             <p className="text-xs text-text-muted italic">No sets match "{filterQuery.trim()}".</p>
           ) : (
             <div className="space-y-2">
-              <div className="hidden md:grid grid-cols-[auto_1fr_140px_90px_90px_auto] gap-2 text-xs text-text-muted px-1">
+              <div className="hidden md:grid grid-cols-[auto_1fr_140px_7.5rem_7.5rem_auto] gap-2 text-xs text-text-muted px-1">
                 <input
                   type="checkbox"
                   aria-label="Select all shown"

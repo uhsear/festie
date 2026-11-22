@@ -248,12 +248,24 @@ export default function FestivalAnnouncements({ festivalId, festivalName, scope 
                   </p>
                 </div>
                 {status === 'scheduled' && (
-                  <button type="button" className={buttonClass} disabled={busy} onClick={() => void cancel(a, false)}>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy}
+                    aria-label={`${COPY.rowCancel}: ${a.title}`}
+                    onClick={() => void cancel(a, false)}
+                  >
                     {COPY.rowCancel}
                   </button>
                 )}
                 {status === 'sent' && a.sentAt && Date.now() - Date.parse(a.sentAt) < BANNER_MS && (
-                  <button type="button" className={buttonClass} disabled={busy} onClick={() => setTakeDown(a)}>
+                  <button
+                    type="button"
+                    className={buttonClass}
+                    disabled={busy}
+                    aria-label={`${COPY.rowTakeDown}: ${a.title}`}
+                    onClick={() => setTakeDown(a)}
+                  >
                     {COPY.rowTakeDown}
                   </button>
                 )}

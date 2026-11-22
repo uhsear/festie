@@ -45,3 +45,13 @@ describe('DayEditor engagement', () => {
     expect(screen.queryByText(/Picked by|No picks/)).toBeNull();
   });
 });
+
+describe('DayEditor labels', () => {
+  it('names the day and each set in its controls', () => {
+    renderDay();
+    expect(screen.getByRole('button', { name: 'Remove Friday' })).toBeTruthy();
+    expect(screen.getByLabelText('Start time for Alpha')).toBeTruthy();
+    expect(screen.getByLabelText('End time for Beta')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Remove Alpha' })).toBeTruthy();
+  });
+});
