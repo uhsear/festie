@@ -546,8 +546,8 @@ function AuthGate() {
     Appearance.setColorScheme(followSystemTheme ? 'unspecified' : theme === 'daylight' ? 'light' : 'dark');
   }, [theme, followSystemTheme]);
   useEffect(() => {
-    applySystemScheme(systemScheme);
-  }, [applySystemScheme, followSystemTheme, systemScheme]);
+    if (uiHydrated) applySystemScheme(systemScheme);
+  }, [applySystemScheme, followSystemTheme, systemScheme, uiHydrated]);
 
   return (
     <View style={styles.appShell}>

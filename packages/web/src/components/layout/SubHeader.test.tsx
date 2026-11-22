@@ -311,15 +311,15 @@ describe('SubHeader route scope', () => {
   });
 });
 
-describe('SubHeader save status chip', () => {
-  it('mounts for a signed-in profile and not for a guest', () => {
+describe('SubHeader status line', () => {
+  it('mounts the one status line on schedule routes, for guests too', () => {
     const { unmount } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(screen.getByTestId('save-status-chip')).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-status-line')).toBeInTheDocument();
     unmount();
     const prev = storeState.currentProfile;
     storeState.currentProfile = null;
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(screen.queryByTestId('save-status-chip')).not.toBeInTheDocument();
+    expect(screen.getByTestId('schedule-status-line')).toBeInTheDocument();
     storeState.currentProfile = prev;
   });
 });
