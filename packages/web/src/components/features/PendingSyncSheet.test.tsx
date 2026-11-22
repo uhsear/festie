@@ -87,6 +87,13 @@ describe('PendingSyncSheet', () => {
     expect(screen.getByText('Conflict')).toBeInTheDocument();
   });
 
+  it('names each row in its Retry and Dismiss buttons', () => {
+    setStoreState([item({ clientId: 'a', label: 'Add meeting point: Doomed one' }), item({ clientId: 'b', label: 'Update picks' })]);
+    render(<PendingSyncSheet onClose={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'Retry Add meeting point: Doomed one' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Dismiss Update picks' })).toBeInTheDocument();
+  });
+
   it('dismisses a single item from the store and storage via its Dismiss button', async () => {
     const user = userEvent.setup();
     setStoreState([item({ clientId: 'abc' })]);
