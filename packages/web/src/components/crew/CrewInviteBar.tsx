@@ -167,7 +167,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
           />
         </div>
       )}
-      {full && <p className="text-xs text-text-secondary">{crewCopy.inviteCrewFull}</p>}
+      {full && <p className="text-xs text-text-secondary">{crewCopy.inviteCrewFull(isOwner)}</p>}
       <div role="status">
         {inviteLocked && (
           <p className="text-xs text-text-secondary inline-flex items-center gap-1">

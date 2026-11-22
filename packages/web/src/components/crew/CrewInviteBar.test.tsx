@@ -61,9 +61,15 @@ describe('CrewInviteBar', () => {
   });
 
   it('says the crew is full at the cap and keeps the code visible', () => {
-    renderBar({ memberCount: 30, maxMembers: 30 });
+    renderBar({ memberCount: 30, maxMembers: 30, isOwner: true });
     expect(screen.getByText('Crew is full. Remove a member to invite.')).toBeInTheDocument();
     expect(screen.getByText('K7XQ2M')).toBeInTheDocument();
+  });
+
+  it('tells a member to ask the owner when the crew is full', () => {
+    renderBar({ memberCount: 30, maxMembers: 30, isOwner: false });
+    expect(screen.getByText('Crew is full. Ask the owner to make room.')).toBeInTheDocument();
+    expect(screen.queryByText('Crew is full. Remove a member to invite.')).not.toBeInTheDocument();
   });
 
   it('stays quiet below the cap', () => {
