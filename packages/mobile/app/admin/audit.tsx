@@ -506,7 +506,7 @@ export default function AdminAuditScreen() {
 
 // ---------------------------------------------------------------------------
 // Inline filter text-input (local to this screen — simpler than importing
-// LabeledTextInput because we need 2-column layout with tight spacing).
+// LabeledTextInput because we need tight spacing).
 // ---------------------------------------------------------------------------
 
 interface FilterInputProps {
@@ -560,7 +560,6 @@ function FilterInput({
 
 const useFilterStyles = makeStyles((t) => ({
   field: {
-    flex: 1,
     gap: t.spacing[1],
   },
   label: {
