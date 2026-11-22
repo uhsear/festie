@@ -65,6 +65,14 @@ describe('api service', () => {
   });
 
   describe('api.get', () => {
+    it('hands the 2xx response to onResponse', async () => {
+      mockFetch.mockResolvedValueOnce(jsonResponse({ data: { ok: true }, error: null }, 200, { Date: 'x' }));
+      const onResponse = vi.fn();
+      await api.get('/festivals/f1', { onResponse });
+      expect(onResponse).toHaveBeenCalledOnce();
+      expect(onResponse.mock.calls[0]![0].headers.get('Date')).toBe('x');
+    });
+
     it('makes a GET request to the correct URL', async () => {
       mockFetch.mockResolvedValue(jsonResponse({ data: { name: 'test' }, error: null }));
       await api.get('/festivals');

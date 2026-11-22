@@ -117,7 +117,8 @@ describe('scripts/backup-pg.sh encryption and retention', { skip }, () => {
     const r = run();
     assert.equal(r.status, 1, r.stdout + r.stderr);
     assert.match(r.stderr, /encryption failed/);
-    assert.equal(names('.dump').length, 1, 'the plaintext dump is kept');
+    // On a Sunday the script also writes a _weekly copy, so count only the daily dump.
+    assert.equal(names('.dump').filter((f) => !f.includes('_weekly')).length, 1, 'the plaintext dump is kept');
     assert.deepEqual(names('.gpg'), []);
     assert.deepEqual(names('.tmp'), []);
   });

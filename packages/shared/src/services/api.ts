@@ -35,6 +35,8 @@ interface ApiOptions {
    */
   onOptimisticCreate?: (result: unknown) => void;
   _bypassOfflineQueue?: boolean;
+  /** Receives the raw 2xx Response before the body is read (e.g. for its `Date` header). */
+  onResponse?: (response: Response) => void;
   /** Return the whole `{ data, meta }` body instead of unwrapping `data`. */
   _envelope?: boolean;
   /** Return the response body as text instead of parsing JSON (e.g. the HTML export). */
@@ -423,6 +425,7 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
     // Reachability confirmed (from the network) — recover from a prior
     // false-offline and drain. Guards inside reject cached/offline false 200s.
     markOnlineAndDrain(path);
+    options.onResponse?.(response);
 
     if (asText) return (await response.text()) as T;
 

@@ -21,7 +21,7 @@ env:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Skip|Build your festival|Select a Festival|Festie"
+      text: "Skip|Build your festival|Choose a festival|Festie"
     timeout: 120000
 - tapOn:
     text: "Skip"
@@ -31,10 +31,10 @@ env:
     optional: true
 - runFlow:
     when:
-      visible: "Select a Festival"
+      visible: "Choose a festival"
     commands:
       - tapOn:
-          id: "festival-card-nc-2026"
+          id: "festival-card-fk-2026"
       - extendedWaitUntil:
           visible:
             text: "Switch|Timeline|Cards"

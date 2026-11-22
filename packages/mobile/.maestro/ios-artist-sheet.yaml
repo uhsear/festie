@@ -3,28 +3,34 @@
 # account and mutates nothing. Selectors are testIDs only (set-card-<id>,
 # set-sheet, set-sheet-close); Maestro matches `id` as a regex.
 appId: us.festie.app
+# Always keep a last screenshot, so a failed run shows where it stopped.
+onFlowComplete:
+  - takeScreenshot: zz-last
 ---
 - launchApp:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Plan your weekend|Select a Festival"
+      id: "intro-skip|festival-card-.*"
     timeout: 90000
 - runFlow:
     when:
-      visible: "Plan your weekend"
+      visible:
+        id: "intro-skip"
     commands:
-      - tapOn: "Skip intro"
+      - tapOn:
+          id: "intro-skip"
 - extendedWaitUntil:
-    visible: "Select a Festival"
+    visible:
+      id: "festival-card-.*"
     timeout: 30000
 # See ios-smoke.yaml: centre the card first so a tap cannot land on the tab bar.
 - scrollUntilVisible:
     element:
-      id: "festival-card-nc-2026"
+      id: "festival-card-fk-2026"
     centerElement: true
 - tapOn:
-    id: "festival-card-nc-2026"
+    id: "festival-card-fk-2026"
 - extendedWaitUntil:
     visible:
       id: "schedule-screen"
