@@ -773,7 +773,7 @@ describe('authStore', () => {
   });
 
   describe('account settings actions', () => {
-    it('updatePaymentHandles trims, PUTs and merges the three fields', async () => {
+    it('updatePaymentHandles trims, PUTs the changed fields and merges all three', async () => {
       useAuthStore.setState({ user: mockUser });
       vi.mocked(api.put).mockResolvedValueOnce({
         user: { venmoHandle: 'sam', cashappCashtag: null, paypalHandle: 'sp' },
@@ -783,11 +783,19 @@ describe('authStore', () => {
         .updatePaymentHandles({ venmoHandle: ' sam ', cashappCashtag: '', paypalHandle: 'sp ' });
       expect(api.put).toHaveBeenCalledWith('/account/payment-handles', {
         venmoHandle: 'sam',
-        cashappCashtag: '',
         paypalHandle: 'sp',
       });
       expect(res.venmoHandle).toBe('sam');
       expect(useAuthStore.getState().user).toMatchObject({ venmoHandle: 'sam', cashappCashtag: null, paypalHandle: 'sp' });
+    });
+
+    it('updatePaymentHandles sends only the handles that changed', async () => {
+      useAuthStore.setState({ user: { ...mockUser, venmoHandle: 'old', cashappCashtag: 'jane_doe', paypalHandle: null } });
+      vi.mocked(api.put).mockResolvedValueOnce({ user: { venmoHandle: 'new', cashappCashtag: 'jane_doe', paypalHandle: null } });
+      await useAuthStore
+        .getState()
+        .updatePaymentHandles({ venmoHandle: 'new', cashappCashtag: 'jane_doe', paypalHandle: '' });
+      expect(api.put).toHaveBeenCalledWith('/account/payment-handles', { venmoHandle: 'new' });
     });
 
     it('setPublicSchedule PUTs and sets the flag', async () => {
