@@ -8,6 +8,8 @@ import {
   sharesError,
   formatCents,
   toCents,
+  expenseAmountError,
+  MAX_EXPENSE_AMOUNT,
   centsToInputText,
   attendingDayCount,
   hasDayAnswers,
@@ -21,9 +23,6 @@ import { inputBase } from '../../lib/styles';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 import IconButton from '../ui/IconButton';
-
-// Mirrors the server's amount bound in lib/schemas/expenses.ts.
-const MAX_AMOUNT = 99_999_999.99;
 
 interface FormMember {
   userId: string;
@@ -56,6 +55,8 @@ export default function ExpenseForm({
 }: Props) {
   const [description, setDescription] = useState(initial?.description ?? '');
   const [amount, setAmount] = useState(initial ? String(initial.amount) : '');
+  // The amount error waits for blur (clicking the disabled Add button blurs it) so a half-typed "0.0" does not flash it.
+  const [amountTouched, setAmountTouched] = useState(false);
   const [category, setCategory] = useState<string>(initial?.category ?? 'other');
   const [planned, setPlanned] = useState(initial?.planned === true);
   // Former members cannot be picked or removed in the form and the server rejects them, so drop them on prefill.
@@ -108,11 +109,7 @@ export default function ExpenseForm({
 
   const canSplitByDays = uneven && totalCents > 0 && dayCount > 0 && hasDayAnswers(daysIndex, splitWith);
 
-  let amountError: string | undefined;
-  if (amount !== '' && totalCents < 1) amountError = `Enter an amount of at least ${formatCents(1, currency)}`;
-  else if (Number(amount) > MAX_AMOUNT) {
-    amountError = `Amount can't be more than ${formatCents(Math.round(MAX_AMOUNT * 100), currency)}`;
-  }
+  const amountError = expenseAmountError(amount, currency);
 
   const canSubmit = !!description.trim() && totalCents > 0 && splitWith.length > 0 && !error && !amountError;
 
@@ -155,11 +152,12 @@ export default function ExpenseForm({
         inputMode="decimal"
         step="0.01"
         min="0.01"
-        max={MAX_AMOUNT}
+        max={MAX_EXPENSE_AMOUNT}
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
+        onBlur={() => setAmountTouched(true)}
         placeholder="0.00"
-        error={amountError}
+        error={amountTouched ? amountError : undefined}
         required
       />
       <div>

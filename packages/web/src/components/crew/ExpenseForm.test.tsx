@@ -201,6 +201,8 @@ describe('ExpenseForm amount validation', () => {
     const { user } = setup();
     await user.type(screen.getByLabelText('Description'), 'Gas');
     await user.type(screen.getByLabelText('Amount'), '0.001');
+    expect(screen.queryByText('Enter an amount of at least $0.01')).not.toBeInTheDocument();
+    await user.tab();
     expect(screen.getByText('Enter an amount of at least $0.01')).toBeInTheDocument();
     expect(screen.getByLabelText('Amount')).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
@@ -210,6 +212,7 @@ describe('ExpenseForm amount validation', () => {
     const { user, onSubmit } = setup();
     await user.type(screen.getByLabelText('Description'), 'Gas');
     await user.type(screen.getByLabelText('Amount'), '99999999999');
+    await user.tab();
     expect(screen.getByText("Amount can't be more than $99,999,999.99")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
     expect(onSubmit).not.toHaveBeenCalled();
