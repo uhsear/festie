@@ -216,6 +216,11 @@ describe('helpers/sanitize: redactInviteCodePath', () => {
     assert.equal(redactInviteCodePath('/join-preview/ABC123'), '/join-preview/:code');
   });
 
+  it('redacts regardless of letter case', () => {
+    assert.equal(redactInviteCodePath('/API/V1/CREWS/JOIN-PREVIEW/CODE'), '/API/V1/CREWS/JOIN-PREVIEW/:code');
+    assert.equal(redactInviteCodePath('/Join/CODE'), '/Join/:code');
+  });
+
   it('leaves other paths unchanged', () => {
     assert.equal(redactInviteCodePath('/api/v1/crews/join'), '/api/v1/crews/join');
     assert.equal(redactInviteCodePath('/api/v1/crews/abc/members'), '/api/v1/crews/abc/members');

@@ -10,7 +10,7 @@
  * Covers /crews/join-preview/<code> and the legacy /crews/join/<code>, with or without the /api/v1 prefix.
  */
 export function redactInviteCodePath(path: string): string {
-  return path.replace(/(\/join(?:-preview)?\/)[^/?]+/, '$1:code');
+  return path.replace(/(\/join(?:-preview)?\/)[^/?]+/i, '$1:code');
 }
 
 const DANGEROUS_RECORD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
