@@ -442,7 +442,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
         />
       ) : !showForm ? (
         <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
-          <Plus className="w-4 h-4" aria-hidden="true" /> Add Expense
+          <Plus className="w-4 h-4" aria-hidden="true" /> Add expense
         </Button>
       ) : (
         <ExpenseForm
@@ -463,7 +463,6 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           illustration="emptyList"
           title="No expenses yet"
           description={`Add the first one, for example: Gas, ${formatAmount(60, currency)}, split 4 ways.`}
-          cta={{ label: 'Add expense', onClick: () => setShowForm(true) }}
         />
       ) : visibleExpenses.length === 0 ? (
         <EmptyState

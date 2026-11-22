@@ -154,7 +154,7 @@ test.describe('critical flows', () => {
 
     const description = `Gas ${Date.now()}`;
     await page.goto(`${app.baseUrl}/crew?tab=money`);
-    await page.getByRole('button', { name: 'Add Expense', exact: true }).click();
+    await page.getByRole('button', { name: 'Add expense', exact: true }).click();
     await page.getByLabel('Description').fill(description);
     await page.getByLabel('Amount').fill('42.50');
 
@@ -185,7 +185,7 @@ test.describe('critical flows', () => {
 
     const descriptions = [`Ice ${Date.now()}`, `Water ${Date.now()}`];
     for (const description of descriptions) {
-      await page.getByRole('button', { name: 'Add Expense', exact: true }).click();
+      await page.getByRole('button', { name: 'Add expense', exact: true }).click();
       await page.getByLabel('Description').fill(description);
       await page.getByLabel('Amount').fill('10');
 
