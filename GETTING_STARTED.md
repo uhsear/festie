@@ -103,7 +103,7 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 |----------|---------|
 | `DATABASE_URL` | PostgreSQL connection string, e.g. `postgresql://user:pass@localhost:5432/festie` |
 | `PUBLIC_ORIGIN` | Canonical origin of the deployed app, e.g. `https://festie.us` (required in production; startup validator enforces it) |
-| `SESSION_SECRET` | Strong random string; reserved for future HMAC session signing, enforced at startup in production |
+| `SESSION_SECRET` | Strong random string, enforced at startup in production. Signs the one-click unsubscribe links in marketing email |
 
 ### Required for integration tests
 
@@ -118,6 +118,8 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 | `REDIS_URL` | `redis://127.0.0.1:6379` | Redis connection. Falls back to in-memory when unset or `REDIS_ENABLED=false` |
 | `REDIS_ENABLED` | `true` | Set `false` to run without Redis locally |
 | `RESEND_API_KEY` | — | Transactional email (password reset, invites). Email features silently disabled when unset. |
+| `EMAIL_POSTAL_ADDRESS` | — | Postal address in the footer of marketing email (wrap-up, lineup, days, set times, crew re-form). Those emails are not sent while it is unset; the server logs this once at startup |
+| `EMAIL_UNSUBSCRIBE_SECRET` | `SESSION_SECRET` | Key that signs the unsubscribe links in marketing email. Set it so that rotating `SESSION_SECRET` does not break links already sent (they must work for 30 days) |
 | `FIREBASE_CREDENTIALS_PATH` | — | Absolute path to the Firebase service-account JSON file. Set it to enable FCM push notifications. The server starts normally when it is unset, and push delivery stays disabled. |
 | `ALLOWED_ORIGINS` | derived from `PUBLIC_ORIGIN` | Comma-separated extra CORS origins |
 | `PORT` | `4000` | HTTP port the backend listens on |
@@ -132,7 +134,7 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 
 | Variable | Purpose |
 |----------|---------|
-| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify artist metadata for lineup import; feature disabled when unset |
+| `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` | Spotify artist metadata for lineup import, and the 30-day refresh of stored photos and genres (`scripts/spotify-refresh-stale.ts`); disabled when unset |
 | `APNS_KEY_PATH` / `APNS_KEY_ID` / `APNS_TEAM_ID` / `APNS_BUNDLE_ID` | Direct APNs push for iOS tokens; APNs sender disabled when any of these are unset |
 | `APPLE_TEAM_ID` / `ANDROID_CERT_FINGERPRINTS` | Universal/deep-link asset endpoints |
 | `WEBHOOK_TOKEN_HMAC_KEY` | Required when `FCM_RETRY_WEBHOOK_URL` is set; startup validator enforces this pairing |

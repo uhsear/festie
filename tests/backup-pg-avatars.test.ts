@@ -5,7 +5,7 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { hasCommand, makeTempDir, runScript, stubEnv, writeStub } from './_backup-stubs';
 
-const skip = hasCommand('flock') && hasCommand('tar') ? false : 'needs util-linux flock and tar (Linux)';
+const skip = hasCommand('flock') && hasCommand('tar') && hasCommand('gpg') ? false : 'needs util-linux flock, tar and gpg (Linux)';
 
 // A skipped suite is not counted in the summary, so report the skip as a skipped test too.
 if (skip) it('scripts/backup-pg.sh avatar suite', { skip }, () => {});
@@ -26,6 +26,7 @@ describe('scripts/backup-pg.sh avatar archive', { skip }, () => {
       BACKUP_DIR: backupDir,
       AVATAR_DIR: avatarDir,
       PGPASSWORD: 'x',
+      BACKUP_GPG_PASSPHRASE: 'test-passphrase',
       HOME: work,
       DB_PORT: '1',
       DB_HOST: '127.0.0.1',
@@ -89,7 +90,7 @@ describe('scripts/backup-pg.sh avatar archive', { skip }, () => {
     const r = runScript('scripts/backup-pg.sh', [], env);
     assert.equal(r.status, 76, r.stdout + r.stderr);
     assert.match(r.stdout + r.stderr, /avatar archive failed/);
-    assert.equal(readdirSync(backupDir).filter((f) => f.endsWith('.dump')).length, 1);
+    assert.equal(readdirSync(backupDir).filter((f) => f.endsWith('.dump.gpg')).length, 1);
     assert.equal(archives(backupDir).length, 0);
   });
 

@@ -4,9 +4,16 @@ set -euo pipefail
 # ──────────────────────────────────────────────────────────────────────────────
 # PostgreSQL backup script for Festie
 #
-# Creates pg_dump custom-format backups with gzip compression, rotates old
-# backups on a daily (30) + weekly (12) retention policy, and optionally
-# verifies the dump is restorable.
+# Creates pg_dump custom-format backups with gzip compression, encrypts every
+# dump on the host with GPG (AES256, BACKUP_GPG_PASSPHRASE, the passphrase the
+# off-site script uses), rotates old backups on a daily (30) + weekly (12)
+# retention policy with a hard ceiling of 13 weeks (the Privacy Policy states
+# "up to 13 weeks"), and optionally verifies the dump is restorable.
+#
+# On-host dumps are fp_<stamp>.dump.gpg. Restore one with:
+#   gpg --output restored.dump --decrypt fp_<stamp>.dump.gpg   (asks for the passphrase)
+#   pg_restore --no-owner -d <database> restored.dump
+# The plaintext exists only while this script runs; no unencrypted dump is left on disk.
 #
 # Run manually:    bash scripts/backup-pg.sh
 # Run via cron:    0 */6 * * * cd /opt/festie && bash scripts/backup-pg.sh \
@@ -32,6 +39,7 @@ DB_HOST="${DB_HOST:-127.0.0.1}"
 DB_PORT="${DB_PORT:-5432}"
 DAILY_KEEP="${DAILY_KEEP:-30}"      # days to keep daily backups
 WEEKLY_KEEP="${WEEKLY_KEEP:-12}"    # weekly snapshots to retain
+MAX_AGE_DAYS="${BACKUP_MAX_AGE_DAYS:-91}" # ceiling: nothing older than 13 weeks stays, whatever the counts say
 VERIFY="${BACKUP_VERIFY:-1}"        # pg_restore --list is cheap; catches truncated dumps
 LOCK_WAIT="${BACKUP_LOCK_WAIT:-120}" # seconds to wait for another backup run; 0 = do not wait
 AVATAR_DIR="${AVATAR_DIR:-${PUBLIC_DIR:-$SCRIPT_DIR/public}/uploads/avatars}"
@@ -40,6 +48,28 @@ AVATAR_DIR="${AVATAR_DIR:-${PUBLIC_DIR:-$SCRIPT_DIR/public}/uploads/avatars}"
 
 log() { printf '[%s] %s\n' "$(date -Iseconds)" "$*"; }
 die() { log "ERROR: $*" >&2; exit 1; }
+
+# shellcheck source=lib/backup-gpg.sh
+source "$SCRIPT_DIR/scripts/lib/backup-gpg.sh"
+
+# Every plaintext dump in BACKUP_DIR becomes <name>.gpg and the plaintext is deleted: this run's dump,
+# its weekly copy, and any plaintext left by an older version of this script or by a failed verification.
+# A failed encryption keeps that plaintext, so a backup is never lost, and returns 1 so the run is loud.
+encrypt_plaintext_dumps() {
+  local plain failed=0
+  for plain in "$BACKUP_DIR"/fp_*.dump "$BACKUP_DIR"/fp_*.dump.bad; do
+    [ -f "$plain" ] || continue
+    if backup_encrypt "$plain" "${plain}.gpg.tmp" && mv -f "${plain}.gpg.tmp" "${plain}.gpg"; then
+      rm -f "$plain"
+      log "Encrypted: ${plain}.gpg"
+    else
+      rm -f "${plain}.gpg.tmp"
+      log "ERROR: encryption failed for ${plain}; the plaintext was kept" >&2
+      failed=1
+    fi
+  done
+  return "$failed"
+}
 
 # ── Resolve credentials ─────────────────────────────────────────────────────
 # Prefer DATABASE_URL (standard in .env), fall back to individual PG* vars.
@@ -60,6 +90,9 @@ export PGPASSWORD="${PGPASSWORD:?Could not resolve database password from DATABA
 
 command -v pg_dump >/dev/null 2>&1 || die "pg_dump not found in PATH"
 command -v flock >/dev/null 2>&1 || die "flock not found in PATH"
+command -v gpg >/dev/null 2>&1 || die "gpg not found in PATH -- on-host dumps are encrypted"
+load_backup_passphrase "$SCRIPT_DIR"
+[ -n "$BACKUP_GPG_PASSPHRASE" ] || die "BACKUP_GPG_PASSPHRASE is not set (environment or .env) -- no dump was made, because on-host dumps are encrypted"
 mkdir -p "$BACKUP_DIR"
 
 # One lock for every backup run (shared with backup-offsite-git.sh). Exit 75 so a
@@ -71,12 +104,12 @@ if ! flock "${FLOCK_ARGS[@]}" 9; then
   exit 75
 fi
 
-# Failed copies are kept as *.dump.bad for a week, never as the newest .dump.
-find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump.bad" -mtime +7 -delete
+# Failed copies are kept as fp_*.bad (encrypted at the end of the next run) for a week, never as the newest dump.
+find "$BACKUP_DIR" -maxdepth 1 \( -name "fp_*.bad" -o -name "fp_*.bad.gpg" \) -mtime +7 -delete
 
 # Name by second; never overwrite a file another run just wrote.
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-while [ -e "${BACKUP_DIR}/fp_${TIMESTAMP}.dump" ]; do
+while [ -e "${BACKUP_DIR}/fp_${TIMESTAMP}.dump" ] || [ -e "${BACKUP_DIR}/fp_${TIMESTAMP}.dump.gpg" ]; do
   sleep 1
   TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 done
@@ -104,17 +137,19 @@ fi
 # ── Optional verification ────────────────────────────────────────────────────
 
 if [ "${VERIFY}" = "1" ]; then
-  command -v pg_restore >/dev/null 2>&1 || die "pg_restore not found in PATH -- dump kept unverified: ${BACKUP_FILE}"
+  command -v pg_restore >/dev/null 2>&1 || { encrypt_plaintext_dumps || true; die "pg_restore not found in PATH -- dump kept unverified: ${BACKUP_FILE}.gpg"; }
   LIST_RC=0
   LIST_ERR="$(pg_restore --list "$BACKUP_FILE" 2>&1 >/dev/null)" || LIST_RC=$?
   if [ "$LIST_RC" -eq 0 ]; then
     log "Verification OK: pg_restore --list succeeded"
   elif [ "$LIST_RC" -eq 126 ] || [ "$LIST_RC" -eq 127 ]; then
     # The tool could not run, so the dump is not known to be bad: keep it.
-    die "pg_restore could not run (exit ${LIST_RC}): $(head -n1 <<<"$LIST_ERR") -- dump kept unverified: ${BACKUP_FILE}"
+    encrypt_plaintext_dumps || true
+    die "pg_restore could not run (exit ${LIST_RC}): $(head -n1 <<<"$LIST_ERR") -- dump kept unverified: ${BACKUP_FILE}.gpg"
   else
-    mv -f "$BACKUP_FILE" "${BACKUP_FILE}.bad"
-    die "pg_restore --list failed ($(head -n1 <<<"$LIST_ERR")) -- dump is corrupt, kept as ${BACKUP_FILE}.bad"
+    # Keep the corrupt dump for a week, encrypted like every other dump; the plaintext copy is kept only if encryption fails.
+    if backup_encrypt "$BACKUP_FILE" "${BACKUP_FILE}.bad.gpg"; then rm -f "$BACKUP_FILE"; else rm -f "${BACKUP_FILE}.bad.gpg"; mv -f "$BACKUP_FILE" "${BACKUP_FILE}.bad"; fi
+    die "pg_restore --list failed ($(head -n1 <<<"$LIST_ERR")) -- dump is corrupt, kept as ${BACKUP_FILE}.bad.gpg"
   fi
 fi
 
@@ -136,11 +171,14 @@ fi
 # 6-hourly run must not add a second copy.
 
 DOW=$(date +%u)  # 7 = Sunday
-if [ "$DOW" = "7" ] && ! compgen -G "${BACKUP_DIR}/fp_${TIMESTAMP%%_*}_*_weekly.dump" >/dev/null; then
+if [ "$DOW" = "7" ] && ! compgen -G "${BACKUP_DIR}/fp_${TIMESTAMP%%_*}_*_weekly.dump*" >/dev/null; then
   WEEKLY_FILE="${BACKUP_DIR}/fp_${TIMESTAMP}_weekly.dump"
   cp "$BACKUP_FILE" "$WEEKLY_FILE"
   log "Weekly snapshot: $WEEKLY_FILE"
 fi
+
+# ── Encrypt ──────────────────────────────────────────────────────────────────
+encrypt_plaintext_dumps || die "encryption failed -- a plaintext dump is still on disk: ${BACKUP_DIR}"
 
 # ── Avatars ──────────────────────────────────────────────────────────────────
 # The dump holds avatar keys, not the image files. Written to a temp name first,
@@ -169,8 +207,8 @@ fi
 # ── Rotation: daily ─────────────────────────────────────────────────────────
 # Delete daily dumps (not tagged _weekly) older than DAILY_KEEP days.
 
-DAILY_PRUNED=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump" \
-  -not -name "*_weekly.dump" -mtime +"${DAILY_KEEP}" -print -delete | wc -l)
+DAILY_PRUNED=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump.gpg" \
+  -not -name "*_weekly.dump.gpg" -mtime +"${DAILY_KEEP}" -print -delete | wc -l)
 find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump.counts" -mtime +"${DAILY_KEEP}" -delete
 find "$BACKUP_DIR" -maxdepth 1 -name "avatars_*.tar.gz*" -mtime +"${DAILY_KEEP}" -delete
 log "Daily rotation: pruned ${DAILY_PRUNED} backups older than ${DAILY_KEEP}d"
@@ -179,7 +217,7 @@ log "Daily rotation: pruned ${DAILY_PRUNED} backups older than ${DAILY_KEEP}d"
 # Keep only the most recent WEEKLY_KEEP weekly snapshots.
 
 WEEKLY_PRUNED=0
-WEEKLY_FILES=$(ls -1t "$BACKUP_DIR"/fp_*_weekly.dump 2>/dev/null || true)
+WEEKLY_FILES=$(ls -1t "$BACKUP_DIR"/fp_*_weekly.dump.gpg 2>/dev/null || true)
 WEEKLY_INDEX=0
 for WF in $WEEKLY_FILES; do
   WEEKLY_INDEX=$((WEEKLY_INDEX + 1))
@@ -190,10 +228,18 @@ for WF in $WEEKLY_FILES; do
 done
 log "Weekly rotation: pruned ${WEEKLY_PRUNED} snapshots, keeping ${WEEKLY_KEEP}"
 
+# ── Rotation: age ceiling ───────────────────────────────────────────────────
+# The counts above stop pruning when runs stop or a week is skipped. This ceiling does not: no dump, sidecar
+# or avatar archive stays longer than MAX_AGE_DAYS (13 weeks). -mmin, not -mtime, which rounds down to whole days.
+
+AGED_OUT=$(find "$BACKUP_DIR" -maxdepth 1 \( -name "fp_*.dump.gpg" -o -name "fp_*.dump.counts" -o -name "avatars_*.tar.gz*" \) \
+  -mmin +"$((MAX_AGE_DAYS * 1440))" -print -delete | wc -l)
+log "Age ceiling: removed ${AGED_OUT} files older than ${MAX_AGE_DAYS}d"
+
 # ── Summary ──────────────────────────────────────────────────────────────────
 
-REMAINING_DAILY=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump" -not -name "*_weekly.dump" | wc -l)
-REMAINING_WEEKLY=$(ls -1 "$BACKUP_DIR"/fp_*_weekly.dump 2>/dev/null | wc -l || echo 0)
+REMAINING_DAILY=$(find "$BACKUP_DIR" -maxdepth 1 -name "fp_*.dump.gpg" -not -name "*_weekly.dump.gpg" | wc -l)
+REMAINING_WEEKLY=$(ls -1 "$BACKUP_DIR"/fp_*_weekly.dump.gpg 2>/dev/null | wc -l || echo 0)
 log "Retention summary: ${REMAINING_DAILY} daily + ${REMAINING_WEEKLY} weekly backups on disk"
 # Exit 76 = the dump is good but the avatar archive failed. deploy.py and
 # backup-festival-hourly.sh accept it; every other non-zero exit stays fatal.

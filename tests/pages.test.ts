@@ -115,6 +115,7 @@ describe('pages: route registration', () => {
     assert.ok(paths.includes('/reset-password'));
     assert.ok(paths.includes('/privacy'));
     assert.ok(paths.includes('/terms'));
+    assert.ok(paths.includes('/delete-account'));
     assert.ok(paths.includes('/security-whitepaper'));
     assert.ok(paths.includes('/{*splat}'));
   });
@@ -434,6 +435,15 @@ describe('pages: static routes', () => {
     const res = mockRes();
     handler(mockReq(), res);
     assert.ok(res._sentFile.includes('terms.html'));
+  });
+
+  it('/delete-account serves delete-account.html, with no sign-in check on the route', () => {
+    const router = createPageRoutes(buildDeps());
+    const route = router._routes.find((r: any) => r.path === '/delete-account');
+    assert.equal(route.handlers.length, 1, 'no auth middleware before the handler');
+    const res = mockRes();
+    getHandler(router, '/delete-account')(mockReq(), res);
+    assert.ok(res._sentFile.includes('delete-account.html'));
   });
 
   it('/security-whitepaper serves security-whitepaper.html', () => {

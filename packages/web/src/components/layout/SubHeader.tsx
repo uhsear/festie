@@ -10,6 +10,7 @@ import {
   toggleHiddenDay,
   toggleStageFilter,
   festivalGenres,
+  spotifyAttributionFor,
   visibleDayIndexes,
   festivalTimeLabel,
   formatDayChip,
@@ -29,6 +30,7 @@ import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
 import SaveStatusChip from '../features/SaveStatusChip';
+import SpotifyAttribution from '../features/SpotifyAttribution';
 import FestivalPicker from './FestivalPicker';
 import { isSchedulePath } from './ScheduleViewSwitcher';
 import ScheduleResultsRow from './ScheduleResultsRow';
@@ -149,6 +151,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   // null and the pill never renders.
   const genreChips = useMemo(() => festivalGenres(sets ?? []), [sets]);
   const showGenreFilter = !!showStageFilter && genreChips.length > 0;
+  // The genre chips come from Spotify, so the filter carries the attribution (Spotify Developer Policy II.4).
+  const genreAttribution = useMemo(() => spotifyAttributionFor((sets ?? []).flatMap((set) => set.artists ?? [])), [sets]);
   const showFold = showSearch || !!showStageFilter;
   const filterCount = Number(activeStages.length > 0) + Number(activeGenres.length > 0) + Number(onlyMine) + Number(searchQuery !== '');
   const currentStatus = currentFestival ? festivalStatus(currentFestival, days) : null;
@@ -495,6 +499,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                 );
               })}
             </div>
+            {genreAttribution && <SpotifyAttribution href={genreAttribution.href} />}
           </div>
         )}
 

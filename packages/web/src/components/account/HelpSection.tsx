@@ -37,6 +37,7 @@ export default function HelpSection() {
       />
       <LinkRow href="/terms" title={ACCOUNT_COPY.terms} external />
       <LinkRow href="/privacy.html" title={ACCOUNT_COPY.privacy} external />
+      <LinkRow href="/delete-account" title={ACCOUNT_COPY.deleteHelp} external />
       <LinkRow href={SUPPORT_URL_PAYPAL} title={ACCOUNT_COPY.supportFestie} hint={ACCOUNT_COPY.supportFestieHint} external />
       <LinkRow href="/third-party-notices.txt" title="Third-party notices" external />
       <InstallAppRow />

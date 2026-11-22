@@ -8,6 +8,7 @@
  * GET  /verify-email      - Verify email address via token link
  * POST /resend-verification - Resend email verification (authenticated)
  * POST /reset-password    - Reset password via emailed token
+ * GET|POST /unsubscribe   - One-click unsubscribe from marketing email (signed link, no sign-in)
  * (GET /reset-password lives in routes/pages.ts: it checks the link and hands it to the SPA.)
  *
  * AUDIT FIX (2026-04-14, DEFERRED FIX AGENT 1):
@@ -21,7 +22,7 @@
 import crypto from 'crypto';
 import type { Router } from 'express';
 import { createEmailWindowLimit, createPasswordResetRateLimit } from '../lib/rate-limiting';
-import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail } from '../lib/email';
+import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail, unsubscribeSecret, verifyUnsubscribeToken } from '../lib/email';
 import { escapeHtml } from '../lib/helpers/sanitize';
 import type { RouteDeps } from '../lib/types';
 
@@ -231,6 +232,68 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
     }
   });
 
+  // ── GET|POST /unsubscribe — one-click unsubscribe from re-engagement email ──
+  // The link in every marketing email carries a signed per-user token (lib/email.ts), so it works
+  // without a sign-in. Only POST changes anything (RFC 8058): mail scanners and link previewers open
+  // GET links on delivery. GET shows a confirmation page whose button POSTs; a mail client's one-click
+  // sends the same POST with `List-Unsubscribe=One-Click`.
+  // It turns off the three switches that gate re-engagement email: new lineups, crew re-forms and wrap-ups.
+  async function unsubscribeUserId(token: unknown): Promise<string | null> {
+    const userId = verifyUnsubscribeToken(token, unsubscribeSecret(config));
+    return userId && (await getUserById(userId)) ? userId : null;
+  }
+
+  const sendUnsubscribePage = (res: any, status: number, title: string, message: string, form?: UnsubscribeForm) => {
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store');
+    return res.status(status).send(_verifyEmailPage(status, title, message, OPEN_FESTIE, 'Unsubscribe', { retryHint: false, form }));
+  };
+  const INVALID_LINK = 'This unsubscribe link is not valid. You can turn these emails off in your Festie notification settings.';
+
+  router.get('/unsubscribe', rateLimit(120, 'email-unsubscribe'), async (req: any, res: any) => {
+    try {
+      const token = typeof req.query.token === 'string' ? req.query.token : '';
+      if (!(await unsubscribeUserId(token))) return sendUnsubscribePage(res, 400, 'Link not valid', INVALID_LINK);
+      return sendUnsubscribePage(
+        res,
+        200,
+        'Unsubscribe from Festie emails?',
+        'This turns off Festie lineup, crew re-form and wrap-up emails and alerts for you.',
+        { action: `/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}&from=page`, label: 'Unsubscribe' },
+      );
+    } catch (error: any) {
+      log.error('unsubscribe failed', { error: error.message });
+      return sendUnsubscribePage(res, 500, 'Something went wrong', 'Something went wrong. Please try again.');
+    }
+  });
+
+  router.post('/unsubscribe', rateLimit(120, 'email-unsubscribe'), async (req: any, res: any) => {
+    // The confirmation page marks its form action `from=page`; a mail client's one-click does not and gets JSON.
+    const fromPage = req.query.from === 'page';
+    try {
+      const userId = await unsubscribeUserId(req.query.token);
+      if (!userId) {
+        return fromPage ? sendUnsubscribePage(res, 400, 'Link not valid', INVALID_LINK) : sendError(res, 400, 'Invalid unsubscribe link', ErrorCodes.INVALID_INPUT);
+      }
+      const prefs = await stores.notificationPrefs.get(userId);
+      await stores.notificationPrefs.upsert({ ...prefs, lineupDrops: 0, crewReformed: 0, wrapReady: 0 });
+      log.info('email:unsubscribed', { userId });
+      return fromPage
+        ? sendUnsubscribePage(
+            res,
+            200,
+            'You are unsubscribed',
+            'We turned off Festie lineup, crew re-form and wrap-up emails and alerts for you. You can turn them back on in Account, under Notifications.',
+          )
+        : sendSuccess(res, { unsubscribed: true });
+    } catch (error: any) {
+      log.error('unsubscribe failed', { error: error.message });
+      return fromPage
+        ? sendUnsubscribePage(res, 500, 'Something went wrong', 'Something went wrong. Please try again.')
+        : sendError(res, 500, 'Something went wrong', ErrorCodes.INTERNAL_ERROR);
+    }
+  });
+
   // ── POST /resend-verification — resend email verification (authenticated) ──
   router.post('/resend-verification', userAuth, rateLimit(2, 'resend-verify'), async (req: any, res: any) => {
     try {
@@ -357,24 +420,33 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
 type VerifyAction = { label: string; href: string };
 const OPEN_FESTIE: VerifyAction = { label: 'Open Festie', href: '/' };
 const SIGN_IN: VerifyAction = { label: 'Sign in', href: '/login' };
+// A POST form in place of the link button. `action` is a same-origin path built by the route.
+type UnsubscribeForm = { action: string; label: string };
 
 // Colours: Stage from packages/shared/src/tokens/colors.ts, Daylight from
 // colorsDaylight.ts (bg.primary, text.primary, text.secondary, accent.aqua).
 // `action` carries fixed strings only; `title` too. `message` is escaped.
-function _verifyEmailPage(status: number, title: string, message: string, action: VerifyAction) {
+function _verifyEmailPage(
+  status: number,
+  title: string,
+  message: string,
+  action: VerifyAction,
+  pageTitle = 'Email Verification',
+  { retryHint: showRetryHint = true, form }: { retryHint?: boolean; form?: UnsubscribeForm } = {},
+) {
   const success = status < 400;
   const icon = success ? '&#10003;' : '&#10007;';
   const color = success ? '#22c55e' : '#ef4444';
-  // A 500 is not the link's fault, so it gets no "send another" advice.
+  // A 500 is not the link's fault, so it gets no "send another" advice; nor does a page that is not about a sign-in link.
   const retryHint =
-    !success && status !== 500
+    showRetryHint && !success && status !== 500
       ? '<p class="hint">Need a new link? Sign in to Festie and send another from your account.</p>'
       : '';
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="dark light">
-<title>Email Verification - Festie</title>
+<title>${pageTitle} - Festie</title>
 <style>
   :root { --bg: #0a0a0a; --text: #eaeaf2; --text-2: #9999bb; --accent: #00e8d0; --on-accent: #0a0a0a; --card: rgba(255,255,255,0.05); --border: rgba(255,255,255,0.1); }
   @media (prefers-color-scheme: light) {
@@ -386,6 +458,7 @@ function _verifyEmailPage(status: number, title: string, message: string, action
   h1 { font-size: 22px; margin: 0 0 12px; }
   p { color: var(--text-2); font-size: 15px; line-height: 1.6; margin: 0; }
   .btn { display: inline-block; margin-top: 24px; padding: 12px 24px; min-height: 44px; box-sizing: border-box; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
+  button.btn { border: 0; font: inherit; font-weight: 600; cursor: pointer; }
   .btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
   .hint { margin-top: 16px; font-size: 13px; }
 </style></head>
@@ -394,7 +467,11 @@ function _verifyEmailPage(status: number, title: string, message: string, action
   <div class="icon" aria-hidden="true">${icon}</div>
   <h1>${title}</h1>
   <p>${escapeHtml(message)}</p>
-  <a class="btn" href="${action.href}">${action.label}</a>
+  ${
+    form
+      ? `<form method="post" action="${escapeHtml(form.action)}"><button class="btn" type="submit">${form.label}</button></form>`
+      : `<a class="btn" href="${action.href}">${action.label}</a>`
+  }
   ${retryHint}
 </main>
 </body>

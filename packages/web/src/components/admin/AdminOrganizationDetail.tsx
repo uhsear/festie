@@ -257,7 +257,12 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
                 <li key={p.email} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
                   <div className="min-w-0">
                     <p className="break-all text-sm text-text-primary">{p.email}</p>
-                    <p className="text-xs text-text-muted">{p.role}. Joins when they sign in with this email and confirm it.</p>
+                    <p className="text-xs text-text-muted">
+                      {p.role}.{' '}
+                      {p.expired
+                        ? 'Expired: they can no longer join with this invitation. Add them again to send a new one.'
+                        : 'Joins when they sign in with this email and confirm it.'}
+                    </p>
                   </div>
                   <button
                     type="button"

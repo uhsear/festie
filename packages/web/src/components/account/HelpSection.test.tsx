@@ -16,6 +16,7 @@ describe('HelpSection', () => {
       'Contact support',
       'Terms of service',
       'Privacy policy',
+      'How to delete your account',
       'Support Festie',
       'Third-party notices',
       'Install Festie',
@@ -32,6 +33,11 @@ describe('HelpSection', () => {
     expect(decodeURIComponent(support.getAttribute('href')!)).toContain('Username: alice');
     expect(screen.getByRole('link', { name: 'Terms of service' })).toHaveAttribute('href', '/terms');
     expect(screen.getByRole('link', { name: 'Privacy policy' })).toHaveAttribute('href', '/privacy.html');
+  });
+
+  it('links the public delete-account page', () => {
+    render(<HelpSection />);
+    expect(screen.getByRole('link', { name: 'How to delete your account' })).toHaveAttribute('href', '/delete-account');
   });
 
   it('shows the dev version line under vitest', () => {

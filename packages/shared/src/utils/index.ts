@@ -35,6 +35,7 @@ export * from './grid';
 export * from './analyticsNormalize';
 export * from './scheduleFormat';
 export * from './links';
+export * from './spotifyAttribution';
 export * from './invite';
 export * from './crewWrites';
 export * from './dayOf';

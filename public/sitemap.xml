@@ -16,6 +16,11 @@
     <priority>0.3</priority>
   </url>
   <url>
+    <loc>https://festie.us/delete-account</loc>
+    <changefreq>monthly</changefreq>
+    <priority>0.3</priority>
+  </url>
+  <url>
     <loc>https://festie.us/security-whitepaper.html</loc>
     <changefreq>monthly</changefreq>
     <priority>0.4</priority>

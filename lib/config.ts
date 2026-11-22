@@ -411,6 +411,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
   EMAIL_POSTAL_ADDRESS: string;
+  EMAIL_UNSUBSCRIBE_SECRET: string;
   REFRESH_TOKEN_TTL: number;
   MAX_LOGIN_FAILURES: number;
   LOGIN_LOCKOUT_MS: number;
@@ -809,6 +810,8 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     EMAIL_FROM: overrides.EMAIL_FROM || process.env.EMAIL_FROM || 'Festie <no-reply@festie.us>',
     // CAN-SPAM postal address for the re-engagement footer. Kept out of the public repo; unset omits the line.
     EMAIL_POSTAL_ADDRESS: (overrides.EMAIL_POSTAL_ADDRESS ?? process.env.EMAIL_POSTAL_ADDRESS ?? '').trim(),
+    // Signs the unsubscribe links in marketing email. Separate from SESSION_SECRET so rotating that does not break links already sent; unset falls back to it.
+    EMAIL_UNSUBSCRIBE_SECRET: overrides.EMAIL_UNSUBSCRIBE_SECRET || process.env.EMAIL_UNSUBSCRIBE_SECRET || '',
 
     REFRESH_TOKEN_TTL: readInt(
       overrides.REFRESH_TOKEN_TTL || process.env.REFRESH_TOKEN_TTL,

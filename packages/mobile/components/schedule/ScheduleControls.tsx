@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import SpotifyAttribution from '../SpotifyAttribution';
 import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
 import {
   toggleStageFilter,
@@ -47,6 +48,7 @@ interface ScheduleControlsProps {
   dismissedPhase: FestivalPhase | null;
   filteredSets: FestivalSet[];
   filtersOpen: boolean;
+  genreAttribution: { href: string } | null;
   genreChips: string[];
   genreFilterActive: boolean;
   hPad: number;
@@ -91,6 +93,7 @@ export default function ScheduleControls({
   dismissedPhase,
   filteredSets,
   filtersOpen,
+  genreAttribution,
   genreChips,
   genreFilterActive,
   hPad,
@@ -373,6 +376,7 @@ export default function ScheduleControls({
                   </TouchableOpacity>
                 );
               })}
+              {genreAttribution ? <SpotifyAttribution href={genreAttribution.href} /> : null}
             </View>
           ) : null}
         </ScrollView>

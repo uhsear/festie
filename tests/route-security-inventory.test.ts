@@ -37,6 +37,8 @@ const PUBLIC_ROUTES: Record<string, string> = {
   'deep-links.ts GET /assetlinks.json': 'App link association file.',
   'email-auth.ts POST /forgot-password': SIGN_IN,
   'email-auth.ts GET /verify-email': TOKEN_LINK,
+  'email-auth.ts GET /unsubscribe': 'The signed per-user token in the email link is the credential; it only turns re-engagement email off.',
+  'email-auth.ts POST /unsubscribe': 'RFC 8058 one-click unsubscribe from the mail provider; the signed token in the URL is the credential.',
   'email-auth.ts POST /reset-password': TOKEN_LINK,
   'festival-announcements.ts GET /:id/announcements': 'Published announcements of a published festival.',
   'festival-discovery.ts GET /:festivalId/sets/:setId/also-picked': 'Anonymous set ids behind the CO_PICK_MIN_USERS floor.',
@@ -62,6 +64,7 @@ const PUBLIC_ROUTES: Record<string, string> = {
   'pages.ts GET /reset-password': TOKEN_LINK,
   'pages.ts GET /privacy': 'Static legal page.',
   'pages.ts GET /terms': 'Static legal page.',
+  'pages.ts GET /delete-account': 'Static page; deletion instructions that must be readable without signing in.',
   'pages.ts GET /security-whitepaper': 'Static page.',
   'pages.ts GET /{*splat}': 'SPA shell fallback; the API routes do the auth.',
   'ratings.ts GET /festival/:festivalId/all': 'Per-set counts and averages only; no user ids or notes.',
@@ -84,6 +87,8 @@ const HAND_VALIDATED_BODY: Record<string, string> = {
 };
 const HAND_VALIDATED_QUERY: Record<string, string> = {
   'email-auth.ts GET /verify-email': 'Reads one token string; the store lookup bounds it.',
+  'email-auth.ts GET /unsubscribe': 'Reads one token string; verifyUnsubscribeToken rejects anything but a valid signature.',
+  'email-auth.ts POST /unsubscribe': 'Reads one token string; verifyUnsubscribeToken rejects anything but a valid signature.',
   'notifications.ts GET /history': 'Clamps limit and offset by hand.',
   'pages.ts GET /reset-password': 'Reads one token string and only forwards it.',
   'pages.ts GET /f/:slug': 'Reads one ref string and only matches it against a fixed allow-list.',
@@ -259,6 +264,7 @@ test('artist routes stay admin only, validated and rate limited', () => {
       'artists.ts POST /spotify-candidates',
       'artists.ts POST /spotify-picks',
       'artists.ts POST /spotify-refresh',
+      'artists.ts POST /spotify-refresh-stale',
       'artists.ts POST /suggestions/:id/decision',
     ],
   );

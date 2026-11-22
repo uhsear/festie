@@ -6,6 +6,7 @@ import {
   listDuplicateArtists,
   listFestivalArtists,
   refreshSpotifyDetails,
+  refreshStaleSpotifyDetails,
   searchArtists,
   updateArtist,
 } from '@festie/shared/services';
@@ -155,6 +156,21 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
     }
   };
 
+  const refreshStale = async () => {
+    setFilling(true);
+    setFillNote(null);
+    try {
+      const done = await refreshStaleSpotifyDetails();
+      const more = done.rateLimited ? ' Spotify asked us to slow down: run it again later.' : '';
+      setFillNote(`Checked ${done.checked}: updated ${done.updated}, unchanged ${done.unchanged}, Spotify lookup failed for ${done.unavailable + done.failed}.${more}`);
+      await refresh();
+    } catch (err) {
+      setFillNote(err instanceof Error ? err.message : "Couldn't refresh Spotify data. Try again.");
+    } finally {
+      setFilling(false);
+    }
+  };
+
   const requestSave = (artist: AdminArtistRow) => {
     if (artist.alsoOn > 0 && !asked.has(artist.id)) setConfirmId(artist.id);
     else void save(artist);
@@ -196,6 +212,9 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         </Button>
         <Button size="sm" disabled={filling} onClick={() => void fillPhotos()}>
           {filling ? 'Filling…' : 'Fill photos from Spotify'}
+        </Button>
+        <Button size="sm" disabled={filling} onClick={() => void refreshStale()}>
+          Refresh old Spotify data
         </Button>
       </div>
 

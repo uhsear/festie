@@ -579,7 +579,7 @@ describe('CSP Building', () => {
 
     assert(!csp.includes("'sha256-xyz789'"), 'style hashes must be omitted so unsafe-inline is not nullified');
     assert(csp.includes("'unsafe-inline'"), 'unsafe-inline required for motion/react dynamic styles');
-    assert(csp.includes('https://fonts.googleapis.com'));
+    assert(!csp.includes('fonts.googleapis.com'), 'fonts are self-hosted');
   });
 
   test('buildContentSecurityPolicy with allowStyleAttributes option', () => {
@@ -912,8 +912,8 @@ describe('CSP Building - Advanced Cases', () => {
     const inlineHashes = { script: [] as string[], style: [] as string[] };
     const csp = buildContentSecurityPolicy(config, inlineHashes);
 
-    assert(csp.includes('https://fonts.gstatic.com'));
-    assert(csp.includes('https://fonts.googleapis.com'));
+    assert(csp.includes("font-src 'self';"), 'fonts come from our own origin only');
+    assert(!csp.includes('fonts.gstatic.com') && !csp.includes('fonts.googleapis.com'), 'no Google Fonts host');
   });
 
   test('buildContentSecurityPolicy handles special characters in origin', () => {

@@ -189,14 +189,17 @@ export default function ManageTeam({ organization }: Props) {
 
         {isOwner && data.pending.length > 0 && (
           <>
-            <h4 className="text-sm font-semibold text-text-primary">Waiting to join ({data.pending.length})</h4>
+            <h4 className="text-sm font-semibold text-text-primary">Waiting to join ({data.pending.filter((p) => !p.expired).length})</h4>
             <ul className="list-none space-y-2 p-0">
               {data.pending.map((p) => (
                 <li key={p.email} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-glass-border p-3">
                   <div className="min-w-0">
                     <p className="break-all text-sm text-text-primary">{p.email}</p>
                     <p className="text-xs text-text-muted">
-                      {p.role === 'viewer' ? 'Viewer' : p.role === 'editor' ? 'Editor' : 'Owner'}. Added by {p.addedBy}. Joins when they sign in with this email and confirm it.
+                      {p.role === 'viewer' ? 'Viewer' : p.role === 'editor' ? 'Editor' : 'Owner'}. Added by {p.addedBy}.{' '}
+                      {p.expired
+                        ? 'Expired: they can no longer join with this invitation. Add them again to send a new one.'
+                        : 'Joins when they sign in with this email and confirm it.'}
                     </p>
                   </div>
                   {canManage && p.role !== 'owner' && (

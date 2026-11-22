@@ -251,6 +251,20 @@ export function refreshSpotifyDetails(festivalId: string): Promise<SpotifyRefres
   return api.post<SpotifyRefreshResult>('/admin/artists/spotify-refresh', { festivalId }, { timeoutMs: 120_000 });
 }
 
+export interface SpotifyStaleRefreshResult {
+  checked: number;
+  updated: number;
+  unchanged: number;
+  unavailable: number;
+  failed: number;
+  rateLimited: boolean;
+}
+
+/** Re-reads the Spotify photo and genres of artists not read for 30 days, up to the server's cap for one call. Run again for the rest. */
+export function refreshStaleSpotifyDetails(): Promise<SpotifyStaleRefreshResult> {
+  return api.post<SpotifyStaleRefreshResult>('/admin/artists/spotify-refresh-stale', {}, { timeoutMs: 120_000 });
+}
+
 /** "1.2M followers". Null when Spotify gave no count. */
 export function followersText(followers: number | null): string | null {
   if (followers === null) return null;

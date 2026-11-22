@@ -91,7 +91,7 @@ describe('boot guard (public/boot-guard.js)', () => {
   it.each(['link', 'img'])('ignores a failed %s load such as a blocked font', (tag) => {
     const { window, document, ui } = boot();
     const el = document.createElement(tag);
-    el.setAttribute(tag === 'link' ? 'href' : 'src', 'https://fonts.googleapis.com/css2?family=Space+Grotesk');
+    el.setAttribute(tag === 'link' ? 'href' : 'src', 'https://fonts.example/font.css');
     document.body.append(el);
     el.dispatchEvent(new window.Event('error'));
     expect(ui.queryByRole('alert')).toBeNull();

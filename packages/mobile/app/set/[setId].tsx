@@ -40,6 +40,7 @@ import {
   formatSetWhen,
   reminderNoteSummary,
   primarySpotifyArtist,
+  spotifyAttributionFor,
   getSetStatus,
   artistDisplayName,
   artistSubtitle,
@@ -71,6 +72,7 @@ import { ensureStageTextContrast } from '../../lib/stageTextContrast';
 import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useNow';
 import Button from '../../components/Button';
+import SpotifyAttribution from '../../components/SpotifyAttribution';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import RatingButtons from '../../components/RatingButtons';
@@ -213,6 +215,8 @@ export default function SetDetailScreen() {
   // ---- Derived display data (only computed when the set exists). ----------
   const artistName = set ? artistDisplayName(set, b2bSeparator) : '';
   const artistPhoto = set?.artists?.find((a) => a.photo)?.photo;
+  // Spotify photos and genres need the Spotify logo and a link back (Spotify Developer Policy II.4).
+  const spotifyAttribution = set ? spotifyAttributionFor(set.artists) : null;
 
   // Share the public universal link to this set (mirrors web's /set/$setId
   // route). festie.us is the registered universal-link host (app.json) and the
@@ -551,6 +555,7 @@ export default function SetDetailScreen() {
             {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
           </View>
         </View>
+        {spotifyAttribution ? <SpotifyAttribution href={spotifyAttribution.href} /> : null}
         <Text style={styles.time}>{whenLine}</Text>
         {move ? (
           <Text style={styles.moved} accessibilityLabel={move.a11y}>

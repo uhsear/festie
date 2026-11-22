@@ -60,6 +60,9 @@ import {
 import { adminSuggestion, insertSuggestion, organizerVerdict, ownSuggestion } from './artist-suggestions';
 import { type ArtistViewer, viewerMask, visibleCondition, useIsVisible, useIsForeign } from './artist-visibility';
 
+/** An image on one of Spotify's image hosts, the same hosts the web attribution check accepts. */
+const SPOTIFY_IMAGE_URL = /^https:\/\/(?:[a-z0-9-]+\.)*(?:scdn\.co|spotifycdn\.com)\//i;
+
 export {
   rewriteCopies,
   ArtistError,
@@ -591,6 +594,88 @@ export function createArtistsStore(pool: Pool) {
       } catch (error) {
         throw artistConflict(error) ?? error;
       }
+    },
+
+    /**
+     * Replaces an artist's photo and genres with what Spotify says now, and stamps spotify_fetched_at,
+     * so Spotify content is never kept past the refresh limit (Spotify Developer Terms IV.3.1.1). Unlike
+     * refreshSpotifyDetails it overwrites: a Spotify photo that Spotify no longer returns is cleared, but a
+     * photo that did not come from Spotify is kept. The row is stamped
+     * even when nothing changed, or the artist would be read again on every run. Every festival's copy follows
+     * a change. Only an artist with a Spotify id qualifies.
+     */
+    async renewSpotifyDetails(
+      id: string,
+      input: { photo: string | null; genres: string[]; userId: string | null; ip?: string | null },
+    ): Promise<{ status: 'saved'; artist: ArtistRecord; synced: SyncedFestival[] } | { status: 'unchanged' }> {
+      try {
+        return await withTransactionRetry(pool, async (client) => {
+          const { festivalIds, assertUnchanged } = await lockFestivalsUsing(client, [id]);
+          const { rows } = await client.query(
+            `SELECT ${ARTIST_COLUMNS} FROM artists WHERE id = $1 AND merged_into IS NULL AND spotify_id IS NOT NULL FOR UPDATE`,
+            [id],
+          );
+          const before = rows[0] as ArtistRecord | undefined;
+          if (!before) throw new ArtistError(404, 'NOT_FOUND', 'Artist not found.');
+          // A photo from a lineup import or a merge is not Spotify's to replace or clear, so it stays.
+          const keepsPhoto = !!before.photo && !SPOTIFY_IMAGE_URL.test(before.photo);
+          const photo = keepsPhoto ? before.photo : input.photo?.startsWith('https://') ? input.photo.slice(0, 500) : null;
+          const genres = (input.genres ?? []).slice(0, 10);
+          if (photo === (before.photo ?? null) && JSON.stringify(genres) === JSON.stringify(before.genres ?? [])) {
+            await client.query('UPDATE artists SET spotify_fetched_at = now() WHERE id = $1', [id]);
+            return { status: 'unchanged' as const };
+          }
+          const { rows: updated } = await client.query(
+            `UPDATE artists SET photo = $2, genres = $3::jsonb, spotify_fetched_at = now(), updated_by = $4, updated_at = now()
+              WHERE id = $1 RETURNING ${ARTIST_COLUMNS}`,
+            [id, photo, JSON.stringify(genres), input.userId],
+          );
+          const artist = updated[0] as ArtistRecord;
+          await assertUnchanged();
+          const synced = await rewriteCopies(client, festivalIds, artist);
+          await insertArtistAudit(
+            client,
+            id,
+            { userId: input.userId, ip: input.ip },
+            {
+              name: artist.name,
+              fields: [
+                ...(before.photo !== artist.photo ? ['photo'] : []),
+                ...(JSON.stringify(before.genres ?? []) !== JSON.stringify(artist.genres ?? []) ? ['genres'] : []),
+              ],
+              via: 'spotify-stale-refresh',
+              festivalsUpdated: synced.length,
+              before: { photo: before.photo ?? null, genres: before.genres ?? [] },
+              after: { photo: artist.photo ?? null, genres: artist.genres ?? [] },
+            },
+          );
+          return { status: 'saved' as const, artist, synced };
+        });
+      } catch (error) {
+        throw artistConflict(error) ?? error;
+      }
+    },
+
+    /**
+     * Live artists with a Spotify id whose Spotify data was never read or was read more than `maxAgeDays`
+     * ago, oldest first (never read first). `excludeIds` lets a caller page through without meeting a row
+     * that Spotify would not answer for again.
+     */
+    async listStaleSpotify(
+      maxAgeDays: number,
+      limit: number,
+      excludeIds: string[] = [],
+    ): Promise<Array<{ id: string; spotifyId: string }>> {
+      const { rows } = await pool.query(
+        `SELECT id, spotify_id AS "spotifyId" FROM artists
+          WHERE spotify_id IS NOT NULL AND merged_into IS NULL
+            AND (spotify_fetched_at IS NULL OR spotify_fetched_at < now() - make_interval(days => $1::int))
+            AND NOT (id = ANY($3::text[]))
+          ORDER BY spotify_fetched_at NULLS FIRST, id
+          LIMIT $2`,
+        [maxAgeDays, limit, excludeIds],
+      );
+      return rows;
     },
 
     /**

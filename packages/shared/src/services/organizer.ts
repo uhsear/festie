@@ -121,6 +121,9 @@ export interface TeamInvitation {
   role: OrgRole;
   addedBy: string;
   createdAt: string;
+  /** An invitation lapses 90 days after it was added. An expired one cannot be claimed. */
+  expiresAt: string;
+  expired: boolean;
 }
 
 export interface ManageOrganizationDetail {

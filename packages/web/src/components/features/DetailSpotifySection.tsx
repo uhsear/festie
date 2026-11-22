@@ -60,7 +60,7 @@ export default function DetailSpotifySection({ status, preview, spotifyUrl, visi
             rel="noopener noreferrer"
             className={linkClass}
           >
-            Open in Spotify ↗
+            Open Spotify ↗
           </a>
         </div>
       )}
