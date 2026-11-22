@@ -2,11 +2,11 @@
   "compression": "gzip",
   "groups": {
     "assets/index-<hash>.js": {
-      "bytes": 47340,
+      "bytes": 48141,
       "files": 1
     },
     "assets/festie-shared-<hash>.js": {
-      "bytes": 132145,
+      "bytes": 139611,
       "files": 1
     },
     "assets/react-core-<hash>.js": {
@@ -18,11 +18,11 @@
       "files": 1
     },
     "assets/**/*.js": {
-      "bytes": 793686,
-      "files": 89
+      "bytes": 819952,
+      "files": 94
     },
     "assets/**/*.css": {
-      "bytes": 35559,
+      "bytes": 36025,
       "files": 2
     }
   }
