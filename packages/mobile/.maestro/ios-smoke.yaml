@@ -123,7 +123,7 @@ env:
     id: "segment-cards"
     selected: true
 - assertVisible:
-    text: "Day: Friday"
+    text: "Day: Saturday"
     selected: true
 - extendedWaitUntil:
     visible: "^Must See.*"
@@ -132,16 +132,16 @@ env:
     timeout: 6000
 - takeScreenshot: 06-cards
 - tapOn:
-    text: "Day: Saturday"
+    text: "Day: Sunday"
 - assertVisible:
-    text: "Day: Saturday"
+    text: "Day: Sunday"
     selected: true
 - extendedWaitUntil:
     visible: "^Must See.*"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 07-cards-saturday
+- takeScreenshot: 07-cards-sunday
 
 # Switch the Picks/Crew/Lineup NativeTabs by their label, exactly as the
 # passing Android smoke does. Each screenshot is taken BEFORE its assertion so a
