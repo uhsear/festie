@@ -182,6 +182,26 @@ describe('MapView', () => {
     expect(screen.queryByRole('button', { name: 'SOS' })).not.toBeInTheDocument();
   });
 
+  it('hides crew layers and SOS when the crew belongs to another festival', async () => {
+    h.user = { id: 'u1' };
+    h.crew = { id: 'c1', festivalId: 'other-fest' };
+    render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(h.crewMapProps.mock.calls[0]![0].meetingPoints).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: 'SOS' })).not.toBeInTheDocument();
+    expect(h.useQuery).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
+    expect(screen.getByRole('link', { name: 'crew' })).toBeInTheDocument();
+  });
+
+  it('keeps crew layers when the crew belongs to the selected festival', async () => {
+    h.user = { id: 'u1' };
+    h.crew = { id: 'c1', festivalId: 'f1' };
+    render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(h.crewMapProps.mock.calls[0]![0].meetingPoints).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'SOS' })).toBeInTheDocument();
+  });
+
   it('shows no SOS for a guest', async () => {
     render(<MapView />);
     await screen.findByTestId('crew-map');

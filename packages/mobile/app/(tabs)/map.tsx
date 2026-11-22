@@ -21,6 +21,7 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import ScreenHeader from '../../components/ScreenHeader';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
+import { festivalForCrew } from '../../lib/crewFestival';
 
 /** Sweep stale peers off the map on this cadence while the screen is mounted. */
 const SWEEP_INTERVAL_MS = 15_000;
@@ -136,7 +137,8 @@ export default function MapScreen() {
     });
   }, []);
 
-  const crewLayers = Boolean(user && activeCrew);
+  // A crew belongs to one festival, but the selected festival follows the Lineup tab.
+  const crewLayers = Boolean(user && activeCrew && festivalForCrew(activeCrew, currentFestival));
   const hasCompassPoint = crewLayers && (meetingPoints ?? []).some((p) => p && p.active !== false && hasCoords(p));
   const now = useNow();
   const hasLivePeer = peers.some((p) => p.userId !== user?.id && !isPeerStale(p.serverAt, now, LIVE_LOCATION.STALE_MS));
@@ -180,7 +182,7 @@ export default function MapScreen() {
 
   return (
     <View testID="map-screen" style={styles.screen}>
-      <ScreenHeader title="Map" subtitle={activeCrew?.name} icon="map-outline" right={compassButton} />
+      <ScreenHeader title="Map" subtitle={crewLayers ? activeCrew?.name : undefined} icon="map-outline" right={compassButton} />
       <View style={styles.chipBar}>
         <FreshnessChip surface="crew" />
         <OfflineStatusChip />

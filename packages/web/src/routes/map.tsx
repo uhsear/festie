@@ -8,7 +8,7 @@ import { useActiveCrew } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { Map as MapIcon } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
-import { festivalLoadState } from '@festie/shared/utils';
+import { festivalForCrew, festivalLoadState } from '@festie/shared/utils';
 import EmptyState from '../components/ui/EmptyState';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -42,7 +42,9 @@ function MapViewInner() {
   const user = useAuthStore((s) => s.user);
   // Also selects the first crew, so a hard load of /map joins the crew room without a visit to /crew.
   const { crew: activeCrew } = useActiveCrew();
-  const crewId = user && activeCrew ? activeCrew.id : '';
+  // A crew belongs to one festival, but the selected festival follows the Lineup tab.
+  const mapCrew = activeCrew && festivalForCrew(activeCrew, currentFestival) ? activeCrew : null;
+  const crewId = user && mapCrew ? mapCrew.id : '';
   const hasCrew = crewId !== '';
 
   const peersMap = useLiveLocationStore((s) => s.peers);
