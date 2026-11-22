@@ -264,9 +264,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
                   >
                     {option.label}
                     {option.id === durationChoices?.defaultId && (
-                      <span aria-hidden="true" className="ml-2 text-xs font-normal opacity-80">
-                        Recommended
-                      </span>
+                      <span className="ml-2 text-xs font-normal opacity-80">{LIVE_SHARE_COPY.recommended}</span>
                     )}
                   </Button>
                 ))}

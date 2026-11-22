@@ -145,7 +145,7 @@ describe('LiveLocationControls — share toggle', () => {
     const chooser = screen.getByTestId('live-share-chooser');
     expect(within(chooser).getByText(LIVE_SHARE_COPY.chooserTitle)).toBeInTheDocument();
     for (const label of ['1 hour', '2 hours', '4 hours']) {
-      expect(within(chooser).getByRole('button', { name: label })).toBeInTheDocument();
+      expect(within(chooser).getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
     expect(within(chooser).getByRole('checkbox', { name: /show my battery level/i })).not.toBeChecked();
     await user.click(within(chooser).getByRole('button', { name: LIVE_SHARE_COPY.cancel }));
@@ -174,7 +174,7 @@ describe('LiveLocationControls — share toggle', () => {
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
     await user.click(screen.getByRole('switch'));
     await user.click(screen.getByRole('checkbox', { name: /show my battery level/i }));
-    await user.click(screen.getByRole('button', { name: '2 hours' }));
+    await user.click(screen.getByRole('button', { name: /^2 hours/ }));
     expect(useLiveLocationStore.getState().shareIntent?.shareBattery).toBe(true);
   });
 

@@ -318,6 +318,7 @@ export const LIVE_SHARE_COPY = {
   stoppedNoticeTitle: 'Sharing stopped',
   ruleWeb: 'Only this crew sees it. It stops at the time you pick, or when you close this tab.',
   chooserTitle: 'Share your location for…',
+  recommended: 'Recommended',
   restOfToday: (clock: string) => `Rest of today (until ${clock})`,
   battery: 'Show my battery level',
   batteryHint: 'Helps your crew see why your dot went quiet. At 10% or less, your crew feed says so once.',
