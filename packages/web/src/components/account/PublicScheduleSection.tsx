@@ -121,7 +121,7 @@ export default function PublicScheduleSection() {
               href={url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded-md border border-border px-3 min-h-8 text-sm text-text-primary"
+              className="inline-flex items-center justify-center rounded-md border border-border px-3 min-h-11 text-sm text-text-primary"
             >
               Open
             </a>

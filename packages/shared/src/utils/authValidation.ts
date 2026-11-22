@@ -10,6 +10,12 @@ export function usernameError(value: string): string | null {
   return v.length >= 2 && v.length <= 30 && USERNAME_RE.test(v) ? null : AUTH_COPY.usernameInvalid;
 }
 
+// Mirrors noMarkup/noMarkupMsg in lib/schemas/account.ts (the server rule for names).
+/** Client-side copy of the server display-name markup rule. Returns an error message or null. */
+export function displayNameError(value: string): string | null {
+  return /[<>]/.test(value) ? 'Names cannot contain < or >' : null;
+}
+
 /** UX-only new-password check; the server still applies the full policy. */
 export function validateNewPassword(
   password: string,

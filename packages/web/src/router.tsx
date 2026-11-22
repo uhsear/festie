@@ -214,9 +214,9 @@ const loginRoute = new Route({
   path: '/login',
   component: LoginPage,
   validateSearch: (s: Record<string, unknown>): { next?: string; reset?: true } => {
-    const next = safeReturnPath(s.next);
+    // `next` is always returned: the router spreads the raw search under the validated one, so omitting it would leave the unchecked value in place.
     return {
-      ...(next ? { next } : {}),
+      next: safeReturnPath(s.next) ?? undefined,
       ...(s.reset === 1 || s.reset === '1' || s.reset === true ? { reset: true as const } : {}),
     };
   },
@@ -228,8 +228,7 @@ const registerRoute = new Route({
   path: '/register',
   component: RegisterPage,
   validateSearch: (s: Record<string, unknown>): { next?: string } => {
-    const next = safeReturnPath(s.next);
-    return next ? { next } : {};
+    return { next: safeReturnPath(s.next) ?? undefined };
   },
   beforeLoad: ({ search }) => redirectIfSignedIn(search.next),
 });
