@@ -293,11 +293,16 @@ describe('NotificationSection preferences', () => {
     expect(screen.getByRole('switch', { name: 'Set reminders' })).toBeInTheDocument();
   });
 
-  it('renders without crashing in an error state', () => {
+  it('shows the load error with a retry, not default switches, when the first load failed', async () => {
+    const user = userEvent.setup();
     resetStore({ error: 'Failed to load notification settings' });
     render(<NotificationSection />);
     expect(screen.getByText('Notification types')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Crew picks' })).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Crew picks' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to load notification settings');
+    mockLoadPrefs.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockLoadPrefs).toHaveBeenCalledTimes(1);
   });
 
   it('does not throw if updatePrefs rejects (failure is swallowed)', async () => {
