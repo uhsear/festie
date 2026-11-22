@@ -51,6 +51,7 @@ import FestivalChoiceSheet from '../../components/FestivalChoiceSheet';
 import HandOverSheet from '../../components/HandOverSheet';
 import CrewTabBar, { type CrewTabKey } from '../../components/CrewTabBar';
 import { festivalForCrew } from '../../lib/crewFestival';
+import { nextJoinSelect } from '../../lib/crewJoinSelect';
 import InviteQRSheet from '../../components/InviteQRSheet';
 import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
@@ -256,6 +257,15 @@ export default function CrewScreen() {
     showNotice(crewCopy.joined(activeCrew.name));
     router.setParams({ joined: undefined });
   }, [joinedParam, activeCrew, showNotice, router]);
+
+  // Joining while in another crew: if that crew is still the active one, switch to the joined crew
+  // so the notice above can show and the screen is not left on the wrong crew.
+  const joinSelected = useRef<string | null>(null);
+  useEffect(() => {
+    const next = nextJoinSelect({ joinedParam, crewLoading, activeCrewId: activeCrew?.id, crewIds: crews.map((c) => c.id), selected: joinSelected.current });
+    joinSelected.current = next.selected;
+    if (next.select) selectCrew(next.select).catch((err) => Sentry.captureException(err));
+  }, [joinedParam, crewLoading, activeCrew?.id, crews, selectCrew]);
 
   // /(tabs)/crew?sheet=join opens the Crews sheet in Join mode, once per link:
   // the param is cleared so a later activeCrew change cannot reopen it.
