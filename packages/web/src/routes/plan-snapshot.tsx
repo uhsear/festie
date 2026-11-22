@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { api } from '@festie/shared/services';
+import { api, isApiClientError } from '@festie/shared/services';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { COPY, PRIORITY_LABELS, planBLine, signInTo } from '@festie/shared/constants';
 import type { Festival, FestivalDay, FestivalSet, Priority, Stage } from '@festie/shared/types';
@@ -23,7 +23,7 @@ interface FestivalDetailResponse extends Festival {
   days: (FestivalDay & { label?: string; sets: FestivalSet[] })[];
 }
 
-type LoadState = 'loading' | 'ready' | 'offline';
+type LoadState = 'loading' | 'ready' | 'offline' | 'gone';
 
 interface Row {
   key: string;
@@ -199,8 +199,8 @@ export default function PlanSnapshotPage() {
         setFestival(data);
         setState('ready');
       })
-      .catch(() => {
-        if (!cancelled) setState('offline');
+      .catch((err: unknown) => {
+        if (!cancelled) setState(isApiClientError(err) && err.status === 404 ? 'gone' : 'offline');
       });
     return () => {
       cancelled = true;
@@ -240,7 +240,8 @@ export default function PlanSnapshotPage() {
     );
   }
 
-  const count = snapshot.picks.length;
+  // Once the lineup loads, count only the sets still in it, so the header matches the rows and the footer line.
+  const count = snapshot.picks.length - (state === 'ready' ? missing : 0);
   const mp = snapshot.meetingPoint;
   const planB = 'planB' in snapshot ? snapshot.planB : undefined;
 
@@ -274,6 +275,10 @@ export default function PlanSnapshotPage() {
         </p>
       )}
 
+      {state === 'gone' && (
+        <p className="text-[length:var(--font-size-14)] text-text-secondary">This festival is no longer available.</p>
+      )}
+
       {groups.map((g) => (
         <section key={g.label} aria-label={g.label}>
           <h2 className="type-subheading text-text-primary">{g.label}</h2>
@@ -298,7 +303,7 @@ export default function PlanSnapshotPage() {
         </p>
       )}
 
-      <ImportPlan snapshot={snapshot} />
+      {state !== 'gone' && <ImportPlan snapshot={snapshot} />}
 
       <div className="flex flex-col gap-2 pt-2">
         <Link

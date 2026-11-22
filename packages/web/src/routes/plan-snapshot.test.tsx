@@ -25,6 +25,7 @@ vi.mock('@tanstack/react-router', () => ({
 
 vi.mock('@festie/shared/services', () => ({
   api: { get: (...args: unknown[]) => apiGet(...args) },
+  isApiClientError: (err: unknown) => !!err && typeof err === 'object' && 'status' in err,
 }));
 
 vi.mock('@festie/shared/stores', () => ({
@@ -144,6 +145,16 @@ describe('PlanSnapshotPage', () => {
     );
     render(<PlanSnapshotPage />);
     await waitFor(() => expect(screen.getByText('2 picks are no longer in the lineup.')).toBeInTheDocument());
+    expect(screen.getByText(/1 set$/)).toBeInTheDocument();
+  });
+
+  it('says the festival is gone on a 404, not that the viewer is offline', async () => {
+    apiGet.mockRejectedValue({ status: 404 });
+    setHash(snapshotHash([{ setId: 'set-1', priority: 'want' }]));
+    render(<PlanSnapshotPage />);
+    expect(await screen.findByText('This festival is no longer available.')).toBeInTheDocument();
+    expect(screen.queryByText('Connect to the internet to see set names and times.')).toBeNull();
+    expect(screen.queryByRole('region', { name: 'Add to my plan' })).toBeNull();
   });
 
   it('renders the Plan B line from a v2 code', async () => {
