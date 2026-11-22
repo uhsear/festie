@@ -14,6 +14,9 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }));
 
+const mockToast = vi.fn();
+vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast: mockToast }) }));
+
 const completeProviderSignup = vi.fn();
 vi.mock('@festie/shared', () => ({ useAuth: () => ({ completeProviderSignup, isLoading: false }) }));
 
@@ -82,6 +85,17 @@ describe('FinishSignupPage', () => {
       }),
     );
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith({ to: '/cards' }));
+    expect(mockToast).toHaveBeenCalledWith('Account created', 'success', undefined);
+  });
+
+  it('toasts the verification notice with the email when one was sent', async () => {
+    completeProviderSignup.mockResolvedValue({ emailVerificationSent: true });
+    const user = userEvent.setup();
+    render(<FinishSignupPage />);
+    await fill(user, '1995-01-01');
+    await waitFor(() => expect(mockToast).toHaveBeenCalled());
+    expect(mockToast.mock.calls[0][0]).toContain('ada@example.com');
+    expect(mockToast.mock.calls[0][1]).toBe('success');
   });
 
   it('sends the ?ref= source stored on this visit', async () => {
