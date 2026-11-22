@@ -392,10 +392,15 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
   // Initialize on mount
   useEffect(() => {
     pruneStaleEntries().catch(console.error);
-    getPendingCount().then(setPendingCount).catch(console.error);
+    getPendingCount()
+      .then((n) => {
+        setPendingCount(n);
+        setPendingSync(n);
+      })
+      .catch(console.error);
     // Failed writes are persisted, so the "couldn't sync" sheet survives a reload.
     hydrateFailedSync().catch(console.error);
-  }, []);
+  }, [setPendingSync]);
 
   // Update pending count whenever it changes
   const updatePendingCount = useCallback(async () => {

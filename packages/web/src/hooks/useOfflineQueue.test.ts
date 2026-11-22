@@ -8,7 +8,7 @@
  * rather than retried forever.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 
 // A small stateful uiStore: the queue (and the shared failed-sync helpers it
 // calls) read and write failedSync / offlineMode through getState().
@@ -17,7 +17,7 @@ const ui = vi.hoisted(() => {
   const state = {
     failedSync: [] as FailedItem[],
     offlineMode: false,
-    setPendingSync: () => {},
+    setPendingSync: vi.fn(),
     setOfflineMode: (offline: boolean) => {
       state.offlineMode = offline;
     },
@@ -157,6 +157,17 @@ describe('useOfflineQueue — localStorage fallback', () => {
     expect(queue).toHaveLength(1);
     expect(queue[0].clientId).toBe('test-client-1');
     expect(queue[0].status).toBe('pending');
+  });
+
+  it('publishes the persisted pending count to the ui store on mount', async () => {
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify([
+        { clientId: 'seeded-1', type: 'api', url: '/api/profiles/p1', method: 'PUT', status: 'pending', retries: 0, createdAt: Date.now() },
+      ]),
+    );
+    renderHook(() => useOfflineQueue());
+    await waitFor(() => expect(ui.setPendingSync).toHaveBeenCalledWith(1));
   });
 
   it('removes a successfully replayed entry from localStorage (no re-send)', async () => {
