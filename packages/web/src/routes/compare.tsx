@@ -71,6 +71,7 @@ function CompareViewInner() {
       <div className="max-w-2xl mx-auto">
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          headingLevel={1}
           title="Couldn't load your crew"
           description="Check your connection, then try again."
           cta={{ label: 'Try again', onClick: retryCrew }}
@@ -84,6 +85,7 @@ function CompareViewInner() {
       <div className="max-w-2xl mx-auto">
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          headingLevel={1}
           title="Joining when you're back online"
           description="Your join is saved on this device. The crew opens once you reconnect."
         />
@@ -96,6 +98,7 @@ function CompareViewInner() {
       <div className="max-w-2xl mx-auto">
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          headingLevel={1}
           title="No crew yet"
           description="Make a crew or join one with a code to plan together."
           cta={{ label: 'Create or join a crew', onClick: () => navigate({ to: '/crew' }).catch(() => {}) }}
@@ -117,6 +120,7 @@ function CompareViewInner() {
       <div className="max-w-2xl mx-auto">
         <EmptyState
           icon={<Users className="w-12 h-12" aria-hidden="true" />}
+          headingLevel={1}
           title={`Couldn't open ${festivalName}`}
           description={`${crew.name} is planning ${festivalName}. Connect to the internet, then try again.`}
           cta={{ label: 'Try again', onClick: retryFestival }}
