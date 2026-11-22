@@ -49,19 +49,22 @@ env:
 - takeScreenshot: 03-schedule-guest
 
 # Public/auth screens.
-- openLink: "festie://register"
-- takeScreenshot: 03a-register-after-openlink
-- extendedWaitUntil:
-    visible:
-      text: "Create your account|^Open$"
-    timeout: 30000
-- takeScreenshot: 03b-register-wait-matched
-- tapOn:
-    text: "^Open$"
-    optional: true
-- extendedWaitUntil:
-    visible: "Create your account"
-    timeout: 30000
+# The first link after launch is sometimes dropped on a loaded runner (the app stays on the
+# lineup), so retry the whole open + confirm sequence.
+- retry:
+    maxRetries: 3
+    commands:
+      - openLink: "festie://register"
+      - extendedWaitUntil:
+          visible:
+            text: "Create your account|^Open$"
+          timeout: 10000
+      - tapOn:
+          text: "^Open$"
+          optional: true
+      - extendedWaitUntil:
+          visible: "Create your account"
+          timeout: 15000
 - takeScreenshot: 04-register
 - openLink: "festie://forgot-password"
 - extendedWaitUntil:
