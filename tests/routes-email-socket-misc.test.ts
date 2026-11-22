@@ -1503,6 +1503,7 @@ describe('routes/expenses', () => {
 describe('routes/ratings', () => {
   function buildRatingDeps(overrides: any = {}) {
     return baseDeps({
+      getFestivalById: mock.fn(async () => ({ id: 'fest-1', publishedAt: '2026-01-01T00:00:00.000Z' })),
       stores: {
         pool: {
           query: mock.fn(async () => ({ rows: [{ id: 'set-a', festival_id: 'fest-1' }] })),
