@@ -67,6 +67,31 @@ describe('push-sw.js', () => {
     expect(ctx.showNotification.mock.calls[0]![0]).toBe('Festie');
   });
 
+  it('renotifies when the tag is set so a second reminder is not silent', async () => {
+    const waits: Promise<unknown>[] = [];
+    ctx.listeners.push!({
+      data: { json: () => ({ title: 'A', tag: 'reminder-f1' }) },
+      waitUntil: (p: Promise<unknown>) => waits.push(p),
+    });
+    await Promise.all(waits);
+    expect(ctx.showNotification.mock.calls[0]![1]).toMatchObject({ renotify: true });
+  });
+
+  it('shows the generic notification for a JSON null payload', async () => {
+    const waits: Promise<unknown>[] = [];
+    ctx.listeners.push!({ data: { json: () => null }, waitUntil: (p: Promise<unknown>) => waits.push(p) });
+    await Promise.all(waits);
+    expect(ctx.showNotification.mock.calls[0]![0]).toBe('Festie');
+  });
+
+  it('opens the deep link when an open window cannot navigate', async () => {
+    const focus = vi.fn().mockResolvedValue(undefined);
+    const navigate = vi.fn().mockRejectedValue(new Error('uncontrolled'));
+    const c = setup([{ focus, navigate }]);
+    await click(c.listeners, 'https://festie.us/set/s1');
+    expect(c.openWindow).toHaveBeenCalledWith('https://festie.us/set/s1');
+  });
+
   it('opens / for a cross-origin url', async () => {
     const close = await click(ctx.listeners, 'https://evil.example/x');
     expect(close).toHaveBeenCalled();

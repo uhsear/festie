@@ -2,7 +2,8 @@
 self.addEventListener('push', (event) => {
   let payload = { title: 'Festie' };
   try {
-    payload = event.data.json();
+    // A JSON null payload would throw on destructuring below, so keep the generic one.
+    payload = event.data.json() || payload;
   } catch {
     // No payload or not JSON: show the generic notification.
   }
@@ -11,6 +12,8 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(title || 'Festie', {
       body,
       tag,
+      // A reminder shares its tag with the one before it; without renotify the replacement would be silent.
+      renotify: !!tag,
       data: { url },
       icon: '/icons/icon-192.png',
     }),
@@ -38,7 +41,13 @@ self.addEventListener('notificationclick', (event) => {
         return;
       }
       await existing.focus();
-      if (typeof existing.navigate === 'function') await existing.navigate(target.href);
+      if (typeof existing.navigate !== 'function') return;
+      try {
+        await existing.navigate(target.href);
+      } catch {
+        // An uncontrolled window cannot be navigated; open the deep link instead.
+        await self.clients.openWindow(target.href);
+      }
     })(),
   );
 });

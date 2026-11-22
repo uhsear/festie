@@ -971,6 +971,28 @@ describe('notifications/send: web push, channels and recipients', () => {
     assert.equal(webPush.send.mock.calls[0]!.arguments[1].url, 'https://festie.us/');
   });
 
+  it('a transient Web Push failure is queued for retry, a 4xx or stale one is not', async () => {
+    for (const [result, queued] of [
+      [{ sent: false, stale: false, error: 'HTTP 503' }, true],
+      [{ sent: false, stale: false, error: 'HTTP 429' }, true],
+      [{ sent: false, stale: false, error: 'The operation was aborted due to timeout' }, true],
+      [{ sent: false, stale: false, error: 'HTTP 400' }, false],
+      [{ sent: false, stale: true }, false],
+    ] as Array<[any, boolean]>) {
+      const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
+      const enqueue = mock.fn((_entry: any) => {});
+      const webPush = makeWebPush(result);
+      const svc = createSendService({ stores, config, log: fakeLog, messaging: makeMessaging(), retryQueue: { enqueue }, webPush });
+      await svc.send(reminder);
+      assert.equal(enqueue.mock.calls.length, queued ? 1 : 0, JSON.stringify(result));
+      if (queued) {
+        // The queued send runs the push again and throws until it succeeds.
+        await assert.rejects(enqueue.mock.calls[0]!.arguments[0].sendFn());
+        assert.equal(webPush.send.mock.calls.length, 2);
+      }
+    }
+  });
+
   it('a stale Web Push result unregisters the token', async () => {
     const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
     const { svc } = build(stores, { webPush: makeWebPush({ sent: false, stale: true }) });
