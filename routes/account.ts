@@ -675,7 +675,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // The security-critical difference from the removed POST /api/v1/auth/update-email
   // is that the submitted address is NEVER written to `users` here. It lives
   // only in the hashed, single-use, expiring `email_verification_tokens` row
-  // until GET /api/v1/auth/verify-email promotes it via `updateUserEmail`, so a
+  // until POST /api/v1/auth/verify-email promotes it via `updateUserEmail`, so a
   // stolen session cannot move the login identity on request alone. The address
   // currently on file is notified that a change was requested, by a sender that
   // opts out of the dedup guard so the alert cannot be suppressed. When that

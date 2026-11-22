@@ -896,23 +896,27 @@ export default function PicksImageScreen() {
             ) : null}
             {heading('Other formats')}
             <SegmentedControl options={SHAPE_OPTIONS} value={shape} onChange={setShape} accessibilityLabel="Format" />
-            <TouchableOpacity
-              style={[styles.secondaryButton, (printing || !festival || !profile) && styles.disabled]}
-              onPress={() => void handlePrintable()}
-              disabled={printing || !festival || !profile}
-              activeOpacity={0.8}
-              accessibilityRole="button"
-              accessibilityState={{ disabled: printing || !festival || !profile }}
-              accessibilityLabel={COPY.picks.printable}
-            >
-              {printing ? <ActivityIndicator size="small" color={t.colors.accent.aqua} /> : null}
-              <Text style={styles.secondaryButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-                {COPY.picks.printable}
-              </Text>
-            </TouchableOpacity>
-            <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              A web page with your picks and your crew's schedules, ready to print.
-            </Text>
+            {profile ? (
+              <>
+                <TouchableOpacity
+                  style={[styles.secondaryButton, (printing || !festival) && styles.disabled]}
+                  onPress={() => void handlePrintable()}
+                  disabled={printing || !festival}
+                  activeOpacity={0.8}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: printing || !festival }}
+                  accessibilityLabel={COPY.picks.printable}
+                >
+                  {printing ? <ActivityIndicator size="small" color={t.colors.accent.aqua} /> : null}
+                  <Text style={styles.secondaryButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+                    {COPY.picks.printable}
+                  </Text>
+                </TouchableOpacity>
+                <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  A web page with your picks and your crew's schedules, ready to print.
+                </Text>
+              </>
+            ) : null}
           </>
         ) : null}
 

@@ -49,7 +49,9 @@ function VerifyEmailPageInner() {
   if (!token || outcome?.kind === 'dead') {
     card = (
       <div className="bg-bg-card border border-border rounded-lg p-6 text-center space-y-4" role="status">
-        <h2 className="text-lg font-semibold text-text-primary">{AUTH_COPY.verifyEmailExpiredTitle}</h2>
+        <h2 className="text-lg font-semibold text-text-primary">
+          {outcome?.kind === 'dead' && outcome.message ? AUTH_COPY.verifyEmailTakenTitle : AUTH_COPY.verifyEmailExpiredTitle}
+        </h2>
         <p className="text-text-muted text-sm">{(outcome?.kind === 'dead' && outcome.message) || AUTH_COPY.verifyEmailExpiredBody}</p>
         <Link to="/login" className={linkClass}>
           {AUTH_COPY.backToSignIn}

@@ -45,5 +45,6 @@ export const AUTH_COPY = {
   verifyEmailMovedBody: 'Your email address is confirmed. Every device has been signed out for security. Sign in again.',
   verifyEmailExpiredTitle: 'This confirmation link has expired',
   verifyEmailExpiredBody: 'Confirmation links work once and expire. Sign in and send a new one from your account.',
+  verifyEmailTakenTitle: 'Address already in use',
   openFestie: 'Open Festie',
 } as const;

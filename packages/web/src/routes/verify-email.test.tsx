@@ -55,6 +55,16 @@ describe('VerifyEmailPage', () => {
     expect(await screen.findByText('This confirmation link has expired')).toBeTruthy();
   });
 
+  it('says the address is taken, not that the link expired, on a 409', async () => {
+    const { ApiClientError } = await import('@festie/shared/services/api');
+    mockVerifyEmail.mockRejectedValue(new ApiClientError('That address is now in use by another account.', 409, 'CONFLICT'));
+    render(<VerifyEmailPage />);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Confirm my email' }));
+    expect(await screen.findByText('Address already in use')).toBeTruthy();
+    expect(screen.getByText('That address is now in use by another account.')).toBeTruthy();
+    expect(screen.queryByText('This confirmation link has expired')).toBeNull();
+  });
+
   it('shows the expired view when the link has no token', () => {
     mockSearch = {};
     render(<VerifyEmailPage />);
