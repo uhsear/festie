@@ -1,31 +1,14 @@
-import React, { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { REAUTH_COPY, type ReauthBody } from '@festie/shared/services/admin';
 import { PROVIDER_COPY } from '@festie/shared/constants';
 import type { ProviderName } from '@festie/shared/types';
 import PromptDialog from '../components/ui/PromptDialog';
 import Dialog from '../components/ui/Dialog';
 import ProviderButtons from '../components/auth/ProviderButtons';
+import { trackReauthPrompt } from './reauthPromptOpen';
 
 type Answer = string | ReauthBody | null;
 
-// How many password prompts are open. ConfirmDialog reads it so it can step aside instead of stacking.
-let openPrompts = 0;
-const listeners = new Set<() => void>();
-const trackPrompt = (delta: number) => {
-  openPrompts += delta;
-  listeners.forEach((l) => l());
-};
-
-/** True while any password prompt from `useReauthPrompt` is open. */
-export function useReauthPromptOpen(): boolean {
-  return useSyncExternalStore(
-    (l) => {
-      listeners.add(l);
-      return () => listeners.delete(l);
-    },
-    () => openPrompts > 0,
-  );
-}
 
 interface ReauthPromptOptions {
   /** False for a provider-only account: the dialog asks for a Google or Apple sign-in instead. */
@@ -46,8 +29,8 @@ export function useReauthPrompt({ hasPassword = true, linked }: ReauthPromptOpti
 
   useEffect(() => {
     if (!open) return;
-    trackPrompt(1);
-    return () => trackPrompt(-1);
+    trackReauthPrompt(1);
+    return () => trackReauthPrompt(-1);
   }, [open]);
 
   const settle = useCallback((value: Answer) => {

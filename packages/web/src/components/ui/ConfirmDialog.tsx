@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import Button from './Button';
 import Dialog from './Dialog';
-import { useReauthPromptOpen } from '../../hooks/useReauthPrompt';
+import { useReauthPromptOpen } from '../../hooks/reauthPromptOpen';
 
 interface Props {
   open: boolean;
