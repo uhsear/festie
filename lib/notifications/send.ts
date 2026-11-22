@@ -1277,7 +1277,7 @@ export function createSendService({
     const webNotified = new Set<string>();
     let webSent = 0;
     for (const { userId, device } of webSends) {
-      const r = await sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData });
+      const r = await sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData, retryQueue });
       if (r.sent) {
         webSent += 1;
         webNotified.add(userId);

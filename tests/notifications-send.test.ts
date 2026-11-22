@@ -920,8 +920,8 @@ describe('notifications/send: web push, channels and recipients', () => {
       sendEach: mock.fn(async (batch: any[]) => ({ responses: batch.map(() => ({ success: true })) })),
     };
   }
-  function build(stores: any, { webPush = makeWebPush(), messaging = makeMessaging() }: any = {}) {
-    const svc = createSendService({ stores, config, log: fakeLog, messaging, retryQueue: { enqueue() {} }, webPush });
+  function build(stores: any, { webPush = makeWebPush(), messaging = makeMessaging(), retryQueue = { enqueue() {} } }: any = {}) {
+    const svc = createSendService({ stores, config, log: fakeLog, messaging, retryQueue, webPush });
     return { svc, webPush, messaging };
   }
   const reminder = {
@@ -982,7 +982,7 @@ describe('notifications/send: web push, channels and recipients', () => {
       const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });
       const enqueue = mock.fn((_entry: any) => {});
       const webPush = makeWebPush(result);
-      const svc = createSendService({ stores, config, log: fakeLog, messaging: makeMessaging(), retryQueue: { enqueue }, webPush });
+      const { svc } = build(stores, { webPush, retryQueue: { enqueue } });
       await svc.send(reminder);
       assert.equal(enqueue.mock.calls.length, queued ? 1 : 0, JSON.stringify(result));
       if (queued) {
