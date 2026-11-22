@@ -4,6 +4,7 @@ import type { ArtistBackfillRunResult, ArtistBackfillVerify } from '@festie/shar
 import { ApiClientError } from '@festie/shared/services/api';
 import { withReauth } from '@festie/shared/services/admin';
 import {
+  backfillLabel,
   classifyBackfillReport,
   describeBackfillEntry,
   isIdempotentPlan,
@@ -54,11 +55,14 @@ function FindingList({ title, items, tone }: { title: string; items: BackfillFin
       <h3 className="text-sm font-semibold">
         {title} ({items.length})
       </h3>
+      <p className="text-xs text-text-muted">
+        {tone === 'stop' ? 'Check each one before you run. The run stays off until you tick the box below.' : 'Look these over. They do not stop the run.'}
+      </p>
       <ul className="list-none p-0 space-y-2 text-sm">
         {items.map((item) => (
           <li key={item.kind}>
             <div className="font-medium">
-              {item.kind}: {item.count}
+              {backfillLabel(item.kind)}: {item.count}
             </div>
             <ul className="list-none p-0 text-xs break-words text-text-secondary">
               {item.examples.map((example, i) => (
@@ -81,7 +85,7 @@ function ReportLists({ report, stopKinds, reviewKinds }: { report: BackfillRepor
       {lists.map(([key, entries]) => (
         <details key={key} className="rounded-lg border border-glass-border p-2">
           <summary className="cursor-pointer min-h-11 flex items-center text-sm text-text-primary">
-            {key} ({entries.length})
+            {backfillLabel(key)} ({entries.length})
             {stopKinds.has(key) && <span className="ml-2 text-accent-coral">STOP</span>}
             {!stopKinds.has(key) && reviewKinds.has(key) && <span className="ml-2 text-text-muted">review</span>}
           </summary>
@@ -102,7 +106,7 @@ function Counts({ counts }: { counts: Record<string, number> }) {
     <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-4 gap-y-1 text-sm">
       {Object.entries(counts).map(([key, value]) => (
         <div key={key} className="flex justify-between gap-2">
-          <dt className="text-text-muted break-all">{key}</dt>
+          <dt className="text-text-muted">{backfillLabel(key)}</dt>
           <dd className="text-text-primary">{value}</dd>
         </div>
       ))}
@@ -246,7 +250,8 @@ export default function AdminArtistBackfill() {
 
       {verify && (
         <section aria-label="Verify result" className="rounded-lg border border-glass-border p-3 space-y-1 text-sm">
-          <h3 className={verify.ok ? 'text-accent-aqua' : 'text-accent-coral'}>{verify.ok ? 'Verify passed' : 'Verify failed'}</h3>
+          <h3 className="text-xs uppercase tracking-wide text-text-muted">Verify result</h3>
+          <p className={verify.ok ? 'text-accent-aqua' : 'text-accent-coral'}>{verify.ok ? 'Verify passed' : 'Verify failed'}</p>
           <ul className="list-none p-0 break-words">
             {verify.checks.map((c) => (
               <li key={c.name} className={c.ok ? 'text-text-secondary' : 'text-accent-coral'}>
@@ -268,7 +273,7 @@ export default function AdminArtistBackfill() {
           {counts && <Counts counts={counts} />}
           <FindingList title="STOP" items={review.stop} tone="stop" />
           <FindingList title="REVIEW" items={review.review} tone="review" />
-          {review.stop.length === 0 && <p className="text-sm text-accent-aqua">No STOP items.</p>}
+          {review.stop.length === 0 && <p className="text-sm text-accent-aqua">Nothing stops the run.</p>}
           <ReportLists report={dry.report} stopKinds={stopKinds} reviewKinds={reviewKinds} />
 
           {stopCount > 0 && (
@@ -283,6 +288,10 @@ export default function AdminArtistBackfill() {
       <Button className={buttonClass} variant="primary" disabled={!canRun} isLoading={busy === 'run'} onClick={() => setConfirming(true)}>
         Run backfill
       </Button>
+      {dry === null && <p className="text-xs text-text-muted">Run a dry run first. The backfill needs one from the last 15 minutes.</p>}
+      {dry !== null && !stale && stopCount > 0 && !reviewed && (
+        <p className="text-xs text-text-muted">Tick “I reviewed the STOP items” to turn on the run.</p>
+      )}
 
       {outcome && (
         <section aria-label="Run result" className="rounded-lg border border-glass-border p-3 space-y-2 text-sm">
@@ -303,7 +312,7 @@ export default function AdminArtistBackfill() {
             ) : (
               <p className="text-accent-coral">
                 Second dry run still has changes:{' '}
-                {['artistsToCreate', 'festivalsToWrite', 'ownersToWrite'].map((k) => `${k} ${outcome.second?.counts?.[k] ?? 0}`).join(', ')}
+                {['artistsToCreate', 'festivalsToWrite', 'ownersToWrite'].map((k) => `${backfillLabel(k)} ${outcome.second?.counts?.[k] ?? 0}`).join(', ')}
               </p>
             ))}
           {outcome.followUpError && (

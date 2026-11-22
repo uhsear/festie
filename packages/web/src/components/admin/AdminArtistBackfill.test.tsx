@@ -57,10 +57,10 @@ describe('AdminArtistBackfill', () => {
     render(<AdminArtistBackfill />);
     await dryRunWith(stopReport);
     expect(runArtistBackfill).toHaveBeenCalledWith('dry-run');
-    expect(screen.getByText('artistsToCreate')).toBeTruthy();
+    expect(screen.getByText('Artists to create')).toBeTruthy();
     const stop = screen.getByRole('region', { name: 'STOP' });
     expect(within(stop).getByText(/fest-one \| set-1 \| Zed Zebra -> Zed Zebras/)).toBeTruthy();
-    expect(screen.getByText(/rowFills \(1\)/)).toBeTruthy();
+    expect(screen.getByText(/Artist records to fill from Spotify \(1\)/)).toBeTruthy();
   });
 
   it('shows REVIEW findings without a STOP', async () => {
@@ -68,12 +68,13 @@ describe('AdminArtistBackfill', () => {
     await dryRunWith(cleanReport);
     expect(screen.getByRole('region', { name: 'REVIEW' })).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'STOP' })).toBeNull();
-    expect(screen.getByText('No STOP items.')).toBeTruthy();
+    expect(screen.getByText('Nothing stops the run.')).toBeTruthy();
   });
 
   it('keeps Run disabled with no dry run, and with a STOP item until the box is ticked', async () => {
     render(<AdminArtistBackfill />);
     expect((runButton() as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText(/Run a dry run first/)).toBeTruthy();
     await dryRunWith(stopReport);
     expect((runButton() as HTMLButtonElement).disabled).toBe(true);
     fireEvent.click(screen.getByLabelText('I reviewed the STOP items'));
@@ -121,7 +122,7 @@ describe('AdminArtistBackfill', () => {
       .mockResolvedValueOnce(dryResponse({ counts: { ...zeroCounts, ownersToWrite: 3 } }));
     confirmRun();
     const line = await screen.findByText(/Second dry run still has changes/);
-    expect(line.textContent).toMatch(/ownersToWrite 3/);
+    expect(line.textContent).toMatch(/Sets and lineup entries to update 3/);
     expect(line.className).toMatch(/coral/);
   });
 

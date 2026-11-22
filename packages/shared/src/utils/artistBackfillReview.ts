@@ -144,3 +144,38 @@ export function isIdempotentPlan(report: BackfillReportInput): boolean {
   const c = report.counts ?? {};
   return ['artistsToCreate', 'festivalsToWrite', 'ownersToWrite'].every((k) => c[k] === 0);
 }
+
+const BACKFILL_LABELS: Readonly<Record<string, string>> = {
+  festivals: 'Festivals',
+  sets: 'Sets',
+  lineupEntries: 'Lineup entries',
+  elements: 'Artist names',
+  legacyFlatOnlySets: 'Sets with only an old single name',
+  artistsToCreate: 'Artists to create',
+  festivalsToWrite: 'Festivals to update',
+  ownersToWrite: 'Sets and lineup entries to update',
+  renames: 'Name changes',
+  renamesCaseOnly: 'Name changes in capital letters only',
+  needsPick: 'Names that need you to pick the artist',
+  linkConflicts: 'Links that disagree',
+  photosNotCopied: 'Photos not copied',
+  linksNotCopied: 'Links not copied',
+  joinedByName: 'Names matched to an artist',
+  joinedByNameDiffers: 'Names matched to an artist with a different spelling',
+  joinedByNameSuffix: 'Names matched to an artist apart from a suffix',
+  joinedByNameAcrossFestivals: 'Names matched to one artist on several festivals',
+  joinedBySpotify: 'Names matched by Spotify link',
+  b2bSplits: 'B2B names split into separate artists',
+  b2bNotSplit: 'B2B names kept as one artist',
+  linkRefiles: 'Links moved to another platform',
+  separateArtists: 'Similar names kept as separate artists',
+  linkFailures: 'Links that could not be checked',
+  splitLinksToPlace: 'Links to place after a B2B split',
+  rowFills: 'Artist records to fill from Spotify',
+  copyRefreshes: 'Copies to refresh',
+};
+
+/** Plain words for a backfill report key. A key this file does not know shows as it came. */
+export function backfillLabel(key: string): string {
+  return BACKFILL_LABELS[key] ?? key;
+}

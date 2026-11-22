@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { classifyBackfillReport, describeBackfillEntry, isIdempotentPlan } from './artistBackfillReview';
+import { backfillLabel, classifyBackfillReport, describeBackfillEntry, isIdempotentPlan } from './artistBackfillReview';
 
 const kinds = (items: Array<{ kind: string }>) => items.map((i) => i.kind);
 
@@ -93,5 +93,13 @@ describe('isIdempotentPlan', () => {
     expect(isIdempotentPlan({ counts: { artistsToCreate: 0, festivalsToWrite: 0, ownersToWrite: 0 } })).toBe(true);
     expect(isIdempotentPlan({ counts: { artistsToCreate: 0, festivalsToWrite: 1, ownersToWrite: 0 } })).toBe(false);
     expect(isIdempotentPlan({})).toBe(false);
+  });
+});
+
+describe('backfillLabel', () => {
+  it('names the report keys in plain words and passes unknown keys through', () => {
+    expect(backfillLabel('legacyFlatOnlySets')).toBe('Sets with only an old single name');
+    expect(backfillLabel('b2bSplits')).toBe('B2B names split into separate artists');
+    expect(backfillLabel('somethingNew')).toBe('somethingNew');
   });
 });
