@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { useLocation, useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { fetchSharedPicks, mapErrorToUserMessage, isApiClientError } from '@festie/shared/services';
@@ -141,6 +141,7 @@ function Banner({ text, children }: { text: string; children: React.ReactNode })
 function FriendPicksInner() {
   const search = useSearch({ strict: false }) as { from?: string };
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast, toastUndo, toastError } = useToast();
   const user = useAuthStore((s) => s.user);
   const currentFestivalId = useFestivalStore((s) => s.currentFestivalId);
@@ -252,10 +253,10 @@ function FriendPicksInner() {
 
       {!user ? (
         <Banner text={signInTo('compare these picks with yours')}>
-          <Button type="button" variant="primary" size="sm" onClick={() => navigate({ to: '/login' })}>
+          <Button type="button" variant="primary" size="sm" onClick={() => navigate({ to: '/login', search: { next: location.href } })}>
             {COPY.auth.signIn}
           </Button>
-          <Button type="button" variant="secondary" size="sm" onClick={() => navigate({ to: '/register' })}>
+          <Button type="button" variant="secondary" size="sm" onClick={() => navigate({ to: '/register', search: { next: location.href } })}>
             {COPY.auth.createAccount}
           </Button>
         </Banner>
