@@ -81,7 +81,7 @@ vi.mock('expo-file-system', () => {
   return { File, Directory, FileMode: { ReadOnly: 'r' }, Paths: { cache: 'file:///cache' } };
 });
 
-const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, clearBasemapCache, subscribeBasemapCache, readCachedBase64, isBasemapRemoved, MAX_INLINE_BYTES, readArchiveRange, bytesToBase64, MAX_RANGE_BYTES } = await import(
+const { basemapCacheKey, basemapCacheFile, basemapCacheInfo, ensureBasemapCached, clearBasemapCache, subscribeBasemapCache, readCachedBase64, isBasemapRemoved, MAX_INLINE_BYTES, readArchiveRange, bytesToBase64, MAX_RANGE_BYTES, canInlineCachedImage, siteplanNeedsConnection, freeDiskBytes } = await import(
   './basemapCache'
 );
 
@@ -191,6 +191,43 @@ describe('basemapCacheInfo', () => {
     // OS cache eviction: the bytes go, and readiness must go with them.
     basemapCacheFile(URL_A).delete();
     expect(basemapCacheInfo(URL_A).cached).toBe(false);
+  });
+});
+
+describe('site-plan offline rule', () => {
+  const SITEPLAN = 'https://festie.us/uploads/siteplans/x.webp';
+
+  it('canInlineCachedImage accepts 1 byte up to MAX_INLINE_BYTES only', () => {
+    expect(canInlineCachedImage(0)).toBe(false);
+    expect(canInlineCachedImage(1)).toBe(true);
+    expect(canInlineCachedImage(MAX_INLINE_BYTES)).toBe(true);
+    expect(canInlineCachedImage(MAX_INLINE_BYTES + 1)).toBe(false);
+  });
+
+  it('needs a connection when the image is missing or over the limit, not when it fits', () => {
+    expect(siteplanNeedsConnection(SITEPLAN, 0)).toBe(true);
+    expect(siteplanNeedsConnection(SITEPLAN, MAX_INLINE_BYTES + 1)).toBe(true);
+    expect(siteplanNeedsConnection(SITEPLAN, MAX_INLINE_BYTES)).toBe(false);
+    expect(siteplanNeedsConnection(SITEPLAN, 2 * 1024 * 1024)).toBe(false);
+  });
+
+  it('has nothing to warn about when the festival has no site plan', () => {
+    expect(siteplanNeedsConnection(null, 0)).toBe(false);
+    expect(siteplanNeedsConnection(undefined, MAX_INLINE_BYTES + 1)).toBe(false);
+  });
+
+  it('agrees with readCachedBase64 on the same cached size', async () => {
+    for (const bytes of [0, 1234, MAX_INLINE_BYTES, MAX_INLINE_BYTES + 1]) {
+      fs.files.set(basemapCacheFile(SITEPLAN).uri, bytes);
+      const info = basemapCacheInfo(SITEPLAN);
+      expect(siteplanNeedsConnection(SITEPLAN, info.bytes)).toBe((await readCachedBase64(SITEPLAN)) === null);
+    }
+  });
+});
+
+describe('freeDiskBytes', () => {
+  it('is null when the file system does not report free space', () => {
+    expect(freeDiskBytes()).toBeNull();
   });
 });
 

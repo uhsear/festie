@@ -4,6 +4,7 @@ import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTim
 import { Ionicons } from '@expo/vector-icons';
 import type { SectionReadiness } from '@festie/shared/stores';
 import { timeAgo, offlineStatusLabel, offlineActionLabel } from '@festie/shared/utils';
+import { OFFLINE_MAP_COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useOfflineDownload } from '../hooks/useOfflineDownload';
@@ -138,7 +139,18 @@ function StepRow({
 export default function OfflineReadinessCard({ festivalId }: Props) {
   const t = useTokens();
   const styles = useCardStyles();
-  const { steps, summary, download, isDownloading, hasMap, mapBytes, mapReady, removeMap } = useOfflineDownload(festivalId);
+  const {
+    steps,
+    summary,
+    download,
+    isDownloading,
+    hasMap,
+    mapBytes,
+    mapReady,
+    mapMessage,
+    siteplanNeedsConnection,
+    removeMap,
+  } = useOfflineDownload(festivalId);
   const [expanded, setExpanded] = useState(false);
 
   // 30s tick so "synced N ago" keeps advancing from the device clock.
@@ -199,6 +211,12 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
         </TouchableOpacity>
       </View>
 
+      {mapMessage ? (
+        <Text style={styles.notice} accessibilityRole="alert">
+          {mapMessage}
+        </Text>
+      ) : null}
+
       {expanded ? (
         <>
           <Text style={styles.subtitle}>
@@ -221,6 +239,7 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
               </View>
             ))}
           </View>
+          {siteplanNeedsConnection ? <Text style={styles.siteplanNote}>{OFFLINE_MAP_COPY.siteplanNeedsConnection}</Text> : null}
           {hasMap && mapReady ? (
             <TouchableOpacity
               onPress={removeMap}
@@ -304,6 +323,16 @@ const useCardStyles = makeStyles((t) => ({
     ...typeStyle('micro'),
     color: t.colors.accent.coral,
     paddingBottom: t.spacing[2],
+  },
+  notice: {
+    ...typeStyle('caption'),
+    marginTop: t.spacing[3],
+    color: t.colors.accent.coral,
+  },
+  siteplanNote: {
+    ...typeStyle('caption'),
+    paddingBottom: t.spacing[2],
+    color: t.colors.text.muted,
   },
   deleteMap: {
     minHeight: 44,

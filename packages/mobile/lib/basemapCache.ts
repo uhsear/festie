@@ -48,6 +48,27 @@ export function basemapCacheKey(pmtilesUrl: string): string {
 // festival ever ships a bigger image.
 export const MAX_INLINE_BYTES = 24 * 1024 * 1024;
 
+/** The one rule for "the map document can show this cached image": non-empty and at most MAX_INLINE_BYTES. */
+export const canInlineCachedImage = (bytes: number): boolean => bytes > 0 && bytes <= MAX_INLINE_BYTES;
+
+/**
+ * True when the site-plan overlay will not show offline: the festival has an image, but its saved copy is
+ * missing or too big for canInlineCachedImage. OfflineMap's overlay goes through readCachedBase64, which uses
+ * the same rule. `cachedBytes` is basemapCacheInfo(url).bytes, 0 when not saved.
+ */
+export const siteplanNeedsConnection = (siteplanUrl: string | null | undefined, cachedBytes: number): boolean =>
+  !!siteplanUrl && !canInlineCachedImage(cachedBytes);
+
+/** Free disk space in bytes, or null when the device will not say. */
+export function freeDiskBytes(): number | null {
+  try {
+    const free = Paths.availableDiskSpace;
+    return typeof free === 'number' && Number.isFinite(free) ? free : null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * The cached file's bytes as base64, or null when it is missing, empty or larger
  * than MAX_INLINE_BYTES. The map document cannot read `file://` itself: WebKit's
@@ -58,7 +79,7 @@ export async function readCachedBase64(url: string | null | undefined): Promise<
   if (!url) return null;
   try {
     const file = basemapCacheFile(url);
-    if (!file.exists || file.size <= 0 || file.size > MAX_INLINE_BYTES) return null;
+    if (!file.exists || !canInlineCachedImage(file.size)) return null;
     return await file.base64();
   } catch {
     return null;
