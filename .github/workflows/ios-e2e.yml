@@ -37,7 +37,7 @@ on:
         type: boolean
         default: false
       probe_mode:
-        description: 'TEMPORARY: bare | no-intro | stack | tabs'
+        description: 'TEMPORARY: bare | no-intro | stack | tabs | bisect'
         type: string
         default: 'bare'
   workflow_call:
@@ -182,6 +182,11 @@ jobs:
         run: |
           sed -i '' 's|<FirstRunIntro onDone={dismissIntro} />|null|' app/_layout.tsx
           grep -c 'FirstRunIntro onDone' app/_layout.tsx || true
+
+      - name: Patch launch-argument bisect gates (TEMPORARY)
+        if: inputs.probe == true && inputs.probe_mode == 'bisect'
+        working-directory: packages/mobile
+        run: python3 .maestro/probe/apply-bisect.py
 
       - name: Swap in router probe app (TEMPORARY)
         if: inputs.probe == true && (inputs.probe_mode == 'stack' || inputs.probe_mode == 'tabs')
@@ -343,8 +348,23 @@ jobs:
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME/.maestro-install"
           echo "$HOME/.maestro-install/maestro/bin" >> "$GITHUB_PATH"
 
+      - name: Bisect the empty tree by launch argument (TEMPORARY)
+        if: inputs.probe == true && inputs.probe_mode == 'bisect'
+        working-directory: packages/mobile
+        run: |
+          UDID="${{ steps.sim.outputs.udid }}"
+          for v in none offline sos live announce toaster sheet eb wrap tabsview offline,sos,live,announce,toaster,sheet eb,wrap,tabsview,offline,sos,live,announce,toaster,sheet; do
+            xcrun simctl terminate "$UDID" us.festie.app >/dev/null 2>&1 || true
+            sleep 3
+            xcrun simctl launch "$UDID" us.festie.app -probeoff "$v" >/dev/null
+            sleep 40
+            MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > "h.json" || true
+            echo "VARIANT $v nodes=$(grep -c '"attributes"' h.json) ids=$(grep -cE '"resource-id" : "[a-z]' h.json) tabbar=$(grep -c 'Tab Bar' h.json)"
+          done
+          mv h.json maestro-ios-hierarchy-probe-45s.json
+
       - name: Run probe flow (TEMPORARY)
-        if: inputs.probe == true
+        if: inputs.probe == true && inputs.probe_mode != 'bisect'
         working-directory: packages/mobile
         continue-on-error: true
         run: |
