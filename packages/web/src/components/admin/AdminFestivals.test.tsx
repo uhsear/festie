@@ -240,7 +240,7 @@ describe('AdminFestivals', () => {
     render(<AdminFestivals />);
     await userEvent.click(await screen.findByRole('button', { name: 'Archived' }));
     expect(await screen.findByText('Old Fest')).toBeInTheDocument();
-    await userEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Restore Old Fest' }));
     await waitFor(() => expect(restoreFestival).toHaveBeenCalledWith('a1'));
   });
 

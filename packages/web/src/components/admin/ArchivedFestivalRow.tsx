@@ -18,7 +18,7 @@ export default function ArchivedFestivalRow({ item, onRestore }: ArchivedFestiva
         {item.location} · Deleted {timeAgo(Date.parse(item.deletedAt))}
       </p>
     </div>
-    <button onClick={() => onRestore()} className={rowButton}>
+    <button onClick={() => onRestore()} aria-label={`Restore ${item.name}`} className={rowButton}>
       Restore
     </button>
   </div>

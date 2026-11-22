@@ -250,13 +250,13 @@ export default function AdminCrews() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleToggleExpand(crew.id)}
-                      className="text-xs px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
+                      className="text-xs px-3 py-1.5 min-h-11 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
                     >
                       {isExpanded ? 'Hide' : 'View'}
                     </button>
                     <button
                       onClick={() => handleDelete(crew.id)}
-                      className="text-xs px-3 py-1.5 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
+                      className="text-xs px-3 py-1.5 min-h-11 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
                     >
                       Delete
                     </button>

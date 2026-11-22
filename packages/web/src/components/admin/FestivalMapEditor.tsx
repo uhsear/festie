@@ -607,7 +607,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
                     onClick={() => armStage(stage.id)}
                     aria-pressed={isArmed}
                     className={cn(
-                      'px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
+                      'px-3 py-1.5 min-h-11 rounded-md text-xs font-medium transition-colors border',
                       isArmed
                         ? 'bg-accent-aqua text-bg-primary border-accent-aqua'
                         : 'bg-accent-aqua/20 text-accent-aqua border-transparent hover:bg-accent-aqua/30',
