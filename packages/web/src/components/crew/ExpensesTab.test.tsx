@@ -57,17 +57,18 @@ function mockApi(expenses: unknown[], settlementPlan: unknown = plan) {
 
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <ExpensesTab crewId="crew-1" members={members} currentUserId="me" />
     </QueryClientProvider>,
   );
+  return view;
 }
 
 describe('ExpensesTab', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    useCrewStore.setState({ activeCrew: { id: 'crew-1', owner: 'sam' } } as never);
+    useCrewStore.setState({ activeCrew: { id: 'crew-1', owner: 'sam' }, remindedOn: {} } as never);
   });
 
   it('shows the currency label and no filter tabs with no expenses', async () => {
@@ -217,6 +218,17 @@ describe('ExpensesTab', () => {
       await userEvent.click(await screen.findByRole('button', { name: 'Remind Sam' }));
       expect(await screen.findByRole('button', { name: 'Reminded today' })).toBeDisabled();
       expect(post).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps Reminded today after leaving the tab and coming back', async () => {
+      mockApi([expense({})], owedToMe);
+      vi.spyOn(api, 'post').mockResolvedValue({} as never);
+      const first = setup();
+      await userEvent.click(await screen.findByRole('button', { name: 'Remind Sam' }));
+      await screen.findByRole('button', { name: 'Reminded today' });
+      first.unmount();
+      setup();
+      expect(await screen.findByRole('button', { name: 'Reminded today' })).toBeDisabled();
     });
 
     it('does the same when the server says that person was already reminded today', async () => {

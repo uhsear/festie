@@ -62,6 +62,24 @@ export interface CrewFestivalGroup {
   crews: Crew[];
 }
 
+/** The server's reminder day: one settle-up reminder per person per UTC day. */
+export const utcDay = (now: Date = new Date()): string => now.toISOString().slice(0, 10);
+
+/** Members this crew's owner-to-be-paid already reminded today, from the crew store's `remindedOn`. */
+export function remindedUserIdsToday(
+  remindedOn: Record<string, string>,
+  crewId: string,
+  now: Date = new Date(),
+): ReadonlySet<string> {
+  const prefix = `${crewId}:`;
+  const today = utcDay(now);
+  return new Set(
+    Object.entries(remindedOn)
+      .filter(([key, day]) => key.startsWith(prefix) && day === today)
+      .map(([key]) => key.slice(prefix.length)),
+  );
+}
+
 const byStart = (a: Festival, b: Festival) => (a.startDate ?? '').localeCompare(b.startDate ?? '');
 
 export function groupCrewsByFestival(
