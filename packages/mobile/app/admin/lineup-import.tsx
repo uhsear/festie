@@ -33,7 +33,6 @@ import {
   type LineupImportUndoResult,
 } from '@festie/shared/utils';
 import { useAuthStore } from '@festie/shared/stores';
-import ScreenHeader from '../../components/ScreenHeader';
 import AppSwitch from '../../components/AppSwitch';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
@@ -447,13 +446,12 @@ export default function LineupImportScreen() {
   if (!isAdmin) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Import lineup" subtitle="Admin" icon="cloud-upload-outline" />
         <EmptyState
           icon="lock-closed-outline"
           title="Admins only"
           message="This area is restricted to festival administrators."
         />
-        <Stack.Screen options={{ headerShown: false }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Import lineup' }} />
       </View>
     );
   }
@@ -462,14 +460,13 @@ export default function LineupImportScreen() {
   if (!festivalId) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Import lineup" subtitle="Admin" icon="cloud-upload-outline" />
         <EmptyState
           icon="alert-circle-outline"
           title="No festival selected"
           message="Open this screen from a festival to import its lineup."
           action={{ label: 'Back to admin', onPress: goBack }}
         />
-        <Stack.Screen options={{ headerShown: false }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Import lineup' }} />
       </View>
     );
   }
@@ -822,12 +819,6 @@ export default function LineupImportScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader
-        title="Import lineup"
-        subtitle="Paste, match, check, approve"
-        icon="cloud-upload-outline"
-        right={<Button label="Back" variant="ghost" size="sm" icon="chevron-back" onPress={goBack} />}
-      />
 
       <FlatList
         data={step === 'preview' ? items : []}
@@ -985,7 +976,7 @@ export default function LineupImportScreen() {
         onCancel={() => setAnnounceVisible(false)}
       />
 
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Import lineup' }} />
     </View>
   );
 }
