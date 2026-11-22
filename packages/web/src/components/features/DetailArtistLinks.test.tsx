@@ -20,4 +20,21 @@ describe('DetailArtistLinks', () => {
     expect(screen.getByRole('link', { name: 'SLANDER on Spotify' })).toHaveTextContent('Spotify');
     expect(screen.getByRole('link', { name: 'SLANDER on Instagram' })).toHaveTextContent('Instagram');
   });
+
+  it('lists links in the sheet order with a new-tab arrow and drops unsafe URLs', () => {
+    render(
+      <DetailArtistLinks
+        artistLinks={[
+          {
+            name: 'SLANDER',
+            links: { instagram: 'https://instagram.com/slander', evil: 'javascript:alert(1)', spotify: 'https://open.spotify.com/artist/abc' },
+          },
+        ]}
+        isB2B={false}
+        genres={[]}
+      />,
+    );
+    const links = screen.getAllByRole('link');
+    expect(links.map((l) => l.textContent)).toEqual(['Spotify ↗', 'Instagram ↗']);
+  });
 });

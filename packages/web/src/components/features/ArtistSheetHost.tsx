@@ -70,7 +70,7 @@ export default function ArtistSheetHost() {
                       aria-label={`${artist.name} on ${link.label}`}
                       className={cn(sheetButtonClass, 'inline-flex items-center border border-border text-text-primary')}
                     >
-                      {link.label}
+                      {link.label + ' ↗'}
                     </a>
                   ))}
                 </div>

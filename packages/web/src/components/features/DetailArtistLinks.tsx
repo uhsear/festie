@@ -1,5 +1,5 @@
 import React from 'react';
-import { platformLabel, isSafeExternalUrl } from '@festie/shared/utils';
+import { artistLinkEntries } from '@festie/shared/utils';
 import { genreChipLabel } from '@festie/shared/constants';
 import { ArtistNameButton } from './ArtistName';
 
@@ -39,20 +39,19 @@ export default function DetailArtistLinks({ artistLinks, isB2B, genres, hideLink
                 </div>
               )}
               <div className="py-1 pb-2 text-[length:var(--font-size-14)] flex flex-wrap gap-2.5">
-                {Object.entries(a.links || {})
-                  .filter(([platform, url]) => !(platform === 'spotify' && hideLink && url === hideLink.url))
-                  .map(([platform, url]) => (
+                {artistLinkEntries(a.links)
+                  .filter((link) => !(link.key === 'spotify' && hideLink && link.url === hideLink.url))
+                  .map((link) => (
+                    // artistLinkEntries drops non-http(s) URLs: React passes javascript:/data: hrefs through to the DOM.
                     <a
-                      key={platform}
-                      // Defense-in-depth: React passes javascript:/data: URLs
-                      // through to the DOM, so only emit an href for http(s).
-                      href={isSafeExternalUrl(url) ? url : undefined}
+                      key={link.key}
+                      href={link.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      aria-label={`${a.name} on ${platformLabel(platform)}`}
+                      aria-label={`${a.name} on ${link.label}`}
                       className="inline-flex items-center min-h-11 text-[length:var(--font-size-14)] text-accent-aqua no-underline hover:underline"
                     >
-                      {platformLabel(platform) + ' ↗'}
+                      {link.label + ' ↗'}
                     </a>
                   ))}
               </div>
