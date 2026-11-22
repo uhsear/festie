@@ -245,6 +245,7 @@ export const MAP_COPY = {
   setMeetingPoint: 'Set as meeting point',
   share: 'Share',
   copied: 'Copied',
+  copyFailed: 'Could not copy the link.',
   close: 'Close',
   stopShowingWay: 'Stop showing the way',
   showMyLocation: 'Show my location',
