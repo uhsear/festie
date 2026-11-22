@@ -30,6 +30,10 @@
   -webkit-overflow-scrolling: touch;
   min-height: calc(100dvh - 180px);
 }
+/* The map fills the space the shell gives it; a floor taller than that clips the bottom of the page. */
+#main-content:has(.map-page) {
+  min-height: 0;
+}
 .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
 }
@@ -251,12 +255,6 @@
   position: relative;
   min-width: 0;
   width: 100%;
-}
-@media (min-width: 1024px) {
-  .stage-filter-scroll {
-    width: auto;
-    flex: 1 1 0%;
-  }
 }
 .stage-filter-scroll .filter-stage {
   -webkit-mask-image: none;

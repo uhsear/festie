@@ -32,7 +32,7 @@ describe('write outcome copy', () => {
     expect(isPending(null)).toBe(false);
   });
 
-  it('rowSyncState points a failed replay at Pending sync and marks queued rows pending', () => {
+  it('rowSyncState flags a failed replay and marks queued rows pending', () => {
     expect(rowSyncState({ id: 'POST:/a:1', _optimistic: true }, ['POST:/a:1'])).toBe('failed');
     expect(rowSyncState({ id: 'POST:/a:2', _optimistic: true }, ['POST:/a:1'])).toBe('pending');
     expect(rowSyncState({ id: 'e1' }, [])).toBeNull();

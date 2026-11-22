@@ -43,14 +43,14 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
     try {
       await navigator.clipboard.writeText(url);
     } catch {
-      // Clipboard blocked or missing: prompt() shows the link pre-selected.
-      window.prompt('Copy this invite link', url);
+      // Clipboard blocked or missing. prompt() is suppressed in many webviews, so show the link in a toast.
+      toast(`Couldn't copy the link. Share it by hand: ${url}`, 'error', 10000);
       return;
     }
     setCopiedCode(true);
     if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
     copyTimerRef.current = setTimeout(() => setCopiedCode(false), 2000);
-  }, [inviteCode]);
+  }, [inviteCode, toast]);
 
   const handleShare = useCallback(async () => {
     const url = buildJoinUrl(inviteCode, window.location.origin);
@@ -102,9 +102,9 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
 
   return (
     <div className="py-1.5 px-2 rounded-lg bg-bg-card border border-border space-y-1.5">
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
       <Copy className="w-3.5 h-3.5 text-text-muted flex-shrink-0" aria-hidden="true" />
-      <span className="text-xs text-text-secondary truncate">
+      <span className="text-xs text-text-secondary shrink-0">
         Invite: <span className="text-text-primary font-mono">{inviteCode}</span>
       </span>
       {expiryText && <span className="text-xs text-text-muted whitespace-nowrap">{expiryText}</span>}

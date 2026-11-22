@@ -204,7 +204,7 @@ describe('MeetingPointsTab', () => {
   it('renders the loading skeleton state', () => {
     setQuery({ isLoading: true });
     const { container } = render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
-    // No "Add Meeting Point" button while loading.
+    // No "Add meeting point" button while loading.
     expect(screen.queryByRole('button', { name: /add meeting point/i })).not.toBeInTheDocument();
     expect(container.querySelector('.px-4')).toBeInTheDocument();
   });
@@ -360,14 +360,14 @@ describe('MeetingPointsTab', () => {
     expect(screen.getByRole('heading', { name: 'Past' })).toBeInTheDocument();
     expect(screen.getByText('Old Spot')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Edit meeting point' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Add Meeting Point/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Add meeting point/ })).toBeInTheDocument();
   });
 
   it('shows the Past hint once a meet time is entered', async () => {
     const user = userEvent.setup();
     setQuery({ data: [POINT] });
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
-    await user.click(screen.getByRole('button', { name: 'Add Meeting Point' }));
+    await user.click(screen.getByRole('button', { name: 'Add meeting point' }));
     expect(screen.queryByText('Moves to Past 30 minutes after the meet time.')).not.toBeInTheDocument();
     fireEvent.change(screen.getByLabelText('Meet at time'), { target: { value: '2026-06-01T15:00' } });
     expect(screen.getByText('Moves to Past 30 minutes after the meet time.')).toBeInTheDocument();

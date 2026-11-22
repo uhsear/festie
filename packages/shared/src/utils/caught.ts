@@ -205,11 +205,11 @@ export function catchableMeta(item: CatchableSet, nowMs: number, stageName?: str
   return stageName ? `${when} · ${stageName}` : when;
 }
 
-/** "3 seen · 1 skipped · 2 to mark", leaving out zero parts; '' when all are zero. */
+/** "3 seen · 1 missed · 2 to mark", leaving out zero parts; '' when all are zero. */
 export function checklistCountLine(counts: { saw: number; skipped: number; toMark: number }): string {
   return [
     counts.saw && `${counts.saw} seen`,
-    counts.skipped && `${counts.skipped} skipped`,
+    counts.skipped && `${counts.skipped} missed`,
     counts.toMark && `${counts.toMark} to mark`,
   ]
     .filter(Boolean)

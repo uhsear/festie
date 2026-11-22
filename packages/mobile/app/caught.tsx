@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, SectionList, Text, TextInput, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { api, fetchWrap, markCaught, mapErrorToUserMessage } from '@festie/shared/services';
+import { api, fetchWrap, isApiClientError, markCaught, mapErrorToUserMessage } from '@festie/shared/services';
+import { WRAP_STATE_COPY } from '@festie/shared/constants';
 import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import {
   applyCaughtMark,
@@ -12,6 +13,7 @@ import {
   findSetsToAdd,
   formatTime,
   isWrapUnlocked,
+  isWrapUpcoming,
   lineupFromDays,
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
@@ -34,7 +36,7 @@ const SAVE_ERROR = "Couldn't save that. Try again.";
 
 /**
  * "What you caught": every pick for a festival plus sets the user added,
- * grouped by day, with Saw it / Skipped marks and the rating row. All marks go
+ * grouped by day, with Saw it / Missed it marks and the rating row. All marks go
  * through markCaught so they queue offline. Ratings stay online-only on mobile.
  */
 export default function CaughtScreen() {
@@ -53,6 +55,7 @@ export default function CaughtScreen() {
 
   const [data, setData] = useState<WrapResponse | null>(null);
   const [error, setError] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [reload, setReload] = useState(0);
   const [adding, setAdding] = useState(false);
   const [query, setQuery] = useState('');
@@ -70,8 +73,10 @@ export default function CaughtScreen() {
           setData(res);
           setError(false);
         })
-        .catch(() => {
-          if (!cancelled) setError(true);
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          setNotFound(isApiClientError(e) && e.status === 404);
+          setError(true);
         });
       return () => {
         cancelled = true;
@@ -163,6 +168,19 @@ export default function CaughtScreen() {
     );
   }
 
+  if (error && !data && notFound) {
+    return (
+      <View style={styles.screen}>
+        {header}
+        <EmptyState
+          icon="musical-notes-outline"
+          title={WRAP_STATE_COPY.notFound.title}
+          message={WRAP_STATE_COPY.notFound.description}
+        />
+      </View>
+    );
+  }
+
   if (error && !data) {
     return (
       <View style={styles.screen}>
@@ -187,6 +205,19 @@ export default function CaughtScreen() {
       <View style={[styles.screen, styles.centered]}>
         {header}
         <ActivityIndicator color={t.colors.accent.aqua} />
+      </View>
+    );
+  }
+
+  if (isWrapUpcoming(data.festival)) {
+    return (
+      <View style={styles.screen}>
+        {header}
+        <EmptyState
+          icon="musical-notes-outline"
+          title={WRAP_STATE_COPY.notStarted.title}
+          message={WRAP_STATE_COPY.notStarted.description}
+        />
       </View>
     );
   }
@@ -239,11 +270,11 @@ export default function CaughtScreen() {
                     style={styles.button}
                   />
                   <Button
-                    label="Skipped"
+                    label="Missed it"
                     variant={item.caught === false ? 'primary' : 'secondary'}
-                    accessibilityLabel={`Skipped ${artist}`}
+                    accessibilityLabel={`Missed it ${artist}`}
                     accessibilityState={{ selected: item.caught === false }}
-                    onPress={() => toggle(false, 'Marked as skipped')}
+                    onPress={() => toggle(false, 'Marked as missed')}
                     style={styles.button}
                   />
                 </>

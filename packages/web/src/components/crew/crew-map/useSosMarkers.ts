@@ -3,6 +3,7 @@
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
 import type { SosEntry } from '@festie/shared/types';
+import { useAuthStore } from '@festie/shared/stores/authStore';
 import {
   popupContent,
   subEl,
@@ -81,10 +82,12 @@ export function useSosMarkers(
       link.setAttribute('target', '_blank');
       link.setAttribute('rel', 'noopener noreferrer');
       link.textContent = 'Get directions';
+      // Directions to your own position are no use to the raiser.
+      const isMine = s.userId === useAuthStore.getState().user?.id;
       const popupEl = popupContent([
         titleEl(`SOS: ${s.username} needs help`, 'festie-sos-title'),
         s.message ? subEl(s.message) : null,
-        link,
+        isMine ? null : link,
       ]);
       const marker = new gl.Marker({ element: el })
         .setLngLat([lng, lat])

@@ -206,7 +206,6 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
             illustration="emptyList"
             title="Nothing on the list yet"
             description="Add what your crew needs to bring, like a tent, a cooler or sunscreen."
-            cta={{ label: 'Add item', onClick: () => setShowForm(true) }}
           />
           <div className="space-y-2 text-center">
             <p className="text-sm text-text-secondary">Start from a list:</p>

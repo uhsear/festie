@@ -33,7 +33,7 @@ export default function AnnouncementBanner() {
 
   return (
     <div
-      role="status"
+      role={urgent ? 'alert' : 'status'}
       aria-label={COPY.banner.label(kicker, a.title, a.body)}
       data-testid="announcement-banner"
       className={`flex items-center gap-2.5 bg-bg-card border rounded-xl py-2.5 px-4 mx-3 my-2 text-sm text-text-primary ${urgent ? 'border-text-danger' : 'border-accent-aqua'}`}

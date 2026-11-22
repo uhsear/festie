@@ -101,14 +101,35 @@ export const displayNameChangeSchema = z.object({
 
 // Payment handles for settle-up deep links. All optional; an explicit empty
 // string clears the handle (stored as NULL). Handles are short identifiers, not
-// URLs — the deep-link builders prepend the scheme/host. A leading '@' or '$'
-// is tolerated and normalized server-side.
-const paymentHandle = z.string().trim().max(64).optional();
+// URLs — the deep-link builders prepend the scheme/host. A pasted profile URL or
+// a leading '@' or '$' is reduced to the bare handle; anything else outside the
+// per-method character set is rejected.
+const PROFILE_URL = /^(?:https?:\/\/)?(?:www\.)?(venmo\.com|cash\.app|paypal\.me)\/(.*)$/i;
+
+/** Reduces a pasted profile URL, a leading '@' or a leading '$' to the bare handle. */
+const bareHandle = (raw: string): string => {
+  let handle = raw.trim();
+  const url = PROFILE_URL.exec(handle);
+  if (url) {
+    const segments = url[2]!.split(/[?#]/)[0]!.split('/').filter(Boolean);
+    if (url[1]!.toLowerCase() === 'venmo.com' && segments[0]?.toLowerCase() === 'u') segments.shift();
+    handle = segments[0] ?? '';
+  }
+  return handle.replace(/^[@$]+/, '');
+};
+
+const paymentHandle = (label: string, allowed: RegExp, rule: string) =>
+  z
+    .string()
+    .max(256)
+    .transform(bareHandle)
+    .pipe(z.string().max(64).regex(allowed, `${label} can use only ${rule}.`))
+    .optional();
 export const paymentHandlesSchema = z
   .object({
-    venmoHandle: paymentHandle,
-    cashappCashtag: paymentHandle,
-    paypalHandle: paymentHandle,
+    venmoHandle: paymentHandle('Venmo username', /^[A-Za-z0-9._-]*$/, 'letters, numbers, dots, dashes and underscores'),
+    cashappCashtag: paymentHandle('Cash App $cashtag', /^[A-Za-z0-9]*$/, 'letters and numbers'),
+    paypalHandle: paymentHandle('PayPal.me name', /^[A-Za-z0-9._-]*$/, 'letters, numbers, dots, dashes and underscores'),
   })
   .refine((v) => v.venmoHandle !== undefined || v.cashappCashtag !== undefined || v.paypalHandle !== undefined, {
     message: 'At least one payment handle is required',

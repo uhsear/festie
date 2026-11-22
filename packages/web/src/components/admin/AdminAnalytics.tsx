@@ -70,7 +70,7 @@ function AnalyticsDashboard() {
         <p className="text-sm text-text-muted">{analyticsScopeLine(data)}</p>
       </div>
 
-      <ul className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <ul className="list-none p-0 grid grid-cols-1 md:grid-cols-2 gap-4">
         {analyticsQuestions(data).map((q) => (
           <li key={q.id} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
             <div className="type-label text-text-muted mb-1">{q.question}</div>

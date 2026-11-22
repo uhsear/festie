@@ -3,7 +3,7 @@
 
 import crypto from 'crypto';
 
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import type { z } from 'zod';
 
 import { createPasswordResetRateLimit } from '../lib/rate-limiting';
@@ -483,21 +483,38 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // ── PUT|PATCH /payment-handles — set Venmo / Cash App / PayPal handles ─
   // Used to build prefilled settle-up deep links. Each field is independently
   // optional: only the provided keys are updated; an explicit empty string
-  // clears that handle (stored as NULL). A leading '@' or '$' is stripped so
-  // the deep-link builders get a bare identifier.
+  // clears that handle (stored as NULL). The Zod schema reduces a pasted URL or
+  // a leading '@'/'$' to the bare handle; this route only maps empty to NULL.
+  const HANDLE_KEYS = ['venmoHandle', 'cashappCashtag', 'paypalHandle'] as const;
+
+  // Older clients resend all three handles. Drop any equal to the stored value so a
+  // legacy handle saved under looser rules does not block an edit to another one.
+  const dropUnchangedHandles = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = req.body as Record<string, unknown> | undefined;
+      if (!body || typeof body !== 'object') return next();
+      const stored = await getUserById(req.user.userId);
+      if (stored) {
+        for (const key of HANDLE_KEYS) {
+          const sent = body[key];
+          if (typeof sent === 'string' && sent.trim() === (stored[key] ?? '')) delete body[key];
+        }
+      }
+      return next();
+    } catch (error) {
+      log.error('payment handles lookup failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to update payment handles', ErrorCodes.INTERNAL_ERROR);
+    }
+  };
+
   const updatePaymentHandles = async (req: Request, res: Response) => {
     try {
       setNoStore(res);
       const body = req.validatedBody as z.infer<typeof paymentHandlesSchema>;
 
-      // Normalize a raw handle: trim, drop a leading @/$, cap length. Empty
-      // (or whitespace-only) clears the handle.
       const clean = (raw: string | undefined): string | null | undefined => {
         if (raw === undefined) return undefined; // not provided → leave unchanged
-        const trimmed = sanitizeString(raw, 64)
-          .replace(/^[@$]+/, '')
-          .trim();
-        return trimmed.length > 0 ? trimmed : null;
+        return raw.length > 0 ? raw : null;
       };
 
       const fields: Record<string, string | null> = {};
@@ -529,6 +546,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     '/payment-handles',
     userAuth,
     rateLimit(10, 'payment-handles-change'),
+    dropUnchangedHandles,
     validate(schemas.paymentHandles),
     updatePaymentHandles,
   );
@@ -536,6 +554,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     '/payment-handles',
     userAuth,
     rateLimit(10, 'payment-handles-change'),
+    dropUnchangedHandles,
     validate(schemas.paymentHandles),
     updatePaymentHandles,
   );

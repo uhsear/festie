@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const api = vi.hoisted(() => ({ get: vi.fn(), post: vi.fn() }));
 vi.mock('./api', () => ({ api }));
 
-import { approveArtistReview, fetchArtistReview, importArtistReview, parseArtistReviewBatch, rejectArtistReview } from './adminArtistReview';
+import { approveArtistReview, describeBatchIssue, fetchArtistReview, importArtistReview, parseArtistReviewBatch, rejectArtistReview } from './adminArtistReview';
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -41,5 +41,16 @@ describe('parseArtistReviewBatch', () => {
       const result = parseArtistReviewBatch(text);
       expect(result.ok).toBe(false);
     }
+  });
+});
+
+describe('describeBatchIssue', () => {
+  it('names the item and field', () => {
+    expect(describeBatchIssue('items.0.kind: Invalid option: expected one of "link"|"merge"|"rename"')).toBe(
+      'Item 1, field "kind": Invalid option: expected one of "link"|"merge"|"rename"',
+    );
+    expect(describeBatchIssue('items.2.candidates.0.spotifyUrl: Invalid URL')).toBe('Item 3, field "candidates.0.spotifyUrl": Invalid URL');
+    expect(describeBatchIssue('items: Too small')).toBeNull();
+    expect(describeBatchIssue('generatedAt: Required')).toBeNull();
   });
 });

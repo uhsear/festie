@@ -9,6 +9,7 @@ import {
   hydrateFailedSync,
   surfaceFailedSync,
 } from '@festie/shared/services';
+import { describeMutation } from '@festie/shared/utils';
 
 const DB_NAME = 'festie-offline-queue';
 const DB_VERSION = 1;
@@ -23,6 +24,8 @@ interface QueuedMutation {
   url?: string;
   method?: string;
   body?: Record<string, unknown>;
+  /** Plain-words name shown in the PendingSyncSheet if this write fails. */
+  label?: string;
   event?: string;
   data?: Record<string, unknown>;
   status: 'pending' | 'failed' | 'completed';
@@ -113,39 +116,6 @@ function generateClientId(): string {
 }
 
 /**
- * Best-effort, human-readable label for a failed mutation, derived from its
- * HTTP method + URL so the PendingSyncSheet can show something friendlier than
- * "POST /crews/abc/polls". Falls back to "{METHOD} {path}".
- */
-function deriveFailedLabel(method: string | undefined, url: string | undefined): string {
-  const m = (method || 'POST').toUpperCase();
-  const path = (url || '').split('?')[0] || '';
-  const verb = m === 'POST' ? 'Add' : m === 'PUT' || m === 'PATCH' ? 'Update' : m === 'DELETE' ? 'Remove' : m;
-
-  // Map the trailing resource segment to a noun. Trailing dynamic ids (the last
-  // segment when it isn't a known collection word) are ignored so e.g.
-  // POST /crews/x/polls and DELETE /crews/x/polls/y both read "… poll".
-  const segments = path.split('/').filter(Boolean);
-  const nouns: Record<string, string> = {
-    polls: 'poll',
-    'meeting-points': 'meeting point',
-    expenses: 'expense',
-    members: 'member',
-    picks: 'pick',
-    notes: 'note',
-    crews: 'crew',
-    vote: 'vote',
-    settle: 'settlement',
-    'home-base': 'home base',
-  };
-  for (let i = segments.length - 1; i >= 0; i--) {
-    const noun = nouns[segments[i]!];
-    if (noun) return `${verb} ${noun}`;
-  }
-  return `${m} ${path || '(unknown)'}`;
-}
-
-/**
  * Surface a stale offline write that is being discarded (older than 7 days) so it
  * is NEVER silently dropped — the "no silent drops" contract. Routes the entry
  * to the PendingSyncSheet via surfaceFailedSync (coalesced by clientId, so the
@@ -165,7 +135,7 @@ function surfaceStaleDrop(entry: QueuedMutation): void {
   try {
     surfaceFailedSync({
       clientId: entry.clientId,
-      label: deriveFailedLabel(entry.method, entry.url),
+      label: entry.label ?? describeMutation(entry.method, entry.url, entry.body),
       method: entry.method ?? entry.event ?? 'POST',
       url: entry.url ?? '',
       body: entry.body ?? entry.data,
@@ -391,11 +361,18 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
 
   // Initialize on mount
   useEffect(() => {
-    pruneStaleEntries().catch(console.error);
-    getPendingCount().then(setPendingCount).catch(console.error);
+    // Count after the prune settles, so writes it is about to fail are not shown as pending.
+    pruneStaleEntries()
+      .catch(console.error)
+      .then(() => getPendingCount())
+      .then((n) => {
+        setPendingCount(n);
+        setPendingSync(n);
+      })
+      .catch(console.error);
     // Failed writes are persisted, so the "couldn't sync" sheet survives a reload.
     hydrateFailedSync().catch(console.error);
-  }, []);
+  }, [setPendingSync]);
 
   // Update pending count whenever it changes
   const updatePendingCount = useCallback(async () => {
@@ -473,7 +450,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
           try {
             surfaceFailedSync({
               clientId,
-              label: deriveFailedLabel(mutation.method, mutation.url),
+              label: mutation.label ?? describeMutation(mutation.method, mutation.url, mutation.body),
               method: mutation.method ?? 'POST',
               url: mutation.url ?? '',
               body: mutation.body,
@@ -626,7 +603,7 @@ export function useOfflineQueue(): UseOfflineQueueReturn {
               try {
                 surfaceFailedSync({
                   clientId: mutation.clientId,
-                  label: deriveFailedLabel(mutation.method, mutation.url),
+                  label: mutation.label ?? describeMutation(mutation.method, mutation.url, mutation.body),
                   method: mutation.method ?? 'POST',
                   url: mutation.url ?? '',
                   body: mutation.body,

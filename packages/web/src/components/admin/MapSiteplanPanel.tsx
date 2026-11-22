@@ -111,7 +111,7 @@ export default function MapSiteplanPanel({
         type="button"
         onClick={onStartCorners}
         disabled={!isHttpsUrl(siteplanUrl)}
-        className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua/20 text-accent-aqua border border-transparent hover:bg-accent-aqua/30 disabled:opacity-50"
+        className="px-3 py-1.5 min-h-11 rounded-md text-xs font-medium bg-accent-aqua/20 text-accent-aqua border border-transparent hover:bg-accent-aqua/30 disabled:opacity-50"
       >
         {committedSiteplan ? 'Re-place corners' : 'Set corners'}
       </button>

@@ -40,7 +40,7 @@ describe('basemapCache', () => {
     vi.stubGlobal('navigator', { storage: { estimate: async () => ({ quota: 1000, usage: 900 }) } });
     const fetchMock = vi.fn(async () => new Response(null, { headers: { 'content-length': '5000' } }));
     vi.stubGlobal('fetch', fetchMock);
-    expect(await ensureBasemapCached(URL1)).toEqual({ ok: false, reason: 'quota', bytes: 5000 });
+    expect(await ensureBasemapCached(URL1)).toEqual({ ok: false, reason: 'quota', bytes: 5000, freeBytes: 100 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 

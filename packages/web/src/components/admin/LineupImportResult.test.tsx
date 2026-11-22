@@ -20,10 +20,17 @@ const result: LineupImportCommitResult = {
 describe('LineupImportResult', () => {
   it('summarises the import and lists skipped rows', () => {
     render(<LineupImportResult result={result} festivalName="Fest" onReset={vi.fn()} />);
-    expect(screen.getByRole('status')).toHaveTextContent('Added 3 sets, updated 1, created 2 stages and 1 days.');
+    expect(screen.getByRole('status')).toHaveTextContent('Added 3 sets, updated 1, created 2 stages and 1 day.');
     expect(screen.getByRole('status')).toHaveTextContent('Skipped 1 row that name another day.');
     expect(screen.getByText('Row 4, Kai: other day')).toBeInTheDocument();
     expect(screen.getByText('Heads up')).toBeInTheDocument();
+  });
+
+  it('uses singular forms for one of each', () => {
+    render(
+      <LineupImportResult result={{ ...result, created: 1, newStages: 1, newDays: 1 }} festivalName="Fest" onReset={vi.fn()} />,
+    );
+    expect(screen.getByRole('status')).toHaveTextContent('Added 1 set, updated 1, created 1 stage and 1 day.');
   });
 
   it('runs reset and done', async () => {

@@ -328,7 +328,6 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
           illustration="emptyList"
           title="No rides yet"
           description="Offer a ride, or ask for one."
-          cta={{ label: 'Offer a ride', onClick: openCreate }}
         />
       ) : (
         <>

@@ -32,7 +32,6 @@ describe('ChangeEmailModal', () => {
   it('renders as a labelled dialog with both fields', () => {
     renderModal();
     expect(screen.getByRole('dialog', { name: 'Change email' })).toBeInTheDocument();
-    expect(screen.getByText('Change Email')).toBeInTheDocument();
     expect(screen.getByLabelText('New email')).toBeInTheDocument();
     expect(screen.getByLabelText('Current password')).toBeInTheDocument();
   });
@@ -44,8 +43,7 @@ describe('ChangeEmailModal', () => {
 
   it('says "Add Email" when no address is on file', () => {
     render(<ChangeEmailModal onClose={onClose} onSubmit={onSubmit} />);
-    expect(screen.getByRole('dialog', { name: 'Change email' })).toBeInTheDocument();
-    expect(screen.getByText('Add Email')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Add email' })).toBeInTheDocument();
   });
 
   it('drops the password field for a provider-only account and submits without one', async () => {

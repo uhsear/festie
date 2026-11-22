@@ -9,6 +9,7 @@ import { useFestivalStore, useCrewStore, useAuthStore } from '@festie/shared/sto
 import { fetchShareLink } from '@festie/shared/services';
 import { encodePlanSnapshot, buildPlanSnapshotInput, buildPlanQrUrl, MAX_ENCODED_LENGTH } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
+import { useToast } from '../../lib/toastContext';
 import type { Priority } from '@festie/shared/types';
 import Button from '../ui/Button';
 import Dialog from '../ui/Dialog';
@@ -22,6 +23,7 @@ type LinkState = { status: 'loading' } | { status: 'ready'; url: string } | { st
 function LinkSection({ festivalId, festivalName }: { festivalId: string; festivalName: string }) {
   const [state, setState] = useState<LinkState>({ status: 'loading' });
   const [copied, setCopied] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     let cancelled = false;
@@ -48,9 +50,9 @@ function LinkSection({ festivalId, festivalName }: { festivalId: string; festiva
     try {
       await navigator.share({ title: text, text, url });
     } catch (err) {
-      // AbortError = user dismissed the sheet.
+      // AbortError = user dismissed the sheet. Any other failure keeps the link on screen: Copy and Open still work.
       if (!(err instanceof DOMException && err.name === 'AbortError')) {
-        setState({ status: 'error', message: OFFLINE_TEXT });
+        toast("Couldn't open the share sheet. Copy the link instead.", 'error');
       }
     }
   };
@@ -61,7 +63,7 @@ function LinkSection({ festivalId, festivalName }: { festivalId: string; festiva
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      // Clipboard blocked: the URL stays selectable in the <code> block.
+      toast("Couldn't copy the link. Select it and copy it by hand.", 'error');
     }
   };
 
@@ -100,7 +102,7 @@ function LinkSection({ festivalId, festivalName }: { festivalId: string; festiva
               href={state.url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-full border border-border px-3 py-1.5 text-sm font-semibold text-text-primary"
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-full border border-border px-3 text-sm font-semibold text-text-primary focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
             >
               Open
             </a>

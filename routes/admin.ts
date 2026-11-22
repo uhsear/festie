@@ -85,7 +85,11 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
     return rows.map((row: any) => ({
       ...row,
       actorUsername: usernameById.get(row.actorId) || row.actorId,
-      targetLabel: row.details?.targetUsername || row.details?.name || `${row.targetType} ${row.targetId ?? ''}`.trim(),
+      // The generic middleware writes targetType 'unknown' for routes it cannot name; a label would just say "unknown".
+      targetLabel:
+        row.targetType === 'unknown'
+          ? null
+          : row.details?.targetUsername || row.details?.name || `${row.targetType} ${row.targetId ?? ''}`.trim(),
     }));
   };
 
@@ -158,6 +162,7 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
         targetType: a.targetType,
         targetId: a.targetId,
         details: a.details,
+        status: a.status,
         createdAt: a.createdAt,
       }));
 

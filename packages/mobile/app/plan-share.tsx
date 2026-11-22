@@ -54,6 +54,7 @@ export default function PlanShareScreen() {
         showsHorizontalScrollIndicator={false}
         style={styles.tabScroll}
         contentContainerStyle={styles.tabBar}
+        accessibilityRole="tablist"
       >
         {TABS.map((item) => {
           const active = tab === item.key;

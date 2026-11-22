@@ -35,7 +35,7 @@ import {
   writeOutcomeMessage,
   sanitizeAmountInput,
   canAddExpense,
-  isAmountInvalid,
+  expenseAmountError,
   actualExpenses as selectActualExpenses,
   plannedExpenses as selectPlannedExpenses,
   sumExpenseAmounts,
@@ -194,11 +194,11 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
   const shares = splitWith.map((userId) => ({ userId, cents: toCents(shareText[userId] ?? '') }));
   const shareProblem = uneven && amt > 0 ? sharesError(toCents(amt), shares, currency) : null;
   const sharesSum = shares.reduce((sum, sh) => sum + sh.cents, 0);
-  const canAdd = canAddExpense(description, amt, splitWith.length) && !shareProblem;
-  const toConfirm = paymentsToConfirm(expenses, currentUserId);
-  // Inline-validation flag: amount typed but not a usable positive number.
+  // Inline-validation message: amount typed but not one the server accepts.
   // (decimal-pad can still surface '-', '..', or trailing dots on some devices.)
-  const amountInvalid = isAmountInvalid(amount, amt);
+  const amountError = expenseAmountError(amount, currency);
+  const canAdd = canAddExpense(description, amt, splitWith.length) && !shareProblem && !amountError;
+  const toConfirm = paymentsToConfirm(expenses, currentUserId);
 
   const handleAmountChange = (next: string) => {
     setAmount(sanitizeAmountInput(next));
@@ -666,9 +666,9 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
             keyboardType="decimal-pad"
             accessibilityLabel="Expense amount"
           />
-          {amountInvalid ? (
+          {amountError ? (
             <Text style={styles.errorText} accessibilityLiveRegion="polite">
-              {`Enter an amount greater than ${formatAmount(0, currency)}`}
+              {amountError}
             </Text>
           ) : null}
           <View style={styles.chipGrid}>

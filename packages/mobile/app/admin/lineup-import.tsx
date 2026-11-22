@@ -19,6 +19,7 @@ import {
   parseLineupTable,
   parseNameList,
   planSummary,
+  pluralize,
   toImportRows,
   withArtistChoice,
   updateOffBanner,
@@ -688,8 +689,8 @@ export default function LineupImportScreen() {
           <SectionLabel>Result</SectionLabel>
           <View style={[styles.banner, styles.bannerOk]}>
             <Text style={styles.bannerText}>
-              Import done. Added {result.created} sets, updated {result.updated}, created {result.newStages} stages and{' '}
-              {result.newDays} days.
+              Import done. Added {pluralize(result.created, 'set')}, updated {result.updated}, created{' '}
+              {pluralize(result.newStages, 'stage')} and {pluralize(result.newDays, 'day')}.
               {result.announced || result.announcedUpdated
                 ? ` Announced lineup: ${result.announced ?? 0} added, ${result.announcedUpdated ?? 0} updated.`
                 : ''}
@@ -774,7 +775,7 @@ export default function LineupImportScreen() {
             {h.createdBy ? ` by ${h.createdBy}` : ''}
           </Text>
           <Text style={styles.previewMeta}>
-            Added {h.counts.created} · Updated {h.counts.updated} · {h.counts.newStages} stages · {h.counts.newDays} days
+            Added {h.counts.created} · Updated {h.counts.updated} · {pluralize(h.counts.newStages, 'stage')} · {pluralize(h.counts.newDays, 'day')}
             {h.counts.announced || h.counts.announcedUpdated
               ? ` · Announced ${h.counts.announced ?? 0} added, ${h.counts.announcedUpdated ?? 0} updated`
               : ''}

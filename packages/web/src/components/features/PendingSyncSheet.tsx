@@ -22,6 +22,7 @@ function retryItem(item: FailedSyncItem, q: OfflineQueueBridge | null): Promise<
         method: item.method,
         body: item.body,
         clientId: item.clientId,
+        label: item.label,
       }),
     )
       .then(() => q.processQueue())
@@ -95,12 +96,14 @@ export default function PendingSyncSheet({ onClose }: PendingSyncSheetProps) {
             <div className="flex items-center gap-2 flex-shrink-0">
               <button
                 onClick={() => handleRetry([item])}
+                aria-label={`Retry ${item.label}`}
                 className="text-xs font-bold px-3 rounded bg-accent-aqua/15 text-accent-aqua hover:bg-accent-aqua/25 min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
               >
                 Retry
               </button>
               <button
                 onClick={() => dismissItem(item.clientId)}
+                aria-label={`Dismiss ${item.label}`}
                 className="text-xs font-medium px-3 rounded text-text-secondary hover:text-text-primary min-h-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
               >
                 Dismiss

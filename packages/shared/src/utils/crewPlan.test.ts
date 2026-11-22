@@ -16,6 +16,8 @@ import {
   memberIsOwner,
   crewFestivalName,
   memberSummary,
+  crewForFestival,
+  mapCrewHintCopy,
 } from './crewPlan';
 import { createDateInLocalFrame, getSetTimeBounds } from './setStatus';
 import type { Crew, CrewMeetingPoint, Festival, FestivalDay, FestivalSet, Profile } from '../types/domain';
@@ -301,5 +303,31 @@ describe('formatMeetWhen', () => {
   it('falls back to device-local without a zone and null when unparseable', () => {
     expect(formatMeetWhen(iso)).toBe(new Date(iso).toLocaleString([], { weekday: 'short', hour: 'numeric', minute: '2-digit' }));
     expect(formatMeetWhen('nope', 'Europe/Berlin')).toBeNull();
+  });
+});
+
+describe('crewForFestival', () => {
+  const a = { id: 'a', festivalId: 'fa' };
+  const b = { id: 'b', festivalId: 'fb' };
+  it('keeps the active crew when it fits the festival', () => {
+    expect(crewForFestival([a, b], b, { id: 'fb' })).toBe(b);
+  });
+  it('finds the crew of the selected festival when another crew is active', () => {
+    expect(crewForFestival([a, b], a, { id: 'fb' })).toBe(b);
+  });
+  it('skips an offline-join placeholder', () => {
+    expect(crewForFestival([a, { ...b, _optimistic: true }], a, { id: 'fb' })).toBeNull();
+  });
+  it('returns null when no crew fits or no festival is selected', () => {
+    expect(crewForFestival([a], a, { id: 'fb' })).toBeNull();
+    expect(crewForFestival([a], a, null)).toBeNull();
+  });
+});
+
+describe('mapCrewHintCopy', () => {
+  it('names the other festival, else asks to join or sign in', () => {
+    expect(mapCrewHintCopy(true, 'Wasteland')).toContain('Your crew is for Wasteland');
+    expect(mapCrewHintCopy(true, null)).toBe('Join a crew to see friends and meeting points here.');
+    expect(mapCrewHintCopy(false, null)).toMatch(/^Sign in/);
   });
 });

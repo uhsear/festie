@@ -289,7 +289,7 @@ export default function AdminAuditScreen() {
           label="Search the audit log"
           value={draft}
           onChangeText={setDraft}
-          placeholder="actor:asir action:festival.*"
+          placeholder="actor:sam action:festival.*"
           onSubmitEditing={applySearch}
         />
         {submitErrors.map((message) => (
@@ -298,7 +298,7 @@ export default function AdminAuditScreen() {
           </Text>
         ))}
         {parsed.tokens.length === 0 ? (
-          <Text style={styles.rowHint}>Try: actor:asir · user:sam · action:festival.* · after:2026-10-01</Text>
+          <Text style={styles.rowHint}>Try: actor:sam · user:alex · action:festival.* · after:2026-10-01</Text>
         ) : (
           <View style={styles.chipWrap}>
             {parsed.tokens.map((token) => (

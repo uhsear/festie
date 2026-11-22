@@ -211,11 +211,11 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                       )}
                     </div>
 
-                    <div className="mt-1 flex items-center gap-2 text-xs text-text-muted">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
                       <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
-                      <span className="tabular-nums">{timeRange}</span>
+                      <span className="tabular-nums whitespace-nowrap">{timeRange}</span>
                       <span aria-hidden="true">·</span>
-                      <span className="tabular-nums">{fmtDurationMinutes(pick.durationMin)}</span>
+                      <span className="tabular-nums whitespace-nowrap">{fmtDurationMinutes(pick.durationMin)}</span>
                       <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} />
                     </div>
 

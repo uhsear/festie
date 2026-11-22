@@ -74,7 +74,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
       <div className="space-y-1 text-sm text-text-secondary">
         {lines?.festivalLine && <p>{lines.festivalLine}</p>}
         {lines?.ownerLine && <p>{lines.ownerLine}</p>}
-        <p>Crew members can see your picks and your status.</p>
+        {!unusable && <p>Crew members can see your picks and your status.</p>}
         {switchNote && <p>{switchNote}</p>}
         {statusMessage && <p role="status">{statusMessage}</p>}
         {joinError && <p role="alert">{joinError}</p>}

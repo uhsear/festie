@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { makeFestivalSet } from '../test-fixtures/festivalSet';
 import {
+  pluralize,
   formatFestivalDate,
   formatDateSpan,
   formatClock,
@@ -436,3 +437,13 @@ describe('artistLinkEntries', () => {
     expect(artistLinkEntries(undefined)).toEqual([]);
   });
 });
+
+describe('pluralize', () => {
+  it('uses the singular only for exactly one', () => {
+    expect(pluralize(1, 'stage')).toBe('1 stage');
+    expect(pluralize(0, 'stage')).toBe('0 stages');
+    expect(pluralize(2, 'day')).toBe('2 days');
+    expect(pluralize(2, 'entry', 'entries')).toBe('2 entries');
+  });
+});
+

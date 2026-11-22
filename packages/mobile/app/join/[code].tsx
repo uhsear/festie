@@ -160,7 +160,7 @@ export default function JoinInviteScreen() {
           </>
         ) : null}
 
-        {inviteDead && user ? (
+        {user && (!validCode || inviteDead) ? (
           <Button
             maxFontSizeMultiplier={MAX_FONT_SCALE}
             label="Type an invite code"
@@ -202,15 +202,27 @@ export default function JoinInviteScreen() {
           </>
         ) : null}
 
-        {inviteDead && !user ? (
-          <Button
-            maxFontSizeMultiplier={MAX_FONT_SCALE}
-            label="Create account"
-            onPress={() => {
-              setPendingInvite(null);
-              router.push('/(auth)/register');
-            }}
-          />
+        {(!validCode || inviteDead) && !user ? (
+          <>
+            <Button
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              label="Create account"
+              onPress={() => {
+                setPendingInvite(null);
+                router.push('/(auth)/register');
+              }}
+            />
+            <Button
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+              label="Sign in"
+              variant="secondary"
+              onPress={() => {
+                setPendingInvite(null);
+                router.push('/(auth)/login');
+              }}
+              style={styles.secondary}
+            />
+          </>
         ) : null}
 
         <Button

@@ -192,7 +192,7 @@ export const RATING_SCALE_DATA: readonly {
   { value: 4, label: 'Good', order: 1 },
   { value: 3, label: 'Okay', order: 2 },
   { value: 2, label: 'Meh', order: 3 },
-  { value: 1, label: 'Skip', order: 4 },
+  { value: 1, label: 'Nope', order: 4 },
 ] as const;
 
 /** High → low numeric rating values, for rendering order. */
@@ -318,6 +318,7 @@ export const LIVE_SHARE_COPY = {
   stoppedNoticeTitle: 'Sharing stopped',
   ruleWeb: 'Only this crew sees it. It stops at the time you pick, or when you close this tab.',
   chooserTitle: 'Share your location for…',
+  recommended: 'Recommended',
   restOfToday: (clock: string) => `Rest of today (until ${clock})`,
   battery: 'Show my battery level',
   batteryHint: 'Helps your crew see why your dot went quiet. At 10% or less, your crew feed says so once.',
@@ -449,6 +450,15 @@ export const ONBOARDING_COPY = {
   },
   signInPrompt: 'Already have an account?',
   signIn: 'Sign in',
+} as const;
+
+/** Rate and What you caught: a festival id the server does not know, and a festival that has not started. */
+export const WRAP_STATE_COPY = {
+  notFound: { title: 'Festival not found', description: 'This link points to a festival that no longer exists.' },
+  notStarted: {
+    title: "The festival hasn't started",
+    description: 'Come back once the festival starts to rate sets and mark what you caught.',
+  },
 } as const;
 
 export const INTRO_REPLAY_COPY = {

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, SearchX } from 'lucide-react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { pluralize } from '@festie/shared/utils/format';
 import {
   addOrganizationMember,
   handBackFestival,
@@ -207,7 +208,7 @@ export default function AdminOrganizationDetail({ organizationId, onBack, reauth
       <section aria-label="Usage" className="space-y-1">
         <h3 className="type-label text-text-primary">Usage</h3>
         <p className="text-sm text-text-secondary">
-          {data.usage.festivals} festivals ({data.usage.drafts} drafts). {data.usage.announcementsThisMonth} announcements this month.{' '}
+          {pluralize(data.usage.festivals, 'festival')} ({pluralize(data.usage.drafts, 'draft')}). {pluralize(data.usage.announcementsThisMonth, 'announcement')} this month.{' '}
           {Math.round((data.usage.uploadedBytes / (1024 * 1024)) * 10) / 10} MB of site-plan images stored.
         </p>
       </section>

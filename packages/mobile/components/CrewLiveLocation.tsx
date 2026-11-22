@@ -321,13 +321,13 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
                       style={[styles.durationChip, isDefault && styles.durationChipDefault]}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Share for ${d.label}`}
+                      accessibilityLabel={isDefault ? `Share for ${d.label}, ${LIVE_SHARE_COPY.recommended}` : `Share for ${d.label}`}
                     >
                       <Text
                         style={[styles.durationChipText, isDefault && styles.durationChipTextDefault]}
                         maxFontSizeMultiplier={MAX_FONT_SCALE}
                       >
-                        {d.label}
+                        {isDefault ? `${d.label} · ${LIVE_SHARE_COPY.recommended}` : d.label}
                       </Text>
                     </TouchableOpacity>
                   );

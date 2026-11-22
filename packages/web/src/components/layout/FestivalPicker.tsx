@@ -134,6 +134,8 @@ export default function FestivalPicker() {
     return (
       <div key={f.id} className="flex items-center gap-2">
         {button}
+        {/* Follow comes before share so the share icons line up in one right-hand column. */}
+        {followable && <FollowButton festivalId={f.id} festivalName={f.name} size="sm" />}
         {slug && (
           <button
             type="button"
@@ -148,7 +150,6 @@ export default function FestivalPicker() {
             <Share2 className="w-4 h-4" aria-hidden="true" />
           </button>
         )}
-        {followable && <FollowButton festivalId={f.id} festivalName={f.name} size="sm" />}
       </div>
     );
   };

@@ -78,7 +78,7 @@ describe('PollsTab cap', () => {
   it('disables every create button at 3 open polls and shows the cap text', async () => {
     apiGet.mockResolvedValue({ polls: [poll('1'), poll('2'), poll('3')] });
     renderTab();
-    const create = await screen.findByRole('button', { name: /Create Poll/ });
+    const create = await screen.findByRole('button', { name: /Create poll/ });
     expect(create).toBeDisabled();
     expect(screen.getByRole('button', { name: /Which set\?/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: /Meet where\?/ })).toBeDisabled();
@@ -88,7 +88,7 @@ describe('PollsTab cap', () => {
   it('does not count an expired poll', async () => {
     apiGet.mockResolvedValue({ polls: [poll('1'), poll('2'), poll('3', { closes_at: '2020-01-01T00:00:00Z' })] });
     renderTab();
-    const create = await screen.findByRole('button', { name: /Create Poll/ });
+    const create = await screen.findByRole('button', { name: /Create poll/ });
     expect(create).toBeEnabled();
     expect(screen.queryByText(/Close a poll to start another/)).not.toBeInTheDocument();
   });
@@ -99,12 +99,12 @@ describe('PollsTab failed refetch', () => {
     apiGet.mockResolvedValueOnce({ polls: [poll('1')] });
     const qc = createTestQueryClient();
     renderWithQueryClient(<PollsTab crewId="c1" currentUserId="u1" isOwner />, qc);
-    await screen.findByRole('button', { name: /Create Poll/ });
+    await screen.findByRole('button', { name: /Create poll/ });
     apiGet.mockRejectedValueOnce(new Error('offline'));
     await act(() => qc.refetchQueries({ queryKey: ['polls', 'c1'] }));
     expect(await screen.findByText(/Showing saved data/)).toBeInTheDocument();
     expect(screen.queryByText("Couldn't load polls")).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Create Poll/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create poll/ })).toBeInTheDocument();
   });
 });
 

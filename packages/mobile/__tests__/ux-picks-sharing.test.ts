@@ -24,6 +24,14 @@ describe('picks and sharing UX source guards', () => {
     expect(src.match(/const shareText = async/g)).toHaveLength(2);
   });
 
+  it('wrap: card dots are 44pt buttons that scroll the carousel, and the share tabs sit in a tablist', () => {
+    const wrap = read('app/wrap.tsx');
+    expect(wrap).toContain('ref={cardListRef}');
+    expect(wrap).toContain('onPress={() => goToCard(i)}');
+    expect(wrap).toMatch(/dotTarget: \{\s*minWidth: 44,\s*minHeight: 44,/);
+    expect(read('app/plan-share.tsx')).toContain('accessibilityRole="tablist"');
+  });
+
   it('caught: save errors toast, the search is lifted above the keyboard', () => {
     const src = read('app/caught.tsx');
     expect(src).toContain("showToast(mapErrorToUserMessage(e, SAVE_ERROR), { kind: 'error' })");

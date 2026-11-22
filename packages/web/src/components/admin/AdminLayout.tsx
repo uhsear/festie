@@ -34,8 +34,8 @@ export default function AdminLayout({ title, description, onTabChange, activeTab
           {envLabel} environment. Changes here do not reach festie.us.
         </div>
       )}
-      {/* Top bar */}
-      <div className="sticky top-0 z-30 border-b border-glass-border bg-bg-card/80 backdrop-blur-xl">
+      {/* Top bar. -top-4 cancels the scroller's py-4 so no content shows above it once stuck. */}
+      <div className="sticky -top-4 z-30 border-b border-glass-border bg-bg-card/80 backdrop-blur-xl">
         <div className="flex items-center justify-between px-4 py-4 md:px-6">
           <div className="flex items-center gap-4">
             <button

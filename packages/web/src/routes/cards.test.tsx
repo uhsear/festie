@@ -96,7 +96,7 @@ describe('CardsView order and earlier row', () => {
 
   it('folds ended sets into one collapsed row and keeps time order', () => {
     render(<CardsView />);
-    expect(screen.getByRole('button', { name: 'Show 2 sets that ended earlier today' })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: 'Earlier today (2), show sets that ended earlier' })).toHaveTextContent(
       'Earlier today (2)',
     );
     expect(ids()).toEqual(['now', 'late']);
@@ -104,8 +104,8 @@ describe('CardsView order and earlier row', () => {
 
   it('expands and collapses the earlier sets', async () => {
     render(<CardsView />);
-    await userEvent.click(screen.getByRole('button', { name: /ended earlier today/ }));
-    const toggle = screen.getByRole('button', { name: 'Hide sets that ended earlier today' });
+    await userEvent.click(screen.getByRole('button', { name: /Earlier today \(2\), show/ }));
+    const toggle = screen.getByRole('button', { name: 'Hide earlier sets' });
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(toggle).toHaveTextContent('Hide earlier sets');
     expect(ids()).toEqual(['early', 'mid', 'now', 'late']);

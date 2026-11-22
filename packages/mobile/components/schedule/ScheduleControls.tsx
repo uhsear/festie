@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import SpotifyAttribution from '../SpotifyAttribution';
-import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
+import { COPY, DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
 import {
   toggleStageFilter,
   toggleGenreFilter,
@@ -77,7 +77,7 @@ interface ScheduleControlsProps {
   viewMode: "timeline" | "cards";
   visibleDays: number[];
   width: number;
-  zoneLabel: "Festival time" | null;
+  zoneLabel: string | null;
 }
 
 export default function ScheduleControls({
@@ -259,7 +259,7 @@ export default function ScheduleControls({
               activeOpacity={canFilterMine ? 0.7 : 1}
               accessibilityRole="button"
               accessibilityState={canFilterMine ? { selected: onlyMine } : { disabled: true, selected: false }}
-              accessibilityLabel="Show only my picks"
+              accessibilityLabel={canFilterMine ? COPY.picks.filterA11y : undefined}
             >
               <Ionicons
                 name={CONCEPT_IONICON.picks}

@@ -83,7 +83,9 @@ export function offlineStatusLabel(summary: OfflineSummary, nowMs?: number): str
   }
 }
 
-export function offlineActionLabel(summary: OfflineSummary): string {
+/** Downloading needs signal, so offline the action says so instead of failing every step. */
+export function offlineActionLabel(summary: OfflineSummary, offline = false): string {
+  if (offline && summary.overall !== 'syncing') return 'Connect to download';
   switch (summary.overall) {
     case 'syncing': return 'Downloading…';
     case 'ready': return 'Update';

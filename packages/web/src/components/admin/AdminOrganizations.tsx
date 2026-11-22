@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { SearchX } from 'lucide-react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { withReauth } from '@festie/shared/services/admin';
+import { pluralize } from '@festie/shared/utils/format';
 import {
   createOrganization,
   type AdminOrganization,
@@ -35,6 +36,13 @@ const KINDS: ReadonlyArray<{ value: OrgKind; label: string }> = [
 
 export const orgStatusLabel = (status: string) =>
   status === 'pending' ? 'Waiting for activation' : status === 'active' ? 'Active' : 'Suspended';
+
+// Active is the good state, so it is green. Amber is only for an organization that still waits on us.
+const STATUS_CHIP: Record<string, string> = {
+  pending: 'bg-accent-amber/20 text-accent-amber',
+  active: 'bg-accent-green/20 text-accent-green',
+  suspended: 'bg-accent-coral/20 text-accent-coral',
+};
 
 const buttonClass =
   'inline-flex items-center justify-center min-h-11 px-4 rounded-lg bg-accent-aqua text-bg-primary text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-50';
@@ -197,7 +205,7 @@ export default function AdminOrganizations() {
                       >
                         {org.name}
                       </button>
-                      <span className="rounded-full bg-accent-amber/20 px-2 py-0.5 text-xs font-semibold text-accent-amber">
+                      <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', STATUS_CHIP[org.status])}>
                         {orgStatusLabel(org.status)}
                       </span>
                       {org.verifiedAt && (
@@ -205,7 +213,7 @@ export default function AdminOrganizations() {
                       )}
                     </div>
                     <p className="text-xs text-text-muted">
-                      {org.kind}. {org.memberCount ?? 0} members, {org.pendingCount ?? 0} waiting to join, {org.festivalCount ?? 0} festivals
+                      {org.kind}. {pluralize(org.memberCount ?? 0, 'member')}, {org.pendingCount ?? 0} waiting to join, {pluralize(org.festivalCount ?? 0, 'festival')}
                       {org.ownerCount === 0 ? '. No owner yet.' : '.'}
                     </p>
                   </li>

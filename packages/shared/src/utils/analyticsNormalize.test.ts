@@ -341,6 +341,9 @@ describe('admin analytics copy', () => {
     expect(analyticsQuestions(d).map((q) => q.id)).not.toContain('install');
     expect(analyticsScopeLine(d)).toBe('At Fest One: 8 people with a plan.');
     expect(analyticsScopeLine(normalizeAnalytics(raw))).toBe('Across all 2 festivals and 10 accounts.');
+    const all = normalizeAnalytics(raw);
+    const one = { ...all, festivalStats: all.festivalStats.slice(0, 1), totals: { ...all.totals, signedUp: 1 } };
+    expect(analyticsScopeLine(one)).toBe('Across 1 festival and 1 account.');
   });
 
   it('builds funnel steps', () => {
