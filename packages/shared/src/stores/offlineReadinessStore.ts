@@ -165,15 +165,17 @@ const store: StateCreator<OfflineReadinessStore> = (set, get) => {
   // Run one section's loader inside its own try/catch so a single failure marks
   // ONLY that section `error` and never rejects the overall download.
   async function runSection(festivalId: string, section: ReadinessSection, fn: () => Promise<void>): Promise<void> {
-    patchSection(festivalId, section, { status: 'syncing', syncedAt: null });
+    // A section with a syncedAt was ready before this run (only success sets it).
+    const prev = get().byFestival[festivalId]?.[section];
+    const syncedBefore = prev?.syncedAt ?? null;
+    patchSection(festivalId, section, { status: 'syncing', syncedAt: syncedBefore });
     try {
       await fn();
       patchSection(festivalId, section, { status: 'ready', syncedAt: Date.now() });
     } catch {
-      // Keep any previously-synced timestamp so the UI can still say "synced N
-      // ago" for a section that was ready before and just failed to refresh.
-      const prev = get().byFestival[festivalId]?.[section];
-      patchSection(festivalId, section, { status: 'error', syncedAt: prev?.syncedAt ?? null });
+      // A failed refresh must not overwrite good persisted data: a section that
+      // was synced before stays ready with its old timestamp.
+      patchSection(festivalId, section, { status: syncedBefore === null ? 'error' : 'ready', syncedAt: syncedBefore });
     }
   }
 
