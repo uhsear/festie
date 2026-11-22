@@ -15,6 +15,7 @@
 
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { auditContext } from '../lib/audit-middleware.js';
+import { CAP_REACHED } from '../lib/response.js';
 import { OrganizationError } from '../lib/db/stores/organizations.js';
 import { sendOrganizationMemberEmail } from '../lib/email.js';
 import { publishChecklist, submitBlockers } from '../lib/helpers/validation.js';
@@ -149,6 +150,8 @@ export default function createManageRoutes(
         detailsJson: JSON.stringify(details),
         ip: getRequestIp(req),
       });
+      // Tells the generic audit middleware this request already has its row, so one action is one row.
+      if (req.res?.locals) req.res.locals.auditWritten = true;
     } catch (error) {
       log.warn('manage audit write failed', { action, error: (error as Error).message });
     }
@@ -203,7 +206,7 @@ export default function createManageRoutes(
     validate(deps.schemas.organizerFestivalCreate),
     async (req: any, res: any) => {
       try {
-        const { organizationId, ...input } = req.validatedBody;
+        const { organizationId, seriesId: _seriesId, ...input } = req.validatedBody;
         if (req.festivalRole !== 'admin') {
           const counts = await stores.organizations.festivalCounts(organizationId);
           if (req.orgStatus === 'pending' && counts.drafts >= config.ORGANIZER_PENDING_FESTIVAL_CAP) {
@@ -311,7 +314,7 @@ export default function createManageRoutes(
 
   // A store refusal (the last owner, an owner change, the daily cap) keeps its status; anything else is a 500.
   function failOrganization(res: any, error: unknown, what: string) {
-    if (error instanceof OrganizationError) return sendError(res, error.status, error.message, ErrorCodes[error.code]);
+    if (error instanceof OrganizationError) return sendError(res, error.status, error.message, ErrorCodes[error.code], error.status === 429 ? CAP_REACHED : null);
     log.error(`manage ${what} failed`, { error: (error as Error).message });
     return sendError(res, 500, `Failed to ${what}`, ErrorCodes.INTERNAL_ERROR);
   }
@@ -516,6 +519,9 @@ export default function createManageRoutes(
 
   // What happened in the organization: its members' edits and Festie's actions on its festivals. Teammates show by
   // display name (owner decision 9), Festie staff as "Festie support", and a Festie row carries no details.
+  // Only named actions show. The generic audit middleware also writes a nameless row for a dry-run save, a repeat
+  // publish request and a refused write; those would read as "Festivals replaced" with no festival.
+  const ACTIVITY_ACTIONS = Object.values(AUDIT_ACTIONS);
   router.get(
     '/organizations/:id/audit',
     orgAccess({ action: 'org.audit', param: 'id' }),
@@ -527,6 +533,7 @@ export default function createManageRoutes(
         const { cursor, limit } = req.validatedQuery;
         const { rows, nextCursor } = await stores.auditLog.query({
           organizationId: req.organizationId,
+          actions: ACTIVITY_ACTIONS,
           limit,
           cursor: cursor || null,
         });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { useAuthStore } from '@festie/shared';
 import { ApiClientError } from '@festie/shared/services/api';
@@ -68,6 +68,41 @@ describe('/manage', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Resend email' }));
     await waitFor(() => expect(resendVerification).toHaveBeenCalled());
     expect(toast).toHaveBeenCalledWith(expect.any(String), 'success');
+    expect(screen.queryByText('You are not part of an organization on Festie yet.')).not.toBeInTheDocument();
+  });
+
+  it('returns to the Festivals tab when the organization changes to one without Activity', async () => {
+    mockGet.mockImplementation((path: string) =>
+      Promise.resolve(
+        path === '/manage/me'
+          ? {
+              emailConfirmed: true,
+              organizations: [
+                { id: 'o1', name: 'Venue A', role: 'owner', status: 'active', verified: false },
+                { id: 'o2', name: 'Venue B', role: 'editor', status: 'active', verified: false },
+              ],
+            }
+          : [],
+      ),
+    );
+    render();
+    await userEvent.click(await screen.findByRole('button', { name: 'Activity' }));
+    expect(screen.getByRole('button', { name: 'Activity' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.selectOptions(screen.getByLabelText('Organization'), 'o2');
+    expect(screen.getByRole('button', { name: 'Festivals' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByRole('button', { name: 'Activity' })).not.toBeInTheDocument();
+  });
+
+  it('falls back to Festivals when a refetch demotes the member while Activity is open', async () => {
+    const me = (role: string) => ({ emailConfirmed: true, organizations: [{ id: 'o1', name: 'Venue A', role, status: 'active', verified: false }] });
+    mockGet.mockImplementation((path: string) => Promise.resolve(path === '/manage/me' ? me('owner') : []));
+    const client = createTestQueryClient({ queries: { gcTime: 0, retry: false } });
+    renderWithQueryClient(<ManagePage />, client);
+    await userEvent.click(await screen.findByRole('button', { name: 'Activity' }));
+    mockGet.mockImplementation((path: string) => Promise.resolve(path === '/manage/me' ? me('editor') : []));
+    await act(() => client.invalidateQueries({ queryKey: ['manage', 'me'] }));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Activity' })).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Festivals' })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('offers Retry when the organizations cannot load', async () => {

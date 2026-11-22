@@ -33,4 +33,11 @@ describe('usePushLanding', () => {
     expect(selectFestival).not.toHaveBeenCalled();
     expect(window.location.search).toBe('?tab=festivals&festival=f2&view=import');
   });
+
+  it('leaves the organizer festival editor link alone', () => {
+    window.history.replaceState(null, '', '/manage?festival=f2');
+    renderHook(() => usePushLanding());
+    expect(selectFestival).not.toHaveBeenCalled();
+    expect(window.location.search).toBe('?festival=f2');
+  });
 });

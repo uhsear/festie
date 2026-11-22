@@ -139,6 +139,7 @@ describe('festival announcements admin POST', () => {
     const fourth = await post(app, { ...BODY, sendAt: new Date(start + 30 * 60_000).toISOString() });
     assert.equal(fourth.status, 429);
     assert.equal(fourth.body.error.code, 'RATE_LIMITED');
+    assert.equal(fourth.body.error.cap, true);
     assert.equal(
       fourth.body.error.message,
       'This festival already has 3 announcements within an hour of that time. Wait, or cancel one.',

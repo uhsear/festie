@@ -25,7 +25,7 @@ export const announcementsApi = {
       `/${scope}/festivals/${enc(festivalId)}/announcements`,
     ),
   create: (festivalId: string, body: CreateAnnouncementBody, scope: FestivalScope = 'admin') =>
-    api.post<{ announcement: AdminAnnouncement; recipients: number }>(
+    api.post<{ announcement: AdminAnnouncement; recipients: number | null }>(
       `/${scope}/festivals/${enc(festivalId)}/announcements`,
       body,
     ),

@@ -11,6 +11,7 @@
 
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
+import { CAP_REACHED } from '../lib/response.js';
 import { OrganizationError } from '../lib/db/stores/organizations.js';
 import { sendOrganizationMemberEmail } from '../lib/email.js';
 
@@ -43,7 +44,7 @@ export default function createOrganizationsRoutes(deps: any) {
 
   // A store refusal (missing organization, last owner, duplicate member) keeps its status; anything else is a 500.
   function fail(res: any, error: unknown, what: string) {
-    if (error instanceof OrganizationError) return sendError(res, error.status, error.message, ErrorCodes[error.code]);
+    if (error instanceof OrganizationError) return sendError(res, error.status, error.message, ErrorCodes[error.code], error.status === 429 ? CAP_REACHED : null);
     log.error(`${what} failed`, { error: (error as Error).message });
     return sendError(res, 500, `Failed to ${what}`, ErrorCodes.INTERNAL_ERROR);
   }

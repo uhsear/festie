@@ -53,6 +53,14 @@ describe('GET /notifications/history (database)', { concurrency: 1, skip }, () =
                 ('n-other', $2, 'crew_update', 'Other user', 'Not yours', '{}', 'inbox', 'inbox', NOW())`,
         [userA, userB, sosData],
       );
+      await pool.query(
+        `INSERT INTO festivals (id, name, location, created_at, updated_at) VALUES ('f-inbox', 'Inbox Fest', 'Grounds', NOW(), NOW())`,
+      );
+      await pool.query(
+        `INSERT INTO notification_log (id, user_id, type, title, body, data_json, status, platform, created_at)
+         VALUES ('n-fest', $1, 'announcement', 'Shuttle', 'Runs late.', '{"festivalId":"f-inbox"}', 'inbox', 'inbox', NOW() + INTERVAL '1 minute')`,
+        [userA],
+      );
     } finally {
       await pool.end();
     }
@@ -63,10 +71,12 @@ describe('GET /notifications/history (database)', { concurrency: 1, skip }, () =
       .expect(200);
     assert.deepEqual(
       res.body.data.map((item: any) => item.id),
-      ['n-inbox', 'n-held'],
+      ['n-fest', 'n-inbox', 'n-held'],
     );
-    const [sos, held] = res.body.data;
-    assert.deepEqual(Object.keys(sos).sort(), ['body', 'createdAt', 'data', 'id', 'title', 'type']);
+    const [named, sos, held] = res.body.data;
+    assert.equal(named.festivalName, 'Inbox Fest');
+    assert.equal(sos.festivalName, null);
+    assert.deepEqual(Object.keys(sos).sort(), ['body', 'createdAt', 'data', 'festivalName', 'id', 'title', 'type']);
     assert.deepEqual(sos.data, { deepLink: 'https://festie.us/crew?sos=u1', crewId: 'c1' });
     assert.deepEqual(held.data, { setId: 's1' });
 

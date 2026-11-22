@@ -123,6 +123,7 @@ describe('owner-run members: adding', { skip }, () => {
     const third = await add('three@example.com');
     assert.equal(third.status, 429);
     assert.equal(third.body.error.code, 'RATE_LIMITED');
+    assert.equal(third.body.error.cap, true);
     assert.match(third.body.error.message, /2 people a day/);
     assert.deepEqual(await emailsOf(server), ['one@example.com', 'two@example.com']);
     assert.equal((await o.sql(server, "SELECT 1 FROM organization_pending_members WHERE email = 'three@example.com'")).rowCount, 0);

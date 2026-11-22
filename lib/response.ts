@@ -53,6 +53,12 @@ export const ErrorCodes = {
   CREW_LOCKED: 'CREW_LOCKED',
 } as const;
 
+/**
+ * Detail for a 429 that is a business cap (a daily or hourly limit), not a rate limiter. The client shows the
+ * message of a 429 with this flag as sent; any other 429 without Retry-After keeps the generic wording.
+ */
+export const CAP_REACHED = { cap: true } as const;
+
 // Errors that are safe to retry (transient failures)
 export const RETRYABLE_CODES: Set<string> = new Set([
   ErrorCodes.RATE_LIMITED,
