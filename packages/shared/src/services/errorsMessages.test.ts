@@ -28,9 +28,21 @@ describe('mapErrorToUserMessage', () => {
     expect(mapErrorToUserMessage(apiError(429, {}, ''))).toBe('Too many tries. Wait a moment and try again.');
   });
 
-  it('shows the server reason for a 429 without Retry-After (a daily cap)', () => {
-    expect(mapErrorToUserMessage(apiError(429, {}, 'Your organization can send 3 announcements a day. Try again tomorrow.'))).toBe(
-      'Your organization can send 3 announcements a day. Try again tomorrow.',
+  it('shows the server reason for a 429 flagged as a cap (a daily limit)', () => {
+    expect(
+      mapErrorToUserMessage(apiError(429, { details: { cap: true } }, 'Your organization can send 3 announcements a day. Try again tomorrow.')),
+    ).toBe('Your organization can send 3 announcements a day. Try again tomorrow.');
+  });
+
+  it('keeps the generic words for the per-account login 429, which has no Retry-After and no cap flag', () => {
+    expect(mapErrorToUserMessage(apiError(429, {}, 'Too many login attempts for this account'))).toBe(
+      'Too many tries. Wait a moment and try again.',
+    );
+  });
+
+  it('keeps the generic words for the resend-verification 429 whose text names a delay in seconds', () => {
+    expect(mapErrorToUserMessage(apiError(429, {}, 'Too many verification emails sent to this address. Try again in 3600s'))).toBe(
+      'Too many tries. Wait a moment and try again.',
     );
   });
 

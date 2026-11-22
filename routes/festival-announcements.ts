@@ -17,6 +17,7 @@
 import crypto from 'crypto';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { auditContext } from '../lib/audit-middleware.js';
+import { CAP_REACHED } from '../lib/response.js';
 import { organizerAudience } from '../lib/organizer-engagement.js';
 import type { RouteDeps } from '../lib/types';
 
@@ -123,7 +124,7 @@ export function createAdminAnnouncementRoutes(deps: RouteDeps) {
         const capMessage = () => `Your organization can send ${config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP} announcements a day. Try again tomorrow.`;
         // A cheap early answer; the insert below enforces the cap again under the organization lock.
         if (member && (await stores.announcements.countByOrganizationToday(req.organizationId)) >= config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP) {
-          return sendError(res, 429, capMessage(), ErrorCodes.RATE_LIMITED);
+          return sendError(res, 429, capMessage(), ErrorCodes.RATE_LIMITED, CAP_REACHED);
         }
         const push = !member || req.orgVerified === true;
         const now = Date.now();
@@ -138,6 +139,7 @@ export function createAdminAnnouncementRoutes(deps: RouteDeps) {
             429,
             'This festival already has 3 announcements within an hour of that time. Wait, or cancel one.',
             ErrorCodes.RATE_LIMITED,
+            CAP_REACHED,
           );
         }
         const row = {
@@ -155,7 +157,7 @@ export function createAdminAnnouncementRoutes(deps: RouteDeps) {
         const announcement = member
           ? await stores.announcements.createWithinOrganizationCap({ ...row, organizationId: req.organizationId }, config.ORGANIZER_ANNOUNCEMENT_DAILY_CAP)
           : await stores.announcements.create({ ...row, organizationId: null });
-        if (!announcement) return sendError(res, 429, capMessage(), ErrorCodes.RATE_LIMITED);
+        if (!announcement) return sendError(res, 429, capMessage(), ErrorCodes.RATE_LIMITED, CAP_REACHED);
         const recipients = await countRecipients(festivalId);
         await writeAudit(req, res, festivalId, AUDIT_ACTIONS.FESTIVAL_ANNOUNCEMENT_SENT, {
           announcementId: announcement.id,
