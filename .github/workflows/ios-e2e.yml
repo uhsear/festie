@@ -370,19 +370,17 @@ jobs:
             fi
           done
 
-      # Maestro records every -e value in commands-*.json and maestro.log. Keep the debug
-      # tree and the logs for diagnosis, but delete any file that holds a credential, so the
-      # public artifact can never publish the smoke credentials.
+      # Maestro records every -e value in commands-*.json and maestro.log.
+      # Keep only screenshots in the debug tree so Actions artifacts can never
+      # publish the smoke credentials from this public repository.
       - name: Remove credential-bearing Maestro metadata
         if: always() && env.RUN_MAESTRO == 'true'
         working-directory: packages/mobile
-        env:
-          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
-          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
         run: |
-          for secret in "$TEST_USERNAME" "$TEST_PASSWORD"; do
-            [ -n "$secret" ] || continue
-            grep -rlF -- "$secret" maestro-ios-debug maestro-ios-artist-debug maestro-ios.log maestro-ios-artist.log 2>/dev/null               | while read -r f; do rm -f "$f"; echo "::notice::Removed $f (held a test credential)"; done
+          for dir in maestro-ios-debug maestro-ios-artist-debug; do
+            if [ -d "$dir" ]; then
+              find "$dir" -type f ! -path '*/screenshots/*.png' -delete
+            fi
           done
 
       - name: Upload Maestro artifacts
@@ -397,8 +395,10 @@ jobs:
             packages/mobile/maestro-ios-hierarchy.json
             packages/mobile/maestro-ios-debug/**
             packages/mobile/maestro-ios-artist-debug/**
-            packages/mobile/maestro-ios.log
-            packages/mobile/maestro-ios-artist.log
+            !packages/mobile/maestro-ios-debug/commands-*.json
+            !packages/mobile/maestro-ios-debug/maestro.log
+            !packages/mobile/maestro-ios-artist-debug/commands-*.json
+            !packages/mobile/maestro-ios-artist-debug/maestro.log
           if-no-files-found: error
 
       # Publish the Maestro JUnit report as a PR/run check annotation so failures
