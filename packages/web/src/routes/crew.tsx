@@ -10,7 +10,6 @@ import FreshnessChip from '../components/features/FreshnessChip';
 import CrewHeader from '../components/crew/CrewHeader';
 import CrewSkeleton from '../components/ui/skeletons/CrewSkeleton';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
-import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
@@ -330,7 +329,6 @@ function CrewViewInner() {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <FreshnessChip surface="crew" />
             <OfflineStatusChip />
-            <LastSyncedBadge surface="crew" />
             <SosRaiseButton crewId={activeCrew.id} compact />
           </div>
 
