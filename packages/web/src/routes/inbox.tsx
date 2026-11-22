@@ -66,7 +66,7 @@ export default function InboxView() {
       {loaded && items.length === 0 && !error && <p className="py-6 text-text-secondary">{INBOX_COPY.empty}</p>}
 
       {items.length > 0 && (
-        <ul className="divide-y divide-border-subtle">
+        <ul className="m-0 list-none divide-y divide-border-subtle p-0">
           {items.map((item) => {
             const unread = isInboxItemUnread(item, seenAtOnOpen.current);
             const ago = timeAgo(Date.parse(item.createdAt));

@@ -99,16 +99,28 @@ function Row({
 }
 
 function Message({ text, onRetry }: { text: string; onRetry?: () => void }) {
+  const navigate = useNavigate();
+  const user = useAuthStore((s) => s.user);
   return (
     <>
       <h1 className="sr-only">Friend picks</h1>
-      <div className="max-w-2xl mx-auto py-8 px-4 text-center flex flex-col items-center gap-3" role="alert">
-        {text}
-        {onRetry && (
-          <button type="button" className="btn-secondary min-h-11 px-4" onClick={onRetry}>
-            Try again
+      <div className="max-w-2xl mx-auto py-8 px-4 text-center flex flex-col items-center gap-3">
+        <p role="alert">{text}</p>
+        <div className="flex gap-2 flex-wrap justify-center">
+          {onRetry && (
+            <button type="button" className="btn-secondary min-h-11 px-4" onClick={onRetry}>
+              Try again
+            </button>
+          )}
+          <button type="button" className="btn-primary min-h-11 px-4" onClick={() => navigate({ to: '/' })}>
+            Open Festie
           </button>
-        )}
+          {!user && (
+            <button type="button" className="btn-secondary min-h-11 px-4" onClick={() => navigate({ to: '/register' })}>
+              Create account
+            </button>
+          )}
+        </div>
       </div>
     </>
   );

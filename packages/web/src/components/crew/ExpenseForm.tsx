@@ -8,6 +8,8 @@ import {
   sharesError,
   formatCents,
   toCents,
+  expenseAmountError,
+  MAX_EXPENSE_AMOUNT,
   centsToInputText,
   attendingDayCount,
   hasDayAnswers,
@@ -53,6 +55,8 @@ export default function ExpenseForm({
 }: Props) {
   const [description, setDescription] = useState(initial?.description ?? '');
   const [amount, setAmount] = useState(initial ? String(initial.amount) : '');
+  // The amount error waits for blur (clicking the disabled Add button blurs it) so a half-typed "0.0" does not flash it.
+  const [amountTouched, setAmountTouched] = useState(false);
   const [category, setCategory] = useState<string>(initial?.category ?? 'other');
   const [planned, setPlanned] = useState(initial?.planned === true);
   // Former members cannot be picked or removed in the form and the server rejects them, so drop them on prefill.
@@ -105,7 +109,9 @@ export default function ExpenseForm({
 
   const canSplitByDays = uneven && totalCents > 0 && dayCount > 0 && hasDayAnswers(daysIndex, splitWith);
 
-  const canSubmit = !!description.trim() && totalCents > 0 && splitWith.length > 0 && !error;
+  const amountError = expenseAmountError(amount, currency);
+
+  const canSubmit = !!description.trim() && totalCents > 0 && splitWith.length > 0 && !error && !amountError;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -146,9 +152,12 @@ export default function ExpenseForm({
         inputMode="decimal"
         step="0.01"
         min="0.01"
+        max={MAX_EXPENSE_AMOUNT}
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
+        onBlur={() => setAmountTouched(true)}
         placeholder="0.00"
+        error={amountTouched ? amountError : undefined}
         required
       />
       <div>

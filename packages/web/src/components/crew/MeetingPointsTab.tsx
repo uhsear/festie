@@ -453,7 +453,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         </Button>
         {placing && (
           <p role="status" className="text-xs text-text-secondary">
-            Click the map where you want to meet.
+            Tap or click the map where you want to meet.
           </p>
         )}
         <Suspense
@@ -478,7 +478,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           {/* With no points the empty state carries the only Add button. */}
           {!showForm && (current.length > 0 || past.length > 0) && (
             <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
-              <Plus className="w-4 h-4" aria-hidden="true" /> Add Meeting Point
+              <Plus className="w-4 h-4" aria-hidden="true" /> Add meeting point
             </Button>
           )}
 

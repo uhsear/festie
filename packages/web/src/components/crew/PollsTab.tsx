@@ -263,7 +263,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
             aria-describedby={pollState.atCap ? 'poll-cap-note' : undefined}
             className="w-full min-h-11"
           >
-            <Plus className="w-4 h-4" aria-hidden="true" /> Create Poll
+            <Plus className="w-4 h-4" aria-hidden="true" /> Create poll
           </Button>
           <Button
             variant="secondary"
@@ -292,7 +292,7 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
       ) : (
         <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
           <div className="flex items-center justify-between">
-            <h3 className="font-semibold text-text-primary">New Poll</h3>
+            <h3 className="font-semibold text-text-primary">New poll</h3>
             <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />
           </div>
           <Input
@@ -363,7 +363,6 @@ export default function PollsTab({ crewId, currentUserId, isOwner }: Props) {
           illustration="emptyList"
           title="No polls yet"
           description="Ask the crew something."
-          cta={{ label: 'Create poll', onClick: () => setShowForm(true) }}
         />
       ) : (
         <div className="space-y-3">

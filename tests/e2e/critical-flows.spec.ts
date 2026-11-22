@@ -102,7 +102,7 @@ test.describe('critical flows', () => {
 
     await page.goto(`${app.baseUrl}/crew?tab=find`);
     const panel = page.getByRole('tabpanel');
-    await panel.getByRole('button', { name: 'Send an SOS to your crew' }).click();
+    await panel.getByRole('button', { name: 'Send SOS to your crew' }).click();
     await page.getByRole('dialog').getByRole('button', { name: 'Send SOS', exact: true }).click();
 
     await expect(panel.getByText('You raised an SOS')).toBeVisible();
@@ -131,7 +131,7 @@ test.describe('critical flows', () => {
       await watcherPage.goto(`${app.baseUrl}/crew?tab=find`);
 
       await page.goto(`${app.baseUrl}/crew?tab=find`);
-      await page.getByRole('tabpanel').getByRole('button', { name: 'Send an SOS to your crew' }).click();
+      await page.getByRole('tabpanel').getByRole('button', { name: 'Send SOS to your crew' }).click();
       await page.getByRole('dialog').getByRole('button', { name: 'Send SOS', exact: true }).click();
       await expect(page.getByRole('tabpanel').getByText('You raised an SOS')).toBeVisible();
 
@@ -154,7 +154,7 @@ test.describe('critical flows', () => {
 
     const description = `Gas ${Date.now()}`;
     await page.goto(`${app.baseUrl}/crew?tab=money`);
-    await page.getByRole('button', { name: 'Add Expense', exact: true }).click();
+    await page.getByRole('button', { name: 'Add expense', exact: true }).click();
     await page.getByLabel('Description').fill(description);
     await page.getByLabel('Amount').fill('42.50');
 
@@ -185,7 +185,7 @@ test.describe('critical flows', () => {
 
     const descriptions = [`Ice ${Date.now()}`, `Water ${Date.now()}`];
     for (const description of descriptions) {
-      await page.getByRole('button', { name: 'Add Expense', exact: true }).click();
+      await page.getByRole('button', { name: 'Add expense', exact: true }).click();
       await page.getByLabel('Description').fill(description);
       await page.getByLabel('Amount').fill('10');
 
