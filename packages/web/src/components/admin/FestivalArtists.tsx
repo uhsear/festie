@@ -194,7 +194,7 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         {linked} of {artists.length} {artists.length === 1 ? 'artist has' : 'artists have'} a link.
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div role="group" aria-label="Show" className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant={scope === 'festival' ? 'primary' : 'secondary'} aria-pressed={scope === 'festival'} onClick={() => setScope('festival')}>
           On this festival
         </Button>
@@ -207,13 +207,16 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         <Button size="sm" variant={noLinksOnly ? 'primary' : 'secondary'} aria-pressed={noLinksOnly} onClick={() => setNoLinksOnly((v) => !v)}>
           No links
         </Button>
-        <Button size="sm" disabled={findOpen} onClick={() => setFindOpen(true)}>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-glass-border pt-3">
+        <Button size="sm" variant="secondary" disabled={findOpen} onClick={() => setFindOpen(true)}>
           Find Spotify links
         </Button>
-        <Button size="sm" disabled={filling} onClick={() => void fillPhotos()}>
+        <Button size="sm" variant="secondary" disabled={filling} onClick={() => void fillPhotos()}>
           {filling ? 'Filling…' : 'Fill photos from Spotify'}
         </Button>
-        <Button size="sm" disabled={filling} onClick={() => void refreshStale()}>
+        <Button size="sm" variant="secondary" disabled={filling} onClick={() => void refreshStale()}>
           Refresh old Spotify data
         </Button>
       </div>
@@ -242,7 +245,12 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         </div>
       )}
       {reloading && !loadError && <p className="text-sm text-text-muted">Loading artists…</p>}
-      {!loadError && !reloading && shown.length === 0 && <p className="text-sm text-text-muted">No artists to show.</p>}
+      {!loadError && !reloading && shown.length === 0 && (
+        <p className="text-sm text-text-muted">
+          No artists to show.
+          {scope === 'festival' && artists.length === 0 && ' If this festival already has sets, run Artist backfill from the Admin menu to create their artist records.'}
+        </p>
+      )}
       <ul className="space-y-2">
         {shown.map((artist) => {
           const open = openId === artist.id;
