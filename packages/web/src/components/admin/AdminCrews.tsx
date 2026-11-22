@@ -130,7 +130,7 @@ export default function AdminCrews() {
       const done = await withReauth(async () => {
         await api.delete<void>(`/admin/crews/${id}`);
         return true;
-      }, askPassword);
+      }, askPassword, { retryWrongPassword: true });
       if (done === null) return;
       setCrews(crews.filter((c) => c.id !== id));
       toast(`Deleted ${name}`, 'success');

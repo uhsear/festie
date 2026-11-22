@@ -34,11 +34,12 @@ export default function ConfirmDialog({
   busy = false,
 }: Props) {
   // A password prompt raised by the confirmed action replaces this dialog. Once it has,
-  // stay hidden until the caller closes this one, so it does not flash back mid-request.
+  // stay hidden until the caller closes this one or the request ends, so it does not flash
+  // back mid-request but returns after a cancelled prompt that leaves `open` set.
   const promptOpen = useReauthPromptOpen();
   const [yielded, setYielded] = useState(false);
   if (open && promptOpen && !yielded) setYielded(true);
-  if (!open && yielded) setYielded(false);
+  if (yielded && !promptOpen && (!open || !busy)) setYielded(false);
   return (
     <Dialog open={open && !yielded} onOpenChange={(o) => { if (o || !busy) onOpenChange(o); }} title={title} description={description}>
       <div className="flex gap-2">

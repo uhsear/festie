@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -42,5 +43,37 @@ describe('ConfirmDialog with a password prompt', () => {
     expect(await screen.findByPlaceholderText('Password')).toBeInTheDocument();
     expect(screen.getAllByRole('dialog')).toHaveLength(1);
     expect(screen.queryByText('Delete Fest?')).not.toBeInTheDocument();
+  });
+
+  it('comes back when the prompt is cancelled and the caller keeps it open', async () => {
+    let ask: () => Promise<unknown>;
+    function Harness() {
+      const [busy, setBusy] = useState(false);
+      const reauth = useReauthPrompt();
+      ask = reauth.ask;
+      return (
+        <>
+          <ConfirmDialog
+            open
+            onOpenChange={() => {}}
+            title="Delete Fest?"
+            busy={busy}
+            onConfirm={async () => {
+              setBusy(true);
+              await reauth.ask();
+              setBusy(false);
+            }}
+          />
+          {reauth.reauthDialog}
+        </>
+      );
+    }
+    render(<Harness />);
+    await userEvent.click(screen.getByRole('button', { name: 'Confirm' }));
+    expect(await screen.findByPlaceholderText('Password')).toBeInTheDocument();
+    expect(screen.queryByText('Delete Fest?')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByText('Delete Fest?')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('Password')).not.toBeInTheDocument();
   });
 });
