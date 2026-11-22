@@ -6,11 +6,10 @@ appId: us.festie.app
 # Always keep a last screenshot, so a failed run shows where it stopped.
 onFlowComplete:
   - takeScreenshot: zz-last
-# Maestro reads only MAESTRO_-prefixed shell variables; e2e-ios.yml maps the
-# EAS TEST_* secrets onto those names.
+# ios-e2e.yml passes the secrets as -e TEST_USERNAME / -e TEST_PASSWORD (as android-smoke does).
 env:
-  TEST_USERNAME: ${MAESTRO_TEST_USERNAME}
-  TEST_PASSWORD: ${MAESTRO_TEST_PASSWORD}
+  TEST_USERNAME: ${TEST_USERNAME}
+  TEST_PASSWORD: ${TEST_PASSWORD}
 ---
 - launchApp:
     clearState: true
