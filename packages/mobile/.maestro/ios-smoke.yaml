@@ -123,7 +123,7 @@ env:
     id: "segment-cards"
     selected: true
 - assertVisible:
-    text: "Day: Saturday"
+    text: "Day: Saturday.*"
     selected: true
 - extendedWaitUntil:
     visible: "^Must See.*"
@@ -132,9 +132,9 @@ env:
     timeout: 6000
 - takeScreenshot: 06-cards
 - tapOn:
-    text: "Day: Sunday"
+    text: "Day: Sunday.*"
 - assertVisible:
-    text: "Day: Sunday"
+    text: "Day: Sunday.*"
     selected: true
 - extendedWaitUntil:
     visible: "^Must See.*"
