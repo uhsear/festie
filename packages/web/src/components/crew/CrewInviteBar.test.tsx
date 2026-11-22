@@ -42,15 +42,14 @@ describe('CrewInviteBar', () => {
     expect(await screen.findByText('Copied')).toBeInTheDocument();
   });
 
-  it('offers the link to select when the clipboard write fails', async () => {
+  it('shows the link in a toast when the clipboard write fails', async () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true });
-    const prompt = vi.fn();
-    vi.stubGlobal('prompt', prompt);
     renderBar();
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
-    await waitFor(() => expect(prompt).toHaveBeenCalledWith('Copy this invite link', expect.stringContaining('/join/K7XQ2M')));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(expect.stringContaining('/join/K7XQ2M'), 'error', 10000),
+    );
     expect(screen.queryByText('Copied')).toBeNull();
-    vi.unstubAllGlobals();
   });
 
   it('hides regenerate from a non-owner and shows it to the owner', () => {
