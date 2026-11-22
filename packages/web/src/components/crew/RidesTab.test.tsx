@@ -124,6 +124,14 @@ describe('RidesTab', () => {
     expect(screen.queryByText("Couldn't load rides")).toBeNull();
   });
 
+  it('an empty list offers a ride and does not promise a way to ask for one', async () => {
+    setup([]);
+    expect(await screen.findByText('Offer a ride so the crew can take a seat.')).toBeTruthy();
+    expect(screen.queryByText(/ask for one/)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Offer a ride' }));
+    expect(await screen.findByText('New ride')).toBeTruthy();
+  });
+
   it('open ride offers Take a seat and shows seats, direction and time in festival time', async () => {
     setup([offer({})]);
     expect(await screen.findByRole('button', { name: 'Take a seat' })).toBeTruthy();
