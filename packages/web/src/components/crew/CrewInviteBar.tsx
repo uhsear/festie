@@ -102,9 +102,9 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
 
   return (
     <div className="py-1.5 px-2 rounded-lg bg-bg-card border border-border space-y-1.5">
-    <div className="flex items-center gap-2">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
       <Copy className="w-3.5 h-3.5 text-text-muted flex-shrink-0" aria-hidden="true" />
-      <span className="text-xs text-text-secondary truncate">
+      <span className="text-xs text-text-secondary shrink-0">
         Invite: <span className="text-text-primary font-mono">{inviteCode}</span>
       </span>
       {expiryText && <span className="text-xs text-text-muted whitespace-nowrap">{expiryText}</span>}
