@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useCrewStore } from '../stores/crewStore';
+import { useUIStore } from '../stores/uiStore';
 import { isApiClientError, parseRetryAfterMs } from '../services/errors';
 
 export const RETRY_MAX_ATTEMPTS = 3;
@@ -37,7 +38,8 @@ export async function retryTransient<T>(fn: () => Promise<T>, isCancelled: () =>
 /**
  * Loads a crew's polls, meeting points, packing list, rides and expenses, each with
  * bounded retry. `error` names the sections still failing; `reload` starts over
- * (a Try again tap, screen focus, app foreground). A new crew id or unmount cancels pending retries.
+ * (a Try again tap, screen focus, app foreground). A failure left over from an offline
+ * spell reloads at once when the connection returns. A new crew id or unmount cancels pending retries.
  */
 export function useCrewSections(crewId: string | undefined): { error: string | null; reload: () => void } {
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +75,14 @@ export function useCrewSections(crewId: string | undefined): { error: string | n
       run.current++;
     };
   }, [reload]);
+
+  // Offline, the loaders fail by design; do not leave that failure on screen until the next timed retry.
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const wasOffline = useRef(offlineMode);
+  useEffect(() => {
+    if (wasOffline.current && !offlineMode && error) reload();
+    wasOffline.current = offlineMode;
+  }, [offlineMode, error, reload]);
 
   return { error, reload };
 }

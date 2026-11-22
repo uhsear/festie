@@ -170,7 +170,7 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
   const icon =
     summary.overall === 'ready' ? (
       <Ionicons name="checkmark-circle" size={16} color={t.colors.accent.aqua} />
-    ) : summary.overall === 'partial' ? (
+    ) : summary.overall === 'partial' && summary.hasError ? (
       <Ionicons name="alert-circle" size={16} color={t.colors.accent.coral} />
     ) : summary.overall === 'syncing' ? (
       <ActiveDot />

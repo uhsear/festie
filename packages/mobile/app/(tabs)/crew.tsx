@@ -288,7 +288,11 @@ export default function CrewScreen() {
 
   // The five crew sections load with bounded retry (429/5xx/network). A failure
   // that outlasts the retries is re-tried on screen focus, app foreground, or Try again.
-  const { error: sectionLoadError, reload: reloadCrewSections } = useCrewSections(activeCrew?.id);
+  // Offline, the section loaders fail by design and the cached crew is on screen
+  // under the "Showing offline data" chip, so the failure is not shown as a fault.
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const { error: loadedSectionsError, reload: reloadCrewSections } = useCrewSections(activeCrew?.id);
+  const sectionLoadError = offlineMode ? null : loadedSectionsError;
   const sectionsFailed = !!sectionLoadError;
   useFocusEffect(
     useCallback(() => {
@@ -319,7 +323,6 @@ export default function CrewScreen() {
   // Error states clear only on a new load, so a rate limit or a dropped connection
   // left "Couldn't load" / "Failed to load" on screen until a force-stop. Retry
   // every 30 s while the error shows, and restart the wait when the network returns.
-  const offlineMode = useUIStore((s) => s.offlineMode);
   const hasLoadError = status === 'error' || sectionsFailed;
   const reloadAfterError = useCallback(() => {
     if (status === 'error') retry();
@@ -427,7 +430,7 @@ export default function CrewScreen() {
           }
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   // Reform the active crew for another festival. Crews are festival-scoped, so
@@ -521,7 +524,7 @@ export default function CrewScreen() {
           }
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const handleTransfer = (crewId: string, member: CrewMember) => {
@@ -544,6 +547,7 @@ export default function CrewScreen() {
           },
         },
       ],
+      { cancelable: true },
     );
   };
 
@@ -578,7 +582,7 @@ export default function CrewScreen() {
             .catch((err) => Sentry.captureException(err));
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const handleDelete = (crewId: string, crewName: string, memberCount: number) => {
@@ -593,7 +597,7 @@ export default function CrewScreen() {
             .catch((err) => Sentry.captureException(err));
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const handleOwnerLeave = (crewId: string, crewName: string, members: CrewMember[], selfId: string) => {

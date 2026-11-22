@@ -154,15 +154,6 @@ export const useStyles = makeStyles((t) => ({
   buttonDisabled: {
     opacity: 0.6,
   },
-  iconButton: {
-    padding: t.spacing[2],
-    // Guarantee a >=44pt touch target (WCAG / Apple HIG) for these small
-    // (16-18px) icon-only controls — padding alone can't reach it.
-    minWidth: 44,
-    minHeight: 44,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   inviteBar: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -179,10 +170,27 @@ export const useStyles = makeStyles((t) => ({
   inviteActions: {
     flexDirection: 'row',
     gap: t.spacing[2],
+    width: '100%',
   },
   inviteActionsWrap: {
-    width: '100%',
-    justifyContent: 'flex-end',
+    flexWrap: 'wrap',
+  },
+  // Labelled, like the Find pane's invite buttons, so the icons are not a guessing game.
+  inviteActionButton: {
+    flexGrow: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: t.spacing[1],
+    minHeight: 44,
+    paddingHorizontal: t.spacing[3],
+    borderRadius: t.radii.default,
+    borderWidth: 1,
+    borderColor: t.colors.accent.aqua,
+  },
+  inviteActionLabel: {
+    ...typeStyle('label'),
+    color: t.colors.accent.aqua,
   },
   inviteLabel: {
     ...typeStyle('caption'),

@@ -245,6 +245,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
           },
         },
       ],
+      { cancelable: true },
     );
   };
 
@@ -269,6 +270,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
           },
         },
       ],
+      { cancelable: true },
     );
   };
 
@@ -279,8 +281,9 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
     // The ref (not state) blocks a second Alert: state is stale inside the Alert callback.
     if (s.amount <= 0 || settlingRef.current) return;
     settlingRef.current = true;
+    const unlock = () => { settlingRef.current = false; };
     Alert.alert('Record payment', confirmPaidMessage(s, formatAmount(s.amount, currency)), [
-      { text: 'Cancel', style: 'cancel', onPress: () => { settlingRef.current = false; } },
+      { text: 'Cancel', style: 'cancel', onPress: unlock },
       {
         text: 'Yes, I paid',
         onPress: () => {
@@ -301,7 +304,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
             });
         },
       },
-    ]);
+    ], { cancelable: true, onDismiss: unlock });
   };
 
   const handleConfirmReceived = (p: CrewExpense, received: boolean) => {

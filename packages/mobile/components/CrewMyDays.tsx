@@ -82,7 +82,8 @@ const useStyles = makeStyles((t) => ({
     borderRadius: t.radii.default,
     borderWidth: 1,
     borderColor: t.colors.border.default,
-    backgroundColor: t.colors.bg.secondary,
+    // bg.primary so the segmented track (bg.secondary) reads as a control, not as part of the card.
+    backgroundColor: t.colors.bg.primary,
   },
   title: {
     ...typeStyle('label'),

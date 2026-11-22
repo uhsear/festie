@@ -169,6 +169,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
             onPress: () => void doClear(sos.userId),
           },
         ],
+        { cancelable: true },
       );
     },
     [doClear, currentUserId],

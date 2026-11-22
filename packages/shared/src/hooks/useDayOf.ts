@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useCrewStore } from '../stores/crewStore';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
@@ -52,6 +52,7 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
   const user = useAuthStore((s) => s.user);
   const crews = useCrewStore((s) => s.crews);
   const crew = useCrewStore((s) => s.activeCrew);
+  const crewLoading = useCrewStore((s) => s.crewLoading);
   const crewMembers = useCrewStore((s) => s.crewMembers);
   const statuses = useCrewStore((s) => s.crewStatuses);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
@@ -60,9 +61,18 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
   const sos = useActiveSos();
 
   const firstCrewId = crews[0]?.id;
+  // Auto-select each crew once: crewLoading is a dep, so a failed select would otherwise retry forever.
+  const autoSelectedId = useRef<string | null>(null);
   useEffect(() => {
-    if (user && !crew && firstCrewId) useCrewStore.getState().selectCrew(firstCrewId).catch(() => {});
-  }, [user, crew, firstCrewId]);
+    if (crew) {
+      autoSelectedId.current = null;
+      return;
+    }
+    // A pending select of another crew (a join landing) clears activeCrew; do not override it with the first crew.
+    if (!user || !firstCrewId || crewLoading || autoSelectedId.current === firstCrewId) return;
+    autoSelectedId.current = firstCrewId;
+    useCrewStore.getState().selectCrew(firstCrewId).catch(() => {});
+  }, [user, crew, firstCrewId, crewLoading]);
 
   const crewId = user ? crew?.id : undefined;
   useEffect(() => {

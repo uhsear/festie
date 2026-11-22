@@ -72,6 +72,27 @@ describe('useActiveCrew', () => {
     expect(selectCrew).not.toHaveBeenCalled();
   });
 
+  it('selects crews[0] once a load running at mount finishes with no crew open', async () => {
+    useCrewStore.setState({ crews: [crew('c1'), crew('c2')], crewLoading: true });
+    renderHook(() => useActiveCrew());
+    expect(selectCrew).not.toHaveBeenCalled();
+    act(() => useCrewStore.setState({ crewLoading: false }));
+    await waitFor(() => expect(selectCrew).toHaveBeenCalledWith('c1'));
+  });
+
+  it('does not retry the first crew forever when its select fails', async () => {
+    selectCrew.mockImplementation(async () => {
+      useCrewStore.setState({ crewLoading: true });
+      await new Promise((r) => setTimeout(r, 5));
+      useCrewStore.setState({ crewLoading: false, activeCrew: null });
+    });
+    useCrewStore.setState({ crews: [crew('c1')] });
+    renderHook(() => useActiveCrew());
+    await waitFor(() => expect(selectCrew).toHaveBeenCalledWith('c1'));
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(selectCrew).toHaveBeenCalledTimes(1);
+  });
+
   it('loads crews once when there are none', async () => {
     const { result, rerender } = renderHook(() => useActiveCrew());
     await waitFor(() => expect(loadCrews).toHaveBeenCalledTimes(1));
