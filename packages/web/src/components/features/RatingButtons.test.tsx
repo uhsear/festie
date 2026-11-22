@@ -26,7 +26,7 @@ function renderButtons(props: Partial<ComponentProps<typeof RatingButtons>> = {}
 describe('RatingButtons', () => {
   it('shows the five rating words', () => {
     renderButtons();
-    for (const word of ['Fire', 'Good', 'Okay', 'Meh', 'Skip']) {
+    for (const word of ['Fire', 'Good', 'Okay', 'Meh', 'Nope']) {
       expect(screen.getByText(word)).toBeInTheDocument();
     }
   });

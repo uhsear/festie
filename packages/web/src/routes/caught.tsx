@@ -183,16 +183,16 @@ function CaughtList({ festivalId }: { festivalId: string }) {
                         </button>
                         <button
                           type="button"
-                          aria-label={`Skipped ${name}`}
+                          aria-label={`Missed it ${name}`}
                           aria-pressed={row.caught === false}
                           onClick={() =>
                             row.caught === false
                               ? apply(row.setId, null, 'Mark removed')
-                              : apply(row.setId, false, 'Marked as skipped')
+                              : apply(row.setId, false, 'Marked as missed')
                           }
                           className={cn(chipClass, row.caught === false && pressedClass)}
                         >
-                          Skipped
+                          Missed it
                         </button>
                       </div>
                     )}

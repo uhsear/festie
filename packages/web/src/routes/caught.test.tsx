@@ -101,17 +101,17 @@ describe('CaughtPage', () => {
     mocks.wrap = { festival, planned: [planned({ caught: true }), planned({ setId: 'c', artist: 'C', caught: false })] };
     renderPage();
     expect(await screen.findByRole('heading', { level: 2, name: 'Friday' })).toBeInTheDocument();
-    expect(screen.getByText('1 seen · 1 skipped')).toBeInTheDocument();
+    expect(screen.getByText('1 seen · 1 missed')).toBeInTheDocument();
   });
 
-  it('toggles Saw it and Skipped through markCaught', async () => {
+  it('toggles Saw it and Missed it through markCaught', async () => {
     renderPage();
     fireEvent.click(await screen.findByRole('button', { name: 'Saw Artist A' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', true, 'u1');
     expect(screen.getByRole('button', { name: 'Saw Artist A' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByRole('button', { name: 'Saw Artist A' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', null, 'u1');
-    fireEvent.click(screen.getByRole('button', { name: 'Skipped Artist A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it Artist A' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', false, 'u1');
   });
 

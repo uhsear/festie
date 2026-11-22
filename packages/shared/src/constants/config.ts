@@ -192,7 +192,7 @@ export const RATING_SCALE_DATA: readonly {
   { value: 4, label: 'Good', order: 1 },
   { value: 3, label: 'Okay', order: 2 },
   { value: 2, label: 'Meh', order: 3 },
-  { value: 1, label: 'Skip', order: 4 },
+  { value: 1, label: 'Nope', order: 4 },
 ] as const;
 
 /** High → low numeric rating values, for rendering order. */

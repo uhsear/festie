@@ -40,6 +40,7 @@ export default function RateScreen() {
   const [reload, setReload] = useState(0);
   const [index, setIndex] = useState(0);
   const [seenId, setSeenId] = useState<string | null>(null);
+  const [anyRated, setAnyRated] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -67,7 +68,7 @@ export default function RateScreen() {
     [],
   );
 
-  // Clearing the pending auto-advance keeps a quick Skip or Skipped from advancing twice.
+  // Clearing the pending auto-advance keeps a quick Next or Missed it from advancing twice.
   const advance = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     setIndex((i) => i + 1);
@@ -165,8 +166,8 @@ export default function RateScreen() {
         {header}
         <EmptyState
           icon="checkmark-circle-outline"
-          title="All rated"
-          message="Thanks. Your ratings go into your wrap."
+          title={anyRated ? 'All rated' : "That's everything for now"}
+          message={anyRated ? 'Thanks. Your ratings go into your wrap.' : 'Rate any set from the full list whenever you like.'}
           action={{
             label: unlocked ? 'See your wrap' : 'Back to picks',
             onPress: () =>
@@ -209,7 +210,7 @@ export default function RateScreen() {
           style={styles.caughtButton}
         />
         <Button
-          label="Skipped"
+          label="Missed it"
           variant="secondary"
           onPress={() => {
             mark(set.setId, false);
@@ -225,12 +226,13 @@ export default function RateScreen() {
           festivalId={festivalId}
           showMemory={false}
           onRated={() => {
+            setAnyRated(true);
             mark(set.setId, true);
             next();
           }}
         />
       </View>
-      <Button label="Skip" variant="ghost" onPress={advance} />
+      <Button label="Next" variant="ghost" onPress={advance} />
     </ScrollView>
   );
 }

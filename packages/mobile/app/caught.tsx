@@ -34,7 +34,7 @@ const SAVE_ERROR = "Couldn't save that. Try again.";
 
 /**
  * "What you caught": every pick for a festival plus sets the user added,
- * grouped by day, with Saw it / Skipped marks and the rating row. All marks go
+ * grouped by day, with Saw it / Missed it marks and the rating row. All marks go
  * through markCaught so they queue offline. Ratings stay online-only on mobile.
  */
 export default function CaughtScreen() {
@@ -239,11 +239,11 @@ export default function CaughtScreen() {
                     style={styles.button}
                   />
                   <Button
-                    label="Skipped"
+                    label="Missed it"
                     variant={item.caught === false ? 'primary' : 'secondary'}
-                    accessibilityLabel={`Skipped ${artist}`}
+                    accessibilityLabel={`Missed it ${artist}`}
                     accessibilityState={{ selected: item.caught === false }}
-                    onPress={() => toggle(false, 'Marked as skipped')}
+                    onPress={() => toggle(false, 'Marked as missed')}
                     style={styles.button}
                   />
                 </>

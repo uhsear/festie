@@ -166,9 +166,9 @@ describe('RATING_SCALE', () => {
 });
 
 describe('RATING_LABEL', () => {
-  it('maps 5→Fire, 1→Skip', () => {
+  it('maps 5→Fire, 1→Nope', () => {
     expect(RATING_LABEL[5]).toBe('Fire');
-    expect(RATING_LABEL[1]).toBe('Skip');
+    expect(RATING_LABEL[1]).toBe('Nope');
   });
 });
 

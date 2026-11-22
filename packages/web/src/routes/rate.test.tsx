@@ -100,8 +100,8 @@ describe('RatePage', () => {
   it('links the full list from the flow, the All rated state and the empty state', async () => {
     renderPage();
     expect(await screen.findByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
   });
 
@@ -117,36 +117,45 @@ describe('RatePage', () => {
     expect(mocks.markCaught).toHaveBeenCalledWith('a', true, 'u1');
   });
 
-  it('Saw it marks the set without advancing, and Skipped marks it skipped and advances', async () => {
+  it('Saw it marks the set without advancing, and Missed it marks it as missed and advances', async () => {
     renderPage();
     await screen.findByText('Artist A');
     fireEvent.click(screen.getByRole('button', { name: 'Saw it' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', true, 'u1');
     expect(screen.getByRole('button', { name: 'Saw it' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByText('Artist A')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Skipped' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', false, 'u1');
     expect(screen.getByText('Artist B')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Saw it' })).toHaveAttribute('aria-pressed', 'false');
   });
 
-  it('Skip right after a rating cancels the pending auto-advance instead of skipping a second set', async () => {
+  it('Next right after a rating cancels the pending auto-advance instead of skipping a second set', async () => {
     renderPage();
     fireEvent.click(await screen.findByText('rate-five'));
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByText('Artist B')).toBeInTheDocument();
     expect(screen.queryByText('All rated')).toBeNull();
   });
 
-  it('skip advances, and a festival that is not over links back to picks', async () => {
+  it('next advances, and a festival that is not over links back to picks', async () => {
     mocks.unlocked = false;
     renderPage();
     await screen.findByText('Artist A');
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByText('Artist B')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByRole('link', { name: 'Back to picks' })).toHaveAttribute('href', '/picks');
+  });
+
+  it('does not say All rated when every set was moved past without a rating', async () => {
+    renderPage();
+    await screen.findByText('Artist A');
+    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it' }));
+    expect(screen.getByRole('heading', { name: "That's everything for now" })).toBeInTheDocument();
+    expect(screen.queryByText('All rated')).toBeNull();
   });
 
   it('shows the empty state when nothing needs rating', async () => {
