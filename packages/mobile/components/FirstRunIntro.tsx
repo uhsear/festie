@@ -1,5 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, useWindowDimensions, type ScrollViewInstance } from 'react-native';
+import {
+  AccessibilityInfo,
+  View,
+  Text,
+  TouchableOpacity,
+  ScrollView,
+  findNodeHandle,
+  useWindowDimensions,
+  type HostInstance,
+  type ScrollViewInstance,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,6 +29,7 @@ import AppPressable from './AppPressable';
 import DisplayWords from './DisplayWords';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { setReturnTo } from '../lib/returnTo';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 
 /**
  * First-run intro, also replayed from Account. Five steps (the festival step is
@@ -94,6 +105,13 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
   const [stepKey, setStepKey] = useState<IntroStepKey>('plan');
   const [pickedId, setPickedId] = useState<string | null>(null);
   const scrollRef = useRef<ScrollViewInstance>(null);
+  const reduceMotion = useReduceMotion();
+  // Each page's heading, so a step change from Next or the dots can move screen-reader focus to it.
+  const titleRefs = useRef<Partial<Record<IntroStepKey, HostInstance | null>>>({});
+  const focusTitleOnStepChange = useRef(false);
+  const titleRef = (key: IntroStepKey) => (node: HostInstance | null) => {
+    titleRefs.current[key] = node;
+  };
 
   const { width: screenWidth } = useWindowDimensions();
   const previousWidth = useRef(screenWidth);
@@ -119,9 +137,9 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
   // Scroll to the target page programmatically (used by the Next button).
   const scrollToPage = useCallback(
     (page: number) => {
-      scrollRef.current?.scrollTo({ x: page * screenWidth, animated: true });
+      scrollRef.current?.scrollTo({ x: page * screenWidth, animated: !reduceMotion });
     },
-    [screenWidth],
+    [screenWidth, reduceMotion],
   );
 
   // Leaving the festival step by any route (Next, swipe, a11y action) applies the choice.
@@ -148,11 +166,21 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
     (target: IntroStepKey | null) => {
       if (!target) return;
       if (stepKey === 'festival' && target !== 'festival') commitFestival();
+      if (target !== stepKey) focusTitleOnStepChange.current = true;
       setStepKey(target);
       scrollToPage(steps.indexOf(target));
     },
     [steps, scrollToPage, stepKey, commitFestival],
   );
+
+  // After Next, a dot action or the adjust gesture: the pressed control may unmount
+  // (Next on the last step), so move focus to the new page's heading once it is current.
+  useEffect(() => {
+    if (!focusTitleOnStepChange.current) return;
+    focusTitleOnStepChange.current = false;
+    const node = findNodeHandle(titleRefs.current[stepKey] ?? null);
+    if (node) AccessibilityInfo.setAccessibilityFocus(node);
+  }, [stepKey]);
 
   const handleNext = useCallback(() => goTo(nextIntroStep(steps, stepKey)), [stepKey, goTo, steps]);
 
@@ -231,7 +259,12 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
 
         {/* Value-first copy, anchored low (just above the controls). */}
         <View style={styles.copy}>
-          <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          <Text
+            ref={titleRef(slideKey)}
+            style={styles.title}
+            accessibilityRole="header"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          >
             <DisplayWords text={slide.title} fontSize={styles.title.fontSize} />
           </Text>
           <Text style={styles.text}>{slide.description}</Text>
@@ -242,7 +275,12 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
 
   const renderFestivalStep = () => (
     <View style={styles.formPage}>
-      <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+      <Text
+        ref={titleRef('festival')}
+        style={styles.title}
+        accessibilityRole="header"
+        maxFontSizeMultiplier={MAX_FONT_SCALE}
+      >
         {ONBOARDING_COPY.festival.title}
       </Text>
       <Text style={styles.text}>{ONBOARDING_COPY.festival.description}</Text>
@@ -273,7 +311,12 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
 
   const renderGoingStep = () => (
     <View style={styles.formPage}>
-      <Text style={styles.title} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+      <Text
+        ref={titleRef('going')}
+        style={styles.title}
+        accessibilityRole="header"
+        maxFontSizeMultiplier={MAX_FONT_SCALE}
+      >
         {ONBOARDING_COPY.going.title}
       </Text>
       <Text style={styles.text}>{ONBOARDING_COPY.going.description}</Text>
@@ -562,9 +605,12 @@ const useStyles = makeStyles((t) => ({
     paddingBottom: t.spacing[6],
     paddingHorizontal: t.spacing[6],
   },
+  // 44 px tall so explore-by-touch can hit the adjustable control; the dots stay centered.
   dots: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
     gap: t.spacing[2],
   },
   dot: {
