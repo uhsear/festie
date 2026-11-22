@@ -9,6 +9,7 @@ import {
   fetchAdminCrews,
   fetchCrewMembers,
   removeCrewMember,
+  withReauth,
   type AdminCrewMember,
   type AdminCrewRow,
   type AdminUserRow,
@@ -20,7 +21,7 @@ import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
-import { ConfirmDialog, UserPicker } from '../../components/admin';
+import { ConfirmDialog, UserPicker, useReauthPrompt } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
@@ -90,6 +91,7 @@ export default function AdminCrewsScreen() {
   const [confirmTargetId, setConfirmTargetId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
   const [busy, setBusy] = useState(false);
+  const { ask: askReauth, reauthDialog } = useReauthPrompt();
 
   const [banner, setBanner] = useState<{ text: string; error: boolean } | null>(null);
 
@@ -199,7 +201,20 @@ export default function AdminCrewsScreen() {
     try {
       if (confirm.kind === 'delete-crew' && confirmTargetId) {
         const name = crews.find((c) => c.id === confirmTargetId)?.name || 'crew';
-        await api.delete<void>(`/admin/crews/${confirmTargetId}`);
+        // The server gates crew deletion behind a recent password check. null means the prompt was cancelled.
+        const done = await withReauth(
+          async () => {
+            await api.delete<void>(`/admin/crews/${confirmTargetId}`);
+            return true;
+          },
+          askReauth,
+          { retryWrongPassword: true },
+        );
+        if (!done) {
+          setConfirm(null);
+          setConfirmTargetId(null);
+          return;
+        }
         setCrews((prev) => prev.filter((c) => c.id !== confirmTargetId));
         if (expandedId === confirmTargetId) setExpandedId(null);
         setBanner({ text: `Deleted ${name}.`, error: false });
@@ -219,7 +234,7 @@ export default function AdminCrewsScreen() {
     } finally {
       setBusy(false);
     }
-  }, [confirm, confirmTargetId, removeTarget, crews, expandedId]);
+  }, [confirm, confirmTargetId, removeTarget, crews, expandedId, askReauth]);
 
   const cancelConfirm = useCallback(() => {
     if (busy) return;
@@ -436,6 +451,7 @@ export default function AdminCrewsScreen() {
         onPick={addMember}
       />
 
+      {reauthDialog}
       <Stack.Screen options={{ headerShown: false }} />
     </View>
   );

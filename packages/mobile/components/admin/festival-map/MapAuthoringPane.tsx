@@ -12,6 +12,7 @@ import type { AuthoringMode } from '../../../lib/webviewBridge';
 import { useTokens } from '../../../hooks/useTokens';
 import { useStyles } from './styles';
 import type { ArmedTarget, StageEdit, Vertex } from './types';
+import { zoneDrawHint } from './zoneDrawing';
 
 interface MapAuthoringPaneProps {
   amenityFeatures: { type: "Feature"; geometry: { type: "Point"; coordinates: [number, number]; }; properties: { id: string; amenityType: AmenityType; label: string; }; }[];
@@ -67,7 +68,7 @@ export default function MapAuthoringPane({
                         ? draftCorners.length >= SITEPLAN_CORNER_COUNT
                           ? 'All 4 corners set — apply them below'
                           : `Tap the ${SITEPLAN_CORNER_LABELS[draftCorners.length]} corner (${draftCorners.length}/${SITEPLAN_CORNER_COUNT})`
-                        : `Tap the map to add zone points (${draftVertices.length} added — need 3+)`}
+                        : zoneDrawHint(draftVertices.length)}
           </Text>
         </View>
       ) : null}

@@ -14,8 +14,8 @@ describe('auditActionLabel', () => {
     expect(auditActionLabel(action)).toBe(label);
   });
 
-  it('has the 55 table labels', () => {
-    expect(Object.keys(AUDIT_ACTION_LABELS)).toHaveLength(55);
+  it('has the 62 table labels', () => {
+    expect(Object.keys(AUDIT_ACTION_LABELS)).toHaveLength(62);
     expect(AUDIT_ACTION_LABELS['user.role.revoked']).toBe('Role removed');
   });
 
@@ -25,6 +25,15 @@ describe('auditActionLabel', () => {
     expect(auditActionLabel('festival.announcement.cancelled')).toBe('Announcement cancelled');
     expect(auditActionLabel('user.private_data.viewed')).toBe('User details viewed');
     expect(auditActionLabel('crew.member.added')).toBe('Crew member added');
+  });
+
+  it('names the generic middleware rows people actually see', () => {
+    expect(auditActionLabel('login.created')).toBe('Signed in');
+    expect(auditActionLabel('reauth.created')).toBe('Confirmed password');
+    expect(auditActionLabel('import-lineup.created')).toBe('Lineup checked');
+    for (const verb of ['created', 'updated', 'replaced', 'deleted']) {
+      expect(auditActionLabel(`unknown.${verb}`)).toBe('Other activity');
+    }
   });
 
   it('falls back for generic dotted rows', () => {

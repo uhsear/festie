@@ -114,6 +114,21 @@ describe('AdminOrganizations', () => {
     expect(screen.queryByText('Promoter B')).not.toBeInTheDocument();
   });
 
+  it('shows an active organization in green and a waiting one in amber', async () => {
+    render();
+    await screen.findByText('Venue A');
+    const chip = (text: string) => screen.getAllByText(text).find((el) => el.tagName === 'SPAN')!;
+    expect(chip('Active').className).toContain('text-accent-green');
+    expect(chip('Waiting for activation').className).toContain('text-accent-amber');
+  });
+
+  it('uses singular forms in the summary line', async () => {
+    svc.fetchOrganizations.mockResolvedValue([org({ memberCount: 1, pendingCount: 1, festivalCount: 1 })]);
+    render();
+    await screen.findByText('Venue A');
+    expect(document.body).toHaveTextContent('1 member, 1 waiting to join, 1 festival. No owner yet.');
+  });
+
   it('creates an organization and opens it', async () => {
     svc.createOrganization.mockResolvedValue(org({ id: 'o9', name: 'New Venue' }));
     render();
@@ -128,7 +143,7 @@ describe('AdminOrganizations', () => {
   it('shows what the organization used', async () => {
     render();
     await userEvent.click(await screen.findByRole('button', { name: 'Venue A' }));
-    expect(await screen.findByText(/1 festivals \(1 drafts\)\. 2 announcements this month\. 3 MB of site-plan images stored\./)).toBeInTheDocument();
+    expect(await screen.findByText(/1 festival \(1 draft\)\. 2 announcements this month\. 3 MB of site-plan images stored\./)).toBeInTheDocument();
   });
 
   it('adds a member by email, lower-cased, with the chosen role', async () => {

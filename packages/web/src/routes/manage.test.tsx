@@ -45,6 +45,13 @@ describe('/manage', () => {
     expect(screen.queryByText(/Confirm your email/)).not.toBeInTheDocument();
   });
 
+  it('does not add a second main landmark; the app shell owns it', async () => {
+    mockGet.mockResolvedValue({ emailConfirmed: true, organizations: [] });
+    render();
+    await screen.findByText('You are not part of an organization on Festie yet.');
+    expect(screen.queryByRole('main')).not.toBeInTheDocument();
+  });
+
   it('tells a person with no organization which email to use', async () => {
     mockGet.mockResolvedValue({ emailConfirmed: true, organizations: [] });
     render();

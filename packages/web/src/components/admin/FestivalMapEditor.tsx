@@ -421,6 +421,10 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
 
   const handleSave = async () => {
     if (!detail || basemapInvalid) return;
+    if (draftVertices.length > 0) {
+      toast('Finish or cancel the zone you are drawing, then save the map.', 'error');
+      return;
+    }
     const payload: Record<string, unknown> = {
       name: detail.name?.trim() || name.trim(),
       location: detail.location?.trim() || '',
@@ -515,7 +519,9 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
                         ? draftCorners.length >= SITEPLAN_CORNER_COUNT
                           ? 'All 4 corners set — apply them below'
                           : `Click the ${SITEPLAN_CORNER_LABELS[draftCorners.length]} corner (${draftCorners.length}/${SITEPLAN_CORNER_COUNT})`
-                        : `Click the map to add zone points (${draftVertices.length} added — need 3+)`}
+                        : draftVertices.length >= 3
+                          ? `Finish the zone, or click the map to add more points (${draftVertices.length} added)`
+                          : `Click the map to add zone points (${draftVertices.length} added — need 3+)`}
           </div>
         )}
       </div>
@@ -601,7 +607,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
                     onClick={() => armStage(stage.id)}
                     aria-pressed={isArmed}
                     className={cn(
-                      'px-3 py-1.5 rounded-md text-xs font-medium transition-colors border',
+                      'px-3 py-1.5 min-h-11 rounded-md text-xs font-medium transition-colors border',
                       isArmed
                         ? 'bg-accent-aqua text-bg-primary border-accent-aqua'
                         : 'bg-accent-aqua/20 text-accent-aqua border-transparent hover:bg-accent-aqua/30',

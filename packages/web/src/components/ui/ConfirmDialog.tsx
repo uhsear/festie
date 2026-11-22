@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import Button from './Button';
 import Dialog from './Dialog';
+import { useReauthPromptOpen } from '../../hooks/reauthPromptOpen';
 
 interface Props {
   open: boolean;
@@ -32,8 +33,15 @@ export default function ConfirmDialog({
   onConfirm,
   busy = false,
 }: Props) {
+  // A password prompt raised by the confirmed action replaces this dialog. Once it has,
+  // stay hidden until the caller closes this one or the request ends, so it does not flash
+  // back mid-request but returns after a cancelled prompt that leaves `open` set.
+  const promptOpen = useReauthPromptOpen();
+  const [yielded, setYielded] = useState(false);
+  if (open && promptOpen && !yielded) setYielded(true);
+  if (yielded && !promptOpen && (!open || !busy)) setYielded(false);
   return (
-    <Dialog open={open} onOpenChange={(o) => { if (o || !busy) onOpenChange(o); }} title={title} description={description}>
+    <Dialog open={open && !yielded} onOpenChange={(o) => { if (o || !busy) onOpenChange(o); }} title={title} description={description}>
       <div className="flex gap-2">
         <RadixDialog.Close asChild>
           <Button variant="secondary" type="button" disabled={busy} className="flex-1 min-h-11">

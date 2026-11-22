@@ -10,6 +10,7 @@ import {
   describeDeleteImpact,
   groupIssues,
   type EditableSet,
+  describeShiftResult,
 } from './festivalAdmin';
 
 const stages = [
@@ -161,5 +162,12 @@ describe('describeVersionDifferences', () => {
   it('still reports a change that keeps every count the same', () => {
     const mine = { ...base, days: [{ ...base.days[0]!, sets: [set('s1', { artist: 'Renamed' })] }] };
     expect(describeVersionDifferences(base, mine)).toEqual(['1 detail differs inside the stages, days or sets.']);
+  });
+});
+
+describe('describeShiftResult', () => {
+  it('uses the singular for one set', () => {
+    expect(describeShiftResult({ shifted: 1, skipped: 0, crossedDayStart: 0 }, 15)).toBe('Shifted 1 set by +15 min.');
+    expect(describeShiftResult({ shifted: 3, skipped: 0, crossedDayStart: 0 }, -10)).toBe('Shifted 3 sets by -10 min.');
   });
 });

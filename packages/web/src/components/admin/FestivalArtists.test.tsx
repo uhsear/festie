@@ -68,6 +68,15 @@ describe('FestivalArtists', () => {
     expect(screen.getByText(/Spotify · Also on 2 festivals/)).toBeTruthy();
   });
 
+  it('points at Artist backfill when the festival has no artist records, and groups filters apart from actions', async () => {
+    listFestivalArtists.mockResolvedValue([]);
+    render(<FestivalArtists festivalId="f1" festivalName="Fest" onClose={() => {}} />);
+    expect(await screen.findByText(/run Artist backfill/)).toBeTruthy();
+    const filters = screen.getByRole('group', { name: 'Show' });
+    expect(filters.contains(screen.getByRole('button', { name: 'On this festival' }))).toBe(true);
+    expect(filters.contains(screen.getByRole('button', { name: 'Find Spotify links' }))).toBe(false);
+  });
+
   it('expands a row in place and saves that row on its own', async () => {
     updateArtist.mockResolvedValue({ artist: artist({ links: { soundcloud: 'https://soundcloud.com/avello' }, updatedAt: '2026-06-02T00:00:00.000Z' }), festivalsUpdated: 1 });
     await open();

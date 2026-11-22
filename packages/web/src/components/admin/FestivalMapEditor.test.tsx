@@ -6,6 +6,7 @@ const get = vi.fn();
 const put = vi.fn();
 const uploadSiteplanImage = vi.fn();
 const CLICK = { latitude: 28.6, longitude: -81.4 };
+const toast = vi.hoisted(() => vi.fn());
 
 vi.mock('@festie/shared/services/api', () => ({
   api: { get: (...a: unknown[]) => get(...a), put: (...a: unknown[]) => put(...a) },
@@ -15,7 +16,7 @@ vi.mock('@festie/shared/services', () => ({
 }));
 // The unsaved-changes guard only needs an idle router blocker here.
 vi.mock('@tanstack/react-router', () => ({ useBlocker: () => ({ status: 'idle' }) }));
-vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: vi.fn(), toastError: vi.fn() }) }));
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast, toastError: vi.fn() }) }));
 vi.mock('../crew/CrewMap', () => ({
   default: ({ onMapClick }: { onMapClick?: (c: { latitude: number; longitude: number }) => void }) => (
     <button type="button" onClick={() => onMapClick?.(CLICK)}>
@@ -116,6 +117,21 @@ describe('FestivalMapEditor', () => {
     const moved = savedPayload().mapConfig.amenities.features[0];
     expect(moved!.geometry.coordinates).toEqual([CLICK.longitude, CLICK.latitude]);
     expect(moved!.properties.label).toBe('Water');
+  });
+
+  it('says the zone can be finished once it has three points, and does not save around an unfinished zone', async () => {
+    await renderEditor();
+    fireEvent.change(screen.getByLabelText('Zone label'), { target: { value: 'Camping' } });
+    fireEvent.click(screen.getByText('Draw a zone'));
+    const map = await screen.findByText('stub map');
+    fireEvent.click(map);
+    fireEvent.click(map);
+    expect(screen.getByText('Click the map to add zone points (2 added — need 3+)')).toBeTruthy();
+    fireEvent.click(map);
+    expect(screen.getByText('Finish the zone, or click the map to add more points (3 added)')).toBeTruthy();
+    fireEvent.click(screen.getByText('Save map'));
+    expect(put).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenCalledWith('Finish or cancel the zone you are drawing, then save the map.', 'error');
   });
 
   it('refuses a site-plan image over 10 MB without uploading', async () => {
