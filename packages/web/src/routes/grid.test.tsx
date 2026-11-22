@@ -262,6 +262,18 @@ describe('GridView', () => {
     expect(screen.getByRole('region', { name: 'Schedule grid' })).toBeInTheDocument();
   });
 
+  it('says the act has no time yet, not that no times are out, when a filter leaves only an untimed set', () => {
+    storeState.sets = [timedSet];
+    setFilters({
+      timedSets: [],
+      timelessSets: [{ id: 's1', artist: 'TBA Artist', stageId: 'st1', dayIndex: 0 }],
+    });
+    render(<GridView />);
+    expect(screen.getByText('TBA Artist')).toBeInTheDocument();
+    expect(screen.getByText('TBA — Times Not Yet Announced')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "Set times aren't out yet" })).not.toBeInTheDocument();
+  });
+
   it('shows "No sets scheduled" when allDaySets is empty and no timeless sets', () => {
     setFilters({
       allDaySets: [],
