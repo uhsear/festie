@@ -22,7 +22,11 @@ export default function WeatherStrip({ festivalId, nowMs }: Props) {
       <div className="rounded-xl border border-border bg-bg-card px-4 py-3 flex flex-col gap-3 min-w-0">
         <p className="type-label font-semibold text-text-primary [overflow-wrap:anywhere]">{nowLine}</p>
         {weather.hours.length > 0 && (
-          <ul className="list-none m-0 p-0 flex gap-3 overflow-x-auto">
+          <ul
+            tabIndex={0}
+            aria-label="Hourly forecast"
+            className="list-none m-0 p-0 flex gap-3 overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+          >
             {weather.hours.map((hour) => (
               <li
                 key={hour.label + hour.temp}

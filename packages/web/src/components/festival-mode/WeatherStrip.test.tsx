@@ -40,6 +40,11 @@ describe('WeatherStrip', () => {
     expect(screen.getByLabelText('3 PM, 70°F, 0% chance of rain')).toHaveTextContent('0% rain');
   });
 
+  it('makes the hourly scroller keyboard focusable', () => {
+    render(<WeatherStrip festivalId="f1" nowMs={NOW} />);
+    expect(screen.getByRole('list', { name: 'Hourly forecast' })).toHaveAttribute('tabindex', '0');
+  });
+
   it('drops the condition and range when unknown', () => {
     hook = { weather: weather({ condition: '', todayHigh: null, todayLow: null }), fetchedAt: NOW, stale: false };
     render(<WeatherStrip festivalId="f1" nowMs={NOW} />);

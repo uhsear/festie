@@ -98,7 +98,7 @@ export default function SosRaiseButton({ crewId, compact = false, alerting = fal
           variant="danger"
           onClick={() => setOpen(true)}
           className={`w-full min-h-11${ring}`}
-          aria-label="Send an SOS to your crew"
+          aria-label="Send SOS to your crew"
         >
           <AlertCircle className="w-4 h-4" aria-hidden="true" /> Send SOS
         </Button>
