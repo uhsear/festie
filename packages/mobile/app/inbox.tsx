@@ -3,7 +3,7 @@ import { ActivityIndicator, FlatList, StyleSheet, Text, View } from 'react-nativ
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
 import { useFestivalDataStore, useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores';
-import { INBOX_COPY } from '@festie/shared/constants';
+import { INBOX_COPY, inboxRowLabel } from '@festie/shared/constants';
 import { timeAgo } from '@festie/shared/utils';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
@@ -59,7 +59,7 @@ export default function InboxScreen() {
         <AppPressable
           style={styles.row}
           accessibilityRole="button"
-          accessibilityLabel={`${item.title}. ${item.body}. ${ago}.${unread ? ` ${INBOX_COPY.unreadA11y}.` : ''}`}
+          accessibilityLabel={inboxRowLabel(item, ago, unread)}
           onPress={() => routeNotification(router, { ...item.data, type: item.type })}
         >
           <View
@@ -71,6 +71,7 @@ export default function InboxScreen() {
             <Text style={styles.rowTitle}>{item.title}</Text>
             <Text style={styles.rowBody}>{item.body}</Text>
             <Text style={styles.rowTime}>{ago}</Text>
+            {item.festivalName ? <Text style={styles.rowTime}>{item.festivalName}</Text> : null}
           </View>
         </AppPressable>
         <InboxArtist setId={item.data.setId} />

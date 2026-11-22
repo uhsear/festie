@@ -1,11 +1,21 @@
 import { describe, it, expect } from 'vitest';
-import { INBOX_COPY, inboxBadgeLabel } from './inboxCopy';
+import { INBOX_COPY, inboxBadgeLabel, inboxRowLabel } from './inboxCopy';
 
 describe('inboxCopy', () => {
   it('inboxBadgeLabel caps at 9+', () => {
     expect(inboxBadgeLabel(0)).toBeNull();
     expect(inboxBadgeLabel(3)).toBe('3');
     expect(inboxBadgeLabel(10)).toBe('9+');
+  });
+
+  it('inboxRowLabel does not double the period of a body that ends in one', () => {
+    expect(inboxRowLabel({ title: 'Third', body: 'Bloom.' }, '7m ago', false)).toBe('Third. Bloom. 7m ago.');
+  });
+
+  it('inboxRowLabel names the festival and the unread state', () => {
+    expect(inboxRowLabel({ title: 'Shuttle update', body: 'Runs late', festivalName: 'EDC Orlando' }, '1h ago', true)).toBe(
+      'Shuttle update. Runs late. EDC Orlando. 1h ago. Unread.',
+    );
   });
 
   it('footnote names the push budget', () => {

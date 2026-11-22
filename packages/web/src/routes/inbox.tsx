@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores/inboxStore';
-import { INBOX_COPY } from '@festie/shared/constants/inboxCopy';
+import { INBOX_COPY, inboxRowLabel } from '@festie/shared/constants/inboxCopy';
 import { timeAgo } from '@festie/shared/utils';
 import { openInboxItem } from '../lib/pushTargetPath';
 import ArtistName from '../components/features/ArtistName';
@@ -75,7 +75,7 @@ export default function InboxView() {
                 <button
                   type="button"
                   onClick={() => open(item)}
-                  aria-label={`${item.title}. ${item.body}. ${ago}.${unread ? ` ${INBOX_COPY.unreadA11y}.` : ''}`}
+                  aria-label={inboxRowLabel(item, ago, unread)}
                   className={`flex w-full min-h-11 items-start gap-3 py-3 text-left ${FOCUS_RING}`}
                 >
                   <span
@@ -86,6 +86,7 @@ export default function InboxView() {
                     <span className="block font-semibold text-text-primary">{item.title}</span>
                     <span className="block text-text-secondary [overflow-wrap:anywhere]">{item.body}</span>
                     <span className="block text-xs text-text-muted">{ago}</span>
+                    {item.festivalName && <span className="block text-xs text-text-muted">{item.festivalName}</span>}
                   </span>
                 </button>
                 <InboxArtist setId={item.data.setId} />
