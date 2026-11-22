@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
 import { useCrewSections, retryDelayMs } from '../useCrewSections';
 import { useCrewStore } from '../../stores/crewStore';
+import { useUIStore } from '../../stores/uiStore';
 
 vi.mock('../../services/api', () => ({
   api: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -24,7 +25,10 @@ beforeEach(() => {
   );
   useCrewStore.setState(loaders as never);
 });
-afterEach(() => vi.useRealTimers());
+afterEach(() => {
+  vi.useRealTimers();
+  useUIStore.setState({ offlineMode: false });
+});
 
 describe('retryDelayMs', () => {
   it('honors Retry-After seconds', () => expect(retryDelayMs(err(429, '7'), 1)).toBe(7000));
@@ -71,6 +75,27 @@ describe('useCrewSections', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     unmount();
     await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(loaders.loadPolls).toHaveBeenCalledTimes(1);
+  });
+
+  it('reloads at once when the connection returns with a failure showing', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    const { result } = renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(result.current.error).toBe('Failed to load: rides');
+    const before = loaders.loadRides!.mock.calls.length;
+    loaders.loadRides!.mockResolvedValue(undefined);
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(0); });
+    expect(loaders.loadRides).toHaveBeenCalledTimes(before + 1);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('does not reload on reconnect when nothing failed', async () => {
+    useUIStore.setState({ offlineMode: true });
+    renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(0); });
     expect(loaders.loadPolls).toHaveBeenCalledTimes(1);
   });
 });
