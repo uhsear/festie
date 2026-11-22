@@ -105,6 +105,7 @@ export default function AccountDangerSection({ onDeleted, hasPassword }: Account
           onPress: () => void handleDelete(),
         },
       ],
+      { cancelable: true },
     );
   };
 

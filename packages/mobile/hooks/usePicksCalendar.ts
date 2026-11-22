@@ -96,6 +96,7 @@ export function usePicksCalendar() {
         { text: 'Download once', onPress: () => void handleDownloadCalendar() },
         { text: 'Cancel', style: 'cancel' },
       ],
+      { cancelable: true },
     );
   }, [haptics, handleSubscribeCalendar, handleDownloadCalendar]);
 

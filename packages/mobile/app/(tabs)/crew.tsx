@@ -430,7 +430,7 @@ export default function CrewScreen() {
           }
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   // Reform the active crew for another festival. Crews are festival-scoped, so
@@ -524,7 +524,7 @@ export default function CrewScreen() {
           }
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const handleTransfer = (crewId: string, member: CrewMember) => {
@@ -547,6 +547,7 @@ export default function CrewScreen() {
           },
         },
       ],
+      { cancelable: true },
     );
   };
 
@@ -581,7 +582,7 @@ export default function CrewScreen() {
             .catch((err) => Sentry.captureException(err));
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const handleDelete = (crewId: string, crewName: string, memberCount: number) => {
@@ -596,7 +597,7 @@ export default function CrewScreen() {
             .catch((err) => Sentry.captureException(err));
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const handleOwnerLeave = (crewId: string, crewName: string, members: CrewMember[], selfId: string) => {

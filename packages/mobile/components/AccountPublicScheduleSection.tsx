@@ -84,6 +84,7 @@ export default function AccountPublicScheduleSection() {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Reset links', style: 'destructive', onPress: () => void doReset() },
       ],
+      { cancelable: true },
     );
   };
 

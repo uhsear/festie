@@ -156,7 +156,7 @@ export default function AccountIdentityCard() {
         style: 'destructive',
         onPress: () => void handleRemove(),
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const handleRemove = async () => {

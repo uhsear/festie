@@ -173,7 +173,7 @@ export default function AccountScreen() {
         style: 'destructive',
         onPress: () => void handleLogout(),
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const handleLogout = async () => {

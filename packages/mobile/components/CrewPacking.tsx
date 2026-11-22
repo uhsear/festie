@@ -135,7 +135,7 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
     Alert.alert('Remove item', `Remove "${item.label}" from the packing list?`, [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => handleDelete(item) },
-    ]);
+    ], { cancelable: true });
   };
 
   const canCreate = !!label.trim();

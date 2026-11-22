@@ -64,6 +64,7 @@ export function useSosRaise(crewId: string | null) {
         { text: 'Cancel', style: 'cancel' },
         { text: 'Send SOS', style: 'destructive', onPress: () => void doRaise() },
       ],
+      { cancelable: true },
     );
   }, [crewId, doRaise]);
 

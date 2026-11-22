@@ -94,13 +94,16 @@ async function askNotificationPermission(artist: string): Promise<void> {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'undetermined') return;
     if (await AsyncStorage.getItem(REMINDER_ASK_DISMISSED_KEY)) return;
+    const dismissAsk = () => void AsyncStorage.setItem(REMINDER_ASK_DISMISSED_KEY, '1');
     Alert.alert(
       `Get a heads-up before ${artist}?`,
       'Allow notifications so Festie can remind you before sets start, even when the app is closed.',
       [
-        { text: 'Not now', style: 'cancel', onPress: () => void AsyncStorage.setItem(REMINDER_ASK_DISMISSED_KEY, '1') },
+        { text: 'Not now', style: 'cancel', onPress: dismissAsk },
         { text: 'Allow', onPress: () => void Notifications.requestPermissionsAsync() },
       ],
+      // Back counts as "Not now", so the ask does not return on every save.
+      { cancelable: true, onDismiss: dismissAsk },
     );
   } catch {
     // Best effort: the reminder is saved either way and the delivery line explains a missing permission.
