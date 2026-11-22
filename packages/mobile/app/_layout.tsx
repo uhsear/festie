@@ -552,8 +552,10 @@ function AuthGate() {
   return (
     <View style={styles.appShell}>
       {/* Light-content status bar on the dark stage theme; dark content on the
-          light daylight theme so the icons stay readable against either bg. */}
-      <StatusBar style={theme === 'daylight' ? 'dark' : 'light'} />
+          light daylight theme so the icons stay readable against either bg. The
+          offline banner paints behind the status bar with ink of the opposite polarity
+          (bg.primary on an accent fill), so the icons flip while it shows. */}
+      <StatusBar style={(theme === 'daylight') !== bannerActive ? 'dark' : 'light'} />
       {!loading && <OfflineBanner onActiveChange={setBannerActive} />}
       {!loading && <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />}
       {!loading && <LiveSharePublisher />}
