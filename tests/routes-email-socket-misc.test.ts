@@ -258,6 +258,24 @@ describe('routes/email-auth', () => {
     assert.ok(!JSON.stringify(warn.mock.calls).includes('alice@test.com'), 'the address must not be logged at warn');
   });
 
+  test('POST /forgot-password — a null rejection from the detached send is logged without throwing', async () => {
+    const error = mock.fn();
+    const deps = buildEmailAuthDeps({ log: { ...makeLog(), error } });
+    deps.stores.emailTokens.findUserByEmail = mock.fn(() => Promise.reject(null));
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+      await request(mountApp(createEmailAuthRoutes(deps))).post('/forgot-password').send({ email: 'null@test.com' }).expect(200);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+    assert.equal(unhandled.length, 0, 'the detached catch must not throw');
+    assert.ok(error.mock.calls.some((c: any) => c.arguments[0] === 'forgot-password failed'));
+  });
+
   test('POST /forgot-password — answers before the lookup and send finish, so latency does not reveal an account (SEC-FORGOT-TIMING)', async () => {
     const known = buildEmailAuthDeps();
     known.stores.emailTokens.findUserByEmail = mock.fn(
