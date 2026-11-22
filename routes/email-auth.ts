@@ -428,7 +428,6 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
 // ── Email verification result page ──────────────────────────────────────
 type VerifyAction = { label: string; href: string };
 const OPEN_FESTIE: VerifyAction = { label: 'Open Festie', href: '/' };
-const SIGN_IN: VerifyAction = { label: 'Sign in', href: '/login' };
 // A POST form in place of the link button. `action` is a same-origin path built by the route.
 type UnsubscribeForm = { action: string; label: string };
 
