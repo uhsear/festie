@@ -22,6 +22,9 @@ import Button from '../ui/Button';
 import Input from '../ui/Input';
 import IconButton from '../ui/IconButton';
 
+// Mirrors the server's amount bound in lib/schemas/expenses.ts.
+const MAX_AMOUNT = 99_999_999.99;
+
 interface FormMember {
   userId: string;
   username?: string;
@@ -105,7 +108,13 @@ export default function ExpenseForm({
 
   const canSplitByDays = uneven && totalCents > 0 && dayCount > 0 && hasDayAnswers(daysIndex, splitWith);
 
-  const canSubmit = !!description.trim() && totalCents > 0 && splitWith.length > 0 && !error;
+  let amountError: string | undefined;
+  if (amount !== '' && totalCents < 1) amountError = `Enter an amount of at least ${formatCents(1, currency)}`;
+  else if (Number(amount) > MAX_AMOUNT) {
+    amountError = `Amount can't be more than ${formatCents(Math.round(MAX_AMOUNT * 100), currency)}`;
+  }
+
+  const canSubmit = !!description.trim() && totalCents > 0 && splitWith.length > 0 && !error && !amountError;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -146,9 +155,11 @@ export default function ExpenseForm({
         inputMode="decimal"
         step="0.01"
         min="0.01"
+        max={MAX_AMOUNT}
         value={amount}
         onChange={(e) => setAmount(e.target.value)}
         placeholder="0.00"
+        error={amountError}
         required
       />
       <div>

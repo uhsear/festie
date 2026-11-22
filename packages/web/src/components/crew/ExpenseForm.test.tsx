@@ -195,3 +195,23 @@ describe('ExpenseForm', () => {
     expect(onSubmit.mock.calls[0]![0]).not.toHaveProperty('paidBy');
   });
 });
+
+describe('ExpenseForm amount validation', () => {
+  it('explains an amount under one cent and flags the field', async () => {
+    const { user } = setup();
+    await user.type(screen.getByLabelText('Description'), 'Gas');
+    await user.type(screen.getByLabelText('Amount'), '0.001');
+    expect(screen.getByText('Enter an amount of at least $0.01')).toBeInTheDocument();
+    expect(screen.getByLabelText('Amount')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+  });
+
+  it('explains an amount over the maximum and blocks submit', async () => {
+    const { user, onSubmit } = setup();
+    await user.type(screen.getByLabelText('Description'), 'Gas');
+    await user.type(screen.getByLabelText('Amount'), '99999999999');
+    expect(screen.getByText("Amount can't be more than $99,999,999.99")).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    expect(onSubmit).not.toHaveBeenCalled();
+  });
+});
