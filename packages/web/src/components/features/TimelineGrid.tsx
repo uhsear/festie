@@ -248,19 +248,18 @@ export default function TimelineGrid({
               'border-b-2 border-b-[var(--color-border)]',
               'font-bold uppercase',
               // Mobile: smaller text, tighter letter-spacing so wide tracking
-              // doesn't eat the narrow column, clamp to 2 lines with ellipsis
-              // instead of clipping mid-word.
+              // doesn't eat the narrow column. The name clamps to 2 lines in the
+              // inner span, so a third line cannot peek through the padding.
               'text-[length:var(--font-size-10)] leading-[1.15] tracking-[0.3px] px-1 py-1',
-              'break-words [overflow-wrap:anywhere] line-clamp-2 overflow-hidden',
               // Desktop: restore full sizing + roomier tracking.
               'md:text-[length:var(--font-size-12)] md:leading-normal md:tracking-[1.5px] md:px-2 md:py-2.5',
-              'md:line-clamp-none md:whitespace-normal',
+              'md:whitespace-normal',
               compact && '[scroll-snap-align:none_start]',
             )}
             style={{ borderBottom: `3px solid ${color}`, color: stageTextColor(color, theme) }}
             title={st.name}
           >
-            {st.name}
+            <span className="break-words [overflow-wrap:anywhere] line-clamp-2 overflow-hidden">{st.name}</span>
           </div>
         );
       })}
