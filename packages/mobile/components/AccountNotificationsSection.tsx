@@ -20,6 +20,8 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
   const { registered, busy, error, register, unregister, permission, canAskAgain } = push;
   const offlineMode = useUIStore((s) => s.offlineMode);
   const blocked = permission === 'denied' && !canAskAgain && !registered;
+  // The first refusal resets the switch silently; say so and that it can be asked again.
+  const declined = permission === 'denied' && canAskAgain && !registered;
 
   const onToggle = async (next: boolean) => {
     haptics.select();
@@ -40,7 +42,9 @@ export default function AccountNotificationsSection({ push }: { push: ReturnType
       : 'Turning on…'
     : registered
       ? 'Active on this device'
-      : 'Set reminders & crew updates on this device';
+      : declined
+        ? 'Permission was declined. Turn this on to be asked again.'
+        : 'Set reminders & crew updates on this device';
 
   return (
     <View style={styles.card}>
