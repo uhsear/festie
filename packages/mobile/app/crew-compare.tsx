@@ -40,36 +40,14 @@ export default function CrewCompareScreen() {
   const selectedDay = useFestivalStore((s) => s.selectedDay);
   const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
 
-  const [sort, setSort] = useState<'time' | 'mix'>('time');
-  const { columns, rows, freeTogether, split, together, notThere, timeZone } = useCrewCompare(sort);
-  const { savePick } = usePicks();
-  const { getDays, getStageColor } = useFestival();
-
-  const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // The grid reads the festival store's `allProfiles`, so refresh reloads those
-  // (loadOverlap only fed the crew store). It waits until the festival store
-  // follows the crew's festival.
   const festivalId = currentFestival?.id;
   const ready = festivalSwitch.state === 'match' && status === 'ready';
-  const refresh = useCallback(async () => {
-    if (!festivalId) return;
-    setRefreshing(true);
-    setError(null);
-    try {
-      await useFestivalStore.getState().loadProfiles(festivalId);
-    } catch (err) {
-      setError(mapErrorToUserMessage(err, "Couldn't load crew picks."));
-    } finally {
-      setRefreshing(false);
-    }
-  }, [festivalId]);
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- genuine data-fetch side effect: refresh() flips the refreshing flag before its async profiles GET; not derivable from render inputs
-    if (ready) void refresh();
-  }, [refresh, ready]);
+  const [sort, setSort] = useState<'time' | 'mix'>('time');
+  // The hook reloads the profiles the grid reads once the crew and festival have settled.
+  const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, loading, refreshing, error, refresh } =
+    useCrewCompare(sort, ready);
+  const { savePick } = usePicks();
+  const { getDays, getStageColor } = useFestival();
 
   const days = useMemo(() => getDays(), [getDays]);
 
@@ -165,8 +143,15 @@ export default function CrewCompareScreen() {
       </Wrapper>
     );
   }
+  if (loading) {
+    return (
+      <Wrapper>
+        <LoadingState label="Loading crew picks…" />
+      </Wrapper>
+    );
+  }
   // With everyone else Not going, keep the screen so the day selector can reach another day.
-  if (columns.length <= 1 && notThere.length === 0) {
+  if (alone) {
     return (
       <Wrapper>
         <EmptyState

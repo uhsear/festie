@@ -177,6 +177,14 @@ export function selectNowNext({
   };
 }
 
+const WEATHER_LEAD_MS = 3 * 24 * 60 * 60 * 1000;
+
+/** Current weather helps while the festival runs or is a few days out, not after it ends or months before it starts. */
+export function showsFestivalWeather(selection: Pick<NowNextSelection, 'phase' | 'startsAt'>, nowMs: number): boolean {
+  if (selection.phase === 'after') return false;
+  return selection.startsAt == null || selection.startsAt - nowMs <= WEATHER_LEAD_MS;
+}
+
 /** `8:00 PM` (`20:00` where the locale uses a 24-hour clock) in the festival zone, the same form as `formatTime`; device-local when no zone is known. */
 export function fmtZonedClock(ms: number, timeZone?: string): string {
   return formatClock(ms, timeZone);

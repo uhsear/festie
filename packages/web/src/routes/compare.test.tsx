@@ -11,6 +11,8 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(() => Promise.resolve()),
   savePick: vi.fn(() => Promise.resolve()),
   toastError: vi.fn(),
+  toast: vi.fn(),
+  refresh: vi.fn(),
   days: [
     { id: 'd0', date: '2026-11-06', label: 'Friday' },
     { id: 'd1', date: '2026-11-07', label: 'Saturday' },
@@ -26,7 +28,7 @@ vi.mock('@festie/shared/stores', () => ({
 vi.mock('@festie/shared/hooks', () => ({
   useActiveCrew: () => mocks.crewState,
   useCrewFestival: () => mocks.festState,
-  useCrewCompare: (sort: string) => mocks.compare(sort),
+  useCrewCompare: (sort: string, ready: boolean) => mocks.compare(sort, ready),
   useFestival: () => ({ getStageColor: () => '#fff', getStageName: () => 'Main' }),
   usePicks: () => ({ savePick: mocks.savePick }),
 }));
@@ -34,7 +36,7 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children }: { children: React.ReactNode }) => <a href="#test">{children}</a>,
   useNavigate: () => mocks.navigate,
 }));
-vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toastError: mocks.toastError }) }));
+vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toast: mocks.toast, toastError: mocks.toastError }) }));
 vi.mock('../components/features/GuestTeaser', () => ({ default: () => <div>guest-teaser</div> }));
 vi.mock('../components/features/CrewSuggestionStrip', () => ({
   default: (p: { title?: string }) => {
@@ -64,10 +66,53 @@ beforeEach(() => {
     together: [],
     notThere: [],
     timeZone: 'UTC',
+    alone: false,
+    loading: false,
+    refreshing: false,
+    error: null,
+    refresh: mocks.refresh,
   });
 });
 
 describe('CompareView', () => {
+  it('tells a solo crew to wait for crewmates instead of showing an empty grid', () => {
+    mocks.compare.mockReturnValue({ ...mocks.compare(), rows: [], alone: true });
+    render(<CompareView />);
+    expect(screen.getByText('No crew picks yet')).toBeInTheDocument();
+    expect(screen.getByText(/Once your crewmates save picks/)).toBeInTheDocument();
+    expect(screen.queryByText('No picks on this day yet')).not.toBeInTheDocument();
+  });
+
+  it('shows a loading state, not the solo copy, while the first crew picks load', () => {
+    mocks.compare.mockReturnValue({ ...mocks.compare(), rows: [], loading: true, refreshing: true });
+    render(<CompareView />);
+    expect(screen.getByText('Loading crew picks…')).toBeInTheDocument();
+    expect(screen.queryByText('No crew picks yet')).not.toBeInTheDocument();
+  });
+
+  it('shows the load error with Try again when the load failed and nothing is cached', () => {
+    mocks.compare.mockReturnValue({ ...mocks.compare(), rows: [], error: 'Offline' });
+    render(<CompareView />);
+    expect(screen.getByText("Couldn't load crew picks")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the loaded grid and toasts once when a refresh fails', () => {
+    mocks.compare.mockReturnValue({ ...mocks.compare(), error: 'Offline' });
+    render(<CompareView />);
+    expect(screen.getByText('Daft Punk')).toBeInTheDocument();
+    expect(mocks.toast).toHaveBeenCalledWith('Offline', 'error');
+  });
+
+  it('opens the compare only once the crew and festival have settled', () => {
+    render(<CompareView />);
+    expect(mocks.compare).toHaveBeenCalledWith('time', true);
+    mocks.festState = { state: 'switching', festivalName: 'Forbidden Kingdom', retry: vi.fn() };
+    render(<CompareView />);
+    expect(mocks.compare).toHaveBeenLastCalledWith('time', false);
+  });
+
   it('names members who are not there on the selected day', () => {
     mocks.compare.mockReturnValue({
       ...mocks.compare(),
@@ -146,9 +191,9 @@ describe('CompareView', () => {
 
   it('sorts by Most picked', () => {
     render(<CompareView />);
-    expect(mocks.compare).toHaveBeenLastCalledWith('time');
+    expect(mocks.compare).toHaveBeenLastCalledWith('time', true);
     fireEvent.click(screen.getByRole('button', { name: 'Most picked' }));
-    expect(mocks.compare).toHaveBeenLastCalledWith('mix');
+    expect(mocks.compare).toHaveBeenLastCalledWith('mix', true);
     expect(screen.getByRole('button', { name: 'Most picked' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

@@ -369,8 +369,23 @@ describe('MeetingPointsTab', () => {
     render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
     await user.click(screen.getByRole('button', { name: 'Add meeting point' }));
     expect(screen.queryByText('Moves to Past 30 minutes after the meet time.')).not.toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText('Meet at time'), { target: { value: '2026-06-01T15:00' } });
+    fireEvent.change(screen.getByLabelText('Meet at time'), { target: { value: '2099-06-01T15:00' } });
     expect(screen.getByText('Moves to Past 30 minutes after the meet time.')).toBeInTheDocument();
+  });
+
+  it('refuses a meet time that has already passed, and allows it once it repeats daily', async () => {
+    const user = userEvent.setup();
+    setQuery({ data: [POINT] });
+    render(<MeetingPointsTab crewId="c1" currentUserId="u1" />);
+    await user.click(screen.getByRole('button', { name: 'Add meeting point' }));
+    await user.type(screen.getByLabelText('Label'), 'Gate');
+    await user.type(screen.getByLabelText('Location'), 'North');
+    fireEvent.change(screen.getByLabelText('Meet at time'), { target: { value: '2020-06-01T15:00' } });
+    expect(screen.getByRole('alert')).toHaveTextContent('Pick a time in the future.');
+    expect(screen.getByRole('button', { name: 'Add' })).toBeDisabled();
+    await user.click(screen.getByRole('switch', { name: /Repeats daily/ }));
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Add' })).toBeEnabled();
   });
 
   it('adds a meeting point from a map click', async () => {

@@ -9,13 +9,25 @@ describe('crew compare source guards', () => {
       'useCrewCompare(',
       'useCrewFestival(',
       'useActiveCrew(',
-      'loadProfiles(',
       'Most picked',
       'to my picks',
       'CrewCompareSummary',
     ]) {
       expect(src).toContain(needle);
     }
+  });
+  it('the shared hook owns the profile refresh the screen waits on', () => {
+    expect(read('app/crew-compare.tsx')).toContain('useCrewCompare(sort, ready)');
+    expect(read('../shared/src/hooks/useCrewCompare.ts')).toContain('loadProfiles(');
+  });
+  it('crew-compare shows a loading state before the solo copy', () => {
+    const src = read('app/crew-compare.tsx');
+    expect(src.indexOf('if (loading)')).toBeGreaterThan(-1);
+    expect(src.indexOf('if (loading)')).toBeLessThan(src.indexOf('if (alone)'));
+  });
+  it('the crew full notice shows in the members invite bar and the join consent line hides when full', () => {
+    expect(read('components/crew/CrewMembersTab.tsx')).toContain('crewCopy.inviteCrewFull(isOwner)');
+    expect(read('app/join/[code].tsx')).toMatch(/\{!full \? \(\s*<Text[^>]*>\s*Crew members can see your picks/);
   });
   it('crew-compare no longer refreshes through loadOverlap', () => {
     expect(read('app/crew-compare.tsx')).not.toContain('loadOverlap(');

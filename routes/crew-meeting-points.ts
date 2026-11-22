@@ -182,6 +182,10 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
         }
 
         const { label, location, type, meetAt, stageReference, latitude, longitude, recursDaily } = body;
+        // Polls refuse a past end time the same way; a daily point repeats at that time of day, so it stays valid.
+        if (meetAt && !recursDaily && Date.parse(meetAt) <= Date.now()) {
+          return sendError(res, 400, 'Pick a time in the future.', ErrorCodes.INVALID_INPUT);
+        }
         const id = createOpaqueId('mp');
         // A one-shot timed point auto-expires 30 min after its meet time. A
         // recurring point (recursDaily) must NOT expire — it repeats every
@@ -268,6 +272,10 @@ export default function createCrewMeetingPointRoutes(deps: RouteDeps) {
           body.meetAt !== undefined &&
           (body.meetAt ? Date.parse(body.meetAt) : null) !==
             (existing.meet_at ? new Date(existing.meet_at as string | Date).getTime() : null);
+        // Same rule as create, but only when the time moves: an edit that leaves an old time alone stays allowed.
+        if (timeChanged && effMeetAt && !effRecurs && Date.parse(effMeetAt) <= Date.now()) {
+          return sendError(res, 400, 'Pick a time in the future.', ErrorCodes.INVALID_INPUT);
+        }
         const placeChanged = body.location !== undefined && body.location !== existing.location;
         // Only a time or place change writes the edit trail; any other edit leaves an earlier trail in place.
         const trail =

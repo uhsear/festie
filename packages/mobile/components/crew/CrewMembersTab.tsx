@@ -245,6 +245,11 @@ export default function CrewMembersTab({
                   </TouchableOpacity>
                 ) : null}
               </View>
+              {crew.maxMembers && members.length >= crew.maxMembers ? (
+                <Text style={styles.inviteExpiry} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {crewCopy.inviteCrewFull(isOwner)}
+                </Text>
+              ) : null}
               <CrewLockRow crewId={crew.id} isOwner={isOwner} />
             </View>
           ) : null}

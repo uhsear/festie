@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, Alert, Linking, AccessibilityInfo } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -45,6 +45,7 @@ import {
   myPayments as selectMyPayments,
   myReceipts as selectMyReceipts,
 } from '@festie/shared/utils';
+import { remindedUserIdsToday } from '@festie/shared/utils/crewManage';
 import { EXPENSE_CATEGORIES, CREW_CURRENCIES, expenseCategoryFor } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -83,6 +84,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
   const updateExpense = useCrewStore((s) => s.updateExpense);
   const confirmPayment = useCrewStore((s) => s.confirmPayment);
   const remindPayment = useCrewStore((s) => s.remindPayment);
+  const remindedOn = useCrewStore((s) => s.remindedOn);
   const setExpenseCurrency = useCrewStore((s) => s.setExpenseCurrency);
   const currency = useCrewStore((s) => s.expenseCurrency);
   const isOwner = useCrewStore((s) => s.activeCrew?.owner === currentUserId);
@@ -107,6 +109,10 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
   const [busy, setBusy] = useState(false);
   const [settling, setSettling] = useState(false);
   const settlingRef = useRef(false);
+  const remindingRef = useRef(false);
+  const [reminding, setReminding] = useState(false);
+  // The store marks a sent reminder, or a 409 saying one already went out today.
+  const remindedUserIds = useMemo(() => remindedUserIdsToday(remindedOn, crewId), [remindedOn, crewId]);
   const scrollOnLayout = useRef(false);
   const formY = useRef(0);
   // Planned-vs-actual filter. 'actual' = the real ledger (feeds settle-up);
@@ -323,6 +329,9 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
   };
 
   const handleRemind = (s: CrewSettlement) => {
+    if (remindingRef.current || remindedUserIds.has(s.fromUserId)) return;
+    remindingRef.current = true;
+    setReminding(true);
     remindPayment(crewId, s.fromUserId)
       .then((outcome) => {
         const queued = outcome === 'queued';
@@ -331,7 +340,11 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
         });
         if (!queued) haptics.success();
       })
-      .catch((err) => Alert.alert('Reminder not sent', mapErrorToUserMessage(err, 'Try again.')));
+      .catch((err) => Alert.alert('Reminder not sent', mapErrorToUserMessage(err, 'Try again.')))
+      .finally(() => {
+        remindingRef.current = false;
+        setReminding(false);
+      });
   };
 
   // Open a payment app deep link (falls back to the https URL if the app isn't
@@ -593,14 +606,22 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
                       {settlementSentence(s, currentUserId, currency)}
                     </Text>
                     <TouchableOpacity
-                      style={styles.settleButton}
+                      style={[styles.settleButton, (reminding || remindedUserIds.has(s.fromUserId)) && { opacity: 0.5 }]}
                       onPress={() => handleRemind(s)}
+                      disabled={reminding || remindedUserIds.has(s.fromUserId)}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Remind ${s.fromName} to pay you`}
+                      accessibilityState={{ disabled: reminding || remindedUserIds.has(s.fromUserId), busy: reminding }}
+                      accessibilityLabel={
+                        remindedUserIds.has(s.fromUserId)
+                          ? `Reminded ${s.fromName} today`
+                          : `Remind ${s.fromName} to pay you`
+                      }
                     >
                       <Ionicons name="notifications-outline" size={14} color={t.colors.accent.aqua} />
-                      <Text style={styles.settleButtonText}>Remind {s.fromName}</Text>
+                      <Text style={styles.settleButtonText}>
+                        {remindedUserIds.has(s.fromUserId) ? 'Reminded today' : `Remind ${s.fromName}`}
+                      </Text>
                     </TouchableOpacity>
                   </View>
                 ))}

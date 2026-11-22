@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { encodePlanSnapshot } from '@festie/shared/utils';
 
@@ -180,6 +180,27 @@ describe('PlanSnapshotPage', () => {
     expect(screen.queryByText(/If we lose each other/)).toBeNull();
   });
 
+  it('switches to another plan when only the hash changes', async () => {
+    apiGet.mockResolvedValue(festival);
+    setHash(snapshotHash([{ setId: 'set-1', priority: 'must' }]));
+    render(<PlanSnapshotPage />);
+    expect(await screen.findByText('Aurora')).toBeInTheDocument();
+    expect(screen.getByText(/A friend's picks · 1 set$/)).toBeInTheDocument();
+
+    apiGet.mockResolvedValue({ ...festival, id: 'fest-2', name: 'Other Fest', days: [] });
+    act(() => {
+      window.location.hash = encodePlanSnapshot({
+        festivalId: 'fest-2',
+        festivalName: 'Other Fest',
+        picks: [{ setId: 'x', priority: 'want' }],
+      });
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Other Fest' })).toBeInTheDocument();
+    expect(screen.queryByText('Aurora')).toBeNull();
+    expect(apiGet).toHaveBeenLastCalledWith('/festivals/fest-2');
+  });
+
   describe('import into my plan', () => {
     const loadedPlan = (picks: Record<string, string> = {}) => {
       authState.user = { id: 'u1' };
@@ -285,6 +306,15 @@ describe('PlanSnapshotPage', () => {
       render(<PlanSnapshotPage />);
       expect(screen.getByText('You already have all of these picks.')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /^Add/ })).toBeNull();
+    });
+
+    it('says the plan is empty rather than that the viewer has every pick', () => {
+      apiGet.mockResolvedValue(festival);
+      loadedPlan();
+      setHash(snapshotHash([]));
+      render(<PlanSnapshotPage />);
+      expect(screen.getByText('This plan has no picks yet.')).toBeInTheDocument();
+      expect(screen.queryByText('You already have all of these picks.')).toBeNull();
     });
 
     it('shows a loading state, not "already have all", while the festival is still loading', async () => {

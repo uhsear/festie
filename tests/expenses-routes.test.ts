@@ -183,6 +183,25 @@ describe('POST /crews/:crewId/expenses — paid by and uneven shares', () => {
     assert.equal(res.body.error.message, 'The person who paid must be in the crew.');
   });
 
+  test('an amount with more than two decimals is refused, not rounded', async () => {
+    const deps = buildDeps();
+    const app = await mount(deps);
+
+    for (const amount of [1.005, 8.325, 10.005, 0.015]) {
+      const res = await request(app)
+        .post('/crews/crew-1/expenses')
+        .send({ description: 'Gas', amount, splitWith: ['user-a'] })
+        .expect(400);
+      assert.match(JSON.stringify(res.body.error), /at most 2 decimal places/);
+    }
+    assert.equal(deps.stores.expenses.create.mock.callCount(), 0);
+
+    await request(app)
+      .post('/crews/crew-1/expenses')
+      .send({ description: 'Gas', amount: 1.07, splitWith: ['user-a'] })
+      .expect(201);
+  });
+
   test('paidBy defaults to the caller and the activity uses the crew currency', async () => {
     const deps = buildDeps({ currency: 'EUR' });
     const app = await mount(deps);
