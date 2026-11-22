@@ -132,6 +132,12 @@ function MapViewInner() {
           fill
         />
       </Suspense>
+      {/* Setting a point reuses the Meet tab form and its map; the full-page map stays read-only. */}
+      {hasCrew && (
+        <Link to="/crew" search={{ tab: 'find' }} className="min-h-11 self-start text-sm underline">
+          Add a meeting point
+        </Link>
+      )}
       {hasCrew && pointsFailed && points.length > 0 && (
         <p className="text-sm text-text-muted">{COPY.meetingPoint.showingSaved}</p>
       )}

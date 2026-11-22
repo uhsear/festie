@@ -41,6 +41,11 @@ describe('PlaceCard', () => {
     expect(screen.getByRole('button', { name: 'Show the way' })).toHaveFocus();
   });
 
+  it('sits above the map attribution button instead of covering it', () => {
+    renderCard();
+    expect(screen.getByRole('dialog', { name: 'Mainstage' }).className).toContain('bottom-9');
+  });
+
   it('asks for location when there is no fix', () => {
     const props = renderCard({ selfCoord: null, geoState: 'idle' });
     fireEvent.click(screen.getByRole('button', { name: 'Turn on location to see how far it is' }));

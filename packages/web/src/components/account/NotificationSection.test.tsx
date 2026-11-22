@@ -293,11 +293,24 @@ describe('NotificationSection preferences', () => {
     expect(screen.getByRole('switch', { name: 'Set reminders' })).toBeInTheDocument();
   });
 
-  it('renders without crashing in an error state', () => {
+  it('shows the load error with a retry, not default switches, when the first load failed', async () => {
+    const user = userEvent.setup();
     resetStore({ error: 'Failed to load notification settings' });
     render(<NotificationSection />);
     expect(screen.getByText('Notification types')).toBeInTheDocument();
-    expect(screen.getByRole('switch', { name: 'Crew picks' })).toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Crew picks' })).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('Failed to load notification settings');
+    mockLoadPrefs.mockClear();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mockLoadPrefs).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides festival rows until the global prefs have loaded', () => {
+    topicsState = { festival: { id: 'f1', name: 'EDC' }, subs: { crew: true, schedule: true }, error: false };
+    resetStore({ error: 'Failed to load notification settings' });
+    render(<NotificationSection />);
+    expect(screen.queryByText('Only for EDC')).toBeNull();
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 
   it('does not throw if updatePrefs rejects (failure is swallowed)', async () => {
@@ -332,7 +345,7 @@ describe('NotificationSection preferences', () => {
   });
 
   it('disables the festival Crew picks switch when the global crewUpdates is off', () => {
-    resetStore({ prefs: { ...basePrefs, crewUpdates: false } });
+    resetStore({ prefs: { ...basePrefs, crewUpdates: false }, loaded: true });
     topicsState = { festival: { id: 'f1', name: 'EDC' }, subs: { crew: true, schedule: true }, error: false };
     render(<NotificationSection />);
     const switches = screen.getAllByRole('switch', { name: 'Crew picks' });
@@ -344,6 +357,7 @@ describe('NotificationSection preferences', () => {
 
   it('shows two skeleton rows while the festival topics load', () => {
     topicsState = { festival: { id: 'f1', name: 'EDC' }, subs: null, error: false };
+    resetStore({ loaded: true });
     render(<NotificationSection />);
     expect(screen.getByText('Only for EDC')).toBeInTheDocument();
     expect(screen.getAllByRole('status')).toHaveLength(1);

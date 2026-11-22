@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, fireEvent, render, screen, renderHook, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, renderHook, waitFor, within } from '@testing-library/react';
 import type { Festival, PeerLocation, SosEntry } from '@festie/shared/types';
 import { useSosMarkers } from './crew-map/useSosMarkers';
 import { useAuthStore } from '@festie/shared/stores/authStore';
@@ -507,6 +507,16 @@ describe('CrewMap place card and Nearest', () => {
     expect(screen.getByRole('button', { name: 'Hide Info' })).toHaveTextContent('Info');
     expect(screen.queryByText(/pursu/i)).toBeNull();
     expect(document.body.innerHTML).not.toMatch(/pursu/i);
+  });
+
+  it('headings both chip rows so a screen reader hears what each row does', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    extractAmenityPins.mockReturnValue([amenity('a1', 'atm', 'ATM'), amenity('a2', 'medical', 'First aid')]);
+    render(<CrewMap meetingPoints={[]} festival={FESTIVAL} />);
+    const nearest = screen.getByRole('group', { name: 'Nearest' });
+    expect(within(nearest).getByRole('button', { name: 'Show the way to the nearest medical' })).toBeInTheDocument();
+    const filter = screen.getByRole('group', { name: 'Filter amenities by category' });
+    expect(within(filter).getByText('Show on map')).toBeVisible();
   });
 
   it('says so when no medical pin is mapped and offers Call 911', () => {
