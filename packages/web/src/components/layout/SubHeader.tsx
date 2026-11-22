@@ -337,9 +337,10 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   {`+${hiddenDays.length} hidden`}
                 </button>
               )}
+              {timeLabel && (
+                <span className="self-center shrink-0 whitespace-nowrap text-xs text-text-muted">{timeLabel}</span>
+              )}
             </div>
-            {/* Below the scroller, not inside it, so the zone stays in view when the tabs scroll. */}
-            {timeLabel && <span className="block whitespace-nowrap pt-1 text-xs text-text-muted">{timeLabel}</span>}
           </div>
         )}
 
