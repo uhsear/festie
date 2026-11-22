@@ -102,7 +102,7 @@ export default function DayEditor({
         <div className="basis-full md:basis-auto flex items-center gap-2">
           <input
             type="date"
-            aria-label={`Date for ${day.label || 'this day'}`}
+            aria-label={`Day date for ${day.label || 'this day'}`}
             value={day.date}
             onChange={(e) => onDateChange(e.target.value)}
             className="px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"

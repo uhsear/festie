@@ -56,6 +56,6 @@ describe('DayEditor labels', () => {
     expect(screen.getByRole('button', { name: 'Remove set: Alpha' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Collapse Friday' })).toBeTruthy();
     expect(screen.getByLabelText('Day label for Friday')).toBeTruthy();
-    expect(screen.getByLabelText('Date for Friday')).toBeTruthy();
+    expect(screen.getByLabelText('Day date for Friday')).toBeTruthy();
   });
 });
