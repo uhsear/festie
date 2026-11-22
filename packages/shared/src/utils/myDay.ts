@@ -35,7 +35,7 @@ export function nightLabelFor(day: { label?: string; date: string }): string {
 export function dayPartTitle(part: DayPart, nightLabel: string): string {
   switch (part) {
     case 'afternoon':
-      return 'Afternoon';
+      return 'Daytime';
     case 'evening':
       return 'Evening';
     case 'late-night':
