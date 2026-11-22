@@ -251,7 +251,7 @@ function AdminUsersList() {
                   </th>
                   <th className="px-4 py-3 text-left text-text-muted font-medium">Username</th>
                   <th className="px-4 py-3 text-left text-text-muted font-medium">Email</th>
-                  <th className="px-4 py-3 text-center text-text-muted font-medium">Verified</th>
+                  <th className="px-4 py-3 text-left text-text-muted font-medium">Verified</th>
                   <th className="px-4 py-3 text-center text-text-muted font-medium">Admin</th>
                   <th className="px-4 py-3 text-left text-text-muted font-medium">Joined</th>
                   <th className="px-4 py-3 text-right text-text-muted font-medium">Actions</th>
@@ -310,7 +310,7 @@ function AdminUsersList() {
                           )}
                         </span>
                       </td>
-                      <td data-label="Verified" className={`${cellBase} lg:text-center`}>
+                      <td data-label="Verified" className={cellBase}>
                         {user.emailVerified ? (
                           <span className="inline-flex items-center gap-1.5 text-sm text-accent-green">
                             <span aria-hidden="true" className="h-2 w-2 rounded-full bg-accent-green" />

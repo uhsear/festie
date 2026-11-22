@@ -37,6 +37,13 @@ const KINDS: ReadonlyArray<{ value: OrgKind; label: string }> = [
 export const orgStatusLabel = (status: string) =>
   status === 'pending' ? 'Waiting for activation' : status === 'active' ? 'Active' : 'Suspended';
 
+// Active is the good state, so it is green. Amber is only for an organization that still waits on us.
+const STATUS_CHIP: Record<string, string> = {
+  pending: 'bg-accent-amber/20 text-accent-amber',
+  active: 'bg-accent-green/20 text-accent-green',
+  suspended: 'bg-accent-coral/20 text-accent-coral',
+};
+
 const buttonClass =
   'inline-flex items-center justify-center min-h-11 px-4 rounded-lg bg-accent-aqua text-bg-primary text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-50';
 
@@ -198,7 +205,7 @@ export default function AdminOrganizations() {
                       >
                         {org.name}
                       </button>
-                      <span className="rounded-full bg-accent-amber/20 px-2 py-0.5 text-xs font-semibold text-accent-amber">
+                      <span className={cn('rounded-full px-2 py-0.5 text-xs font-semibold', STATUS_CHIP[org.status])}>
                         {orgStatusLabel(org.status)}
                       </span>
                       {org.verifiedAt && (

@@ -114,6 +114,14 @@ describe('AdminOrganizations', () => {
     expect(screen.queryByText('Promoter B')).not.toBeInTheDocument();
   });
 
+  it('shows an active organization in green and a waiting one in amber', async () => {
+    render();
+    await screen.findByText('Venue A');
+    const chip = (text: string) => screen.getAllByText(text).find((el) => el.tagName === 'SPAN')!;
+    expect(chip('Active').className).toContain('text-accent-green');
+    expect(chip('Waiting for activation').className).toContain('text-accent-amber');
+  });
+
   it('uses singular forms in the summary line', async () => {
     svc.fetchOrganizations.mockResolvedValue([org({ memberCount: 1, pendingCount: 1, festivalCount: 1 })]);
     render();
