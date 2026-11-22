@@ -16,7 +16,12 @@ const expenseShareSchema = z.object({
 });
 
 // Column is NUMERIC(10,2) with CHECK (amount > 0): below 0.01 rounds to 0, above 99,999,999.99 overflows.
-export const expenseAmount = z.number().min(0.01).max(99_999_999.99);
+// Reject a third decimal instead of rounding it: float rounding turns 1.005 into 1.00 but 10.005 into 10.01.
+export const expenseAmount = z
+  .number()
+  .min(0.01)
+  .max(99_999_999.99)
+  .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-4, 'Use at most 2 decimal places.');
 
 export const expenseCreateSchema = z
   .object({
