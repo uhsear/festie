@@ -196,7 +196,18 @@ describe('PlanSnapshotPage', () => {
       expect(bulkSavePicks).not.toHaveBeenCalled();
       // The picks never go into the return path, which is a query string the server and its logs see.
       expect(screen.getByRole('link', { name: 'Sign in' }).getAttribute('href')).not.toContain(hash);
+      // Stashed when the page opens, so it survives the page re-mounting while the router leaves it.
+      expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
       await userEvent.click(screen.getByRole('link', { name: 'Sign in' }));
+      expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
+    });
+
+    it('keeps the stash when the page re-mounts before sign-in finishes', () => {
+      apiGet.mockResolvedValue(festival);
+      const hash = snapshotHash([{ setId: 'set-1', priority: 'must' }]);
+      setHash(hash);
+      render(<PlanSnapshotPage />).unmount();
+      render(<PlanSnapshotPage />);
       expect(sessionStorage.getItem('fk.pendingPlanSnapshot')).toBe(hash);
     });
 

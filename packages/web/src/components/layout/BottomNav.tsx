@@ -119,7 +119,7 @@ export default function BottomNav() {
             <Link
               key={section.key}
               to={isGuestTab ? '/login' : href}
-              search={isGuestTab ? { next: location.href } : undefined}
+              search={isGuestTab ? { next: location.pathname === '/p' ? '/p' : location.href } : undefined}
               aria-current={active ? 'page' : undefined}
               aria-label={`View ${badged ? badgeA11yLabel(label, badge) : label}`}
               className={cn(
