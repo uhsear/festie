@@ -318,6 +318,7 @@ const ALLOWLIST: Record<string, string> = {
   'GET /api/v1/auth/sessions': 'undocumented: public route not yet in the spec',
   'GET /api/v1/auth/unsubscribe': 'undocumented: public route not yet in the spec',
   'GET /api/v1/auth/verify-email': 'undocumented: public route not yet in the spec',
+  'POST /api/v1/auth/verify-email': 'undocumented: public route not yet in the spec',
   'GET /api/v1/crews/join-preview/{inviteCode}': 'undocumented: public route not yet in the spec',
   'GET /api/v1/crews/join/{inviteCode}': 'undocumented: public route not yet in the spec',
   'GET /api/v1/crews/search-users': 'undocumented: public route not yet in the spec',

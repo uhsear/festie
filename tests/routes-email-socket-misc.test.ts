@@ -323,7 +323,7 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'a'.repeat(64);
-    const res = await request(app).get(`/verify-email?token=${validHex}`).expect(400);
+    const res = await request(app).post(`/verify-email?token=${validHex}`).expect(400);
 
     assert.match(res.text, /expired|already been used/i);
   });
@@ -342,7 +342,7 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'b'.repeat(64);
-    const res = await request(app).get(`/verify-email?token=${validHex}`).expect(200);
+    const res = await request(app).post(`/verify-email?token=${validHex}`).expect(200);
 
     assert.match(res.text, /verified/i);
     assert.ok(deps.invalidateUserCache.mock.calls.length >= 1);
@@ -451,7 +451,7 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'c'.repeat(64);
-    const res = await request(app).get(`/verify-email?token=${validHex}`).expect(500);
+    const res = await request(app).post(`/verify-email?token=${validHex}`).expect(500);
 
     assert.match(res.text, /wrong/i);
   });

@@ -183,11 +183,43 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const fakeToken = crypto.randomBytes(32).toString('hex');
-    const res = await server.request.get(`/api/v1/auth/verify-email?token=${fakeToken}`);
+    const res = await server.request.post(`/api/v1/auth/verify-email?token=${fakeToken}`);
     assert.equal(res.status, 400);
     assert.match(res.text, /expired|already been used/i);
     assert.match(res.text, /Link expired/);
     assert.match(res.text, /Need a new link\? Sign in to Festie and send another from your account\./);
+  });
+
+  test('a browser GET only asks for confirmation and leaves the token live for the POST', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const username = `ve-get-${Date.now()}`;
+    await registerUser(server, username, DEFAULT_PASSWORD);
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
+    try {
+      const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+      await pool.query(
+        `INSERT INTO email_verification_tokens (user_id, token_hash, email, expires_at)
+         VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour')`,
+        [rows[0].id, tokenHash, `${username}@example.com`],
+      );
+      const url = `/api/v1/auth/verify-email?token=${verifyToken}`;
+      for (let i = 0; i < 2; i++) {
+        const get = await server.request.get(url);
+        assert.equal(get.status, 200);
+        assert.ok(get.text.includes(`<form method="post" action="${url}">`));
+        assert.doesNotMatch(get.text, /Email verified/);
+      }
+      const used = await pool.query('SELECT used_at FROM email_verification_tokens WHERE token_hash = $1', [tokenHash]);
+      assert.equal(used.rows[0].used_at, null, 'GET must not consume the token');
+      const post = await server.request.post(url).set('Origin', 'null');
+      assert.equal(post.status, 200, 'the form POST works even when the browser sends Origin: null');
+      assert.match(post.text, /Email verified/);
+    } finally {
+      await pool.end();
+    }
   });
 
   test('verifies email end-to-end with valid token', async () => {
@@ -211,7 +243,7 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
         [userId, tokenHash, pendingEmail],
       );
 
-      const res = await server.request.get(`/api/v1/auth/verify-email?token=${verifyToken}`);
+      const res = await server.request.post(`/api/v1/auth/verify-email?token=${verifyToken}`);
       assert.equal(res.status, 200);
       assert.match(res.text, /verified/i);
       assert.match(res.text, /Email verified/);
@@ -586,6 +618,18 @@ describe('email-auth: unsubscribe', { concurrency: 1 }, () => {
     assert.equal((await server.request.post(url)).status, 200, 'replaying it is harmless');
   });
 
+  test('the confirm page asks a question without a success icon, and the form POST works with Origin: null', async () => {
+    const { server, userId } = await setup(`unsub-origin-${Date.now()}`);
+    const token = unsubscribeToken(userId, SECRET);
+    const get = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
+    assert.doesNotMatch(get.text, /&#10003;/);
+    const url = `/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}&from=page`;
+    // A same-origin form POST sends Origin: null under Referrer-Policy: no-referrer.
+    const res = await server.request.post(url).set('Origin', 'null');
+    assert.equal(res.status, 200);
+    assert.match(res.text, /You are unsubscribed/);
+  });
+
   test('POST (RFC 8058 one-click) with a valid token unsubscribes', async () => {
     const { server, userId } = await setup(`unsub-post-${Date.now()}`);
     const token = unsubscribeToken(userId, SECRET);
@@ -610,6 +654,7 @@ describe('email-auth: unsubscribe', { concurrency: 1 }, () => {
       const get = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
       assert.equal(get.status, 400, token);
       assert.match(get.text, /Link not valid/);
+      assert.match(get.text, /href="\/account"/, 'the invalid page links to notification settings');
       assert.doesNotMatch(get.text, /Need a new link/, 'the sign-in retry hint does not apply to an unsubscribe link');
       const post = await server.request.post(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`).type('form').send('List-Unsubscribe=One-Click');
       assert.equal(post.status, 400, token);

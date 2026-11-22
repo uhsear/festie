@@ -160,7 +160,7 @@ describe('GET /api/v1/auth/verify-email', () => {
   test('non-existent valid-format token returns 400', async () => {
     const server = await startServer(); servers.push(server);
     const fakeToken = crypto.randomBytes(32).toString('hex');
-    const res = await server.request.get('/api/v1/auth/verify-email?token=' + fakeToken);
+    const res = await server.request.post('/api/v1/auth/verify-email?token=' + fakeToken);
     assert.equal(res.status, 400);
   });
 
@@ -181,7 +181,7 @@ describe('GET /api/v1/auth/verify-email', () => {
         [reg.body.data.user.id, tokenHash, 'verify@example.com']
       );
 
-      const res = await server.request.get('/api/v1/auth/verify-email?token=' + rawToken);
+      const res = await server.request.post('/api/v1/auth/verify-email?token=' + rawToken);
       assert.equal(res.status, 200);
 
       const userCheck = await pool.query('SELECT email_verified_at FROM users WHERE id = $1', [reg.body.data.user.id]);
@@ -202,10 +202,10 @@ describe('GET /api/v1/auth/verify-email', () => {
         [user.user.id, tokenHash, 'test@example.com']
       );
 
-      const r1 = await server.request.get('/api/v1/auth/verify-email').query({ token: rawToken });
+      const r1 = await server.request.post('/api/v1/auth/verify-email').query({ token: rawToken });
       assert.equal(r1.status, 200, 'First verification should succeed');
 
-      const r2 = await server.request.get('/api/v1/auth/verify-email').query({ token: rawToken });
+      const r2 = await server.request.post('/api/v1/auth/verify-email').query({ token: rawToken });
       assert.equal(r2.status, 400, 'Reused token should be rejected');
     } finally { await pool.end(); }
   });
