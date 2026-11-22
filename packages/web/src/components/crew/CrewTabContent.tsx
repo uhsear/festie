@@ -8,7 +8,7 @@ import PackingTab from './PackingTab';
 import RidesTab from './RidesTab';
 import ExpensesTab from './ExpensesTab';
 import ActivityTab from './ActivityTab';
-import type { CrewTabKey } from '@festie/shared/utils';
+import { CREW_TABS, type CrewTabKey } from '@festie/shared/utils';
 import type { CrewMember } from '@festie/shared/types';
 
 interface CrewTabContentProps {
@@ -57,6 +57,8 @@ export default function CrewTabContent({
       id="crew-tab-panel"
       aria-labelledby={`crew-tab-${tab}`}
     >
+      {/* The page h1 is the crew name; this keeps the section headings below from skipping a level. */}
+      <h2 className="sr-only">{CREW_TABS.find((entry) => entry.key === tab)?.label}</h2>
       {tab === 'members' && (
         <MembersTab
           members={members}
