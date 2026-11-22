@@ -155,7 +155,7 @@ describe('GridView perf (EDC Orlando-sized lineup)', () => {
     expect(day1).toHaveLength(35);
     for (const s of day1) expect(root.querySelectorAll(`[data-set-id="${s.id}"]`)).toHaveLength(1);
     expect(root.querySelectorAll('[data-set-id]')).toHaveLength(35);
-    expect(screen.getByRole('button', { name: 'You have 5 schedule clashes. Open them in Picks.' })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: '5 clashes. Open them in Picks.' })).toHaveTextContent(
       '5 clashes',
     );
 

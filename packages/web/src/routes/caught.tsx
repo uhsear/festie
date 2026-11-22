@@ -195,7 +195,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
                       <div role="group" aria-label={name} className="flex gap-2">
                         <button
                           type="button"
-                          aria-label={`Saw ${name}`}
+                          aria-label={`Saw it, ${name}`}
                           aria-pressed={row.caught === true}
                           onClick={() =>
                             row.caught === true
