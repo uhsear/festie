@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { fetchCrewExpenses, fetchCrewSettlementPlan, createCrewExpense, deleteCrewExpense } from '@festie/shared/services';
 import { useCrewStore } from '@festie/shared/stores';
+import { isApiClientError } from '@festie/shared/services/errors';
 import type {
   SettleCrewExpenseRequest,
   CreateCrewExpenseRequest,
@@ -205,11 +206,19 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     onError: (e) => toastError(e, "Couldn't update the payment. Try again."),
   });
 
+  // The server allows one reminder per person per day: a sent one, or a 409 saying so, ends the button until reload.
+  const [remindedUserIds, setRemindedUserIds] = useState<ReadonlySet<string>>(new Set());
+  const markReminded = (userId: string) => setRemindedUserIds((prev) => new Set(prev).add(userId));
   const remind = useMutation({
     mutationFn: ({ userId }: { userId: string; name: string }) => remindPayment(crewId, userId),
-    onSuccess: (outcome, { name }) =>
-      toast(writeOutcomeMessage(outcome, `Reminder sent to ${name}.`), outcome === 'queued' ? 'info' : 'success'),
-    onError: (e) => toastError(e, "Couldn't send the reminder. Try again."),
+    onSuccess: (outcome, { userId, name }) => {
+      markReminded(userId);
+      toast(writeOutcomeMessage(outcome, `Reminder sent to ${name}.`), outcome === 'queued' ? 'info' : 'success');
+    },
+    onError: (e, { userId }) => {
+      if (isApiClientError(e) && e.status === 409) markReminded(userId);
+      toastError(e, "Couldn't send the reminder. Try again.");
+    },
   });
 
   const changeCurrency = useMutation({
@@ -420,6 +429,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           currency={currency}
           settlePending={settle.isPending}
           remindPending={remind.isPending}
+          remindedUserIds={remindedUserIds}
           onPay={setPaidTarget}
           onRemind={(userId, name) => remind.mutate({ userId, name })}
         />

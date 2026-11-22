@@ -197,4 +197,38 @@ describe('ExpensesTab', () => {
     setup();
     expect(await screen.findByText("You're all settled up.")).toBeInTheDocument();
   });
+
+  describe('Remind', () => {
+    const owedToMe = {
+      currency: 'USD',
+      balances: [
+        { userId: 'me', username: 'me', balance: 20 },
+        { userId: 'sam', username: 'sam', balance: -20 },
+      ],
+      settlements: [
+        { fromUserId: 'sam', fromName: 'Sam', toUserId: 'me', toName: 'Me', amountCents: 2000, amount: 20, payeeHandles: {} },
+      ],
+    };
+
+    it('turns into a disabled Reminded today after a reminder is sent', async () => {
+      mockApi([expense({})], owedToMe);
+      const post = vi.spyOn(api, 'post').mockResolvedValue({} as never);
+      setup();
+      await userEvent.click(await screen.findByRole('button', { name: 'Remind Sam' }));
+      expect(await screen.findByRole('button', { name: 'Reminded today' })).toBeDisabled();
+      expect(post).toHaveBeenCalledTimes(1);
+    });
+
+    it('does the same when the server says that person was already reminded today', async () => {
+      mockApi([expense({})], owedToMe);
+      const conflict = Object.assign(new Error('You already reminded Sam today.'), {
+        name: 'ApiClientError',
+        status: 409,
+      });
+      vi.spyOn(api, 'post').mockRejectedValue(conflict);
+      setup();
+      await userEvent.click(await screen.findByRole('button', { name: 'Remind Sam' }));
+      expect(await screen.findByRole('button', { name: 'Reminded today' })).toBeDisabled();
+    });
+  });
 });
