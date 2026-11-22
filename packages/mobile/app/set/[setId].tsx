@@ -65,7 +65,7 @@ import { useTokens, makeStyles, typeStyle, useLargeText, typeScaleCap, MAX_FONT_
 import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
-import { PRIORITY_SYMBOLS, GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { PRIORITY_SYMBOLS, GUEST_PROMPT_COPY, genreChipLabel } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS, priorityIconName } from '../../lib/prioritySymbol';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import { ensureStageTextContrast } from '../../lib/stageTextContrast';
@@ -892,7 +892,7 @@ export default function SetDetailScreen() {
           <View style={styles.chipRow}>
             {allGenres.map((g) => (
               <View key={g} style={styles.chip}>
-                <Text style={styles.chipText}>{g}</Text>
+                <Text style={styles.chipText}>{genreChipLabel(g)}</Text>
               </View>
             ))}
           </View>
@@ -1152,7 +1152,7 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.bg.secondary,
   },
   chipText: {
-    ...typeStyle('micro'),
+    ...typeStyle('label'),
     color: t.colors.text.secondary,
   },
   linkRow: {
