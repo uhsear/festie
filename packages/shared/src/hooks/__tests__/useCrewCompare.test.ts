@@ -86,6 +86,35 @@ describe('useCrewCompare refresh', () => {
   });
 });
 
+describe('useCrewCompare cold load', () => {
+  const coldCache = () => {
+    useCrewStore.setState({ crewMembers: [{ userId: 'me' }, { userId: 'bo' }] } as never);
+    useFestivalDataStore.setState({ allProfiles: [] as never });
+  };
+
+  it('is not alone when the first load fails with nothing cached', async () => {
+    coldCache();
+    const loadProfiles = vi.fn().mockRejectedValue(new Error('offline'));
+    useFestivalDataStore.setState({ loadProfiles } as never);
+    const { result } = renderHook(() => useCrewCompare('time', true));
+    await waitFor(() => expect(result.current.error).toBe('offline'));
+    expect(result.current.alone).toBe(false);
+    expect(result.current.loading).toBe(false);
+  });
+
+  it('is loading, not alone, while the first load runs with nothing cached', async () => {
+    coldCache();
+    let finish: () => void = () => {};
+    const loadProfiles = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
+    useFestivalDataStore.setState({ loadProfiles } as never);
+    const { result } = renderHook(() => useCrewCompare('time', true));
+    await waitFor(() => expect(result.current.loading).toBe(true));
+    expect(result.current.alone).toBe(false);
+    await act(async () => finish());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+  });
+});
+
 describe('useCrewCompare', () => {
   it('puts me first and skips other days', () => {
     const { result } = renderHook(() => useCrewCompare('time'));

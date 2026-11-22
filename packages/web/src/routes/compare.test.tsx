@@ -67,6 +67,7 @@ beforeEach(() => {
     notThere: [],
     timeZone: 'UTC',
     alone: false,
+    loading: false,
     refreshing: false,
     error: null,
     refresh: mocks.refresh,
@@ -80,6 +81,13 @@ describe('CompareView', () => {
     expect(screen.getByText('No crew picks yet')).toBeInTheDocument();
     expect(screen.getByText(/Once your crewmates save picks/)).toBeInTheDocument();
     expect(screen.queryByText('No picks on this day yet')).not.toBeInTheDocument();
+  });
+
+  it('shows a loading state, not the solo copy, while the first crew picks load', () => {
+    mocks.compare.mockReturnValue({ ...mocks.compare(), rows: [], loading: true, refreshing: true });
+    render(<CompareView />);
+    expect(screen.getByText('Loading crew picks…')).toBeInTheDocument();
+    expect(screen.queryByText('No crew picks yet')).not.toBeInTheDocument();
   });
 
   it('shows the load error with Try again when the load failed and nothing is cached', () => {

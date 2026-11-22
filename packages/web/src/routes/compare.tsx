@@ -36,7 +36,7 @@ function CompareViewInner() {
   const { status, crew, retry: retryCrew } = useActiveCrew();
   const { state: festivalState, festivalName, retry: retryFestival } = useCrewFestival(crew);
   const ready = festivalState === 'match' && status === 'ready';
-  const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, error, refresh } = useCrewCompare(
+  const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, loading, error, refresh } = useCrewCompare(
     sort,
     ready,
   );
@@ -131,6 +131,14 @@ function CompareViewInner() {
           description={`${crew.name} is planning ${festivalName}. Connect to the internet, then try again.`}
           cta={{ label: 'Try again', onClick: retryFestival }}
         />
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="max-w-2xl mx-auto py-8 text-center text-sm text-text-secondary" role="status">
+        Loading crew picks…
       </div>
     );
   }

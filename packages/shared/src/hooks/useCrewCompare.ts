@@ -37,8 +37,10 @@ export interface CrewCompare {
   /** Others who said Not going on the selected day, in member order. */
   notThere: CrewCompareColumn[];
   timeZone: string | undefined;
-  /** No crewmate is in the grid and none is marked Not going: nothing to compare yet. */
+  /** No crewmate is in the grid and none is marked Not going: nothing to compare yet. False while a load runs or after it failed. */
   alone: boolean;
+  /** The first load of crew picks is running and no crewmate is cached yet. */
+  loading: boolean;
   refreshing: boolean;
   /** Set when the last crew picks load failed; cleared when the next one starts. */
   error: string | null;
@@ -166,7 +168,10 @@ export function useCrewCompare(sort: 'time' | 'mix', ready = false): CrewCompare
     [sets, days, dayProfiles, selectedDay, timeZone],
   );
 
-  const alone = columns.length <= 1 && notThere.length === 0;
+  // Nothing cached yet looks the same as a crew of one, so a running or failed load must not read as "alone".
+  const noCrewmates = columns.length <= 1 && notThere.length === 0;
+  const loading = noCrewmates && refreshing;
+  const alone = noCrewmates && !refreshing && !error;
 
-  return { columns, rows, freeTogether, split, together, notThere, timeZone, alone, refreshing, error, refresh };
+  return { columns, rows, freeTogether, split, together, notThere, timeZone, alone, loading, refreshing, error, refresh };
 }

@@ -44,7 +44,7 @@ export default function CrewCompareScreen() {
   const ready = festivalSwitch.state === 'match' && status === 'ready';
   const [sort, setSort] = useState<'time' | 'mix'>('time');
   // The hook reloads the profiles the grid reads once the crew and festival have settled.
-  const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, refreshing, error, refresh } =
+  const { columns, rows, freeTogether, split, together, notThere, timeZone, alone, loading, refreshing, error, refresh } =
     useCrewCompare(sort, ready);
   const { savePick } = usePicks();
   const { getDays, getStageColor } = useFestival();
@@ -140,6 +140,13 @@ export default function CrewCompareScreen() {
           message={`${activeCrew.name} is planning ${festivalSwitch.festivalName}. Connect to the internet, then try again.`}
           action={{ label: 'Try again', onPress: festivalSwitch.retry }}
         />
+      </Wrapper>
+    );
+  }
+  if (loading) {
+    return (
+      <Wrapper>
+        <LoadingState label="Loading crew picks…" />
       </Wrapper>
     );
   }
