@@ -29,3 +29,20 @@ describe('crew route search', () => {
     expect(validateCrewSearch({ sos: 'u1', tab: 'meeting' })).toEqual({ sos: 'u1', tab: 'find' });
   });
 });
+
+describe('login and register next param', () => {
+  const validate = (path: '/login' | '/register', search: Record<string, unknown>) =>
+    (router.routesByPath[path].options.validateSearch as (s: Record<string, unknown>) => { next?: string })(search);
+
+  it.each(['/login', '/register'] as const)('%s keeps a same-site path', (path) => {
+    expect(validate(path, { next: '/join/ABC' }).next).toBe('/join/ABC');
+  });
+
+  it.each(['/login', '/register'] as const)('%s returns next explicitly undefined for off-site values', (path) => {
+    for (const next of ['https://evil.example', 'http://evil.example', '//evil.example', String.raw`/\evil.example`]) {
+      const result = validate(path, { next });
+      // The router spreads the raw search under the validated one, so the key must be present to override it.
+      expect(result).toHaveProperty('next', undefined);
+    }
+  });
+});

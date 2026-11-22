@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
+import { displayNameError } from '@festie/shared/utils';
 import Button from './Button';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
@@ -68,6 +69,8 @@ export default function AccountDisplayNameSection() {
     if (!trimmed) return 'Enter a display name.';
     if (trimmed.length > MAX_LEN) return `Display name must be ${MAX_LEN} characters or fewer.`;
     if (trimmed === currentName) return 'That is already your display name.';
+    const markup = displayNameError(trimmed);
+    if (markup) return markup;
     return null;
   };
 

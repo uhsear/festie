@@ -183,7 +183,7 @@ function GoogleButton({
     };
   }, [clientId, dark, round, submitRef, onError, reclaim]);
 
-  return <div ref={host} className="flex min-h-11 justify-center" aria-label={label} />;
+  return <div ref={host} role="group" className="flex min-h-11 justify-center" aria-label={label} />;
 }
 
 function AppleButton({

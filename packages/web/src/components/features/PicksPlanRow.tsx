@@ -77,10 +77,10 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
 
   return (
     <div className="flex items-center gap-2 pl-4 pr-2 py-2 w-full bg-bg-card border border-border rounded-xl mb-2">
-      <div className="relative flex flex-1 items-center gap-x-3 min-w-0 py-1 text-left rounded-lg">
+      {/* Phone: the name gets the full line, time and stage sit under it. sm+: time | name | stage in one row. */}
+      <div className="relative flex flex-1 flex-col gap-y-1 min-w-0 py-1 text-left rounded-lg sm:flex-row sm:items-center sm:gap-x-3">
         <RowOpenButton label={label} onClick={() => setDetailSet(set)} />
-        <div className="text-xs text-text-muted min-w-[56px] font-semibold tabular-nums">{time}</div>
-        <div className="flex-1 min-w-0">
+        <div className="order-1 min-w-0 sm:order-2 sm:flex-1">
           <div className="text-sm font-bold break-words [overflow-wrap:anywhere] line-clamp-2">
             <ArtistName set={set} separator={b2bSeparator} />
           </div>
@@ -114,7 +114,10 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
             </div>
           )}
         </div>
-        <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} />
+        <div className="order-2 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 sm:contents">
+          <div className="text-xs text-text-muted font-semibold tabular-nums whitespace-nowrap sm:order-1 sm:w-36 sm:shrink-0">{time}</div>
+          <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} className="sm:order-3 sm:max-w-40" />
+        </div>
       </div>
 
       <div role="group" aria-label={`Priority for ${artist}`} className="flex items-center">
