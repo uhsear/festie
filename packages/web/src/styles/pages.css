@@ -28,7 +28,7 @@
   overflow-anchor: none;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
-  min-height: calc(100dvh - 180px);
+  min-height: min(calc(100dvh - 180px), 100%);
 }
 .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
