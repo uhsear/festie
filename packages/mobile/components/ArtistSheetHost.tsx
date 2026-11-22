@@ -6,6 +6,7 @@ import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 import { useInterest } from '@festie/shared/hooks/useInterest';
 import { artistLinkEntries, spotifyAttributionFor } from '@festie/shared/utils';
 import { enrichArtistTarget } from '@festie/shared/utils/artistSheet';
+import { genreChipLabel } from '@festie/shared/constants';
 import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Avatar from './Avatar';
 import SheetShell from './SheetShell';
@@ -64,7 +65,7 @@ export default function ArtistSheetHost({ inSetSheet = false }: { inSetSheet?: b
                   </Text>
                   {artist.genres?.length ? (
                     <Text style={styles.when} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                      {artist.genres.join(' · ')}
+                      {artist.genres.map(genreChipLabel).join(' · ')}
                     </Text>
                   ) : null}
                   {spotifyAttributionFor([artist]) ? <SpotifyAttribution href={spotifyAttributionFor([artist])!.href} /> : null}

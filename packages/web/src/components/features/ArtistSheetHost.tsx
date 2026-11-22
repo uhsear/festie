@@ -4,6 +4,7 @@ import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 import { useInterest } from '@festie/shared/hooks/useInterest';
 import { artistLinkEntries, spotifyAttributionFor } from '@festie/shared/utils';
 import { enrichArtistTarget } from '@festie/shared/utils/artistSheet';
+import { genreChipLabel } from '@festie/shared/constants';
 import Avatar from '../ui/Avatar';
 import Sheet from '../ui/Sheet';
 import SpotifyAttribution from './SpotifyAttribution';
@@ -56,7 +57,7 @@ export default function ArtistSheetHost() {
               <div className="flex flex-col gap-1 min-w-0">
                 <span className="text-base font-semibold text-text-primary">{artist.name}</span>
                 {artist.genres && artist.genres.length > 0 && (
-                  <span className="text-sm text-text-secondary">{artist.genres.join(' · ')}</span>
+                  <span className="text-sm text-text-secondary">{artist.genres.map(genreChipLabel).join(' · ')}</span>
                 )}
                 {spotifyAttributionFor([artist]) ? <SpotifyAttribution href={spotifyAttributionFor([artist])!.href} /> : null}
                 <div className="flex flex-wrap gap-2">
@@ -66,9 +67,10 @@ export default function ArtistSheetHost() {
                       href={link.url}
                       target="_blank"
                       rel="noopener noreferrer"
+                      aria-label={`${artist.name} on ${link.label}`}
                       className={cn(sheetButtonClass, 'inline-flex items-center border border-border text-text-primary')}
                     >
-                      {link.label}
+                      {link.label + ' ↗'}
                     </a>
                   ))}
                 </div>
