@@ -41,7 +41,9 @@ describe('Dialog', () => {
     renderDialog();
     const dialog = screen.getByRole('dialog', { name: 'Rename crew' });
     expect(dialog.className).toContain('bg-bg-secondary');
-    expect(dialog.className).not.toContain('bg-bg-card');
+    // The translucent card fill is wrong for a dialog; only the daylight theme swaps to the white card colour.
+    expect(dialog.className).not.toMatch(/(^|\s)bg-bg-card/);
+    expect(dialog.className).toContain('[:root[data-theme=daylight]_&]:bg-bg-card');
     const overlay = document.querySelector('[data-state="open"].fixed.inset-0');
     expect(overlay?.className).toContain('z-[var(--z-modal)]');
   });

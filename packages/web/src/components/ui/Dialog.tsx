@@ -44,7 +44,7 @@ export default function Dialog({
           {...returnFocus}
           {...(description ? {} : { 'aria-describedby': undefined })}
           className="fixed left-1/2 top-1/2 z-[var(--z-modal)] w-[92vw] max-w-sm max-h-[90vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2
-                     rounded-2xl bg-bg-secondary border border-border-light shadow-2xl p-5 space-y-4
+                     rounded-2xl bg-bg-secondary [:root[data-theme=daylight]_&]:bg-bg-card border border-border-light shadow-2xl p-5 space-y-4
                      data-[state=open]:animate-in data-[state=open]:zoom-in-95"
         >
           <div className="flex items-start justify-between gap-3">
