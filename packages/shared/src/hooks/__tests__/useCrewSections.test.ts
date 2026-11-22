@@ -106,6 +106,46 @@ describe('useCrewSections', () => {
     expect(result.current.error).toBeNull();
   });
 
+  it('makes only one extra try after a failed reconnect reload', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    const before = loaders.loadRides!.mock.calls.length;
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(120_000); });
+    // reconnect run (3 attempts) plus one extra run (3 attempts), then nothing more
+    expect(loaders.loadRides).toHaveBeenCalledTimes(before + 6);
+  });
+
+  it('leaves no armed retry after a successful reconnect reload', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    const { result } = renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    loaders.loadRides!.mockResolvedValue(undefined);
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(0); });
+    expect(result.current.error).toBeNull();
+    loaders.loadRides!.mockRejectedValue(err(403));
+    await act(async () => { result.current.reload(); await vi.advanceTimersByTimeAsync(0); });
+    expect(result.current.error).toBe('Failed to load: rides');
+    const before = loaders.loadRides!.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(RECONNECT_RETRY_MS * 3); });
+    expect(loaders.loadRides).toHaveBeenCalledTimes(before);
+  });
+
+  it('waits for a slow reconnect reload instead of cancelling it', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    const { result } = renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    // Reconnect reload takes 8 s (> RECONNECT_RETRY_MS) and then succeeds.
+    loaders.loadRides!.mockImplementation(() => new Promise<void>((resolve) => setTimeout(resolve, 8000)));
+    const before = loaders.loadRides!.mock.calls.length;
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(RECONNECT_RETRY_MS + 4000); });
+    expect(loaders.loadRides).toHaveBeenCalledTimes(before + 1);
+    expect(result.current.error).toBeNull();
+  });
+
   it('does not reload on reconnect when nothing failed', async () => {
     useUIStore.setState({ offlineMode: true });
     renderHook(() => useCrewSections('c1'));
