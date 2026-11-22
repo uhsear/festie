@@ -18,6 +18,7 @@ import { isResetLinkExpired, mapErrorToUserMessage } from '@festie/shared/servic
 import { AUTH_COPY } from '@festie/shared/constants';
 import { validateNewPassword } from '@festie/shared/utils';
 import Button from '../components/Button';
+import PasswordStrengthMeter from '../components/PasswordStrengthMeter';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 
 /**
@@ -220,6 +221,7 @@ export default function ResetPasswordScreen() {
             <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.colors.text.secondary} />
           </TouchableOpacity>
         </View>
+        <PasswordStrengthMeter password={newPassword} />
         <Text style={styles.hint}>{AUTH_COPY.passwordHint}</Text>
 
         <TextInput

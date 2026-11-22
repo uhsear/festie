@@ -36,6 +36,7 @@ import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
 import ProviderButtons from '../../components/ProviderButtons';
+import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
@@ -554,6 +555,7 @@ export default function RegisterScreen() {
             {errors.password}
           </Text>
         ) : null}
+        <PasswordStrengthMeter password={password} username={username} email={email} />
         <Text style={styles.hint}>{AUTH_COPY.passwordHint}</Text>
 
         <Text style={styles.label} accessible={false} importantForAccessibility="no">
