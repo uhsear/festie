@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AccessibilityInfo, AppState, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,6 +17,10 @@ interface AnnouncementBannerProps {
   onActiveChange?: (active: boolean) => void;
 }
 
+/** Past this many characters two lines may not hold the body, in case the platform reports only the clamped lines. */
+const LONG_BODY_CHARS = 120;
+const BODY_LINES = 2;
+
 /**
  * App-wide "From Festie" banner for admin announcements, mounted at the root under
  * the SOS banner. Shows the newest urgent (else newest) announcement the user has
@@ -32,6 +36,8 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
   const dismissed = useAnnouncementStore((st) => st.dismissed);
   const load = useAnnouncementStore((st) => st.load);
   const dismiss = useAnnouncementStore((st) => st.dismiss);
+  const [expanded, setExpanded] = useState(false);
+  const [measuredLines, setMeasuredLines] = useState(0);
 
   useEffect(() => {
     void load(festivalId);
@@ -44,6 +50,11 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
   const a = pickBannerAnnouncement(items, dismissed);
   const active = a !== null;
   const id = a?.id;
+  // A new announcement starts collapsed.
+  useEffect(() => {
+    setExpanded(false);
+    setMeasuredLines(0);
+  }, [id]);
   const kicker = a ? ANNOUNCEMENT_COPY.banner.kicker(a.severity) : '';
   const label = a ? ANNOUNCEMENT_COPY.banner.label(kicker, a.title, a.body) : '';
 
@@ -60,6 +71,7 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
 
   if (!a) return null;
   const urgent = a.severity === 'urgent';
+  const canExpand = measuredLines > BODY_LINES || a.body.length > LONG_BODY_CHARS;
 
   return (
     <View
@@ -69,13 +81,34 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
       ]}
     >
       {/* Label the text column, not the row, so iOS keeps Open and Dismiss focusable. */}
-      <View style={s.body} accessible accessibilityRole="summary" accessibilityLabel={label}>
-        <View style={s.kickerRow}>
-          {urgent ? <Ionicons name="warning-outline" size={iconSize.sm} color={t.colors.text.danger} /> : null}
-          <Text style={[s.kicker, urgent && { color: t.colors.text.danger }]}>{kicker}</Text>
+      <View style={s.column}>
+        <View style={s.body} accessible accessibilityRole="summary" accessibilityLabel={label}>
+          <View style={s.kickerRow}>
+            {urgent ? <Ionicons name="warning-outline" size={iconSize.sm} color={t.colors.text.danger} /> : null}
+            <Text style={[s.kicker, urgent && { color: t.colors.text.danger }]}>{kicker}</Text>
         </View>
         <Text style={s.title}>{a.title}</Text>
-        <Text style={s.text}>{a.body}</Text>
+        <Text
+          style={s.text}
+          numberOfLines={expanded ? undefined : BODY_LINES}
+          onTextLayout={(e) => setMeasuredLines(e.nativeEvent.lines.length)}
+        >
+          {a.body}
+        </Text>
+        </View>
+        {canExpand ? (
+          <AppPressable
+            style={s.readMore}
+            onPress={() => setExpanded((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={expanded ? ANNOUNCEMENT_COPY.banner.readLess : ANNOUNCEMENT_COPY.banner.readMore}
+            accessibilityState={{ expanded }}
+          >
+            <Text style={s.actionText}>
+              {expanded ? ANNOUNCEMENT_COPY.banner.readLess : ANNOUNCEMENT_COPY.banner.readMore}
+            </Text>
+          </AppPressable>
+        ) : null}
       </View>
       {a.screen !== 'home' ? (
         <AppPressable
@@ -113,8 +146,10 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.bg.secondary,
     borderBottomWidth: 2,
   },
-  body: {
+  column: {
     flex: 1,
+  },
+  body: {
     gap: t.spacing[1],
   },
   kickerRow: {
@@ -138,6 +173,11 @@ const useStyles = makeStyles((t) => ({
     minWidth: 44,
     minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readMore: {
+    minHeight: 44,
+    alignSelf: 'flex-start',
     justifyContent: 'center',
   },
   actionText: {
