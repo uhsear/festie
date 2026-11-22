@@ -221,6 +221,14 @@ describe('helpers/sanitize: redactInviteCodePath', () => {
     assert.equal(redactInviteCodePath('/Join/CODE'), '/Join/:code');
   });
 
+  it('redacts every code in a string that holds more than one', () => {
+    assert.equal(
+      redactInviteCodePath('https://festie.us/join/AAA1 from https://festie.us/crews/join-preview/BBB2'),
+      'https://festie.us/join/:code from https://festie.us/crews/join-preview/:code',
+    );
+    assert.equal(redactInviteCodePath('/join/AAA1'), '/join/:code'); // a second call on a global regex must not skip
+  });
+
   it('leaves other paths unchanged', () => {
     assert.equal(redactInviteCodePath('/api/v1/crews/join'), '/api/v1/crews/join');
     assert.equal(redactInviteCodePath('/api/v1/crews/abc/members'), '/api/v1/crews/abc/members');
