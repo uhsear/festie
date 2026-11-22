@@ -52,6 +52,7 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
   const user = useAuthStore((s) => s.user);
   const crews = useCrewStore((s) => s.crews);
   const crew = useCrewStore((s) => s.activeCrew);
+  const crewLoading = useCrewStore((s) => s.crewLoading);
   const crewMembers = useCrewStore((s) => s.crewMembers);
   const statuses = useCrewStore((s) => s.crewStatuses);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
@@ -62,8 +63,8 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
   const firstCrewId = crews[0]?.id;
   useEffect(() => {
     // A pending select of another crew (a join landing) clears activeCrew; do not override it with the first crew.
-    if (user && !crew && firstCrewId && !useCrewStore.getState().crewLoading) useCrewStore.getState().selectCrew(firstCrewId).catch(() => {});
-  }, [user, crew, firstCrewId]);
+    if (user && !crew && firstCrewId && !crewLoading) useCrewStore.getState().selectCrew(firstCrewId).catch(() => {});
+  }, [user, crew, firstCrewId, crewLoading]);
 
   const crewId = user ? crew?.id : undefined;
   useEffect(() => {

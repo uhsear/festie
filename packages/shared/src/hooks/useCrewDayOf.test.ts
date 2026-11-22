@@ -29,4 +29,13 @@ describe('useCrewDayOf first-crew selection', () => {
     act(() => useCrewStore.setState({ activeCrew: null, crewLoading: true }));
     expect(selectCrew).not.toHaveBeenCalled();
   });
+
+  it('selects the first crew once a load that was running at mount finishes', () => {
+    useCrewStore.setState({ activeCrew: null, crewLoading: true });
+    renderHook(() => useCrewDayOf(0, []));
+    expect(selectCrew).not.toHaveBeenCalled();
+    act(() => useCrewStore.setState({ crewLoading: false }));
+    expect(selectCrew).toHaveBeenCalledTimes(1);
+    expect(selectCrew).toHaveBeenCalledWith('old');
+  });
 });

@@ -40,8 +40,8 @@ export function useActiveCrew(): { status: CrewScreenStatus; crew: Crew | null; 
   const firstCrewId = crews.find((c) => !c._optimistic)?.id;
   useEffect(() => {
     // A pending select of another crew clears activeCrew; do not override it with the first crew.
-    if (user && !crew && firstCrewId && !useCrewStore.getState().crewLoading) track(useCrewStore.getState().selectCrew(firstCrewId));
-  }, [user, crew, firstCrewId, track]);
+    if (user && !crew && firstCrewId && !crewLoading) track(useCrewStore.getState().selectCrew(firstCrewId));
+  }, [user, crew, firstCrewId, crewLoading, track]);
 
   // A persisted activeCrew is a cold-start read cache; refetch it once per crew so members
   // who joined while this device was closed appear. selectCrew keeps same-crew data on screen.

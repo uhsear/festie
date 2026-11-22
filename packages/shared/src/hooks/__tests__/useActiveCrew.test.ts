@@ -72,6 +72,14 @@ describe('useActiveCrew', () => {
     expect(selectCrew).not.toHaveBeenCalled();
   });
 
+  it('selects crews[0] once a load running at mount finishes with no crew open', async () => {
+    useCrewStore.setState({ crews: [crew('c1'), crew('c2')], crewLoading: true });
+    renderHook(() => useActiveCrew());
+    expect(selectCrew).not.toHaveBeenCalled();
+    act(() => useCrewStore.setState({ crewLoading: false }));
+    await waitFor(() => expect(selectCrew).toHaveBeenCalledWith('c1'));
+  });
+
   it('loads crews once when there are none', async () => {
     const { result, rerender } = renderHook(() => useActiveCrew());
     await waitFor(() => expect(loadCrews).toHaveBeenCalledTimes(1));
