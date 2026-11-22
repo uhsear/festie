@@ -188,6 +188,19 @@ a:focus-visible,
   min-height: 44px;
 }
 @media (forced-colors: active) {
+  /* Tailwind's reset drops a button's border and fill, so a filled button reads as plain text.
+     A selected tab, toggle or current-page link gets the system selection colours instead. */
+  button,
+  [role='tab'] {
+    border: 1px solid ButtonText;
+  }
+  [aria-pressed='true']:not(.day-tab-underline),
+  [aria-selected='true']:not(.day-tab-underline),
+  [aria-current='page']:not(.day-tab-underline) {
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
   .card-priority-btn {
     border: 2px solid ButtonText;
   }
