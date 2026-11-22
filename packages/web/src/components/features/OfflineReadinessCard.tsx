@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, AlertCircle, ChevronDown, Download, RefreshCw } from 'lucide-react';
 import type { SectionReadiness } from '@festie/shared/stores/offlineReadinessStore';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { offlineActionLabel, offlineStatusLabel, timeAgo } from '@festie/shared/utils';
 import { useOfflineDownload } from '../../hooks/useOfflineDownload';
 import { cn } from '../../lib/utils';
@@ -117,6 +118,7 @@ function StepRow({
 export default function OfflineReadinessCard({ festivalId, className }: Props) {
   const { steps, summary, download, isDownloading, mapBytes, hasMap, mapProgress, mapReady, mapMessage, removeMap } =
     useOfflineDownload(festivalId);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const [expanded, setExpanded] = useState(false);
 
   // 30s tick so "synced N ago" keeps advancing from the device clock.
@@ -184,7 +186,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
         <button
           type="button"
           onClick={handleDownload}
-          disabled={isDownloading}
+          disabled={isDownloading || offlineMode}
           aria-busy={isDownloading || undefined}
           className={cn(
             'inline-flex flex-shrink-0 items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-semibold min-h-11',
@@ -194,7 +196,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
             'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
         >
-          {offlineActionLabel(summary)}
+          {offlineActionLabel(summary, offlineMode)}
         </button>
         <button
           type="button"

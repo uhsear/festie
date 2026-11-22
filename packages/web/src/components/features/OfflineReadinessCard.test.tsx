@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import OfflineReadinessCard from './OfflineReadinessCard';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { buildOfflineSteps, summarizeOffline } from '@festie/shared/utils';
 import type { FestivalPhase } from '@festie/shared/utils';
 
@@ -91,6 +92,16 @@ describe('OfflineReadinessCard', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: /retry weather/i }));
     expect(h.download).toHaveBeenCalledTimes(1);
+  });
+
+  it('disables the action and asks for a connection while offline', () => {
+    useUIStore.setState({ offlineMode: true });
+    try {
+      render(<OfflineReadinessCard festivalId="fest-1" />);
+      expect(screen.getByRole('button', { name: 'Connect to download' })).toBeDisabled();
+    } finally {
+      useUIStore.setState({ offlineMode: false });
+    }
   });
 
   it('calls download from the action button', () => {

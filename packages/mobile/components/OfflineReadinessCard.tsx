@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { SectionReadiness } from '@festie/shared/stores';
 import { timeAgo, offlineStatusLabel, offlineActionLabel } from '@festie/shared/utils';
 import { OFFLINE_MAP_COPY } from '@festie/shared/constants';
+import { useUIStore } from '@festie/shared/stores';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useOfflineDownload } from '../hooks/useOfflineDownload';
@@ -151,6 +152,7 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
     siteplanNeedsConnection,
     removeMap,
   } = useOfflineDownload(festivalId);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const [expanded, setExpanded] = useState(false);
 
   // 30s tick so "synced N ago" keeps advancing from the device clock.
@@ -185,19 +187,25 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
         </Text>
         <TouchableOpacity
           onPress={download}
-          disabled={isDownloading}
+          disabled={isDownloading || offlineMode}
           accessibilityRole="button"
           accessibilityLabel={
-            isDownloading ? 'Downloading' : summary.hasDownloaded ? 'Update offline cache' : 'Download for offline'
+            isDownloading
+              ? 'Downloading'
+              : offlineMode
+                ? 'Connect to download'
+                : summary.hasDownloaded
+                  ? 'Update offline cache'
+                  : 'Download for offline'
           }
-          accessibilityState={{ busy: isDownloading, disabled: isDownloading }}
-          style={[styles.button, isDownloading && styles.buttonBusy]}
+          accessibilityState={{ busy: isDownloading, disabled: isDownloading || offlineMode }}
+          style={[styles.button, (isDownloading || offlineMode) && styles.buttonBusy]}
           activeOpacity={0.8}
         >
           <View style={styles.buttonBg} pointerEvents="none" />
           {/* Trailing NBSP absorbs Fabric's single-line under-measure (see OfflineStatusChip). */}
           <Text style={styles.buttonText} textBreakStrategy="simple">
-            {offlineActionLabel(summary) + ' '}
+            {offlineActionLabel(summary, offlineMode) + ' '}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
