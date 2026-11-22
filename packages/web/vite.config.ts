@@ -170,6 +170,12 @@ export default defineConfig({
           });
         },
       },
+      // Friend picks read /s/<ref>/json from the page's own origin; without this the dev server answers with the SPA shell.
+      '^/s/[^/]+/json$': {
+        target: process.env.VITE_API_URL || 'http://127.0.0.1:4000',
+        changeOrigin: true,
+        headers: { Origin: 'http://127.0.0.1:4000' },
+      },
       '/socket.io': {
         target: process.env.VITE_API_URL || 'http://127.0.0.1:4000',
         changeOrigin: true,

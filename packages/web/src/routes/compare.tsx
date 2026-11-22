@@ -225,7 +225,7 @@ function CompareViewInner() {
           </div>
         ) : (
           <div
-            className="max-w-6xl mx-auto mt-2 overflow-x-auto"
+            className="max-w-6xl mx-auto mt-2 overflow-auto max-h-[70dvh]"
             role="region"
             aria-label="Crew picks by set"
             tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: keeps this overflow-x-auto table keyboard-scrollable; rule only exempts role=tabpanel
@@ -233,7 +233,7 @@ function CompareViewInner() {
             <table className="w-full border-separate border-spacing-0">
               <thead>
                 <tr className="text-left text-xs uppercase tracking-[var(--letter-spacing-caps)] text-text-muted">
-                  <th scope="col" className="sticky left-0 bg-bg-primary z-10 py-2 pr-3 min-w-[180px]">
+                  <th scope="col" className="sticky left-0 top-0 bg-bg-primary z-30 py-2 pr-3 min-w-[180px]">
                     Set
                   </th>
                   {columns.map((c) => (
