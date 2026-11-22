@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, renderHook, waitFor } from '@testing-library/react';
 import type { Festival, PeerLocation, SosEntry } from '@festie/shared/types';
 import { useSosMarkers } from './crew-map/useSosMarkers';
@@ -118,6 +118,20 @@ vi.mock('lucide-react', () => ({
   Loader2: () => <span data-testid="locating-spinner" />,
 }));
 
+const basemap = vi.hoisted(() => ({ cached: false }));
+vi.mock('../../lib/basemapCache', () => ({
+  basemapSupported: () => true,
+  basemapCacheInfo: vi.fn(async () => ({ cached: basemap.cached, syncedAt: null })),
+}));
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import CrewMap from './CrewMap';
 
 const POINT_WITH_COORDS = {
@@ -411,6 +425,43 @@ async function renderReadyMap(props: Partial<React.ComponentProps<typeof CrewMap
   act(() => load());
   return view;
 }
+
+describe('CrewMap offline basemap notice', () => {
+  const withBasemap = {
+    id: 'f1',
+    mapConfig: { offlineBasemap: { pmtilesUrl: 'https://cdn.example.com/a.pmtiles' } },
+  } as unknown as Festival;
+
+  beforeEach(() => {
+    hasOfflineBasemap.mockReturnValue(true);
+    pmtilesImport.mockReturnValue({ Protocol: class { tile = vi.fn(); } });
+    extractMeetingPointPins.mockReturnValue([
+      { id: 'mp1', kind: 'meeting-point', label: 'Main Gate', sublabel: '', latitude: 41.88, longitude: -87.62 },
+    ]);
+  });
+  afterEach(() => useUIStore.setState({ offlineMode: false }));
+
+  it('says the base map is not saved when offline and it was never downloaded', async () => {
+    basemap.cached = false;
+    useUIStore.setState({ offlineMode: true });
+    render(<CrewMap meetingPoints={[]} festival={withBasemap} />);
+    expect(await screen.findByText(/Base map not saved/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Open Picks' })).toHaveAttribute('href', '/picks');
+  });
+
+  it('stays quiet when the base map is saved, and when online', async () => {
+    basemap.cached = true;
+    useUIStore.setState({ offlineMode: true });
+    const { unmount } = render(<CrewMap meetingPoints={[]} festival={withBasemap} />);
+    await waitFor(() => expect(mapInstances).toHaveLength(1));
+    expect(screen.queryByText(/Base map not saved/)).toBeNull();
+    unmount();
+    basemap.cached = false;
+    useUIStore.setState({ offlineMode: false });
+    render(<CrewMap meetingPoints={[]} festival={withBasemap} />);
+    expect(screen.queryByText(/Base map not saved/)).toBeNull();
+  });
+});
 
 describe('CrewMap place card and Nearest', () => {
   beforeEach(stubGeolocation);

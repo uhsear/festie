@@ -35,9 +35,12 @@ import {
   type NearestStep,
   type MapPin as Pin,
 } from '@festie/shared/utils';
+import { Link } from '@tanstack/react-router';
+import { OFFLINE_MAP_COPY } from '@festie/shared/constants';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import EmptyState from '../ui/EmptyState';
+import { basemapCacheInfo, basemapSupported } from '../../lib/basemapCache';
 import { relAge, type MapLibre, type PursueTarget } from './crew-map/mapDom';
 import { useGeolocationWatch } from './crew-map/useGeolocationWatch';
 import { useSelfMarker } from './crew-map/useSelfMarker';
@@ -560,6 +563,26 @@ export default function CrewMap({
   // the per-concern hooks re-add their layers when it reports ready again.
   const theme = useUIStore((s) => s.theme);
 
+  // Offline with an offline basemap that was never downloaded: the pins and site plan
+  // draw over a blank canvas and MapLibre reports nothing, so say what is missing.
+  const offlineMode = useUIStore((s) => s.offlineMode);
+  const mapConfig = festival?.mapConfig;
+  const basemapUrl = hasOfflineBasemap(mapConfig) && basemapSupported() ? (mapConfig?.offlineBasemap.pmtilesUrl ?? null) : null;
+  const [basemapMissing, setBasemapMissing] = useState(false);
+  useEffect(() => {
+    if (!offlineMode || !basemapUrl) {
+      setBasemapMissing(false);
+      return;
+    }
+    let live = true;
+    void basemapCacheInfo(basemapUrl).then((info) => {
+      if (live) setBasemapMissing(!info.cached);
+    });
+    return () => {
+      live = false;
+    };
+  }, [offlineMode, basemapUrl]);
+
   // ── Map lifecycle: create once when there's content; tear down on unmount ──
   useEffect(() => {
     if (!shouldRenderMap || !containerRef.current) return;
@@ -759,6 +782,14 @@ export default function CrewMap({
 
   return (
     <div className="space-y-2">
+      {basemapMissing && (
+        <p role="status" className="text-xs text-text-secondary">
+          {OFFLINE_MAP_COPY.basemapNotSaved}{' '}
+          <Link to="/picks" className="text-accent-aqua underline">
+            Open Picks
+          </Link>
+        </p>
+      )}
       <div className="relative rounded-lg overflow-hidden border border-border bg-bg-secondary">
         <div
           ref={containerRef}
