@@ -75,6 +75,9 @@ vi.mock('../components/crew/CrewMap', () => ({
   },
 }));
 
+vi.mock('../components/features/FreshnessChip', () => ({ default: () => <span>freshness-chip</span> }));
+vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => <span>offline-chip</span> }));
+
 vi.mock('../components/crew/SosRaiseButton', () => ({
   default: () => <button type="button">SOS</button>,
 }));
@@ -200,6 +203,20 @@ describe('MapView', () => {
     await screen.findByTestId('crew-map');
     expect(h.crewMapProps.mock.calls[0]![0].meetingPoints).toHaveLength(1);
     expect(screen.getByRole('button', { name: 'SOS' })).toBeInTheDocument();
+  });
+
+  it('shows the freshness and offline-download chips for a signed-in user only', async () => {
+    h.user = { id: 'u1' };
+    const { unmount } = render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(screen.getByText('freshness-chip')).toBeInTheDocument();
+    expect(screen.getByText('offline-chip')).toBeInTheDocument();
+    unmount();
+    h.user = null;
+    render(<MapView />);
+    await screen.findByTestId('crew-map');
+    expect(screen.queryByText('freshness-chip')).not.toBeInTheDocument();
+    expect(screen.queryByText('offline-chip')).not.toBeInTheDocument();
   });
 
   it('shows no SOS for a guest', async () => {

@@ -13,6 +13,8 @@ import EmptyState from '../components/ui/EmptyState';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
+import FreshnessChip from '../components/features/FreshnessChip';
+import OfflineStatusChip from '../components/features/OfflineStatusChip';
 
 // Lazy: CrewMap pulls in maplibre-gl, so it stays out of the main bundle.
 const CrewMap = lazy(() => import('../components/crew/CrewMap'));
@@ -103,6 +105,13 @@ function MapViewInner() {
   return (
     <div className="space-y-2 px-4 py-2">
       <h1 className="sr-only">Map</h1>
+      {/* So a user offline can see how stale the shown pins are, as on mobile. */}
+      {user && (
+        <div className="flex flex-wrap items-center gap-2">
+          <FreshnessChip surface="crew" />
+          <OfflineStatusChip />
+        </div>
+      )}
       {/* A row above the canvas, not an overlay, so it never fights the place card or pursue bar. */}
       {showSosRow && (
         <div className="flex justify-end">
