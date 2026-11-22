@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { SearchX } from 'lucide-react';
 import { ApiClientError, mapErrorToUserMessage } from '@festie/shared/services/api';
 import { withReauth } from '@festie/shared/services/admin';
 import {
   approveArtistReview,
+  describeBatchIssue,
   importArtistReview,
   parseArtistReviewBatch,
   rejectArtistReview,
@@ -199,6 +200,7 @@ export default function AdminArtistReview() {
   const [text, setText] = useState('');
   const [importError, setImportError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const fileInput = useRef<HTMLInputElement>(null);
   const [merge, setMerge] = useState<{ item: ArtistReviewItem; url?: string } | null>(null);
 
   const refresh = () => queryClient.invalidateQueries({ queryKey: adminKeys.artistReview });
@@ -225,7 +227,9 @@ export default function AdminArtistReview() {
       setOffset(0);
       await refresh();
     } catch (err) {
-      setImportError(mapErrorToUserMessage(err, "Couldn't import the batch. Check the JSON and try again."));
+      // mapErrorToUserMessage drops the "items.0.kind" prefix, which is the part that says where to look.
+      const where = err instanceof ApiClientError && err.code === 'VALIDATION_ERROR' ? describeBatchIssue(err.message) : null;
+      setImportError(where ?? mapErrorToUserMessage(err, "Couldn't import the batch. Check the JSON and try again."));
     } finally {
       setBusy(false);
     }
@@ -271,12 +275,19 @@ export default function AdminArtistReview() {
       <h2 className="type-heading text-text-primary">Import a batch</h2>
       <p className="text-sm text-text-muted">Upload or paste the research JSON. An item that is already in the queue is skipped.</p>
       <input
+        ref={fileInput}
         type="file"
         accept="application/json,.json"
         aria-label="Batch file"
-        className="block text-sm text-text-primary"
-        onChange={(event) => void readFile(event.target.files?.[0])}
+        className="hidden"
+        onChange={(event) => {
+          void readFile(event.target.files?.[0]);
+          event.target.value = '';
+        }}
       />
+      <button type="button" className={smallButton} onClick={() => fileInput.current?.click()}>
+        Choose file
+      </button>
       <textarea
         className={`${INPUT_CLASS} min-h-32 font-mono`}
         value={text}
