@@ -4,7 +4,7 @@ import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
-import { api, mapErrorToUserMessage } from '@festie/shared/services';
+import { api, isApiClientError, mapErrorToUserMessage } from '@festie/shared/services';
 import { createSendGuard, isRateLimited } from '../lib/pushSendGuard';
 
 const TOKEN_KEY = 'festie-push-token';
@@ -259,7 +259,8 @@ export function useMobilePush(): MobilePush {
       await AsyncStorage.multiRemove([LOCAL_FESTIVAL_KEY, LOCAL_COVERS_KEY]);
       setRegistered(true);
     } catch (err) {
-      setError(mapErrorToUserMessage(err, "Couldn't enable notifications. Try again."));
+      // Native errors (SERVICE_NOT_AVAILABLE, "No projectId found") are not user copy, so only a server error keeps its message.
+      setError(mapErrorToUserMessage(isApiClientError(err) ? err : null, "Couldn't enable notifications. Try again."));
       throw err;
     } finally {
       busyRef.current = false;
@@ -280,7 +281,7 @@ export function useMobilePush(): MobilePush {
       }
       setRegistered(false);
     } catch (err) {
-      setError(mapErrorToUserMessage(err, "Couldn't disable notifications. Try again."));
+      setError(mapErrorToUserMessage(isApiClientError(err) ? err : null, "Couldn't disable notifications. Try again."));
       throw err;
     } finally {
       setBusy(false);

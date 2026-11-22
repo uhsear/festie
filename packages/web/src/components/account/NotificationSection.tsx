@@ -13,6 +13,7 @@ import {
 } from '@festie/shared/utils';
 import { useNotificationTopics } from '@festie/shared/hooks';
 import { NOTIFICATION_TOPIC_COPY } from '@festie/shared/constants';
+import { isApiClientError } from '@festie/shared/services/api';
 import { useToast } from '../../lib/toastContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { cn } from '../../lib/utils';
@@ -194,6 +195,8 @@ function PushSubsection() {
   const { toast, toastError } = useToast();
   const push = usePushNotifications();
   const [pushBusy, setPushBusy] = useState(false);
+  // A browser or push-service failure carries a raw string ("Subscription failed - no active Service Worker"), so only a server error keeps its own message.
+  const toastPushError = (e: unknown, fallback: string) => toastError(isApiClientError(e) ? e : null, fallback);
   // Render nothing while the key request is in flight, so a supported browser never flashes "Not supported".
   if (push.unsupportedReason === 'not-configured' || push.checking) return null;
 
@@ -218,7 +221,7 @@ function PushSubsection() {
         toast('Permission prompt dismissed.', 'info');
       }
     } catch (e) {
-      toastError(e, "Couldn't turn on notifications. Try again.");
+      toastPushError(e, "Couldn't turn on notifications. Try again.");
     } finally {
       setPushBusy(false);
     }
@@ -231,7 +234,7 @@ function PushSubsection() {
       await push.registerToken();
       toast('Push notifications enabled', 'success');
     } catch (e) {
-      toastError(e, "Couldn't turn on notifications. Try again.");
+      toastPushError(e, "Couldn't turn on notifications. Try again.");
     } finally {
       setPushBusy(false);
     }
@@ -243,7 +246,7 @@ function PushSubsection() {
       await push.unregisterToken();
       toast('Push notifications disabled', 'success');
     } catch (e) {
-      toastError(e, "Couldn't turn off notifications. Try again.");
+      toastPushError(e, "Couldn't turn off notifications. Try again.");
     } finally {
       setPushBusy(false);
     }

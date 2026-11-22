@@ -142,9 +142,17 @@ describe('NotificationSection', () => {
     expect(registerToken).not.toHaveBeenCalled();
   });
 
-  it('reports a failed permission request through toastError', async () => {
-    const err = new Error('boom');
-    requestPermission.mockRejectedValue(err);
+  it('shows the fallback, not the raw browser string, when the permission request fails', async () => {
+    requestPermission.mockRejectedValue(new Error('Subscription failed - no active Service Worker'));
+    render(<NotificationSection />);
+    await userEvent.click(screen.getByRole('button', { name: 'Enable Notifications' }));
+    await waitFor(() => expect(toastError).toHaveBeenCalledWith(null, "Couldn't turn on notifications. Try again."));
+  });
+
+  it('keeps the message of a server error from registering the token', async () => {
+    const err = Object.assign(new Error('Too many devices'), { name: 'ApiClientError', status: 400, isNetworkError: false });
+    requestPermission.mockResolvedValue('granted');
+    registerToken.mockRejectedValue(err);
     render(<NotificationSection />);
     await userEvent.click(screen.getByRole('button', { name: 'Enable Notifications' }));
     await waitFor(() => expect(toastError).toHaveBeenCalledWith(err, expect.any(String)));

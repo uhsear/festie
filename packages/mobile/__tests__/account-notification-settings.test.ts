@@ -21,7 +21,9 @@ describe('T6 mobile notification settings', () => {
     expect(calendar).toContain('Share.share');
   });
   it('maps raw push-registration failures to plain copy', () => {
-    expect(read('hooks/useMobilePush.ts')).toContain('mapErrorToUserMessage(err,');
+    const push = read('hooks/useMobilePush.ts');
+    expect(push).toMatch(/mapErrorToUserMessage\(isApiClientError\(err\) \? err : null, "Couldn't enable/);
+    expect(push).toMatch(/mapErrorToUserMessage\(isApiClientError\(err\) \? err : null, "Couldn't disable/);
   });
   it('opens system settings when permission is denied', () => {
     expect(read('components/AccountNotificationsSection.tsx')).toContain('Linking.openSettings');
