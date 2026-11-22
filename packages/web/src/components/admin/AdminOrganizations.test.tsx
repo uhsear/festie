@@ -135,7 +135,7 @@ describe('AdminOrganizations', () => {
   it('shows what the organization used', async () => {
     render();
     await userEvent.click(await screen.findByRole('button', { name: 'Venue A' }));
-    expect(await screen.findByText(/1 festivals \(1 drafts\)\. 2 announcements this month\. 3 MB of site-plan images stored\./)).toBeInTheDocument();
+    expect(await screen.findByText(/1 festival \(1 draft\)\. 2 announcements this month\. 3 MB of site-plan images stored\./)).toBeInTheDocument();
   });
 
   it('adds a member by email, lower-cased, with the chosen role', async () => {
