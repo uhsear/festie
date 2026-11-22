@@ -63,6 +63,7 @@ import { safeJsonForScript, isAllowedMapHost, buildSetAuthoringScript } from '..
 import type { AuthoringMode } from '../lib/webviewBridge';
 import { basemapCacheInfo, ensureBasemapCached, isBasemapRemoved, readArchiveRange, readCachedBase64 } from '../lib/basemapCache';
 import { buildMapHtml } from '../lib/mapDocument';
+import { decideLoadFailure } from '../lib/mapLoadRecovery';
 import { compassHref, peerCompassHref } from '../lib/dayOfRoutes';
 import Button from './Button';
 import MapPlaceCard from './MapPlaceCard';
@@ -870,17 +871,40 @@ export default function OfflineMap({
   const framedSosRef = useRef<Set<string>>(new Set());
 
   const fellBackRef = useRef(false);
-  // Holds the in-flight offline-fallback timer so a new onLoadStart (the WebView
-  // can fire it repeatedly) clears the prior one instead of stacking timers, and
-  // so we can clear it on unmount. Behavior is unchanged — only the leak is fixed.
-  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // The in-flight load timer (`timeoutRef`, declared below) is replaced by each onLoadStart
+  // (the WebView can fire it repeatedly) so timers never stack, and cleared on unmount.
   const fallBack = useCallback(() => {
     if (fellBackRef.current) return;
     fellBackRef.current = true;
     setPhase('fallback');
   }, []);
+  // Remounting the WebView (a new `key`) starts a fresh renderer process. The first WebView of
+  // a cold app can lose its renderer or miss the load window; one automatic remount covers that
+  // before the banner shows. The count resets on a manual retry.
+  const [webviewKey, setWebviewKey] = useState(0);
+  const autoRemountsRef = useRef(0);
+  const webviewPhaseRef = useRef(webviewPhase);
+  useEffect(() => {
+    webviewPhaseRef.current = webviewPhase;
+  }, [webviewPhase]);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Every "the WebView did not come up" signal (load error, HTTP error, document init error,
+  // load timeout, lost renderer) lands here: remount once, then fall back to the list.
+  const handleLoadFailure = useCallback(() => {
+    if (fellBackRef.current) return;
+    if (decideLoadFailure(autoRemountsRef.current) === 'fallback') {
+      fallBack();
+      return;
+    }
+    autoRemountsRef.current += 1;
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    timeoutRef.current = null;
+    setPhase('loading');
+    setWebviewKey((k) => k + 1);
+  }, [fallBack]);
   // Clears the latched failure and remounts the WebView (phase 'loading').
   const retryMap = useCallback(() => {
+    autoRemountsRef.current = 0;
     fellBackRef.current = false;
     setPhase('loading');
   }, []);
@@ -986,10 +1010,10 @@ export default function OfflineMap({
           msg.reason !== 'draftpoints-update' &&
           msg.reason !== 'fitbounds'
         )
-          fallBack();
+          handleLoadFailure();
       }
     },
-    [fallBack, onMapPress, interactive, allPins, selectPin, localArchive],
+    [handleLoadFailure, onMapPress, interactive, allPins, selectPin, localArchive],
   );
 
   // Arm a load timeout on load start: if the document never signals 'ready'
@@ -1000,15 +1024,9 @@ export default function OfflineMap({
     if (timeoutRef.current) clearTimeout(timeoutRef.current);
     timeoutRef.current = setTimeout(() => {
       timeoutRef.current = null;
-      setPhase((p) => {
-        if (p === 'loading') {
-          fellBackRef.current = true;
-          return 'fallback';
-        }
-        return p;
-      });
+      if (webviewPhaseRef.current === 'loading') handleLoadFailure();
     }, LOAD_TIMEOUT_MS);
-  }, []);
+  }, [handleLoadFailure]);
 
   // Clear any pending fallback timer when the component unmounts.
   useEffect(() => {
@@ -1435,6 +1453,7 @@ export default function OfflineMap({
         <View style={styles.web} />
       ) : (
         <WebView<object>
+          key={webviewKey}
           ref={webRef}
           // Default-deny navigation: the document is an inline (about:blank) page;
           // only its own load + OSM raster tiles are
@@ -1447,8 +1466,12 @@ export default function OfflineMap({
           style={styles.web}
           onMessage={onMessage}
           onLoadStart={armTimeout}
-          onError={fallBack}
-          onHttpError={fallBack}
+          onError={handleLoadFailure}
+          onHttpError={handleLoadFailure}
+          // Android lost the sandboxed renderer / iOS terminated the content process: the page is
+          // gone and 'ready' will never come, so recover now instead of waiting out the timeout.
+          onRenderProcessGone={handleLoadFailure}
+          onContentProcessDidTerminate={handleLoadFailure}
           javaScriptEnabled
           domStorageEnabled
           startInLoadingState={false}

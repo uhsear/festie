@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
 
-const src = readFileSync(join(__dirname, '..', 'components/OfflineMap.tsx'), 'utf8');
+const src = readFileSync(join(__dirname, '..', 'components/OfflineMap.tsx'), 'utf8').split(String.fromCharCode(13)).join('');
 
 describe('OfflineMap audit source guards', () => {
   it('offers a retry after a load failure instead of latching the fallback', () => {
@@ -10,6 +10,17 @@ describe('OfflineMap audit source guards', () => {
     expect(src).toContain("fellBackRef.current = false;\n    setPhase('loading');");
     expect(src).toContain('label="Retry map"');
     expect(src).toContain("The map didn't load.");
+  });
+
+  it('remounts the WebView once on a lost renderer or load failure before showing the banner', () => {
+    expect(src).toContain('key={webviewKey}');
+    expect(src).toContain('onRenderProcessGone={handleLoadFailure}');
+    expect(src).toContain('onContentProcessDidTerminate={handleLoadFailure}');
+    expect(src).toContain('onError={handleLoadFailure}');
+    expect(src).toContain('onHttpError={handleLoadFailure}');
+    expect(src).toContain("decideLoadFailure(autoRemountsRef.current) === 'fallback'");
+    // a manual retry restores the automatic remount
+    expect(src).toContain('autoRemountsRef.current = 0;\n    fellBackRef.current = false;');
   });
 
   it('replays one-shot framing and disarms placement when the document reloads', () => {
