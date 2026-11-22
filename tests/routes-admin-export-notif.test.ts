@@ -847,6 +847,18 @@ describe('routes/admin-audit.js', () => {
     assert.equal(adminAuditQuery.parse({ user: ' sam ' }).user, 'sam');
   });
 
+  test('GET /audit gives rows with no known target no target label', async () => {
+    const deps = makeDeps();
+    deps.stores.auditLog.query = mock.fn(async () => ({
+      rows: [{ id: 'a1', action: 'unknown.created', actorType: 'user', actorId: 'user-1', targetType: 'unknown', targetId: null, details: null, createdAt: '2026-01-01' }],
+      nextCursor: null,
+    }));
+    const { app } = await buildAuditApp(deps);
+
+    const res = await request(app).get('/audit').expect(200);
+    assert.equal(res.body.data[0].targetLabel, null);
+  });
+
   test('GET /audit enriches rows with actor username and target label, without friendlyAction', async () => {
     const deps = makeDeps();
     deps.stores.auditLog.query = mock.fn(async () => ({
@@ -1630,6 +1642,21 @@ describe('routes/admin.js', () => {
     const activity = res.body.data.recentActivity;
     assert.ok(activity.length > 0);
     assert.ok(activity[0].actorUsername);
+  });
+
+  test('GET /dashboard keeps the status of each activity row so failures can be marked', async () => {
+    const deps = makeDeps();
+    deps.stores.auditLog.query = mock.fn(async () => ({
+      rows: [
+        { id: 'a1', action: 'festival.updated', actorType: 'admin', actorId: 'user-1', targetType: 'festival', targetId: 'f1', details: null, status: 'failure', createdAt: '2026-01-01' },
+      ],
+      nextCursor: null,
+    }));
+    const { default: createAdminRoutes } = await import('../routes/admin.js');
+    const app = buildApp(createAdminRoutes(deps));
+
+    const res = await request(app).get('/dashboard').expect(200);
+    assert.equal(res.body.data.recentActivity[0].status, 'failure');
   });
 
   test('GET /dashboard counts total picks across profiles', async () => {
