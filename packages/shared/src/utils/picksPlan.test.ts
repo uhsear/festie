@@ -6,6 +6,8 @@ import {
   bulkAddMessage,
   comparePicksByTime,
   effectivePicksFilter,
+  filterPickMap,
+  filterPlanListItems,
   picksStats,
   reminderLeadA11y,
   reminderLeadLabel,
@@ -196,5 +198,61 @@ describe('reminder labels', () => {
     expect(reminderLeadA11y(1)).toBe('1 minute');
     expect(reminderLeadA11y(60)).toBe('1 hour');
     expect(reminderLeadA11y(15)).toBe('15 minutes');
+  });
+});
+
+describe('filterPickMap', () => {
+  const picks: Record<string, Priority> = { a: 'must', b: 'want-to-see', c: 'maybe', d: 'must' };
+
+  it('keeps every pick for the all filter and a blank search', () => {
+    expect(filterPickMap({ sets: SETS, picks, stages: STAGES, filter: 'all', search: ' ', clashIds: NONE })).toEqual(picks);
+  });
+
+  it('keeps one priority', () => {
+    expect(filterPickMap({ sets: SETS, picks, stages: STAGES, filter: 'must', search: '', clashIds: NONE })).toEqual({
+      a: 'must',
+      d: 'must',
+    });
+  });
+
+  it('keeps only clashing sets for the clashes filter', () => {
+    expect(
+      filterPickMap({ sets: SETS, picks, stages: STAGES, filter: 'clashes', search: '', clashIds: new Set(['b']) }),
+    ).toEqual({ b: 'want-to-see' });
+  });
+
+  it('matches the search on the artist and the stage name', () => {
+    expect(filterPickMap({ sets: SETS, picks, stages: STAGES, filter: 'all', search: 'tent', clashIds: NONE })).toEqual({
+      c: 'maybe',
+    });
+  });
+
+  it('drops sets with no pick', () => {
+    expect(filterPickMap({ sets: SETS, picks: { a: 'must' }, stages: STAGES, filter: 'all', search: '', clashIds: NONE })).toEqual({
+      a: 'must',
+    });
+  });
+
+  it('agrees with the sets buildPicksRows lists', () => {
+    const listed = buildPicksRows({
+      sets: SETS, picks, days: DAYS, stages: STAGES, groupMode: 'day', filter: 'want-to-see', search: 'b',
+      collapsed: NONE, clashIds: NONE, compare: byId,
+    });
+    const ids = listed.filter((r) => r.kind === 'set').map((r) => (r as { set: FestivalSet }).set.id);
+    expect(Object.keys(filterPickMap({ sets: SETS, picks, stages: STAGES, filter: 'want-to-see', search: 'b', clashIds: NONE }))).toEqual(ids);
+  });
+});
+
+describe('filterPlanListItems', () => {
+  const item = (set: FestivalSet) => ({ set, dayIndex: 0, note: 'n', reminderMinutes: null, priority: null });
+  const items = [item(makeSet({ id: 'Bacardí' })), item(makeSet({ id: 'zed', stageId: 'tent' }))];
+
+  it('returns every item for a blank search', () => {
+    expect(filterPlanListItems(items, '  ', STAGES)).toBe(items);
+  });
+
+  it('matches case- and accent-insensitively on artist or stage name', () => {
+    expect(filterPlanListItems(items, 'bacardi', STAGES).map((i) => i.set.id)).toEqual(['Bacardí']);
+    expect(filterPlanListItems(items, 'TENT', STAGES).map((i) => i.set.id)).toEqual(['zed']);
   });
 });

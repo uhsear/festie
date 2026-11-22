@@ -142,9 +142,11 @@ export default function JoinInviteScreen() {
 
         {inviteUsable && user ? (
           <>
-            <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              Crew members can see your picks and your status.
-            </Text>
+            {!full ? (
+              <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                Crew members can see your picks and your status.
+              </Text>
+            ) : null}
             {switchesFestival ? (
               <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 Joining switches you to {preview?.festivalName}.

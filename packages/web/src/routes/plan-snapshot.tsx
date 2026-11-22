@@ -145,7 +145,11 @@ function ImportPlan({ snapshot }: { snapshot: PlanSnapshot }) {
       </>
     );
   } else if (preview.toAdd.length === 0) {
-    body = <p className="text-[length:var(--font-size-14)] text-text-primary">You already have all of these picks.</p>;
+    body = (
+      <p className="text-[length:var(--font-size-14)] text-text-primary">
+        {snapshot.picks.length === 0 ? 'This plan has no picks yet.' : 'You already have all of these picks.'}
+      </p>
+    );
   } else {
     body = (
       <>
@@ -171,8 +175,14 @@ function ImportPlan({ snapshot }: { snapshot: PlanSnapshot }) {
  * a tap on Add (see ImportPlan), so opening a friend's code alone never changes the viewer's plan.
  */
 export default function PlanSnapshotPage() {
-  const [hash] = useState(readHash);
+  const [hash, setHash] = useState(readHash);
   const user = useAuthStore((s) => s.user);
+  // Pasting another /p link into the same tab only changes the hash; the page must follow it.
+  useEffect(() => {
+    const onHashChange = () => setHash(readHash());
+    window.addEventListener('hashchange', onHashChange);
+    return () => window.removeEventListener('hashchange', onHashChange);
+  }, []);
   // A signed-out visitor opening the link keeps the hash for the trip through sign-in. While signed out the stash
   // stays, even when the URL has no hash: the page re-mounts at /login?next=/p and must not delete what it just read.
   // It is dropped once the viewer is signed in. Clearing here, not in readHash, keeps StrictMode's double init safe.
@@ -184,6 +194,11 @@ export default function PlanSnapshotPage() {
       // sessionStorage unavailable: the visitor opens the link again after signing in
     }
   }, [user, hash]);
+  // Keyed on the hash so a new plan starts with fresh festival and load state.
+  return <PlanSnapshotView key={hash} hash={hash} />;
+}
+
+function PlanSnapshotView({ hash }: { hash: string }) {
   const decoded = useMemo(() => decodePlanSnapshot(hash), [hash]);
   const snapshot = decoded.ok ? decoded.data : null;
   const [festival, setFestival] = useState<FestivalDetailResponse | null>(null);

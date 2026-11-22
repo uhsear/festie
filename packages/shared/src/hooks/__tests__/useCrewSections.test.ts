@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useCrewSections, retryDelayMs } from '../useCrewSections';
+import { useCrewSections, retryDelayMs, RECONNECT_RETRY_MS } from '../useCrewSections';
 import { useCrewStore } from '../../stores/crewStore';
 import { useUIStore } from '../../stores/uiStore';
 
@@ -87,6 +87,61 @@ describe('useCrewSections', () => {
     const before = loaders.loadRides!.mock.calls.length;
     loaders.loadRides!.mockResolvedValue(undefined);
     await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(0); });
+    expect(loaders.loadRides).toHaveBeenCalledTimes(before + 1);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('tries once more when the reload at reconnect also fails', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    const { result } = renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    expect(result.current.error).toBe('Failed to load: rides');
+    // Back online but the network is not ready yet: the reload at reconnect fails as well.
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(0); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(RECONNECT_RETRY_MS - 100); });
+    expect(result.current.error).toBe('Failed to load: rides');
+    loaders.loadRides!.mockResolvedValue(undefined);
+    await act(async () => { await vi.advanceTimersByTimeAsync(RECONNECT_RETRY_MS + 100); });
+    expect(result.current.error).toBeNull();
+  });
+
+  it('makes only one extra try after a failed reconnect reload', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    const before = loaders.loadRides!.mock.calls.length;
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(120_000); });
+    // reconnect run (3 attempts) plus one extra run (3 attempts), then nothing more
+    expect(loaders.loadRides).toHaveBeenCalledTimes(before + 6);
+  });
+
+  it('leaves no armed retry after a successful reconnect reload', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    const { result } = renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    loaders.loadRides!.mockResolvedValue(undefined);
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(0); });
+    expect(result.current.error).toBeNull();
+    loaders.loadRides!.mockRejectedValue(err(403));
+    await act(async () => { result.current.reload(); await vi.advanceTimersByTimeAsync(0); });
+    expect(result.current.error).toBe('Failed to load: rides');
+    const before = loaders.loadRides!.mock.calls.length;
+    await act(async () => { await vi.advanceTimersByTimeAsync(RECONNECT_RETRY_MS * 3); });
+    expect(loaders.loadRides).toHaveBeenCalledTimes(before);
+  });
+
+  it('waits for a slow reconnect reload instead of cancelling it', async () => {
+    useUIStore.setState({ offlineMode: true });
+    loaders.loadRides!.mockRejectedValue(err(503));
+    const { result } = renderHook(() => useCrewSections('c1'));
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    // Reconnect reload takes 8 s (> RECONNECT_RETRY_MS) and then succeeds.
+    loaders.loadRides!.mockImplementation(() => new Promise<void>((resolve) => setTimeout(resolve, 8000)));
+    const before = loaders.loadRides!.mock.calls.length;
+    await act(async () => { useUIStore.setState({ offlineMode: false }); await vi.advanceTimersByTimeAsync(RECONNECT_RETRY_MS + 4000); });
     expect(loaders.loadRides).toHaveBeenCalledTimes(before + 1);
     expect(result.current.error).toBeNull();
   });

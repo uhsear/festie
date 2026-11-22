@@ -124,8 +124,8 @@ describe('FestivalEditForm lineup tools', () => {
     });
     const row = document.querySelector('[data-issue-key="set:s2"]') as HTMLElement;
     expect(within(row).getAllByText('Pick a stage for Mira.').length).toBe(1);
-    expect(within(row).getByLabelText('Stage').getAttribute('aria-invalid')).toBe('true');
-    expect(within(row).getByLabelText('Start time').getAttribute('aria-invalid')).toBeNull();
+    expect(within(row).getByLabelText(/^Stage for /).getAttribute('aria-invalid')).toBe('true');
+    expect(within(row).getByLabelText(/^Start time for /).getAttribute('aria-invalid')).toBeNull();
   });
 
   it('labels the save button by change count and disables it at zero', () => {
@@ -139,7 +139,7 @@ describe('FestivalEditForm lineup tools', () => {
     );
     expect((screen.getByText('Save 2 changes') as HTMLButtonElement).disabled).toBe(false);
     rerender(<FestivalEditForm {...baseProps} formData={{ name: 'Fest' }} setFormData={vi.fn()} />);
-    expect((screen.getByText('Save 0 changes') as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByText('Save') as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('reports the notify checkbox', () => {

@@ -5,7 +5,7 @@ import { registerCreateReconciler } from '../services/offlineQueue';
 import { mapErrorToUserMessage } from '../services/errors';
 import { getStorage } from '../platform/storage';
 import { writeOutcomeOf, type WriteOutcome } from '../utils/crewWrites';
-import { crewCopy } from '../utils/crewManage';
+import { crewCopy, utcDay } from '../utils/crewManage';
 import { useAuthStore } from './authStore';
 import { useLiveLocationStore } from './liveLocationStore';
 import {
@@ -118,6 +118,9 @@ export interface CrewState {
   activity: CrewActivityEntry[];
   // Cursor for the next older activity page; null when there is none. Not persisted.
   activityNextCursor: string | null;
+  // `${crewId}:${userId}` -> UTC day (YYYY-MM-DD) of the last settle-up reminder sent or refused as
+  // already sent. Not persisted; the server stays the authority. Read it with remindedUserIdsToday.
+  remindedOn: Record<string, string>;
   crewLoading: boolean;
   error: string | null;
   // ── Offline read-cache bookkeeping (persisted) ──────────────────
@@ -318,6 +321,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   expenseCurrency: 'USD',
   activity: [],
   activityNextCursor: null,
+  remindedOn: {},
   crewLoading: false,
   error: null,
   _cachedAt: null,
@@ -1768,10 +1772,13 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
   // reminder queued offline would fire hours later, so it fails fast instead.
   remindPayment: async (crewId: string, userId: string) => {
     set({ error: null });
+    const markReminded = () => set((s) => ({ remindedOn: { ...s.remindedOn, [`${crewId}:${userId}`]: utcDay() } }));
     try {
       const res = await api.post(`/crews/${crewId}/expenses/remind`, { userId }, { _bypassOfflineQueue: true });
+      markReminded();
       return writeOutcomeOf(res);
     } catch (err) {
+      if ((err as { status?: number })?.status === 409) markReminded();
       const message = mapErrorToUserMessage(err, 'Failed to send reminder');
       set({ error: message });
       throw err;

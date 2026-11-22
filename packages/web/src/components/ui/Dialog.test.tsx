@@ -37,6 +37,17 @@ describe('Dialog', () => {
     expect(screen.getByRole('button', { name: 'Inside' })).toBeInTheDocument();
   });
 
+  it('uses an opaque surface and an overlay level that stacks nested dialogs', () => {
+    renderDialog();
+    const dialog = screen.getByRole('dialog', { name: 'Rename crew' });
+    expect(dialog.className).toContain('bg-bg-secondary');
+    // The translucent card fill is wrong for a dialog; only the daylight theme swaps to the white card colour.
+    expect(dialog.className).not.toMatch(/(^|\s)bg-bg-card/);
+    expect(dialog.className).toContain('[:root[data-theme=daylight]_&]:bg-bg-card');
+    const overlay = document.querySelector('[data-state="open"].fixed.inset-0');
+    expect(overlay?.className).toContain('z-[var(--z-modal)]');
+  });
+
   it('calls onOpenChange(false) on Escape', async () => {
     const onOpenChange = vi.fn();
     renderDialog(onOpenChange);

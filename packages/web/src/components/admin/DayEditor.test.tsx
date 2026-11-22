@@ -45,3 +45,17 @@ describe('DayEditor engagement', () => {
     expect(screen.queryByText(/Picked by|No picks/)).toBeNull();
   });
 });
+
+describe('DayEditor labels', () => {
+  it('names the day and each set in its controls', () => {
+    renderDay();
+    expect(screen.getByRole('button', { name: 'Remove Friday' })).toBeTruthy();
+    expect(screen.getByLabelText('Start time for Alpha')).toBeTruthy();
+    expect(screen.getByLabelText('End time for Beta')).toBeTruthy();
+    // The visible text below md is "Remove set", so the name starts with it (WCAG 2.5.3).
+    expect(screen.getByRole('button', { name: 'Remove set: Alpha' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Collapse Friday' })).toBeTruthy();
+    expect(screen.getByLabelText('Day label for Friday')).toBeTruthy();
+    expect(screen.getByLabelText('Day date for Friday')).toBeTruthy();
+  });
+});

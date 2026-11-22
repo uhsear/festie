@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import mainSource from './main.tsx?raw';
 import type { User } from '@festie/shared';
 
 const m = vi.hoisted(() => ({
@@ -128,5 +129,10 @@ describe('main.tsx wiring', { timeout: 30000 }, () => {
     expect(dc.queues).toBe(false);
     expect(dc.httpHeaders.request.deny).toContain('referer');
     expect(dc.urlQueryParams.deny).toContain('token');
+  });
+
+  it('imports zodJitless before any other module so no schema is built without it', () => {
+    const firstImport = mainSource.split(String.fromCharCode(10)).find((line) => line.startsWith('import '))?.trim();
+    expect(firstImport).toBe("import '@festie/shared/zodJitless';");
   });
 });

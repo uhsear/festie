@@ -58,8 +58,9 @@ describe('grid clash copy', () => {
     expect(clashChip(3)).toBe('3 clashes');
   });
   it('formats the chip a11y label', () => {
-    expect(clashChipA11y(1)).toBe('You have 1 schedule clash. Open it in Picks.');
-    expect(clashChipA11y(3)).toBe('You have 3 schedule clashes. Open them in Picks.');
+    expect(clashChipA11y(1)).toBe('1 clash. Open it in Picks.');
+    expect(clashChipA11y(3)).toBe('3 clashes. Open them in Picks.');
+    expect(clashChipA11y(3).startsWith(clashChip(3))).toBe(true);
   });
   it('never says conflict in grid copy', () => {
     for (const v of Object.values(COPY.grid)) expect(v.toLowerCase()).not.toContain('conflict');

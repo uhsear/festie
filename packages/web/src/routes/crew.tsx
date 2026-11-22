@@ -348,6 +348,8 @@ function CrewViewInner() {
                 crewName={activeCrew.name}
                 isOwner={isOwner}
                 expiresAt={activeCrew.inviteExpiresAt}
+                memberCount={members.length}
+                maxMembers={activeCrew.maxMembers}
               />
             </Card>
           )}
@@ -396,6 +398,8 @@ function CrewViewInner() {
                 crewName={activeCrew.name}
                 isOwner={isOwner}
                 expiresAt={activeCrew.inviteExpiresAt}
+                memberCount={members.length}
+                maxMembers={activeCrew.maxMembers}
               />
             )}
 

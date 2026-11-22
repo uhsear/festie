@@ -43,7 +43,7 @@ const PAGE_STYLE = `
       font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
-      color: #ff3366;
+      color: #ff5c85;
       margin-bottom: 8px;
     }
     h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; overflow-wrap: anywhere; }
@@ -51,7 +51,7 @@ const PAGE_STYLE = `
     .invite-button {
       display: inline-block;
       margin-top: 24px;
-      background: #ff3366;
+      background: #d6154f;
       color: #fff;
       text-decoration: none;
       padding: 14px 32px;
@@ -59,11 +59,11 @@ const PAGE_STYLE = `
       font-weight: 600;
       font-size: 15px;
     }
-    .invite-button:hover { background: #e62e5c; }
-    .invite-footer { font-size: 12px; color: #888; margin-top: 24px; }
+    .invite-button:hover { background: #c01d3a; }
+    .invite-footer { font-size: 12px; color: #999; margin-top: 24px; }
     .invite-error-title { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
     .invite-error-message { font-size: 14px; color: #aaa; margin-bottom: 32px; line-height: 1.6; }
-    .invite-link { color: #ff3366; text-decoration: none; font-weight: 600; font-size: 14px; }
+    .invite-link { color: #ff5c85; text-decoration: none; font-weight: 600; font-size: 14px; }
     .invite-link:hover { text-decoration: underline; }
     .invite-save { display: inline-block; margin-top: 16px; padding: 12px 8px; }`;
 
@@ -132,6 +132,7 @@ export function renderInviteJoinPage({
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${title}</title>
   <meta name="description" content="${escapeHtml(description)}">
+  <meta name="robots" content="noindex">
   <meta name="theme-color" content="#0a0a0a">
   <meta property="og:title" content="${title}">
   <meta property="og:description" content="${escapeHtml(description)}">
@@ -191,6 +192,7 @@ export function renderInviteErrorPage(origin: string, message: string) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>This invite doesn't work</title>
+  <meta name="robots" content="noindex">
   <meta name="theme-color" content="#0a0a0a">
   <style>${PAGE_STYLE}${LIGHT_STYLE}
   </style>

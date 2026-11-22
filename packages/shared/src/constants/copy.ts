@@ -107,8 +107,9 @@ export const FESTIVAL_STATUS_LABEL: Record<FestivalStatus, string> = {
 export const signInTo = (what: string): string => `Sign in to ${what}.`;
 export const clashCount = (n: number): string => (n === 1 ? COPY.clash.one : `${n} schedule clashes`);
 export const clashChip = (n: number): string => (n === 1 ? '1 clash' : `${n} clashes`);
+// Starts with the chip's visible text so the accessible name contains it (WCAG 2.5.3).
 export const clashChipA11y = (n: number): string =>
-  n === 1 ? 'You have 1 schedule clash. Open it in Picks.' : `You have ${n} schedule clashes. Open them in Picks.`;
+  n === 1 ? '1 clash. Open it in Picks.' : `${n} clashes. Open them in Picks.`;
 export const planBLine = (text: string): string => `If we lose each other: ${text}`;
 export const meetingPointEditedBy = (name: string, was: string): string => `Edited by ${name}, was ${was}`;
 export const meetingPointEditedNoName = (was: string): string => `Edited, was ${was}`;

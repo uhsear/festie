@@ -17,6 +17,7 @@ import { verifiedOrganizationOnly } from '../lib/app-context/session.js';
 import { AUDIT_ACTIONS } from '../lib/audit-actions.js';
 import { organizerAudience } from '../lib/organizer-engagement.js';
 import { createAdminAuditWriter } from '../lib/audit-middleware.js';
+import { CAP_REACHED } from '../lib/response.js';
 import type { RouteDeps } from '../lib/types';
 
 // Why "Announce days" refuses, as the message the admin sees and the status it carries.
@@ -98,7 +99,7 @@ export default function createLineupAnnounceRoute(deps: RouteDeps) {
       if (scope) {
         claimId = await stores.festivalReview.claimLineupAnnounce(festivalId);
         if (claimId === null) {
-          return sendError(res, 429, 'This festival already sent its lineup announcement today. Try again tomorrow.', ErrorCodes.RATE_LIMITED);
+          return sendError(res, 429, 'This festival already sent its lineup announcement today. Try again tomorrow.', ErrorCodes.RATE_LIMITED, CAP_REACHED);
         }
       }
       try {

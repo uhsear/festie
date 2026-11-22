@@ -26,6 +26,12 @@ describe('crew UX sweep guards', () => {
     expect(src).toContain('`Reminder sent to ${s.fromName}.`');
     expect(src).not.toContain('announceForAccessibility(`Reminder sent');
   });
+  it('settle-up Remind shows Reminded today and cannot fire twice at once', () => {
+    const src = read('components/CrewExpenses.tsx');
+    expect(src).toContain('remindedUserIdsToday(remindedOn, crewId)');
+    expect(src).toContain("'Reminded today'");
+    expect(src).toContain('if (remindingRef.current || remindedUserIds.has(s.fromUserId)) return;');
+  });
   it('guest crew plan offers sign in and create account', () => {
     const src = read('app/crew-plan.tsx');
     expect(src).toContain("setReturnTo('/crew-plan')");

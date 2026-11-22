@@ -118,7 +118,9 @@ export default function createFestivalsRoutes(deps: RouteDeps) {
       ...day,
       sets: (day.sets || []).map((set: any) => (own.has(set.id) ? set : { ...set, id: `set-${crypto.randomUUID()}` })),
     }));
-    return { ...sent, ...(days ? { days } : {}) };
+    // The organizer editor has no series control: a series is a Festie-wide id, so a member's body never moves it.
+    const { seriesId: _seriesId, ...rest } = sent as T & { seriesId?: unknown };
+    return { ...rest, ...(days ? { days } : {}) } as T;
   }
 
   // 400 with one issue per problem; `message` stays one sentence for old clients.

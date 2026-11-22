@@ -5,7 +5,8 @@
 /**
  * Email-Related Auth Routes (split from auth.js for maintainability)
  * POST /forgot-password   - Request password reset email
- * GET  /verify-email      - Verify email address via token link
+ * POST /verify-email      - Verify email address (the web confirm page posts the emailed token)
+ * GET  /verify-email      - Legacy link: redirects to the confirm page without consuming the token
  * POST /resend-verification - Resend email verification (authenticated)
  * POST /reset-password    - Reset password via emailed token
  * GET|POST /unsubscribe   - One-click unsubscribe from marketing email (signed link, no sign-in)
@@ -22,7 +23,7 @@
 import crypto from 'crypto';
 import type { Router } from 'express';
 import { createEmailWindowLimit, createPasswordResetRateLimit } from '../lib/rate-limiting';
-import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail, unsubscribeSecret, verifyUnsubscribeToken } from '../lib/email';
+import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail, unsubscribeSecret, verifyEmailUrl, verifyUnsubscribeToken } from '../lib/email';
 import { escapeHtml } from '../lib/helpers/sanitize';
 import type { RouteDeps } from '../lib/types';
 
@@ -124,61 +125,31 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
     },
   );
 
-  // ── GET /verify-email — verify email address via token link ──────────
-  // This endpoint is dual-purpose: it is the target of the link in a
-  // verification email (clicked from a browser → friendly HTML page) but it
-  // must also honour the JSON `{ data, error }` API contract for clients that
-  // explicitly ask for it. We content-negotiate on the `Accept` header: a
-  // client that prefers `application/json` (and is not asking for HTML) gets
-  // JSON via sendSuccess/sendError; everyone else (browsers, `Accept: */*`)
-  // gets the rendered HTML page. The HTML branch sets an explicit
-  // `Content-Type: text/html; charset=utf-8` so browsers parse it as markup
-  // rather than sniffing/defaulting to plain text.
-  // A browser GET only asks for confirmation; the form on that page POSTs the same URL and consumes the token.
-  // Mail scanners and link previews open GET links on delivery, so consuming there burned the link
-  // before the person clicked it. A JSON client still consumes on GET.
-  const verifyEmail = async (req: any, res: any) => {
-    // True when the caller is an API client that wants JSON, not the HTML page.
-    const accept = String(req.headers?.accept || '');
-    const wantsJson = /application\/json/i.test(accept) && !/text\/html/i.test(accept);
+  // ── verify-email ──────────────────────────────────────────────────────
+  // The emailed link opens the web confirm page (/verify-email in the SPA),
+  // which POSTs the token here. A GET must never consume a token: mail
+  // scanners prefetch links and would burn it before the person clicks.
+  // Both verbs share runVerification, so the sign-out rules below hold for each.
+  type VerifyOutcome = {
+    status: number;
+    message: string;
+    code?: string;
+    data?: { verified: true; email: string; sessionsRevoked: boolean };
+  };
 
-    const sendHtml = (status: number, title: string, message: string, action: VerifyAction) => {
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      return res.status(status).send(_verifyEmailPage(status, title, message, action));
-    };
-
+  const runVerification = async (token: string): Promise<VerifyOutcome> => {
     try {
-      const token = String(req.query.token || '').trim();
-      if (!token || !/^[a-f0-9]{64}$/.test(token)) {
-        return wantsJson
-          ? sendError(res, 400, 'Invalid verification link', ErrorCodes.INVALID_INPUT)
-          : sendHtml(400, 'Link not valid', 'Invalid verification link.', OPEN_FESTIE);
-      }
-
-      if (req.method === 'GET' && !wantsJson) {
-        res.setHeader('Content-Type', 'text/html; charset=utf-8');
-        res.setHeader('Cache-Control', 'no-store');
-        return res.status(200).send(
-          _verifyEmailPage(
-            200,
-            'Confirm your email?',
-            'Select the button to confirm this address for your Festie account.',
-            OPEN_FESTIE,
-            'Email Verification',
-            { form: { action: `/api/v1/auth/verify-email?token=${token}`, label: 'Confirm email' } },
-          ),
-        );
-      }
-
       const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
       // Atomic claim: the UPDATE ... RETURNING is the only place a token is
       // consumed, so two concurrent clicks on one link cannot both proceed.
       const tokenRow = await stores.emailTokens.consumeVerificationToken(tokenHash);
 
       if (!tokenRow) {
-        return wantsJson
-          ? sendError(res, 400, 'This verification link has expired or already been used', ErrorCodes.INVALID_INPUT)
-          : sendHtml(400, 'Link expired', 'This verification link has expired or already been used.', OPEN_FESTIE);
+        return {
+          status: 400,
+          message: 'This verification link has expired or already been used',
+          code: ErrorCodes.INVALID_INPUT,
+        };
       }
 
       const { user_id: userId, email: verifiedEmail } = tokenRow;
@@ -201,11 +172,12 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
         // as a 500 marked retryable, which no retry could ever satisfy.
         if (writeError?.code !== '23505') throw writeError;
         log.warn('email:verify-address-taken', { userId });
-        const takenMsg =
-          'That address is now in use by another account. Request the email change again from your account settings.';
-        return wantsJson
-          ? sendError(res, 409, takenMsg, ErrorCodes.ALREADY_EXISTS)
-          : sendHtml(409, 'Address already in use', takenMsg, OPEN_FESTIE);
+        return {
+          status: 409,
+          message:
+            'That address is now in use by another account. Request the email change again from your account settings.',
+          code: ErrorCodes.ALREADY_EXISTS,
+        };
       }
       invalidateUserCache();
 
@@ -232,26 +204,42 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
       }
 
       log.info('email:verified', { userId, email: verifiedEmail, identityMoved });
-      return wantsJson
-        ? sendSuccess(res, { verified: true, email: verifiedEmail, sessionsRevoked: identityMoved })
-        : identityMoved
-          ? sendHtml(
-              200,
-              'Email changed',
-              'Your email address is confirmed. Every device has been signed out for security — please sign in again.',
-              SIGN_IN,
-            )
-          : sendHtml(200, 'Email verified', 'Your email is confirmed. You can keep using Festie.', OPEN_FESTIE);
+      return { status: 200, message: '', data: { verified: true, email: verifiedEmail, sessionsRevoked: identityMoved } };
     } catch (error: any) {
       log.error('verify-email failed', { error: error.message });
-      return wantsJson
-        ? sendError(res, 500, 'Something went wrong', ErrorCodes.INTERNAL_ERROR)
-        : sendHtml(500, 'Something went wrong', 'Something went wrong. Please try again.', OPEN_FESTIE);
+      return { status: 500, message: 'Something went wrong', code: ErrorCodes.INTERNAL_ERROR };
     }
   };
-  const verifyEmailLimit = rateLimit(10, 'verify-email');
-  router.get('/verify-email', verifyEmailLimit, verifyEmail);
-  router.post('/verify-email', verifyEmailLimit, verifyEmail);
+
+  const sendVerifyJson = (res: any, out: VerifyOutcome) =>
+    out.data ? sendSuccess(res, out.data) : sendError(res, out.status, out.message, out.code);
+
+  // POST /verify-email — the confirm page's button. Public: the token is the credential.
+  router.post('/verify-email', rateLimit(10, 'verify-email'), validate(schemas.verifyEmail), async (req: any, res: any) =>
+    sendVerifyJson(res, await runVerification(req.validatedBody.token)),
+  );
+
+  // GET /verify-email — kept for one release for links already in inboxes.
+  // Browsers (and link scanners) get a redirect to the confirm page and
+  // consume nothing; a client that asks for JSON is an API caller, not a
+  // prefetch, and still consumes. A malformed link keeps the error page.
+  router.get('/verify-email', rateLimit(10, 'verify-email'), async (req: any, res: any) => {
+    // True when the caller is an API client that wants JSON, not the HTML page.
+    const accept = String(req.headers?.accept || '');
+    const wantsJson = /application\/json/i.test(accept) && !/text\/html/i.test(accept);
+    const token = String(req.query.token || '').trim();
+
+    if (!/^[a-f0-9]{64}$/.test(token)) {
+      if (wantsJson) return sendError(res, 400, 'Invalid verification link', ErrorCodes.INVALID_INPUT);
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      return res.status(400).send(_verifyEmailPage(400, 'Link not valid', 'Invalid verification link.', OPEN_FESTIE));
+    }
+    if (!wantsJson) {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.redirect(302, `/verify-email?token=${token}`);
+    }
+    return sendVerifyJson(res, await runVerification(token));
+  });
 
   // ── GET|POST /unsubscribe — one-click unsubscribe from re-engagement email ──
   // The link in every marketing email carries a signed per-user token (lib/email.ts), so it works
@@ -347,7 +335,7 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
         user.email,
         config.EMAIL_VERIFY_TOKEN_TTL_HOURS,
       );
-      const verifyUrl = `${config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
+      const verifyUrl = verifyEmailUrl(config, verifyToken);
       const sent = await sendVerificationEmail({ to: user.email, username: user.username, verifyUrl, config, log, redis: deps.redis });
       if (!sent) {
         return sendError(res, 503, 'We could not send the verification email. Try again in a few minutes.', ErrorCodes.SERVICE_UNAVAILABLE);
@@ -441,7 +429,6 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
 // ── Email verification result page ──────────────────────────────────────
 type VerifyAction = { label: string; href: string };
 const OPEN_FESTIE: VerifyAction = { label: 'Open Festie', href: '/' };
-const SIGN_IN: VerifyAction = { label: 'Sign in', href: '/login' };
 const NOTIFICATION_SETTINGS: VerifyAction = { label: 'Open notification settings', href: '/account' };
 // A POST form in place of the link button. `action` is a same-origin path built by the route.
 type UnsubscribeForm = { action: string; label: string };

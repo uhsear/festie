@@ -183,11 +183,9 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const fakeToken = crypto.randomBytes(32).toString('hex');
-    const res = await server.request.post(`/api/v1/auth/verify-email?token=${fakeToken}`);
+    const res = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: fakeToken });
     assert.equal(res.status, 400);
-    assert.match(res.text, /expired|already been used/i);
-    assert.match(res.text, /Link expired/);
-    assert.match(res.text, /Need a new link\? Sign in to Festie and send another from your account\./);
+    assert.match(res.body.error.message, /expired|already been used/i);
   });
 
   test('a browser GET only asks for confirmation and leaves the token live for the POST', async () => {
@@ -207,16 +205,18 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
       );
       const url = `/api/v1/auth/verify-email?token=${verifyToken}`;
       for (let i = 0; i < 2; i++) {
-        const get = await server.request.get(url);
-        assert.equal(get.status, 200);
-        assert.ok(get.text.includes(`<form method="post" action="${url}">`));
-        assert.doesNotMatch(get.text, /Email verified/);
+        const get = await server.request.get(url).set('Accept', 'text/html');
+        assert.equal(get.status, 302);
+        assert.equal(get.headers.location, `/verify-email?token=${verifyToken}`);
       }
       const used = await pool.query('SELECT used_at FROM email_verification_tokens WHERE token_hash = $1', [tokenHash]);
       assert.equal(used.rows[0].used_at, null, 'GET must not consume the token');
-      const post = await server.request.post(url).set('Origin', 'null');
-      assert.equal(post.status, 200, 'the form POST works even when the browser sends Origin: null');
-      assert.match(post.text, /Email verified/);
+      // The confirm page is the SPA, so verify-email is not exempt from the Origin check.
+      const opaque = await server.request.post('/api/v1/auth/verify-email').set('Origin', 'null').send({ token: verifyToken });
+      assert.equal(opaque.status, 403);
+      const post = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: verifyToken });
+      assert.equal(post.status, 200);
+      assert.equal(post.body.data.verified, true);
     } finally {
       await pool.end();
     }
@@ -243,11 +243,9 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
         [userId, tokenHash, pendingEmail],
       );
 
-      const res = await server.request.post(`/api/v1/auth/verify-email?token=${verifyToken}`);
+      const res = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: verifyToken });
       assert.equal(res.status, 200);
-      assert.match(res.text, /verified/i);
-      assert.match(res.text, /Email verified/);
-      assert.match(res.text, /Open Festie/);
+      assert.equal(res.body.data.verified, true);
 
       // email_verified_at should now be set
       const after = await pool.query('SELECT email, email_verified_at FROM users WHERE id = $1', [userId]);

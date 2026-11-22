@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useSearch } from '@tanstack/react-router';
+import { useLocation, useNavigate, useSearch } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import { fetchSharedPicks, mapErrorToUserMessage, isApiClientError } from '@festie/shared/services';
@@ -13,6 +13,7 @@ import {
 import { COPY, PRIORITY_LABEL, signInTo } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
+import Button from '../components/ui/Button';
 import StageBadge from '../components/ui/StageBadge';
 import PriorityIcon from '../components/ui/PriorityIcon';
 import { useToast } from '../lib/toastContext';
@@ -103,22 +104,24 @@ function Message({ text, onRetry }: { text: string; onRetry?: () => void }) {
   const user = useAuthStore((s) => s.user);
   return (
     <>
-      <h1 className="sr-only">Friend picks</h1>
-      <div className="max-w-2xl mx-auto py-8 px-4 text-center flex flex-col items-center gap-3">
-        <p role="alert">{text}</p>
+      <div className="max-w-2xl mx-auto py-12 px-6 text-center flex flex-col items-center gap-4">
+        <h1 className="type-heading text-text-primary">Friend picks</h1>
+        <p role="alert" className="text-[length:var(--font-size-14)] text-text-secondary">
+          {text}
+        </p>
         <div className="flex gap-2 flex-wrap justify-center">
           {onRetry && (
-            <button type="button" className="btn-secondary min-h-11 px-4" onClick={onRetry}>
+            <Button type="button" variant="secondary" size="sm" onClick={onRetry}>
               Try again
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn-primary min-h-11 px-4" onClick={() => navigate({ to: '/' })}>
+          <Button type="button" variant="primary" size="sm" onClick={() => navigate({ to: '/' })}>
             Open Festie
-          </button>
+          </Button>
           {!user && (
-            <button type="button" className="btn-secondary min-h-11 px-4" onClick={() => navigate({ to: '/register' })}>
+            <Button type="button" variant="secondary" size="sm" onClick={() => navigate({ to: '/register' })}>
               Create account
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -138,6 +141,7 @@ function Banner({ text, children }: { text: string; children: React.ReactNode })
 function FriendPicksInner() {
   const search = useSearch({ strict: false }) as { from?: string };
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast, toastUndo, toastError } = useToast();
   const user = useAuthStore((s) => s.user);
   const currentFestivalId = useFestivalStore((s) => s.currentFestivalId);
@@ -249,28 +253,28 @@ function FriendPicksInner() {
 
       {!user ? (
         <Banner text={signInTo('compare these picks with yours')}>
-          <button type="button" className="btn-primary min-h-11 px-4" onClick={() => navigate({ to: '/login' })}>
+          <Button type="button" variant="primary" size="sm" onClick={() => navigate({ to: '/login', search: { next: location.href } })}>
             {COPY.auth.signIn}
-          </button>
-          <button type="button" className="btn-secondary min-h-11 px-4" onClick={() => navigate({ to: '/register' })}>
+          </Button>
+          <Button type="button" variant="secondary" size="sm" onClick={() => navigate({ to: '/register', search: { next: location.href } })}>
             {COPY.auth.createAccount}
-          </button>
+          </Button>
         </Banner>
       ) : otherFestival ? (
         <Banner text={`These picks are for ${festivalName}.`}>
-          <button
+          <Button
             type="button"
-            className="btn-primary min-h-11 px-4"
+            variant="primary" size="sm"
             onClick={() => void useFestivalStore.getState().selectFestival(payload.festivalId)}
           >
             {`Switch to ${festivalName}`}
-          </button>
+          </Button>
         </Banner>
       ) : notJoined ? (
         <Banner text={`You haven't joined ${festivalName} yet. Join it to compare and add picks.`}>
-          <button type="button" className="btn-primary min-h-11 px-4" onClick={() => navigate({ to: '/cards' })}>
+          <Button type="button" variant="primary" size="sm" onClick={() => navigate({ to: '/cards' })}>
             {`Open ${festivalName}`}
-          </button>
+          </Button>
         </Banner>
       ) : null}
 
@@ -307,14 +311,14 @@ function FriendPicksInner() {
               {plan.total === 0 ? (
                 <p className="text-sm">Tick the sets you want to add.</p>
               ) : (
-                <button
+                <Button
                   type="button"
-                  className="btn-primary min-h-11 px-4 self-start"
+                  variant="primary" size="sm" className="self-start"
                   disabled={busy}
                   onClick={handleAdd}
                 >
                   {`Add ${plan.total} to my plan`}
-                </button>
+                </Button>
               )}
             </>
           )}

@@ -10,7 +10,7 @@ interface CompareColumnProps {
 
 export default memo(function CompareColumn({ name, isMe, color }: CompareColumnProps) {
   return (
-    <th scope="col" className="py-2 px-2 text-center min-w-[72px]">
+    <th scope="col" className="sticky top-0 z-20 bg-bg-primary py-2 px-2 text-center min-w-[72px]">
       <div className="flex flex-col items-center gap-1">
         <Avatar name={name || 'User'} size="sm" />
         <span className="text-[length:var(--font-size-12)] normal-case font-medium text-text-secondary truncate max-w-[72px]">

@@ -81,7 +81,7 @@ export default function DayEditor({
           type="button"
           onClick={onToggleExpand}
           className="inline-flex items-center justify-center rounded bg-bg-card text-text-secondary hover:text-text-primary transition-colors min-h-11 min-w-11 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
-          aria-label={isExpanded ? 'Collapse day' : 'Expand day'}
+          aria-label={`${isExpanded ? 'Collapse' : 'Expand'} ${day.label || 'day'}`}
           aria-expanded={isExpanded}
           title={isExpanded ? 'Collapse' : 'Expand'}
         >
@@ -94,7 +94,7 @@ export default function DayEditor({
         <input
           type="text"
           placeholder="Day label"
-          aria-label="Day label"
+          aria-label={`Day label for ${day.label || 'this day'}`}
           value={day.label}
           onChange={(e) => onLabelChange(e.target.value)}
           className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
@@ -102,7 +102,7 @@ export default function DayEditor({
         <div className="basis-full md:basis-auto flex items-center gap-2">
           <input
             type="date"
-            aria-label="Day date"
+            aria-label={`Day date for ${day.label || 'this day'}`}
             value={day.date}
             onChange={(e) => onDateChange(e.target.value)}
             className="px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
@@ -112,6 +112,7 @@ export default function DayEditor({
           </span>
           <button
             onClick={onRemoveDay}
+            aria-label={`Remove ${day.label || 'day'}`}
             className="px-2 py-2 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
           >
             Remove
@@ -139,7 +140,7 @@ export default function DayEditor({
             <p className="text-xs text-text-muted italic">No sets match "{filterQuery.trim()}".</p>
           ) : (
             <div className="space-y-2">
-              <div className="hidden md:grid grid-cols-[auto_1fr_140px_90px_90px_auto] gap-2 text-xs text-text-muted px-1">
+              <div className="hidden md:grid grid-cols-[auto_1fr_140px_7.5rem_7.5rem_auto] gap-2 text-xs text-text-muted px-1">
                 <input
                   type="checkbox"
                   aria-label="Select all shown"

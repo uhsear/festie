@@ -538,7 +538,7 @@ describe('GridView', () => {
     it('opens Picks at the clash cards', () => {
       setFilters({ ...timedDay, allDaySets: [alpha, beta], timedSets: [alpha, beta] });
       render(<GridView />);
-      fireEvent.click(screen.getByRole('button', { name: 'You have 1 schedule clash. Open it in Picks.' }));
+      fireEvent.click(screen.getByRole('button', { name: '1 clash. Open it in Picks.' }));
       expect(mockNavigate).toHaveBeenCalledWith({ to: '/picks', hash: 'clashes' });
     });
   });

@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { CalendarPlus } from 'lucide-react';
-import { useFestivalStore } from '@festie/shared/stores';
+import { selectMyPicks, useFestivalStore } from '@festie/shared/stores';
 import { fetchCalendarLinks } from '@festie/shared/services';
 import { CALENDAR_LINK_COPY } from '@festie/shared/constants';
 import { buildPicksIcsExport, describeIcsExport } from '@festie/shared/utils';
@@ -28,6 +28,7 @@ export default function CalendarDialog() {
   const { toast } = useToast();
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const currentProfile = useFestivalStore((s) => s.currentProfile);
+  const myPicks = useFestivalStore(selectMyPicks);
   const sets = useFestivalStore((s) => s.sets);
   const stages = useFestivalStore((s) => s.stages);
 
@@ -54,7 +55,7 @@ export default function CalendarDialog() {
   };
 
   const download = () => {
-    if (!currentFestival || !currentProfile) return;
+    if (!currentFestival || !myPicks) return;
     const result = buildPicksIcsExport({
       festival: {
         id: currentFestival.id,
@@ -64,9 +65,9 @@ export default function CalendarDialog() {
       },
       sets,
       stages,
-      picks: currentProfile.picks,
-      notes: currentProfile.notes,
-      reminders: currentProfile.reminders,
+      picks: myPicks,
+      notes: currentProfile?.notes,
+      reminders: currentProfile?.reminders,
     });
     const safeName = (currentFestival.name || 'festival').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
     saveBlob(new Blob([result.ics], { type: 'text/calendar;charset=utf-8' }), `${safeName}_picks.ics`);
@@ -74,13 +75,22 @@ export default function CalendarDialog() {
     setOpen(false);
   };
 
+  // Subscribe needs an account (the feed is keyed to a profile); the file export works from the picks on this device.
+  if (!currentProfile) {
+    return (
+      <Button variant="secondary" size="sm" type="button" aria-label="Download picks as a calendar file" onClick={download}>
+        <CalendarPlus className="w-4 h-4" aria-hidden="true" />
+        Download .ics
+      </Button>
+    );
+  }
+
   return (
     <>
       <Button
         variant="secondary"
         size="sm"
         type="button"
-        aria-label="Add picks to calendar"
         onClick={() => setOpen(true)}
       >
         <CalendarPlus className="w-4 h-4" aria-hidden="true" />

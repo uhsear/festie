@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { displayNameError } from '@festie/shared/utils';
@@ -133,7 +134,7 @@ export default function AccountDisplayNameSection() {
                 setValue(v);
                 setError(null);
               }}
-              placeholder="How your name appears to your crew"
+              placeholder={ACCOUNT_COPY.displayNamePlaceholder}
               placeholderTextColor={t.colors.text.placeholder}
               autoCapitalize="words"
               autoCorrect={false}

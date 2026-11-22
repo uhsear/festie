@@ -315,7 +315,7 @@ describe('routes/email-auth', () => {
     assert.match(res.text, /invalid/i);
   });
 
-  test('GET /verify-email — returns error for expired/used token', async () => {
+  test('POST /verify-email — returns error for expired/used token', async () => {
     const deps = buildEmailAuthDeps();
     // consumeVerificationToken returns null by default (expired/used)
     createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
@@ -323,12 +323,46 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'a'.repeat(64);
-    const res = await request(app).post(`/verify-email?token=${validHex}`).expect(400);
+    const res = await request(app).post('/verify-email').send({ token: validHex }).expect(400);
 
-    assert.match(res.text, /expired|already been used/i);
+    assert.match(res.body.error.message, /expired|already been used/i);
   });
 
-  test('GET /verify-email — confirming the address already on file does not sign the user out', async () => {
+  test('GET /verify-email — a browser GET with a well-formed token redirects and consumes nothing', async () => {
+    const deps = buildEmailAuthDeps();
+    deps.stores.emailTokens.consumeVerificationToken = mock.fn(async () => ({
+      id: 'tok-1',
+      user_id: 'user-1',
+      email: 'alice@test.com',
+    }));
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+    const app = mountApp(createEmailAuthRoutes(deps));
+
+    const validHex = 'd'.repeat(64);
+    const res = await request(app).get(`/verify-email?token=${validHex}`).set('Accept', 'text/html').expect(302);
+
+    assert.equal(res.headers.location, `/verify-email?token=${validHex}`);
+    assert.equal(deps.stores.emailTokens.consumeVerificationToken.mock.calls.length, 0, 'a link prefetch must not burn the token');
+  });
+
+  test('POST /verify-email — consumes the token and returns JSON', async () => {
+    const deps = buildEmailAuthDeps();
+    deps.stores.emailTokens.consumeVerificationToken = mock.fn(async () => ({
+      id: 'tok-1',
+      user_id: 'user-1',
+      email: 'alice@test.com',
+    }));
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+    const app = mountApp(createEmailAuthRoutes(deps));
+
+    const res = await request(app).post('/verify-email').send({ token: 'e'.repeat(64) }).expect(200);
+
+    assert.equal(res.body.data.verified, true);
+    assert.equal(res.body.data.sessionsRevoked, false);
+    assert.equal(deps.stores.emailTokens.consumeVerificationToken.mock.calls.length, 1);
+  });
+
+  test('POST /verify-email — confirming the address already on file does not sign the user out', async () => {
     const deps = buildEmailAuthDeps();
     // getUserById reports alice@test.com, so this token re-confirms the address
     // the account already holds: a signup/resend confirmation, not a move.
@@ -342,9 +376,9 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'b'.repeat(64);
-    const res = await request(app).post(`/verify-email?token=${validHex}`).expect(200);
+    const res = await request(app).post('/verify-email').send({ token: validHex }).expect(200);
 
-    assert.match(res.text, /verified/i);
+    assert.equal(res.body.data.verified, true);
     assert.ok(deps.invalidateUserCache.mock.calls.length >= 1);
     assert.equal(deps.invalidateUserSessions.mock.calls.length, 0, 'nothing moved, so nothing to revoke');
   });
@@ -441,7 +475,7 @@ describe('routes/email-auth', () => {
     assert.match(res.text, /invalid/i);
   });
 
-  test('GET /verify-email — returns 500 on DB error', async () => {
+  test('POST /verify-email — returns 500 on DB error', async () => {
     const deps = buildEmailAuthDeps();
     deps.stores.emailTokens.consumeVerificationToken = mock.fn(async () => {
       throw new Error('DB fail');
@@ -451,9 +485,9 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'c'.repeat(64);
-    const res = await request(app).post(`/verify-email?token=${validHex}`).expect(500);
+    const res = await request(app).post('/verify-email').send({ token: validHex }).expect(500);
 
-    assert.match(res.text, /wrong/i);
+    assert.match(res.body.error.message, /wrong/i);
   });
 
   test('POST /update-email — the route is not mounted at all', async () => {

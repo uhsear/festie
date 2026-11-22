@@ -40,11 +40,17 @@ type UseFestivalStore = {
   setState: (partial: Partial<FestivalStore>) => void;
 };
 
+// Every subscriber's getSnapshot runs on each store change, so one merged object is shared until
+// either store replaces its state; spreading both stores per subscriber made a pick tap slow on a long lineup.
+let mergedCache: { data: unknown; ui: unknown; merged: FestivalStore } | null = null;
+
 function getMergedState(): FestivalStore {
-  return {
-    ...useFestivalDataStore.getState(),
-    ...useFestivalUIStore.getState(),
-  } as FestivalStore;
+  const data = useFestivalDataStore.getState();
+  const ui = useFestivalUIStore.getState();
+  if (mergedCache && mergedCache.data === data && mergedCache.ui === ui) return mergedCache.merged;
+  const merged = { ...data, ...ui } as FestivalStore;
+  mergedCache = { data, ui, merged };
+  return merged;
 }
 
 // Subscribe to both underlying stores. The listener fires when either

@@ -50,7 +50,9 @@ export function mapErrorToUserMessage(err: unknown, fallback = 'Something went w
     if (err.status === 429) {
       const ms = parseRetryAfterMs(err.retryAfter);
       const secs = ms != null ? Math.ceil(ms / 1000) : null;
-      if (!secs) return 'Too many tries. Wait a moment and try again.';
+      // A business cap (daily limit) flags itself with `cap` and carries its own reason; waiting would not help.
+      // Any other 429 without Retry-After keeps the generic words: its server text can name an account or an address.
+      if (!secs) return err.details?.cap === true && err.message ? err.message : 'Too many tries. Wait a moment and try again.';
       return `Too many tries. Wait ${secs} ${secs === 1 ? 'second' : 'seconds'} and try again.`;
     }
     if (err.status === 423) {

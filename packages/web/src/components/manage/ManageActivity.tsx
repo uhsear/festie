@@ -2,16 +2,17 @@ import React from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { fetchManageActivity, type ManageActivityEntry } from '@festie/shared/services/organizer';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
+import { auditActionLabel } from '@festie/shared/utils';
 import EmptyState from '../ui/EmptyState';
 
 interface Props {
   organizationId: string;
 }
 
-/** "festival.publish_requested" becomes "Festival publish requested". */
-export const describeAction = (action: string): string => {
-  const words = action.replace(/[._]+/g, ' ').trim();
-  return words.charAt(0).toUpperCase() + words.slice(1);
+/** The festival or organization an entry names; a Festie row carries no details. */
+const targetName = (entry: ManageActivityEntry): string => {
+  const name = entry.details?.name;
+  return typeof name === 'string' ? name : '';
 };
 
 const when = (iso: string) => {
@@ -45,7 +46,7 @@ export default function ManageActivity({ organizationId }: Props) {
       <ul className="list-none space-y-2 p-0">
         {entries.map((entry) => (
           <li key={entry.id} className="rounded-lg border border-glass-border p-3">
-            <p className="text-sm text-text-primary">{describeAction(entry.action)}</p>
+            <p className="text-sm text-text-primary">{targetName(entry) ? `${auditActionLabel(entry.action)}: ${targetName(entry)}` : auditActionLabel(entry.action)}</p>
             <p className="text-xs text-text-muted">
               {entry.actor} · {when(entry.createdAt)}
             </p>

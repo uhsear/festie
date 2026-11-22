@@ -786,7 +786,7 @@ export default function CrewMap({
   const wayBarSaysLocation = showPursueOverlay && !selfCoord && awaitingFix;
 
   return (
-    <div className={fill ? 'flex min-h-0 flex-1 flex-col gap-2' : 'space-y-2'}>
+    <div className={fill ? 'flex flex-1 flex-col gap-2' : 'space-y-2'}>
       {basemapMissing && (
         <p role="status" className="text-xs text-text-secondary">
           {OFFLINE_MAP_COPY.basemapNotSaved}{' '}
