@@ -163,7 +163,7 @@ jobs:
         with:
           model: 'iPhone 16 Pro'
           os: 'iOS'
-          os_version: '>=18.5 <19'
+          os_version: '>=18.5'
           wait_for_boot: true
           boot_timeout_seconds: 180
           boot_retries: 3
