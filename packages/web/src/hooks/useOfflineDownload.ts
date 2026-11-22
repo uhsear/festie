@@ -93,7 +93,7 @@ export function useOfflineDownload(festivalId: string) {
   const mapMessage =
     mapUrl && quotaFailure && mapSection.status === 'error'
       ? quotaFailure.bytes != null
-        ? OFFLINE_MAP_COPY.notEnoughSpace(quotaFailure.bytes, quotaFailure.freeBytes ?? 0)
+        ? OFFLINE_MAP_COPY.notEnoughSpace(quotaFailure.bytes, quotaFailure.freeBytes)
         : OFFLINE_MAP_COPY.notEnoughSpaceUnknownSize
       : null;
 

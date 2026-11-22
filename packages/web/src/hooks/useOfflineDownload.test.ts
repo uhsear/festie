@@ -91,6 +91,17 @@ describe('useOfflineDownload', () => {
     expect(result.current.summary.overall).toBe('ready');
   });
 
+  it('does not claim 0 MB free when the browser gave no free-space estimate', async () => {
+    h.readiness.byFestival = { f1: allReady };
+    h.cache.ensure = { ok: false, reason: 'quota', bytes: 6_000_000 };
+    const { result } = renderHook(() => useOfflineDownload('f1'));
+    await act(async () => {
+      await result.current.download();
+    });
+    expect(result.current.mapMessage).toContain('needs 6 MB)');
+    expect(result.current.mapMessage).not.toContain('0 MB free');
+  });
+
   it('shows the not-enough-space detail after a quota failure while other rows finish', async () => {
     h.readiness.byFestival = { f1: allReady };
     h.cache.ensure = { ok: false, reason: 'quota', bytes: 4_200_000, freeBytes: 1_300_000 };

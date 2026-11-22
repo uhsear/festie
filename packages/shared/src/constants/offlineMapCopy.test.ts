@@ -2,6 +2,13 @@ import { describe, it, expect } from 'vitest';
 import { OFFLINE_MAP_COPY } from './offlineMapCopy';
 
 describe('offlineMapCopy', () => {
+  it('notEnoughSpace leaves out the free size when it is unknown', () => {
+    const msg = OFFLINE_MAP_COPY.notEnoughSpace(6_000_000, null);
+    expect(msg).toContain('needs 6 MB)');
+    expect(msg).not.toContain('free)');
+    expect(msg).not.toContain('0 MB free');
+  });
+
   it('notEnoughSpace states what is needed and what is free', () => {
     expect(OFFLINE_MAP_COPY.notEnoughSpace(190_000_000, 120_400_000)).toBe(
       'Not enough free space to save the map (needs 190 MB, 120 MB free). Free up some space and try again.',
