@@ -120,7 +120,7 @@ function ManagePageInner() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
+    <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
       <h1 className="type-heading text-text-primary">Manage your festivals</h1>
       {me.data && !me.data.emailConfirmed && (
         <div role="status" className="flex flex-col gap-2 rounded-lg border border-accent-amber p-3 text-sm text-text-primary sm:flex-row sm:items-center sm:justify-between">
@@ -136,6 +136,6 @@ function ManagePageInner() {
         </div>
       )}
       {body}
-    </main>
+    </div>
   );
 }

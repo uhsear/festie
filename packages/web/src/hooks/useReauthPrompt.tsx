@@ -1,12 +1,14 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { REAUTH_COPY, type ReauthBody } from '@festie/shared/services/admin';
 import { PROVIDER_COPY } from '@festie/shared/constants';
 import type { ProviderName } from '@festie/shared/types';
 import PromptDialog from '../components/ui/PromptDialog';
 import Dialog from '../components/ui/Dialog';
 import ProviderButtons from '../components/auth/ProviderButtons';
+import { trackReauthPrompt } from './reauthPromptOpen';
 
 type Answer = string | ReauthBody | null;
+
 
 interface ReauthPromptOptions {
   /** False for a provider-only account: the dialog asks for a Google or Apple sign-in instead. */
@@ -24,6 +26,12 @@ export function useReauthPrompt({ hasPassword = true, linked }: ReauthPromptOpti
   const [open, setOpen] = useState(false);
   const resolver = useRef<((value: Answer) => void) | null>(null);
   const [error, setError] = useState<string | undefined>();
+
+  useEffect(() => {
+    if (!open) return;
+    trackReauthPrompt(1);
+    return () => trackReauthPrompt(-1);
+  }, [open]);
 
   const settle = useCallback((value: Answer) => {
     resolver.current?.(value);

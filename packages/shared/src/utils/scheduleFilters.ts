@@ -285,6 +285,11 @@ export function searchHiddenByFilters(
   return query.trim() !== '' && daySets.some((s) => setMatchesSearch(s, query, stages as Stage[]));
 }
 
+/** True when any set on the day has a start and end time, whatever the filters hide. */
+export function dayHasTimedSets(daySets: readonly FestivalSet[]): boolean {
+  return daySets.some((s) => !!s.startTime && !!s.endTime);
+}
+
 export function scheduleResultsSummary(o: {
   count: number;
   onlyMine: boolean;

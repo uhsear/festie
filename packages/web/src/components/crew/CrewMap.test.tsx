@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, fireEvent, render, screen, renderHook, waitFor } from '@testing-library/react';
 import type { Festival, PeerLocation, SosEntry } from '@festie/shared/types';
 import { useSosMarkers } from './crew-map/useSosMarkers';
+import { useAuthStore } from '@festie/shared/stores/authStore';
 import { usePeerMarkers } from './crew-map/usePeerMarkers';
 import { useStageMarkers } from './crew-map/useStageMarkers';
 import { useAmenityMarkers } from './crew-map/useAmenityMarkers';
@@ -368,8 +369,10 @@ describe('useSosMarkers keyboard accessibility', () => {
       return this;
     }
   }
+  let popupDom: HTMLElement | null = null;
   class FakePopup {
-    setDOMContent() {
+    setDOMContent(el: HTMLElement) {
+      popupDom = el;
       return this;
     }
   }
@@ -408,6 +411,18 @@ describe('useSosMarkers keyboard accessibility', () => {
       label: 'Dana — SOS',
       coord: { latitude: 41.88, longitude: -87.62 },
     });
+  });
+
+  it("offers directions to another member's SOS but not to your own", () => {
+    setup();
+    expect(popupDom?.querySelector('a.festie-sos-link')).not.toBeNull();
+    useAuthStore.setState({ user: { id: 'u1', username: 'Dana' } as never });
+    try {
+      setup();
+      expect(popupDom?.querySelector('a.festie-sos-link')).toBeNull();
+    } finally {
+      useAuthStore.setState({ user: null });
+    }
   });
 });
 

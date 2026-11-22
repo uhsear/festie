@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, within, act } from '@testing-library/react';
 import { createTestQueryClient, renderWithQueryClient } from '../test-utils';
+import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 
 // CrewView reads tab badge counts via react-query, so renders need a client.
 const render = (ui: React.ReactElement) => renderWithQueryClient(ui);
@@ -238,6 +239,7 @@ describe('CrewView', () => {
     h.confirms = {};
     h.handOver = null;
     h.members = null;
+    useLiveLocationStore.setState({ activeSosList: [] });
     setStoreState();
   });
 
@@ -375,6 +377,24 @@ describe('CrewView', () => {
     expect(screen.getByTestId('crew-tab-bar')).toHaveAttribute('data-active', 'find');
     expect(screen.getByTestId('MeetingPointsTab')).toBeInTheDocument();
     expect(screen.queryByText('Crew plan')).not.toBeInTheDocument();
+  });
+
+  it('shows the header SOS button off the Find tab only, and hides it once your own SOS is up', () => {
+    crewWithActive();
+    const { unmount } = render(<CrewView />);
+    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
+    unmount();
+
+    h.search = { tab: 'money' };
+    const second = render(<CrewView />);
+    expect(screen.getByTestId('sos-raise')).toBeInTheDocument();
+    second.unmount();
+
+    useLiveLocationStore.setState({
+      activeSosList: [{ crewId: 'c1', userId: 'u1', username: 'testuser', raisedAt: new Date().toISOString() }],
+    });
+    render(<CrewView />);
+    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
   });
 
   it('marks open polls seen when the Plan tab shows loaded polls', () => {

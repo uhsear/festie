@@ -7,7 +7,7 @@ export type ConceptIconKey =
 /** One name per concept, shared by web and mobile. See docs/design/copy-voice.md. */
 export const COPY = {
   nowNext: { name: 'Now & Next', open: 'Open Now & Next', icon: 'nowNext' },
-  jumpToNow: { label: 'Jump to now', a11y: 'Scroll to the current time', icon: 'jumpToNow' },
+  jumpToNow: { label: 'Jump to now', a11y: 'Jump to now, scroll to the current time', icon: 'jumpToNow' },
   picks: {
     tab: 'Picks', title: 'My picks', filterA11y: 'Show only my picks',
     share: 'Share picks', shareByQr: 'Share by QR', shareOffline: 'Share offline',
@@ -64,6 +64,7 @@ export const COPY = {
   grid: {
     zoomIn: 'Zoom in', zoomInHint: 'Show less of the day, larger',
     zoomOut: 'Zoom out', zoomOutHint: 'Show more of the day',
+    shareImageA11y: 'Share grid as image',
     holdToPick: 'Hold a set to pick', swipeAndHold: 'Swipe for stages · Hold a set to pick',
     holdHint: 'Hold to change your pick', clearPick: 'Clear pick',
     tbaTitle: "Set times aren't out yet",
@@ -197,5 +198,9 @@ export const DISCOVER_COPY = {
   },
 } as const;
 
-/** First letter upper-case, the rest as stored. */
-export const genreChipLabel = (genre: string): string => genre.charAt(0).toLocaleUpperCase() + genre.slice(1);
+// Genre words that are acronyms or have a fixed casing; every other word gets a capital first letter.
+const GENRE_WORDS: Record<string, string> = { edm: 'EDM', dnb: 'DnB', 'r&b': 'R&B', uk: 'UK' };
+
+/** One casing for a genre on every surface: each word capitalised, known acronyms kept as written. */
+export const genreChipLabel = (genre: string): string =>
+  genre.replace(/[^\s-]+/g, (word) => GENRE_WORDS[word.toLowerCase()] ?? word.charAt(0).toLocaleUpperCase() + word.slice(1));

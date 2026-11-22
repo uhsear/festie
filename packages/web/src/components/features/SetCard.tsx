@@ -250,7 +250,7 @@ function SetCard({
       <span
         className={cn(
           'card-stage',
-          'relative z-[2] inline-block px-2 py-1 rounded-xl',
+          'relative z-[2] inline-block max-w-full truncate align-top px-2 py-1 rounded-xl',
           'type-micro font-bold uppercase tracking-[0.08em] mb-2.5',
           dimmed
             ? 'bg-[var(--color-overlay-3)] text-text-secondary'

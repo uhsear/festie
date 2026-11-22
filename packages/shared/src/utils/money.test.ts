@@ -10,6 +10,8 @@ import {
   spendingExpenses,
   ledgerRows,
   describePayment,
+  expenseAmountError,
+  MAX_EXPENSE_AMOUNT,
 } from './money';
 
 describe('settlement helpers', () => {
@@ -130,5 +132,21 @@ describe('centsToInputText / ZERO_EPSILON', () => {
   it('is the settled threshold formatBalance uses', () => {
     expect(formatBalance(ZERO_EPSILON)).toBe('$0.00');
     expect(formatBalance(ZERO_EPSILON + 0.001)).toBe('+$0.01');
+  });
+});
+
+describe('expenseAmountError', () => {
+  it('stays quiet for an empty or usable amount', () => {
+    expect(expenseAmountError('')).toBeUndefined();
+    expect(expenseAmountError('12.50')).toBeUndefined();
+    expect(expenseAmountError(MAX_EXPENSE_AMOUNT)).toBeUndefined();
+  });
+  it('explains an amount below one cent', () => {
+    expect(expenseAmountError('0')).toBe('Enter an amount of at least $0.01');
+    expect(expenseAmountError('.')).toBe('Enter an amount of at least $0.01');
+    expect(expenseAmountError('-3')).toBe('Enter an amount of at least $0.01');
+  });
+  it('explains an amount above the server bound', () => {
+    expect(expenseAmountError('999999999')).toBe("Amount can't be more than $99,999,999.99");
   });
 });

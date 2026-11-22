@@ -69,6 +69,7 @@ export default function FestivalModeScreen() {
   const nowMs = useNow(60_000);
 
   const timeZone = resolveFestivalTimeZone(currentFestival);
+  const timeLabel = festivalTimeLabel(timeZone, nowMs);
   const lineupMode = !user;
   const selection = useMemo(
     () => selectNowNext({ sets, days, picks: lineupMode ? undefined : (picks ?? {}), nowMs, timeZone }),
@@ -161,7 +162,7 @@ export default function FestivalModeScreen() {
                 <Text style={styles.clock} accessibilityLabel={`Festival time ${fmtZonedClock(nowMs, timeZone)}`}>
                   {fmtZonedClock(nowMs, timeZone)}
                 </Text>
-                {festivalTimeLabel(timeZone, nowMs) ? <Text style={styles.clockCaption}>Festival time</Text> : null}
+                {timeLabel ? <Text style={styles.clockCaption}>{timeLabel}</Text> : null}
               </View>
             </View>
           </View>

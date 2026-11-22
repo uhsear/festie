@@ -194,26 +194,35 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         {linked} of {artists.length} {artists.length === 1 ? 'artist has' : 'artists have'} a link.
       </p>
 
-      <div className="flex flex-wrap items-center gap-2">
-        <Button size="sm" variant={scope === 'festival' ? 'primary' : 'secondary'} aria-pressed={scope === 'festival'} onClick={() => setScope('festival')}>
-          On this festival
-        </Button>
-        <Button size="sm" variant={scope === 'all' ? 'primary' : 'secondary'} aria-pressed={scope === 'all'} onClick={() => setScope('all')}>
-          All artists
-        </Button>
-        <Button size="sm" variant={scope === 'duplicates' ? 'primary' : 'secondary'} aria-pressed={scope === 'duplicates'} onClick={() => setScope('duplicates')}>
-          Possible duplicates
-        </Button>
-        <Button size="sm" variant={noLinksOnly ? 'primary' : 'secondary'} aria-pressed={noLinksOnly} onClick={() => setNoLinksOnly((v) => !v)}>
-          No links
-        </Button>
-        <Button size="sm" disabled={findOpen} onClick={() => setFindOpen(true)}>
+      <div role="group" aria-label="Show" className="flex flex-wrap items-center gap-2">
+        {([
+          { label: 'On this festival', active: scope === 'festival', toggle: () => setScope('festival') },
+          { label: 'All artists', active: scope === 'all', toggle: () => setScope('all') },
+          { label: 'Possible duplicates', active: scope === 'duplicates', toggle: () => setScope('duplicates') },
+          { label: 'No links', active: noLinksOnly, toggle: () => setNoLinksOnly((v) => !v) },
+        ] as const).map(({ label, active, toggle }) => (
+          <button
+            key={label}
+            type="button"
+            aria-pressed={active}
+            onClick={toggle}
+            className={`px-4 py-2 min-h-11 rounded-full text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua ${
+              active ? 'bg-accent-aqua/20 text-accent-aqua' : 'bg-bg-primary text-text-muted hover:bg-bg-card/80'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-glass-border pt-3">
+        <Button size="sm" variant="secondary" disabled={findOpen} onClick={() => setFindOpen(true)}>
           Find Spotify links
         </Button>
-        <Button size="sm" disabled={filling} onClick={() => void fillPhotos()}>
+        <Button size="sm" variant="secondary" disabled={filling} onClick={() => void fillPhotos()}>
           {filling ? 'Filling…' : 'Fill photos from Spotify'}
         </Button>
-        <Button size="sm" disabled={filling} onClick={() => void refreshStale()}>
+        <Button size="sm" variant="secondary" disabled={filling} onClick={() => void refreshStale()}>
           Refresh old Spotify data
         </Button>
       </div>
@@ -242,7 +251,12 @@ export default function FestivalArtists({ festivalId, festivalName, onClose }: F
         </div>
       )}
       {reloading && !loadError && <p className="text-sm text-text-muted">Loading artists…</p>}
-      {!loadError && !reloading && shown.length === 0 && <p className="text-sm text-text-muted">No artists to show.</p>}
+      {!loadError && !reloading && shown.length === 0 && (
+        <p className="text-sm text-text-muted">
+          No artists to show.
+          {scope === 'festival' && artists.length === 0 && ' If this festival already has sets, run Artist backfill from the Admin menu to create their artist records.'}
+        </p>
+      )}
       <ul className="space-y-2">
         {shown.map((artist) => {
           const open = openId === artist.id;

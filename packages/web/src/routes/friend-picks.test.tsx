@@ -165,4 +165,16 @@ describe('FriendPicksView', () => {
     expect(screen.getByText("This link can't be read. Ask your friend to send it again.")).toBeTruthy();
     expect(fetchSharedPicks).not.toHaveBeenCalled();
   });
+
+  it('gives a dead link a way out, with Create account only for guests', () => {
+    search.from = '../x';
+    const { unmount } = renderView();
+    expect(screen.getByRole('button', { name: 'Open Festie' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Create account' })).toBeNull();
+    unmount();
+    authUser.value = null;
+    renderView();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeTruthy();
+    authUser.value = { id: 'u1' };
+  });
 });

@@ -124,7 +124,7 @@ describe('ExpensesTab', () => {
     mockApi([]);
     const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 'e9' } as never);
     setup();
-    await userEvent.click(await screen.findByRole('button', { name: 'Add Expense' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add expense' }));
     await userEvent.type(screen.getByLabelText('Description'), 'Gas');
     await userEvent.type(screen.getByLabelText('Amount'), '60');
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));

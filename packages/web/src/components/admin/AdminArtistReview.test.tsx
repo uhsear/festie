@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { createTestQueryClient, renderWithQueryClient } from '../../test-utils';
+import { ApiClientError } from '@festie/shared/services/api';
 import AdminArtistReview from './AdminArtistReview';
 
 const toast = vi.fn();
@@ -153,6 +154,17 @@ describe('AdminArtistReview', () => {
     await waitFor(() => expect(svc.importArtistReview).toHaveBeenCalledWith({ generatedAt: '2026-11-21', items: [{ kind: 'link' }] }));
     expect(toast).toHaveBeenCalledWith('Imported 2 new items, updated 0 pending, skipped 1 already in the queue.', 'success');
     await waitFor(() => expect(svc.fetchArtistReview.mock.calls.length).toBeGreaterThan(1));
+  });
+
+  it('names the item and field the server refused', async () => {
+    svc.importArtistReview.mockRejectedValueOnce(
+      new ApiClientError('items.0.kind: Invalid option: expected one of "link"|"merge"|"rename"', 400, 'VALIDATION_ERROR'),
+    );
+    render();
+    await screen.findByText('Galactic Effect');
+    fireEvent.change(screen.getByRole('textbox', { name: 'Batch JSON' }), { target: { value: '{"items":[{"name":"Foo","kind":"x"}]}' } });
+    await userEvent.click(screen.getByRole('button', { name: 'Import' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Item 1, field "kind": Invalid option');
   });
 
   it('refuses text that is not a batch before it reaches the server', async () => {

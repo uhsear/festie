@@ -123,6 +123,20 @@ describe('LiveLocationControls — share toggle', () => {
     expect(localStorage.getItem(SHARE_EXPLAINER_SEEN_KEY)).toBe('1');
   });
 
+  it('lists durations in ascending order and marks the default without moving it', async () => {
+    const user = userEvent.setup();
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+    await user.click(screen.getByRole('switch'));
+
+    const chooser = screen.getByTestId('live-share-chooser');
+    const labels = within(chooser)
+      .getAllByRole('button')
+      .map((b) => b.textContent ?? '')
+      .filter((t) => /hour/.test(t));
+    expect(labels.slice(0, 3).map((t) => t.replace('Recommended', ''))).toEqual(['1 hour', '2 hours', '4 hours']);
+    expect(within(chooser).getByText('Recommended')).toBeInTheDocument();
+  });
+
   it('switch on opens the chooser with the duration buttons and a cancel', async () => {
     const user = userEvent.setup();
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
@@ -131,7 +145,7 @@ describe('LiveLocationControls — share toggle', () => {
     const chooser = screen.getByTestId('live-share-chooser');
     expect(within(chooser).getByText(LIVE_SHARE_COPY.chooserTitle)).toBeInTheDocument();
     for (const label of ['1 hour', '2 hours', '4 hours']) {
-      expect(within(chooser).getByRole('button', { name: label })).toBeInTheDocument();
+      expect(within(chooser).getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
     expect(within(chooser).getByRole('checkbox', { name: /show my battery level/i })).not.toBeChecked();
     await user.click(within(chooser).getByRole('button', { name: LIVE_SHARE_COPY.cancel }));
@@ -160,7 +174,7 @@ describe('LiveLocationControls — share toggle', () => {
     render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
     await user.click(screen.getByRole('switch'));
     await user.click(screen.getByRole('checkbox', { name: /show my battery level/i }));
-    await user.click(screen.getByRole('button', { name: '2 hours' }));
+    await user.click(screen.getByRole('button', { name: /^2 hours/ }));
     expect(useLiveLocationStore.getState().shareIntent?.shareBattery).toBe(true);
   });
 
@@ -358,6 +372,16 @@ describe('LiveLocationControls — active SOS banner', () => {
     expect(
       within(screen.getByTestId('sos-banner')).getByRole('button', { name: /get directions/i }),
     ).toBeInTheDocument();
+  });
+
+  it('offers no directions to your own SOS and hides the raise helper with the button', () => {
+    setSos([
+      { ...baseSos, userId: ME, position: { lat: 41.88, lng: -87.62, capturedAt: new Date().toISOString() } },
+    ]);
+    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
+
+    expect(screen.queryByRole('button', { name: /get directions/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/for emergencies — alerts your whole crew/i)).not.toBeInTheDocument();
   });
 
   it('ignores an SOS targeting a different crew', () => {

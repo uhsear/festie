@@ -2,6 +2,7 @@ import Papa from 'papaparse';
 import type { Artist, LineupEntry } from '../types/domain';
 import { coverLineup } from './lineupCover';
 import { artistNamesOf, joinArtistNames } from './setArtists';
+import { pluralize } from './format';
 
 export type LineupImportRowStatus = 'new' | 'changed' | 'unchanged' | 'error';
 
@@ -360,7 +361,7 @@ export const defaultUpdateExisting = (mapping: LineupColumnMapping): boolean => 
 /** The banner for a preview whose changed rows would not be applied, or null. */
 export function updateOffBanner(counts: Pick<LineupImportPlanCounts, 'changed'>, updateExisting: boolean): string | null {
   if (updateExisting || counts.changed === 0) return null;
-  return `${plural(counts.changed, 'row')} change${counts.changed === 1 ? 's' : ''} existing sets or announced acts. Turn on Update to apply them.`;
+  return `${pluralize(counts.changed, 'row')} change${counts.changed === 1 ? 's' : ''} existing sets or announced acts. Turn on Update to apply them.`;
 }
 
 /** A pasted list: one act per line, blank lines and # lines skipped. A line number is the row number. */
@@ -457,26 +458,24 @@ export function toImportRows(
   return out;
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
 export function planSummary(
   counts: Pick<LineupImportPlanCounts, 'new' | 'changed' | 'unchanged' | 'error' | 'skipped' | 'newStages' | 'newDays'> & { announced?: number },
   updateExisting: boolean,
 ): string {
   const parts: string[] = [];
   const announced = counts.announced ?? 0;
-  if (counts.new - announced > 0) parts.push(`Add ${plural(counts.new - announced, 'set')}.`);
-  if (announced) parts.push(`Add ${plural(announced, 'announced name')}.`);
+  if (counts.new - announced > 0) parts.push(`Add ${pluralize(counts.new - announced, 'set')}.`);
+  if (announced) parts.push(`Add ${pluralize(announced, 'announced name')}.`);
   if (updateExisting) {
     if (counts.changed) parts.push(`Update ${counts.changed}.`);
   } else {
     const matching = counts.changed + counts.unchanged;
-    if (matching) parts.push(`Leave ${plural(matching, 'matching set')} as they are.`);
+    if (matching) parts.push(`Leave ${pluralize(matching, 'matching set')} as they are.`);
   }
-  if (counts.newStages) parts.push(`Create ${plural(counts.newStages, 'stage')}.`);
-  if (counts.newDays) parts.push(`Create ${plural(counts.newDays, 'day')}.`);
-  if (counts.skipped) parts.push(`Skip ${plural(counts.skipped, 'row')} that name${counts.skipped === 1 ? 's' : ''} another day.`);
-  if (counts.error) parts.push(`${plural(counts.error, 'row')} ${counts.error === 1 ? 'has' : 'have'} errors.`);
+  if (counts.newStages) parts.push(`Create ${pluralize(counts.newStages, 'stage')}.`);
+  if (counts.newDays) parts.push(`Create ${pluralize(counts.newDays, 'day')}.`);
+  if (counts.skipped) parts.push(`Skip ${pluralize(counts.skipped, 'row')} that name${counts.skipped === 1 ? 's' : ''} another day.`);
+  if (counts.error) parts.push(`${pluralize(counts.error, 'row')} ${counts.error === 1 ? 'has' : 'have'} errors.`);
   return parts.length ? parts.join(' ') : 'Nothing to change.';
 }
 

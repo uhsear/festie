@@ -66,6 +66,22 @@ export function toCents(value: string | number): number {
   return Number.isFinite(cents) ? cents : 0;
 }
 
+/** Largest expense amount the server accepts (lib/schemas/expenses.ts: NUMERIC(10,2)). */
+export const MAX_EXPENSE_AMOUNT = 99_999_999.99;
+
+/**
+ * Inline message for an expense amount the server would reject, or undefined when
+ * the amount is empty or usable. Both apps show it so neither surfaces raw zod text.
+ */
+export function expenseAmountError(raw: string | number, currency = 'USD'): string | undefined {
+  if (String(raw).trim() === '') return undefined;
+  if (toCents(raw) < 1) return `Enter an amount of at least ${formatCents(1, currency)}`;
+  if (Number(raw) > MAX_EXPENSE_AMOUNT) {
+    return `Amount can't be more than ${formatCents(Math.round(MAX_EXPENSE_AMOUNT * 100), currency)}`;
+  }
+  return undefined;
+}
+
 /** Integer cents to the text of an amount input, e.g. 1240 → "12.40". */
 export function centsToInputText(cents: number): string {
   return (cents / 100).toFixed(2);

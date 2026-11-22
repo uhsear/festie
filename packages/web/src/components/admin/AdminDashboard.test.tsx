@@ -46,6 +46,19 @@ describe('AdminDashboard', () => {
     expect(screen.getByText('Role granted')).toBeInTheDocument();
   });
 
+  it('marks a failed activity row', async () => {
+    mockFetch.mockResolvedValue({
+      ...dashboard,
+      recentActivity: [
+        { id: 'a1', action: 'user.role.granted', actorUsername: 'asir', status: 'failure', createdAt: new Date().toISOString() },
+        { id: 'a2', action: 'user.deleted', actorUsername: 'asir', status: 'success', createdAt: new Date().toISOString() },
+      ],
+    });
+    renderDashboard();
+    expect(await screen.findByText('Role granted')).toBeInTheDocument();
+    expect(screen.getAllByText('Failed')).toHaveLength(1);
+  });
+
   it('Refresh Dashboard is disabled while a refetch is in flight', async () => {
     renderDashboard();
     const refresh = await screen.findByRole('button', { name: 'Refresh Dashboard' });

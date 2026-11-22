@@ -29,7 +29,7 @@ const SCOPE_OPTIONS: { value: Scope; label: string }[] = [
   { value: 'user', label: 'User activity' },
 ];
 
-const EXAMPLE_LINE = 'Try: actor:asir · user:sam · action:festival.* · after:2026-10-01';
+const EXAMPLE_LINE = 'Try: actor:sam · user:alex · action:festival.* · after:2026-10-01';
 
 function downloadCsv(csv: string) {
   saveBlob(new Blob([csv], { type: 'text/csv;charset=utf-8' }), `festie-audit-${new Date().toISOString().slice(0, 10)}.csv`);
@@ -161,13 +161,13 @@ export default function AdminAudit() {
         <input
           id="audit-search"
           type="text"
-          placeholder="actor:asir action:festival.* after:2026-10-01"
+          placeholder="Search the audit log"
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === 'Enter') commitQuery(text);
           }}
-          className="w-full px-3 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          className="w-full px-3 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
         />
         {parsed.errors.length > 0 && (
           <div role="alert" className="text-sm text-accent-coral space-y-1">
@@ -179,7 +179,7 @@ export default function AdminAudit() {
         {parsed.tokens.length === 0 ? (
           <p className="text-xs text-text-muted">{EXAMPLE_LINE}</p>
         ) : (
-          <ul className="flex flex-wrap gap-2">
+          <ul className="list-none p-0 flex flex-wrap gap-2">
             {parsed.tokens.map((token) => (
               <li
                 key={token.raw}

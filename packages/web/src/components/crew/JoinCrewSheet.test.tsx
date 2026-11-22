@@ -83,6 +83,12 @@ describe('JoinCrewSheet', () => {
     expect(screen.getByRole('button', { name: 'Join crew' })).toBeDisabled();
   });
 
+  it.each(['invalid', 'expired', 'locked'])('drops the consent line when the invite is %s', (status) => {
+    h.preview = { status, preview: null };
+    render(<JoinCrewSheet code="K7XQ2M" onClose={() => {}} />);
+    expect(screen.queryByText('Crew members can see your picks and your status.')).not.toBeInTheDocument();
+  });
+
   it('shows the locked message and disables Join for a locked crew', () => {
     h.preview = { status: 'locked', preview: null };
     renderSheet();

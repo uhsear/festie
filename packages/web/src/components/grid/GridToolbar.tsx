@@ -100,7 +100,7 @@ export default function GridToolbar({
           }}
           onClick={onExport}
           title="Share grid"
-          aria-label="Share grid as image"
+          aria-label={COPY.grid.shareImageA11y}
           aria-busy={exporting ? 'true' : 'false'}
           disabled={exporting}
           type="button"
