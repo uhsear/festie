@@ -204,7 +204,7 @@ export default function StageBadge({
   const activeClass = variant === 'chip' && active ? 'border-current' : '';
 
   return (
-    <span className={cn(variantClass, activeClass, className)} style={{ ...baseStyle, ...style }}>
+    <span className={cn(variantClass, activeClass, className)} style={{ ...baseStyle, ...style }} title={variant === 'pick' ? stageName : undefined}>
       {stageName}
     </span>
   );
