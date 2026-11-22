@@ -164,7 +164,33 @@ describe('PicksView', () => {
     render(<PicksView />);
     expect(screen.getByTestId('guest-picks-banner')).toBeInTheDocument();
     expect(screen.getByTestId('plan-row')).toHaveTextContent('Daft Punk');
+  });
+
+  it('gives a guest with picks the calendar file and the image, and a Share button that asks them to sign in', async () => {
+    setStoreState({ user: null, profile: null, sets: [makeSet('s1', 'Daft Punk')] });
+    useFestivalStore.setState({ guestPicks: { f1: { s1: 'must' } } } as never);
+    const createObjectURL = vi.fn(() => 'blob:mock');
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    render(<PicksView />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Download picks as a calendar file' }, { timeout: 5000 }));
+    expect(buildPicksIcsExport).toHaveBeenCalledWith(expect.objectContaining({ picks: { s1: 'must' } }));
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Save my picks as an image' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share my picks' }));
+    expect(mockToast).toHaveBeenCalledWith('Sign in to share your picks.', 'info');
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' });
+    clickSpy.mockRestore();
+  });
+
+  it('shows no export buttons to a guest with no picks', () => {
+    setStoreState({ user: null, profile: null, sets: [makeSet('s1', 'Daft Punk')] });
+    useFestivalStore.setState({ guestPicks: {} } as never);
+    render(<PicksView />);
     expect(screen.queryByLabelText('Share my picks')).toBeNull();
+    expect(screen.queryByLabelText('Save my picks as an image')).toBeNull();
   });
 
   it('shows "No festival selected" when no festival', () => {
@@ -421,13 +447,12 @@ describe('PicksView', () => {
     expect(screen.getByRole('heading', { name: 'Day 2' })).toBeInTheDocument();
   });
 
-  it('gives a guest with picks the My day tab but no export buttons', () => {
+  it('gives a guest with picks the My day tab', () => {
     setStoreState({ user: null, profile: null, sets: [makeSet('s1', 'Daft Punk')] });
     useFestivalStore.setState({ guestPicks: { f1: { s1: 'must' } } } as never);
     render(<PicksView />);
     fireEvent.click(screen.getByRole('tab', { name: 'My day' }));
     expect(screen.getByTestId('my-day-list')).toBeInTheDocument();
-    expect(screen.queryByLabelText('Share my picks')).toBeNull();
   });
 
   it('shows the tab row and the Notes list for a user with only a note', () => {

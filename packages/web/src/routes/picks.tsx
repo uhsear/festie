@@ -32,7 +32,9 @@ import MarkedNoSet from '../components/features/MarkedNoSet';
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
 const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
 const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
-import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X } from 'lucide-react';
+import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X, Share2 } from 'lucide-react';
+import Button from '../components/ui/Button';
+import { useToast } from '../lib/toastContext';
 import { cn } from '@/lib/utils';
 
 type PicksViewMode = 'plan' | 'myday' | 'reminders' | 'notes';
@@ -71,6 +73,7 @@ function PicksViewInner() {
   const navigate = useNavigate();
   const hash = useLocation().hash;
   const reducedMotion = useReducedMotion();
+  const { toast } = useToast();
   const user = useAuthStore((state) => state.user);
   const currentProfile = useFestivalStore((state) => state.currentProfile);
   const myPicks = useFestivalStore(selectMyPicks);
@@ -158,10 +161,27 @@ function PicksViewInner() {
     return groups;
   }, [view, sets, myPicks, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator]);
 
-  // Share, calendar and image export need a profile; the view tabs do not.
-  const actionButtons = currentProfile && hasAnyPicks ? (
+  // Share needs an account (the link is a server page). The calendar file and the image draw from the
+  // picks on this device, so a guest gets those and a Share button that asks them to sign in.
+  const actionButtons = hasAnyPicks ? (
     <Suspense fallback={null}>
-      <SharePicksDialog />
+      {currentProfile ? (
+        <SharePicksDialog />
+      ) : (
+        <Button
+          variant="secondary"
+          size="sm"
+          type="button"
+          aria-label="Share my picks"
+          onClick={() => {
+            toast('Sign in to share your picks.', 'info');
+            void navigate({ to: '/login' });
+          }}
+        >
+          <Share2 className="w-4 h-4" aria-hidden="true" />
+          {COPY.picks.share}
+        </Button>
+      )}
       <CalendarDialog />
       <ScheduleImageDialog />
     </Suspense>
