@@ -50,6 +50,9 @@ env:
 
 # Public/auth screens.
 - openLink: "festie://register"
+- waitForAnimationToEnd:
+    timeout: 3000
+- takeScreenshot: 03b-after-register-link
 - extendedWaitUntil:
     visible:
       text: "Create your account|^Open$"
