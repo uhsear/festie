@@ -46,11 +46,9 @@ describe('ConfirmDialog with a password prompt', () => {
   });
 
   it('comes back when the prompt is cancelled and the caller keeps it open', async () => {
-    let ask: () => Promise<unknown>;
     function Harness() {
       const [busy, setBusy] = useState(false);
       const reauth = useReauthPrompt();
-      ask = reauth.ask;
       return (
         <>
           <ConfirmDialog
