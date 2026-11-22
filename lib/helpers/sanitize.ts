@@ -5,6 +5,14 @@
  * Input sanitization, encoding, and log-safe transformations.
  */
 
+/**
+ * Replace an invite code in a request path with a placeholder. A live code is a credential, so it must not reach a log.
+ * Covers /crews/join-preview/<code> and the legacy /crews/join/<code>, with or without the /api/v1 prefix.
+ */
+export function redactInviteCodePath(path: string): string {
+  return path.replace(/\/join(-preview)?\/[^/?]+/, '/join$1/:code');
+}
+
 const DANGEROUS_RECORD_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 export function safeDataFilename(file: any) {

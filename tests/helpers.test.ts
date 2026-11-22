@@ -13,6 +13,7 @@ import {
   stripBom,
   encodeContentDispositionFilename,
   createAuditLog,
+  redactInviteCodePath,
 } from '../lib/helpers/sanitize.js';
 
 import {
@@ -199,6 +200,20 @@ describe('helpers/sanitize: getLogSafeRequestInfo', () => {
     assert.equal(result.method, 'DELETE');
     assert.equal(result.path, '/api/users/1');
     assert.equal(result.ip, '1.2.3.4');
+  });
+});
+
+describe('helpers/sanitize: redactInviteCodePath', () => {
+  it('replaces the code in join-preview and legacy join paths, with or without a prefix', () => {
+    assert.equal(redactInviteCodePath('/api/v1/crews/join-preview/ABC123'), '/api/v1/crews/join-preview/:code');
+    assert.equal(redactInviteCodePath('/api/v1/crews/join/ABC123'), '/api/v1/crews/join/:code');
+    assert.equal(redactInviteCodePath('/join/ABC123'), '/join/:code');
+    assert.equal(redactInviteCodePath('/join-preview/ABC123'), '/join-preview/:code');
+  });
+
+  it('leaves other paths unchanged', () => {
+    assert.equal(redactInviteCodePath('/api/v1/crews/join'), '/api/v1/crews/join');
+    assert.equal(redactInviteCodePath('/api/v1/crews/abc/members'), '/api/v1/crews/abc/members');
   });
 });
 
