@@ -80,7 +80,8 @@ function BeaconScreen() {
         {/* Fixed dark fill and white ring: the screen flashes through avatar colours, so a themed button can vanish. */}
         <button
           type="button"
-          className="min-h-14 min-w-40 rounded-full border-2 border-white bg-[#080810] px-8 text-lg font-semibold text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+          style={{ backgroundColor: '#080810', borderColor: '#FFFFFF', color: '#FFFFFF' }}
+          className="min-h-14 min-w-40 rounded-full border-2 px-8 text-lg font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
         >
           {BEACON_COPY.done}
         </button>

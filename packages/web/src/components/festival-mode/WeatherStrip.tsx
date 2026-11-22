@@ -23,7 +23,7 @@ export default function WeatherStrip({ festivalId, nowMs }: Props) {
         <p className="type-label font-semibold text-text-primary [overflow-wrap:anywhere]">{nowLine}</p>
         {weather.hours.length > 0 && (
           <ul
-            tabIndex={0}
+            tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: keeps this overflow-x-auto strip keyboard-scrollable
             aria-label="Hourly forecast"
             className="list-none m-0 p-0 flex gap-3 overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
           >
