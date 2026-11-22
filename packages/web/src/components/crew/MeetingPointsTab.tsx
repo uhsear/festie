@@ -453,7 +453,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         </Button>
         {placing && (
           <p role="status" className="text-xs text-text-secondary">
-            Click the map where you want to meet.
+            Tap or click the map where you want to meet.
           </p>
         )}
         <Suspense
