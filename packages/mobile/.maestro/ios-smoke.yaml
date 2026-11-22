@@ -50,10 +50,12 @@ env:
 
 # Public/auth screens.
 - openLink: "festie://register"
+- takeScreenshot: 03a-register-after-openlink
 - extendedWaitUntil:
     visible:
       text: "Create your account|^Open$"
     timeout: 30000
+- takeScreenshot: 03b-register-wait-matched
 - tapOn:
     text: "^Open$"
     optional: true
