@@ -93,6 +93,10 @@ describe('isLargeText — large-text layout switch', () => {
     expect(isLargeText(1.3)).toBe(true);
     expect(isLargeText(2.35)).toBe(true);
   });
+
+  it('turns on at the 32-bit float that Android reports for a 1.3 setting', () => {
+    expect(isLargeText(Math.fround(1.3))).toBe(true);
+  });
 });
 
 describe('typeScaleCap — per-role Dynamic Type cap', () => {
