@@ -32,14 +32,6 @@ on:
         description: 'Boot the simulator and run the Maestro flows after the build'
         type: boolean
         default: true
-      probe:
-        description: 'TEMPORARY: replace the app with a bare probe screen and run the probe flow'
-        type: boolean
-        default: false
-      probe_mode:
-        description: 'TEMPORARY: bare | no-intro | stack | tabs | bisect'
-        type: string
-        default: 'bare'
   workflow_call:
     inputs:
       ref:
@@ -176,55 +168,6 @@ jobs:
           boot_timeout_seconds: 180
           boot_retries: 3
 
-      - name: Drop the first-run intro (TEMPORARY)
-        if: inputs.probe == true && inputs.probe_mode == 'no-intro'
-        working-directory: packages/mobile
-        run: |
-          sed -i '' 's|<FirstRunIntro onDone={dismissIntro} />|null|' app/_layout.tsx
-          grep -c 'FirstRunIntro onDone' app/_layout.tsx || true
-
-      - name: Patch launch-argument bisect gates (TEMPORARY)
-        if: inputs.probe == true && inputs.probe_mode == 'bisect'
-        working-directory: packages/mobile
-        run: python3 .maestro/probe/apply-bisect.py
-
-      - name: Swap in router probe app (TEMPORARY)
-        if: inputs.probe == true && (inputs.probe_mode == 'stack' || inputs.probe_mode == 'tabs')
-        working-directory: packages/mobile
-        run: |
-          P=.maestro/probe
-          find app -mindepth 1 -maxdepth 1 ! -name _layout.tsx -exec rm -r {} +
-          cp $P/stack-layout.tsx app/_layout.tsx
-          if [ "${{ inputs.probe_mode }}" = "stack" ]; then
-            cp $P/probe-screen.tsx app/index.tsx
-          else
-            mkdir -p "app/(tabs)"
-            cp $P/tabs-layout.tsx "app/(tabs)/_layout.tsx"
-            cp $P/probe-screen.tsx "app/(tabs)/index.tsx"
-            cp $P/probe-screen.tsx "app/(tabs)/two.tsx"
-          fi
-
-      - name: Swap in bare probe app (TEMPORARY)
-        if: inputs.probe == true && inputs.probe_mode == 'bare'
-        working-directory: packages/mobile
-        run: |
-          cat > app/_layout.tsx <<'EOT'
-          import { useState } from 'react';
-          import { Pressable, Text, View } from 'react-native';
-          export default function ProbeLayout() {
-            const [done, setDone] = useState(false);
-            return (
-              <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }}>
-                <Text testID="probe-text" style={{ color: '#fff', fontSize: 24 }}>Probe</Text>
-                <Pressable testID="probe-btn" onPress={() => setDone(true)} style={{ padding: 20, backgroundColor: '#0aa', marginTop: 20 }}>
-                  <Text style={{ color: '#fff' }}>Tap me</Text>
-                </Pressable>
-                {done ? <Text testID="probe-done" style={{ color: '#fff', marginTop: 20 }}>Done</Text> : null}
-              </View>
-            );
-          }
-          EOT
-
       # Generate the native ios/ project (CNG; ios/ is gitignored).
       # --no-install: pnpm already installed node_modules; don't let prebuild shell
       # out to npm and fight the pnpm layout. CocoaPods is installed separately below.
@@ -348,38 +291,8 @@ jobs:
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME/.maestro-install"
           echo "$HOME/.maestro-install/maestro/bin" >> "$GITHUB_PATH"
 
-      - name: Bisect the empty tree by launch argument (TEMPORARY)
-        if: inputs.probe == true && inputs.probe_mode == 'bisect'
-        working-directory: packages/mobile
-        run: |
-          UDID="${{ steps.sim.outputs.udid }}"
-          for v in none offline sos live announce toaster sheet eb wrap tabsview offline,sos,live,announce,toaster,sheet eb,wrap,tabsview,offline,sos,live,announce,toaster,sheet; do
-            xcrun simctl terminate "$UDID" us.festie.app >/dev/null 2>&1 || true
-            sleep 3
-            xcrun simctl launch "$UDID" us.festie.app -probeoff "$v" >/dev/null
-            sleep 40
-            MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > "h.json" || true
-            echo "VARIANT $v nodes=$(grep -c '"attributes"' h.json) ids=$(grep -cE '"resource-id" : "[a-z]' h.json) tabbar=$(grep -c 'Tab Bar' h.json)"
-          done
-          mv h.json maestro-ios-hierarchy-probe-45s.json
-
-      - name: Run probe flow (TEMPORARY)
-        if: inputs.probe == true && inputs.probe_mode != 'bisect'
-        working-directory: packages/mobile
-        continue-on-error: true
-        run: |
-          xcrun simctl launch "${{ steps.sim.outputs.udid }}" us.festie.app || true
-          sleep 45
-          MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > maestro-ios-hierarchy-probe-45s.json || true
-          grep -c '"attributes"' maestro-ios-hierarchy-probe-45s.json || true
-          grep -E '"(resource-id|accessibilityText)" : "[^"]+"' maestro-ios-hierarchy-probe-45s.json || true
-          PROBE=.maestro/ios-probe.yaml
-          if [ "${{ inputs.probe_mode }}" = "no-intro" ]; then PROBE=.maestro/ios-probe-nointro.yaml; fi
-          MAESTRO_CLI_NO_ANALYTICS=1 maestro test $PROBE --test-output-dir="$PWD/maestro-ios-debug" || true
-          MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > maestro-ios-hierarchy.json || true
-
       - name: Run Maestro flows (iOS)
-        if: env.RUN_MAESTRO == 'true' && inputs.probe != true
+        if: env.RUN_MAESTRO == 'true'
         working-directory: packages/mobile
         env:
           # Passed to Maestro so the authed phase of the smoke runs; CI provides
@@ -427,7 +340,7 @@ jobs:
           exit "$status"
 
       - name: Verify route screenshot coverage
-        if: env.RUN_MAESTRO == 'true' && inputs.probe != true
+        if: env.RUN_MAESTRO == 'true'
         working-directory: packages/mobile
         run: |
           SCREENSHOT_DIR=maestro-ios-debug/screenshots
@@ -480,7 +393,6 @@ jobs:
             packages/mobile/maestro-ios-report.xml
             packages/mobile/maestro-ios-artist-report.xml
             packages/mobile/maestro-ios-hierarchy.json
-            packages/mobile/maestro-ios-hierarchy-probe-45s.json
             packages/mobile/maestro-ios-debug/**
             packages/mobile/maestro-ios-artist-debug/**
             !packages/mobile/maestro-ios-debug/commands-*.json
