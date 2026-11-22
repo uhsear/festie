@@ -22,6 +22,8 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
 
   const [displayName, setDisplayName] = useState(user.name || '');
   const [savingDisplayName, setSavingDisplayName] = useState(false);
+  // Mirrors the server's noMarkup rule so the message shows while typing, not only after a failed save.
+  const markupError = /[<>]/.test(displayName) ? 'Names cannot contain < or >' : undefined;
 
   const handleDisplayNameChange = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -54,6 +56,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
             onChange={(e) => setDisplayName(e.target.value)}
             placeholder="How your name appears to your crew"
             aria-label="Display name"
+            error={markupError}
             className="flex-1"
             autoComplete="name"
             maxLength={50}
@@ -63,7 +66,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
             variant="primary"
             size="md"
             isLoading={savingDisplayName}
-            disabled={offlineMode || !displayName.trim() || displayName.trim() === (user.name ?? '')}
+            disabled={offlineMode || !!markupError || !displayName.trim() || displayName.trim() === (user.name ?? '')}
             className="min-h-[44px] min-w-[44px]"
           >
             Save
