@@ -63,8 +63,8 @@ vi.mock('@tanstack/react-query', () => ({
 vi.mock('@tanstack/react-router', () => ({
   useSearch: () => h.search,
   useNavigate: () => h.navigate,
-  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
-    <a href={to} {...rest}>
+  Link: ({ to, search, children, ...rest }: { to: string; search?: unknown; children: React.ReactNode }) => (
+    <a href={to} data-search={JSON.stringify(search)} {...rest}>
       {children}
     </a>
   ),
@@ -206,6 +206,7 @@ describe('MapView', () => {
     render(<MapView />);
     await screen.findByTestId('crew-map');
     expect(screen.getByRole('link', { name: 'Add a meeting point' })).toHaveAttribute('href', '/crew');
+    expect(screen.getByRole('link', { name: 'Add a meeting point' })).toHaveAttribute('data-search', '{"tab":"find"}');
   });
 
   it('hides crew layers and SOS when the crew belongs to another festival', async () => {

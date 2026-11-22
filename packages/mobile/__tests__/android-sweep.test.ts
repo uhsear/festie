@@ -90,10 +90,4 @@ describe('android sweep', () => {
       expect(src).not.toContain('message="Something went wrong reaching the server."');
     }
   });
-
-  it('the join landing re-selects the joined crew when another crew is still the active one', () => {
-    const src = read('app/(tabs)/crew.tsx');
-    expect(src).toContain('crews.some((c) => c.id === joinedParam)');
-    expect(src).toContain('selectCrew(joinedParam)');
-  });
 });

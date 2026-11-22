@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { MapPin, AlertTriangle, Navigation, X, LocateFixed, Loader2 } from 'lucide-react';
 import {
   extractMeetingPointPins,
@@ -183,6 +183,7 @@ export default function CrewMap({
   onSetMeetingPoint,
   hasList = false,
 }: Props) {
+  const nearestLabelId = useId();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const locateButtonRef = useRef<HTMLButtonElement | null>(null);
   // 'pending' until we know whether the GL library mounted; flips to 'error' on
@@ -984,8 +985,8 @@ export default function CrewMap({
 
       {/* ── Nearest-X quick controls: show the way to the closest medical / water / toilet. */}
       {hasAmenities && (
-        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-labelledby="map-nearest-label">
-          <span id="map-nearest-label" className="text-xs text-text-muted">{MAP_COPY.nearest}</span>
+        <div className="flex flex-wrap items-center gap-1.5" role="group" aria-labelledby={nearestLabelId}>
+          <span id={nearestLabelId} className="text-xs text-text-muted">{MAP_COPY.nearest}</span>
           {NEAREST_AMENITY_TYPES.map((type) => {
             const { glyph } = amenityGlyph(type);
             const name = humanizeAmenityType(type);

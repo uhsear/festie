@@ -51,6 +51,7 @@ import FestivalChoiceSheet from '../../components/FestivalChoiceSheet';
 import HandOverSheet from '../../components/HandOverSheet';
 import CrewTabBar, { type CrewTabKey } from '../../components/CrewTabBar';
 import { festivalForCrew } from '../../lib/crewFestival';
+import { nextJoinSelect } from '../../lib/crewJoinSelect';
 import InviteQRSheet from '../../components/InviteQRSheet';
 import FreshnessChip from '../../components/FreshnessChip';
 import { LowPowerIndicator } from '../../components/LowPowerControls';
@@ -261,10 +262,9 @@ export default function CrewScreen() {
   // so the notice above can show and the screen is not left on the wrong crew.
   const joinSelected = useRef<string | null>(null);
   useEffect(() => {
-    if (!joinedParam || crewLoading || activeCrew?.id === joinedParam) return;
-    if (joinSelected.current === joinedParam || !crews.some((c) => c.id === joinedParam)) return;
-    joinSelected.current = joinedParam; // once per join, so a failed select cannot loop
-    selectCrew(joinedParam).catch((err) => Sentry.captureException(err));
+    const next = nextJoinSelect({ joinedParam, crewLoading, activeCrewId: activeCrew?.id, crewIds: crews.map((c) => c.id), selected: joinSelected.current });
+    joinSelected.current = next.selected;
+    if (next.select) selectCrew(next.select).catch((err) => Sentry.captureException(err));
   }, [joinedParam, crewLoading, activeCrew?.id, crews, selectCrew]);
 
   // /(tabs)/crew?sheet=join opens the Crews sheet in Join mode, once per link:

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, act, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const h = vi.hoisted(() => ({
@@ -76,6 +76,10 @@ describe('CrewStatus', () => {
     h.loadStatuses.mockReset().mockResolvedValue(undefined);
   });
 
+  afterEach(() => {
+    useUIStore.setState({ offlineMode: false });
+  });
+
   it('shows one loading status while statuses load', () => {
     h.loadStatuses.mockReturnValue(new Promise(() => {}));
     renderStatus();
@@ -97,7 +101,28 @@ describe('CrewStatus', () => {
     expect(await screen.findByText(/You're offline\. Showing the last saved status\./)).toBeInTheDocument();
     expect(screen.queryByText("Couldn't load crew status")).not.toBeInTheDocument();
     expect(screen.getByText('sam', { exact: false })).toBeInTheDocument();
-    useUIStore.setState({ offlineMode: false });
+  });
+
+  it('shows the error panel, not the cached note, when offline with no cached statuses', async () => {
+    useUIStore.setState({ offlineMode: true });
+    h.members = [{ userId: 'u1', name: 'User 1' }];
+    h.loadStatuses.mockRejectedValue(offlineError());
+    renderStatus();
+    expect(await screen.findByText("Couldn't load crew status")).toBeInTheDocument();
+    expect(screen.queryByText(/Showing the last saved status/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/No one has shared a status yet/)).not.toBeInTheDocument();
+  });
+
+  it('reloads when the device comes back online while the load error is showing', async () => {
+    useUIStore.setState({ offlineMode: true });
+    h.statuses = [row('sam', 'here', 1)];
+    h.loadStatuses.mockRejectedValue(offlineError());
+    renderStatus();
+    await screen.findByText(/Showing the last saved status/);
+    const calls = h.loadStatuses.mock.calls.length;
+    h.loadStatuses.mockResolvedValue(undefined);
+    act(() => useUIStore.setState({ offlineMode: false }));
+    await waitFor(() => expect(h.loadStatuses.mock.calls.length).toBeGreaterThan(calls));
   });
 
   it('says the server failed when the load fails with a 5xx', async () => {
