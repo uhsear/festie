@@ -9,6 +9,7 @@ import {
   startsAfterMidnight,
   isAfterMidnight,
   setMinuteRange,
+  zoneOffsetMsAt,
 } from './setStatus';
 import type { FestivalSet, FestivalDay } from '../types/domain';
 
@@ -74,6 +75,26 @@ describe('getSetTimeBounds', () => {
 // Festival-timezone-aware bounds (opt-in via the `timeZone` arg). These assert
 // against absolute UTC instants computed from the zone's known offset, so they
 // are host-timezone-independent (Node ships full IANA tz data).
+describe('zoneOffsetMsAt cache', () => {
+  it('answers a repeated instant from the cache without formatting again', () => {
+    const utc = Date.UTC(2031, 5, 1, 12, 0, 0);
+    const first = zoneOffsetMsAt(utc, 'America/Chicago');
+    expect(first).toBe(-5 * 3_600_000);
+    const spy = vi.spyOn(Intl.DateTimeFormat.prototype, 'formatToParts');
+    expect(zoneOffsetMsAt(utc, 'America/Chicago')).toBe(first);
+    expect(spy).not.toHaveBeenCalled();
+    spy.mockRestore();
+  });
+
+  it('keeps zones apart and still follows a DST change', () => {
+    const winter = Date.UTC(2031, 0, 15, 12, 0, 0);
+    const summer = Date.UTC(2031, 6, 15, 12, 0, 0);
+    expect(zoneOffsetMsAt(winter, 'America/New_York')).toBe(-5 * 3_600_000);
+    expect(zoneOffsetMsAt(summer, 'America/New_York')).toBe(-4 * 3_600_000);
+    expect(zoneOffsetMsAt(winter, 'Europe/Berlin')).toBe(3_600_000);
+  });
+});
+
 describe('zonedWallTimeToMs (festival-zone anchoring)', () => {
   it('interprets a wall-clock in the given IANA zone, not the device zone', () => {
     // 2026-09-04 is EDT (UTC-4) for America/New_York: 20:00 EDT = 00:00 UTC next day.

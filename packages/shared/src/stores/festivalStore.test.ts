@@ -45,6 +45,16 @@ describe('festivalStore (facade)', () => {
   // ── getState merges both stores ─────────────────────────────────────
 
   describe('getState', () => {
+    it('returns the same merged object until either store changes', () => {
+      const first = useFestivalStore.getState();
+      expect(useFestivalStore.getState()).toBe(first);
+      useFestivalUIStore.setState({ searchQuery: 'changed' });
+      const second = useFestivalStore.getState();
+      expect(second).not.toBe(first);
+      expect(second.searchQuery).toBe('changed');
+      expect(useFestivalStore.getState()).toBe(second);
+    });
+
     it('returns merged state from data and UI stores', () => {
       const state = useFestivalStore.getState();
       // Data store fields
