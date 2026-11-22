@@ -197,6 +197,8 @@ a:focus-visible,
   [aria-pressed='true']:not(.day-tab-underline),
   [aria-selected='true']:not(.day-tab-underline),
   [aria-current='page']:not(.day-tab-underline) {
+    /* Without this the browser paints a Canvas plate behind the label, and HighlightText on that plate is invisible. */
+    forced-color-adjust: none;
     border-color: Highlight;
     background: Highlight;
     color: HighlightText;
