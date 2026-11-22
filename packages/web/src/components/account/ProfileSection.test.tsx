@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { ACCOUNT_COPY } from '@festie/shared/constants';
 
 // --- Mocks ---------------------------------------------------------------
 
@@ -49,7 +50,7 @@ beforeEach(() => {
 describe('ProfileSection — rendering', () => {
   it('renders the display-name input pre-filled with the current name', () => {
     render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
-    const input = screen.getByPlaceholderText('How your crew sees you') as HTMLInputElement;
+    const input = screen.getByPlaceholderText(ACCOUNT_COPY.displayNamePlaceholder) as HTMLInputElement;
     expect(input).toBeInTheDocument();
     expect(input.value).toBe('Ada Lovelace');
   });
@@ -84,7 +85,7 @@ describe('ProfileSection — display name submission', () => {
     const user = userEvent.setup();
     render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
 
-    const input = screen.getByPlaceholderText('How your crew sees you');
+    const input = screen.getByPlaceholderText(ACCOUNT_COPY.displayNamePlaceholder);
     await user.clear(input);
     await user.type(input, '  Grace Hopper  ');
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -96,7 +97,7 @@ describe('ProfileSection — display name submission', () => {
     const user = userEvent.setup();
     render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
 
-    const input = screen.getByPlaceholderText('How your crew sees you');
+    const input = screen.getByPlaceholderText(ACCOUNT_COPY.displayNamePlaceholder);
     await user.clear(input);
     await user.type(input, 'Grace');
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -109,7 +110,7 @@ describe('ProfileSection — display name submission', () => {
     mockUpdateDisplayName.mockRejectedValue(new Error('network'));
     render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
 
-    const input = screen.getByPlaceholderText('How your crew sees you');
+    const input = screen.getByPlaceholderText(ACCOUNT_COPY.displayNamePlaceholder);
     await user.clear(input);
     await user.type(input, 'Grace');
     await user.click(screen.getByRole('button', { name: 'Save' }));
@@ -127,7 +128,7 @@ describe('ProfileSection — Save button enablement', () => {
   it('disables Save when the input is empty', async () => {
     const user = userEvent.setup();
     render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
-    const input = screen.getByPlaceholderText('How your crew sees you');
+    const input = screen.getByPlaceholderText(ACCOUNT_COPY.displayNamePlaceholder);
     await user.clear(input);
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
   });
@@ -135,7 +136,7 @@ describe('ProfileSection — Save button enablement', () => {
   it('disables Save when the input is only whitespace', async () => {
     const user = userEvent.setup();
     render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
-    const input = screen.getByPlaceholderText('How your crew sees you');
+    const input = screen.getByPlaceholderText(ACCOUNT_COPY.displayNamePlaceholder);
     await user.clear(input);
     await user.type(input, '   ');
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
@@ -144,7 +145,7 @@ describe('ProfileSection — Save button enablement', () => {
   it('enables Save once the name changes to a non-empty value', async () => {
     const user = userEvent.setup();
     render(<ProfileSection user={{ name: 'Ada Lovelace', username: 'ada' }} />);
-    const input = screen.getByPlaceholderText('How your crew sees you');
+    const input = screen.getByPlaceholderText(ACCOUNT_COPY.displayNamePlaceholder);
     await user.clear(input);
     await user.type(input, 'Grace Hopper');
     expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { ACCOUNT_COPY } from '@festie/shared/constants';
 import { displayNameError } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
@@ -55,7 +56,7 @@ export default function ProfileSection({ user }: ProfileSectionProps) {
           <Input
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="How your crew sees you"
+            placeholder={ACCOUNT_COPY.displayNamePlaceholder}
             aria-label="Display name"
             error={markupError}
             className="flex-1"
