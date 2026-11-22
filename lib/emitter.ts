@@ -112,7 +112,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
   }
 
   function queueCrewPickPush(profile: EmitterProfile) {
-    if (_shuttingDown || !notificationService?.isConfigured) return;
+    if (_shuttingDown || !notificationService) return;
     const key = `${profile.festivalId}:${profile.userId}`;
     const pending = _crewPushPending.get(key);
     if (pending) {
@@ -248,11 +248,11 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     }
 
     // Push notification for pick changes to offline crew
-    if (notificationService?.isConfigured && changedFields.picks) {
+    if (changedFields.picks) {
       queueCrewPickPush(profile);
 
-      // #30: Silent push for background data sync (no visible notification)
-      queueSilentSync(profile.festivalId);
+      // #30: Silent push for background data sync (no visible notification, so it needs a provider)
+      if (notificationService?.isConfigured) queueSilentSync(profile.festivalId);
     }
   }
 
@@ -295,7 +295,7 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     pickersBySet: Parameters<typeof buildSchedulePushes>[2];
     interestedByEntry?: Parameters<typeof buildSchedulePushes>[3];
   }): Promise<{ ok: boolean }> {
-    if (!notificationService?.isConfigured || typeof notificationService.send !== 'function') return { ok: true };
+    if (typeof notificationService?.send !== 'function') return { ok: true };
     try {
       let sent = 0;
       let failed = 0;

@@ -709,3 +709,55 @@ describe('reminder-scheduler: bounded parallel sends', () => {
     assert.ok(peak > 1 && peak <= 10, `peak in flight was ${peak}`);
   });
 });
+
+describe('reminder-scheduler: quiet hours', () => {
+  function setup(prefs: any, notifyResult: any) {
+    const setStartMs = Date.now() + 16 * 60000;
+    const startClock = new Date(setStartMs);
+    const setDate = new Date(startClock.getHours() < 6 ? setStartMs - 86_400_000 : setStartMs);
+    const dateStr = `${setDate.getFullYear()}-${String(setDate.getMonth() + 1).padStart(2, '0')}-${String(setDate.getDate()).padStart(2, '0')}`;
+    const startTime = `${String(startClock.getHours()).padStart(2, '0')}:${String(startClock.getMinutes()).padStart(2, '0')}`;
+    const queryFn = mock.fn(async (sql: string) => {
+      if (sql.includes('festival_days')) return { rows: [{ day_index: 0, label: 'Day 1', date: dateStr }] };
+      if (sql.includes('festival_stages')) return { rows: [] };
+      if (sql.includes('festival_sets')) {
+        return { rows: [{ id: 'set-1', day_index: 0, artist: 'DJ Alpha', artists: null, stage_id: null, startTime, endTime: '23:59' }] };
+      }
+      if (sql.includes('festival_profiles')) {
+        return { rows: [{ id: 'fp-1', userId: 'user-1', remindersJson: JSON.stringify({ 'set-1': 15 }), picksJson: '{}' }] };
+      }
+      if (sql.includes('festivals')) return { rows: [{ id: 'fest-1', name: 'Test Fest' }] };
+      return { rows: [] };
+    });
+    const notifyFn = mock.fn(async () => notifyResult);
+    const scheduler = createReminderScheduler(
+      makeDeps({
+        pool: { query: queryFn },
+        stores: { notificationPrefs: { get: mock.fn(async () => prefs) } },
+        notificationService: { send: notifyFn },
+      }),
+    );
+    return { scheduler, notifyFn };
+  }
+
+  const alwaysQuiet = { setReminders: true, dndStart: '00:00', dndEnd: '23:59' };
+
+  it('hands a reminder due in quiet hours to notify() so send() writes the held inbox row', async () => {
+    const { scheduler, notifyFn } = setup(alwaysQuiet, { sent: 0, reason: 'dnd_active' });
+    await scheduler.tick();
+    assert.equal(notifyFn.mock.calls.length, 1);
+  });
+
+  it('writes the quiet-hours inbox row once: a later tick does not notify again', async () => {
+    const { scheduler, notifyFn } = setup(alwaysQuiet, { sent: 0, reason: 'dnd_active' });
+    await scheduler.tick();
+    await scheduler.tick();
+    assert.equal(notifyFn.mock.calls.length, 1);
+  });
+
+  it('still honours the setReminders opt-out during quiet hours', async () => {
+    const { scheduler, notifyFn } = setup({ ...alwaysQuiet, setReminders: false }, { sent: 0 });
+    await scheduler.tick();
+    assert.equal(notifyFn.mock.calls.length, 0);
+  });
+});

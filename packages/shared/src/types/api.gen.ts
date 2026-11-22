@@ -2388,7 +2388,7 @@ export type paths = {
             path?: never;
             cookie?: never;
         };
-        /** List profiles for festival (picks of other users only for crew mates; meta.pickCounts holds anonymous per-set counts of other attendees) */
+        /** List the caller and their crew mates for a festival (picks of crew mates only; meta.pickCounts holds anonymous per-set counts of all other attendees) */
         get: {
             parameters: {
                 query?: never;
