@@ -973,10 +973,11 @@ describe('notifications/send: web push, channels and recipients', () => {
 
   it('a transient Web Push failure is queued for retry, a 4xx or stale one is not', async () => {
     for (const [result, queued] of [
-      [{ sent: false, stale: false, error: 'HTTP 503' }, true],
-      [{ sent: false, stale: false, error: 'HTTP 429' }, true],
-      [{ sent: false, stale: false, error: 'The operation was aborted due to timeout' }, true],
+      [{ sent: false, stale: false, error: 'HTTP 503', retryable: true }, true],
+      [{ sent: false, stale: false, error: 'HTTP 429', retryable: true }, true],
+      [{ sent: false, stale: false, error: 'The operation was aborted due to timeout', retryable: true }, true],
       [{ sent: false, stale: false, error: 'HTTP 400' }, false],
+      [{ sent: false, stale: false, error: 'bad key length' }, false],
       [{ sent: false, stale: true }, false],
     ] as Array<[any, boolean]>) {
       const stores = makeStores({ tokens: { u1: [{ token: webToken, platform: 'web' }] } });

@@ -178,6 +178,35 @@ describe('createWebPushSender', () => {
     assert.equal(result.sent, false);
     assert.equal(result.stale, false);
     assert.ok(result.error);
+    assert.equal(result.retryable, true);
+  });
+
+  test('a 400 is not retryable, a 429 is', async () => {
+    stubFetch(400);
+    assert.equal((await sender().send(subscription(), payload)).retryable, false);
+    stubFetch(429);
+    assert.equal((await sender().send(subscription(), payload)).retryable, true);
+  });
+
+  test('a network error is retryable, a local encryption error is not', async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => {
+      throw new Error('connect ECONNRESET');
+    }) as typeof fetch;
+    try {
+      assert.equal((await sender().send(subscription(), payload)).retryable, true);
+    } finally {
+      globalThis.fetch = original;
+    }
+    const calls = stubFetch(201);
+    const bad = subscription();
+    const parsed = JSON.parse(bad);
+    // A well-formed point that is not on the curve passes parsing but fails ECDH.
+    parsed.keys.p256dh = Buffer.concat([Buffer.from([0x04]), Buffer.alloc(64, 1)]).toString('base64url');
+    const result = await sender().send(JSON.stringify(parsed), payload);
+    assert.equal(result.sent, false);
+    assert.notEqual(result.retryable, true);
+    assert.equal(calls.length, 0);
   });
 
   test('an invalid token is stale and never fetched', async () => {

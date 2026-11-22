@@ -636,8 +636,8 @@ export function createSendService({
       result = { sent: false, stale: false, error: (error as Failure).message };
     }
     if (!result.sent) log.debug('web push send failed', { userId, error: result.error });
-    // Network errors, timeouts, 429 and 5xx are transient, as for FCM. A 4xx other than 429 would fail again.
-    if (!result.sent && !result.stale && (!result.error?.startsWith('HTTP ') || /^HTTP (429|5\d\d)$/.test(result.error))) {
+    // Network errors, timeouts, 429 and 5xx are transient, as for FCM. The sender marks them retryable.
+    if (!result.sent && !result.stale && result.retryable) {
       deviceRetryQueue.enqueue({
         userId,
         sendFn: async () => {
