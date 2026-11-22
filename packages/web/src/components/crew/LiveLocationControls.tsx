@@ -116,7 +116,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
   const clearMine = clearTarget?.userId === currentUserId;
   const ownSosActive = sosList.some((e) => e.userId === currentUserId);
   const showChooser = chooserOpen && !isSharingThisCrew && !lowPowerMode;
-  // Duration buttons, the default first so it is first in focus order.
+  // Duration buttons in ascending order; the default is marked, not moved.
   const durationChoices = showChooser
     ? liveShareOptions({
         days: festivalDays,
@@ -126,9 +126,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
       })
     : null;
   const orderedOptions = durationChoices
-    ? [...durationChoices.options].sort(
-        (a, b) => Number(b.id === durationChoices.defaultId) - Number(a.id === durationChoices.defaultId),
-      )
+    ? [...durationChoices.options].sort((a, b) => a.ms - b.ms)
     : [];
 
   return (
@@ -136,7 +134,9 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
       {/* ── Send SOS: top of the Meet tab. Hidden while your own SOS is active
           (the banner below carries "I'm safe"), as on mobile. ─────────────── */}
       {!ownSosActive && <SosRaiseButton crewId={crewId} alerting={showSos} />}
-      <p className="text-xs text-text-muted">For emergencies — alerts your whole crew. Needs signal to send.</p>
+      {!ownSosActive && (
+        <p className="text-xs text-text-muted">For emergencies — alerts your whole crew. Needs signal to send.</p>
+      )}
       <CheckInCard crewId={crewId} />
 
       {/* ── Active SOS banners (crew-wide, prominent) ──────────────────────────
@@ -169,7 +169,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {entry.position && (
+              {entry.position && !isMine && (
                 <Button
                   variant="secondary"
                   size="sm"
@@ -263,6 +263,11 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
                     onClick={() => startSharing(option.ms)}
                   >
                     {option.label}
+                    {option.id === durationChoices?.defaultId && (
+                      <span aria-hidden="true" className="ml-2 text-xs font-normal opacity-80">
+                        Recommended
+                      </span>
+                    )}
                   </Button>
                 ))}
               </>
