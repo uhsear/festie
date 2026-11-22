@@ -131,6 +131,7 @@ export interface AppState {
   routeRateLimits: Map<string, RateLimitEntry>;
   authRateLimits: Map<string, RateLimitEntry>;
   adminAuthRateLimits: Map<string, RateLimitEntry>;
+  loginIpRateLimits: Map<string, RateLimitEntry>;
   socketConnectRateLimits: Map<string, RateLimitEntry>;
   socketRateLimits: Map<string, RateLimitEntry>;
   userAuthRateLimits: Map<string, RateLimitEntry>;

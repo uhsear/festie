@@ -60,6 +60,7 @@ function makeApp() {
     getRequestIp: (req: any) => req.ip || '127.0.0.1',
     rateLimit: () => (_req: any, _res: any, next: any) => next(),
     authRateLimit: (_req: any, _res: any, next: any) => next(),
+    loginIpRateLimit: (_req: any, _res: any, next: any) => next(),
     sendError,
     ErrorCodes,
     generateOpenAPISpec: () => ({}),

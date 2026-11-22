@@ -237,6 +237,7 @@ function configureMiddleware(app: Application, ctx: AppContext) {
     validateUserSession,
     resolveRequestToken,
     authRateLimit,
+    loginIpRateLimit,
     sendError,
     ErrorCodes,
     generateOpenAPISpec,
@@ -663,7 +664,8 @@ function configureMiddleware(app: Application, ctx: AppContext) {
   app.use('/api', (req: Request, res: Response, next: NextFunction) =>
     req.method === 'POST' && req.path === '/v1/metrics/web-vitals' ? next() : globalLimiter(req, res, next));
 
-  app.use('/api/v1/auth/login', authRateLimit);
+  // Login keeps its per-(IP, username) route bucket (routes/auth.ts) and gets a looser per-IP cap here.
+  app.use('/api/v1/auth/login', loginIpRateLimit);
   app.use('/api/v1/auth/register', authRateLimit);
 
   // ── NUL bytes ─────────────────────────────────────────────────────────

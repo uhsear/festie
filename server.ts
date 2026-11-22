@@ -55,9 +55,8 @@ function validateStartupConfig(config: any) {
   }
 
   // 3. Production must not ship weak/default SESSION_SECRET (only enforced when key exists on config).
-  // NOTE: SESSION_SECRET is not currently used for HMAC signing — session tokens are opaque random
-  // strings hashed with SHA-256 server-side. This check ensures the key is pre-provisioned so
-  // HMAC-signed sessions can be introduced without a redeployment. See ADR-004.
+  // NOTE: SESSION_SECRET keys the HMAC of client IPs in the per-IP login lockout. Rotating it resets those
+  // counters. Session tokens are opaque random strings hashed with SHA-256, not signed. See ADR-004.
   if (isProd && Object.prototype.hasOwnProperty.call(config, 'SESSION_SECRET')) {
     if (!config.SESSION_SECRET || config.SESSION_SECRET === 'change-me') {
       throw new Error(
@@ -433,7 +432,7 @@ function installErrorHandling(app: Express, ctx: AppContext) {
 
 /** Boot-time DB housekeeping: expired-token purge and venue coordinate backfill (leader instance only). */
 function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
-  const { pool } = ctx;
+  const { pool, config } = ctx;
 
   // ── Startup token purge ──────────────────────────────────────────
   // Same leader-election guard as the periodic token cleanup in
@@ -445,13 +444,18 @@ function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
     Promise.all([
       pool.query('DELETE FROM password_reset_tokens WHERE expires_at < NOW()'),
       pool.query('DELETE FROM email_verification_tokens WHERE expires_at < NOW()'),
-      pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked = TRUE'),
+      pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR (revoked = TRUE AND rotated_at IS NULL)'),
+      pool.query(
+        "DELETE FROM login_failure_ips WHERE last_failure_at < NOW() - make_interval(secs => $1) AND (locked_until IS NULL OR locked_until < NOW())",
+        [config.LOGIN_LOCKOUT_MS / 1000],
+      ),
     ])
       .then((purged: any[]) => {
         log.info('startup token purge completed', {
           resetTokens: purged[0].rowCount,
           verifyTokens: purged[1].rowCount,
           refreshTokens: purged[2].rowCount,
+          loginFailureIps: purged[3].rowCount,
         });
       })
       .catch((err: any) => {

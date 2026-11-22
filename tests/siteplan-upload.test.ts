@@ -52,6 +52,7 @@ function makeApp(publicOrigin: string) {
     getRequestIp: () => '127.0.0.1',
     rateLimit: passthrough,
     authRateLimit: (_req: any, _res: any, next: any) => next(),
+    loginIpRateLimit: (_req: any, _res: any, next: any) => next(),
     sendError,
     sendSuccess,
     ErrorCodes,

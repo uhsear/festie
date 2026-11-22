@@ -132,6 +132,8 @@ describe('Config Loading', () => {
 
     assert.equal(config.RATE_LIMIT_MAX, 500);
     assert.equal(config.AUTH_RATE_LIMIT_MAX, 20);
+    assert.equal(config.AUTH_LOGIN_IP_RATE_LIMIT_MAX, 30);
+    assert.equal(loadConfig({ PUBLIC_ORIGIN: '', ADMIN_USER: 'admin', ADMIN_PASSWORD: 'Str0ngTest!Pw', AUTH_LOGIN_IP_RATE_LIMIT_MAX: '7' }).AUTH_LOGIN_IP_RATE_LIMIT_MAX, 7);
   });
 
   test('loadConfig with custom data directories', () => {
