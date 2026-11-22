@@ -42,6 +42,7 @@ function RatePageInner() {
   if (!festivalId) {
     return (
       <EmptyState
+        headingLevel={1}
         icon={<Music className="w-9 h-9" aria-hidden="true" />}
         title="Nothing to rate right now"
         description="Sets you picked show up here after they end."
@@ -104,6 +105,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
     if (isApiClientError(error) && error.status === 404) {
       return (
         <EmptyState
+          headingLevel={1}
           icon={<Music className="w-9 h-9" aria-hidden="true" />}
           title={WRAP_STATE_COPY.notFound.title}
           description={WRAP_STATE_COPY.notFound.description}
@@ -112,6 +114,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
     }
     return (
       <EmptyState
+        headingLevel={1}
         icon={<Music className="w-9 h-9" aria-hidden="true" />}
         title="Couldn't load your sets"
         cta={{ label: 'Try again', onClick: () => refetch() }}
@@ -128,6 +131,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
   if (isWrapUpcoming(data.festival)) {
     return (
       <EmptyState
+        headingLevel={1}
         icon={<Music className="w-9 h-9" aria-hidden="true" />}
         title={WRAP_STATE_COPY.notStarted.title}
         description={WRAP_STATE_COPY.notStarted.description}
@@ -138,6 +142,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
     return (
       <>
         <EmptyState
+          headingLevel={1}
           icon={<Music className="w-9 h-9" aria-hidden="true" />}
           title="Nothing to rate right now"
           description="Sets you picked show up here after they end."
