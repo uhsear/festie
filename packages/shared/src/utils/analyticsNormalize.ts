@@ -9,6 +9,8 @@
  * can reuse the same types and normalization without a web dependency.
  */
 
+import { pluralize } from './format';
+
 export interface TopSetData {
   artist: string;
   stageId: string | null;
@@ -278,7 +280,8 @@ export function analyticsScopeLine(data: AnalyticsData): string {
   if (data.scope.festivalId) {
     return `At ${data.scope.festivalName ?? ''}: ${data.totals.usersWithPlan} people with a plan.`;
   }
-  return `Across all ${data.festivalStats.length} festivals and ${data.totals.signedUp} accounts.`;
+  const count = data.festivalStats.length;
+  return `Across ${count === 1 ? '' : 'all '}${pluralize(count, 'festival')} and ${pluralize(data.totals.signedUp, 'account')}.`;
 }
 
 export function funnelSteps(data: AnalyticsData): Array<{ label: string; count: number; pctOfStart: string }> {
