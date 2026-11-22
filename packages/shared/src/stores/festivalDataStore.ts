@@ -539,6 +539,12 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         return;
       }
 
+      // A 200 while offline is the web service worker answering GET /festivals/:id
+      // from cache, not a server fetch. Show the data but never stamp it fresh:
+      // the freshness label keeps the age of the last real fetch (same rule as
+      // api.markOnlineAndDrain, which refuses to treat that 200 as reachability).
+      const servedOffline = isOffline() || (typeof navigator !== 'undefined' && navigator.onLine === false);
+
       set({
         // Re-assert the id alongside the data: an async persist rehydration
         // finishing mid-fetch can overwrite the id set at the top of this
@@ -554,7 +560,7 @@ const festivalDataStore: StateCreator<FestivalDataStore> = (set, get) => ({
         pickCounts: pickCounts ?? (prevState._cachedFestivalId === festivalId ? prevState.pickCounts : {}),
         currentProfile,
         isLoading: false,
-        _festivalCachedAt: Date.now(),
+        _festivalCachedAt: servedOffline ? prevState._festivalCachedAt : Date.now(),
         _cachedFestivalId: festivalId,
         _profilesCachedAt: profilesAreFresh ? Date.now() : prevState._profilesCachedAt,
         pickSync: {},

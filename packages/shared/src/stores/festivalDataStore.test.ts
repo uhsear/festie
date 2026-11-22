@@ -1262,6 +1262,29 @@ describe('festivalDataStore', () => {
       expect(state._profilesCachedAt).toBeGreaterThanOrEqual(before);
     });
 
+    it('keeps the prior _festivalCachedAt when a 200 arrives while offline (service-worker cache)', async () => {
+      // Web: the SW answers GET /festivals/:id from cache with no network, so the 200 is not fresh data.
+      useUIStore.setState({ offlineMode: true });
+      const lastRealFetch = Date.now() - 10 * 60_000;
+      useFestivalDataStore.setState({ _festivalCachedAt: lastRealFetch, _cachedFestivalId: 'fest-1' });
+      vi.mocked(api.get).mockResolvedValueOnce({ ...mockFestival, stages: [], days: [] });
+
+      await useFestivalDataStore.getState().selectFestival('fest-1');
+
+      expect(useFestivalDataStore.getState()._festivalCachedAt).toBe(lastRealFetch);
+    });
+
+    it('does not stamp _festivalCachedAt for a cached 200 when the OS reports offline', async () => {
+      vi.stubGlobal('navigator', { onLine: false });
+      useFestivalDataStore.setState({ _festivalCachedAt: null });
+      vi.mocked(api.get).mockResolvedValueOnce({ ...mockFestival, stages: [], days: [] });
+
+      await useFestivalDataStore.getState().selectFestival('fest-1');
+      vi.unstubAllGlobals();
+
+      expect(useFestivalDataStore.getState()._festivalCachedAt).toBeNull();
+    });
+
     it('preserves persisted allProfiles offline ONLY when they belong to this festival', async () => {
       useAuthStore.setState({
         user: { id: 'user-1', username: 'alice', createdAt: '', updatedAt: '' },
