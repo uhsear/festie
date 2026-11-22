@@ -209,6 +209,24 @@ describe('lib/sentry.js', () => {
       assert.deepEqual(out.request.headers, { accept: 'x' });
     });
 
+    it('scrubErrorEvent redacts referer, query string, message and exception values', () => {
+      const out = sentryModule.scrubErrorEvent({
+        request: { url: 'https://festie.us/x', query_string: `next=${path}`, headers: { referer: `https://festie.us${path}`, Referer: `https://festie.us${path}` } },
+        message: `failed ${path}`,
+        exception: { values: [{ value: `GET ${path} failed` }, { type: 'Error' }] },
+      });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+      assert.equal(out.exception.values[0].value, `GET ${redacted} failed`);
+    });
+
+    it('scrubTransactionEvent redacts referer, query string and trace context data', () => {
+      const out = sentryModule.scrubTransactionEvent({
+        request: { query_string: `next=${path}`, headers: { referer: `https://festie.us${path}` } },
+        contexts: { trace: { data: urlData() } },
+      });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+    });
+
     it('scrubTransactionEvent redacts url, transaction, span descriptions and span url data', () => {
       const out = sentryModule.scrubTransactionEvent({
         request: { url: `https://festie.us${path}` },

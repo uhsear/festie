@@ -36,15 +36,25 @@ function composeHook(ours: (item: any) => any, theirs?: (item: any, hint?: any) 
   };
 }
 
+function scrubRequest(request: any) {
+  if (!request) return;
+  for (const key of ['url', 'query_string']) if (key in request) request[key] = redactIfString(request[key]);
+  for (const key of ['referer', 'Referer']) if (request.headers && key in request.headers) request.headers[key] = redactIfString(request.headers[key]);
+}
+
 function scrubErrorEvent(event: any) {
   // Strip obvious PII paths
   if (event.request && event.request.headers) {
     delete event.request.headers.cookie;
     delete event.request.headers.authorization;
   }
-  // An invite code in the URL is a live credential.
-  if (event.request) event.request.url = redactIfString(event.request.url);
+  // An invite code in a URL, referer or message is a live credential.
+  scrubRequest(event.request);
   event.transaction = redactIfString(event.transaction);
+  event.message = redactIfString(event.message);
+  if (Array.isArray(event.exception?.values)) {
+    for (const entry of event.exception.values) entry.value = redactIfString(entry.value);
+  }
   return event;
 }
 
@@ -55,8 +65,9 @@ function scrubSpan(span: any) {
 }
 
 function scrubTransactionEvent(event: any) {
-  if (event.request) event.request.url = redactIfString(event.request.url);
+  scrubRequest(event.request);
   event.transaction = redactIfString(event.transaction);
+  redactUrlData(event.contexts?.trace?.data);
   if (Array.isArray(event.spans)) for (const span of event.spans) scrubSpan(span);
   return event;
 }
