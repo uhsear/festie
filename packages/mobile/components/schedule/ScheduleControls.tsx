@@ -77,7 +77,7 @@ interface ScheduleControlsProps {
   viewMode: "timeline" | "cards";
   visibleDays: number[];
   width: number;
-  zoneLabel: "Festival time" | null;
+  zoneLabel: string | null;
 }
 
 export default function ScheduleControls({
