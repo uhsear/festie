@@ -632,7 +632,7 @@ export default function GridScreen() {
               onPress={() => void handleExport()}
               disabled={sharing}
               accessibilityRole="button"
-              accessibilityLabel="Export grid as image"
+              accessibilityLabel={COPY.grid.shareImageA11y}
               hitSlop={8}
               style={styles.headerButton}
             >

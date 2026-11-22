@@ -1,5 +1,6 @@
 import React from 'react';
 import { platformLabel, isSafeExternalUrl } from '@festie/shared/utils';
+import { genreChipLabel } from '@festie/shared/constants';
 import { ArtistNameButton } from './ArtistName';
 
 interface Props {
@@ -19,9 +20,9 @@ export default function DetailArtistLinks({ artistLinks, isB2B, genres, hideLink
           {genres.map((g) => (
             <span
               key={g}
-              className="px-2.5 py-0.5 rounded-DEFAULT bg-[var(--color-overlay-2)] border border-border text-text-secondary text-[length:var(--font-size-12)] font-semibold capitalize tracking-[0.02em]"
+              className="px-2.5 py-0.5 rounded-DEFAULT bg-[var(--color-overlay-2)] border border-border text-text-secondary text-[length:var(--font-size-12)] font-semibold tracking-[0.02em]"
             >
-              {g}
+              {genreChipLabel(g)}
             </span>
           ))}
         </div>
@@ -48,9 +49,10 @@ export default function DetailArtistLinks({ artistLinks, isB2B, genres, hideLink
                       href={isSafeExternalUrl(url) ? url : undefined}
                       target="_blank"
                       rel="noopener noreferrer"
+                      aria-label={`${a.name} on ${platformLabel(platform)}`}
                       className="inline-flex items-center min-h-11 text-[length:var(--font-size-14)] text-accent-aqua no-underline hover:underline"
                     >
-                      {(platform === 'spotify' ? 'Open Spotify' : platformLabel(platform)) + ' ↗'}
+                      {platformLabel(platform) + ' ↗'}
                     </a>
                   ))}
               </div>

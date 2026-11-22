@@ -528,9 +528,7 @@ export default function TimelineScreen() {
         );
       }
       if (item.kind === 'earlier') {
-        const label = earlierOpen
-          ? 'Hide sets that ended earlier today'
-          : `Show ${item.count} sets that ended earlier today`;
+        const label = `Earlier today (${item.count}), ${earlierOpen ? 'hide' : 'show'} sets that ended earlier`;
         return (
           <TouchableOpacity
             style={styles.earlierRow}

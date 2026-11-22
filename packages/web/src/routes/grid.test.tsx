@@ -389,7 +389,7 @@ describe('GridView', () => {
       scrollToNow: vi.fn(),
     });
     render(<GridView />);
-    expect(screen.getByLabelText('Scroll to the current time')).toBeInTheDocument();
+    expect(screen.getByLabelText('Jump to now, scroll to the current time')).toBeInTheDocument();
     expect(screen.getByText('Jump to now')).toBeInTheDocument();
   });
 
