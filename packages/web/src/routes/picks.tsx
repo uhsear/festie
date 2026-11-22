@@ -8,7 +8,7 @@ import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useActiveCrew, usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
-import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, isSetScheduled, resolveFestivalTimeZone } from '@festie/shared/utils';
+import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, filterPickMap, filterPlanListItems, isSetScheduled, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { MyDay, PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
 import FestivalLoadError from '../components/features/FestivalLoadError';
@@ -135,7 +135,8 @@ function PicksViewInner() {
   // unscheduled on every day, so keep each day's own and list the dayless picks once.
   const myDayGroups = useMemo(() => {
     if (view !== 'myday') return null;
-    const picks = myPicks ?? {};
+    // The focus filter and search narrow My day the same way they narrow All picks.
+    const picks = filterPickMap({ sets, picks: myPicks ?? undefined, stages, filter: effectiveFilter, search, clashIds });
     const groups: Array<{ key: string; label: string | null; myDay: MyDay }> = [];
     days.forEach((day, dayIndex) => {
       const dayGroups = buildPickConflicts({ sets, myPicks: picks, selectedDay: dayIndex, days, timeZone, stages });
@@ -159,7 +160,7 @@ function PicksViewInner() {
       groups.push({ key: 'no-day', label: null, myDay: { sections: [], unscheduled: noDay, pickCount: noDay.length } });
     }
     return groups;
-  }, [view, sets, myPicks, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator]);
+  }, [view, sets, myPicks, days, timeZone, stages, meetingPoints, currentFestival?.b2bSeparator, effectiveFilter, search, clashIds]);
 
   // Share needs an account (the link is a server page). The calendar file and the image draw from the
   // picks on this device, so a guest gets those and a Share button that asks them to sign in.
@@ -246,20 +247,96 @@ function PicksViewInner() {
       </RovingGroup>
     ) : null;
 
+  const chips: Array<{ value: PicksFilter; label: string; count: number; priority?: Priority; clash?: boolean }> = [
+    { value: 'all', label: 'All', count: stats.total },
+    ...(stats.must > 0 ? [{ value: 'must' as const, label: 'Must', count: stats.must, priority: 'must' as const }] : []),
+    ...(stats.want > 0
+      ? [{ value: 'want-to-see' as const, label: 'Want', count: stats.want, priority: 'want-to-see' as const }]
+      : []),
+    ...(stats.maybe > 0
+      ? [{ value: 'maybe' as const, label: 'Maybe', count: stats.maybe, priority: 'maybe' as const }]
+      : []),
+    ...(stats.clashes > 0
+      ? [{ value: 'clashes' as const, label: COPY.clash.filter, count: stats.clashes, clash: true }]
+      : []),
+  ];
+
+  const trimmedSearch = search.trim();
+  const clashOnlyEmpty = effectiveFilter === 'clashes' && !trimmedSearch;
+
+  const filterChips = (
+    <div role="group" aria-label="Filter picks" className="flex flex-wrap gap-2 mb-3">
+      {chips.map((c) => (
+        <button
+          key={c.value}
+          type="button"
+          aria-pressed={effectiveFilter === c.value}
+          className={chipClass(effectiveFilter === c.value)}
+          onClick={() => toggleFilter(c.value)}
+        >
+          {c.priority && (
+            <span style={{ color: PRIORITY_STYLE[c.priority].accent }} className="inline-flex">
+              <PriorityIcon priority={c.priority} className="w-3.5 h-3.5" filled />
+            </span>
+          )}
+          {c.clash && <TriangleAlert className="w-3.5 h-3.5 text-accent-coral" aria-hidden="true" />}
+          {c.label}
+          <Badge variant={c.priority ? PRIORITY_STYLE[c.priority].badge : 'count'}>{c.count}</Badge>
+        </button>
+      ))}
+    </div>
+  );
+  const searchBox = (
+    <div className="relative flex-1 min-w-[160px]">
+      <Search
+        className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none"
+        aria-hidden="true"
+      />
+      <input
+        type="text"
+        inputMode="search"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        placeholder="Filter picks"
+        aria-label="Filter my picks"
+        className="w-full min-h-11 rounded-full border border-border-input bg-bg-card pl-9 pr-11 text-sm"
+      />
+      {search && (
+        <button
+          type="button"
+          aria-label="Clear search"
+          onClick={() => setSearch('')}
+          className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
+        >
+          <X className="w-4 h-4" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+  // Notes and Reminders list every set with one, picked or not, so only the text search narrows them.
+  const searchRow = <div className="flex flex-wrap items-center gap-2 mb-3">{searchBox}</div>;
+
   // Reminders and notes can exist without picks, so these lists skip the empty state.
   if (view === 'reminders' || view === 'notes') {
+    const listItems = view === 'reminders' ? reminderItems : noteItems;
+    const shownItems = filterPlanListItems(listItems, search, stages);
     return (
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
           {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
           {viewTabRow}
           <div role="tabpanel" id="picks-view-panel" aria-labelledby={`picks-tab-${view}`}>
-            <PlanNotesList
-              kind={view}
-              items={view === 'reminders' ? reminderItems : noteItems}
-              days={days}
-              onOpenSet={setDetailSet}
-            />
+            {listItems.length > 0 && searchRow}
+            {shownItems.length === 0 && listItems.length > 0 ? (
+              <EmptyState
+                icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
+                title="No matching picks"
+                description={`Nothing matches “${trimmedSearch}”.`}
+                cta={{ label: 'Clear filters', onClick: clearFilters }}
+              />
+            ) : (
+              <PlanNotesList kind={view} items={shownItems} days={days} onOpenSet={setDetailSet} />
+            )}
           </div>
         </div>
       </RefreshableView>
@@ -298,23 +375,6 @@ function PicksViewInner() {
     );
   }
 
-  const chips: Array<{ value: PicksFilter; label: string; count: number; priority?: Priority; clash?: boolean }> = [
-    { value: 'all', label: 'All', count: stats.total },
-    ...(stats.must > 0 ? [{ value: 'must' as const, label: 'Must', count: stats.must, priority: 'must' as const }] : []),
-    ...(stats.want > 0
-      ? [{ value: 'want-to-see' as const, label: 'Want', count: stats.want, priority: 'want-to-see' as const }]
-      : []),
-    ...(stats.maybe > 0
-      ? [{ value: 'maybe' as const, label: 'Maybe', count: stats.maybe, priority: 'maybe' as const }]
-      : []),
-    ...(stats.clashes > 0
-      ? [{ value: 'clashes' as const, label: COPY.clash.filter, count: stats.clashes, clash: true }]
-      : []),
-  ];
-
-  const trimmedSearch = search.trim();
-  const clashOnlyEmpty = effectiveFilter === 'clashes' && !trimmedSearch;
-
   return (
     <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
       <div role="region" aria-label="My picks" className="flex flex-col max-w-[600px] mx-auto w-full">
@@ -325,11 +385,20 @@ function PicksViewInner() {
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
 
         <div role="tabpanel" id="picks-view-panel" aria-labelledby={`picks-tab-${view}`}>
+        {view === 'myday' && (
+          <>
+            {filterChips}
+            {searchRow}
+          </>
+        )}
         {view === 'myday' && myDayGroups && myDayGroups.length === 0 && (
           <EmptyState
             icon={<CalendarX className="w-9 h-9" aria-hidden="true" />}
-            title="No matching picks"
-            description="No picks in this view."
+            title={clashOnlyEmpty ? COPY.clash.none : 'No matching picks'}
+            description={
+              clashOnlyEmpty ? COPY.clash.noneBody : trimmedSearch ? `Nothing matches “${trimmedSearch}”.` : 'No picks in this view.'
+            }
+            cta={filtersActive ? { label: 'Clear filters', onClick: clearFilters } : undefined}
           />
         )}
         {view === 'myday' &&
@@ -342,26 +411,7 @@ function PicksViewInner() {
 
         {view === 'plan' && (
           <>
-        <div role="group" aria-label="Filter picks" className="flex flex-wrap gap-2 mb-3">
-          {chips.map((c) => (
-            <button
-              key={c.value}
-              type="button"
-              aria-pressed={effectiveFilter === c.value}
-              className={chipClass(effectiveFilter === c.value)}
-              onClick={() => toggleFilter(c.value)}
-            >
-              {c.priority && (
-                <span style={{ color: PRIORITY_STYLE[c.priority].accent }} className="inline-flex">
-                  <PriorityIcon priority={c.priority} className="w-3.5 h-3.5" filled />
-                </span>
-              )}
-              {c.clash && <TriangleAlert className="w-3.5 h-3.5 text-accent-coral" aria-hidden="true" />}
-              {c.label}
-              <Badge variant={c.priority ? PRIORITY_STYLE[c.priority].badge : 'count'}>{c.count}</Badge>
-            </button>
-          ))}
-        </div>
+        {filterChips}
 
         <div className="flex flex-wrap items-center gap-2 mb-3">
           <RovingGroup
@@ -401,31 +451,7 @@ function PicksViewInner() {
               </button>
             ))}
           </RovingGroup>
-          <div className="relative flex-1 min-w-[160px]">
-            <Search
-              className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none"
-              aria-hidden="true"
-            />
-            <input
-              type="text"
-              inputMode="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter picks"
-              aria-label="Filter my picks"
-              className="w-full min-h-11 rounded-full border border-border-input bg-bg-card pl-9 pr-11 text-sm"
-            />
-            {search && (
-              <button
-                type="button"
-                aria-label="Clear search"
-                onClick={() => setSearch('')}
-                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
-              >
-                <X className="w-4 h-4" aria-hidden="true" />
-              </button>
-            )}
-          </div>
+          {searchBox}
         </div>
 
         <MarkedNoSet />

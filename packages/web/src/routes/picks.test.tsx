@@ -447,6 +447,92 @@ describe('PicksView', () => {
     expect(screen.getByRole('heading', { name: 'Day 2' })).toBeInTheDocument();
   });
 
+  describe('My day filters and search', () => {
+    const mixed = () =>
+      setStoreState({
+        sets: [
+          makeSet('s1', 'Daft Punk'),
+          makeSet('s2', 'Justice', { dayIndex: 1 }),
+          makeSet('s3', 'Odesza', { dayIndex: 1, stageId: 'st2' }),
+        ],
+        profile: picksOf({ s1: 'must', s2: 'want-to-see', s3: 'maybe' }),
+      });
+    const openMyDay = () => {
+      mixed();
+      render(<PicksView />);
+      fireEvent.click(screen.getByRole('tab', { name: 'My day' }));
+    };
+
+    it('shows the priority chips and the search box on My day', () => {
+      openMyDay();
+      expect(screen.getByRole('group', { name: 'Filter picks' })).toBeInTheDocument();
+      expect(screen.getByRole('textbox', { name: 'Filter my picks' })).toBeInTheDocument();
+      expect(screen.getAllByTestId('my-day-list')).toHaveLength(2);
+    });
+
+    it('keeps only the days that hold the chosen priority', () => {
+      openMyDay();
+      fireEvent.click(screen.getByRole('button', { name: /^Must/ }));
+      expect(screen.getAllByTestId('my-day-list')).toHaveLength(1);
+      expect(screen.getByRole('heading', { name: 'Day 1' })).toBeInTheDocument();
+      expect(screen.queryByRole('heading', { name: 'Day 2' })).toBeNull();
+    });
+
+    it('filters by artist or stage name and explains an empty result', () => {
+      openMyDay();
+      const box = screen.getByRole('textbox', { name: 'Filter my picks' });
+      fireEvent.change(box, { target: { value: 'sahara' } });
+      expect(screen.getAllByTestId('my-day-list')).toHaveLength(1);
+      fireEvent.change(box, { target: { value: 'zzz' } });
+      expect(screen.queryByTestId('my-day-list')).toBeNull();
+      expect(screen.getByText('Nothing matches “zzz”.')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+      expect(screen.getAllByTestId('my-day-list')).toHaveLength(2);
+    });
+
+    it('keeps the filters when the person switches to All picks and back', () => {
+      openMyDay();
+      fireEvent.click(screen.getByRole('button', { name: /^Must/ }));
+      fireEvent.click(screen.getByRole('tab', { name: 'All picks' }));
+      expect(screen.getByRole('button', { name: /^Must/ })).toHaveAttribute('aria-pressed', 'true');
+    });
+  });
+
+  describe('Notes and Reminders search', () => {
+    const withNotes = () => {
+      setStoreState({
+        sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Justice', { dayIndex: 1 })],
+        profile: { id: 'p1', userId: 'u1', picks: { s1: 'must' }, notes: { s1: 'Bring water', s2: 'Meet Sam' } },
+      });
+      render(<PicksView />);
+      fireEvent.click(screen.getByRole('tab', { name: /^Notes/ }));
+    };
+
+    it('searches the notes list by artist', () => {
+      withNotes();
+      expect(screen.getByTestId('plan-notes-list')).toHaveTextContent('notes:2');
+      fireEvent.change(screen.getByRole('textbox', { name: 'Filter my picks' }), { target: { value: 'justice' } });
+      expect(screen.getByTestId('plan-notes-list')).toHaveTextContent('notes:1');
+    });
+
+    it('explains a search that matches no note', () => {
+      withNotes();
+      fireEvent.change(screen.getByRole('textbox', { name: 'Filter my picks' }), { target: { value: 'zzz' } });
+      expect(screen.queryByTestId('plan-notes-list')).toBeNull();
+      expect(screen.getByText('Nothing matches “zzz”.')).toBeInTheDocument();
+    });
+
+    it('shows no search box when the list is empty', () => {
+      setStoreState({
+        sets: [makeSet('s1', 'Daft Punk')],
+        profile: { id: 'p1', userId: 'u1', picks: { s1: 'must' }, notes: {} },
+      });
+      render(<PicksView />);
+      fireEvent.click(screen.getByRole('tab', { name: /^Notes/ }));
+      expect(screen.queryByRole('textbox', { name: 'Filter my picks' })).toBeNull();
+    });
+  });
+
   it('gives a guest with picks the My day tab', () => {
     setStoreState({ user: null, profile: null, sets: [makeSet('s1', 'Daft Punk')] });
     useFestivalStore.setState({ guestPicks: { f1: { s1: 'must' } } } as never);

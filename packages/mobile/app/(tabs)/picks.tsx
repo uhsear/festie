@@ -36,11 +36,11 @@ import {
   listenListText,
   buildMyDay,
   buildPlanList,
-  buildPicksRows,
+  filterPickMap,
+  filterPlanListItems,
   isSetScheduled,
   clashBadgeBySetId,
   fmtZonedClock,
-  foldSearch,
   spotifyAttributionFor,
 } from '@festie/shared/utils';
 import { mapErrorToUserMessage } from '@festie/shared/services';
@@ -204,13 +204,7 @@ export default function PicksScreen() {
 
   const listRows = useMemo<Row[]>(() => {
     if (activePlanList) {
-      const q = foldSearch(search.trim());
-      const items = (activePlanList === 'reminders' ? reminderItems : noteItems).filter(
-        (item) =>
-          !q ||
-          foldSearch(artistDisplayName(item.set, separator)).includes(q) ||
-          foldSearch(getStageName(item.set.stageId) || '').includes(q),
-      );
+      const items = filterPlanListItems(activePlanList === 'reminders' ? reminderItems : noteItems, search, stages);
       const out: Row[] = [];
       const known = new Set(days.map((d) => d.index));
       const emit = (groupId: string, label: string, groupItems: PlanListItem[]) => {
@@ -230,20 +224,14 @@ export default function PicksScreen() {
 
     // My day covers the picks the current filter and search leave in the plan.
     // Membership ignores collapsed groups in By day / By priority, which emit only their header.
-    const eligible = buildPicksRows({
+    const visiblePicks = filterPickMap({
       sets,
       picks: myPicks ?? undefined,
-      days: storeDays,
       stages,
-      groupMode: 'day',
       filter: effectiveFilter,
       search,
-      collapsed: new Set(),
       clashIds: conflictIds,
-      compare: () => 0,
     });
-    const visiblePicks: Record<string, Priority> = {};
-    for (const row of eligible) if (row.kind === 'set' && myPicks?.[row.set.id]) visiblePicks[row.set.id] = myPicks[row.set.id]!;
     const out: Row[] = [];
     days.forEach((day) => {
       const myDay = buildMyDay({
