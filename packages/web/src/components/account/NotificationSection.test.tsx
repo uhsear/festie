@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 const toast = vi.fn();
@@ -323,6 +323,27 @@ describe('NotificationSection preferences', () => {
     expect(screen.getByText('Notification types')).toBeInTheDocument();
   });
 
+  it('toasts when a switch fails to save, so the failure is visible off screen', async () => {
+    const user = userEvent.setup();
+    toast.mockClear();
+    mockUpdatePrefs.mockRejectedValue(new Error('network'));
+    render(<NotificationSection />);
+    await user.click(screen.getByRole('switch', { name: 'Schedule changes' }));
+    await waitFor(() => expect(toast).toHaveBeenCalledWith("Couldn't update notification setting. Try again.", 'error'));
+  });
+
+  it('names the problem when a quiet-hours time is cleared, and when both times match', async () => {
+    resetStore({ prefs: { ...basePrefs, dndStart: '23:00', dndEnd: '08:00' }, loaded: true });
+    const { container } = render(<NotificationSection />);
+    const [, to] = Array.from(container.querySelectorAll('input[type="time"]')) as HTMLInputElement[];
+    fireEvent.change(to!, { target: { value: '' } });
+    fireEvent.blur(to!);
+    expect(screen.getByText('Enter a start and end time.')).toBeInTheDocument();
+    fireEvent.change(to!, { target: { value: '23:00' } });
+    fireEvent.blur(to!);
+    expect(screen.getByText("Start and end can't be the same.")).toBeInTheDocument();
+  });
+
   it('shows skeletons, not switches, until the first load finishes', () => {
     resetStore({ isLoading: true, loaded: false });
     const { rerender } = render(<NotificationSection />);
@@ -348,8 +369,8 @@ describe('NotificationSection preferences', () => {
     resetStore({ prefs: { ...basePrefs, crewUpdates: false }, loaded: true });
     topicsState = { festival: { id: 'f1', name: 'EDC' }, subs: { crew: true, schedule: true }, error: false };
     render(<NotificationSection />);
-    const switches = screen.getAllByRole('switch', { name: 'Crew picks' });
-    const festivalSwitch = switches[1];
+    expect(screen.getAllByRole('switch', { name: 'Crew picks' })).toHaveLength(1);
+    const festivalSwitch = screen.getByRole('switch', { name: 'Crew picks for EDC' });
     expect(festivalSwitch).toBeDisabled();
     expect(festivalSwitch).toHaveAttribute('aria-checked', 'false');
     expect(screen.getByText('Off for every festival')).toBeInTheDocument();

@@ -36,6 +36,14 @@ describe('mapErrorToUserMessage', () => {
     expect(mapErrorToUserMessage(apiError(400, {}, 'Name is required'), 'Fallback')).toBe('Name is required');
   });
 
+  it('replaces a raw push-service failure with the fallback', () => {
+    const abort = Object.assign(new Error('Registration failed - push service error'), { name: 'AbortError' });
+    expect(mapErrorToUserMessage(abort, "Couldn't turn on notifications. Try again.")).toBe(
+      "Couldn't turn on notifications. Try again.",
+    );
+    expect(mapErrorToUserMessage(new Error('Registration failed - push service error'), 'Fallback')).toBe('Fallback');
+  });
+
   it('uses a plain Error message', () => {
     expect(mapErrorToUserMessage(new Error('x'), 'Fallback')).toBe('x');
   });
