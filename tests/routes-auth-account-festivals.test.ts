@@ -943,6 +943,7 @@ describe('routes/auth.js — createAuthRoutes', () => {
       const deps = makeMockDeps();
       deps.stores.refreshTokens = {
         validate: mock.fn(async () => null),
+        findRotated: mock.fn(async () => null),
       };
       const router = createAuthRoutes(deps);
       const app = createApp(router);
@@ -978,10 +979,13 @@ describe('routes/auth.js — createAuthRoutes', () => {
 
     test('returns 401 and mints nothing when the claim is lost to a concurrent call', async () => {
       const createFn = mock.fn(async () => {});
+      const revokeFn = mock.fn(async () => []);
       const deps = makeMockDeps();
       deps.stores.refreshTokens = {
         validate: mock.fn(async () => ({ userId: 'u-1' })),
         claim: mock.fn(async () => null),
+        findRotated: mock.fn(async () => ({ userId: 'u-1', familyId: 'fam-1', ageMs: 50 })),
+        revokeFamily: revokeFn,
         create: createFn,
       };
       const app = createApp(createAuthRoutes(deps));
@@ -991,7 +995,25 @@ describe('routes/auth.js — createAuthRoutes', () => {
       assert.equal(res.status, 401);
       assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
       assert.equal(createFn.mock.calls.length, 0);
+      assert.equal(revokeFn.mock.calls.length, 0, 'a claim lost inside the grace window revokes nothing');
       assert.equal(res.headers['set-cookie'], undefined);
+    });
+
+    test('revokes the whole family when a token spent long ago is presented again', async () => {
+      const revokeFn = mock.fn(async () => ['sess-hash-1']);
+      const deps = makeMockDeps();
+      deps.stores.refreshTokens = {
+        validate: mock.fn(async () => null),
+        findRotated: mock.fn(async () => ({ userId: 'u-1', familyId: 'fam-1', ageMs: 60_000 })),
+        revokeFamily: revokeFn,
+      };
+      const app = createApp(createAuthRoutes(deps));
+
+      const res = await request(app).post('/refresh-token').send({ refreshToken: 'rt-replayed' });
+
+      assert.equal(res.status, 401);
+      assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+      assert.deepEqual(revokeFn.mock.calls[0]?.arguments, ['fam-1']);
     });
   });
 

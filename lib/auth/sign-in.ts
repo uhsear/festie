@@ -81,6 +81,7 @@ export async function issueRefreshToken(userId: string, sessionToken: string, de
     userId,
     sessionToken: hashToken(sessionToken),
     expiresAt: new Date(Date.now() + config.REFRESH_TOKEN_TTL),
+    familyId: createOpaqueId('rtf'),
   });
   return refreshToken;
 }

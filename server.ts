@@ -445,7 +445,7 @@ function runStartupJobs(ctx: AppContext, deps: RouteDeps) {
     Promise.all([
       pool.query('DELETE FROM password_reset_tokens WHERE expires_at < NOW()'),
       pool.query('DELETE FROM email_verification_tokens WHERE expires_at < NOW()'),
-      pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked = TRUE'),
+      pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR (revoked = TRUE AND rotated_at IS NULL)'),
     ])
       .then((purged: any[]) => {
         log.info('startup token purge completed', {

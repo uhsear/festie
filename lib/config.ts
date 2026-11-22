@@ -45,6 +45,9 @@ export const DEFAULTS = {
   MAX_RATE_LIMIT_ENTRIES: 10_000,
   AUTH_RATE_LIMIT_WINDOW: 300_000,
   AUTH_RATE_LIMIT_MAX: 10,
+  // Per-IP cap on POST /auth/login attempts per AUTH_RATE_LIMIT_WINDOW. Looser than AUTH_RATE_LIMIT_MAX because
+  // the per-(IP, username) route bucket already holds one account to 10 tries; this only bounds one IP across accounts.
+  AUTH_LOGIN_IP_RATE_LIMIT_MAX: 30,
   SESSION_CLEANUP_INTERVAL_MS: 60_000,
   SESSION_TTL: 24 * 60 * 60 * 1000,
   SOCKET_CONNECT_WINDOW: 60_000,
@@ -333,6 +336,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   MAX_RATE_LIMIT_ENTRIES: number;
   AUTH_RATE_LIMIT_WINDOW: number;
   AUTH_RATE_LIMIT_MAX: number;
+  AUTH_LOGIN_IP_RATE_LIMIT_MAX: number;
   SESSION_CLEANUP_INTERVAL_MS: number;
   SESSION_TTL: number;
   SOCKET_CONNECT_WINDOW: number;
@@ -558,6 +562,10 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     AUTH_RATE_LIMIT_MAX: readInt(
       overrides.AUTH_RATE_LIMIT_MAX || process.env.AUTH_RATE_LIMIT_MAX,
       DEFAULTS.AUTH_RATE_LIMIT_MAX,
+    ),
+    AUTH_LOGIN_IP_RATE_LIMIT_MAX: readInt(
+      overrides.AUTH_LOGIN_IP_RATE_LIMIT_MAX || process.env.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
+      DEFAULTS.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
     ),
     SESSION_CLEANUP_INTERVAL_MS: readInt(
       overrides.SESSION_CLEANUP_INTERVAL_MS || process.env.SESSION_CLEANUP_INTERVAL_MS,

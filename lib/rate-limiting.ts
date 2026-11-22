@@ -69,6 +69,7 @@ function createRateLimiters({
   resolveRequestToken,
   redisRateLimiter,
   redisAuthRateLimiter,
+  redisLoginIpRateLimiter,
   redisSocketConnectLimiter,
   redis,
   redisRateCheck,
@@ -303,7 +304,7 @@ function createRateLimiters({
     };
   }
 
-  function createAuthRateLimiter(map: any, redisLimiter: any) {
+  function createAuthRateLimiter(map: any, redisLimiter: any, max: number = config.AUTH_RATE_LIMIT_MAX, scopePrefix = 'auth') {
     return async (req: any, res: any, next: any) => {
       const ip = getRequestIp(req);
       if (redisLimiter) {
@@ -311,7 +312,7 @@ function createRateLimiters({
           const result = await redisLimiter.check(ip);
           if (!result.fallback) {
             if (result.limited) {
-              log.warn('rate-limit:exceeded', { scope: `auth:${ip}`, ip, path: redactInviteCodePath(req.path), userId: req.user?.userId });
+              log.warn('rate-limit:exceeded', { scope: `${scopePrefix}:${ip}`, ip, path: redactInviteCodePath(req.path), userId: req.user?.userId });
               res.set('Retry-After', String(Math.max(1, Math.ceil(result.resetMs / 1000))));
               promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
               return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
@@ -323,7 +324,7 @@ function createRateLimiters({
           recordFallback('auth', err);
         }
       }
-      const effectiveMax = fallbackMax(config.AUTH_RATE_LIMIT_MAX);
+      const effectiveMax = fallbackMax(max);
       const now = Date.now();
       let entry = getAndTouch(map, ip);
       if (!entry || now - entry.start > config.AUTH_RATE_LIMIT_WINDOW) {
@@ -334,7 +335,7 @@ function createRateLimiters({
       entry.count += 1;
       if (entry.count > effectiveMax) {
         log.warn('rate-limit:exceeded', {
-          scope: `auth:${ip}`,
+          scope: `${scopePrefix}:${ip}`,
           ip,
           path: redactInviteCodePath(req.path),
           userId: req.user?.userId,
@@ -405,12 +406,20 @@ function createRateLimiters({
 
   const authRateLimit = createAuthRateLimiter(state.authRateLimits, redisAuthRateLimiter);
   const adminAuthRateLimit = createAuthRateLimiter(state.adminAuthRateLimits, redisAuthRateLimiter);
+  // Login only: a looser per-IP cap than the strict one above. Like it, it also counts the shared 'unknown' IP.
+  const loginIpRateLimit = createAuthRateLimiter(
+    state.loginIpRateLimits,
+    redisLoginIpRateLimiter,
+    config.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
+    'auth-login-ip',
+  );
 
   return {
     enforceRateLimitMapCap,
     rateLimit,
     createAuthRateLimiter,
     authRateLimit,
+    loginIpRateLimit,
     adminAuthRateLimit,
     consumeSocketRateLimit,
     consumeUserAuthRateLimit,

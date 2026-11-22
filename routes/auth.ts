@@ -34,28 +34,72 @@ import { acceptProviderToken, ProviderRejection } from '../lib/oauth/accept';
 import type {} from '../lib/types';
 import type { RouteDeps } from '../lib/types';
 
+// Failed attempts count per (account, client IP): reaching MAX_LOGIN_FAILURES locks the account for that IP
+// only. The account-wide total across all IPs locks every IP, and only at this much higher threshold.
+export const LOGIN_GLOBAL_LOCK_FAILURES = 50;
+// A refresh token spent this recently is a racing tab or a retry, not a replay: refuse it, revoke nothing.
+export const REFRESH_REUSE_GRACE_MS = 10_000;
+
+// SHA-256 of the client IP: the per-IP failure table never stores a raw address.
+function ipKeyOf(req: Request, deps: RouteDeps) {
+  return crypto.createHash('sha256').update(String(deps.getRequestIp(req))).digest('hex');
+}
+
 /**
- * Track a failed login attempt: increment metrics, record per-user failure,
- * and lock the account if the failure threshold is reached.
+ * Count one failure against a counter (failures older than the lockout window stop counting) and lock it at the threshold.
  */
-async function handleLoginFailure(user: any, deps: RouteDeps) {
+async function bumpFailureCounter(
+  counter: { get: () => Promise<any>; reset: () => Promise<any>; record: () => Promise<any>; lock: (until: Date) => Promise<any> },
+  threshold: number,
+  deps: RouteDeps,
+) {
+  const { config } = deps;
+  const prior = await counter.get();
+  if (prior?.lastFailureAt && Date.now() - new Date(prior.lastFailureAt).getTime() > config.LOGIN_LOCKOUT_MS) {
+    await counter.reset();
+  }
+  await counter.record();
+  const failures = await counter.get();
+  if (failures && failures.consecutiveFailures >= threshold) {
+    await counter.lock(new Date(Date.now() + config.LOGIN_LOCKOUT_MS));
+    return failures.consecutiveFailures as number;
+  }
+  return 0;
+}
+
+/**
+ * Track a failed login attempt: increment metrics, record the per-(account, IP) failure and the account-wide
+ * one, and lock the IP or the whole account when its threshold is reached.
+ */
+async function handleLoginFailure(user: any, ipKey: string, deps: RouteDeps) {
   const { stores, config, log, state } = deps;
   if (state?.metrics) {
     state.metrics.authFailures = (state.metrics.authFailures || 0) + 1;
   }
   if (user && stores.loginFailures) {
-    // Failures older than the lockout window stop counting.
-    const prior = await stores.loginFailures.get(user.id);
-    if (prior?.lastFailureAt && Date.now() - new Date(prior.lastFailureAt).getTime() > config.LOGIN_LOCKOUT_MS) {
-      await stores.loginFailures.reset(user.id);
-    }
-    await stores.loginFailures.record(user.id);
-    const failures = await stores.loginFailures.get(user.id);
-    if (failures && failures.consecutiveFailures >= config.MAX_LOGIN_FAILURES) {
-      const lockUntil = new Date(Date.now() + config.LOGIN_LOCKOUT_MS);
-      await stores.loginFailures.lock(user.id, lockUntil);
-      log.warn('account locked', { userId: user.id, failures: failures.consecutiveFailures });
-    }
+    const lf = stores.loginFailures;
+    const ipLocked = await bumpFailureCounter(
+      {
+        get: () => lf.getIp(user.id, ipKey),
+        reset: () => lf.resetIp(user.id, ipKey),
+        record: () => lf.recordIp(user.id, ipKey),
+        lock: (until) => lf.lockIp(user.id, ipKey, until),
+      },
+      config.MAX_LOGIN_FAILURES,
+      deps,
+    );
+    if (ipLocked) log.warn('account locked for ip', { userId: user.id, failures: ipLocked });
+    const globalLocked = await bumpFailureCounter(
+      {
+        get: () => lf.get(user.id),
+        reset: () => lf.resetTotal(user.id),
+        record: () => lf.record(user.id),
+        lock: (until) => lf.lock(user.id, until),
+      },
+      LOGIN_GLOBAL_LOCK_FAILURES,
+      deps,
+    );
+    if (globalLocked) log.warn('account locked', { userId: user.id, failures: globalLocked });
   }
 }
 
@@ -210,11 +254,15 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
     return (await stores.users.getByUsername(ident)) ?? stores.users.findDeletedByUsername(ident);
   }
 
-  async function checkAccountLockout(user: any, res: Response) {
+  // Locked when the whole account is locked, or when this client IP is. Both answer identically.
+  async function checkAccountLockout(user: any, ipKey: string, res: Response) {
     if (!user) return false;
-    const failures = await stores.loginFailures?.get(user.id);
-    if (failures?.lockedUntil && new Date() < new Date(failures.lockedUntil)) {
-      const retryAfterSec = Math.ceil((new Date(failures.lockedUntil).getTime() - new Date().getTime()) / 1000);
+    const now = Date.now();
+    const lockedUntilMs = [await stores.loginFailures?.get(user.id), await stores.loginFailures?.getIp(user.id, ipKey)]
+      .map((row) => (row?.lockedUntil ? new Date(row.lockedUntil).getTime() : 0))
+      .filter((until) => until > now);
+    if (lockedUntilMs.length > 0) {
+      const retryAfterSec = Math.ceil((Math.max(...lockedUntilMs) - now) / 1000);
       res.setHeader('Retry-After', String(retryAfterSec));
       sendError(res, 423, 'Account temporarily locked due to too many failed attempts', ErrorCodes.ACCOUNT_LOCKED);
       return true;
@@ -229,10 +277,12 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
         return sendError(res, 400, 'Username and password required', ErrorCodes.MISSING_FIELD);
       }
       const user = await resolveLoginUser(username);
+      const ipKey = ipKeyOf(req, deps);
 
-      if (await checkAccountLockout(user, res)) return;
+      if (await checkAccountLockout(user, ipKey, res)) return;
 
-      if (user && !deps.consumeUserAuthRateLimit(user.id, config.AUTH_RATE_LIMIT_MAX)) {
+      // Account-wide cap across all IPs. It must not undercut the per-IP lock: one IP may not shut an account out.
+      if (user && !deps.consumeUserAuthRateLimit(user.id, LOGIN_GLOBAL_LOCK_FAILURES)) {
         const jitter = 100 + Math.floor(Math.random() * 100);
         return setTimeout(
           () => sendError(res, 429, 'Too many login attempts for this account', ErrorCodes.RATE_LIMITED),
@@ -244,7 +294,7 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
       // (Google or Apple sign-in only) must never pass a password login.
       const passwordValid = await verifyPassword(String(password), user?.passwordHash || DUMMY_PASSWORD_HASH);
       if (!user || !user.passwordHash || !passwordValid) {
-        await handleLoginFailure(user, deps);
+        await handleLoginFailure(user, ipKey, deps);
         const jitter = 500 + Math.floor(Math.random() * 1000);
         log.warn('authentication failed', { username: user ? user.username : 'unknown', ip: req.ip });
         return setTimeout(
@@ -253,7 +303,10 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
         );
       }
 
-      if (stores.loginFailures) await stores.loginFailures.reset(user.id);
+      if (stores.loginFailures) {
+        await stores.loginFailures.resetTotal(user.id);
+        await stores.loginFailures.resetIp(user.id, ipKey);
+      }
 
       return await finishSignIn(req, res, user, deps);
     } catch (error: any) {
@@ -367,6 +420,29 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
     }
   });
 
+  // A refresh token that was already rotated and is presented again may be a stolen copy. Past the grace
+  // window, revoke every token and session of its family; inside it, a racing tab is refused and nothing else changes.
+  async function revokeFamilyOnReuse(hashedToken: string) {
+    const rotated = await stores.refreshTokens.findRotated(hashedToken);
+    if (!rotated) return;
+    if (rotated.ageMs <= REFRESH_REUSE_GRACE_MS) {
+      log.warn('auth:refresh-race', { userId: rotated.userId });
+      return;
+    }
+    const sessionHashes = await stores.refreshTokens.revokeFamily(rotated.familyId);
+    // The family id of a pre-migration token is its own token hash, so log a digest, never the id itself.
+    const familyId = crypto.createHash('sha256').update(rotated.familyId).digest('hex').slice(0, 16);
+    log.warn('auth:refresh-reuse', { userId: rotated.userId, familyId });
+    const revoked = new Set(sessionHashes);
+    for (const socket of await deps.fetchRevocationSockets(io)) {
+      const sessionToken = socket.data?.userSessionToken;
+      if (socket.data?.userId === rotated.userId && sessionToken && revoked.has(deps.hashSessionToken(sessionToken))) {
+        socket.emit('session:revoked', { reason: 'refresh-token-reuse' });
+        socket.disconnect(true);
+      }
+    }
+  }
+
   // ── POST /refresh-token — exchange refresh token for new session + new refresh token ──
   router.post(
     '/refresh-token',
@@ -384,6 +460,7 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
         const hashedToken = hashToken(incomingRefreshToken);
         const stored = await stores.refreshTokens.validate(hashedToken);
         if (!stored) {
+          await revokeFamilyOnReuse(hashedToken);
           return sendError(res, 401, 'Invalid or expired refresh token', ErrorCodes.TOKEN_EXPIRED);
         }
 
@@ -391,7 +468,8 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
         // concurrent calls with one token, only one wins the claim.
         const claimed = await stores.refreshTokens.claim(hashedToken);
         if (!claimed) {
-          log.warn('auth:refresh-race', { userId: stored.userId });
+          // Lost a race, or the token was replayed a moment ago: the grace window decides which.
+          await revokeFamilyOnReuse(hashedToken);
           return sendError(res, 401, 'Invalid or expired refresh token', ErrorCodes.TOKEN_EXPIRED);
         }
 
@@ -410,6 +488,7 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
           userId: user.id,
           sessionToken: hashToken(newSessionToken),
           expiresAt: new Date(Date.now() + config.REFRESH_TOKEN_TTL),
+          familyId: stored.familyId,
         });
 
         const { serializePublicUser } = deps;

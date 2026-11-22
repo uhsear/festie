@@ -61,6 +61,7 @@ function makeMiddlewareApp(overrides: { isAllowedOrigin?: (origin: string, host?
     getRequestIp: (req: any) => req.ip || '127.0.0.1',
     rateLimit: (..._args: any[]) => (req: any, res: any, next: any) => next(),
     authRateLimit: (req: any, res: any, next: any) => next(),
+    loginIpRateLimit: (req: any, res: any, next: any) => next(),
     sendError,
     ErrorCodes,
     generateOpenAPISpec: () => ({}),

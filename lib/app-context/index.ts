@@ -114,6 +114,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     SESSION_TTL: config.SESSION_TTL,
     MAX_USERS: config.MAX_USERS,
     AUTH_RATE_LIMIT_MAX: config.AUTH_RATE_LIMIT_MAX,
+    AUTH_LOGIN_IP_RATE_LIMIT_MAX: config.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
     AVATAR_SIZE: config.AVATAR_SIZE,
     COOKIE_SECURE: config.COOKIE_SECURE,
     ALLOWED_ORIGINS_COUNT: config.ALLOWED_ORIGINS.length,
@@ -168,6 +169,13 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
         prefix: 'auth',
       })
     : null;
+  const redisLoginIpRateLimiter = redis
+    ? createRedisRateLimiter(redis, {
+        windowMs: config.AUTH_RATE_LIMIT_WINDOW,
+        maxRequests: config.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
+        prefix: 'auth-login-ip',
+      })
+    : null;
   const redisSocketConnectLimiter = redis
     ? createRedisRateLimiter(redis, {
         windowMs: config.SOCKET_CONNECT_WINDOW,
@@ -214,6 +222,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     routeRateLimits: new Map(),
     authRateLimits: new Map(),
     adminAuthRateLimits: new Map(),
+    loginIpRateLimits: new Map(),
     socketConnectRateLimits: new Map(),
     socketRateLimits: new Map(),
     userAuthRateLimits: new Map(),
@@ -243,6 +252,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
       { map: state.routeRateLimits, window: config.RATE_LIMIT_WINDOW, tsField: 'start' as const },
       { map: state.authRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'start' as const },
       { map: state.adminAuthRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'start' as const },
+      { map: state.loginIpRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'start' as const },
       { map: state.socketConnectRateLimits, window: config.SOCKET_CONNECT_WINDOW, tsField: 'windowStart' as const },
       { map: state.socketRateLimits, window: config.SOCKET_EVENT_WINDOW, tsField: 'windowStart' as const },
       { map: state.userAuthRateLimits, window: config.AUTH_RATE_LIMIT_WINDOW, tsField: 'windowStart' as const },
@@ -339,6 +349,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     resolveRequestToken,
     redisRateLimiter,
     redisAuthRateLimiter,
+    redisLoginIpRateLimiter,
     redisSocketConnectLimiter,
     redis,
     redisRateCheck,
@@ -347,6 +358,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
   const {
     rateLimit,
     authRateLimit,
+    loginIpRateLimit,
     adminAuthRateLimit,
     enforceRateLimitMapCap,
     consumeSocketRateLimit,
@@ -523,6 +535,7 @@ async function createAppContext(overrides: any = {}): Promise<AppContext> {
     // Rate limiters
     rateLimit,
     authRateLimit,
+    loginIpRateLimit,
     adminAuthRateLimit,
     enforceRateLimitMapCap,
     consumeSocketRateLimit,
