@@ -1114,6 +1114,31 @@ describe('routes/spotify.js', () => {
     }
   });
 
+  it('bounds the top-tracks request with an abort signal (SEC-SPOTIFY-NOTIMEOUT)', async () => {
+    const deps = makeDeps({
+      stores: {
+        pool: makePool([
+          { rows: [{ id: 'set-timeout', artists: [{ name: 'Artist', links: { spotify: 'https://open.spotify.com/artist/abc123' } }] }] },
+        ]),
+      },
+    });
+    const origFetch = global.fetch;
+    const calls: { url: string; signal?: AbortSignal }[] = [];
+    global.fetch = mock.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url: String(url), signal: init?.signal ?? undefined });
+      return { ok: true, json: async () => ({ access_token: 'tok', expires_in: 3600, tracks: [] }) };
+    }) as unknown as typeof fetch;
+    try {
+      const handler = previewHandler(createSpotifyRoutes(deps as any));
+      await handler({ params: { setId: 'set-timeout' } }, { json: mock.fn(), status: mock.fn(function (this: unknown) { return this; }) });
+      const topTracks = calls.find((c) => c.url.includes('/top-tracks'));
+      assert.ok(topTracks, 'the top-tracks request was made');
+      assert.ok(topTracks.signal instanceof AbortSignal, 'the request carries an abort signal');
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
+
   it('returns 404 when set not found', async () => {
     const deps = makeDeps({
       stores: {
