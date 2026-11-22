@@ -5,6 +5,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAnnouncementStore, useFestivalDataStore } from '@festie/shared/stores';
 import { announcementTarget, pickBannerAnnouncement } from '@festie/shared/utils';
+import type { FestivalAnnouncement } from '@festie/shared/types';
 import { ANNOUNCEMENT_COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import { pushTargetHref } from '../lib/pushRoutes';
@@ -21,6 +22,48 @@ interface AnnouncementBannerProps {
 const LONG_BODY_CHARS = 120;
 const BODY_LINES = 2;
 
+/** The announcement text column. Keyed by id at the call site, so a new announcement starts collapsed. */
+function AnnouncementText({ a, kicker, label }: { a: FestivalAnnouncement; kicker: string; label: string }) {
+  const t = useTokens();
+  const s = useStyles();
+  const [expanded, setExpanded] = useState(false);
+  const [measuredLines, setMeasuredLines] = useState(0);
+  const urgent = a.severity === 'urgent';
+  const canExpand = measuredLines > BODY_LINES || a.body.length > LONG_BODY_CHARS;
+  const readLabel = expanded ? ANNOUNCEMENT_COPY.banner.readLess : ANNOUNCEMENT_COPY.banner.readMore;
+
+  return (
+    <View style={s.column}>
+      {/* Label the text group, not the row, so iOS keeps Read more, Open and Dismiss focusable. */}
+      <View style={s.body} accessible accessibilityRole="summary" accessibilityLabel={label}>
+        <View style={s.kickerRow}>
+          {urgent ? <Ionicons name="warning-outline" size={iconSize.sm} color={t.colors.text.danger} /> : null}
+          <Text style={[s.kicker, urgent && { color: t.colors.text.danger }]}>{kicker}</Text>
+        </View>
+        <Text style={s.title}>{a.title}</Text>
+        <Text
+          style={s.text}
+          numberOfLines={expanded ? undefined : BODY_LINES}
+          onTextLayout={(e) => setMeasuredLines(e.nativeEvent.lines.length)}
+        >
+          {a.body}
+        </Text>
+      </View>
+      {canExpand ? (
+        <AppPressable
+          style={s.readMore}
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={readLabel}
+          accessibilityState={{ expanded }}
+        >
+          <Text style={s.actionText}>{readLabel}</Text>
+        </AppPressable>
+      ) : null}
+    </View>
+  );
+}
+
 /**
  * App-wide "From Festie" banner for admin announcements, mounted at the root under
  * the SOS banner. Shows the newest urgent (else newest) announcement the user has
@@ -36,8 +79,6 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
   const dismissed = useAnnouncementStore((st) => st.dismissed);
   const load = useAnnouncementStore((st) => st.load);
   const dismiss = useAnnouncementStore((st) => st.dismiss);
-  const [expanded, setExpanded] = useState(false);
-  const [measuredLines, setMeasuredLines] = useState(0);
 
   useEffect(() => {
     void load(festivalId);
@@ -50,11 +91,6 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
   const a = pickBannerAnnouncement(items, dismissed);
   const active = a !== null;
   const id = a?.id;
-  // A new announcement starts collapsed.
-  useEffect(() => {
-    setExpanded(false);
-    setMeasuredLines(0);
-  }, [id]);
   const kicker = a ? ANNOUNCEMENT_COPY.banner.kicker(a.severity) : '';
   const label = a ? ANNOUNCEMENT_COPY.banner.label(kicker, a.title, a.body) : '';
 
@@ -71,7 +107,6 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
 
   if (!a) return null;
   const urgent = a.severity === 'urgent';
-  const canExpand = measuredLines > BODY_LINES || a.body.length > LONG_BODY_CHARS;
 
   return (
     <View
@@ -80,36 +115,7 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
         { borderColor: urgent ? t.colors.text.danger : t.colors.accent.aqua, paddingTop: (padTop ? insets.top : 0) + t.spacing[2] },
       ]}
     >
-      {/* Label the text column, not the row, so iOS keeps Open and Dismiss focusable. */}
-      <View style={s.column}>
-        <View style={s.body} accessible accessibilityRole="summary" accessibilityLabel={label}>
-          <View style={s.kickerRow}>
-            {urgent ? <Ionicons name="warning-outline" size={iconSize.sm} color={t.colors.text.danger} /> : null}
-            <Text style={[s.kicker, urgent && { color: t.colors.text.danger }]}>{kicker}</Text>
-        </View>
-        <Text style={s.title}>{a.title}</Text>
-        <Text
-          style={s.text}
-          numberOfLines={expanded ? undefined : BODY_LINES}
-          onTextLayout={(e) => setMeasuredLines(e.nativeEvent.lines.length)}
-        >
-          {a.body}
-        </Text>
-        </View>
-        {canExpand ? (
-          <AppPressable
-            style={s.readMore}
-            onPress={() => setExpanded((v) => !v)}
-            accessibilityRole="button"
-            accessibilityLabel={expanded ? ANNOUNCEMENT_COPY.banner.readLess : ANNOUNCEMENT_COPY.banner.readMore}
-            accessibilityState={{ expanded }}
-          >
-            <Text style={s.actionText}>
-              {expanded ? ANNOUNCEMENT_COPY.banner.readLess : ANNOUNCEMENT_COPY.banner.readMore}
-            </Text>
-          </AppPressable>
-        ) : null}
-      </View>
+      <AnnouncementText key={a.id} a={a} kicker={kicker} label={label} />
       {a.screen !== 'home' ? (
         <AppPressable
           style={s.action}
