@@ -122,11 +122,11 @@ export async function sendEmail({ to, subject, html, text, headers, idempotencyK
 function _wrapTemplate(title: any, bodyHtml: any, footer = "If you didn't request this, you can safely ignore this email.") {
   return `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Festie: ${title}</title></head>
 <body style="margin:0;padding:0;background:#0a0a0f;font-family:'Segoe UI',Roboto,sans-serif">
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0f;padding:40px 20px">
 <tr><td align="center">
-<table width="480" cellpadding="0" cellspacing="0" style="background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;overflow:hidden">
+<table width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);border-radius:16px;overflow:hidden">
   <tr><td style="padding:32px 32px 24px;text-align:center">
     <h1 style="margin:0 0 4px;color:#e4e4e7;font-size:22px;font-weight:600">Festie</h1>
     <p style="margin:0;color:rgba(255,255,255,0.5);font-size:13px">${title}</p>
@@ -173,7 +173,7 @@ export async function sendPasswordResetEmail({ to, username, resetUrl, config, l
   const html = _wrapTemplate('Password Reset Request', bodyHtml);
   const text = `Hey ${username},\n\nYour username is ${username}.\n\nWe received a request to reset your Festie password.\n\nReset your password: ${resetUrl}\n\nThis link expires in 60 minutes.\n\nIf you didn't request this, you can safely ignore this email.`;
 
-  return sendEmail({ to, subject: 'Reset your Festie password', html, text, config, log, _client, type: 'password_reset', redis });
+  return sendEmail({ to, subject: 'Reset your Festie password', html, text, config, log, _client, type: 'password_reset', redis, dedupe: false });
 }
 
 /**
@@ -190,7 +190,7 @@ export async function sendVerificationEmail({ to, username, verifyUrl, config, l
   const html = _wrapTemplate('Verify Your Email', bodyHtml);
   const text = `Hey ${username},\n\nThanks for signing up for Festie!\n\nVerify your email: ${verifyUrl}\n\nThis link expires in ${hours}.\n\nIf you didn't create this account, you can safely ignore this email.`;
 
-  return sendEmail({ to, subject: 'Verify your Festie email', html, text, config, log, _client, type: 'verify_email', redis });
+  return sendEmail({ to, subject: 'Verify your Festie email', html, text, config, log, _client, type: 'verify_email', redis, dedupe: false });
 }
 
 /**
@@ -208,7 +208,7 @@ export async function sendEmailChangeConfirmEmail({ to, username, verifyUrl, con
   const footer = 'If you did not ask for this, ignore this email. Your account email stays the same.';
   const html = _wrapTemplate('Confirm New Email', bodyHtml, footer);
   const text = `Hey ${username},\n\n${intro}\n\nConfirm your new email: ${verifyUrl}\n\n${footer}`;
-  return sendEmail({ to, subject: 'Confirm your new Festie email', html, text, config, log, _client, type: 'email_change_confirm' });
+  return sendEmail({ to, subject: 'Confirm your new Festie email', html, text, config, log, _client, type: 'email_change_confirm', dedupe: false });
 }
 
 const SECURITY_FOOTER = 'Festie will never ask you for your password by email.';
@@ -292,7 +292,7 @@ export async function sendPublishDecisionEmail({ to, organizationName, festivalN
       ]
     : [
         `Festie asked for changes to ${festivalName} before it goes live.`,
-        `Festie asked for changes: ${note}.`,
+        `Note from Festie: ${String(note ?? '').trim().replace(/\.+$/, '')}.`,
         'Edit your festival, then submit it again.',
       ];
   const bodyHtml = `${lines.map((line) => `<p style="${ALERT_P}">${escapeHtml(line)}</p>`).join('\n    ')}
@@ -425,7 +425,7 @@ export async function sendWrapReadyEmail({ to, userId, username, festivalName, f
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">${escapeHtml(name)} wrapped up. Your recap is ready: top sets, crew superlatives, and your numbers.</p>
     ${_buttonHtml(wrapUrl, 'See your wrap-up')}
     ${_urlFallback(wrapUrl)}`;
-  const footer = _reengagementFooter('Wrap-up ready', config, prep);
+  const footer = _reengagementFooter('Wrap and rating nudges', config, prep);
   const html = _wrapTemplate('Your Festival Wrap-Up', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\n${name} wrapped up. Your recap is ready.\n\nSee your wrap-up: ${wrapUrl}\n\n${footer.text}`;
   return sendEmail({ to, subject: `Your ${name} wrap-up is ready`, html, text, headers: prep.headers, config, log, _client, type: 'wrap_ready' });
@@ -449,7 +449,7 @@ export async function sendLineupDropEmail({ to, userId, username, festivalName, 
     <p style="color:#d4d4d8;font-size:15px;line-height:1.6;margin:0 0 24px">The lineup for <strong style="color:#e4e4e7">${escapeHtml(name)}</strong> ${escapeHtml(sentence)}</p>
     ${_buttonHtml(festivalUrl, 'See the lineup')}
     ${_urlFallback(festivalUrl)}`;
-  const footer = _reengagementFooter('New lineups', config, prep);
+  const footer = _reengagementFooter('New lineups, days and set times', config, prep);
   const html = _wrapTemplate('New Lineup', bodyHtml, footer.html);
   const text = `Hey ${username || 'there'},\n\nThe lineup for ${name} ${hasTimes ? 'just dropped.' : sentence}\n\nSee the lineup: ${festivalUrl}\n\n${footer.text}`;
   const subject = hasTimes ? `${name} lineup just dropped` : `${name} lineup is out`;
@@ -502,7 +502,7 @@ export async function sendSetTimesOutEmail({ to, userId, username, festivalName,
     ${noteHtml}
     ${_buttonHtml(festivalUrl, 'See the schedule')}
     ${_urlFallback(festivalUrl)}`;
-  const footer = _reengagementFooter('New lineups and set times', config, prep);
+  const footer = _reengagementFooter('New lineups, days and set times', config, prep);
   const html = _wrapTemplate('Set Times Are Out', bodyHtml, footer.html);
   const noteText = note ? `\n\n${note}` : '';
   const text = `Hey ${username || 'there'},\n\n${the} for ${name} are out. Pick your sets and spot clashes before the weekend.${noteText}\n\nSee the schedule: ${festivalUrl}\n\n${footer.text}`;
@@ -519,7 +519,6 @@ export async function sendCrewReformEmail({
   username,
   crewName,
   festivalName,
-  crewId,
   inviteUrl,
   config,
   log,
@@ -530,7 +529,7 @@ export async function sendCrewReformEmail({
   const origin = _origin(config);
   // Prefer an explicit invite link (the invitee may not have a festival profile
   // yet); otherwise deep-link to the crew page.
-  const url = inviteUrl || `${origin}/crew/${encodeURIComponent(crewId || '')}`;
+  const url = inviteUrl || `${origin}/crew`;
   const crew = crewName || 'Your crew';
   const fest = festivalName ? ` for ${festivalName}` : '';
   const bodyHtml = `
