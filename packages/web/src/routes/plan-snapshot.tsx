@@ -173,12 +173,13 @@ function ImportPlan({ snapshot }: { snapshot: PlanSnapshot }) {
 export default function PlanSnapshotPage() {
   const [hash] = useState(readHash);
   const user = useAuthStore((s) => s.user);
-  // A signed-out visitor opening the link keeps the hash for the trip through sign-in. The stash is dropped once it
-  // was read back (the URL has no hash) or the viewer is signed in. Clearing here, not in readHash, keeps StrictMode's double init safe.
+  // A signed-out visitor opening the link keeps the hash for the trip through sign-in. While signed out the stash
+  // stays, even when the URL has no hash: the page re-mounts at /login?next=/p and must not delete what it just read.
+  // It is dropped once the viewer is signed in. Clearing here, not in readHash, keeps StrictMode's double init safe.
   useEffect(() => {
     try {
-      if (window.location.hash && !user) sessionStorage.setItem(PENDING_PLAN_KEY, hash);
-      else sessionStorage.removeItem(PENDING_PLAN_KEY);
+      if (user) sessionStorage.removeItem(PENDING_PLAN_KEY);
+      else if (window.location.hash) sessionStorage.setItem(PENDING_PLAN_KEY, hash);
     } catch {
       // sessionStorage unavailable: the visitor opens the link again after signing in
     }
@@ -241,7 +242,7 @@ export default function PlanSnapshotPage() {
   }
 
   // Once the lineup loads, count only the sets still in it, so the header matches the rows and the footer line.
-  const count = snapshot.picks.length - (state === 'ready' ? missing : 0);
+  const count = state === 'gone' ? 0 : snapshot.picks.length - (state === 'ready' ? missing : 0);
   const mp = snapshot.meetingPoint;
   const planB = 'planB' in snapshot ? snapshot.planB : undefined;
 
