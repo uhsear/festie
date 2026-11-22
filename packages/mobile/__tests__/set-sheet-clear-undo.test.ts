@@ -16,6 +16,6 @@ describe('T20 mobile set sheet and clash prompt', () => {
   it('renders toasts above the iOS formSheet, so an Undo fired from the sheet is visible', () => {
     const toaster = readFileSync(join(__dirname, '..', 'components/Toaster.tsx'), 'utf8');
     expect(toaster).toContain("from 'react-native-screens'");
-    expect(toaster).toMatch(/Platform\.OS === 'ios' \? <FullWindowOverlay>\{host\}<\/FullWindowOverlay> : host/);
+    expect(toaster).toMatch(/Platform\.OS === 'ios' && visible\.length > 0 \? <FullWindowOverlay>\{host\}<\/FullWindowOverlay> : host/);
   });
 });

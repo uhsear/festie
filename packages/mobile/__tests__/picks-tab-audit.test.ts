@@ -10,8 +10,9 @@ describe('picks tab audit guards', () => {
     const start = picks.indexOf('if (!myDayMode) return rows;');
     const end = picks.indexOf('}, [\n    activePlanList,', start);
     const branch = picks.slice(start, end);
-    expect(branch).toContain('buildPicksRows(');
-    expect(branch).toContain('collapsed: new Set()');
+    // The shared membership filter never looks at collapsed groups.
+    expect(branch).toContain('filterPickMap(');
+    expect(branch).not.toContain('collapsed: new Set()');
     expect(branch).not.toMatch(/of rows\)/);
     expect(branch).toContain("groupId: 'myday-tba'");
     expect(branch).toContain('isSetScheduled');

@@ -335,6 +335,26 @@ describe('authStore', () => {
     });
   });
 
+  describe('verifyEmail', () => {
+    const token = 'a'.repeat(64);
+    it('posts the token and returns the confirmed address', async () => {
+      vi.mocked(api.post).mockResolvedValue({ verified: true, email: 'a@b.co', sessionsRevoked: false });
+      await expect(useAuthStore.getState().verifyEmail(token)).resolves.toEqual({ email: 'a@b.co', sessionsRevoked: false });
+      expect(api.post).toHaveBeenCalledWith('/auth/verify-email', { token });
+    });
+    it('logs out a signed-in user when the login address moved', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.post).mockResolvedValue({ verified: true, email: 'a@b.co', sessionsRevoked: true });
+      await useAuthStore.getState().verifyEmail(token);
+      expect(api.post).toHaveBeenCalledWith('/auth/logout', {});
+      expect(useAuthStore.getState().user).toBeNull();
+    });
+    it('rethrows so the page can show the reason', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('expired'));
+      await expect(useAuthStore.getState().verifyEmail(token)).rejects.toThrow('expired');
+    });
+  });
+
   describe('logout', () => {
     it('clears user state and calls resetAllStores', async () => {
       useAuthStore.setState({

@@ -24,6 +24,7 @@ const ROUTE_TITLES: Record<string, { page: string; festival: boolean }> = {
   '/p': { page: 'Shared plan', festival: false },
   '/signup/finish': { page: 'Finish sign-up', festival: false },
   '/reset-password': { page: 'Reset password', festival: false },
+  '/verify-email': { page: 'Confirm email', festival: false },
   '/login': { page: 'Sign in', festival: false },
   '/register': { page: 'Create account', festival: false },
   '/forgot-password': { page: 'Reset password', festival: false },
