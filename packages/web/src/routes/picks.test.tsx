@@ -453,7 +453,7 @@ describe('PicksView', () => {
 
   it('hides the calendar export button when the profile has no picks', () => {
     render(<PicksView />);
-    expect(screen.queryByRole('button', { name: 'Add picks to calendar' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add to calendar' })).toBeNull();
   });
 
   it('shows the calendar button and downloads an .ics via Download once', async () => {
@@ -468,7 +468,7 @@ describe('PicksView', () => {
 
     render(<PicksView />);
     // CalendarDialog is lazy and unmocked; its cold import can pass findByRole's 1s default.
-    fireEvent.click(await screen.findByRole('button', { name: 'Add picks to calendar' }, { timeout: 5000 }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add to calendar' }, { timeout: 5000 }));
     fireEvent.click(await screen.findByRole('button', { name: 'Download once' }));
 
     expect(buildPicksIcsExport).toHaveBeenCalledTimes(1);
