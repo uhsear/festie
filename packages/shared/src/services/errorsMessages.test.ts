@@ -24,8 +24,20 @@ describe('mapErrorToUserMessage', () => {
     );
   });
 
-  it('maps a 429 with no delay to a moment', () => {
-    expect(mapErrorToUserMessage(apiError(429))).toBe('Too many tries. Wait a moment and try again.');
+  it('maps a 429 with no delay and no reason to a moment', () => {
+    expect(mapErrorToUserMessage(apiError(429, {}, ''))).toBe('Too many tries. Wait a moment and try again.');
+  });
+
+  it('shows the server reason for a 429 without Retry-After (a daily cap)', () => {
+    expect(mapErrorToUserMessage(apiError(429, {}, 'Your organization can send 3 announcements a day. Try again tomorrow.'))).toBe(
+      'Your organization can send 3 announcements a day. Try again tomorrow.',
+    );
+  });
+
+  it('keeps the wait copy for a 429 with Retry-After even when it has a message', () => {
+    expect(mapErrorToUserMessage(apiError(429, { retryAfter: '30' }, 'Too many requests'))).toBe(
+      'Too many tries. Wait 30 seconds and try again.',
+    );
   });
 
   it('maps a 5xx to the server copy', () => {
