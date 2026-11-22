@@ -16,6 +16,7 @@ import {
   defaultZoomIndex,
   buildGridCrewAvatarsBySet,
   lineupReplacesEmptyState,
+  dayHasTimedSets,
   type GridCrewProfile,
 } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
@@ -237,7 +238,7 @@ function GridViewInner() {
 
   // Filters left only untimed sets. The "times aren't out yet" copy fits only when the whole day has no times.
   if (timedSets.length === 0 && timelessSets.length > 0) {
-    const dayHasTimes = (sets ?? []).some((s) => s.dayIndex === selectedDay && s.startTime && s.endTime);
+    const dayHasTimes = dayHasTimedSets((sets ?? []).filter((s) => s.dayIndex === selectedDay));
     return (
       <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
         <div
