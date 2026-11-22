@@ -126,7 +126,7 @@ const uiStore: StateCreator<UIStore> = (set, get) => ({
   onlineUsers: [],
   toasts: [],
   theme: 'stage',
-  followSystemTheme: false,
+  followSystemTheme: true,
   hapticsEnabled: true,
   wrapShowHandle: true,
   crewBadgeSeen: {},
@@ -256,6 +256,11 @@ export const useUIStore = create<UIStore>()(
   persist(uiStore, {
     name: THEME_STORAGE_KEY,
     storage: createJSONStorage(() => getStorage()),
+    // A store saved before followSystemTheme existed chose its theme by hand: keep that choice fixed.
+    merge: (persisted, current) => {
+      const saved = (persisted ?? {}) as Partial<UIStore>;
+      return { ...current, ...saved, followSystemTheme: saved.followSystemTheme ?? (saved.theme !== undefined ? false : current.followSystemTheme) };
+    },
     partialize: (state) => ({
       theme: state.theme,
       followSystemTheme: state.followSystemTheme,

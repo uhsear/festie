@@ -17,7 +17,7 @@ export function applyTheme(theme: ThemePreference): void {
   document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ground);
 }
 
-// A visitor with no saved preference follows the OS. Read at import, before any store write; mobile has no OS sync, so the shared default stays 'stage'.
+// A visitor with no saved preference follows the OS. Read at import, before any store write.
 let firstVisit = (() => {
   try {
     return localStorage.getItem(THEME_STORAGE_KEY) === null;
