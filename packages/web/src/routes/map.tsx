@@ -99,11 +99,10 @@ function MapViewInner() {
     );
   }
 
-  // The row is min-h-11 plus space-y-2 (3.25rem); the canvas calc below gives that back.
   const showSosRow = hasCrew && !sosList.some((e) => e.userId === user?.id);
 
   return (
-    <div className="space-y-2 px-4 py-2">
+    <div className="flex h-full min-h-0 flex-col gap-2 px-4 py-2">
       <h1 className="sr-only">Map</h1>
       {/* So a user offline can see how stale the shown pins are, as on mobile. */}
       {user && (
@@ -132,11 +131,7 @@ function MapViewInner() {
           festival={mapFestival}
           focusPinId={focusStage ?? null}
           onFocusHandled={() => navigate({ to: '/map', search: {}, replace: true })}
-          canvasClassName={
-            showSosRow
-              ? 'h-[calc(100dvh-var(--bottom-nav-h,0px)-14.25rem)] min-h-[320px]'
-              : 'h-[calc(100dvh-var(--bottom-nav-h,0px)-11rem)] min-h-[320px]'
-          }
+          fill
         />
       </Suspense>
       {hasCrew && pointsFailed && points.length > 0 && (

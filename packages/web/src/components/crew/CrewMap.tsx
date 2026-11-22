@@ -136,6 +136,8 @@ interface Props {
   draftPoints?: { latitude: number; longitude: number }[];
   /** Height classes for the map canvas. Defaults to the 288 px crew-tab size. */
   canvasClassName?: string;
+  /** Fill the height the parent gives it (a flex column) instead of a fixed canvas height. */
+  fill?: boolean;
   /** A stage pin id to fly to and open on arrival (from "Show stage on map"). */
   focusPinId?: string | null;
   /** Called once the focus was applied, so the caller can clear its search param. */
@@ -175,6 +177,7 @@ export default function CrewMap({
   draftPoints,
   authoring = false,
   canvasClassName = 'h-72',
+  fill = false,
   focusPinId,
   onFocusHandled,
   onSetMeetingPoint,
@@ -789,7 +792,7 @@ export default function CrewMap({
   const wayBarSaysLocation = showPursueOverlay && !selfCoord && awaitingFix;
 
   return (
-    <div className="space-y-2">
+    <div className={fill ? 'flex min-h-0 flex-1 flex-col gap-2' : 'space-y-2'}>
       {basemapMissing && (
         <p role="status" className="text-xs text-text-secondary">
           {OFFLINE_MAP_COPY.basemapNotSaved}{' '}
@@ -798,10 +801,12 @@ export default function CrewMap({
           </Link>
         </p>
       )}
-      <div className="relative rounded-lg overflow-hidden border border-border bg-bg-secondary">
+      <div
+        className={`relative rounded-lg overflow-hidden border border-border bg-bg-secondary ${fill ? 'min-h-[320px] flex-1' : ''}`}
+      >
         <div
           ref={containerRef}
-          className={`festie-map-canvas ${canvasClassName} w-full`}
+          className={`festie-map-canvas ${fill ? 'h-full' : canvasClassName} w-full`}
           role="region"
           tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: focus enables arrow-key map pan/zoom (see aria-describedby help below); rule only exempts role=tabpanel
           aria-label="Crew map with meeting points and live locations"

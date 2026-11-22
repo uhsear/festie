@@ -214,6 +214,15 @@ describe('CrewMap', () => {
     expect(screen.getByLabelText(label)).not.toHaveClass('h-72');
   });
 
+  it('fills its parent instead of a fixed height when fill is set', () => {
+    extractMeetingPointPins.mockReturnValue([]);
+    render(<CrewMap meetingPoints={[]} authoring fill />);
+    const canvas = screen.getByLabelText('Crew map with meeting points and live locations');
+    expect(canvas).toHaveClass('h-full');
+    expect(canvas).not.toHaveClass('h-72');
+    expect(canvas.parentElement).toHaveClass('flex-1');
+  });
+
   it('derives pins from the provided meeting points via the shared util', () => {
     extractMeetingPointPins.mockReturnValue([]);
     render(<CrewMap meetingPoints={[POINT_WITH_COORDS, POINT_NO_COORDS]} />);
