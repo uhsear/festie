@@ -53,7 +53,7 @@ describe('CalendarDialog', () => {
     });
   });
 
-  const open = () => fireEvent.click(screen.getByRole('button', { name: 'Add picks to calendar' }));
+  const open = () => fireEvent.click(screen.getByRole('button', { name: 'Add to calendar' }));
 
   it('Download once builds the export with reminders and toasts the summary', () => {
     Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });

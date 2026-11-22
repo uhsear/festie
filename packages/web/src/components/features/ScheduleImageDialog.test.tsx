@@ -50,7 +50,7 @@ function setup(sets: unknown[], picks: Record<string, string>, initialMode?: 'fu
     selectedDay: 0,
   });
   render(<ScheduleImageDialog initialMode={initialMode} />);
-  fireEvent.click(screen.getByRole('button', { name: initialMode ? 'Lock screen image' : 'Save my picks as an image' }));
+  fireEvent.click(screen.getByRole('button', { name: initialMode ? 'Lock screen image' : 'Save image' }));
   // The dialog opens on Lock screen; most cases here exercise the Story shape.
   if (!initialMode && story) fireEvent.click(screen.getByRole('button', { name: 'Story' }));
 }

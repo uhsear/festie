@@ -137,7 +137,6 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
         variant="secondary"
         size="sm"
         type="button"
-        aria-label="Save my picks as an image"
         onClick={() => setOpen(true)}
       >
         <ImageDown className="w-4 h-4" aria-hidden="true" />

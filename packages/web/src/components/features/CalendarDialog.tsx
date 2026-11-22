@@ -79,7 +79,6 @@ export default function CalendarDialog() {
         variant="secondary"
         size="sm"
         type="button"
-        aria-label="Add picks to calendar"
         onClick={() => setOpen(true)}
       >
         <CalendarPlus className="w-4 h-4" aria-hidden="true" />

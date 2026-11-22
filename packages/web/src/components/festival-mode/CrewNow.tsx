@@ -139,7 +139,6 @@ export function MeetNowCard({ meet, nowMs, timeZone, onOpenMeet }: MeetProps) {
       <button
         type="button"
         onClick={onOpenMeet}
-        aria-label={meet ? `${meet.label}${meet.location ? `, ${meet.location}` : ''}${when ? `, ${when}` : ''}. Open meeting points` : 'No meeting point set. Add one'}
         className={cn(
           'flex items-center gap-3 w-full text-left rounded-xl border border-border bg-bg-card p-4 min-h-[64px]',
           'transition-colors duration-[var(--duration-med)] hover:bg-bg-card-hover motion-reduce:transition-none',
@@ -163,6 +162,7 @@ export function MeetNowCard({ meet, nowMs, timeZone, onOpenMeet }: MeetProps) {
             </>
           )}
         </span>
+        <span className="sr-only">. Open meeting points</span>
         <ChevronRight className="w-5 h-5 shrink-0 text-text-secondary" aria-hidden="true" />
       </button>
     </section>
