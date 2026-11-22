@@ -38,12 +38,19 @@ describe('sendPublishDecisionEmail', () => {
     assert.equal(ok, true);
     assert.deepEqual(message.to, ['owner@example.com']);
     assert.equal(message.subject, 'Festie asked for changes to Fest Subject');
-    assert.match(message.text, /Festie asked for changes: Add the <venue> address\./);
+    assert.match(message.text, /Note from Festie: Add the <venue> address\./);
     assert.match(message.html, /Add the &lt;venue&gt; address/);
     assert.match(message.html, /Venue &lt;b&gt;X&lt;\/b&gt;/);
     assert.doesNotMatch(message.html, /<venue>|<b>X<\/b>/);
     assert.match(message.html, /https:\/\/festie\.example\/manage/);
     assert.equal(message.headers, undefined, 'a decision is not marketing mail: no unsubscribe header');
+  });
+
+  test('a note that ends in a question mark or exclamation mark gets no extra period', async () => {
+    const q = await run({ decision: 'declined', note: 'Is the map right?' });
+    assert.match(q.message.text, /Note from Festie: Is the map right\?\r?\n/);
+    const e = await run({ decision: 'declined', note: 'Fix the dates!' });
+    assert.match(e.message.text, /Note from Festie: Fix the dates!\r?\n/);
   });
 
   test('an approval says the festival is live and has no note', async () => {

@@ -285,6 +285,7 @@ export async function sendEmailChangedEmail({ to, config, log, _client }: any) {
  */
 export async function sendPublishDecisionEmail({ to, organizationName, festivalName, decision, note, config, log, _client }: any) {
   const approved = decision === 'approved';
+  const noteText = String(note ?? '').trim().replace(/\.+$/, '');
   const lines = approved
     ? [
         `Festie reviewed ${festivalName} for ${organizationName}, and it is live.`,
@@ -292,7 +293,7 @@ export async function sendPublishDecisionEmail({ to, organizationName, festivalN
       ]
     : [
         `Festie asked for changes to ${festivalName} before it goes live.`,
-        `Note from Festie: ${String(note ?? '').trim().replace(/\.+$/, '')}.`,
+        `Note from Festie: ${noteText}${/[?!]$/.test(noteText) ? '' : '.'}`,
         'Edit your festival, then submit it again.',
       ];
   const bodyHtml = `${lines.map((line) => `<p style="${ALERT_P}">${escapeHtml(line)}</p>`).join('\n    ')}
