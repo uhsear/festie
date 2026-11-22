@@ -223,17 +223,26 @@ jobs:
       # Tee the full log to a file so it can be uploaded as an artifact on failure.
       - name: Build .app for the simulator
         working-directory: packages/mobile/ios
+        # Expo's @ExpoModule scan has a fixed 5 s limit and times out on a busy runner
+        # ("Scanning for @ExpoModule classes didn't complete ... Build again to retry").
+        # Retry the build once for that error only; any other failure fails at once.
         run: |
           set -o pipefail
-          xcodebuild \
-            -workspace "${{ steps.xcode.outputs.workspace }}" \
-            -scheme "${{ steps.xcode.outputs.scheme }}" \
-            -sdk iphonesimulator \
-            -configuration Release \
-            -arch arm64 \
-            -derivedDataPath build \
-            CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
-            build | tee "$GITHUB_WORKSPACE/xcodebuild.log"
+          build() {
+            xcodebuild \
+              -workspace "${{ steps.xcode.outputs.workspace }}" \
+              -scheme "${{ steps.xcode.outputs.scheme }}" \
+              -sdk iphonesimulator \
+              -configuration Release \
+              -arch arm64 \
+              -derivedDataPath build \
+              CODE_SIGN_IDENTITY="" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO \
+              build | tee "$GITHUB_WORKSPACE/xcodebuild.log"
+          }
+          if build; then exit 0; fi
+          if ! grep -q "Scanning for @ExpoModule classes didn't complete" "$GITHUB_WORKSPACE/xcodebuild.log"; then exit 1; fi
+          echo "::warning::Expo module scan timed out; building once more."
+          build
 
       # Locate the built .app and fail loudly with a clear message if it's missing.
       - name: Locate built .app
@@ -277,8 +286,8 @@ jobs:
         if: env.RUN_MAESTRO == 'true'
         run: |
           # Pinned release zip with a checksum, not the unpinned get.maestro.mobile.dev installer.
-          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" "https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.6.1/maestro.zip"
-          echo "3440825f514f537c6a96bcf5de995780c2a4a7f83a43208fdc95d4f1fecfad3b  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
+          curl -fsSL -o "$RUNNER_TEMP/maestro.zip" "https://github.com/mobile-dev-inc/maestro/releases/download/cli-2.12.1/maestro.zip"
+          echo "54dbb0716425626604973cbb374c585ca30272375d9ce15177a1152765ddd9d7  $RUNNER_TEMP/maestro.zip" | sha256sum -c -
           unzip -q "$RUNNER_TEMP/maestro.zip" -d "$HOME/.maestro-install"
           echo "$HOME/.maestro-install/maestro/bin" >> "$GITHUB_PATH"
 
@@ -341,6 +350,26 @@ jobs:
           test "$COUNT" -ge 21 || { echo "::error::Expected at least 21 route screenshots"; exit 1; }
           test "$UNIQUE" -ge 15 || { echo "::error::Screenshots are not diverse enough; navigation likely stalled"; exit 1; }
 
+      # On failure, save what XCUITest exposes on the screen the flow stopped on,
+      # because the debug tree is scrubbed to screenshots below.
+      - name: Dump the iOS view hierarchy on failure
+        if: failure() && env.RUN_MAESTRO == 'true'
+        working-directory: packages/mobile
+        env:
+          TEST_USERNAME: ${{ secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ secrets.TEST_PASSWORD }}
+        run: |
+          out=maestro-ios-hierarchy.json
+          MAESTRO_CLI_NO_ANALYTICS=1 maestro hierarchy > "$out" || echo "::warning::maestro hierarchy failed"
+          # The artifact is public: drop the dump if a typed credential is on screen.
+          for secret in "$TEST_USERNAME" "$TEST_PASSWORD"; do
+            if [ -n "$secret" ] && grep -qiF -- "$secret" "$out" 2>/dev/null; then
+              rm -f "$out"
+              echo "::warning::Hierarchy held a test credential and was not uploaded"
+              break
+            fi
+          done
+
       # Maestro records every -e value in commands-*.json and maestro.log.
       # Keep only screenshots in the debug tree so Actions artifacts can never
       # publish the smoke credentials from this public repository.
@@ -363,6 +392,7 @@ jobs:
             packages/mobile/*.png
             packages/mobile/maestro-ios-report.xml
             packages/mobile/maestro-ios-artist-report.xml
+            packages/mobile/maestro-ios-hierarchy.json
             packages/mobile/maestro-ios-debug/**
             packages/mobile/maestro-ios-artist-debug/**
             !packages/mobile/maestro-ios-debug/commands-*.json

@@ -1,0 +1,49 @@
+# Guest phase of android-smoke.yaml: the same route checks up to the sign-in screen, no
+# credentials and no sign-in. Keep the two files in step when the guest copy changes.
+appId: us.festie.app
+tags:
+  - smoke
+  - nightly
+env:
+  FESTIVAL_ID: ${FESTIVAL_ID || 'fk-2026'}
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Plan.your.weekend|Choose.a.festival"
+    timeout: 120000
+- takeScreenshot: 01-launch
+- runFlow:
+    when:
+      visible: "Plan.your.weekend"
+    commands:
+      - assertVisible: "Plan.your.weekend"
+      - tapOn:
+          id: "intro-skip"
+- extendedWaitUntil:
+    visible: "Choose.a.festival"
+    timeout: 30000
+- assertVisible: "Choose.a.festival"
+- takeScreenshot: 02-festival-picker
+- tapOn:
+    id: "festival-card-${FESTIVAL_ID}"
+- extendedWaitUntil:
+    visible:
+      text: "Timeline|Cards"
+    timeout: 150000
+- waitForAnimationToEnd:
+    timeout: 6000
+- assertNotVisible: "Choose.a.festival"
+- takeScreenshot: 03-schedule-guest
+
+- openLink: "festie://register"
+- extendedWaitUntil:
+    visible: "Create your account"
+    timeout: 30000
+- takeScreenshot: 04-register
+- openLink: "festie://forgot-password"
+- extendedWaitUntil:
+    visible: "Reset your password|Forgot password"
+    timeout: 30000
+- takeScreenshot: 05-forgot-password

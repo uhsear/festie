@@ -3,6 +3,9 @@
 # absent. This flow intentionally avoids picks, crew creation, preferences,
 # admin mutations, SOS sends, and account changes against the production API.
 appId: us.festie.app
+# Always keep a last screenshot, so a failed run shows where it stopped.
+onFlowComplete:
+  - takeScreenshot: zz-last
 # Maestro reads only MAESTRO_-prefixed shell variables; e2e-ios.yml maps the
 # EAS TEST_* secrets onto those names.
 env:
@@ -13,33 +16,36 @@ env:
     clearState: true
 - extendedWaitUntil:
     visible:
-      text: "Plan your weekend|Select a Festival"
+      id: "intro-skip|festival-card-.*"
     timeout: 90000
 - takeScreenshot: 01-launch
 - runFlow:
     when:
-      visible: "Plan your weekend"
+      visible:
+        id: "intro-skip"
     commands:
-      - assertVisible: "Plan your weekend"
-      - tapOn: "Skip intro"
+      - tapOn:
+          id: "intro-skip"
 - extendedWaitUntil:
-    visible: "Select a Festival"
+    visible:
+      id: "festival-card-.*"
     timeout: 30000
-- assertVisible: "Select a Festival"
+- assertVisible:
+    id: "festival-card-fk-2026"
 - takeScreenshot: 02-festival-picker
 # At large Dynamic Type a festival card is taller than half the screen and its
 # centre sits under the tab bar, so a plain tap lands on a tab. Centre it first.
 - scrollUntilVisible:
     element:
-      id: "festival-card-nc-2026"
+      id: "festival-card-fk-2026"
     centerElement: true
 - tapOn:
-    id: "festival-card-nc-2026"
+    id: "festival-card-fk-2026"
 - extendedWaitUntil:
     visible:
       text: "Timeline|Cards"
     timeout: 150000
-- assertNotVisible: "Select a Festival"
+- assertNotVisible: "Choose a festival"
 - takeScreenshot: 03-schedule-guest
 
 # Public/auth screens.
