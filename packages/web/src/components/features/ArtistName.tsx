@@ -7,10 +7,11 @@ import type { FestivalSet } from '@festie/shared/types';
 import { cn } from '../../lib/utils';
 
 const BUTTON_CLASS =
-  'artist-name-btn inline text-left align-baseline px-0 py-[3px] m-0 bg-transparent border-0 text-inherit font-[inherit] text-[length:inherit] leading-[inherit] cursor-pointer ' +
+  'artist-name-btn inline text-left align-baseline px-0 py-[3px] mx-0 -my-[3px] bg-transparent border-0 text-inherit font-[inherit] text-[length:inherit] leading-[inherit] cursor-pointer ' +
   'hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua focus-visible:rounded-sm ' +
   // The 44px touch target comes from a pseudo-element, so the name keeps its text size and line layout.
-  // Vertical padding on an inline box grows its own rect past 24px (WCAG 2.5.8) without moving the lines.
+  // A button lays out as one inline block, so its 3px vertical padding is cancelled by the negative margin: the box
+  // grows past 24px (WCAG 2.5.8) and the lines stay the height they were.
   'relative pointer-events-auto';
 
 // A name inside a small tile that is itself the open-set target must not grow a hit area that covers the tile.
