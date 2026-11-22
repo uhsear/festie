@@ -722,7 +722,7 @@ export default function FestivalEditForm({
 
       </fieldset>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-glass-border bg-bg-primary pt-4">
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-glass-border bg-bg-primary px-2 pb-2 pt-4">
         {editingId && (
           <span className="w-full text-sm text-text-muted sm:mr-auto sm:w-auto">
             {total > 0 ? `${plural(total, 'unsaved change')}` : 'All changes saved'}

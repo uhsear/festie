@@ -240,7 +240,7 @@ export default function SetEditor({
           ))}
         </select>
       </label>
-      <label className={FIELD_LABEL}>
+      <label className={`${FIELD_LABEL} col-span-2 sm:col-span-1`}>
         <span className={FIELD_CAPTION}>Start</span>
         <input
           type="time"
@@ -251,7 +251,7 @@ export default function SetEditor({
           className="w-full min-w-0 px-1.5 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
         />
       </label>
-      <label className={FIELD_LABEL}>
+      <label className={`${FIELD_LABEL} col-span-2 sm:col-span-1`}>
         <span className={FIELD_CAPTION}>End</span>
         <input
           type="time"
