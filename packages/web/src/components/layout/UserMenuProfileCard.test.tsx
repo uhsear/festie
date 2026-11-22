@@ -15,5 +15,7 @@ describe('UserMenuProfileCard', () => {
     expect(screen.getByText('Asir K')).toBeInTheDocument();
     expect(screen.getByText('@asir')).toBeInTheDocument();
     expect(screen.queryByText('Account identity across every festival')).toBeNull();
+    expect(screen.queryByText('Account')).toBeNull();
+    expect(screen.queryByText('Admin')).toBeNull();
   });
 });
