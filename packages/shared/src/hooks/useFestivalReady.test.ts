@@ -77,6 +77,18 @@ describe('useFestivalReady', () => {
     await waitFor(() => expect(result.current.visible).toBe(true));
   });
 
+  it('reads async storage once per festival and handles a failed read without an unhandled rejection', async () => {
+    const getItem = vi.fn(() => Promise.reject(new Error('storage down')));
+    configureStorage({ getItem, setItem: () => {}, removeItem: () => {} });
+    setup(upcoming);
+    const { result, rerender } = renderHook(() => useFestivalReady(false, NOW));
+    rerender();
+    rerender();
+    await waitFor(() => expect(result.current.visible).toBe(true));
+    // One read from the render-time peek and one from the effect, however many renders ran.
+    expect(getItem).toHaveBeenCalledTimes(2);
+  });
+
   it('is not visible while the festival is in progress', async () => {
     setup(live);
     const { result } = renderHook(() => useFestivalReady(false, NOW));

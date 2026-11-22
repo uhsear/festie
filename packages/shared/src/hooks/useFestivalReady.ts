@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { getStorage } from '../platform/storage';
 import { useAuthStore } from '../stores/authStore';
 import { useCrewStore } from '../stores/crewStore';
@@ -23,7 +23,12 @@ const hiddenKey = (festivalId: string) => `festie_ready_hidden:${festivalId}`;
 function peekHidden(festivalId: string): boolean | null {
   try {
     const raw = getStorage().getItem(hiddenKey(festivalId));
-    return raw instanceof Promise ? null : raw === '1';
+    if (raw instanceof Promise) {
+      // The effect below does the real read and handles its error; this one is thrown away.
+      raw.catch(() => {});
+      return null;
+    }
+    return raw === '1';
   } catch {
     return null;
   }
@@ -99,7 +104,9 @@ export function useFestivalReady(
     offlineReady: isFestivalDownloaded(readiness),
   });
 
-  const resolvedHidden = hidden ?? (festivalId ? peekHidden(festivalId) : null);
+  // Once per festival, so an async adapter (mobile) does not start a new read on every render.
+  const peekedHidden = useMemo(() => (festivalId ? peekHidden(festivalId) : null), [festivalId]);
+  const resolvedHidden = hidden ?? peekedHidden;
   const visible =
     !!user &&
     !!currentFestival &&
