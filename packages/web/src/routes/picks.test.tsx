@@ -377,6 +377,26 @@ describe('PicksView', () => {
     expect(radios[1]).toHaveAttribute('aria-checked', 'true');
   });
 
+  it('keeps keyboard focus on the tab when arrowing from the plan views into Reminders and back', () => {
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk')],
+      profile: { id: 'p1', userId: 'u1', picks: { s1: 'must' }, notes: { s1: 'Bring water' } },
+    });
+    render(<PicksView />);
+    const myDay = screen.getByRole('tab', { name: 'My day' });
+    myDay.focus();
+    fireEvent.keyDown(myDay, { key: 'ArrowRight' });
+    const reminders = screen.getByRole('tab', { name: /^Reminders/ });
+    expect(reminders).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(reminders);
+    fireEvent.keyDown(reminders, { key: 'ArrowRight' });
+    const notes = screen.getByRole('tab', { name: /^Notes/ });
+    fireEvent.keyDown(notes, { key: 'ArrowLeft' });
+    fireEvent.keyDown(screen.getByRole('tab', { name: /^Reminders/ }), { key: 'ArrowLeft' });
+    expect(screen.getByRole('tab', { name: 'My day' })).toHaveAttribute('aria-selected', 'true');
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'My day' }));
+  });
+
   it('uses a plain text field, not a search field, so the browser adds no second clear button', () => {
     setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
     render(<PicksView />);

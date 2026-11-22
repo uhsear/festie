@@ -203,7 +203,7 @@ function PicksViewInner() {
   ];
   const viewTabRow =
     hasAnyPicks || reminderItems.length > 0 || noteItems.length > 0 ? (
-      <RovingGroup itemRole="tab" role="tablist" aria-label="Picks views" className="flex gap-2 mb-3 overflow-x-auto">
+      <RovingGroup key="picks-view-tabs" itemRole="tab" role="tablist" aria-label="Picks views" className="flex gap-2 mb-3 overflow-x-auto">
         {viewTabs.map((tab) => (
           <button
             key={tab.id}
@@ -257,7 +257,7 @@ function PicksViewInner() {
           {viewTabRow}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
-          <div role="tabpanel" id="picks-view-panel" aria-labelledby={`picks-tab-${view}`}>
+          <div {...(viewTabRow ? { role: 'tabpanel', id: 'picks-view-panel', 'aria-labelledby': `picks-tab-${view}` } : {})}>
           <PickBulkActions />
           <ListenList
             sets={pickedSets}
@@ -393,14 +393,14 @@ function PicksViewInner() {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Filter picks"
               aria-label="Filter my picks"
-              className="w-full min-h-11 rounded-full border border-border-input bg-bg-card pl-9 pr-9 text-sm"
+              className="w-full min-h-11 rounded-full border border-border-input bg-bg-card pl-9 pr-11 text-sm"
             />
             {search && (
               <button
                 type="button"
                 aria-label="Clear search"
                 onClick={() => setSearch('')}
-                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-8 min-w-8 items-center justify-center text-text-muted cursor-pointer"
+                className="absolute right-1 top-1/2 -translate-y-1/2 inline-flex min-h-11 min-w-11 items-center justify-center rounded-full text-text-muted cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2"
               >
                 <X className="w-4 h-4" aria-hidden="true" />
               </button>
