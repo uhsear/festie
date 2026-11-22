@@ -17,15 +17,25 @@ let Sentry: any = null;
 let initialized = false;
 let noop = true;
 
-const URL_DATA_KEYS = ['url', 'http.url', 'url.full', 'http.target', 'url.path'];
+const REDACT_MAX_DEPTH = 8;
+const REDACT_MAX_NODES = 2000;
 
-function redactIfString(value: unknown) {
-  return typeof value === 'string' ? redactInviteCodePath(value) : value;
-}
-
-function redactUrlData(data: any) {
-  if (!data || typeof data !== 'object') return;
-  for (const key of URL_DATA_KEYS) if (key in data) data[key] = redactIfString(data[key]);
+/**
+ * Replaces every string inside an object or array with its invite-code-redacted form, in place, and returns the value.
+ * Bounded so a hostile or huge event cannot hang the process: it stops below depth 8 and after 2000 visited nodes,
+ * and a WeakSet skips cycles. Past those limits a string is left as is.
+ */
+function redactDeep<T>(value: T, depth = 0, state = { nodes: 0, seen: new WeakSet<object>() }): T {
+  if (typeof value === 'string') return redactInviteCodePath(value) as T;
+  if (!value || typeof value !== 'object' || ArrayBuffer.isView(value)) return value;
+  if (depth >= REDACT_MAX_DEPTH || state.seen.has(value)) return value;
+  state.seen.add(value);
+  const holder = value as Record<string, unknown>;
+  for (const key of Object.keys(holder)) {
+    if (++state.nodes > REDACT_MAX_NODES) break;
+    holder[key] = redactDeep(holder[key], depth + 1, state);
+  }
+  return value;
 }
 
 /** Runs `ours` first, then the caller's hook on its result. A null from either drops the item. */
@@ -36,46 +46,14 @@ function composeHook(ours: (item: any) => any, theirs?: (item: any, hint?: any) 
   };
 }
 
-function scrubRequest(request: any) {
-  if (!request) return;
-  for (const key of ['url', 'query_string']) if (key in request) request[key] = redactIfString(request[key]);
-  for (const key of ['referer', 'Referer']) if (request.headers && key in request.headers) request.headers[key] = redactIfString(request.headers[key]);
-}
-
 function scrubErrorEvent(event: any) {
   // Strip obvious PII paths
   if (event.request && event.request.headers) {
     delete event.request.headers.cookie;
     delete event.request.headers.authorization;
   }
-  // An invite code in a URL, referer or message is a live credential.
-  scrubRequest(event.request);
-  event.transaction = redactIfString(event.transaction);
-  event.message = redactIfString(event.message);
-  if (Array.isArray(event.exception?.values)) {
-    for (const entry of event.exception.values) entry.value = redactIfString(entry.value);
-  }
-  return event;
-}
-
-function scrubSpan(span: any) {
-  span.description = redactIfString(span.description);
-  redactUrlData(span.data);
-  return span;
-}
-
-function scrubTransactionEvent(event: any) {
-  scrubRequest(event.request);
-  event.transaction = redactIfString(event.transaction);
-  redactUrlData(event.contexts?.trace?.data);
-  if (Array.isArray(event.spans)) for (const span of event.spans) scrubSpan(span);
-  return event;
-}
-
-function scrubBreadcrumb(breadcrumb: any) {
-  breadcrumb.message = redactIfString(breadcrumb.message);
-  redactUrlData(breadcrumb.data);
-  return breadcrumb;
+  // An invite code in a URL, referer, message or any other field is a live credential.
+  return redactDeep(event);
 }
 
 function initSentry(options: any = {}) {
@@ -139,10 +117,10 @@ function initSentry(options: any = {}) {
       ...extra,
       // Ours run first and always; a caller hook sees the scrubbed value and cannot replace them.
       beforeSend: composeHook(scrubErrorEvent, extra.beforeSend),
-      beforeSendTransaction: composeHook(scrubTransactionEvent, extra.beforeSendTransaction),
-      beforeBreadcrumb: composeHook(scrubBreadcrumb, extra.beforeBreadcrumb),
+      beforeSendTransaction: composeHook(redactDeep, extra.beforeSendTransaction),
+      beforeBreadcrumb: composeHook(redactDeep, extra.beforeBreadcrumb),
       // traceLifecycle is 'static', so the span callback takes a SpanJSON through withStaticSpan.
-      beforeSendSpan: Sentry.withStaticSpan(composeHook(scrubSpan, extra.beforeSendSpan)),
+      beforeSendSpan: Sentry.withStaticSpan(composeHook(redactDeep, extra.beforeSendSpan)),
     });
     noop = false;
     console.debug('[sentry] initialized', { env: options.environment || cfg().NODE_ENV, release: options.release || cfg().SENTRY_RELEASE || cfg().APP_VERSION });
@@ -238,4 +216,4 @@ const sentry = {
   get raw() { return Sentry; },
 };
 
-export { initSentry, sentry, scrubErrorEvent, scrubTransactionEvent, scrubSpan, scrubBreadcrumb, composeHook };
+export { initSentry, sentry, scrubErrorEvent, redactDeep, composeHook };

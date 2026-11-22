@@ -219,16 +219,16 @@ describe('lib/sentry.js', () => {
       assert.equal(out.exception.values[0].value, `GET ${redacted} failed`);
     });
 
-    it('scrubTransactionEvent redacts referer, query string and trace context data', () => {
-      const out = sentryModule.scrubTransactionEvent({
+    it('redactDeep redacts transaction referer, query string and trace context data', () => {
+      const out = sentryModule.redactDeep({
         request: { query_string: `next=${path}`, headers: { referer: `https://festie.us${path}` } },
         contexts: { trace: { data: urlData() } },
       });
       assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
     });
 
-    it('scrubTransactionEvent redacts url, transaction, span descriptions and span url data', () => {
-      const out = sentryModule.scrubTransactionEvent({
+    it('redactDeep redacts transaction url, transaction, span descriptions and span url data', () => {
+      const out = sentryModule.redactDeep({
         request: { url: `https://festie.us${path}` },
         transaction: `GET ${path}`,
         spans: [{ description: `GET ${path}`, data: urlData() }, { description: 'db' }],
@@ -238,23 +238,38 @@ describe('lib/sentry.js', () => {
       assert.equal(out.spans[1].description, 'db');
     });
 
-    it('scrubSpan redacts description and url data', () => {
-      const out = sentryModule.scrubSpan({ description: `GET ${path}`, data: urlData() });
+    it('redactDeep redacts span description and url data', () => {
+      const out = sentryModule.redactDeep({ description: `GET ${path}`, data: urlData() });
       assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
     });
 
-    it('scrubBreadcrumb redacts message and data.url', () => {
-      const out = sentryModule.scrubBreadcrumb({ message: `GET ${path}`, data: { url: `https://festie.us${path}`, status_code: 200 } });
+    it('redactDeep redacts breadcrumb message and data.url', () => {
+      const out = sentryModule.redactDeep({ message: `GET ${path}`, data: { url: `https://festie.us${path}`, status_code: 200 } });
       assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
       assert.equal(out.data.status_code, 200);
     });
 
+    it('redactDeep reaches nested extra values, arrays and non-string query strings', () => {
+      const out = sentryModule.redactDeep({ extra: { a: { b: [`x ${path}`, { c: `https://festie.us${path}` }] } }, request: { query_string: [['next', path]] }, n: 1 });
+      assert.ok(!JSON.stringify(out).includes('SECRETCODE'));
+      assert.equal(out.n, 1);
+    });
+
+    it('redactDeep survives a cycle and a very deep object', () => {
+      const cyclic: any = { url: path };
+      cyclic.self = cyclic;
+      assert.equal(sentryModule.redactDeep(cyclic).url, redacted);
+      let deep: any = { leaf: path };
+      for (let i = 0; i < 50_000; i++) deep = { next: deep };
+      assert.doesNotThrow(() => sentryModule.redactDeep(deep));
+    });
+
     it('composeHook runs ours first and then the caller hook on the scrubbed value', () => {
       const seen: any[] = [];
-      const hook = sentryModule.composeHook(sentryModule.scrubBreadcrumb, (b: any) => { seen.push(b); return b; });
+      const hook = sentryModule.composeHook(sentryModule.redactDeep, (b: any) => { seen.push(b); return b; });
       hook({ message: path });
       assert.equal(seen[0].message, redacted);
-      assert.equal(sentryModule.composeHook(sentryModule.scrubBreadcrumb, () => null)({ message: path }), null);
+      assert.equal(sentryModule.composeHook(sentryModule.redactDeep, () => null)({ message: path }), null);
     });
   });
 
