@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { Alert, Linking } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
-import { useFestivalDataStore, useUIStore } from '@festie/shared/stores';
+import { selectMyPicks, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { buildPicksIcsExport, describeIcsExport } from '@festie/shared/utils';
 import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
 import { useHaptics } from './useHaptics';
@@ -12,6 +12,7 @@ export function usePicksCalendar() {
   const haptics = useHaptics();
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
+  const myPicks = useFestivalDataStore(selectMyPicks);
   const sets = useFestivalDataStore((s) => s.sets);
   const stages = useFestivalDataStore((s) => s.stages);
   const [exportBusy, setExportBusy] = useState(false);
@@ -21,7 +22,7 @@ export function usePicksCalendar() {
   // works offline) and shared via the OS sheet — same write/share flow as the
   // account data export.
   const handleDownloadCalendar = useCallback(async () => {
-    if (!currentFestival || !currentProfile || exportBusy) return;
+    if (!currentFestival || !myPicks || exportBusy) return;
     setExportBusy(true);
     try {
       const result = buildPicksIcsExport({
@@ -33,9 +34,9 @@ export function usePicksCalendar() {
         },
         sets,
         stages,
-        picks: currentProfile.picks,
-        notes: currentProfile.notes,
-        reminders: currentProfile.reminders,
+        picks: myPicks,
+        notes: currentProfile?.notes,
+        reminders: currentProfile?.reminders,
       });
       const ics = result.ics;
       const safeName = (currentFestival.name || 'festival').replace(/[^a-z0-9_-]/gi, '_').slice(0, 60);
@@ -59,7 +60,7 @@ export function usePicksCalendar() {
     } finally {
       setExportBusy(false);
     }
-  }, [currentFestival, currentProfile, sets, stages, exportBusy, haptics]);
+  }, [currentFestival, currentProfile, myPicks, sets, stages, exportBusy, haptics]);
 
   // Subscribe to the live feed: webcal:// opens the iOS Calendar subscribe prompt.
   // Android has no webcal handler, so the open rejects and Google Calendar's
@@ -88,6 +89,11 @@ export function usePicksCalendar() {
 
   const handleAddToCalendar = useCallback(() => {
     haptics.tap();
+    // The live feed belongs to an account; a guest gets the file built from the picks on this device.
+    if (!currentProfile) {
+      void handleDownloadCalendar();
+      return;
+    }
     Alert.alert(
       'Add to calendar',
       'Subscribe keeps your calendar up to date when set times change. Download once saves a file that does not update.',
@@ -98,7 +104,7 @@ export function usePicksCalendar() {
       ],
       { cancelable: true },
     );
-  }, [haptics, handleSubscribeCalendar, handleDownloadCalendar]);
+  }, [haptics, currentProfile, handleSubscribeCalendar, handleDownloadCalendar]);
 
   return { exportBusy, handleAddToCalendar };
 }

@@ -77,6 +77,12 @@ describe('JoinCrewSheet', () => {
     expect(screen.getByRole('button', { name: 'Crew is full' })).toBeDisabled();
   });
 
+  it('drops the consent line when the crew is full', () => {
+    h.preview = { status: 'ready', preview: preview({ memberCount: 30, spotsLeft: 0 }) };
+    renderSheet();
+    expect(screen.queryByText('Crew members can see your picks and your status.')).not.toBeInTheDocument();
+  });
+
   it.each(['invalid', 'expired', 'locked'])('disables Join when the invite is %s', (status) => {
     h.preview = { status, preview: null };
     renderSheet();

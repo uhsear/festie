@@ -290,4 +290,16 @@ describe('organizations: /auth/me and the audit rows', { skip }, () => {
     const createdRows = await auditRows(server, "action = 'festival.created' AND target_id = $1", [created.body.data.id]);
     assert.deepEqual([createdRows[0].actor_type, createdRows[0].organization_id], ['organizer', 'org-a']);
   });
+
+  test('a member cannot set a series on a festival, by edit or at create', async () => {
+    const { server } = await boot();
+    const users = await o.seedScenario(server);
+    const edit = await o.as(server, users.editorA.token).put(`${MANAGE}/festivals/f-a`, { name: 'Same', seriesId: 'series-x', expectedUpdatedAt: FAR_FUTURE });
+    assert.equal(edit.status, 200, JSON.stringify(edit.body));
+    assert.equal((await o.sql(server, "SELECT series_id FROM festivals WHERE id = 'f-a'")).rows[0].series_id, null);
+
+    const created = await o.as(server, users.ownerA.token).post(`${MANAGE}/festivals`, { organizationId: 'org-a', name: 'Series try', seriesId: 'series-x' });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    assert.equal((await o.sql(server, 'SELECT series_id FROM festivals WHERE id = $1', [created.body.data.id])).rows[0].series_id, null);
+  });
 });

@@ -52,7 +52,9 @@ describe('picks and sharing UX source guards', () => {
   it('crew-compare: a failed refresh keeps the grid, guests get Sign in, names take two lines', () => {
     const src = read('app/crew-compare.tsx');
     expect(src).toContain('if (error && rows.length === 0)');
-    expect(src).toContain("setError(mapErrorToUserMessage(err, \"Couldn't load crew picks.\"))");
+    expect(read('../shared/src/hooks/useCrewCompare.ts')).toContain(
+      "setError(mapErrorToUserMessage(err, \"Couldn't load crew picks.\"))",
+    );
     expect(src).toContain("label: COPY.auth.signIn, onPress: () => router.push('/(auth)/login')");
     expect(src).toMatch(/styles\.setArtist\} numberOfLines=\{2\}/);
   });

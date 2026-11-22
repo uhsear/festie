@@ -35,6 +35,12 @@ describe('SettleUpCard', () => {
     expect(props.onRemind).toHaveBeenCalledWith('u3', 'Mira');
   });
 
+  it('disables Remind and says Reminded today once that person was reminded', () => {
+    setup({ remindedUserIds: new Set(['u3']) });
+    expect(screen.getByRole('button', { name: 'Reminded today' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Remind Mira' })).toBeNull();
+  });
+
   it('says so when nothing is owed', () => {
     setup({ myPayments: [], myReceipts: [] });
     expect(screen.getByText("You're all settled up.")).toBeInTheDocument();

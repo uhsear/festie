@@ -14,12 +14,14 @@ import {
   isFixRecent,
   resolveFestivalTimeZone,
   selectNowNext,
+  showsFestivalWeather,
   stageCoord,
   walkToStage,
 } from '@festie/shared/utils';
 import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
 import { useLastKnownFix } from '../hooks/useLastKnownFix';
+import { setReturnTo } from '../lib/returnTo';
 import { useSosRaise } from '../hooks/useSosRaise';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
@@ -185,7 +187,7 @@ export default function FestivalModeScreen() {
             walk={walk}
           />
 
-          <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} />
+          {showsFestivalWeather(selection, nowMs) ? <WeatherStrip festivalId={currentFestival.id} nowMs={nowMs} /> : null}
 
           {user ? (
             <CaughtNowCard
@@ -203,7 +205,10 @@ export default function FestivalModeScreen() {
               title="Find your crew here"
               body="Sign in to see where your friends are and where you're meeting."
               cta="Sign in"
-              onPress={() => router.push('/(auth)/login')}
+              onPress={() => {
+                setReturnTo('/festival-mode');
+                router.push('/(auth)/login');
+              }}
             />
           ) : after && crew ? (
             <CrewWrapUp

@@ -4,9 +4,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * Drives scroll-linked UI (R11 timeline beam, R13 shrinking header) from a
  * single scroll listener on a scrollable container.
  *
- * Sets a `--scroll-progress` custom property (0→1) on the container element so
- * pure-CSS consumers (the timeline beam height) can read it without React
- * re-renders. Also returns `scrolled` (boolean, scrollTop past `threshold`) and
+ * Sets a `--scroll-progress` custom property (0→1) so pure-CSS consumers (the
+ * timeline beam height) can read it without React re-renders. It is written to
+ * the element behind `varsRef` (the consumer itself) when one is attached, else to the container. A
+ * custom property is inherited, so writing it on a container with a large subtree
+ * re-styles every descendant on each scroll frame. Also returns `scrolled` (boolean, scrollTop past `threshold`) and
  * `scrollingUp` for header collapse logic — those DO drive React state but only
  * flip on a crossing, not on every scroll frame.
  *
@@ -16,8 +18,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  * so it never double-drives on modern engines. The boolean state (header) has no
  * pure-CSS equivalent, so it always runs.
  */
-export function useScrollProgress<T extends HTMLElement>(threshold = 80) {
+export function useScrollProgress<T extends HTMLElement, V extends HTMLElement = HTMLDivElement>(threshold = 80) {
   const ref = useRef<T | null>(null);
+  const varsRef = useRef<V | null>(null);
   const prevTopRef = useRef(0);
   const rafRef = useRef<number | null>(null);
   const [scrolled, setScrolled] = useState(false);
@@ -33,11 +36,12 @@ export function useScrollProgress<T extends HTMLElement>(threshold = 80) {
       const top = node.scrollTop;
       const max = node.scrollHeight - node.clientHeight;
       const progress = max > 0 ? Math.min(1, Math.max(0, top / max)) : 0;
-      node.style.setProperty('--scroll-progress', String(progress));
+      const varsTarget = varsRef.current ?? node;
+      varsTarget.style.setProperty('--scroll-progress', String(progress));
       // Keep gutter-pinned children (the R11 beam) glued to the left gutter as
       // the timeline scrolls horizontally — the time labels are `sticky left-0`,
       // so the beam must track scrollLeft to stay aligned with them.
-      node.style.setProperty('--scroll-left', `${node.scrollLeft}px`);
+      varsTarget.style.setProperty('--scroll-left', `${node.scrollLeft}px`);
       setScrolled(top > threshold);
       // Treat tiny jitter as "no direction change" to avoid header flicker.
       if (Math.abs(top - prevTopRef.current) > 4) {
@@ -53,5 +57,5 @@ export function useScrollProgress<T extends HTMLElement>(threshold = 80) {
     };
   }, []);
 
-  return { ref, scrolled, scrollingUp, handleScroll };
+  return { ref, varsRef, scrolled, scrollingUp, handleScroll };
 }

@@ -89,9 +89,22 @@ function addDaysToDateKey(dayKey: string, n: number): string {
 
 // Building an Intl.DateTimeFormat is far slower than using one, and this runs per set on every render.
 const offsetFormatters = new Map<string, Intl.DateTimeFormat>();
+// The same set times are resolved again on every render, so remember each answer. Per zone, cleared whole at the cap.
+const OFFSET_CACHE_MAX = 20_000;
+const offsetCache = new Map<string, Map<number, number>>();
 
 /** The offset (ms) the given IANA zone is from UTC at a particular instant. */
-export function zoneOffsetMsAt(utcMs: number, timeZone: string): number {
+export function zoneOffsetMsAt(instantMs: number, timeZone: string): number {
+  // Offsets change on whole minutes, so key by the minute: a ticking clock then reuses one entry per minute
+  // instead of filling the cache with single-use entries that evict the set times it exists to keep.
+  const utcMs = Math.floor(instantMs / 60_000) * 60_000;
+  let cache = offsetCache.get(timeZone);
+  if (!cache) {
+    cache = new Map();
+    offsetCache.set(timeZone, cache);
+  }
+  const cached = cache.get(utcMs);
+  if (cached !== undefined) return cached;
   let dtf = offsetFormatters.get(timeZone);
   if (!dtf) {
     dtf = new Intl.DateTimeFormat('en-US', {
@@ -110,6 +123,8 @@ export function zoneOffsetMsAt(utcMs: number, timeZone: string): number {
   const map: Record<string, number> = {};
   for (const p of parts) if (p.type !== 'literal') map[p.type] = parseInt(p.value, 10);
   const asUTC = Date.UTC(map.year!, map.month! - 1, map.day!, map.hour!, map.minute!, map.second!);
+  if (cache.size >= OFFSET_CACHE_MAX) cache.clear();
+  cache.set(utcMs, asUTC - utcMs);
   return asUTC - utcMs;
 }
 

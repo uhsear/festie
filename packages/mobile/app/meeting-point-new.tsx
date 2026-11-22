@@ -1,11 +1,16 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { useEffect, useMemo } from 'react';
-import { ScrollView } from 'react-native';
+import { useMemo, type ReactNode } from 'react';
+import { ScrollView, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
+import { useActiveCrew } from '@festie/shared/hooks';
+import { isCrewOwner } from '@festie/shared/utils';
+import { COPY, signInTo } from '@festie/shared/constants';
 import CrewMeetingPoints from '../components/CrewMeetingPoints';
+import EmptyState from '../components/EmptyState';
+import LoadingState from '../components/LoadingState';
 import { makeStyles, useTokens } from '../hooks/useTokens';
 
 function finiteOrNull(value: string | undefined): number | null {
@@ -29,7 +34,8 @@ export default function MeetingPointNewScreen() {
     stageReference?: string;
   }>();
   const user = useAuthStore((s) => s.user);
-  const activeCrew = useCrewStore((s) => s.activeCrew);
+  const { status, crew: activeCrew, retry: retryCrew } = useActiveCrew();
+  const crewMembers = useCrewStore((s) => s.crewMembers);
   const festival = useFestivalDataStore((s) => s.currentFestival);
   const days = useFestivalDataStore((s) => s.days);
 
@@ -47,12 +53,48 @@ export default function MeetingPointNewScreen() {
     };
   }, [lat, lng, label, location, stageReference]);
 
-  const missing = !user || !activeCrew;
-  useEffect(() => {
-    if (missing) router.back();
-  }, [missing, router]);
-
-  if (!user || !activeCrew) return null;
+  // The crew store may still be hydrating on a cold deep link, so wait for it before deciding the screen is empty.
+  const gate = (children: ReactNode) => <View style={styles.screen}>{children}</View>;
+  if (!user) {
+    return gate(
+      <EmptyState
+        icon="lock-closed"
+        title={COPY.auth.signInRequired}
+        message={signInTo('add a meeting point')}
+        action={{ label: COPY.auth.signIn, onPress: () => router.push('/(auth)/login') }}
+      />,
+    );
+  }
+  if (status === 'loading') return gate(<LoadingState label="Loading your crew…" />);
+  if (status === 'error') {
+    return gate(
+      <EmptyState
+        icon="cloud-offline-outline"
+        title="Couldn't load your crew"
+        message="Check your connection, then try again."
+        action={{ label: 'Try again', onPress: retryCrew }}
+      />,
+    );
+  }
+  if (status === 'joining') {
+    return gate(
+      <EmptyState
+        icon="cloud-offline-outline"
+        title="Joining when you're back online"
+        message="Your join is saved on this device. The crew opens once you reconnect."
+      />,
+    );
+  }
+  if (status === 'none' || !activeCrew) {
+    return gate(
+      <EmptyState
+        icon="people-outline"
+        title="No crew yet"
+        message="Make a crew or join one with a code to add a meeting point."
+        action={{ label: 'Create or join a crew', onPress: () => router.navigate('/(tabs)/crew') }}
+      />,
+    );
+  }
 
   return (
     <ScrollView
@@ -64,7 +106,7 @@ export default function MeetingPointNewScreen() {
       <CrewMeetingPoints
         crewId={activeCrew.id}
         currentUserId={user.id}
-        isOwner={false}
+        isOwner={isCrewOwner(activeCrew, crewMembers.length ? crewMembers : (activeCrew.members ?? []), user.id)}
         festival={festival}
         days={days}
         prefillCoords={coords}

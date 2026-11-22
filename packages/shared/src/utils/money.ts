@@ -79,6 +79,8 @@ export function expenseAmountError(raw: string | number, currency = 'USD'): stri
   if (Number(raw) > MAX_EXPENSE_AMOUNT) {
     return `Amount can't be more than ${formatCents(Math.round(MAX_EXPENSE_AMOUNT * 100), currency)}`;
   }
+  const scaled = Number(raw) * 100;
+  if (Math.abs(scaled - Math.round(scaled)) >= 1e-4) return 'Use at most 2 decimal places';
   return undefined;
 }
 

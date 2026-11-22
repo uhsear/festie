@@ -23,4 +23,10 @@ describe('t3 toast host source guards', () => {
     expect(src).toContain('onPress={() => dismissToast(toast.id)}');
     expect(src).toContain('useListBottomInset(');
   });
+
+  // An empty FullWindowOverlay is a full-screen native window that iOS 18 accessibility (VoiceOver, XCUITest/Maestro) treats as the whole screen, so the app tree below it goes empty.
+  it('Toaster mounts the iOS overlay only while a toast is visible', () => {
+    const src = read('components/Toaster.tsx');
+    expect(src).toMatch(/Platform\.OS === 'ios' && visible\.length > 0 \? <FullWindowOverlay>/);
+  });
 });

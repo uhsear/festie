@@ -3,9 +3,11 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithQueryClient } from '../test-utils';
 
 const search = { from: 'tok123' as string | undefined };
+const navigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigate,
   useSearch: () => search,
+  useLocation: () => ({ href: '/friend-picks?from=tok123' }),
 }));
 
 const fetchSharedPicks = vi.fn();
@@ -92,6 +94,16 @@ describe('FriendPicksView', () => {
     expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Create account' })).toBeTruthy();
     expect(screen.queryAllByRole('checkbox')).toHaveLength(0);
+  });
+
+  it('sends a guest to sign in or register and back to these picks', async () => {
+    authUser.value = null;
+    renderView();
+    await screen.findByText('Sign in to compare these picks with yours.');
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(navigate).toHaveBeenLastCalledWith({ to: '/login', search: { next: '/friend-picks?from=tok123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+    expect(navigate).toHaveBeenLastCalledWith({ to: '/register', search: { next: '/friend-picks?from=tok123' } });
   });
 
   it('adds ticked sets once per priority and undo restores previous picks', async () => {

@@ -100,7 +100,7 @@ describe('CompareRow', () => {
 
   it('links the artist to the set page', () => {
     renderInTable(<CompareRow {...defaultProps} />);
-    expect(screen.getByRole('link', { name: 'Open Daft Punk set' })).toHaveAttribute('href', '/set/set-1');
+    expect(screen.getByRole('link', { name: /open Daft Punk set$/ })).toHaveAttribute('href', '/set/set-1');
   });
 
   it('shows both names for a B2B set', () => {

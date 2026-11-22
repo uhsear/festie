@@ -190,7 +190,6 @@ export default function SharePicksDialog({ className }: { className?: string }) 
         size="sm"
         type="button"
         className={className}
-        aria-label="Share my picks"
         onClick={() => setOpen(true)}
       >
         <Share2 className="w-4 h-4" aria-hidden="true" />

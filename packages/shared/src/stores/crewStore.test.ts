@@ -3,6 +3,7 @@ import { useCrewStore, parseActivityPage } from './crewStore';
 import { useAuthStore } from './authStore';
 import { api } from '../services/api';
 import type { Crew, CrewMember, CrewMemberStatus, CrewPoll, PollSetRef } from '../types/domain';
+import { utcDay } from '../utils/crewManage';
 
 vi.mock('../services/api', () => ({
   api: {
@@ -696,6 +697,17 @@ describe('crewStore', () => {
       await expect(useCrewStore.getState().remindPayment('crew-1', 'user-2')).rejects.toBe(conflict);
       // Online-only: a reminder queued offline would fire hours later.
       expect(api.post).toHaveBeenCalledWith('/crews/crew-1/expenses/remind', { userId: 'user-2' }, { _bypassOfflineQueue: true });
+      expect(Object.keys(useCrewStore.getState().remindedOn)).toEqual(['crew-1:user-2']);
+    });
+
+    it('remindPayment marks a sent reminder and leaves other failures unmarked', async () => {
+      useCrewStore.setState({ remindedOn: {} });
+      vi.mocked(api.post).mockRejectedValueOnce(Object.assign(new Error('down'), { status: 500 }));
+      await expect(useCrewStore.getState().remindPayment('crew-1', 'user-2')).rejects.toThrow('down');
+      expect(useCrewStore.getState().remindedOn).toEqual({});
+      vi.mocked(api.post).mockResolvedValueOnce({ reminded: true });
+      await useCrewStore.getState().remindPayment('crew-1', 'user-2');
+      expect(useCrewStore.getState().remindedOn['crew-1:user-2']).toBe(utcDay());
     });
   });
 

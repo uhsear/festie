@@ -3,6 +3,7 @@ import {
   crewCapState,
   crewCopy,
   crewFestivalChoices,
+  remindedUserIdsToday,
   festivalLabel,
   groupCrewsByFestival,
   handOverCandidates,
@@ -226,4 +227,16 @@ describe('absoluteAvatarUrl', () => {
     expect(absoluteAvatarUrl('https://cdn.example/a.webp', 'https://festie.us')).toBe('https://cdn.example/a.webp');
     expect(absoluteAvatarUrl(null, 'https://festie.us')).toBeUndefined();
   });
+});
+
+describe('remindedUserIdsToday', () => {
+  const now = new Date('2026-09-04T12:00:00Z');
+  it('lists only this crew and only reminders from the current UTC day', () => {
+    const remindedOn = { 'c1:u1': '2026-09-04', 'c1:u2': '2026-09-03', 'c2:u3': '2026-09-04' };
+    expect([...remindedUserIdsToday(remindedOn, 'c1', now)]).toEqual(['u1']);
+  });
+});
+it('words the crew-full notice for owners and members', () => {
+  expect(crewCopy.inviteCrewFull(true)).toBe('Crew is full. Remove a member to invite.');
+  expect(crewCopy.inviteCrewFull(false)).toBe('Crew is full. Ask the owner to make room.');
 });

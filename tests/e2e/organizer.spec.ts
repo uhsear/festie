@@ -92,7 +92,7 @@ test('organizer journey: create, submit, decline, fix, approve and share', async
 
   // 3. A list of names is the fast path to a lineup.
   await ownerPage.getByRole('button', { name: 'Import lineup', exact: true }).first().click();
-  await ownerPage.getByLabel(/Paste cells from Google Sheets/).fill('Kai\nMira\nNoor');
+  await ownerPage.getByLabel(/paste a list of names/).fill('Kai\nMira\nNoor');
   await ownerPage.getByRole('button', { name: 'Check as a list of names' }).click();
   await ownerPage.getByRole('button', { name: 'Approve', exact: true }).click();
   await ownerPage.getByRole('dialog').getByRole('button', { name: 'Import', exact: true }).click();
@@ -182,7 +182,9 @@ test('organizer journey: create, submit, decline, fix, approve and share', async
   await expect(outsiderPage.getByRole('button', { name: 'Account settings' })).toBeVisible();
   await expect(outsiderPage.getByRole('button', { name: 'Manage your festivals' })).toHaveCount(0);
   await outsiderPage.goto(`${app.baseUrl}/manage`);
-  await expect(outsiderPage.getByText('You are not part of an organization on Festie yet.')).toBeVisible();
+  // A new account has not confirmed its email, so the page asks for that and offers no festival list.
+  await expect(outsiderPage.getByText("Confirm your email to see and edit your organization's festivals.")).toBeVisible();
+  await expect(outsiderPage.getByRole('button', { name: 'New festival' })).toHaveCount(0);
 
   await ownerContext.close();
   await viewerContext.close();

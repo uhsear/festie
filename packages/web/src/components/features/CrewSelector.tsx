@@ -117,7 +117,6 @@ export default function CrewSelector({
           tap();
           setIsOpen(!isOpen);
         }}
-        aria-label="Select crew"
         aria-expanded={isOpen}
         aria-haspopup="listbox"
         onKeyDown={(e) => {
@@ -133,6 +132,7 @@ export default function CrewSelector({
         )}
       >
         <span className="min-w-0 text-left">
+          <span className="sr-only">Select crew: </span>
           <span className="block truncate">{selectedCrew?.name || 'Select Crew'}</span>
           {selectedFestival && (
             <span className="block truncate text-xs font-normal text-text-muted">{festivalLabel(selectedFestival)}</span>
