@@ -101,8 +101,12 @@ function defaultDeps(): DownloadDeps {
     loadExpenses: (crewId) => useCrewStore.getState().loadExpenses(crewId),
     loadActivity: (crewId) => useCrewStore.getState().loadActivity(crewId),
     // The body is kept in weatherStore (zustand-persist), so weather works
-    // offline on mobile as well as on web.
-    fetchWeather: (festivalId) => useWeatherStore.getState().loadWeather(festivalId),
+    // offline on mobile as well as on web. The weather route needs a session (401 for guests), so a guest
+    // skips it, like profiles: otherwise the step errors forever and the checklist can never finish.
+    fetchWeather: async (festivalId) => {
+      if (!useAuthStore.getState().user) return;
+      await useWeatherStore.getState().loadWeather(festivalId);
+    },
     getSets: () => useFestivalDataStore.getState().sets,
     prefetchImage: async (url) => {
       // Best-effort image warm: a GET routes the response into the SW CacheFirst
