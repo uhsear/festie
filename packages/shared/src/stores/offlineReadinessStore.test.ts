@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { useOfflineReadinessStore, collectArtUrls, type DownloadDeps } from './offlineReadinessStore';
 import { useWeatherStore } from './weatherStore';
+import { useAuthStore } from './authStore';
+import { useFestivalDataStore } from './festivalDataStore';
 import type { FestivalSet } from '../types';
 
 function set(id: string, artists?: { name: string; photo?: string }[]): FestivalSet {
@@ -189,6 +191,22 @@ describe('offlineReadinessStore', () => {
       await useOfflineReadinessStore.getState().downloadForOffline('fest-1', 'crew-1', deps);
       const r = useOfflineReadinessStore.getState().getReadiness('fest-1');
       expect(r.crew.status).toBe('ready');
+    });
+  });
+  describe('guest download', () => {
+    it('does not call the authenticated profiles load for a guest, and the picks step is ready', async () => {
+      const loadProfiles = vi.fn().mockRejectedValue(new Error('Please log in'));
+      const original = useFestivalDataStore.getState().loadProfiles;
+      useFestivalDataStore.setState({ loadProfiles });
+      useAuthStore.setState({ user: null });
+      try {
+        const { loadProfiles: _unused, ...deps } = mockDeps();
+        await useOfflineReadinessStore.getState().downloadForOffline('fest-1', undefined, deps);
+        expect(loadProfiles).not.toHaveBeenCalled();
+        expect(useOfflineReadinessStore.getState().getReadiness('fest-1').picks.status).toBe('ready');
+      } finally {
+        useFestivalDataStore.setState({ loadProfiles: original });
+      }
     });
   });
 });

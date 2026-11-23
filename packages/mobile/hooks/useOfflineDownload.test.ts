@@ -82,7 +82,9 @@ describe('offline map readiness size gate', () => {
 
   it('ends in error when the archive did not land on disk', async () => {
     vi.mocked(ensureBasemapCached).mockResolvedValueOnce(null);
-    expect((await downloadOfflineMap(PMTILES, SITEPLAN)).section.status).toBe('error');
+    const result = await downloadOfflineMap(PMTILES, SITEPLAN);
+    expect(result.section.status).toBe('error');
+    expect(result.message).toBe("Couldn't save the map. Check your connection and try again.");
     expect(ensureBasemapCached).toHaveBeenCalledWith(SITEPLAN);
   });
 

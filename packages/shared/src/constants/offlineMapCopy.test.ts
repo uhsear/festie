@@ -26,4 +26,8 @@ describe('offlineMapCopy', () => {
   it('siteplan note keeps the base map promise', () => {
     expect(OFFLINE_MAP_COPY.siteplanNeedsConnection).toContain('base map still works offline');
   });
+
+  it('has a plain message for a failed download', () => {
+    expect(OFFLINE_MAP_COPY.downloadFailed).toBe("Couldn't save the map. Check your connection and try again.");
+  });
 });

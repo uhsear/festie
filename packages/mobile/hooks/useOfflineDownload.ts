@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import { useOfflineReadinessStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { SectionReadiness } from '@festie/shared/stores';
+import { OFFLINE_MAP_COPY } from '@festie/shared/constants';
 import {
   buildOfflineSteps,
   summarizeOffline,
@@ -58,7 +59,8 @@ export async function downloadOfflineMap(
   if (!space.ok) return { section: { status: 'error', syncedAt: Date.now() }, message: space.message };
   await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
   const section = sectionFromDisk(pmtilesUrl);
-  return { section: section.status === 'ready' ? section : { status: 'error', syncedAt: Date.now() }, message: null };
+  if (section.status === 'ready') return { section, message: null };
+  return { section: { status: 'error', syncedAt: Date.now() }, message: OFFLINE_MAP_COPY.downloadFailed };
 }
 
 /**
