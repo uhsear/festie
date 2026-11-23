@@ -265,28 +265,36 @@ describe('setTimesBannerKind', () => {
   const festival = (extra: Partial<Festival> = {}) => ({ id: 'f', name: 'F', lineup: [], ...extra }) as unknown as Festival;
   const days = [{ date: '2027-02-05' }] as FestivalDay[];
   const timedSet = (startTime: string | null) => ({ id: 's', startTime }) as unknown as FestivalSet;
+  const BEFORE = Date.UTC(2027, 0, 1);
+  const AFTER = Date.UTC(2027, 1, 20);
+  const kind = (f: Festival | null, d: FestivalDay[], s: FestivalSet[], now = BEFORE) => setTimesBannerKind(f, d, s, now);
 
   it('is null when a set has a time, or for a draft or no festival', () => {
-    expect(setTimesBannerKind(festival(), days, [timedSet(null), timedSet('20:00')])).toBeNull();
-    expect(setTimesBannerKind(festival({ publishedAt: null }), days, [])).toBeNull();
-    expect(setTimesBannerKind(null, days, [])).toBeNull();
+    expect(kind(festival(), days, [timedSet(null), timedSet('20:00')])).toBeNull();
+    expect(kind(festival({ publishedAt: null }), days, [])).toBeNull();
+    expect(kind(null, days, [])).toBeNull();
   });
 
   it('is "times" when sets exist with no times', () => {
-    expect(setTimesBannerKind(festival(), days, [timedSet(null), timedSet('')])).toBe('times');
+    expect(kind(festival(), days, [timedSet(null), timedSet('')])).toBe('times');
   });
 
   it('is "days" when nothing has a day: no sets and no act with a day', () => {
-    expect(setTimesBannerKind(festival(), days, [])).toBe('days');
-    expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'])] }), days, [])).toBe('days');
+    expect(kind(festival(), days, [])).toBe('days');
+    expect(kind(festival({ lineup: [entry('a', ['A'])] }), days, [])).toBe('days');
     // A date that matches no festival day is not a day.
-    expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'], { dayDate: '2030-01-01' })] }), days, [])).toBe('days');
+    expect(kind(festival({ lineup: [entry('a', ['A'], { dayDate: '2030-01-01' })] }), days, [])).toBe('days');
     // A cancelled act does not count.
-    expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'], { dayDate: '2027-02-05', status: 'cancelled' })] }), days, [])).toBe('days');
+    expect(kind(festival({ lineup: [entry('a', ['A'], { dayDate: '2027-02-05', status: 'cancelled' })] }), days, [])).toBe('days');
   });
 
   it('is "times" when an act has a day but no set has a time', () => {
-    expect(setTimesBannerKind(festival({ lineup: [entry('a', ['A'], { dayDate: '2027-02-05' })] }), days, [])).toBe('times');
+    expect(kind(festival({ lineup: [entry('a', ['A'], { dayDate: '2027-02-05' })] }), days, [])).toBe('times');
+  });
+
+  it('is null once the festival is over, even with no set times', () => {
+    expect(kind(festival(), days, [], AFTER)).toBeNull();
+    expect(kind(festival(), days, [timedSet(null)], AFTER)).toBeNull();
   });
 });
 

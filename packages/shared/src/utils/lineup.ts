@@ -280,16 +280,18 @@ export function lineupReplacesEmptyState(model: AnnouncedLineupModel, searchQuer
 }
 
 /**
- * What the follow banner says for the festival on screen. Null when a set has a time (or the festival
- * is a draft): there is nothing left to wait for. 'days' when no act has a day yet, so the banner
+ * What the follow banner says for the festival on screen. Null when a set has a time, the festival
+ * is a draft, or the festival is over: there is nothing left to wait for. 'days' when no act has a day yet, so the banner
  * names days as well as set times. 'times' otherwise.
  */
 export function setTimesBannerKind(
   festival: Festival | null | undefined,
   days: readonly FestivalDay[] | null | undefined,
   sets: readonly FestivalSet[] | null | undefined,
+  now: number = Date.now(),
 ): 'days' | 'times' | null {
   if (!festival || festival.publishedAt === null) return null;
+  if (festivalPhase(festival, days, new Date(now)) === 'post') return null;
   const allSets = sets ?? [];
   if (allSets.some((set) => !!set.startTime)) return null;
   if (allSets.length > 0) return 'times';
