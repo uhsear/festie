@@ -114,6 +114,15 @@ describe('SetCard', () => {
     mockPicks(null);
   });
 
+  it('renders an 8-artist B2B set as eight name buttons in a wrapping line', () => {
+    const artists = ['Ana', 'Bo', 'Cy', 'Di', 'Ed', 'Flo', 'Gus', 'Hal'].map((name) => ({ name }));
+    render(<SetCard {...defaultProps} set={makeSet({ artist: artists.map((a) => a.name).join(' b2b '), artists })} />);
+    const line = document.querySelector('.card-artist')!;
+    expect(line.querySelectorAll('button')).toHaveLength(8);
+    expect(line).toHaveTextContent('Ana b2b Bo b2b Cy b2b Di b2b Ed b2b Flo b2b Gus b2b Hal');
+    expect(line.className).toContain('break-words');
+  });
+
   it('shows the moved chip and reads the old slot in the accessible name', () => {
     moveMock.value = { chip: 'Moved', line: 'Moved from Sat 10:00 PM, Sahara', a11y: 'Moved from Saturday 10:00 PM, Sahara' };
     render(<SetCard {...defaultProps} />);

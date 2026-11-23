@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { createArtist, matchArtists } from '@festie/shared/services';
+import { MAX_ARTISTS_PER_SET } from '@festie/shared/constants';
 import { useCanMatchArtists } from './festivalModeContext';
 import type { ArtistCandidate } from '@festie/shared/services';
 import {
@@ -14,7 +15,6 @@ import type { Artist } from '@festie/shared/types';
 import ArtistSlotMatch from './ArtistSlotMatch';
 import type { SlotMatch } from './ArtistSlotMatch';
 
-const MAX_ARTISTS_PER_SET = 4;
 
 export interface SetRow {
   id: string;
@@ -56,7 +56,7 @@ export interface SetEditorProps {
 
 /**
  * Edits one set row (artists, stage, startTime, endTime) inside a day.
- * A B2B set holds up to 4 artists; each keeps its own id, links and photo by index.
+ * A B2B set holds up to 8 artists; each keeps its own id, links and photo by index.
  * On blur the server matches the typed name: one artist links at once ("Not this one" undoes it),
  * two or more open the picker, none leaves the name free (the save creates the artist).
  * Links are read only here: they are edited once, on the Artists tab.
