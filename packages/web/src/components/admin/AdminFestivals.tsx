@@ -451,9 +451,9 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
 
   const handleDelete = async (id: string) => {
     const name = nameOf(id);
-    let description = describeDeleteImpact(null);
+    let description = describeDeleteImpact(null, scope);
     try {
-      description = describeDeleteImpact(await fetchDeleteImpact(id, scope));
+      description = describeDeleteImpact(await fetchDeleteImpact(id, scope), scope);
     } catch (err: unknown) {
       console.warn('Could not load delete impact', err);
     }

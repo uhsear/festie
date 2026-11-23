@@ -131,6 +131,18 @@ describe('describeDeleteImpact', () => {
     );
     expect(describeDeleteImpact(null)).toBe('People who joined this festival lose access until you restore it from Archived.');
   });
+
+  it('tells an organizer that only Festie can restore, never pointing at Archived', () => {
+    const texts = [
+      describeDeleteImpact(null, 'manage'),
+      describeDeleteImpact({ profiles: 0, crews: 0, picks: 0 }, 'manage'),
+      describeDeleteImpact({ profiles: 2, crews: 1, picks: 0 }, 'manage'),
+    ];
+    for (const t of texts) {
+      expect(t).toContain('Festie can restore it if you ask. Contact support.');
+      expect(t).not.toContain('Archived');
+    }
+  });
 });
 
 describe('groupIssues', () => {
