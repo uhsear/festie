@@ -3,7 +3,7 @@ import 'dotenv/config';
  * Artist rules for organizations (master plan M7 slice 5, artist plan section 8, conflict rows C5 and C6).
  * Runs the real app on the throwaway test database, with ORGANIZER_PLATFORM_ENABLED on.
  *
- * Covers: which artists an organizer sees (published, own festivals, created by its organization) and that a
+ * Covers: which artists an organizer sees (published, own festivals, created by the viewer itself) and that a
  * hidden artist changes no answer; create (unverified, neutral automatic note on a hidden clash); direct edit,
  * the flagged fill carve-out and the suggestion path; what a draft of another tenant never reveals; the admin
  * decision of a suggestion; the festival save and the lineup import resolving names the same way.
