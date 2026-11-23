@@ -175,6 +175,7 @@ describe('routes/email-auth', () => {
       invalidateVerificationTokens: mock.fn(noopAsync),
       invalidateTokensForEmail: mock.fn(noopAsync),
       invalidatePendingEmailChanges: mock.fn(noopAsync),
+      findResetToken: mock.fn(async () => null),
       consumeResetToken: mock.fn(async () => null),
     };
   }

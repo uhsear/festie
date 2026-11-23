@@ -358,8 +358,10 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
   // TOKEN_EXPIRED lets clients tell a dead link from a weak password without matching text.
   const RESET_LINK_EXPIRED = 'This reset link has expired or was already used';
 
+  const hashResetToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+
   async function resolveResetToken(token: string) {
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenHash = hashResetToken(token);
 
     const consumed = await stores.emailTokens.consumeResetToken(tokenHash);
     if (consumed) return { userId: consumed.user_id };
@@ -379,7 +381,11 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
         if (newPassword !== confirmPassword) {
           return sendError(res, 400, 'Passwords do not match', ErrorCodes.INVALID_INPUT);
         }
-        const pwError = checkPasswordPolicy(newPassword);
+        // Look the account up without consuming the link, so the policy can reject a password that
+        // contains the username or email and the user can still retry with the same link.
+        const live = await stores.emailTokens.findResetToken(hashResetToken(token));
+        const owner = live ? await getUserById(live.user_id) : null;
+        const pwError = checkPasswordPolicy(newPassword, { username: owner?.username, email: owner?.email });
         if (pwError) {
           return sendError(res, 400, pwError, ErrorCodes.INVALID_INPUT);
         }
