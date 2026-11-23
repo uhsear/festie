@@ -4,13 +4,12 @@
       "url": [
         "https://festie.us/",
         "https://festie.us/login",
-        "https://festie.us/festivals"
+        "https://festie.us/cards"
       ],
       "numberOfRuns": 3,
       "settings": {
         "preset": "desktop",
-        "throttlingMethod": "simulate",
-        "budgetPath": "./config/lighthouse-budget.json"
+        "throttlingMethod": "simulate"
       }
     },
     "assert": {
@@ -22,6 +21,9 @@
         "categories:seo": ["warn", { "minScore": 0.85 }],
         "uses-long-cache-ttl": "off",
         "csp-xss": "off",
+        "resource-summary:script:size": ["error", { "maxNumericValue": 700000 }],
+        "resource-summary:script:count": ["error", { "maxNumericValue": 70 }],
+        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1 }],
         "unused-javascript": ["warn", { "maxLength": 3 }],
         "unused-css-rules": ["warn", { "maxLength": 3 }]
       }
