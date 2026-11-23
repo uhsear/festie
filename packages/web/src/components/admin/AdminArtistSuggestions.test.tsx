@@ -62,6 +62,16 @@ describe('AdminArtistSuggestions', () => {
     expect(toast).toHaveBeenCalledWith('Applied to INFEKT (UK) and 3 festivals.', 'success');
   });
 
+  it('does not say "0 festivals" when no festival copy needed updating', async () => {
+    svc.decideArtistSuggestion.mockResolvedValue({ status: 'accepted', artistId: 'a1', festivalsUpdated: 0 });
+    render();
+    await userEvent.click(await screen.findByRole('button', { name: 'Accept the change to INFEKT (UK)' }));
+    await userEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('Applied to INFEKT (UK). No festival copies needed updating.', 'success'),
+    );
+  });
+
   it('rejects only with a note that the organization reads', async () => {
     svc.decideArtistSuggestion.mockResolvedValue({ status: 'rejected', artistId: 'a1', festivalsUpdated: 0 });
     render();

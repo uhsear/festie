@@ -1,5 +1,6 @@
 import React from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useAuthStore } from '@festie/shared';
 import { fetchAdminDashboard } from '@festie/shared/services/admin';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
@@ -12,7 +13,7 @@ import {
 import { CircleCheck, CircleHelp, ClipboardList, Music, Tent, TriangleAlert, Users } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import { cn } from '../../lib/utils';
-import { ADMIN_QUERY_OPTIONS, adminKeys } from './adminQueries';
+import { ADMIN_QUERY_OPTIONS, adminKeys, useReviewQueue } from './adminQueries';
 import { useAdminSearch } from './useAdminSearch';
 
 const STAT_ICONS = {
@@ -38,6 +39,9 @@ export default function AdminDashboard() {
     queryFn: fetchAdminDashboard,
     ...ADMIN_QUERY_OPTIONS,
   });
+  // The same query the Organizations tab label reads, so the admin sees the count here without a second request.
+  const organizerPlatformOn = useAuthStore((state) => state.user?.organizerPlatform !== false);
+  const waiting = useReviewQueue(organizerPlatformOn).data?.requests.length ?? 0;
 
   if (isPending) {
     return (
@@ -64,6 +68,15 @@ export default function AdminDashboard() {
 
   return (
     <div className="space-y-8">
+      {waiting > 0 && (
+        <button
+          type="button"
+          onClick={() => setAdminSearch({ tab: 'organizations' })}
+          className="w-full text-left rounded-lg border border-accent-amber p-4 min-h-11 text-sm text-accent-amber hover:bg-bg-card/80 transition-colors"
+        >
+          {waiting === 1 ? '1 festival is waiting for review.' : `${waiting} festivals are waiting for review.`} Open Organizations.
+        </button>
+      )}
       {/* Stats Grid */}
       <div>
         <h2 className="type-heading text-text-primary mb-4">Statistics</h2>

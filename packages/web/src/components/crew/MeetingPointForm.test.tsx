@@ -36,6 +36,11 @@ const setup = (over: Partial<Parameters<typeof MeetingPointForm>[0]> = {}) => {
 };
 
 describe('MeetingPointForm', () => {
+  it('shows a visible label for the optional meet time', () => {
+    setup();
+    expect(screen.getByText('Meet at (optional)')).toBeVisible();
+  });
+
   it('submits and cancels', async () => {
     const props = setup();
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));

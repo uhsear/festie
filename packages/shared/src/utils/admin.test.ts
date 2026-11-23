@@ -140,6 +140,14 @@ describe('buildFestivalPreview', () => {
     ]);
     expect(buildFestivalPreview(detail).lineup).toEqual([]);
   });
+  it('derives the date range from the days when the payload has no start or end date', () => {
+    const { startDate: _s, endDate: _e, ...bare } = detail as unknown as Record<string, unknown>;
+    const withDays = (dates: string[]) =>
+      ({ ...bare, days: dates.map((date, dayIndex) => ({ dayIndex, date, sets: [] })) }) as unknown as FestivalPreviewInput;
+    expect(buildFestivalPreview(withDays(['2027-03-06'])).dateRange).toBe('Mar 6, 2027');
+    expect(buildFestivalPreview(withDays(['2026-05-02', '', '2026-05-01'])).dateRange).toBe('May 1 – May 2, 2026');
+    expect(buildFestivalPreview(withDays([])).dateRange).toBeNull();
+  });
   it('keys days by dayIndex because the server sends no day id', () => {
     const keys = buildFestivalPreview(detail).days.map((d) => d.key);
     expect(keys).toEqual(['0', '1']);

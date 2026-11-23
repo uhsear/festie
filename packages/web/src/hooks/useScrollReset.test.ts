@@ -83,6 +83,30 @@ describe('useScrollReset', () => {
     expect(mainContent.scrollTop).toBe(0);
   });
 
+  it('leaves scroll alone when the URL hash names an element on the page', () => {
+    const target = document.createElement('div');
+    target.id = 'danger';
+    mainContent.appendChild(target);
+    window.history.replaceState(null, '', '/account#danger');
+    try {
+      renderHook(({ path }) => useScrollReset(path), { initialProps: { path: '/account' } });
+      flushRafs();
+      expect(mainContent.scrollTop).toBe(200);
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
+  it('still resets when the hash names no element', () => {
+    window.history.replaceState(null, '', '/account#missing');
+    try {
+      renderHook(({ path }) => useScrollReset(path), { initialProps: { path: '/account' } });
+      expect(mainContent.scrollTop).toBe(0);
+    } finally {
+      window.history.replaceState(null, '', '/');
+    }
+  });
+
   it('re-runs when pathname changes', () => {
     const { rerender } = renderHook(({ path }) => useScrollReset(path), {
       initialProps: { path: '/page-a' },

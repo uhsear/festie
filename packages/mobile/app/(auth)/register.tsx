@@ -8,7 +8,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
-  Linking,
   Modal,
   Pressable,
   type HostInstance,
@@ -31,9 +30,10 @@ import {
   type RegisterErrors,
   type RegisterField,
 } from '@festie/shared/utils';
-import { AUTH_COPY } from '@festie/shared/constants';
+import { AUTH_COPY, GUEST_LEGAL_COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
+import GuestLegalFooter, { openPage } from '../../components/GuestLegalFooter';
 import InviteCard from '../../components/InviteCard';
 import ProviderButtons from '../../components/ProviderButtons';
 import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
@@ -41,10 +41,6 @@ import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
-
-// No in-app Terms route exists yet; open the canonical web Terms of Service,
-// mirroring how the privacy screen links out to it.
-const TERMS_URL = 'https://festie.us/terms.html';
 
 // Screen order; the first invalid field in this order takes focus.
 const FIELD_ORDER: RegisterField[] = ['username', 'email', 'password', 'confirmPassword', 'dateOfBirth', 'tosAccepted'];
@@ -647,7 +643,7 @@ export default function RegisterScreen() {
               I agree to the{' '}
             </Text>
             <TouchableOpacity
-              onPress={() => void Linking.openURL(TERMS_URL)}
+              onPress={() => void openPage(GUEST_LEGAL_COPY.termsPath)}
               accessibilityRole="link"
               accessibilityLabel="Read the Terms of Service, opens in browser"
             >
@@ -709,6 +705,7 @@ export default function RegisterScreen() {
         >
           <Text style={styles.linkText}>Browse without an account</Text>
         </TouchableOpacity>
+        <GuestLegalFooter />
       </ScrollView>
 
       {/* iOS bottom-sheet date picker — only rendered on iOS */}

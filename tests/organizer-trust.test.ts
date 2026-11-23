@@ -259,7 +259,8 @@ describe('Integration: organizer trust tier', { skip, concurrency: 1 }, () => {
       assert.ok(mine, `the editor's save is listed by display name: ${text}`);
       const festie = view.body.data.filter((row: any) => row.actor === 'Festie support');
       assert.ok(festie.length > 0, 'the admin save is listed as Festie support');
-      assert.ok(festie.every((row: any) => row.details === null), 'a Festie row carries no details');
+      // A Festie row names the organization's festival and nothing else.
+      assert.ok(festie.every((row: any) => row.details === null || JSON.stringify(Object.keys(row.details)) === '["name"]'), 'a Festie row carries at most the festival name');
       assert.equal(text.includes(users.editorA.username), false);
       assert.equal(text.includes('testadmin-'), false);
       assert.equal(text.includes('actorId'), false);

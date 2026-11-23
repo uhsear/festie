@@ -175,6 +175,11 @@ describe('CrewPlanView', () => {
     expect(screen.getByText('Forbidden Kingdom · 2 members')).toBeInTheDocument();
   });
 
+  it('keeps the Back to crew link a 44px touch target', () => {
+    render(<CrewPlanView />);
+    expect(screen.getByRole('link', { name: 'Back to crew' })).toHaveClass('min-h-11', 'min-w-11');
+  });
+
   it('shows a recurring meet-up time in the festival zone, not the device zone', () => {
     festivalState.currentFestival = { id: 'f1', name: 'Forbidden Kingdom', timeZone: 'Asia/Tokyo' };
     festivalState.days = [];

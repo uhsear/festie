@@ -51,6 +51,13 @@ describe('ForgotPasswordPage', () => {
     expect(mockForgot).not.toHaveBeenCalled();
   });
 
+  it('moves focus to the email field when validation fails', async () => {
+    const user = userEvent.setup();
+    render(<ForgotPasswordPage />);
+    await user.click(screen.getByRole('button', { name: 'Send reset link' }));
+    expect(screen.getByLabelText('Email')).toHaveFocus();
+  });
+
   it('returns to the form with the email kept', async () => {
     const user = userEvent.setup();
     render(<ForgotPasswordPage />);

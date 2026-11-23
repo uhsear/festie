@@ -380,6 +380,24 @@ describe('lib/db/stores/email-tokens.js', () => {
   // =========================================================================
   // consumeResetToken()
   // =========================================================================
+  describe('findResetToken', () => {
+    it('reads a live token without marking it used', async () => {
+      const pool = makePool([{ rows: [{ user_id: 'user-1' }] }]);
+      const store = createEmailTokensStore(pool);
+
+      assert.deepStrictEqual(await store.findResetToken('hash-reset'), { user_id: 'user-1' });
+      const sql = (pool.query.mock.calls[0]! as any).arguments[0] as string;
+      assert.ok(sql.startsWith('SELECT user_id'));
+      assert.ok(!sql.includes('UPDATE'));
+      assert.ok(sql.includes('used_at IS NULL') && sql.includes('expires_at > NOW()'));
+    });
+
+    it('returns null when no live token matches', async () => {
+      const store = createEmailTokensStore(makePool([{ rows: [] }]));
+      assert.strictEqual(await store.findResetToken('missing'), null);
+    });
+  });
+
   describe('consumeResetToken', () => {
     it('marks the token used and returns the user_id', async () => {
       const pool = makePool([{ rows: [{ user_id: 'user-1' }] }]);

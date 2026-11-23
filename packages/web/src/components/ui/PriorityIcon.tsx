@@ -6,7 +6,7 @@ import { PRIORITY_SYMBOLS, type PrioritySymbolKey } from '@festie/shared/constan
 const ICONS: Record<PrioritySymbolKey, LucideIcon> = { star: Star, heart: Heart, circle: Circle };
 
 export function priorityLucide(priority: Priority): LucideIcon {
-  return ICONS[PRIORITY_SYMBOLS[priority].icon];
+  return ICONS[(PRIORITY_SYMBOLS[priority] ?? PRIORITY_SYMBOLS['want-to-see']).icon];
 }
 
 interface PriorityIconProps {
