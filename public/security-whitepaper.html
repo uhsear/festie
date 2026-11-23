@@ -215,8 +215,8 @@
     <header>
         <h1>Security Whitepaper</h1>
         <p class="document-meta">
-            <span><strong>Version:</strong> 1.0</span>
-            <span><strong>Last Updated:</strong> March 2026</span>
+            <span><strong>Version:</strong> 1.1</span>
+            <span><strong>Last Updated:</strong> November 2026</span>
         </p>
     </header>
 
@@ -315,14 +315,19 @@
                 </thead>
                 <tbody>
                     <tr>
-                        <td>Consecutive failed login attempts</td>
+                        <td>Consecutive failed login attempts from one IP address to one account</td>
                         <td>10</td>
-                        <td>Account locked for 15 minutes</td>
+                        <td>Account locked for 15 minutes for that IP address</td>
+                    </tr>
+                    <tr>
+                        <td>Consecutive failed login attempts across all IP addresses to one account</td>
+                        <td>50</td>
+                        <td>Whole account locked for 15 minutes</td>
                     </tr>
                     <tr>
                         <td>Lockout duration</td>
                         <td>15 minutes</td>
-                        <td>Automatic unlock; user can unlock via email</td>
+                        <td>Automatic unlock; a password reset by email also clears the lock</td>
                     </tr>
                     <tr>
                         <td>Failed attempts reset</td>
@@ -335,15 +340,15 @@
 
             <h3>Rate Limiting on Authentication Endpoints</h3>
             <div class="security-feature">
-                <strong>Login Endpoint:</strong> 10 requests per 5-minute window per IP address
+                <strong>Login Endpoint:</strong> 30 requests per 5-minute window per IP address, and 10 requests per minute per IP address and account
             </div>
             <div class="security-feature">
-                <strong>Password Reset:</strong> 5 requests per 15-minute window per email address
+                <strong>Password Reset:</strong> 3 requests per hour per email address
             </div>
             <div class="security-feature">
-                <strong>Registration:</strong> 5 requests per hour per IP address
+                <strong>Registration:</strong> 10 requests per 5-minute window per IP address
             </div>
-            <p>Rate limiting is enforced at the reverse proxy layer with per-IP and per-user tracking. Attempts to bypass rate limiting via distributed requests are mitigated through adaptive thresholds.</p>
+            <p>The application enforces these limits itself, with per-IP and per-account tracking. Redis shares the counters between processes when it is enabled.</p>
 
             <h3>Multi-Device Session Management</h3>
             <p>Users can maintain multiple concurrent sessions across devices. Session invalidation can be triggered by:</p>
@@ -536,7 +541,7 @@
                     </tr>
                     <tr>
                         <td>Audit Logs</td>
-                        <td>90 days</td>
+                        <td>1 year</td>
                         <td>Automatic deletion</td>
                     </tr>
                     <tr>
@@ -618,7 +623,7 @@
             <h3>Log Storage & Access</h3>
             <ul>
                 <li><strong>Storage:</strong> PostgreSQL with tamper-evident checksums</li>
-                <li><strong>Retention:</strong> 90-day retention policy with automatic deletion</li>
+                <li><strong>Retention:</strong> 1-year retention policy with automatic deletion</li>
                 <li><strong>Access Control:</strong> Restricted to administrators; all log access logged</li>
                 <li><strong>Query Interface:</strong> Admin panel with filtering by user, action, date range, result status</li>
                 <li><strong>Export:</strong> Bulk export capabilities for security investigations and audits</li>
@@ -878,7 +883,7 @@
     </main>
 
     <footer>
-        <p>Festie Security Whitepaper | Version 1.0 | Last Updated March 2026</p>
+        <p>Festie Security Whitepaper | Version 1.1 | Last Updated November 2026</p>
     </footer>
 </body>
 </html>
