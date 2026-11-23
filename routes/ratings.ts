@@ -12,6 +12,7 @@ export function createRatingsRoutes(deps: RouteDeps) {
     sendError,
     ErrorCodes,
     rateLimit,
+    getFestivalById,
     schemas,
     validate,
     validateParams,
@@ -21,6 +22,29 @@ export function createRatingsRoutes(deps: RouteDeps) {
   const crewMember = crewMembership({ stores, log, sendError, ErrorCodes });
   const writeLimit = rateLimit(60, 'rating-write');
   const readLimit = rateLimit(120, 'rating-read');
+
+  // Only someone who joined a published festival may rate its sets. A draft or a festival the caller
+  // never joined answers like a missing set, so draft set ids are not an oracle.
+  async function canRateSet(userId: string, setId: string): Promise<boolean> {
+    const { rows } = await stores.pool.query(
+      `
+  SELECT
+    1
+  FROM
+    festival_sets fs
+    JOIN festivals f ON f.id = fs.festival_id
+    AND f.deleted_at IS NULL
+    AND f.published_at IS NOT NULL
+    JOIN festival_profiles fp ON fp.festival_id = f.id
+    AND fp.user_id = $2
+    AND fp.deleted_at IS NULL
+  WHERE
+    fs.id = $1
+`,
+      [setId, userId],
+    );
+    return rows.length > 0;
+  }
 
   // Rate a set (upsert)
   router.post(
@@ -34,22 +58,7 @@ export function createRatingsRoutes(deps: RouteDeps) {
         const { setId } = req.validatedParams;
         const { rating, note } = req.validatedBody;
 
-        // Verify set exists
-        const setCheck = await stores.pool.query(
-          `
-  SELECT
-    fs.id,
-    fs.festival_id
-  FROM
-    festival_sets fs
-    JOIN festivals f ON fs.festival_id = f.id
-    AND f.deleted_at IS NULL
-  WHERE
-    fs.id = $1
-`,
-          [setId],
-        );
-        if (setCheck.rows.length === 0) {
+        if (!(await canRateSet(req.user.userId, setId))) {
           return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
         }
 
@@ -78,20 +87,7 @@ export function createRatingsRoutes(deps: RouteDeps) {
     async (req: any, res: any) => {
       try {
         const { setId } = req.validatedParams;
-        const setCheck = await stores.pool.query(
-          `
-  SELECT
-    fs.id
-  FROM
-    festival_sets fs
-    JOIN festivals f ON fs.festival_id = f.id
-    AND f.deleted_at IS NULL
-  WHERE
-    fs.id = $1
-`,
-          [setId],
-        );
-        if (setCheck.rows.length === 0) {
+        if (!(await canRateSet(req.user.userId, setId))) {
           return sendError(res, 404, 'Set not found', ErrorCodes.NOT_FOUND);
         }
         const result = await stores.ratings.setCaught(req.user.userId, setId, req.validatedBody.caught);
@@ -143,6 +139,9 @@ export function createRatingsRoutes(deps: RouteDeps) {
     async (req: any, res: any) => {
       try {
         const { cursor, limit } = req.validatedQuery;
+        // A missing or draft festival answers an empty list, like the public announcements feed.
+        const festival = await getFestivalById(req.validatedParams.festivalId);
+        if (!festival?.publishedAt) return sendSuccess(res, { ratings: [], nextCursor: null });
         const result = await stores.ratings.getByFestival(req.validatedParams.festivalId, { cursor, limit });
         return sendSuccess(res, { ratings: result.items, nextCursor: result.nextCursor });
       } catch (err: any) {

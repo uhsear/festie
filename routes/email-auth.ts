@@ -69,6 +69,32 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
 
   const router = express.Router();
 
+  async function sendResetLink(cleanEmail: string) {
+    const user = await stores.emailTokens.findUserByEmail(cleanEmail);
+    if (!user) return;
+
+    // Invalidate any existing reset tokens for this user
+    await stores.emailTokens.invalidateResetTokens(user.id);
+
+    // Generate new reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    await stores.emailTokens.createResetToken(user.id, tokenHash);
+
+    const resetUrl = `${config.PUBLIC_ORIGIN}/reset-password?token=${resetToken}`;
+    const sent = await sendPasswordResetEmail({ to: cleanEmail, username: user.username, resetUrl, config, log, redis: deps.redis });
+    if (!sent) {
+      // The response stays identical so it cannot reveal accounts. sendEmail has already logged
+      // the provider error; this line says which request lost its reset mail.
+      log.warn('forgot-password:email-failed', {
+        userId: user.id,
+        reason: config.RESEND_API_KEY ? 'send-failed' : 'RESEND_API_KEY not configured',
+      });
+    }
+
+    log.info('forgot-password:requested', { userId: user.id });
+  }
+
   // ── POST /forgot-password — request password reset email ─────────────
   router.post(
     '/forgot-password',
@@ -89,34 +115,11 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
           return sendSuccess(res, { message: successMsg });
         }
 
-        const user = await stores.emailTokens.findUserByEmail(cleanEmail);
-
-        if (!user) {
-          // Timing-safe: add small delay to match the email-send path
-          await new Promise((r) => setTimeout(r, 200 + Math.random() * 300));
-          return sendSuccess(res, { message: successMsg });
-        }
-
-        // Invalidate any existing reset tokens for this user
-        await stores.emailTokens.invalidateResetTokens(user.id);
-
-        // Generate new reset token
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const tokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
-        await stores.emailTokens.createResetToken(user.id, tokenHash);
-
-        const resetUrl = `${config.PUBLIC_ORIGIN}/reset-password?token=${resetToken}`;
-        const sent = await sendPasswordResetEmail({ to: cleanEmail, username: user.username, resetUrl, config, log, redis: deps.redis });
-        if (!sent) {
-          // The response stays identical so it cannot reveal accounts. sendEmail has already logged
-          // the provider error; this line says which request lost its reset mail.
-          log.warn('forgot-password:email-failed', {
-            userId: user.id,
-            reason: config.RESEND_API_KEY ? 'send-failed' : 'RESEND_API_KEY not configured',
-          });
-        }
-
-        log.info('forgot-password:requested', { userId: user.id, email: cleanEmail });
+        // Answer before any lookup or send: a known and an unknown address then return in the same time.
+        // That work is detached, so its failures are logged here and never reach the caller.
+        // Accepted risk: shutdown does not wait for it, so a restart in that window loses the email.
+        // The user can request another link, and the loss shows in the log.
+        void sendResetLink(cleanEmail).catch((error: any) => log.error('forgot-password failed', { error: error?.message ?? String(error) }));
         return sendSuccess(res, { message: successMsg });
       } catch (error: any) {
         log.error('forgot-password failed', { error: error.message });

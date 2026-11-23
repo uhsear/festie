@@ -19,6 +19,7 @@ import { AUTH_COPY, COPY } from '@festie/shared/constants';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
 import InviteCard from '../../components/InviteCard';
+import GuestLegalFooter from '../../components/GuestLegalFooter';
 import ProviderButtons from '../../components/ProviderButtons';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
@@ -325,6 +326,7 @@ export default function LoginScreen() {
         >
           <Text style={styles.linkText}>Browse without an account</Text>
         </TouchableOpacity>
+        <GuestLegalFooter />
       </ScrollView>
     </KeyboardAvoidingView>
   );

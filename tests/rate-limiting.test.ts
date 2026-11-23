@@ -36,6 +36,7 @@ function makeDeps(overrides: any = {}) {
       rateLimits: new Map(),
       authRateLimits: new Map(),
       adminAuthRateLimits: new Map(),
+      loginIpRateLimits: new Map(),
       routeRateLimits: new Map(),
       socketRateLimits: new Map(),
       socketConnectRateLimits: new Map(),
@@ -86,6 +87,7 @@ describe('rate-limiting: createRateLimiters', () => {
     const rl = createRateLimiters(deps);
     assert.equal(typeof rl.rateLimit, 'function');
     assert.equal(typeof rl.authRateLimit, 'function');
+    assert.equal(typeof rl.loginIpRateLimit, 'function');
     assert.equal(typeof rl.adminAuthRateLimit, 'function');
     assert.equal(typeof rl.consumeSocketRateLimit, 'function');
     assert.equal(typeof rl.consumeUserAuthRateLimit, 'function');

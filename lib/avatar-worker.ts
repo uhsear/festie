@@ -39,6 +39,7 @@ parentPort!.on('message', async (msg: { buffer: ArrayBuffer; maxPixels: number; 
     const ab = result.buffer.slice(result.byteOffset, result.byteOffset + result.byteLength) as ArrayBuffer;
     parentPort!.postMessage({ result: ab }, [ab]);
   } catch (err) {
-    parentPort!.postMessage({ error: (err as Error).message, statusCode: 400 });
+    // Decoder text names libvips internals; the caller gets a fixed message and the pool keeps the original as `detail` for the log.
+    parentPort!.postMessage({ error: 'We could not read that image', statusCode: 400, detail: (err as Error).message });
   }
 });

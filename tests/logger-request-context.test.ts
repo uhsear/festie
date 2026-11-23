@@ -60,6 +60,7 @@ function makeApp() {
     getRequestIp: (req: any) => req.ip || '127.0.0.1',
     rateLimit: () => (_req: any, _res: any, next: any) => next(),
     authRateLimit: (_req: any, _res: any, next: any) => next(),
+    loginIpRateLimit: (_req: any, _res: any, next: any) => next(),
     sendError,
     ErrorCodes,
     generateOpenAPISpec: () => ({}),
@@ -121,10 +122,13 @@ describe('server error handler: production 5xx', () => {
     result.app.get('/__boom', () => {
       throw new Error('boom for stack test');
     });
+    result.app.get('/join-preview/:code', () => {
+      throw new Error('boom for invite path');
+    });
     const stack = result.app.router.stack;
     const at = stack.findIndex((l: any) => String(l.handle).includes('runWithRequestContext'));
     assert.ok(at >= 0, 'request-context middleware is mounted');
-    stack.splice(at + 1, 0, stack.pop());
+    stack.splice(at + 1, 0, ...stack.splice(-2));
   });
 
   after(async () => {
@@ -138,5 +142,13 @@ describe('server error handler: production 5xx', () => {
     assert.ok(line, 'error line captured');
     assert.match(line.stack, /boom for stack test/);
     assert.equal(line.reqId, res.headers['x-request-id']);
+  });
+
+  it('redacts an invite code from the logged path', async () => {
+    const res = await request(result.app).get('/join-preview/SECRETCODE');
+    assert.equal(res.status, 500);
+    const line = lines.find((l) => l.msg === 'unhandled request error' && l.error === 'boom for invite path');
+    assert.ok(line, 'error line captured');
+    assert.equal(line.path, '/join-preview/:code');
   });
 });

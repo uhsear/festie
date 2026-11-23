@@ -325,6 +325,24 @@ describe('request-helpers: auth detection helpers', () => {
 
 // ─── enforceAllowedOrigin middleware ─────────────────────────────────────────
 
+describe('request-helpers: CSRF logs redact invite codes', () => {
+  it('redacts the code in both the blocked-origin and missing-origin warnings', () => {
+    const warns: any[] = [];
+    const helpers = createRequestHelpers({
+      config: baseConfig,
+      log: { ...noopLog, warn: (...a: any[]) => warns.push(a) },
+      sendError: noopSendError,
+      ErrorCodes,
+    });
+    const path = '/api/v1/crews/join/SECRET1';
+    helpers.enforceAllowedOrigin(mockReq({ method: 'POST', path, headers: { origin: 'https://evil.example' } }), {}, () => {});
+    helpers.enforceAllowedOrigin(mockReq({ method: 'POST', path, headers: { cookie: 'festie_session=abc' } }), {}, () => {});
+    const csrf = warns.filter(([msg]) => String(msg).startsWith('csrf:'));
+    assert.equal(csrf.length, 2);
+    for (const [, meta] of csrf) assert.equal(meta.path, '/api/v1/crews/join/:code');
+  });
+});
+
 describe('request-helpers: enforceAllowedOrigin', () => {
   // Runs the middleware and records every next() call's arguments and every sendError code.
   function run(reqOverrides: any) {

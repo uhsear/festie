@@ -161,16 +161,21 @@ async function liveTokenEmails(userId: string): Promise<string[]> {
 async function stealResetToken(userId: string) {
   const raw = crypto.randomBytes(32).toString('hex');
   const hash = crypto.createHash('sha256').update(raw).digest('hex');
-  const updated = await withPool(async (pool) => {
-    const { rows } = await pool.query(
-      `UPDATE password_reset_tokens SET token_hash = $2
-        WHERE id = (SELECT id FROM password_reset_tokens
-                     WHERE user_id = $1 AND used_at IS NULL ORDER BY id DESC LIMIT 1)
-        RETURNING id`,
-      [userId, hash],
-    );
-    return rows[0];
-  });
+  // forgot-password answers before it writes the token row, so retry until it exists.
+  let updated: unknown;
+  for (let attempt = 0; attempt < 40 && !updated; attempt++) {
+    updated = await withPool(async (pool) => {
+      const { rows } = await pool.query(
+        `UPDATE password_reset_tokens SET token_hash = $2
+          WHERE id = (SELECT id FROM password_reset_tokens
+                       WHERE user_id = $1 AND used_at IS NULL ORDER BY id DESC LIMIT 1)
+          RETURNING id`,
+        [userId, hash],
+      );
+      return rows[0];
+    });
+    if (!updated) await new Promise((resolve) => setTimeout(resolve, 50));
+  }
   assert.ok(updated, 'expected a live password-reset token row for the user');
   return raw;
 }

@@ -344,7 +344,7 @@ describe('Device token purge', () => {
     const deleteExpired = mock.fn(async () => 2);
     const log = { info: mock.fn(), warn: mock.fn(), error: mock.fn(), debug: mock.fn() };
     const ctx: any = {
-      config: { SESSION_TTL: 86400000, AUDIT_LOG_RETENTION_DAYS: 90 },
+      config: { SESSION_TTL: 86400000, AUDIT_LOG_RETENTION_DAYS: 90, LOGIN_LOCKOUT_MS: 900000 },
       state: {
         timers: [],
         rateLimits: new Map(),
@@ -359,6 +359,7 @@ describe('Device token purge', () => {
         auditLog: { cleanup: mock.fn(async () => 0) },
         crews: { meetingPoints: { expireStale: mock.fn(async () => ({ rowCount: 0 })) } },
         deviceTokens: { deleteExpired },
+        loginFailures: { purgeStaleIps: mock.fn(async () => 0) },
       },
       log,
       pool: {},

@@ -6,7 +6,15 @@ import request from 'supertest';
 import { io as createSocketClient } from 'socket.io-client';
 import { Pool } from 'pg';
 import crypto from 'crypto';
-import { createFestivalPlanner } from '../server';
+import { createFestivalPlanner as createPlanner } from '../server';
+
+// Each planner owns a pg pool (max 20); close them all after each test or the file exhausts Postgres.
+const openPlanners: Array<{ close: () => Promise<unknown> }> = [];
+async function createFestivalPlanner(overrides: any) {
+  const planner = await createPlanner(overrides);
+  openPlanners.push(planner);
+  return planner;
+}
 import { ensureTestSchema, requireTestDatabaseUrl } from './_test-schema';
 import { sanitizeString } from '../lib/helpers/sanitize';
 import { fileURLToPath } from 'url';
@@ -67,12 +75,15 @@ describe('Hardening Tests', { concurrency: 1 }, () => {
 
   afterEach(async () => {
     if (server) {
-      return new Promise<void>((resolve) => {
+      await new Promise<void>((resolve) => {
         server.close(() => {
           if (io) io.close();
           resolve();
         });
       });
+    }
+    while (openPlanners.length > 0) {
+      await openPlanners.pop()!.close().catch((err: unknown) => console.warn('planner close failed', err));
     }
   });
 
