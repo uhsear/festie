@@ -75,6 +75,8 @@ export interface FestivalEditFormProps {
   alertsOn?: boolean;
   /** A viewer reads the form but cannot change it: every input is disabled and the save buttons are gone. */
   readOnly?: boolean;
+  /** The server refuses a name or location change on a live festival of an unverified organization: lock both inputs. */
+  identityLocked?: boolean;
   onSave: () => void;
   /** Edit mode: reset to the loaded festival. */
   onDiscard: () => void;
@@ -113,6 +115,7 @@ export default function FestivalEditForm({
   mode = 'admin',
   alertsOn = false,
   readOnly = false,
+  identityLocked = false,
   onSave,
   onDiscard,
   onCancel,
@@ -401,6 +404,7 @@ export default function FestivalEditForm({
             placeholder="Festival Name"
             value={formData.name || ''}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            disabled={identityLocked}
             aria-invalid={nameIssues.length ? true : undefined}
             className={`w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${nameIssues.length ? ERROR_RING : ''}`}
           />
@@ -420,6 +424,7 @@ export default function FestivalEditForm({
             placeholder="Location"
             value={formData.location || ''}
             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+            disabled={identityLocked}
             className="w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           />
           {venueGuessed && (
@@ -428,6 +433,14 @@ export default function FestivalEditForm({
             </p>
           )}
         </div>
+        {identityLocked && (
+          <p className="text-xs text-text-muted md:col-span-2">
+            Ask Festie to change the name or location of a live festival.{' '}
+            <a href="mailto:support@festie.us" className="text-accent-aqua underline">
+              Contact Festie
+            </a>
+          </p>
+        )}
         <label className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
           Time zone
           <select

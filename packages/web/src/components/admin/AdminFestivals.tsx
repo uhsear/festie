@@ -695,6 +695,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
         venueGuessed={!!festivalId && venueGuessedFor === festivalId}
         mode={organizer ? 'organizer' : 'admin'}
         readOnly={!canWrite}
+        identityLocked={organizer && !!meta.publishedAt && formOrg?.verified !== true}
         alertsOn={verifiedMember}
         savedDays={original?.days}
         savedLineup={original?.lineup}
