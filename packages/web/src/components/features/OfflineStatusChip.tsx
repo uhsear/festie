@@ -3,9 +3,9 @@ import { Check, Download } from 'lucide-react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import {
-  OFFLINE_REMINDER_TEXT,
   festivalPhase,
   offlineReminderAt,
+  offlineReminderText,
   offlineStatusLabel,
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
@@ -16,7 +16,7 @@ const PILL =
   'inline-flex items-center gap-1.5 px-3 rounded-full text-xs font-medium bg-text-secondary/10 text-text-secondary';
 
 function Chip({ festivalId, className, remind }: { festivalId: string; className?: string; remind: boolean }) {
-  const { summary, download, isDownloading } = useOfflineDownload(festivalId);
+  const { summary, download, isDownloading, hasMap } = useOfflineDownload(festivalId);
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const days = useFestivalStore((s) => s.days);
 
@@ -62,7 +62,7 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
     <div className={cn('flex flex-wrap items-center gap-2 text-xs', className)}>
       {showReminder ? (
         <p className="basis-full rounded-xl border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber">
-          {OFFLINE_REMINDER_TEXT}
+          {offlineReminderText(hasMap)}
         </p>
       ) : null}
       <button

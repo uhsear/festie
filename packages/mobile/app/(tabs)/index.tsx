@@ -42,7 +42,7 @@ import {
   searchOtherDays,
   searchEmptyCopy,
   searchHiddenByFilters,
-  dayHasTimedSets,
+  dayTimesNotOut,
   groupScheduleSets,
   defaultScheduleView,
   hasAnyPick,
@@ -618,7 +618,9 @@ export default function TimelineScreen() {
         onSavePick={handlePickChange}
         onOpenDetail={handleSetPress}
         defaultExpanded={timedSets.length === 0}
-        allTba={timedSets.length === 0 && !dayHasTimedSets(allSets.filter((s) => s.dayIndex === selectedDay))}
+        allTba={
+          timedSets.length === 0 && dayTimesNotOut(currentFestival, festivalDays, allSets.filter((s) => s.dayIndex === selectedDay))
+        }
       />
     ) : null;
 
