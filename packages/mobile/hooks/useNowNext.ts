@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AppState } from 'react-native';
-import { useFestivalDataStore } from '@festie/shared/stores';
+import { selectMyPicks, useFestivalDataStore } from '@festie/shared/stores';
 import { getSetTimeBounds, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 
@@ -39,7 +39,7 @@ export interface NowNext {
 export function useNowNext(upcomingLimit = 5): NowNext {
   const sets = useFestivalDataStore((s) => s.sets) as FestivalSet[];
   const days = useFestivalDataStore((s) => s.days);
-  const picks = useFestivalDataStore((s) => s.currentProfile?.picks);
+  const picks = useFestivalDataStore(selectMyPicks) ?? undefined;
   const timeZone = useFestivalDataStore((s) => resolveFestivalTimeZone(s.currentFestival));
 
   const [now, setNow] = useState<Date>(() => new Date());

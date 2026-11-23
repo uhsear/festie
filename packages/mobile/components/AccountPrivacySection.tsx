@@ -149,7 +149,7 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[4],
     paddingVertical: t.spacing[3],
   },
-  title: { ...typeStyle('body'), fontWeight: '700', color: t.colors.text.primary, flex: 1 },
+  title: { ...typeStyle('body', 700), color: t.colors.text.primary, flex: 1 },
   item: {
     flexDirection: 'row',
     gap: t.spacing[3],

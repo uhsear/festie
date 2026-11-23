@@ -26,6 +26,10 @@ env:
     timeout: 30000
 - assertVisible: "Choose.a.festival"
 - takeScreenshot: 02-festival-picker
+- scrollUntilVisible:
+    element:
+      id: "festival-card-${FESTIVAL_ID}"
+    timeout: 30000
 - tapOn:
     id: "festival-card-${FESTIVAL_ID}"
 - extendedWaitUntil:

@@ -36,7 +36,8 @@ const smallButton =
 /** The festivals of the member's organizations, grouped by organization when there is more than one (plan-v3 5.1 step 6). */
 export default function ManageFestivalList({ query, organizations, onOpen, onNew, onDelete }: Props) {
   const { toast } = useToast();
-  const canCreate = organizations.some((o) => o.role !== 'viewer' && o.status !== 'suspended');
+  const canCreate = organizations.some((o) => o.role === 'owner' && o.status !== 'suspended');
+  const canImport = organizations.some((o) => o.role !== 'viewer' && o.status !== 'suspended');
   const festivals = (query.data ?? []).filter((f) => !f.deleted);
   const [qr, setQr] = useState<{ name: string; link: string } | null>(null);
 
@@ -129,7 +130,7 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
       <EmptyState
         icon={<SearchX className="w-9 h-9" aria-hidden="true" />}
         title="No festivals yet"
-        description={canCreate ? 'Create a draft to get started. Only your team and Festie can see it.' : 'Your team has no festivals yet.'}
+        description={canCreate ? 'Create a draft to get started. Only your team and Festie can see it.' : 'Your team has no festivals yet. An owner of your organization creates the first one.'}
       />
     );
   } else if (organizations.length > 1) {
@@ -157,9 +158,8 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
   return (
     <div className="space-y-4">
       {banners}
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="type-heading text-text-primary">Festivals</h2>
-        {canCreate && (
+      {canCreate && (
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={onNew}
@@ -168,13 +168,13 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
             <Plus className="w-4 h-4" aria-hidden="true" />
             New festival
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {body}
-      {canCreate && (
+      {canImport && (
         <p className="text-sm text-text-muted">
           Starting a lineup?{' '}
-          <button type="button" className="text-accent-aqua underline" onClick={() => downloadText('festie-lineup-sample.csv', LINEUP_SAMPLE_CSV)}>
+          <button type="button" className="inline-flex min-h-11 items-center text-accent-aqua underline" onClick={() => downloadText('festie-lineup-sample.csv', LINEUP_SAMPLE_CSV)}>
             Download a sample import file
           </button>
           .

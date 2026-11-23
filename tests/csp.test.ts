@@ -238,6 +238,11 @@ describe('csp: Cross-Origin-Opener-Policy', () => {
     assert.match(policy, /camera=\(\)/);
   });
 
+  it('names no feature Chromium rejects (browsing-topics logged a console error on every load)', async () => {
+    const policy = String((await headersFor({}))['permissions-policy']);
+    assert.doesNotMatch(policy, /browsing-topics/);
+  });
+
   it('lets only the Spotify embed use encrypted media (FND-062)', async () => {
     const policy = String((await headersFor({}))['permissions-policy']);
     assert.match(policy, /encrypted-media=\(self "https:\/\/open\.spotify\.com"\)/);

@@ -251,7 +251,7 @@ function TimelineGridCell({
                 onKeyDown={(e) => onNavKey(e, set.id)}
                 tabIndex={tabIndex}
                 aria-pressed={active ? 'true' : 'false'}
-                aria-label={pickLabel(p)}
+                aria-label={`${pickLabel(p)}: ${dn}`}
                 title={pickLabel(p)}
                 onClick={(e) => {
                   e.preventDefault();

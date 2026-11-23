@@ -3,7 +3,7 @@ import { AccessibilityInfo, Text, View } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchWrap, markCaught } from '@festie/shared/services';
-import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
+import { selectMyPicks, useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { FestivalSet, WrapResponse } from '@festie/shared/types';
 import { applyCaughtMark, artistDisplayName, catchableMeta, caughtFor, selectCatchable } from '@festie/shared/utils';
 import PressableScale from './PressableScale';
@@ -35,7 +35,7 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
   const user = useAuthStore((s) => s.user);
   const sets = useFestivalDataStore((s) => s.sets) as FestivalSet[];
   const days = useFestivalDataStore((s) => s.days);
-  const picks = useFestivalDataStore((s) => s.currentProfile?.picks);
+  const picks = useFestivalDataStore(selectMyPicks) ?? undefined;
   const [data, setData] = useState<WrapResponse>();
   const [overlay, setOverlay] = useState<ReadonlyMap<string, boolean | null>>(new Map());
   const [error, setError] = useState(false);

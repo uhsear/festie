@@ -79,22 +79,22 @@ export default function ManageOrgProfile({ organization, canEdit }: Props) {
     <form onSubmit={save} aria-label="Organization profile" className="grid grid-cols-1 gap-3 md:grid-cols-2">
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         Name
-        <input required minLength={2} maxLength={80} value={name} disabled={nameLocked} onChange={(e) => setName(e.target.value)} className={INPUT_CLASS} />
+        <input required minLength={2} maxLength={80} value={name} disabled={nameLocked} onChange={(e) => setName(e.target.value)} className={`${INPUT_CLASS} min-h-11`} />
         {nameLocked && <span>Verified organizations can only be renamed by Festie support.</span>}
       </label>
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         Display name
-        <input minLength={2} maxLength={80} value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={INPUT_CLASS} />
+        <input minLength={2} maxLength={80} value={displayName} onChange={(e) => setDisplayName(e.target.value)} className={`${INPUT_CLASS} min-h-11`} />
         <span>Teammates and emails use this instead of the name. Leave it empty to use the name.</span>
       </label>
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         Contact email
-        <input type="email" maxLength={254} value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className={INPUT_CLASS} />
+        <input type="email" maxLength={254} value={contactEmail} onChange={(e) => setContactEmail(e.target.value)} className={`${INPUT_CLASS} min-h-11`} />
         <span>Where Festie writes to you about your festivals.</span>
       </label>
       <label className="flex flex-col gap-1 text-xs text-text-muted">
         Website
-        <input type="url" maxLength={2048} placeholder="https://" value={website} onChange={(e) => setWebsite(e.target.value)} className={INPUT_CLASS} />
+        <input type="url" maxLength={2048} placeholder="https://" value={website} onChange={(e) => setWebsite(e.target.value)} className={`${INPUT_CLASS} min-h-11`} />
       </label>
       <div className="md:col-span-2">
         <button type="submit" disabled={busy || name.trim().length < 2} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-accent-aqua px-4 text-sm font-medium text-bg-primary disabled:opacity-50">

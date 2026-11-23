@@ -26,4 +26,12 @@ describe('getHomeActions', () => {
     expect(keys({ phase: 'post', signedIn: true, pickCount: 0, hasCrew: false })).toEqual(['wrap']);
     expect(keys({ phase: 'post', signedIn: true, pickCount: 0, hasCrew: true })).toEqual(['wrap', 'settle']);
   });
+  it('every link accessible name starts with its visible label (WCAG 2.5.3)', () => {
+    const all = [
+      ...getHomeActions({ phase: 'live', signedIn: true, pickCount: 0, hasCrew: true }),
+      ...getHomeActions({ phase: 'post', signedIn: true, pickCount: 0, hasCrew: true }),
+      ...getHomeActions({ phase: 'pre', signedIn: true, pickCount: 0, hasCrew: false }),
+    ];
+    for (const a of all) expect(a.a11y.startsWith(a.label), a.key).toBe(true);
+  });
 });

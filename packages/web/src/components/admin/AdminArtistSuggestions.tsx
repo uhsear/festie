@@ -44,7 +44,9 @@ export default function AdminArtistSuggestions() {
       const result = await decideArtistSuggestion(suggestion.id, decision, note?.trim());
       toast(
         decision === 'accept'
-          ? `Applied to ${artistTitle(suggestion.artist)} and ${plural(result.festivalsUpdated, 'festival')}.`
+          ? result.festivalsUpdated === 0
+            ? `Applied to ${artistTitle(suggestion.artist)}. No festival copies needed updating.`
+            : `Applied to ${artistTitle(suggestion.artist)} and ${plural(result.festivalsUpdated, 'festival')}.`
           : 'Rejected. The organization sees your note.',
         'success',
       );

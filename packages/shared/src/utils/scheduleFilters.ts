@@ -1,6 +1,6 @@
 import type { FestivalSet, Stage, Priority, Profile } from '../types/domain';
 import type { FestivalPhase } from './festivalTime';
-import { setMatchesSearch } from './setSearch';
+import { foldLetters, setMatchesSearch } from './setSearch';
 import { byStartTime } from './scheduleFormat';
 import { artistDisplayName, formatTime } from './format';
 import { setGenres } from './discover';
@@ -49,7 +49,7 @@ function azName(set: FestivalSet, b2bSeparator?: string): string {
 
 /** First letter (accents folded) of the A-Z name, or "#" for a digit or symbol. */
 export function azGroupKey(set: FestivalSet, b2bSeparator?: string): string {
-  const ch = azName(set, b2bSeparator).normalize('NFD').charAt(0).toLocaleUpperCase();
+  const ch = foldLetters(azName(set, b2bSeparator)).charAt(0).toLocaleUpperCase();
   return /\p{L}/u.test(ch) ? ch : '#';
 }
 

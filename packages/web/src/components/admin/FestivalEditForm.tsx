@@ -75,6 +75,8 @@ export interface FestivalEditFormProps {
   alertsOn?: boolean;
   /** A viewer reads the form but cannot change it: every input is disabled and the save buttons are gone. */
   readOnly?: boolean;
+  /** The server refuses a name or location change on a live festival of an unverified organization: lock both inputs. */
+  identityLocked?: boolean;
   onSave: () => void;
   /** Edit mode: reset to the loaded festival. */
   onDiscard: () => void;
@@ -113,6 +115,7 @@ export default function FestivalEditForm({
   mode = 'admin',
   alertsOn = false,
   readOnly = false,
+  identityLocked = false,
   onSave,
   onDiscard,
   onCancel,
@@ -120,6 +123,7 @@ export default function FestivalEditForm({
   const organizer = mode === 'organizer';
   const { toast } = useToast();
   const rootRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(initialExpandedDays ?? new Set());
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -173,6 +177,21 @@ export default function FestivalEditForm({
   }, [resolved]);
   const dayHasIssue = (day: Day, index: number) =>
     byKey.has(`day:${index}`) || (day.sets || []).some((st) => byKey.has(`set:${st.id}`));
+
+  // Publish the sticky Save/Cancel bar height so the toast stack sits above it instead of covering Save.
+  useEffect(() => {
+    const el = actionBarRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.borderBoxSize?.[0]?.blockSize ?? entries[0]?.contentRect?.height ?? 0;
+      document.documentElement.style.setProperty('--sticky-bar-h', `${h}px`);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--sticky-bar-h');
+    };
+  }, []);
 
   useEffect(() => {
     if (issues.length === 0) return;
@@ -401,6 +420,8 @@ export default function FestivalEditForm({
             placeholder="Festival Name"
             value={formData.name || ''}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+            disabled={identityLocked}
+            aria-describedby={identityLocked ? 'festival-identity-locked' : undefined}
             aria-invalid={nameIssues.length ? true : undefined}
             className={`w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${nameIssues.length ? ERROR_RING : ''}`}
           />
@@ -420,6 +441,8 @@ export default function FestivalEditForm({
             placeholder="Location"
             value={formData.location || ''}
             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+            disabled={identityLocked}
+            aria-describedby={identityLocked ? 'festival-identity-locked' : undefined}
             className="w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           />
           {venueGuessed && (
@@ -428,6 +451,14 @@ export default function FestivalEditForm({
             </p>
           )}
         </div>
+        {identityLocked && (
+          <p id="festival-identity-locked" className="text-xs text-text-muted md:col-span-2">
+            Ask Festie to change the name or location of a live festival.{' '}
+            <a href="mailto:support@festie.us" className="text-accent-aqua underline">
+              Contact Festie
+            </a>
+          </p>
+        )}
         <label className="flex flex-col gap-1 text-xs text-text-muted md:col-span-2">
           Time zone
           <select
@@ -535,19 +566,19 @@ export default function FestivalEditForm({
                     aria-invalid={stageIssues.length ? true : undefined}
                     value={stage.name}
                     onChange={(e) => handleStageName(i, e.target.value)}
-                    className={`flex-1 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${stageIssues.length ? ERROR_RING : ''}`}
+                    className={`flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${stageIssues.length ? ERROR_RING : ''}`}
                   />
                   <input
                     type="color"
-                    aria-label={`Stage colour for ${stage.name || 'new stage'}`}
+                    aria-label={`Stage color for ${stage.name || 'new stage'}`}
                     value={stage.color}
                     onChange={(e) => handleStageColor(i, e.target.value)}
-                    className="w-12 h-10 rounded-lg cursor-pointer"
+                    className="w-12 min-w-10 h-10 shrink-0 rounded-lg cursor-pointer"
                   />
                   <button
                     onClick={() => handleRemoveStage(stage.id)}
                     aria-label={`Remove stage ${stage.name || 'new stage'}`}
-                    className="px-2 py-2 min-h-11 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
+                    className="px-2 py-2 min-h-11 shrink-0 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
                   >
                     Remove
                   </button>
@@ -563,7 +594,7 @@ export default function FestivalEditForm({
         </div>
         <button
           onClick={handleAddStage}
-          className="mt-3 px-3 py-1.5 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+          className="mt-3 px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
         >
           + Add Stage
         </button>
@@ -651,6 +682,7 @@ export default function FestivalEditForm({
                   onSelectAll={selectAll}
                   visibleSets={visibleSets}
                   filterQuery={query}
+                  organizer={organizer}
                   isExpanded={expanded}
                   onToggleExpand={() => toggleDayExpanded(day.id)}
                   onLabelChange={(v) => handleDayLabel(day.id, v)}
@@ -667,7 +699,7 @@ export default function FestivalEditForm({
         </div>
         <button
           onClick={handleAddDay}
-          className="mt-3 px-3 py-1.5 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+          className="mt-3 px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
         >
           + Add Day
         </button>
@@ -723,7 +755,7 @@ export default function FestivalEditForm({
 
       </fieldset>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-glass-border bg-bg-primary px-2 pb-2 pt-4">
+      <div ref={actionBarRef} className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-glass-border bg-bg-primary px-2 pb-2 pt-4">
         {editingId && (
           <span className="w-full text-sm text-text-muted sm:mr-auto sm:w-auto">
             {total > 0 ? `${plural(total, 'unsaved change')}` : 'All changes saved'}
@@ -731,14 +763,14 @@ export default function FestivalEditForm({
         )}
         <button
           onClick={onCancel}
-          className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
+          className="px-4 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
         >
           {readOnly ? 'Close' : 'Cancel'}
         </button>
         {!readOnly && editingId && total > 0 && (
           <button
             onClick={onDiscard}
-            className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
+            className="px-4 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
           >
             Discard
           </button>
@@ -747,7 +779,7 @@ export default function FestivalEditForm({
         <button
           onClick={onSave}
           disabled={saving || (!!editingId && total === 0)}
-          className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 min-h-11 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? 'Saving…' : editingId ? (total > 0 ? `Save ${plural(total, 'change')}` : 'Save') : 'Create festival'}
         </button>

@@ -210,4 +210,18 @@ describe('SetEditor artist matching', () => {
     renderSet({ artist: 'Kai', artists: [{ id: 'art-1', name: 'Kai', links: { spotify: 'https://s/kai', apple_music: 'https://a/kai' } }] });
     expect(screen.getByText('Spotify, Apple Music. Edit links on the Artists tab.')).toBeTruthy();
   });
+
+  it('tells an organizer to ask Festie, since there is no Artists tab', () => {
+    render(
+      <SetEditor
+        set={{ id: 's1', artist: 'Kai', artists: [{ id: 'art-1', name: 'Kai', links: { spotify: 'https://s/kai' } }] }}
+        stages={[]}
+        organizer
+        onSetArtists={vi.fn()}
+        onField={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Spotify. Ask Festie to change links.')).toBeTruthy();
+  });
 });

@@ -308,12 +308,12 @@ export default function ExpenseForm({
         )}
       </div>
       {/* Planned = budget/forecast row. Excluded from balances + settle-up. */}
-      <label className="flex items-start gap-2 cursor-pointer select-none">
+      <label className="flex items-center gap-2 min-h-11 cursor-pointer select-none">
         <input
           type="checkbox"
           checked={planned}
           onChange={(e) => setPlanned(e.target.checked)}
-          className="mt-0.5 h-4 w-4 accent-accent-aqua"
+          className="h-4 w-4 shrink-0 accent-accent-aqua"
         />
         <span className="text-sm text-text-primary">
           Planned expense <span className="text-text-muted">(budget only — won't affect who owes what)</span>
