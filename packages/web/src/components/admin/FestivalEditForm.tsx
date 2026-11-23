@@ -651,6 +651,7 @@ export default function FestivalEditForm({
                   onSelectAll={selectAll}
                   visibleSets={visibleSets}
                   filterQuery={query}
+                  organizer={organizer}
                   isExpanded={expanded}
                   onToggleExpand={() => toggleDayExpanded(day.id)}
                   onLabelChange={(v) => handleDayLabel(day.id, v)}

@@ -39,6 +39,7 @@ export interface DayEditorProps {
   /** Sets to render: day.sets after the filter and sort. */
   visibleSets?: SetRow[];
   filterQuery?: string;
+  organizer?: boolean;
 }
 
 /**
@@ -68,6 +69,7 @@ export default function DayEditor({
   onSelectAll,
   visibleSets,
   filterQuery = '',
+  organizer = false,
 }: DayEditorProps) {
   const setCount = (day.sets || []).length;
   const shown = visibleSets ?? day.sets ?? [];
@@ -170,6 +172,7 @@ export default function DayEditor({
                   dayLabel={day.label}
                   stages={stages}
                   separator={separator}
+                  organizer={organizer}
                   onSetArtists={(artists) => onSetArtists(s.id, artists)}
                   engagement={engagement?.[s.id]}
                   showEngagement={engagement !== undefined}
