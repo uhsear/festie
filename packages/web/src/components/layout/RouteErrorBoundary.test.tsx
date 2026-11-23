@@ -41,16 +41,25 @@ describe('RouteErrorBoundary', () => {
     mockNavigate.mockClear();
   });
 
-  it('Retry reloads the page when a route chunk failed to load', async () => {
+  it('Reload reloads the page when a route chunk failed to load', async () => {
     const reload = vi.fn();
     vi.stubGlobal('location', { ...window.location, reload });
     const reset = vi.fn();
     const error = new TypeError('Failed to fetch dynamically imported module: /assets/map-abc.js');
     render(<RouteErrorBoundary error={error} reset={reset} />);
-    await userEvent.setup().click(screen.getByRole('button', { name: /retry/i }));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Reload' }));
     expect(reload).toHaveBeenCalled();
     expect(reset).not.toHaveBeenCalled();
     vi.unstubAllGlobals();
+  });
+
+  it('says a new version is available, not offline, when a route chunk failed to load', () => {
+    const error = new TypeError('Failed to fetch dynamically imported module: /assets/map-abc.js');
+    render(<RouteErrorBoundary error={error} reset={vi.fn()} />);
+    expect(screen.getByText('Festie was updated')).toBeInTheDocument();
+    expect(screen.queryByText('You appear to be offline')).not.toBeInTheDocument();
+    expect(screen.getAllByRole('button')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
   });
 
   // ── Generic / unknown errors ─────────────────────────────────────────
