@@ -82,6 +82,15 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
   const enrichAuditEntries = async (rows: any[]) => {
     const users = await getUsers();
     const usernameById = new Map<string, string>(users.map((u: any) => [u.id, u.username]));
+    // A row about an organization carries its id only; the admin reads the name.
+    const organizationIds = [
+      ...new Set<string>(rows.filter((r: any) => r.targetType === 'organization' && r.targetId && !r.details?.name).map((r: any) => r.targetId)),
+    ];
+    const organizationNames = new Map<string, string>();
+    for (const id of organizationIds) {
+      const organization = await stores.organizations.getById(id);
+      if (organization) organizationNames.set(id, organization.name);
+    }
     return rows.map((row: any) => ({
       ...row,
       actorUsername: usernameById.get(row.actorId) || row.actorId,
@@ -89,7 +98,10 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
       targetLabel:
         row.targetType === 'unknown'
           ? null
-          : row.details?.targetUsername || row.details?.name || `${row.targetType} ${row.targetId ?? ''}`.trim(),
+          : row.details?.targetUsername ||
+            row.details?.name ||
+            (row.targetType === 'organization' && organizationNames.get(row.targetId)) ||
+            `${row.targetType} ${row.targetId ?? ''}`.trim(),
     }));
   };
 

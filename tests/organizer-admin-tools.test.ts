@@ -125,6 +125,43 @@ describe('admin tools of the organizer platform', { skip }, () => {
     assert.equal(actors['rf-staff'], 'Festie support');
   });
 
+  test('the review queue says what each held alert changes', async () => {
+    const { server, adminToken } = await boot();
+    const slot = (startTime: string) => JSON.stringify({ dayKey: '2027-03-06', dayLabel: 'Saturday', startTime, endTime: null, stageId: 'm', stageName: 'Main' });
+    await o.sql(
+      server,
+      `INSERT INTO festival_held_schedule_changes (festival_id, set_id, kind, artist, before_slot, after_slot, picker_ids)
+       VALUES ('f-a-live', 's1', 'moved', 'Kai Wave', $1::jsonb, $2::jsonb, '{}'),
+              ('f-a-live', 's2', 'removed', 'Dim Echo', NULL, NULL, '{}')`,
+      [slot('20:00'), slot('21:00')],
+    );
+    const queue = await o.as(server, adminToken).get('/api/v1/admin/organizations/review-queue');
+    assert.equal(queue.status, 200);
+    assert.deepEqual(queue.body.data.held[0].items, [
+      { kind: 'removed', artist: 'Dim Echo', before: null, after: null },
+      {
+        kind: 'moved',
+        artist: 'Kai Wave',
+        before: { dayKey: '2027-03-06', dayLabel: 'Saturday', startTime: '20:00', endTime: null, stageId: 'm', stageName: 'Main' },
+        after: { dayKey: '2027-03-06', dayLabel: 'Saturday', startTime: '21:00', endTime: null, stageId: 'm', stageName: 'Main' },
+      },
+    ]);
+  });
+
+  test('an audit row about an organization names it instead of printing its id', async () => {
+    const { server, adminToken } = await boot();
+    const { rows: admins } = await o.sql(server, "SELECT ur.user_id FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.name = 'admin' LIMIT 1");
+    await o.sql(
+      server,
+      `INSERT INTO audit_log (id, actor_type, actor_id, action, target_type, target_id, organization_id, status, created_at)
+       VALUES ('rf-org-label', 'admin', $1, 'organization.updated', 'organization', 'org-a', 'org-a', 'success', NOW())`,
+      [admins[0].user_id],
+    );
+    const audit = await o.as(server, adminToken).get('/api/v1/admin/audit?limit=100');
+    assert.equal(audit.status, 200, JSON.stringify(audit.body));
+    assert.equal(audit.body.data.find((e: any) => e.id === 'rf-org-label').targetLabel, 'Org org-a');
+  });
+
   test("a Festie row names its organization's festival and nothing else", async () => {
     const { server, users } = await boot();
     const { rows: admins } = await o.sql(server, "SELECT ur.user_id FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.name = 'admin' LIMIT 1");

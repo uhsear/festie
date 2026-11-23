@@ -337,6 +337,13 @@ export function createFestivalReviewStore(pool: Pool) {
       WHERE
         h2.festival_id = h.festival_id
     ) AS "people",
+    -- What each held change is, so the admin sees what Send alert would tell people.
+    jsonb_agg(
+      jsonb_build_object('kind', h.kind, 'artist', h.artist, 'before', h.before_slot, 'after', h.after_slot)
+      ORDER BY
+        h.artist,
+        h.set_id
+    ) AS "items",
     MAX(h.updated_at) AS "updatedAt"
   FROM
     festival_held_schedule_changes h

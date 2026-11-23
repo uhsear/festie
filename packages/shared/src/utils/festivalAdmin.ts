@@ -1,6 +1,6 @@
 import { festivalStartMinutes, startsAfterMidnight } from './setStatus';
 import { timeAgo } from './timeAgo';
-import { pluralize } from './format';
+import { formatTime, pluralize } from './format';
 
 // FestivalIssueTarget, FestivalIssue and ChecklistItem mirror lib/helpers/validation.ts (server).
 export interface FestivalIssueTarget {
@@ -311,6 +311,23 @@ export function describeDeleteImpact(impact: DeleteImpact | null, scope: 'admin'
   return manage
     ? `${p} joined this festival and ${c}. They lose access. ${ORGANIZER_RESTORE} Their picks are kept.`
     : `${p} joined this festival and ${c}. They lose access until you restore it from Archived. Their picks are kept.`;
+}
+
+interface HeldChangeLike {
+  kind: 'moved' | 'removed' | 'entry_cancelled';
+  artist: string;
+  before: { dayLabel: string; startTime: string | null; stageName: string | null } | null;
+  after: { dayLabel: string; startTime: string | null; stageName: string | null } | null;
+}
+
+const describeSlot = (slot: HeldChangeLike['before']): string =>
+  slot ? [slot.dayLabel, slot.startTime ? formatTime(slot.startTime) : 'Time TBA', slot.stageName].filter(Boolean).join(', ') : 'unknown';
+
+/** One line of a held alert: what changed for one act, in the words an attendee would read. */
+export function describeHeldChange(item: HeldChangeLike): string {
+  if (item.kind === 'removed') return `${item.artist}: removed`;
+  if (item.kind === 'entry_cancelled') return `${item.artist}: cancelled`;
+  return `${item.artist}: ${describeSlot(item.before)} to ${describeSlot(item.after)}`;
 }
 
 export function describeShiftResult(
