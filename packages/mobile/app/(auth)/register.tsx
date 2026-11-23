@@ -257,6 +257,7 @@ const useStyles = makeStyles((t) => ({
 export default function RegisterScreen() {
   const styles = useStyles();
   const t = useTokens();
+  const pickerTheme = useUIStore((s) => s.theme) === 'daylight' ? 'light' : 'dark';
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [errors, setErrors] = useState<RegisterErrors>({});
@@ -752,8 +753,7 @@ export default function RegisterScreen() {
                     clearError('dateOfBirth');
                   }
                 }}
-                // Ensure the spinner respects the dark background.
-                themeVariant="dark"
+                themeVariant={pickerTheme}
                 textColor={t.colors.text.primary}
               />
             </Pressable>
