@@ -120,14 +120,16 @@ export default function MeetingPointForm({
       onChange={(e) => onStageRefChange(e.target.value)}
       maxLength={100}
     />
-    <input
-      type="datetime-local"
-      className={`${inputBase} min-h-11`}
-      placeholder="Meet at (optional)"
-      aria-label={festivalTimeZone ? 'Meet at time, festival time' : 'Meet at time'}
-      value={meetAt}
-      onChange={(e) => onMeetAtChange(e.target.value)}
-    />
+    <label className="block text-xs text-text-muted">
+      Meet at (optional)
+      <input
+        type="datetime-local"
+        className={`${inputBase} min-h-11 mt-1`}
+        aria-label={festivalTimeZone ? 'Meet at time, festival time' : 'Meet at time'}
+        value={meetAt}
+        onChange={(e) => onMeetAtChange(e.target.value)}
+      />
+    </label>
     {festivalTimeZone && <p className="text-xs text-text-muted -mt-1">Festival time</p>}
     {meetAtError ? (
       <p role="alert" className="text-xs text-[var(--color-text-danger)]">
