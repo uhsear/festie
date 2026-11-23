@@ -97,6 +97,9 @@ env:
 - assertVisible:
     id: "segment-cards"
     selected: true
+- extendedWaitUntil:
+    visible: "^Must See.*|Set times not announced yet|No sets for this day"
+    timeout: 30000
 # The default day depends on the run date, so pick Saturday before asserting it.
 - tapOn:
     text: "Day: Saturday.*"
@@ -113,6 +116,9 @@ env:
     selected: true
 - waitForAnimationToEnd:
     timeout: 6000
+- extendedWaitUntil:
+    visible: "^Must See.*|Set times not announced yet|No sets for this day"
+    timeout: 30000
 - takeScreenshot: 07-cards-sunday
 - openLink: "festie://timeline"
 - extendedWaitUntil:
@@ -122,6 +128,9 @@ env:
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
+- extendedWaitUntil:
+    visible: "Stage [0-9]+ of [0-9]+|Stages|Set times not announced yet|No sets for this day"
+    timeout: 30000
 - takeScreenshot: 08-timeline
 - openLink: "festie://grid"
 - extendedWaitUntil:
@@ -179,12 +188,15 @@ env:
     id: "map-sos-fab"
 - waitForAnimationToEnd:
     timeout: 6000
+- extendedWaitUntil:
+    notVisible: "Loading map…"
+    timeout: 30000
 - assertNotVisible: "Find your crew"
 - takeScreenshot: 16-map
 - openLink: "festie://compass"
 - extendedWaitUntil:
     visible:
-      text: "Compass|Nothing to point at yet|No saved coordinates|Location permission needed"
+      text: "Nothing to point at yet|No saved coordinates|Location permission needed"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
@@ -224,8 +236,9 @@ env:
     timeout: 30000
 - extendedWaitUntil:
     visible:
-      text: "Find|Admins only|Couldn't load admin data"
+      text: "Find|Couldn't load admin data"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
+- assertNotVisible: "Admins only"
 - takeScreenshot: 21-admin
