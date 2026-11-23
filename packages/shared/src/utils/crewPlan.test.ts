@@ -118,6 +118,13 @@ describe('buildSlots', () => {
     expect(slot!.picks[0]!.set.id).toBe('a2');
   });
 
+  it('treats a NULL priority row as want-to-see', () => {
+    const sets = [set('a', '13:00', '14:00')];
+    const profiles = [profile('m1', 'Ann', { a: null as never })];
+    const [slot] = buildSlots(sets, days, profiles, nowMs);
+    expect(slot!.picks[0]!.priority).toBe('want-to-see');
+  });
+
   it('counts only start times the crew picked and skips sets already started', () => {
     const sets = [
       set('x1', '12:30', '13:30'), // unpicked

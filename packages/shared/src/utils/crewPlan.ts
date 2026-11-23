@@ -110,7 +110,8 @@ export function buildSlots(
       let best: { setId: string; priority: Priority } | null = null;
       for (const [setId, priority] of Object.entries(profile.picks || {})) {
         if (!slotSetIds.has(setId)) continue;
-        const p = priority as Priority;
+        // priority is nullable in the DB; treat a legacy NULL row as the default pick.
+        const p = (priority ?? 'want-to-see') as Priority;
         if (!best || PRIORITY_WEIGHT[p] > PRIORITY_WEIGHT[best.priority]) best = { setId, priority: p };
       }
       if (best) {
