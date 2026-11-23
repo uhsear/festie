@@ -70,6 +70,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
       }}
       title={lines?.title ?? 'Crew invite'}
       description={lines?.stateLine}
+      className="md:max-w-md md:mx-auto md:bottom-4 md:rounded-2xl md:border"
     >
       <div className="space-y-1 text-sm text-text-secondary">
         {lines?.festivalLine && <p>{lines.festivalLine}</p>}
@@ -80,18 +81,26 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
         {joinError && <p role="alert">{joinError}</p>}
       </div>
       <div className="flex gap-2 pt-2">
-        <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
-          Not now
-        </Button>
-        <Button
-          type="button"
-          className="flex-1"
-          disabled={unusable || full}
-          isLoading={busy}
-          onClick={handleJoin}
-        >
-          {full ? 'Crew is full' : 'Join crew'}
-        </Button>
+        {unusable ? (
+          <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+            Close
+          </Button>
+        ) : (
+          <>
+            <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+              Not now
+            </Button>
+            <Button
+              type="button"
+              className="flex-1"
+              disabled={full}
+              isLoading={busy}
+              onClick={handleJoin}
+            >
+              {full ? 'Crew is full' : 'Join crew'}
+            </Button>
+          </>
+        )}
       </div>
     </Sheet>
   );
