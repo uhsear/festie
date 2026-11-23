@@ -8,6 +8,7 @@ import createFestivalsRoutes from '../routes/festivals.js';
 import { schemas, validate, sanitizeFestivalPayload } from '../lib/schemas.js';
 import { validateFestivalIssues } from '../lib/helpers/validation.js';
 import { FestivalChangedError } from '../lib/db/stores/festivals.js';
+import { MAX_ARTISTS_PER_SET } from '../lib/constants.js';
 
 const noop = () => {};
 const pass = (_req: any, _res: any, next: any) => next();
@@ -175,8 +176,8 @@ describe('festival lineup saves', () => {
     await request(app).put('/f1').send({ expectedUpdatedAt: UPDATED_AT, lineup }).expect(400);
   });
 
-  test('five artists on one entry is refused', async () => {
-    const artists = ['A', 'B', 'C', 'D', 'E'].map((name) => ({ name }));
+  test('more than MAX_ARTISTS_PER_SET artists on one entry is refused', async () => {
+    const artists = Array.from({ length: MAX_ARTISTS_PER_SET + 1 }, (_, i) => ({ name: `Act ${i}` }));
     const app = appFor({ festivals: { update: updateStore() } });
     await request(app).put('/f1').send({ expectedUpdatedAt: UPDATED_AT, lineup: [{ artists }] }).expect(400);
   });
