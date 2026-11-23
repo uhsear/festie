@@ -3,7 +3,7 @@ import { festivalPhase } from './festivalTime';
 import { formatTime } from './format';
 import { coverLineup, entryDayIndex, lineupNameKey, type LineupCover } from './lineupCover';
 import { byStartTime, formatDayChip } from './scheduleFormat';
-import { foldSearch, joinedArtistNames } from './setSearch';
+import { joinedArtistNames, searchMatcher } from './setSearch';
 
 // Everything the attendee lineup (web today, mobile from phase A5) decides: the badge on a row, the
 // header counts, search, which rows show on which day, and how they group. Web and mobile render
@@ -124,13 +124,13 @@ export function announcedActsLine(lineup: readonly Pick<LineupEntry, 'status'>[]
   return `${count} announced ${count === 1 ? 'act' : 'acts'}. Edit them on the web.`;
 }
 
-/** Case-, accent- and punctuation-insensitive substring match on the poster name and on every artist name. */
+/** Case-, accent- and punctuation- and space-insensitive substring match on the poster name and on every artist name. */
 export function lineupEntryMatchesSearch(entry: LineupEntry, query: string): boolean {
-  const q = foldSearch(query.trim());
-  if (!q) return true;
-  if (entry.displayName && foldSearch(entry.displayName).includes(q)) return true;
-  if (entry.artists.some((artist) => foldSearch(artist.name).includes(q))) return true;
-  return foldSearch(joinedArtistNames(entry.artists)).includes(q);
+  const matches = searchMatcher(query);
+  if (!matches) return true;
+  if (entry.displayName && matches(entry.displayName)) return true;
+  if (entry.artists.some((artist) => matches(artist.name))) return true;
+  return matches(joinedArtistNames(entry.artists));
 }
 
 /** Announced acts that match a search, across every day, for the "Announced acts" group under set results. */

@@ -53,6 +53,14 @@ describe('setMatchesSearch', () => {
 
   it('keeps a punctuation-only query from matching every set', () => {
     expect(setMatchesSearch(mk('p', { artist: 'Daft Punk' }), '&', stages)).toBe(false);
+    expect(setMatchesSearch(mk('p', { artist: 'Above & Beyond' }), '&', stages)).toBe(true);
+  });
+
+  it('treats punctuation as a word break or nothing, so spaced and joined spellings both match', () => {
+    expect(setMatchesSearch(mk('j', { artist: 'Jay-Z' }), 'jay z', stages)).toBe(true);
+    expect(setMatchesSearch(mk('j', { artist: 'Jay Z' }), 'jay-z', stages)).toBe(true);
+    expect(setMatchesSearch(mk('a', { artist: 'Above&Beyond' }), 'above beyond', stages)).toBe(true);
+    expect(setMatchesSearch(mk('d', { artist: "Don't Stop" }), 'dont stop', stages)).toBe(true);
   });
 
   const set = mk('a', { artist: 'Daft Punk' });
