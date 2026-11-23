@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@festie/shared';
 import { ApiClientError, mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   bulkArchiveFestivals,
@@ -104,9 +105,10 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
     organizer ? '/manage' : '/admin',
   );
   const queryClient = useQueryClient();
+  const organizerPlatformOn = useAuthStore((state) => state.user?.organizerPlatform !== false);
   const festivalsQuery = useAdminFestivals(!organizer);
   const manageQuery = useManageFestivals(organizer);
-  const waitingIds = new Set((useReviewQueue(!organizer).data?.requests ?? []).map((r) => r.festivalId));
+  const waitingIds = new Set((useReviewQueue(!organizer && organizerPlatformOn).data?.requests ?? []).map((r) => r.festivalId));
   const festivals = festivalsQuery.data ?? [];
   const [archived, setArchived] = useState<ArchivedFestival[]>([]);
   const [listView, setListView] = useState<ListView>('live');
