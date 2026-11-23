@@ -71,6 +71,12 @@ describe('Integration — Crews (membership + realtime)', { concurrency: 1 }, ()
     const bobProfile = await joinFestivalProfile(server, bob.token);
     const adminToken = await loginAdmin(server);
 
+    // Presence is crew-scoped, so Alice sees Bob only as a crew mate.
+    const pair = (
+      await server.request.post('/api/v1/crews').set('x-user-token', alice.token).send({ name: 'Pair', festivalId: 'fest-1' }).expect(201)
+    ).body.data;
+    await server.request.post('/api/v1/crews/join').set('x-user-token', bob.token).send({ inviteCode: pair.inviteCode }).expect(200);
+
     const aliceSocket = connectSocket(server.baseUrl);
     const bobSocket = connectSocket(server.baseUrl);
     await Promise.all([waitForEvent(aliceSocket, 'connect'), waitForEvent(bobSocket, 'connect')]);

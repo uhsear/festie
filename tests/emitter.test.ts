@@ -70,19 +70,21 @@ function crewStores(membersByCrew: Record<string, string[]>) {
 // ---------------------------------------------------------------------------
 
 describe('emitter: profileCreated', () => {
-  it('emits profile:created to the festival room', () => {
+  it('emits profile:created to the joiner and their crews, never the festival room', async () => {
     const io = makeIo();
-    const emitter = createSocketEmitter(defaultDeps({ io }));
+    const stores = crewStores({ c1: ['user-1', 'bob'] });
+    const emitter = createSocketEmitter(defaultDeps({ io, stores }));
 
-    emitter.profileCreated({
+    await emitter.profileCreated({
       festivalId: 'fest-1',
-      profile: { id: 'prof-1', name: 'Alice' },
+      profile: { id: 'prof-1', name: 'Alice', userId: 'user-1' },
       user: { avatarKey: 'abc' },
     });
 
     assert.equal(io.to.mock.callCount(), 1);
-    assert.deepEqual(io.to.mock.calls[0]!.arguments, ['fest-1']);
-    const emitted = io._rooms['fest-1'];
+    assert.deepEqual(io.to.mock.calls[0]!.arguments, [['user:user-1', 'crew:c1']]);
+    assert.equal(io._rooms['fest-1'], undefined);
+    const emitted = io._rooms['user:user-1,crew:c1'];
     assert.equal(emitted.length, 1);
     assert.equal(emitted[0][0], 'profile:created');
     assert.equal(emitted[0][1]._v, 1);
@@ -605,20 +607,6 @@ describe('emitter: festivalDeleted', () => {
     assert.equal(io.emit.mock.callCount(), 1);
     assert.equal(io._globalEmits[0][0], 'festival:deleted');
     assert.equal(io._globalEmits[0][1].id, 'fest-1');
-  });
-});
-
-describe('emitter: presenceUpdate', () => {
-  it('emits presence:update to the festival room', () => {
-    const io = makeIo();
-    const emitter = createSocketEmitter(defaultDeps({ io }));
-
-    emitter.presenceUpdate({ festivalId: 'fest-1', online: [{ userId: 'u1' }] });
-
-    assert.equal(io.to.mock.callCount(), 1);
-    const emitted = io._rooms['fest-1'];
-    assert.equal(emitted[0][0], 'presence:update');
-    assert.deepEqual(emitted[0][1].online, [{ userId: 'u1' }]);
   });
 });
 

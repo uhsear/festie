@@ -41,7 +41,7 @@ export async function ensureFestivalProfile(
   if (profile) {
     const user = await getUserById(profile.userId);
     if (!user) return { error: 'user-missing' };
-    emitter.profileCreated({ festivalId, profile, user });
+    await emitter.profileCreated({ festivalId, profile, user });
     return { profile, user };
   }
 
@@ -68,6 +68,6 @@ export async function ensureFestivalProfile(
   const user = await getUserById(profile.userId);
   if (!user) return { error: 'user-missing' };
   log.info('profile:created', { profileId: profile.id, festivalId, userId: reqUser.userId, username: reqUser.username });
-  emitter.profileCreated({ festivalId, profile, user });
+  await emitter.profileCreated({ festivalId, profile, user });
   return { profile, user };
 }

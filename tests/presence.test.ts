@@ -43,10 +43,15 @@ function makeSocket(overrides: any = {}) {
 function makeIo(sockets: any[] = []) {
   const socketMap = new Map(sockets.map((s: any) => [s.id, s]));
   const _emitted: any[] = [];
+  const _byRoom: { room: any; event: string; payload: any }[] = [];
   return {
     _emitted,
-    to: mock.fn(() => ({
-      emit: mock.fn((...args: any[]) => _emitted.push(args)),
+    _byRoom,
+    to: mock.fn((room: any) => ({
+      emit: mock.fn((...args: any[]) => {
+        _emitted.push(args);
+        _byRoom.push({ room, event: args[0], payload: args[1] });
+      }),
     })),
     emit: mock.fn(),
     of: mock.fn(() => ({ sockets: socketMap })),
@@ -61,7 +66,7 @@ function makeRedisPresence(overrides: any = {}) {
   };
 }
 
-function makeStores(users: any[] = [], profiles: any[] = []) {
+function makeStores(users: any[] = [], profiles: any[] = [], membersByCrew: Record<string, string[]> = {}) {
   const byId = new Map(users.map((u: any) => [u.id, u]));
   return {
     users: {
@@ -70,6 +75,14 @@ function makeStores(users: any[] = [], profiles: any[] = []) {
     profiles: {
       getByUserId: mock.fn(async (userId: string) => profiles.filter((p: any) => p.userId === userId)),
       readAll: mock.fn(async () => profiles),
+    },
+    crews: {
+      listByFestival: mock.fn(async () => Object.keys(membersByCrew).map((id) => ({ id }))),
+      listByUserAndFestival: mock.fn(async (userId: string) =>
+        Object.keys(membersByCrew).filter((id) => membersByCrew[id]!.includes(userId)).map((id) => ({ id }))),
+      getMembersForCrews: mock.fn(
+        async (ids: string[]) => new Map(ids.map((id) => [id, (membersByCrew[id] || []).map((userId) => ({ userId }))])),
+      ),
     },
   };
 }
@@ -622,7 +635,32 @@ describe('presence: emitPresence', () => {
     t.mock.timers.tick(200);
     for (let i = 0; i < 20; i++) await Promise.resolve();
 
-    assert.ok(io.to.mock.callCount() >= 1);
+    assert.deepEqual(io._byRoom.map((c) => c.room), ['user:user-1']);
+    assert.equal(io._byRoom[0]!.event, 'presence:update');
+    pm.clearPresenceTimers();
+  });
+
+  it('sends each viewer only themselves and online crew mates', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const stores = makeStores([], [], { c1: ['alice', 'bob'], c2: ['cara', 'dan'] });
+    const pm = createPresenceManager(defaultDeps({ stores }));
+    const io = makeIo();
+
+    await pm.setSocketPresence('fest-1', 'alice', 'alice', 's1');
+    await pm.setSocketPresence('fest-1', 'bob', 'bob', 's2');
+    await pm.setSocketPresence('fest-1', 'cara', 'cara', 's3');
+    await pm.setSocketPresence('fest-1', 'eve', 'eve', 's4');
+
+    pm.emitPresence('fest-1', io);
+    t.mock.timers.tick(200);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+
+    const seenBy = (room: string) => io._byRoom.find((c) => c.room === room)!.payload.online.map((u: any) => u.userId);
+    assert.deepEqual(seenBy('user:alice'), ['alice', 'bob']);
+    assert.deepEqual(seenBy('user:bob'), ['alice', 'bob']);
+    assert.deepEqual(seenBy('user:cara'), ['cara']);
+    assert.deepEqual(seenBy('user:eve'), ['eve']);
+    assert.ok(io._byRoom.every((c) => c.room !== 'fest-1'), 'never broadcast to the festival room');
     pm.clearPresenceTimers();
   });
 
@@ -632,6 +670,7 @@ describe('presence: emitPresence', () => {
     const pm = createPresenceManager(deps);
     const io = makeIo();
 
+    await pm.setSocketPresence('fest-1', 'user-1', 'alice', 'sock-1');
     pm.emitPresence('fest-1', io);
     pm.emitPresence('fest-1', io);
     pm.emitPresence('fest-1', io);
@@ -653,7 +692,7 @@ describe('presence: emitProfileIdentity', () => {
       { userId: 'user-1', festivalId: 'fest-2', id: 'prof-2' },
       { userId: 'user-2', festivalId: 'fest-1', id: 'prof-3' },
     ];
-    const stores = makeStores([], profiles);
+    const stores = makeStores([], profiles, { c1: ['user-1', 'user-2'] });
     const pm = createPresenceManager(defaultDeps({ stores }));
     const io = makeIo();
 
@@ -669,6 +708,8 @@ describe('presence: emitProfileIdentity', () => {
       ['profile:identity', { festivalId: 'fest-1', profileId: 'prof-1', ...identity }],
       ['profile:identity', { festivalId: 'fest-2', profileId: 'prof-2', ...identity }],
     ]);
+    assert.ok(io._byRoom.every((c) => Array.isArray(c.room) && c.room.includes('user:user-1') && c.room.includes('crew:c1')));
+    assert.ok(io._byRoom.every((c) => c.room !== 'fest-1' && c.room !== 'fest-2'), 'never the festival room');
     pm.clearPresenceTimers();
   });
 });
