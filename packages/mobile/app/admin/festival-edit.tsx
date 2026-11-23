@@ -17,6 +17,7 @@ import {
   type RemovalSummary,
   type SetEngagementMap,
 } from '@festie/shared/services';
+import { MAX_ARTISTS_PER_SET } from '@festie/shared/constants';
 import { useAuthStore } from '@festie/shared/stores';
 import EmptyState from '../../components/EmptyState';
 import AppSwitch from '../../components/AppSwitch';
@@ -107,7 +108,6 @@ import { useStyles } from '../../components/admin/festival-edit/styles';
  */
 
 const DEFAULT_STAGE_COLOR = '#6a6a88';
-const MAX_ARTISTS_PER_SET = 4;
 
 // Local editable shapes (StageRow / SetRow / DayRow / FormState) live in
 // ./festivalEditState alongside the pure tree reducers they operate on.

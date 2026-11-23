@@ -521,6 +521,9 @@ export const SOCKET_RECONNECTION_CONFIG = {
   reconnectionAttempts: Infinity,
 };
 
+// Artists in one B2B set. Mirrors lib/constants.ts; tests/constants-parity.test.ts guards it.
+export const MAX_ARTISTS_PER_SET = 8;
+
 // ── Crew limits ────────────────────────────────────────────────────────────
 // `lib/constants.ts` is the source. `tests/constants-parity.test.ts` guards this copy.
 export const MAX_CREWS_PER_FESTIVAL = 3;

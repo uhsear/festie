@@ -281,7 +281,7 @@ function SetCardMobileImpl({
           set={set}
           separator={b2bSeparator}
           textStyle={[styles.artist, dimmed && styles.dimmedText]}
-          numberOfLines={2}
+          numberOfLines={(set.artists?.length ?? 0) > 1 ? undefined : 2}
           maxFontSizeMultiplier={typeScaleCap('title')}
         />
         {/* The space to the right of a short name opens the set, as the whole row did before the name became a button. */}

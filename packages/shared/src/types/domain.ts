@@ -121,7 +121,7 @@ export interface Festival {
 export interface LineupEntry {
   /** Server-made (`lu-<uuid>`) or a client-sent id. Stable across renames and re-pastes. */
   id: string;
-  /** 1-4 artists; B2B order is kept. */
+  /** 1-8 artists; B2B order is kept. */
   artists: Artist[];
   /** The name on the poster, when it differs from the joined artist names. */
   displayName: string | null;

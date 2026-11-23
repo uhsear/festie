@@ -39,7 +39,7 @@ describe('parseLineupText', () => {
 
   it('flags lines that need a look, and blocks the ones the server would refuse', () => {
     const r = parseLineupText(
-      ['A, B, C', 'A b2b B b2b C b2b D b2b E', 'Onaroi* Onara B2B roi*)', 'Odd name -', 'DPMO Presents: x', 'Tyler, The Creator', 'dup', 'DUP'].join('\n'),
+      ['A, B, C', 'A b2b B b2b C b2b D b2b E b2b F b2b G b2b H b2b I', 'Onaroi* Onara B2B roi*)', 'Odd name -', 'DPMO Presents: x', 'Tyler, The Creator', 'dup', 'DUP'].join('\n'),
     );
     const kinds = r.flags.map((f) => `${f.line}:${f.kind}${f.blocking ? '!' : ''}`);
     expect(kinds).toContain('1:list');

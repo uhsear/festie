@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createArtist, matchArtists } from '@festie/shared/services';
+import { MAX_ARTISTS_PER_SET } from '@festie/shared/constants';
 import { useCanMatchArtists } from './festivalModeContext';
 import type { ArtistCandidate } from '@festie/shared/services';
 import {
@@ -398,7 +399,7 @@ export default function AnnouncedNames<D extends FormDay>({
     const entry = lineup[index]!;
     const names = value.split(new RegExp(`\\s+(?:${sep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}|b2b)\\s+`, 'i')).map((n) => n.trim()).filter(Boolean);
     if (names.length === 0) return 'Enter at least one artist name.';
-    if (names.length > 4) return 'A line holds at most 4 artists. Put the full text in the poster name instead.';
+    if (names.length > MAX_ARTISTS_PER_SET) return `A line holds at most ${MAX_ARTISTS_PER_SET} artists. Put the full text in the poster name instead.`;
     // A name that survives the rename keeps its links.
     const links = new Map(entry.artists.map((a) => [a.name.toLowerCase(), a.links ?? {}]));
     patch(index, { artists: names.map((name) => ({ name, links: links.get(name.toLowerCase()) ?? {} })) });
