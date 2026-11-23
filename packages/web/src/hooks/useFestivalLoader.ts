@@ -115,12 +115,12 @@ export function useFestivalLoader() {
         const cached = useFestivalStore.getState().currentFestival;
         // Signed-in users revalidate in the effect below; guests would otherwise keep the cache forever.
         if (cached && !useAuthStore.getState().user) selectFestival(cached.id).catch((err) => console.warn('Festival select failed', err));
-        // selectFestival sets currentFestivalId synchronously, so a linked select still in flight
-        // when this reruns after sign-in is visible here even though currentFestival is not yet.
-        if (fests.length > 0 && !cached && !useFestivalStore.getState().currentFestivalId) {
-          const pick = pickDefaultFestival(fests);
-          if (pick) selectFestival(pick.id).catch((err) => console.warn('Festival select failed', err));
-        }
+        // A festival chosen while the list loaded (crew festival, push landing) keeps its place while its
+        // select is in flight. An id whose select failed has no data: retry it, or pick a default if it is gone.
+        const { currentFestivalId: chosenId, isLoading } = useFestivalStore.getState();
+        if (fests.length === 0 || cached || (chosenId && isLoading)) return;
+        const pick = fests.find((f) => f.id === chosenId) ?? pickDefaultFestival(fests);
+        if (pick) selectFestival(pick.id).catch((err) => console.warn('Festival select failed', err));
       })
       .catch((err) => console.warn('Festival list load failed', err));
   }, [loadFestivals, selectFestival, userId]); // userId: refetch after sign-in/out, logout resets the stores
