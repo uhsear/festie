@@ -162,7 +162,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
   });
 
   // Organizer mode: the organization of the open festival (or of a new one) decides what the form allows.
-  const eligibleOrgs = organizations.filter((o) => o.role !== 'viewer');
+  const eligibleOrgs = organizations.filter((o) => o.role === 'owner' && o.status !== 'suspended');
   const targetOrgId = newOrgId || eligibleOrgs.find((o) => o.id === defaultOrgId)?.id || eligibleOrgs[0]?.id || '';
   // The festival GET does not carry its organization, so an open festival takes it from the member's festival
   // list. With one organization there is no doubt.

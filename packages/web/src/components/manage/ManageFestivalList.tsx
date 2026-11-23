@@ -36,7 +36,7 @@ const smallButton =
 /** The festivals of the member's organizations, grouped by organization when there is more than one (plan-v3 5.1 step 6). */
 export default function ManageFestivalList({ query, organizations, onOpen, onNew, onDelete }: Props) {
   const { toast } = useToast();
-  const canCreate = organizations.some((o) => o.role !== 'viewer' && o.status !== 'suspended');
+  const canCreate = organizations.some((o) => o.role === 'owner' && o.status !== 'suspended');
   const festivals = (query.data ?? []).filter((f) => !f.deleted);
   const [qr, setQr] = useState<{ name: string; link: string } | null>(null);
 
@@ -129,7 +129,7 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
       <EmptyState
         icon={<SearchX className="w-9 h-9" aria-hidden="true" />}
         title="No festivals yet"
-        description={canCreate ? 'Create a draft to get started. Only your team and Festie can see it.' : 'Your team has no festivals yet.'}
+        description={canCreate ? 'Create a draft to get started. Only your team and Festie can see it.' : 'Your team has no festivals yet. An owner of your organization creates the first one.'}
       />
     );
   } else if (organizations.length > 1) {
