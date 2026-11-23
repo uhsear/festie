@@ -74,6 +74,8 @@ env:
 - extendedWaitUntil:
     visible: "Sign in to your account"
     timeout: 30000
+# Screenshot before typing: the artifact is public, so it must not show the username.
+- takeScreenshot: screenshots/05-login-ready
 - tapOn:
     id: "login-username-input"
 - inputText: "${TEST_USERNAME}"
@@ -100,7 +102,6 @@ env:
 # tap the button. Anchor ^Sign in$ so it hits the button, not this subtitle.
 - tapOn:
     text: "Sign in to your account"
-- takeScreenshot: screenshots/05-login-ready
 - tapOn:
     text: "^Sign in$"
 - tapOn:
