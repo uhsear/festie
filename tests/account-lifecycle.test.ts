@@ -132,6 +132,21 @@ describe('account lifecycle', { concurrency: 1, skip }, () => {
     assert.equal(newSession.status, 200);
   });
 
+  test('change password rejects a password containing the email local part', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const user = await register(server, uniqueName('cpe'), `zebrafinch${RUN_TAG}@example.com`);
+
+    const weak = `zebrafinch${RUN_TAG}-Qx7`;
+    const res = await server.request
+      .post('/api/v1/auth/change-password')
+      .set('x-user-token', user.token)
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ currentPassword: PASSWORD, newPassword: weak, confirmPassword: weak });
+    assert.equal(res.status, 400, JSON.stringify(res.body));
+    assert.equal(res.body.error.message, 'Password must not contain your email address');
+  });
+
   test('change password from a browser origin returns no body token', async () => {
     const server = await startServer();
     servers.push(server);

@@ -140,6 +140,15 @@ export function createEmailTokensStore(pool: Pool) {
       await pool.query(SUPERSEDE_PENDING_CHANGES, [userId, keepEmail]);
     },
 
+    /** Read a live reset token without consuming it, so the password policy can see whose account it is. */
+    async findResetToken(tokenHash: string) {
+      const { rows } = await pool.query(
+        'SELECT user_id FROM password_reset_tokens WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()',
+        [tokenHash],
+      );
+      return rows[0] || null;
+    },
+
     async consumeResetToken(tokenHash: string) {
       const { rows } = await pool.query(
         'UPDATE password_reset_tokens SET used_at = NOW() WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW() RETURNING user_id',

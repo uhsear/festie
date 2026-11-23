@@ -34,15 +34,11 @@ function ForgotPasswordPageInner() {
   };
 
   const validate = () => {
-    if (!email) {
-      setEmailError('Email is required');
-      return false;
-    }
-    if (!/^\S+@\S+\.[a-zA-Z]{2,}$/.test(email)) {
-      setEmailError('Invalid email address');
-      return false;
-    }
-    return true;
+    const message = !email ? 'Email is required' : !/^\S+@\S+\.[a-zA-Z]{2,}$/.test(email) ? 'Invalid email address' : '';
+    if (!message) return true;
+    setEmailError(message);
+    document.getElementById('forgot-email')?.focus();
+    return false;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -80,6 +76,7 @@ function ForgotPasswordPageInner() {
           // Form
           <form noValidate onSubmit={handleSubmit} className="bg-bg-card border border-border rounded-lg p-6 space-y-4 text-left">
             <Input
+              id="forgot-email"
               label={AUTH_COPY.emailLabel}
               name="email"
               type="email"

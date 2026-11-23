@@ -607,7 +607,11 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
         if (!currentPassword || !newPassword || !confirmPassword) {
           return sendError(res, 400, 'Current and new password required', ErrorCodes.MISSING_FIELD);
         }
-        const pwError = checkPasswordPolicy(newPassword, { username: req.user?.username });
+        const user = await getUserById(req.user.userId);
+        if (!user) {
+          return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
+        }
+        const pwError = checkPasswordPolicy(newPassword, { username: user.username, email: user.email });
         if (pwError) {
           return sendError(res, 400, pwError, ErrorCodes.INVALID_INPUT);
         }
@@ -619,10 +623,6 @@ export default function createAuthRoutes(deps: RouteDeps): Router {
         const newPasswordHash = await hashPassword(newPassword);
 
         // Verify current password first
-        const user = await getUserById(req.user.userId);
-        if (!user) {
-          return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
-        }
         if (!(await verifyPassword(currentPassword, user.passwordHash))) {
           return sendError(res, 400, 'Your current password is not correct.', ErrorCodes.PASSWORD_INCORRECT);
         }
