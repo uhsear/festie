@@ -82,6 +82,9 @@ function crewRoutes(router: any): Array<[string, string]> {
 const BODIES: Record<string, object> = {
   'POST /id-1/checkin': { minutes: 30 },
   'PUT /id-1/days': { days: [] },
+  'PUT /id-1/home-base': { location: 'Camp B' },
+  'PUT /id-1/photo-album': { photoAlbumUrl: 'https://photos.example.com/a' },
+  'POST /id-1/rides': { note: 'x' },
   'POST /id-1/live-location': { lat: 1, lng: 1, capturedAt: '2026-01-01T00:00:00.000Z', expiresAt: '2026-01-01T01:00:00.000Z' },
   'POST /id-1/meeting-points': { label: 'Gate', location: 'Main gate' },
   'PUT /id-1/meeting-points/id-1': { label: 'Gate' },
