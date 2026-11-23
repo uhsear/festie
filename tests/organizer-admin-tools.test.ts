@@ -125,14 +125,15 @@ describe('admin tools of the organizer platform', { skip }, () => {
     assert.equal(actors['rf-staff'], 'Festie support');
   });
 
-  test('the review queue says what each held alert changes', async () => {
+  test('the review queue says what each held alert changes, and leaves out a set moved back', async () => {
     const { server, adminToken } = await boot();
     const slot = (startTime: string) => JSON.stringify({ dayKey: '2027-03-06', dayLabel: 'Saturday', startTime, endTime: null, stageId: 'm', stageName: 'Main' });
     await o.sql(
       server,
       `INSERT INTO festival_held_schedule_changes (festival_id, set_id, kind, artist, before_slot, after_slot, picker_ids)
        VALUES ('f-a-live', 's1', 'moved', 'Kai Wave', $1::jsonb, $2::jsonb, '{}'),
-              ('f-a-live', 's2', 'removed', 'Dim Echo', NULL, NULL, '{}')`,
+              ('f-a-live', 's2', 'removed', 'Dim Echo', NULL, NULL, '{}'),
+              ('f-a-live', 's3', 'moved', 'Back Again', $1::jsonb, $1::jsonb, '{}')`,
       [slot('20:00'), slot('21:00')],
     );
     const queue = await o.as(server, adminToken).get('/api/v1/admin/organizations/review-queue');

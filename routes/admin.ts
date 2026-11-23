@@ -86,11 +86,7 @@ export default function createAdminRoutes(deps: RouteDeps): Router {
     const organizationIds = [
       ...new Set<string>(rows.filter((r: any) => r.targetType === 'organization' && r.targetId && !r.details?.name).map((r: any) => r.targetId)),
     ];
-    const organizationNames = new Map<string, string>();
-    for (const id of organizationIds) {
-      const organization = await stores.organizations.getById(id);
-      if (organization) organizationNames.set(id, organization.name);
-    }
+    const organizationNames = organizationIds.length > 0 ? await stores.organizations.namesByIds(organizationIds) : new Map<string, string>();
     return rows.map((row: any) => ({
       ...row,
       actorUsername: usernameById.get(row.actorId) || row.actorId,
