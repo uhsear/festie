@@ -263,3 +263,15 @@ export const useOfflineReadinessStore = create<OfflineReadinessStore>()(
     partialize: (state) => ({ byFestival: state.byFestival }),
   }),
 );
+
+// A guest download skips weather and picks (both need a session) yet records them as ready. When that guest
+// signs in, nothing was cached for the account, so drop those two so the checklist asks for a new download.
+// `sessionChecked` keeps a cold-start rehydration (null -> persisted user) from counting as a sign-in.
+useAuthStore.subscribe((state, prev) => {
+  if (!(prev.sessionChecked && !prev.user && state.user)) return;
+  const { byFestival } = useOfflineReadinessStore.getState();
+  const next = Object.fromEntries(
+    Object.entries(byFestival).map(([id, r]) => [id, { ...r, picks: emptySection(), weather: emptySection() }]),
+  );
+  useOfflineReadinessStore.setState({ byFestival: next });
+});
