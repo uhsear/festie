@@ -45,6 +45,20 @@ describe('ResetPasswordPage', () => {
     expect(mockResetPassword).not.toHaveBeenCalled();
   });
 
+  it('moves focus to the first invalid field', async () => {
+    const user = userEvent.setup();
+    render(<ResetPasswordPage />);
+    await user.click(screen.getByRole('button', { name: 'Reset password' }));
+    expect(screen.getByLabelText('New password')).toHaveFocus();
+  });
+
+  it('moves focus to the confirm field when only it is wrong', async () => {
+    const user = userEvent.setup();
+    render(<ResetPasswordPage />);
+    await fill(user, 'N3wStr0ng!Pw22', 'Other!Str0ng77');
+    expect(screen.getByLabelText('Confirm new password')).toHaveFocus();
+  });
+
   it('shows the strength meter for the new password', async () => {
     const user = userEvent.setup();
     render(<ResetPasswordPage />);
