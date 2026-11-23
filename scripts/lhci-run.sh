@@ -38,12 +38,16 @@ if ! [ -f "$CONFIG" ]; then
   exit 2
 fi
 
-npx --yes @lhci/cli@0.14.x autorun --config="$CONFIG"
+# Run both passes even when the first fails, then exit with the worse code.
+DESKTOP_RC=0
+npx --yes @lhci/cli@0.14.x autorun --config="$CONFIG" || DESKTOP_RC=$?
 
 # Second run with Lighthouse's default mobile preset (slow 4G, 4x CPU), which is what festival-goers use.
 # Measured mobile performance is 46-51 and mobile CLS 0.26, so the floors sit just under those numbers.
-MOBILE_CONFIG="$(mktemp --suffix=.json)"
-trap 'rm -f "$MOBILE_CONFIG"' EXIT
+# mktemp -d plus a fixed file name: BSD mktemp has no --suffix.
+MOBILE_DIR="$(mktemp -d)"
+MOBILE_CONFIG="$MOBILE_DIR/lighthouserc.mobile.json"
+trap 'rm -f "$MOBILE_CONFIG"; rmdir "$MOBILE_DIR"' EXIT
 node -e '
 const fs = require("fs");
 const [src, dest] = process.argv.slice(1);
@@ -57,4 +61,8 @@ Object.assign(c.ci.assert.assertions, {
 c.ci.upload.outputDir = c.ci.upload.outputDir + "-mobile";
 fs.writeFileSync(dest, JSON.stringify(c));
 ' "$CONFIG" "$MOBILE_CONFIG"
-npx --yes @lhci/cli@0.14.x autorun --config="$MOBILE_CONFIG"
+MOBILE_RC=0
+npx --yes @lhci/cli@0.14.x autorun --config="$MOBILE_CONFIG" || MOBILE_RC=$?
+
+if [ "$DESKTOP_RC" -ne 0 ]; then exit "$DESKTOP_RC"; fi
+exit "$MOBILE_RC"
