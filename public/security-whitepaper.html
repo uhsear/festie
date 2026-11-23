@@ -290,7 +290,7 @@
             <ul>
                 <li><strong>Token Format:</strong> Cryptographically random tokens (minimum 256 bits entropy)</li>
                 <li><strong>Storage:</strong> Tokens are hashed using SHA-256 before database storage; raw tokens never stored on disk</li>
-                <li><strong>Cookie Configuration:</strong> HTTP-only flag prevents JavaScript access, Secure flag enforced on HTTPS connections, SameSite=Strict [TODO-confirm: production .env COOKIE_SAME_SITE value]. Cross-site request forgery is also blocked by an Origin check on state-changing requests from browsers, and by a required custom request header when a cookie-authenticated request has no Origin</li>
+                <li><strong>Cookie Configuration:</strong> HTTP-only flag prevents JavaScript access, Secure flag enforced on HTTPS connections, SameSite=Lax. Cross-site request forgery is also blocked by an Origin check on state-changing requests from browsers, and by a required custom request header when a cookie-authenticated request has no Origin</li>
                 <li><strong>Session Duration:</strong> 24-hour absolute timeout, sliding window renewal on activity</li>
             </ul>
 
@@ -405,7 +405,7 @@
                 <strong>Token-Based Protection:</strong> Optional CSRF tokens for additional protection on sensitive operations
             </div>
             <div class="security-feature">
-                <strong>SameSite Cookies:</strong> Session cookies use SameSite=Strict [TODO-confirm: production .env COOKIE_SAME_SITE value], limiting cross-site cookie transmission
+                <strong>SameSite Cookies:</strong> Session cookies use SameSite=Lax, limiting cross-site cookie transmission
             </div>
 
             <h3>Other Injection Attacks</h3>
