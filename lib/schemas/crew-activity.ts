@@ -10,14 +10,14 @@ import { identifier } from './primitives';
 const hasDefinedField = (d: object) => Object.values(d).some((v) => v !== undefined);
 const AT_LEAST_ONE_FIELD = { message: 'At least one field required' };
 
-export const crewHomeBaseSchema = z
-  .object({
-    location: z.string().trim().max(200).optional().nullable(),
-    time: z.string().trim().max(100).optional().nullable(),
-    // T54: undefined keeps the stored Plan B; null or '' clears it.
-    planB: z.string().trim().max(140).optional().nullable(),
-  })
-  .refine(hasDefinedField, AT_LEAST_ONE_FIELD);
+// location is required: the store overwrites location and time together, so a body without it
+// (an old client sending only time or planB) would wipe the stored home base. null clears it.
+export const crewHomeBaseSchema = z.object({
+  location: z.string().trim().max(200).nullable(),
+  time: z.string().trim().max(100).optional().nullable(),
+  // T54: undefined keeps the stored Plan B; null or '' clears it.
+  planB: z.string().trim().max(140).optional().nullable(),
+});
 
 // M6 Crew Photo Wall (Phase 1, link-out only). A single shared-album URL per
 // crew (e.g. Google Photos / Apple shared album). https-only and length-bounded
@@ -248,6 +248,8 @@ export const checkinStartSchema = z
   .strip();
 
 // ── Crew carpool / ride-board schemas (M2 logistics) ────────────────
+// A new offer must carry something a rider can read, so explicit nulls and direction alone do not count.
+// Mirrors the web form's own guard in RidesTab.
 export const rideCreateSchema = z
   .object({
     driver: z.string().trim().max(100).optional().nullable(),
@@ -258,7 +260,11 @@ export const rideCreateSchema = z
     direction: z.enum(['to_festival', 'home']).optional().nullable(),
     departTime: z.string().datetime().optional().nullable(),
   })
-  .refine(hasDefinedField, AT_LEAST_ONE_FIELD);
+  .refine(
+    (d) =>
+      [d.driver, d.departFrom, d.departAt, d.note].some((v) => !!v) || d.seats != null || d.departTime != null,
+    AT_LEAST_ONE_FIELD,
+  );
 
 export const rideUpdateSchema = z
   .object({
