@@ -24,6 +24,7 @@ const INLINE_HASH_FILES = [
   'export-template.html',
   'privacy.html',
   'terms.html',
+  'dmca.html',
   'delete-account.html',
   'security-whitepaper.html',
   'offline.html',

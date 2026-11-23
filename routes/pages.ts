@@ -191,6 +191,7 @@ export default function createPageRoutes(deps: RouteDeps) {
   // Static page routes (serve HTML files without .html extension)
   router.get('/privacy', (req: any, res: any) => res.sendFile(path.join(config.PUBLIC_DIR, 'privacy.html')));
   router.get('/terms', (req: any, res: any) => res.sendFile(path.join(config.PUBLIC_DIR, 'terms.html')));
+  router.get('/dmca', (req: any, res: any) => res.sendFile(path.join(config.PUBLIC_DIR, 'dmca.html')));
   // Account deletion instructions for the App Store and Google Play. Public: readable without signing in.
   router.get('/delete-account', (req: any, res: any) => res.sendFile(path.join(config.PUBLIC_DIR, 'delete-account.html')));
   router.get('/security-whitepaper', (req: any, res: any) => res.sendFile(path.join(config.PUBLIC_DIR, 'security-whitepaper.html')));

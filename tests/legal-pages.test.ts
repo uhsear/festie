@@ -39,7 +39,7 @@ test('mobile privacy screen mirrors the organizer subsection', () => {
 });
 
 test('placeholders are plain text, never a stray tag, and all of them are marked TODO', () => {
-  for (const name of ['terms.html', 'privacy.html', 'security-whitepaper.html']) {
+  for (const name of ['terms.html', 'privacy.html', 'dmca.html', 'security-whitepaper.html']) {
     const html = page(name);
     assert.doesNotMatch(html, /<(?:D|D30|SEND|ADDRESS|AGENT NAME|DATE)>/, `${name} has a raw placeholder tag`);
     for (const m of html.matchAll(/\[(TODO[^\]]*)\]/g)) {

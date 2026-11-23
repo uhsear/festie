@@ -116,6 +116,7 @@ describe('pages: route registration', () => {
     assert.ok(paths.includes('/reset-password'));
     assert.ok(paths.includes('/privacy'));
     assert.ok(paths.includes('/terms'));
+    assert.ok(paths.includes('/dmca'));
     assert.ok(paths.includes('/delete-account'));
     assert.ok(paths.includes('/security-whitepaper'));
     assert.ok(paths.includes('/{*splat}'));
