@@ -383,6 +383,11 @@ jobs:
               find "$dir" -type f ! -path '*/screenshots/*.png' -delete
             fi
           done
+          # Signed-in screens show the CI account's @username, so publish only the
+          # guest phase (01-05; the login shot is taken before typing).
+          if [ -d maestro-ios-debug ]; then
+            find maestro-ios-debug -type f -name '*.png' ! -name '0[1-5]-*.png' -delete
+          fi
 
       - name: Upload Maestro artifacts
         if: always() && env.RUN_MAESTRO == 'true'
