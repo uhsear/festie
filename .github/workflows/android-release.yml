@@ -93,6 +93,14 @@ jobs:
       # --no-install: pnpm already installed node_modules; don't let prebuild
       # shell out to npm and fight the pnpm layout. The withAndroidUploadSigning
       # config plugin runs here and injects the release signingConfig.
+      - name: Write google-services.json from the repository secret
+        working-directory: packages/mobile
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          [ -n "$GOOGLE_SERVICES_JSON" ] || { echo "::error::Set the GOOGLE_SERVICES_JSON secret; prebuild needs google-services.json"; exit 1; }
+          printf '%s' "$GOOGLE_SERVICES_JSON" > google-services.json
+
       - name: Expo prebuild (android)
         working-directory: packages/mobile
         run: pnpm exec expo prebuild --platform android --no-install

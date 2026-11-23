@@ -39,3 +39,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Firebase Android config. CI writes it from the GOOGLE_SERVICES_JSON secret; local builds keep an untracked copy.
+google-services.json
