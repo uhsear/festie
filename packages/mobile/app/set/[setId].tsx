@@ -169,7 +169,6 @@ export default function SetDetailScreen() {
   const sets = useFestivalDataStore((s) => s.sets);
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const nowMs = useNow(60_000);
-  const currentFestivalId = useFestivalDataStore((s) => s.currentFestivalId);
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
   const allProfiles = useFestivalDataStore((s) => s.allProfiles);
@@ -200,7 +199,10 @@ export default function SetDetailScreen() {
     (async () => {
       try {
         const { festivalId } = await locateSet(setId);
-        if (festivalId && festivalId !== currentFestivalId) {
+        // currentFestivalId is set before the festival arrives, so only a loaded festival can be skipped.
+        const loaded = useFestivalDataStore.getState();
+        const alreadyLoaded = loaded.currentFestival?.id === festivalId && loaded.days.length > 0 && !loaded.isLoading;
+        if (festivalId && !alreadyLoaded) {
           await selectFestival(festivalId);
         }
         if (!useFestivalDataStore.getState().sets.some((x) => x.id === setId)) {
@@ -211,7 +213,7 @@ export default function SetDetailScreen() {
         setResolveFailed(true);
       }
     })();
-  }, [set, setId, currentFestivalId, selectFestival, resolveAttempt]);
+  }, [set, setId, selectFestival, resolveAttempt]);
 
   const b2bSeparator = currentFestival?.b2bSeparator;
 
