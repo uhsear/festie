@@ -46,7 +46,7 @@ describe('OfflineStatusChip', () => {
     before.unmount();
     vi.setSystemTime(Date.UTC(2026, 10, 9, 18, 0));
     const at = render(<OfflineStatusChip remind />);
-    expect(at.getByText('Open Festie on wifi to save the map and lineup for no signal.')).toBeInTheDocument();
+    expect(at.getByText('Open Festie on wifi to save the lineup for no signal.')).toBeInTheDocument();
     at.unmount();
     const noRemind = render(<OfflineStatusChip />);
     expect(noRemind.queryByText(/Open Festie on wifi/)).toBeNull();

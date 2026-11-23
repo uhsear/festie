@@ -1,7 +1,7 @@
 import { zonedWallTimeToMs } from './setStatus';
 
 /** Copy for the day-before reminder: the mobile local notification and the web home banner. */
-export const OFFLINE_REMINDER_TEXT = 'Open Festie on wifi to save the map and lineup for no signal.';
+export const OFFLINE_REMINDER_TEXT = 'Open Festie on wifi to save the lineup for no signal.';
 
 const REMINDER_HOUR = 18;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
