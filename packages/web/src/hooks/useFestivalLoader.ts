@@ -14,14 +14,14 @@ const EDITOR_PATH = /^\/(admin|manage)(\/|$)/;
 function stripJoinCrewParam() {
   const url = new URL(window.location.href);
   url.searchParams.delete('joinCrew');
-  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
 
 /** Drops only ?festival= so ?ref= and the rest survive. */
 function stripFestivalParam() {
   const url = new URL(window.location.href);
   url.searchParams.delete('festival');
-  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
 
 /** Remembers an anonymous ?ref= source for sign-up counts. The first valid value wins. */
@@ -115,8 +115,9 @@ export function useFestivalLoader() {
         const cached = useFestivalStore.getState().currentFestival;
         // Signed-in users revalidate in the effect below; guests would otherwise keep the cache forever.
         if (cached && !useAuthStore.getState().user) selectFestival(cached.id).catch((err) => console.warn('Festival select failed', err));
-        // isLoading: a linked select may still be in flight when this reruns after sign-in.
-        if (fests.length > 0 && !cached && !useFestivalStore.getState().isLoading) {
+        // selectFestival sets currentFestivalId synchronously, so a linked select still in flight
+        // when this reruns after sign-in is visible here even though currentFestival is not yet.
+        if (fests.length > 0 && !cached && !useFestivalStore.getState().currentFestivalId) {
           const pick = pickDefaultFestival(fests);
           if (pick) selectFestival(pick.id).catch((err) => console.warn('Festival select failed', err));
         }

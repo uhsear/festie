@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
     currentProfile: null as unknown,
     // What the festival store has persisted; getState() reads it.
     cachedFestival: null as unknown,
+    // Set by selectFestival synchronously, before currentFestival lands.
+    currentFestivalId: null as string | null,
   },
 }));
 
@@ -50,7 +52,11 @@ vi.mock('@festie/shared/stores', () => {
     loadProfiles: vi.fn(async () => {}),
   };
   const useFestivalStore = Object.assign((sel: (s: typeof slice) => unknown) => sel(slice), {
-    getState: () => ({ festivals: h.festivals as unknown[], currentFestival: h.state.cachedFestival }),
+    getState: () => ({
+      festivals: h.festivals as unknown[],
+      currentFestival: h.state.cachedFestival,
+      currentFestivalId: h.state.currentFestivalId,
+    }),
   });
   return { useFestivalStore };
 });
@@ -263,6 +269,7 @@ describe('useFestivalLoader follow link from /f/', () => {
     sessionStorage.clear();
     h.state.user = null;
     h.state.cachedFestival = null;
+    h.state.currentFestivalId = null;
     h.festivals = [{ id: 'f1' }, { id: 'f2' }];
     h.selectFestival.mockClear();
   });
@@ -270,6 +277,7 @@ describe('useFestivalLoader follow link from /f/', () => {
   afterEach(() => {
     h.state.user = null;
     h.state.cachedFestival = null;
+    h.state.currentFestivalId = null;
     h.festivals = [];
     window.history.pushState({}, '', '/');
   });
@@ -289,5 +297,35 @@ describe('useFestivalLoader follow link from /f/', () => {
     await act(async () => {});
     expect(h.selectFestival.mock.calls.map((call) => call[0])).not.toContain('f1');
     expect(readSignupRef()).toBe('share-festival');
+  });
+
+  it('does not pick the default while the linked select is still pending when a cookie session signs in', async () => {
+    window.history.pushState({}, '', '/?festival=f2');
+    const { rerender } = renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(h.selectFestival).toHaveBeenLastCalledWith('f2');
+
+    // selectFestival('f2') has set currentFestivalId but not currentFestival yet.
+    h.state.currentFestivalId = 'f2';
+    h.selectFestival.mockClear();
+    h.state.user = { id: 'u1' };
+    rerender();
+    await act(async () => {});
+    expect(h.selectFestival).not.toHaveBeenCalled();
+  });
+});
+
+describe('useFestivalLoader history state', () => {
+  afterEach(() => window.history.pushState({}, '', '/'));
+
+  it('keeps the router history state when it strips ?festival=', async () => {
+    h.state.user = null;
+    h.festivals = [{ id: 'f2' }];
+    window.history.pushState({ __TSR_index: 3 }, '', '/wrap?festival=f2');
+    renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(window.location.search).toBe('');
+    expect(window.history.state).toEqual({ __TSR_index: 3 });
+    h.festivals = [];
   });
 });
