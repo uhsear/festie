@@ -59,8 +59,14 @@ async function create(server: any, token: string, body: unknown) {
 
 const row = async (server: any, id: string) =>
   (await o.sql(server, 'SELECT published_at, publish_requested_at, publish_review_note FROM festivals WHERE id = $1', [id])).rows[0];
-const auditRows = async (server: any, action: string, id: string) =>
-  (await o.sql(server, 'SELECT actor_type, organization_id, details_json FROM audit_log WHERE action = $1 AND target_id = $2', [action, id])).rows;
+// audit() is fire-and-forget, so the row can land after the response. Wait up to 2 s for it.
+const auditRows = async (server: any, action: string, id: string) => {
+  for (let attempt = 0; ; attempt++) {
+    const { rows } = await o.sql(server, 'SELECT actor_type, organization_id, details_json FROM audit_log WHERE action = $1 AND target_id = $2', [action, id]);
+    if (rows.length > 0 || attempt >= 40) return rows;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+};
 
 describe('submit for review', { skip }, () => {
   test('names only goes to review (C10), and publish still refuses until the days are dated', async () => {
