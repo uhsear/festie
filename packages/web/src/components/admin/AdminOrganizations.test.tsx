@@ -84,7 +84,7 @@ const detail = (over: Record<string, unknown> = {}) => ({
 
 const queue = (over: Record<string, unknown> = {}) => ({
   requests: [{ festivalId: 'f1', name: 'Venue Fest', organizationId: 'o1', organizationName: 'Venue A', verified: false, requestedAt: '2026-11-02T12:00:00.000Z' }],
-  held: [{ festivalId: 'f2', name: 'Live Fest', organizationId: 'o1', organizationName: 'Venue A', changes: 3, people: 41, updatedAt: '2026-11-02T12:00:00.000Z' }],
+  held: [{ festivalId: 'f2', name: 'Live Fest', organizationId: 'o1', organizationName: 'Venue A', changes: 3, people: 41, items: [{ kind: 'moved', artist: 'Kai Wave', before: { dayLabel: 'Saturday', startTime: '20:00', stageName: 'Main' }, after: { dayLabel: 'Saturday', startTime: '21:00', stageName: 'Main' } }], updatedAt: '2026-11-02T12:00:00.000Z' }],
   recentEdits: [{ id: 'a1', createdAt: '2026-11-03T12:00:00.000Z', action: 'festival.updated', festivalId: 'f2', name: 'Live Fest', organizationId: 'o1', organizationName: 'Venue A', details: null }],
   ...over,
 });
@@ -269,6 +269,7 @@ describe('AdminOrganizations', () => {
     render();
     await userEvent.click(await screen.findByRole('button', { name: 'Held alerts (1)' }));
     expect(screen.getByText(/3 held changes, 41 people would be told/)).toBeInTheDocument();
+    expect(screen.getByText('Kai Wave: Saturday, 8:00 PM, Main to Saturday, 9:00 PM, Main')).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Send the alerts for Live Fest' }));
     await userEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Send alert' }));
     await waitFor(() => expect(svc.releaseHeldAlerts).toHaveBeenCalledWith('f2'));

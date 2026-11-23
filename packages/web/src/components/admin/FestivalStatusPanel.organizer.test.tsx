@@ -178,4 +178,11 @@ describe('FestivalStatusPanel in organizer mode', () => {
     expect(screen.getByRole('button', { name: 'Submit for review' })).toBeDisabled();
     expect(screen.getByText('Festie is checking your organization. Submit unlocks when we approve you.')).toBeInTheDocument();
   });
+
+  it('says access is paused, not pending, for a suspended organization', () => {
+    renderPanel(ctx({ orgStatus: 'suspended' }));
+    expect(screen.getByRole('button', { name: 'Submit for review' })).toBeDisabled();
+    expect(screen.getByText("Your organization's access is paused. Contact Festie.")).toBeInTheDocument();
+    expect(screen.queryByText(/checking your organization/)).not.toBeInTheDocument();
+  });
 });

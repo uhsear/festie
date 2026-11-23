@@ -136,11 +136,11 @@ export default function AdminOrganizations() {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <label className="flex flex-col gap-1 text-xs text-text-muted">
                 Organization name
-                <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={80} className={INPUT_CLASS} />
+                <input value={name} onChange={(e) => setName(e.target.value)} required minLength={2} maxLength={80} className={`${INPUT_CLASS} min-h-11`} />
               </label>
               <label className="flex flex-col gap-1 text-xs text-text-muted">
                 Kind
-                <select value={kind} onChange={(e) => setKind(e.target.value as OrgKind)} className={INPUT_CLASS}>
+                <select value={kind} onChange={(e) => setKind(e.target.value as OrgKind)} className={`${INPUT_CLASS} min-h-11`}>
                   {KINDS.map((k) => (
                     <option key={k.value} value={k.value}>
                       {k.label}
@@ -150,7 +150,7 @@ export default function AdminOrganizations() {
               </label>
               <label className="flex flex-col gap-1 text-xs text-text-muted">
                 Website (https, optional)
-                <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://" maxLength={2048} className={INPUT_CLASS} />
+                <input type="url" value={website} onChange={(e) => setWebsite(e.target.value)} placeholder="https://" maxLength={2048} className={`${INPUT_CLASS} min-h-11`} />
               </label>
             </div>
             <button type="submit" disabled={creating || name.trim().length < 2} className={buttonClass}>
@@ -162,7 +162,7 @@ export default function AdminOrganizations() {
             <div className="flex flex-wrap items-end gap-3">
               <label className="flex flex-col gap-1 text-xs text-text-muted">
                 Show
-                <select value={status} onChange={(e) => setStatus(e.target.value)} className={INPUT_CLASS}>
+                <select value={status} onChange={(e) => setStatus(e.target.value)} className={`${INPUT_CLASS} min-h-11`}>
                   {STATUS_FILTERS.map((f) => (
                     <option key={f.value} value={f.value}>
                       {f.label}

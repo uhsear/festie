@@ -28,6 +28,10 @@ vi.mock('../components/admin/AdminCommandPalette', () => ({
   default: () => null,
   openAdminPalette: vi.fn(),
 }));
+let waitingRequests = 0;
+vi.mock('../components/admin/adminQueries', () => ({
+  useReviewQueue: () => ({ data: { requests: Array.from({ length: waitingRequests }, (_, i) => ({ festivalId: `f${i}` })) } }),
+}));
 vi.mock('../components/admin/AdminDashboard', () => ({
   default: () => <div>dashboard content</div>,
 }));
@@ -40,6 +44,7 @@ describe('AdminPanel route gate', () => {
   beforeEach(() => {
     navigate.mockClear();
     useAuthStore.setState({ user: null });
+    waitingRequests = 0;
   });
 
   it('denies a signed-out visitor and renders no admin UI', () => {
@@ -66,6 +71,14 @@ describe('AdminPanel route gate', () => {
     render(<AdminPanel />);
     expect(screen.queryByText('Access Denied')).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Admin Panel' })).toBeInTheDocument();
+    expect(await screen.findByText('dashboard content')).toBeInTheDocument();
+  });
+
+  it('puts the count of festivals waiting for review on the Organizations tab', async () => {
+    waitingRequests = 2;
+    useAuthStore.setState({ user: { ...baseUser, isAdmin: true } as never });
+    render(<AdminPanel />);
+    expect(screen.getByText('Organizations (2)')).toBeInTheDocument();
     expect(await screen.findByText('dashboard content')).toBeInTheDocument();
   });
 

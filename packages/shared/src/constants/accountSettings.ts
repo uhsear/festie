@@ -23,6 +23,8 @@ export const ACCOUNT_COPY = {
   motionNote: "Motion follows your device's Reduce Motion setting.",
   adminTitle: 'Admin',
   adminHint: 'Dashboard, activity & festivals',
+  manageTitle: 'Manage your festivals',
+  manageHint: 'Drafts, team and review for your organization',
   privacyTitle: 'Privacy Policy',
   privacyHint: 'How we handle your data',
   displayNamePlaceholder: 'How your name appears to your crew',

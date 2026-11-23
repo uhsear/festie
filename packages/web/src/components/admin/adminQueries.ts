@@ -59,8 +59,8 @@ export function useOrganization(id: string | null) {
   });
 }
 
-export function useReviewQueue() {
-  return useQuery({ queryKey: adminKeys.reviewQueue, queryFn: fetchReviewQueue, ...ADMIN_QUERY_OPTIONS });
+export function useReviewQueue(enabled = true) {
+  return useQuery({ queryKey: adminKeys.reviewQueue, queryFn: fetchReviewQueue, enabled, ...ADMIN_QUERY_OPTIONS });
 }
 
 /** The pending organizer suggestions for artists (GET /admin/artists/suggestions). */

@@ -186,6 +186,8 @@ export function buildFestivalPreview(detail: FestivalPreviewInput): FestivalPrev
     pinned: typeof s.latitude === 'number' && typeof s.longitude === 'number',
   }));
 
+  // The admin and manage detail payloads carry no festival start or end date, so the days give the range.
+  const dates = detail.days.map((d) => d.date).filter(Boolean).sort();
   const warnings: string[] = [];
   const unpinned = stages.filter((s) => !s.pinned);
   if (unpinned.length > 0) {
@@ -198,7 +200,7 @@ export function buildFestivalPreview(detail: FestivalPreviewInput): FestivalPrev
 
   return {
     name: detail.name,
-    dateRange: formatFestivalDateRange(detail.startDate, detail.endDate),
+    dateRange: formatFestivalDateRange(detail.startDate || dates[0], detail.endDate || dates[dates.length - 1]),
     location: detail.location,
     days,
     lineup,

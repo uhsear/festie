@@ -97,6 +97,16 @@ describe('ManageTeam', () => {
     expect(toast).toHaveBeenCalledWith(expect.stringContaining('Added.'), 'success');
   });
 
+  it('says so when the invitation email could not be sent', async () => {
+    mockPost.mockResolvedValue({ kind: 'pending', role: 'editor', emailed: false });
+    render();
+    await userEvent.type(await screen.findByPlaceholderText('name@venue.example'), 'new@venue.example');
+    await userEvent.click(screen.getByRole('button', { name: 'Add member' }));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('Added, but the email could not be sent. Tell them to sign in with this address.', 'warning'),
+    );
+  });
+
   it('removes a member only after the owner confirms', async () => {
     mockDelete.mockResolvedValue({ userId: 'u2', role: 'editor' });
     render();
@@ -104,6 +114,18 @@ describe('ManageTeam', () => {
     expect(mockDelete).not.toHaveBeenCalled();
     await userEvent.click(await screen.findByRole('button', { name: 'Remove' }));
     await waitFor(() => expect(mockDelete).toHaveBeenCalledWith('/manage/organizations/org-a/members/u2'));
+  });
+
+  it('leaves the owner list out when no owner has a display name', async () => {
+    mockGet.mockResolvedValue(
+      detail({
+        role: 'editor',
+        pending: [],
+        members: [{ userId: 'u1', name: null, role: 'owner', active: true, addedBy: 'Festie support', createdAt: '2026-11-01T00:00:00.000Z' }],
+      }),
+    );
+    render({ ...organization, role: 'editor' });
+    expect(await screen.findByText(/Only an owner of Venue A can change the team.$/)).toBeInTheDocument();
   });
 
   it('shows an editor the team without addresses, controls or the add form', async () => {

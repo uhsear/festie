@@ -117,6 +117,12 @@ export function createOrganizationsStore(pool: Pool) {
       return rows[0] ?? null;
     },
 
+    /** The names of the given organizations in one query, as an id to name map. */
+    async namesByIds(organizationIds: string[]): Promise<Map<string, string>> {
+      const { rows } = await pool.query('SELECT id, name FROM organizations WHERE id = ANY($1::text[])', [organizationIds]);
+      return new Map(rows.map((r: { id: string; name: string }) => [r.id, r.name]));
+    },
+
     /** Every organization with counts. `ownerless` keeps the ones with no active owner. */
     async list({ status, ownerless }: { status?: OrgStatus; ownerless?: boolean } = {}) {
       const { rows } = await pool.query(

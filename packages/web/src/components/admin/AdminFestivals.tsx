@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAuthStore } from '@festie/shared';
 import { ApiClientError, mapErrorToUserMessage } from '@festie/shared/services/api';
 import {
   bulkArchiveFestivals,
@@ -67,7 +68,7 @@ import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { ArrowLeft, Plus, SearchX } from 'lucide-react';
 import { useAdminSearch, type AdminSearch } from './useAdminSearch';
-import { ADMIN_QUERY_OPTIONS, adminKeys, useAdminFestivals, useManageFestivals } from './adminQueries';
+import { ADMIN_QUERY_OPTIONS, adminKeys, useAdminFestivals, useManageFestivals, useReviewQueue } from './adminQueries';
 import type { Day } from './DayEditor';
 
 type ListView = 'live' | 'archived';
@@ -104,8 +105,10 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
     organizer ? '/manage' : '/admin',
   );
   const queryClient = useQueryClient();
+  const organizerPlatformOn = useAuthStore((state) => state.user?.organizerPlatform !== false);
   const festivalsQuery = useAdminFestivals(!organizer);
   const manageQuery = useManageFestivals(organizer);
+  const waitingIds = new Set((useReviewQueue(!organizer && organizerPlatformOn).data?.requests ?? []).map((r) => r.festivalId));
   const festivals = festivalsQuery.data ?? [];
   const [archived, setArchived] = useState<ArchivedFestival[]>([]);
   const [listView, setListView] = useState<ListView>('live');
@@ -162,7 +165,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
   });
 
   // Organizer mode: the organization of the open festival (or of a new one) decides what the form allows.
-  const eligibleOrgs = organizations.filter((o) => o.role !== 'viewer');
+  const eligibleOrgs = organizations.filter((o) => o.role === 'owner' && o.status !== 'suspended');
   const targetOrgId = newOrgId || eligibleOrgs.find((o) => o.id === defaultOrgId)?.id || eligibleOrgs[0]?.id || '';
   // The festival GET does not carry its organization, so an open festival takes it from the member's festival
   // list. With one organization there is no doubt.
@@ -451,9 +454,9 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
 
   const handleDelete = async (id: string) => {
     const name = nameOf(id);
-    let description = describeDeleteImpact(null);
+    let description = describeDeleteImpact(null, scope);
     try {
-      description = describeDeleteImpact(await fetchDeleteImpact(id, scope));
+      description = describeDeleteImpact(await fetchDeleteImpact(id, scope), scope);
     } catch (err: unknown) {
       console.warn('Could not load delete impact', err);
     }
@@ -695,6 +698,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
         venueGuessed={!!festivalId && venueGuessedFor === festivalId}
         mode={organizer ? 'organizer' : 'admin'}
         readOnly={!canWrite}
+        identityLocked={organizer && !!meta.publishedAt && formOrg?.verified !== true}
         alertsOn={verifiedMember}
         savedDays={original?.days}
         savedLineup={original?.lineup}
@@ -905,6 +909,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
                 <FestivalListRow
                   key={festival.id}
                   festival={festival}
+                  waitingForReview={waitingIds.has(festival.id)}
                   selected={selected.has(festival.id)}
                   onToggleSelected={() => toggleSelected(festival.id)}
                   onOpen={(view) => setAdminSearch({ tab: 'festivals', festival: festival.id, view })}

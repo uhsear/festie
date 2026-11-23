@@ -3,7 +3,7 @@ import { useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 import { SearchX } from 'lucide-react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { publishFestival } from '@festie/shared/services/festivalAdmin';
-import { auditActionLabel } from '@festie/shared/utils';
+import { auditActionLabel, describeHeldChange } from '@festie/shared/utils';
 import {
   declinePublishRequest,
   discardHeldAlerts,
@@ -34,6 +34,7 @@ type Action =
 const smallButton =
   'inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
 
+const HELD_LINES_SHOWN = 5;
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const people = (n: number) => (n === 1 ? '1 person' : `${n} people`);
 
@@ -190,6 +191,14 @@ export default function AdminReviewQueue({ section, queue }: Props) {
                   <p className="text-xs text-text-muted">
                     {h.organizationName ?? 'No organization'}. {plural(h.changes, 'held change')}, {people(h.people)} would be told.
                   </p>
+                  {h.items.length > 0 && (
+                    <ul aria-label={`Held changes for ${h.name}`} className="list-disc space-y-0.5 pl-5 text-sm text-text-secondary">
+                      {h.items.slice(0, HELD_LINES_SHOWN).map((item, i) => (
+                        <li key={i}>{describeHeldChange(item)}</li>
+                      ))}
+                      {h.items.length > HELD_LINES_SHOWN && <li>and {h.items.length - HELD_LINES_SHOWN} more</li>}
+                    </ul>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <button type="button" className={smallButton} aria-label={`Send the alerts for ${h.name}`} disabled={busy} onClick={() => setAction({ kind: 'release', held: h })}>
                       Send alert
