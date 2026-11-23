@@ -20,7 +20,10 @@ function InboxArtist({ setId }: { setId?: string }) {
   if (!set) return null;
   return (
     <View style={styles.artistLine}>
-      <ArtistName set={set} separator={separator} textStyle={styles.artistLink} numberOfLines={1} />
+      <Text style={styles.artistPrefix}>Artist:</Text>
+      <View style={styles.artistName}>
+        <ArtistName set={set} separator={separator} textStyle={styles.artistLink} numberOfLines={1} />
+      </View>
     </View>
   );
 }
@@ -140,7 +143,9 @@ const useStyles = makeStyles((t) => ({
   rowTitle: { ...typeStyle('body', 600), color: t.colors.text.primary },
   rowBody: { ...typeStyle('caption'), color: t.colors.text.primary },
   rowTime: { ...typeStyle('caption'), color: t.colors.text.secondary },
-  artistLine: { paddingHorizontal: t.spacing[4], paddingBottom: t.spacing[3], paddingLeft: t.spacing[4] + 8 + t.spacing[3] },
+  artistLine: { flexDirection: 'row', alignItems: 'center', gap: t.spacing[1], paddingHorizontal: t.spacing[4], paddingBottom: t.spacing[3], paddingLeft: t.spacing[4] + 8 + t.spacing[3] },
+  artistPrefix: { ...typeStyle('caption'), color: t.colors.text.secondary },
+  artistName: { flexShrink: 1 },
   artistLink: { ...typeStyle('caption', 600), color: t.colors.accent.aqua },
   separator: { height: StyleSheet.hairlineWidth, backgroundColor: t.colors.border.light },
   message: { padding: t.spacing[4], gap: t.spacing[2], alignItems: 'flex-start' },

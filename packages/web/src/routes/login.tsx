@@ -49,7 +49,10 @@ function LoginPageInner() {
 
     if (!username) setUsernameErr(AUTH_COPY.loginIdentifierRequired);
     if (!password) setPasswordErr('Password is required');
-    if (!username || !password) return;
+    if (!username || !password) {
+      document.getElementById(username ? 'login-password' : 'login-identifier')?.focus();
+      return;
+    }
 
     try {
       const result = await login({ username, password });
@@ -97,6 +100,7 @@ function LoginPageInner() {
 
         <div className="mb-3">
           <Input
+            id="login-identifier"
             label={AUTH_COPY.loginIdentifierLabel}
             autoComplete="username"
             maxLength={254}
@@ -109,6 +113,7 @@ function LoginPageInner() {
 
         <div className="mb-3">
           <Input
+            id="login-password"
             label="Password"
             isPassword
             autoComplete="current-password"

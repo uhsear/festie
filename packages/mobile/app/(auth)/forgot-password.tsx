@@ -19,6 +19,7 @@ import { ACCOUNT_COPY, AUTH_COPY } from '@festie/shared/constants';
 import { isValidEmail } from '@festie/shared/utils';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
+import GuestLegalFooter from '../../components/GuestLegalFooter';
 import { makeStyles, typeScaleCap, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
 /**
@@ -62,6 +63,11 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.danger,
     textAlign: 'center',
     marginBottom: t.spacing[3],
+  },
+  label: {
+    ...typeStyle('label', 600),
+    color: t.colors.text.primary,
+    marginBottom: t.spacing[1],
   },
   input: {
     backgroundColor: t.colors.bg.input,
@@ -202,6 +208,10 @@ export default function ForgotPasswordScreen() {
               </Text>
             ) : null}
 
+            {/* The visible label is for sighted users; the input carries its own accessibilityLabel. */}
+            <Text style={styles.label} accessible={false} importantForAccessibility="no">
+              {AUTH_COPY.emailLabel}
+            </Text>
             <TextInput
               style={styles.input}
               placeholder="you@example.com"
@@ -281,6 +291,7 @@ export default function ForgotPasswordScreen() {
             <Text style={styles.linkTextAccent}>Back to sign in</Text>
           </TouchableOpacity>
         </Link>
+        <GuestLegalFooter />
       </ScrollView>
     </KeyboardAvoidingView>
   );

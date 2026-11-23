@@ -281,6 +281,28 @@ describe('email-auth: reset-password', { concurrency: 1 }, () => {
     assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
   });
 
+  test('malformed token (truncated link): 400 with TOKEN_EXPIRED, not a field validation error', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const res = await server.request
+      .post('/api/v1/auth/reset-password')
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ token: 'bogus', newPassword: 'freshpassword9', confirmPassword: 'freshpassword9' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+  });
+
+  test('dead token with a policy-failing password still gets TOKEN_EXPIRED, not a field error', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const res = await server.request
+      .post('/api/v1/auth/reset-password')
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ token: 'bogus', newPassword: 'password123', confirmPassword: 'password123' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+  });
+
   test('rejects invalid token', async () => {
     const server = await startServer();
     servers.push(server);
@@ -349,6 +371,38 @@ describe('email-auth: reset-password', { concurrency: 1 }, () => {
         confirmPassword: 'short',
       });
     assert.ok(res.status >= 400);
+  });
+
+  test('rejects a password containing the token owner username and keeps the token usable', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const username = `rpctx${Date.now()}`;
+    await registerUser(server, username, DEFAULT_PASSWORD);
+
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    try {
+      const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+      await pool.query(
+        `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+        [rows[0].id, tokenHash],
+      );
+
+      const weak = `${username}-Zq7`;
+      const res = await server.request
+        .post('/api/v1/auth/reset-password')
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .send({ token, newPassword: weak, confirmPassword: weak });
+      assert.equal(res.status, 400);
+      assert.equal(res.body.error.message, 'Password must not contain your username');
+
+      const { rows: left } = await pool.query('SELECT used_at FROM password_reset_tokens WHERE token_hash = $1', [tokenHash]);
+      assert.equal(left[0].used_at, null, 'a rejected password must not burn the reset link');
+    } finally {
+      await pool.end();
+    }
   });
 
   test('happy path: valid token resets password and invalidates sessions', async () => {

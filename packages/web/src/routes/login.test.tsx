@@ -98,6 +98,21 @@ describe('LoginPage', () => {
     expect(screen.getByText('Password is required')).toBeInTheDocument();
   });
 
+  it('moves focus to the first invalid field on an empty submit', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(screen.getByLabelText('Username or email')).toHaveFocus();
+  });
+
+  it('moves focus to the password field when only it is empty', async () => {
+    const user = userEvent.setup();
+    render(<LoginPage />);
+    await user.type(screen.getByLabelText('Username or email'), 'testuser');
+    await user.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(screen.getByLabelText('Password')).toHaveFocus();
+  });
+
   it('shows "Password is required" when username is filled but password is empty', async () => {
     const user = userEvent.setup();
     render(<LoginPage />);
