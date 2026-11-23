@@ -15,8 +15,8 @@ import {
   ACCOUNT_SECTIONS,
   COPY,
   INTRO_REPLAY_COPY,
+  GUEST_LEGAL_COPY,
   SUPPORT_EMAIL,
-  SUPPORT_URL_TERMS,
   THEME_MODE_OPTIONS,
 } from '@festie/shared/constants';
 import type { AccountSectionId } from '@festie/shared/constants';
@@ -24,6 +24,7 @@ import { listIdentities } from '@festie/shared/services';
 import type { IdentitySummary } from '@festie/shared/types';
 import { themeModeOf, useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import ScreenHeader from '../../components/ScreenHeader';
+import { openPage } from '../../components/GuestLegalFooter';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import AppPressable from '../../components/AppPressable';
 import SectionLabel from '../../components/SectionLabel';
@@ -324,7 +325,7 @@ export default function AccountScreen() {
           title={ACCOUNT_COPY.terms}
           onPress={() => {
             haptics.tap();
-            void Linking.openURL(SUPPORT_URL_TERMS);
+            void openPage(GUEST_LEGAL_COPY.termsPath);
           }}
           accessibilityLabel={ACCOUNT_COPY.terms}
         />

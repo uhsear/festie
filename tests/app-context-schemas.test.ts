@@ -907,13 +907,11 @@ describe('schemas: resetPasswordPublic', () => {
     assert.ok(result.success);
   });
 
-  it('rejects invalid token format', () => {
-    const result = schemas.resetPasswordPublic.safeParse({
-      token: 'not-hex',
-      newPassword: 'newpass123',
-      confirmPassword: 'newpass123',
-    });
-    assert.ok(!result.success);
+  it('accepts any non-empty token so a mangled link reaches the handler', () => {
+    const base = { newPassword: 'newpass123', confirmPassword: 'newpass123' };
+    assert.ok(schemas.resetPasswordPublic.safeParse({ ...base, token: 'not-hex' }).success);
+    assert.ok(!schemas.resetPasswordPublic.safeParse({ ...base, token: '' }).success);
+    assert.ok(!schemas.resetPasswordPublic.safeParse({ ...base, token: 'a'.repeat(4097) }).success);
   });
 });
 

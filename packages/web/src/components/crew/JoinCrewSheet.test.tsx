@@ -83,10 +83,13 @@ describe('JoinCrewSheet', () => {
     expect(screen.queryByText('Crew members can see your picks and your status.')).not.toBeInTheDocument();
   });
 
-  it.each(['invalid', 'expired', 'locked'])('disables Join when the invite is %s', (status) => {
+  it.each(['invalid', 'expired', 'locked'])('offers one Done button beside the header Close and no Join button when the invite is %s', (status) => {
     h.preview = { status, preview: null };
-    renderSheet();
-    expect(screen.getByRole('button', { name: 'Join crew' })).toBeDisabled();
+    const onClose = renderSheet();
+    expect(screen.queryByRole('button', { name: 'Join crew' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Not now' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onClose).toHaveBeenCalled();
   });
 
   it.each(['invalid', 'expired', 'locked'])('drops the consent line when the invite is %s', (status) => {
@@ -95,11 +98,10 @@ describe('JoinCrewSheet', () => {
     expect(screen.queryByText('Crew members can see your picks and your status.')).not.toBeInTheDocument();
   });
 
-  it('shows the locked message and disables Join for a locked crew', () => {
+  it('shows the locked message for a locked crew', () => {
     h.preview = { status: 'locked', preview: null };
     renderSheet();
     expect(screen.getByText("This crew isn't taking new members.")).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Join crew' })).toBeDisabled();
   });
 
   it('keeps Join enabled when the preview is unreachable', () => {
@@ -107,6 +109,23 @@ describe('JoinCrewSheet', () => {
     renderSheet();
     expect(screen.getByText(/Can't check this invite right now/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Join crew' })).toBeEnabled();
+  });
+
+  it('renders a centred dialog, not the bottom drawer, at desktop width', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    try {
+      renderSheet();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(document.querySelector('[data-vaul-drawer]')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Join crew' })).toBeEnabled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('toasts, navigates to /crew and closes after joining', async () => {

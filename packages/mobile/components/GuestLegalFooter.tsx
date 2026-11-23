@@ -32,7 +32,7 @@ const useStyles = makeStyles((t) => ({
   },
 }));
 
-async function openPage(path: string) {
+export async function openPage(path: string) {
   const url = `${SITE}${path}`;
   try {
     await WebBrowser.openBrowserAsync(url);
