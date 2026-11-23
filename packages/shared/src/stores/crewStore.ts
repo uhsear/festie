@@ -313,6 +313,14 @@ let _lastSelectCrewId: string | null = null;
  */
 function selectCrewFestivalIfNone(crews: Crew[], activeCrew: Crew | null): void {
   if (!useAuthStore.getState().user) return;
+  // Mobile restores the saved festival asynchronously; a live selection would beat it in the persist merge.
+  if (!useFestivalDataStore.persist.hasHydrated()) {
+    const unsub = useFestivalDataStore.persist.onFinishHydration(() => {
+      unsub();
+      selectCrewFestivalIfNone(crews, activeCrew);
+    });
+    return;
+  }
   const data = useFestivalDataStore.getState();
   if (data.currentFestivalId) return;
   const festivalId = (activeCrew ?? crews.find((c) => !c._optimistic))?.festivalId;

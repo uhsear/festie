@@ -15,6 +15,7 @@ const crew = (id: string, festivalId?: string): Crew =>
 describe('crew festival auto-select', () => {
   let select: ReturnType<typeof vi.fn>;
   beforeEach(() => {
+    vi.restoreAllMocks();
     vi.clearAllMocks();
     select = vi.fn().mockResolvedValue(undefined);
     useCrewStore.setState({ crews: [], activeCrew: null, crewLoading: false, error: null });
@@ -40,6 +41,21 @@ describe('crew festival auto-select', () => {
   it('leaves an already chosen festival alone', async () => {
     useFestivalDataStore.setState({ currentFestivalId: 'other' });
     await useCrewStore.getState().loadCrews();
+    expect(select).not.toHaveBeenCalled();
+  });
+
+  it('waits for festival store hydration so a saved festival is not replaced', async () => {
+    let finish: () => void = () => {};
+    vi.spyOn(useFestivalDataStore.persist, 'hasHydrated').mockReturnValue(false);
+    vi.spyOn(useFestivalDataStore.persist, 'onFinishHydration').mockImplementation((cb) => {
+      finish = () => cb(useFestivalDataStore.getState());
+      return () => {};
+    });
+    await useCrewStore.getState().loadCrews();
+    expect(select).not.toHaveBeenCalled();
+    useFestivalDataStore.setState({ currentFestivalId: 'saved' });
+    vi.spyOn(useFestivalDataStore.persist, 'hasHydrated').mockReturnValue(true);
+    finish();
     expect(select).not.toHaveBeenCalled();
   });
 

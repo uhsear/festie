@@ -16,6 +16,8 @@ const h = vi.hoisted(() => ({
     currentProfile: null as unknown,
     // What the festival store has persisted; getState() reads it.
     cachedFestival: null as unknown,
+    currentFestivalId: null as string | null,
+    isLoading: false,
   },
 }));
 
@@ -50,7 +52,12 @@ vi.mock('@festie/shared/stores', () => {
     loadProfiles: vi.fn(async () => {}),
   };
   const useFestivalStore = Object.assign((sel: (s: typeof slice) => unknown) => sel(slice), {
-    getState: () => ({ festivals: h.festivals as unknown[], currentFestival: h.state.cachedFestival }),
+    getState: () => ({
+      festivals: h.festivals as unknown[],
+      currentFestival: h.state.cachedFestival,
+      currentFestivalId: h.state.currentFestivalId,
+      isLoading: h.state.isLoading,
+    }),
   });
   return { useFestivalStore };
 });
@@ -72,6 +79,10 @@ describe('useFestivalLoader session probe', () => {
     h.state.cb = null;
     h.state.currentFestival = null;
     h.state.currentProfile = null;
+    h.state.cachedFestival = null;
+    h.state.currentFestivalId = null;
+    h.state.isLoading = false;
+    h.festivals = [];
   });
 
   it('probes once when no user is persisted, since the session cookie may exist', () => {
@@ -103,6 +114,48 @@ describe('useFestivalLoader session probe', () => {
     rerender();
     await act(async () => {});
     expect(h.loadFestivals).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('useFestivalLoader default pick', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    h.state.user = null;
+    h.state.currentFestival = null;
+    h.state.cachedFestival = null;
+    h.state.currentFestivalId = null;
+    h.state.isLoading = false;
+    h.festivals = [{ id: 'f1' }, { id: 'f2' }];
+    window.history.pushState({}, '', '/');
+  });
+
+  afterEach(() => {
+    h.state.currentFestivalId = null;
+    h.state.isLoading = false;
+    h.festivals = [];
+  });
+
+  it('keeps a selection that is still loading', async () => {
+    h.state.currentFestivalId = 'f2';
+    h.state.isLoading = true;
+    renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(h.selectFestival).not.toHaveBeenCalled();
+  });
+
+  it('retries a persisted id whose data never loaded', async () => {
+    h.state.currentFestivalId = 'f2';
+    renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(h.selectFestival).toHaveBeenCalledWith('f2');
+  });
+
+  it('falls back to the default when the persisted id is not in the list', async () => {
+    h.state.currentFestivalId = 'gone';
+    renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(h.selectFestival).toHaveBeenCalledTimes(1);
+    expect(h.selectFestival).not.toHaveBeenCalledWith('gone');
   });
 });
 
