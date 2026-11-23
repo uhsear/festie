@@ -158,6 +158,23 @@ describe('map step outcome survives the card unmounting', () => {
     expect(mapStateFor(PMTILES)).toEqual({ section: { status: 'ready', syncedAt: 1_700_000_000_000 }, message: null });
     setMapOutcome(PMTILES, null);
   });
+
+  it('forgets a stale error once disk is ready, so an evicted cache comes back idle', () => {
+    setMapOutcome(PMTILES, { section: { status: 'error', syncedAt: 1 }, message: 'old' });
+    fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
+    mapStateFor(PMTILES);
+    fs.files.clear();
+    expect(mapStateFor(PMTILES)).toEqual({ section: { status: 'idle', syncedAt: null }, message: null });
+  });
+
+  it('keeps a running attempt even when disk is ready', () => {
+    const syncing = { section: { status: 'syncing' as const, syncedAt: null }, message: null };
+    setMapOutcome(PMTILES, syncing);
+    fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
+    mapStateFor(PMTILES);
+    expect(getMapOutcome(PMTILES)).toEqual(syncing);
+    setMapOutcome(PMTILES, null);
+  });
 });
 
 describe('card-started download and remove', () => {

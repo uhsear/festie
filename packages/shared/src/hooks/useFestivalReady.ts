@@ -38,7 +38,7 @@ function peekHidden(festivalId: string): boolean | null {
 export function useFestivalReady(
   notificationsAllowed: boolean,
   now?: Date,
-  /** The mobile-only offline map step, or null/omitted when the festival has none. */
+  /** The offline map step, or null/omitted when the festival has none. */
   offlineMap: SectionReadiness | null = null,
 ): {
   visible: boolean;

@@ -11,7 +11,7 @@ import {
   extractSiteplan,
   headContentLength,
 } from '@festie/shared/utils';
-import { getMapOutcome, setMapOutcome, subscribeMapOutcome, type MapOutcome } from '../lib/offlineMapOutcome';
+import { forgetMapOutcome, getMapOutcome, setMapOutcome, subscribeMapOutcome, type MapOutcome } from '../lib/offlineMapOutcome';
 import {
   basemapCacheInfo,
   clearBasemapCache,
@@ -70,7 +70,12 @@ export async function downloadOfflineMap(
  */
 export function mapStateFor(pmtilesUrl: string | null | undefined): MapOutcome {
   const disk = sectionFromDisk(pmtilesUrl);
-  if (disk.status === 'ready') return { section: disk, message: null };
+  if (disk.status === 'ready') {
+    // The saved map supersedes an old error, which must not come back if the OS evicts the cache.
+    const last = getMapOutcome(pmtilesUrl);
+    if (pmtilesUrl && last && last.section.status !== 'syncing') forgetMapOutcome(pmtilesUrl);
+    return { section: disk, message: null };
+  }
   return getMapOutcome(pmtilesUrl) ?? { section: IDLE, message: null };
 }
 
@@ -195,7 +200,7 @@ export function useOfflineDownload(festivalId: string) {
     hasMap: !!mapUrl,
     mapBytes: mapUrl ? mapBytes : null,
     mapReady: mapSection.status === 'ready',
-    // Why the map was not saved (not enough space). Only while the step is in error: a later
+    // Why the map was not saved (not enough space, or the download failed). Only while the step is in error: a later
     // success or a reset to idle must not leave the old refusal on the card.
     mapMessage: mapUrl && mapSection.status === 'error' ? mapMessage : null,
     // The map is saved but the site-plan overlay still needs a connection.

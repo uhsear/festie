@@ -21,6 +21,11 @@ export function setMapOutcome(url: string, outcome: MapOutcome | null): void {
   notify();
 }
 
+/** Drops the entry without notifying: for a reader that finds it obsolete while rendering. */
+export const forgetMapOutcome = (url: string): void => {
+  outcomes.delete(url);
+};
+
 export function subscribeMapOutcome(cb: () => void): () => void {
   listeners.add(cb);
   return () => {
