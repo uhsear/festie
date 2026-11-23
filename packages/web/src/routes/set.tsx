@@ -38,10 +38,10 @@ export default function SetDeepLink() {
         if (!set) {
           const { festivalId } = await locateSet(setId);
           // currentFestivalId is set before the festival arrives, so only a loaded festival can be skipped.
-          const loaded = useFestivalStore.getState();
-          const alreadyLoaded = loaded.currentFestival?.id === festivalId && loaded.days.length > 0 && !loaded.isLoading;
+          const st = useFestivalStore.getState();
+          const alreadyLoaded = st.currentFestival?.id === festivalId && st.days.length > 0 && !st.isLoading;
           if (festivalId && !alreadyLoaded) {
-            await loaded.selectFestival(festivalId);
+            await st.selectFestival(festivalId);
           }
           set = useFestivalStore.getState().sets.find((s) => s.id === setId);
         }
