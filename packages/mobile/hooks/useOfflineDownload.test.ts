@@ -26,6 +26,9 @@ vi.mock('expo-file-system', () => {
     get lastModified() {
       return 1_700_000_000_000;
     }
+    delete() {
+      fs.files.delete(this.uri);
+    }
     async base64() {
       return `b64:${this.size}`;
     }
@@ -46,8 +49,8 @@ vi.mock('../lib/basemapCache', async (importOriginal) => {
   };
 });
 
-const { sectionFromDisk, downloadOfflineMap, mapStateFor } = await import('./useOfflineDownload');
-const { setMapOutcome } = await import('../lib/offlineMapOutcome');
+const { sectionFromDisk, downloadOfflineMap, mapStateFor, runMapDownload, removeOfflineMap } = await import('./useOfflineDownload');
+const { setMapOutcome, getMapOutcome } = await import('../lib/offlineMapOutcome');
 const { basemapCacheFile, ensureBasemapCached, checkArchiveSpace } = await import('../lib/basemapCache');
 
 const PMTILES = 'https://festie.us/uploads/basemaps/big-2026.pmtiles';
@@ -152,5 +155,25 @@ describe('map step outcome survives the card unmounting', () => {
     fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
     expect(mapStateFor(PMTILES)).toEqual({ section: { status: 'ready', syncedAt: 1_700_000_000_000 }, message: null });
     setMapOutcome(PMTILES, null);
+  });
+});
+
+describe('card-started download and remove', () => {
+  it('runMapDownload stores the refusal, and a later success clears it', async () => {
+    fs.free = 3.7 * 1024 * MIB;
+    vi.stubGlobal('fetch', head(139 * 1024 * MIB));
+    await runMapDownload(PMTILES, null);
+    expect(getMapOutcome(PMTILES)?.section.status).toBe('error');
+    expect(getMapOutcome(PMTILES)?.message).toMatch(/Not enough free space/);
+    fs.free = undefined;
+    await runMapDownload(PMTILES, null);
+    expect(getMapOutcome(PMTILES)).toBeNull();
+  });
+
+  it('removing a saved map drops an old error so it does not resurface', async () => {
+    setMapOutcome(PMTILES, { section: { status: 'error', syncedAt: 1 }, message: 'old' });
+    fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
+    removeOfflineMap(PMTILES, null);
+    expect(mapStateFor(PMTILES)).toEqual({ section: { status: 'idle', syncedAt: null }, message: null });
   });
 });

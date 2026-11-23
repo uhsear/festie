@@ -72,10 +72,27 @@ export function mapStateFor(pmtilesUrl: string | null | undefined): MapOutcome {
   return getMapOutcome(pmtilesUrl) ?? { section: IDLE, message: null };
 }
 
+/** One card-started attempt: publishes syncing, then the error (with message) or clears on success. */
+export async function runMapDownload(pmtilesUrl: string, siteplanUrl: string | null): Promise<void> {
+  setMapOutcome(pmtilesUrl, { section: { status: 'syncing', syncedAt: null }, message: null });
+  const result = await downloadOfflineMap(pmtilesUrl, siteplanUrl);
+  setMapOutcome(pmtilesUrl, result.section.status === 'ready' ? null : result);
+}
+
+/** Removes the saved map and forgets the last attempt, so an old error cannot resurface after Remove. */
+export function removeOfflineMap(pmtilesUrl: string | null, siteplanUrl: string | null): void {
+  if (pmtilesUrl) {
+    clearBasemapCache(pmtilesUrl);
+    setMapOutcome(pmtilesUrl, null);
+  }
+  if (siteplanUrl) clearBasemapCache(siteplanUrl);
+}
+
 function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | null) {
-  // Disk and the last attempt are both readable synchronously, so derive the state at render time and
-  // re-render when either changes (another hook instance, the map screen, or an attempt settling).
-  const [, bump] = useState(0);
+  // Disk and the last attempt are both readable synchronously. Read them only on mount, when the URL
+  // changes, and when either notifies (another hook instance, the map screen, or an attempt settling):
+  // a render must not hit the file system, and the section object must stay stable between changes.
+  const [version, bump] = useState(0);
   useEffect(() => {
     const rerender = () => bump((n) => n + 1);
     const offDisk = subscribeBasemapCache(rerender);
@@ -85,14 +102,13 @@ function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | n
       offOutcome();
     };
   }, []);
-  const { section, message } = mapStateFor(pmtilesUrl);
-  const siteplanBytes = basemapCacheInfo(siteplanUrl).bytes;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is the invalidation signal
+  const { section, message } = useMemo(() => mapStateFor(pmtilesUrl), [pmtilesUrl, version]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `version` is the invalidation signal
+  const siteplanBytes = useMemo(() => basemapCacheInfo(siteplanUrl).bytes, [siteplanUrl, version]);
 
   const download = useCallback(async () => {
-    if (!pmtilesUrl) return;
-    setMapOutcome(pmtilesUrl, { section: { status: 'syncing', syncedAt: null }, message: null });
-    const result = await downloadOfflineMap(pmtilesUrl, siteplanUrl);
-    setMapOutcome(pmtilesUrl, result.section.status === 'ready' ? null : result);
+    if (pmtilesUrl) await runMapDownload(pmtilesUrl, siteplanUrl);
   }, [pmtilesUrl, siteplanUrl]);
 
   return { section, download, message, siteplanBytes };
@@ -152,10 +168,7 @@ export function useOfflineDownload(festivalId: string) {
       live = false;
     };
   }, [mapUrl]);
-  const removeMap = useCallback(() => {
-    if (mapUrl) clearBasemapCache(mapUrl);
-    if (siteplanUrl) clearBasemapCache(siteplanUrl);
-  }, [mapUrl, siteplanUrl]);
+  const removeMap = useCallback(() => removeOfflineMap(mapUrl, siteplanUrl), [mapUrl, siteplanUrl]);
 
   const download = useCallback(() => {
     void downloadForOffline(festivalId, activeCrewId ?? undefined);
