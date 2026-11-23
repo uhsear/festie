@@ -576,7 +576,7 @@ export default function FestivalEditForm({
         </div>
         <button
           onClick={handleAddStage}
-          className="mt-3 px-3 py-1.5 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+          className="mt-3 px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
         >
           + Add Stage
         </button>
@@ -681,7 +681,7 @@ export default function FestivalEditForm({
         </div>
         <button
           onClick={handleAddDay}
-          className="mt-3 px-3 py-1.5 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+          className="mt-3 px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
         >
           + Add Day
         </button>
@@ -745,14 +745,14 @@ export default function FestivalEditForm({
         )}
         <button
           onClick={onCancel}
-          className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
+          className="px-4 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
         >
           {readOnly ? 'Close' : 'Cancel'}
         </button>
         {!readOnly && editingId && total > 0 && (
           <button
             onClick={onDiscard}
-            className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
+            className="px-4 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
           >
             Discard
           </button>
@@ -761,7 +761,7 @@ export default function FestivalEditForm({
         <button
           onClick={onSave}
           disabled={saving || (!!editingId && total === 0)}
-          className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 min-h-11 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? 'Saving…' : editingId ? (total > 0 ? `Save ${plural(total, 'change')}` : 'Save') : 'Create festival'}
         </button>

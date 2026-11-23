@@ -55,7 +55,7 @@ const STATUS = {
 } as const;
 
 const actionClass =
-  'px-2 py-0.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-xs font-medium';
+  'inline-flex items-center min-h-11 px-3 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-xs font-medium';
 
 /** Draft/published chip, "Before you publish" checklist and the Publish button. */
 export default function FestivalStatusPanel({
@@ -247,7 +247,7 @@ export default function FestivalStatusPanel({
                 type="button"
                 disabled={blocked || dirty || (!!organizer && !orgActive)}
                 onClick={() => setConfirming(true)}
-                className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-4 py-2 min-h-11 rounded-lg bg-accent-aqua text-bg-primary text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {actionLabel}
               </button>

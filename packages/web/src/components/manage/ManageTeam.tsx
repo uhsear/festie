@@ -230,11 +230,11 @@ export default function ManageTeam({ organization }: Props) {
           <form onSubmit={addMember} aria-label="Add a member" className="grid grid-cols-1 gap-3 rounded-lg border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
             <label className="flex flex-col gap-1 text-xs text-text-muted">
               Email
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="name@venue.example" className={INPUT_CLASS} />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="name@venue.example" className={`${INPUT_CLASS} min-h-11`} />
             </label>
             <label className="flex flex-col gap-1 text-xs text-text-muted">
               Role
-              <select value={role} onChange={(e) => setRole(e.target.value as OrgRole)} className={INPUT_CLASS}>
+              <select value={role} onChange={(e) => setRole(e.target.value as OrgRole)} className={`${INPUT_CLASS} min-h-11`}>
                 {ROLES.map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}

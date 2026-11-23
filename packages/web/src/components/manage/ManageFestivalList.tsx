@@ -174,7 +174,7 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
       {canCreate && (
         <p className="text-sm text-text-muted">
           Starting a lineup?{' '}
-          <button type="button" className="text-accent-aqua underline" onClick={() => downloadText('festie-lineup-sample.csv', LINEUP_SAMPLE_CSV)}>
+          <button type="button" className="inline-flex min-h-11 items-center text-accent-aqua underline" onClick={() => downloadText('festie-lineup-sample.csv', LINEUP_SAMPLE_CSV)}>
             Download a sample import file
           </button>
           .
