@@ -276,8 +276,11 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
           <div
             className={`min-h-0 flex flex-col gap-[var(--space-4)] ${isLg || snap === 1 ? 'overflow-y-auto' : 'overflow-hidden'} overscroll-contain p-7 pt-[72px] pb-[max(12px,env(safe-area-inset-bottom))]`}
             ref={panelRef}
-            // The peeking sheet runs past the viewport, so focus on a control below the fold must open it fully.
-            onFocusCapture={() => setSnap(1)}
+            // The peeking sheet runs past the viewport, so keyboard focus on a control below the fold must open it fully.
+            // Pointer taps focus controls too, and must not re-expand a sheet the user just collapsed.
+            onFocusCapture={(e) => {
+              if ((e.target as Element).matches(':focus-visible')) setSnap(1);
+            }}
           >
             <div>
               <div
