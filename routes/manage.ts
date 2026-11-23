@@ -541,8 +541,15 @@ export default function createManageRoutes(
         for (const actorId of new Set<string>(rows.map((row: any) => row.actorId).filter(Boolean))) {
           labels.set(actorId, await stores.organizations.editorLabel(req.organizationId, actorId));
         }
+        // A Festie row carries no details, but the owner needs to know which festival it is about. Only the name of
+        // one of the organization's own festivals goes out.
+        const hasFestieFestivalRow = rows.some((row: any) => row.actorType !== 'organizer' && row.targetType === 'festival');
+        const festivalNames = new Map<string, string>(
+          hasFestieFestivalRow ? (await stores.organizations.listFestivals([req.organizationId])).map((f: any) => [f.id, f.name]) : [],
+        );
         const entries = rows.map((row: any) => {
           const byMember = row.actorType === 'organizer';
+          const festivalName = !byMember && row.targetType === 'festival' ? festivalNames.get(row.targetId) : null;
           return {
             id: row.id,
             action: row.action,
@@ -550,7 +557,7 @@ export default function createManageRoutes(
             targetId: row.targetId,
             createdAt: row.createdAt,
             actor: (byMember && row.actorId && labels.get(row.actorId)) || 'Festie support',
-            details: byMember ? withoutSmallAudiences(row.details) : null,
+            details: byMember ? withoutSmallAudiences(row.details) : festivalName ? { name: festivalName } : null,
           };
         });
         return sendSuccess(res, entries, { limit, nextCursor });

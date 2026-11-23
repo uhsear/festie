@@ -124,4 +124,25 @@ describe('admin tools of the organizer platform', { skip }, () => {
     assert.equal(actors['rf-gone'], 'A former teammate');
     assert.equal(actors['rf-staff'], 'Festie support');
   });
+
+  test("a Festie row names its organization's festival and nothing else", async () => {
+    const { server, users } = await boot();
+    const { rows: admins } = await o.sql(server, "SELECT ur.user_id FROM user_roles ur JOIN roles r ON r.id = ur.role_id WHERE r.name = 'admin' LIMIT 1");
+    const insert = (id: string, targetId: string) =>
+      o.sql(
+        server,
+        `INSERT INTO audit_log (id, actor_type, actor_id, action, target_type, target_id, details_json, organization_id, status, created_at)
+         VALUES ($1, 'admin', $2, 'festival.published', 'festival', $3, '{"note":"private"}', 'org-a', 'success', NOW())`,
+        [id, admins[0].user_id, targetId],
+      );
+    await insert('rf-own', 'f-a');
+    // A row filed under this organization but aimed at another organization's festival must not leak that name.
+    await insert('rf-other', 'f-b');
+    const view = await o.as(server, users.ownerA.token).get('/api/v1/manage/organizations/org-a/audit');
+    assert.equal(view.status, 200);
+    const details = Object.fromEntries(view.body.data.map((e: any) => [e.id, e.details]));
+    assert.deepEqual(details['rf-own'], { name: 'Fest f-a' });
+    assert.equal(details['rf-other'], null);
+    assert.doesNotMatch(JSON.stringify(view.body), /private|Fest f-b/);
+  });
 });
