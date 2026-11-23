@@ -89,14 +89,15 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
           maxLength={200}
         />
         <p className="text-xs text-text-muted -mt-1">{COPY.homeBase.hint}</p>
-        <input
-          type="time"
-          className={`${inputBase} min-h-11`}
-          placeholder="Time (optional)"
-          aria-label="Meet at time"
-          value={time}
-          onChange={(e) => setTime(e.target.value)}
-        />
+        <label className="block text-xs text-text-muted">
+          Meet at (optional)
+          <input
+            type="time"
+            className={`${inputBase} min-h-11 mt-1`}
+            value={time}
+            onChange={(e) => setTime(e.target.value)}
+          />
+        </label>
         <label className="block text-xs text-text-muted">
           {COPY.homeBase.planBLabel}
           <input

@@ -55,8 +55,6 @@ export default function TabLayout() {
         backgroundColor: colors.bg.secondary,
         iconColor: { default: colors.text.muted, selected: colors.accent.aqua },
         labelStyle: { default: { color: colors.text.muted }, selected: { color: colors.accent.aqua } },
-        // Android's Material pill otherwise stays the dark-theme grey on a light bar.
-        indicatorColor: colors.aquaAlpha[15],
       }
     : null;
   // Connect Socket.IO when the user is on the main tabs (authenticated). Events
@@ -98,6 +96,9 @@ export default function TabLayout() {
     <View style={{ flex: 1 }} importantForAccessibility={sheetOpen ? 'no-hide-descendants' : 'auto'}>
       <NativeTabs
         tintColor={colors.accent.aqua}
+        // Android's Material pill otherwise stays system grey: a light pill on the daylight bar,
+        // and on the stage bar the aqua icon measured 2.03:1 against it.
+        indicatorColor={colors.aquaAlpha[15]}
         minimizeBehavior="onScrollDown"
         labelVisibilityMode="labeled"
         {...daylightBar}

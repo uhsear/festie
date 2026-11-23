@@ -1,5 +1,6 @@
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useFestivalDataStore } from '@festie/shared/stores';
 import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import FestivalList from '../FestivalList';
 import ScreenHeader from '../ScreenHeader';
@@ -22,6 +23,8 @@ export default function SchedulePickerView({
 }: SchedulePickerViewProps) {
   const styles = useStyles();
   const t = useTokens();
+  // With no festivals loaded the list shows its own offline error, so the note would repeat it.
+  const hasFestivals = useFestivalDataStore((s) => s.festivals.length > 0);
   return (
   // ScreenHeader owns the top safe-area inset (insets.top + spacing[4]) — the
   // native Tabs nav header is hidden (see (tabs)/_layout.tsx), so this is the
@@ -44,7 +47,7 @@ export default function SchedulePickerView({
         ) : undefined
       }
     />
-    {pickingFestival && offlineMode ? (
+    {pickingFestival && offlineMode && hasFestivals ? (
       <Text style={styles.pickerOffline} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         You&apos;re offline. Switching festivals needs signal. Your current lineup stays saved.
       </Text>

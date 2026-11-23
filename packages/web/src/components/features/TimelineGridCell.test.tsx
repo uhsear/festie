@@ -130,6 +130,14 @@ describe('TimelineGridCell block placement', () => {
     expect(btn.getAttribute('aria-label')).not.toContain('(selected)');
   });
 
+  it('names each pick button after its set, so a screen reader can tell them apart', () => {
+    const labels = [...renderCell('a', 0, 4, null).querySelectorAll('button[aria-pressed]')].map((b) =>
+      b.getAttribute('aria-label'),
+    );
+    expect(labels).toHaveLength(3);
+    for (const label of labels) expect(label).toMatch(/: a$/);
+  });
+
   it('shows the pick row only when canPick is set', () => {
     expect(renderCell('d', 0, 4, null, { canPick: true }).querySelectorAll('button[aria-pressed]').length).toBeGreaterThan(0);
     expect(renderCell('e', 0, 4, null, { canPick: false }).querySelectorAll('button[aria-pressed]').length).toBe(0);

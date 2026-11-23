@@ -193,7 +193,7 @@ export default function CrewMembersTab({
             <View style={styles.inviteBar}>
               <Ionicons name="key-outline" size={16} color={t.colors.accent.aqua} />
               <Text style={styles.inviteLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>Invite code</Text>
-              <Text style={styles.inviteCode} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityLabel={`Invite code ${crew.inviteCode}`}>
+              <Text style={styles.inviteCode} testID="crew-invite-code" maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityLabel={`Invite code ${crew.inviteCode}`}>
                 {crew.inviteCode}
               </Text>
               {inviteExpiry ? (

@@ -1,7 +1,7 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { act, render, screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 
@@ -314,6 +314,29 @@ describe('DetailPanel', () => {
     } finally {
       window.matchMedia = original;
     }
+  });
+
+  describe('phone sheet at the peek position', () => {
+    const body = () => screen.getByTestId('drawer-content').querySelector('.overflow-hidden, .overflow-y-auto') as HTMLElement;
+
+    it('opens with a body that does not scroll, because the sheet peeks', () => {
+      render(<DetailPanel {...defaultProps} />);
+      expect(body().className).toContain('overflow-hidden');
+    });
+
+    it('expands when focus moves into the body, so a keyboard user can reach the controls below the fold', () => {
+      render(<DetailPanel {...defaultProps} />);
+      act(() => screen.getByText('Clash Clear').focus());
+      expect(body().className).toContain('overflow-y-auto');
+    });
+
+    it('has a handle button that toggles between peek and full', async () => {
+      render(<DetailPanel {...defaultProps} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Expand set details' }));
+      expect(body().className).toContain('overflow-y-auto');
+      await userEvent.click(screen.getByRole('button', { name: 'Collapse set details' }));
+      expect(body().className).toContain('overflow-hidden');
+    });
   });
 
   it('renders the stage name badge', () => {

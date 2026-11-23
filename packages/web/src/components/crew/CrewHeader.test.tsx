@@ -24,6 +24,11 @@ describe('CrewHeader', () => {
     expect(screen.getByText(/Forbidden Kingdom · 9 members/)).toBeInTheDocument();
   });
 
+  it('uses the singular in the button name for a crew of one', () => {
+    render(<CrewHeader crew={crew} members={makeMembers(1)} onOpenMembers={vi.fn()} />);
+    expect(screen.getByRole('button', { name: 'See all 1 member' })).toBeInTheDocument();
+  });
+
   it('shows 5 avatars and +2 for 7 members', () => {
     render(<CrewHeader crew={crew} members={makeMembers(7)} onOpenMembers={vi.fn()} />);
     expect(screen.getAllByTestId('avatar')).toHaveLength(5);

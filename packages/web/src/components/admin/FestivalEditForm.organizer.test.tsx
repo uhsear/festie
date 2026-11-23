@@ -43,6 +43,17 @@ describe('FestivalEditForm in organizer mode', () => {
     expect(screen.queryByText('Attendees are alerted after Festie checks the change.')).not.toBeInTheDocument();
   });
 
+  it('locks name and location with a hint and a contact link when the server would refuse the change', () => {
+    render(<FestivalEditForm {...props} mode="organizer" identityLocked />);
+    expect(screen.getByLabelText('Festival Name')).toBeDisabled();
+    expect(screen.getByLabelText('Location')).toBeDisabled();
+    expect(screen.getByLabelText('Festival Name')).toHaveAccessibleDescription(/Ask Festie to change the name or location/);
+    expect(screen.getByLabelText('Location')).toHaveAccessibleDescription(/Ask Festie to change the name or location/);
+    expect(screen.getByText(/Ask Festie to change the name or location of a live festival\./)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Contact Festie' })).toHaveAttribute('href', 'mailto:support@festie.us');
+    expect(screen.getByLabelText('Festival time zone')).toBeEnabled();
+  });
+
   it('disables every input and drops the save buttons for a viewer', () => {
     render(<FestivalEditForm {...props} mode="organizer" readOnly />);
     const group = screen.getByRole('group', { name: 'Festival details' });

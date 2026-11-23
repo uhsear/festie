@@ -125,7 +125,7 @@ Push notification subsystem (FCM for Android, APNs for iOS, Web Push for browser
 | `share-links.ts` | Revocable picks share tokens (`/s/<token>`) |
 | `artists.ts` | `artists`, `artist_suggestions` -- the artist repository, the copies that sets and announced lineups hold, and organizer suggestions |
 | `artist-match-review.ts` | `artist_match_reviews` -- the admin Artist review queue: imported link, merge and rename proposals, approved through the artists store in one transaction |
-| `artist-visibility.ts` | Which artists an organizer may see: published, own festivals, or created by its organization |
+| `artist-visibility.ts` | Which artists an organizer may see: published, own festivals, or created by the viewer itself |
 | `festival-lock.ts` | Festival row locks shared by the artist and lineup-import stores |
 | `time-releases.ts` | `festival_time_releases` -- per-date "set times are out" claims |
 

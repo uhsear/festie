@@ -243,7 +243,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
               </>
             ) : (
               <>
-                <label className="flex items-start gap-2 text-sm text-text-primary">
+                <label className="flex items-start gap-2 min-h-11 text-sm text-text-primary">
                   <input
                     type="checkbox"
                     checked={shareBattery}

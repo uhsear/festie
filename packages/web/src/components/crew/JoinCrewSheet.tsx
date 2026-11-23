@@ -6,6 +6,8 @@ import { useInvitePreview, useJoinCrewByInvite } from '@festie/shared/hooks';
 import { crewCopy, describeInvitePreview, inviteIsDead, inviteStatusMessage } from '@festie/shared/utils';
 import { useToast } from '../../lib/toastContext';
 import Sheet from '../ui/Sheet';
+import Dialog from '../ui/Dialog';
+import { useMediaQuery } from '../../hooks/useMediaQuery';
 import Button from '../ui/Button';
 
 interface JoinCrewSheetProps {
@@ -24,6 +26,7 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
   const { status, preview } = useInvitePreview(code);
   const joinByInvite = useJoinCrewByInvite();
   const currentFestivalId = useFestivalStore((s) => s.currentFestival?.id);
+  const isDesktop = useMediaQuery('(min-width: 768px)');
   const [busy, setBusy] = useState(false);
   const [joinError, setJoinError] = useState<string | null>(null);
 
@@ -62,15 +65,12 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
     }
   };
 
-  return (
-    <Sheet
-      open={!!code}
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
-      title={lines?.title ?? 'Crew invite'}
-      description={lines?.stateLine}
-    >
+  const title = lines?.title ?? 'Crew invite';
+  const onOpenChange = (open: boolean) => {
+    if (!open) onClose();
+  };
+  const body = (
+    <>
       <div className="space-y-1 text-sm text-text-secondary">
         {lines?.festivalLine && <p>{lines.festivalLine}</p>}
         {lines?.ownerLine && <p>{lines.ownerLine}</p>}
@@ -80,19 +80,41 @@ export default function JoinCrewSheet({ code, onClose }: JoinCrewSheetProps) {
         {joinError && <p role="alert">{joinError}</p>}
       </div>
       <div className="flex gap-2 pt-2">
-        <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
-          Not now
-        </Button>
-        <Button
-          type="button"
-          className="flex-1"
-          disabled={unusable || full}
-          isLoading={busy}
-          onClick={handleJoin}
-        >
-          {full ? 'Crew is full' : 'Join crew'}
-        </Button>
+        {unusable ? (
+          <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <>
+            <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
+              Not now
+            </Button>
+            <Button
+              type="button"
+              className="flex-1"
+              disabled={full}
+              isLoading={busy}
+              onClick={handleJoin}
+            >
+              {full ? 'Crew is full' : 'Join crew'}
+            </Button>
+          </>
+        )}
       </div>
+    </>
+  );
+
+  // A centred dialog on desktop like the SOS, QR and confirm dialogs; a draggable bottom sheet on phones.
+  if (isDesktop) {
+    return (
+      <Dialog open={!!code} onOpenChange={onOpenChange} title={title} description={lines?.stateLine}>
+        {body}
+      </Dialog>
+    );
+  }
+  return (
+    <Sheet open={!!code} onOpenChange={onOpenChange} title={title} description={lines?.stateLine}>
+      {body}
     </Sheet>
   );
 }

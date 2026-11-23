@@ -39,6 +39,7 @@ export interface DayEditorProps {
   /** Sets to render: day.sets after the filter and sort. */
   visibleSets?: SetRow[];
   filterQuery?: string;
+  organizer?: boolean;
 }
 
 /**
@@ -68,6 +69,7 @@ export default function DayEditor({
   onSelectAll,
   visibleSets,
   filterQuery = '',
+  organizer = false,
 }: DayEditorProps) {
   const setCount = (day.sets || []).length;
   const shown = visibleSets ?? day.sets ?? [];
@@ -99,7 +101,7 @@ export default function DayEditor({
           onChange={(e) => onLabelChange(e.target.value)}
           className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
         />
-        <div className="basis-full md:basis-auto flex items-center gap-2">
+        <div className="basis-full md:basis-auto flex flex-wrap items-center gap-2">
           <input
             type="date"
             aria-label={`Day date for ${day.label || 'this day'}`}
@@ -113,7 +115,7 @@ export default function DayEditor({
           <button
             onClick={onRemoveDay}
             aria-label={`Remove ${day.label || 'day'}`}
-            className="px-2 py-2 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
+            className="px-2 py-2 min-h-11 shrink-0 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
           >
             Remove
           </button>
@@ -170,6 +172,7 @@ export default function DayEditor({
                   dayLabel={day.label}
                   stages={stages}
                   separator={separator}
+                  organizer={organizer}
                   onSetArtists={(artists) => onSetArtists(s.id, artists)}
                   engagement={engagement?.[s.id]}
                   showEngagement={engagement !== undefined}

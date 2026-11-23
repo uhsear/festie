@@ -148,6 +148,12 @@ describe('OfflineBanner', () => {
     expect(screen.getByText("2 changes couldn't sync")).toBeInTheDocument();
   });
 
+  it('lets the Review button inherit the banner text colour so it stays legible on the coral bar', () => {
+    setStoreState({ failedSync: [failedItem({ label: 'Add meeting point' })] });
+    render(<OfflineBanner />);
+    expect(screen.getByRole('button', { name: 'Review' })).toHaveClass('text-inherit');
+  });
+
   it('opens the PendingSyncSheet when Review is clicked', async () => {
     const user = userEvent.setup();
     setStoreState({ failedSync: [failedItem({ label: 'Add meeting point' })] });

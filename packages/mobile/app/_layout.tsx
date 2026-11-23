@@ -519,6 +519,7 @@ function AuthGate() {
   // launch, guests included. The redirect effect above now gates on `hydrated`
   // for exactly this reason — see its comment.
   const loading = (!hydrated || !uiHydrated || !fontsReady) && !bootTimedOut;
+  const introShowing = !loading && (introReplay || (introSeen === false && !skipIntro));
   useQueueDrain(!loading);
   useOtaUpdatePrompt();
 
@@ -561,7 +562,12 @@ function AuthGate() {
       {!loading && <LiveSharePublisher />}
       {!loading && <AnnouncementBanner padTop={!bannerActive && !sosActive} onActiveChange={setAnnounceActive} />}
       <TopBannerContext.Provider value={bannerActive || sosActive || announceActive}>
-        <View style={styles.appShell}>
+        <View
+          style={styles.appShell}
+          // Keep TalkBack inside the overlay (splash or intro) that visually covers the app.
+          importantForAccessibility={loading || introShowing ? 'no-hide-descendants' : 'auto'}
+          accessibilityElementsHidden={loading || introShowing}
+        >
           {/* Use expo-router's global router singleton (not the local useRouter
               instance): the root boundary sits OUTSIDE the Stack, so it must
               navigate imperatively rather than via router context. */}
@@ -662,7 +668,7 @@ function AuthGate() {
           <ActivityIndicator size="large" color={colors.accent.aqua} />
         </View>
       )}
-      {!loading && (introReplay || (introSeen === false && !skipIntro)) && <FirstRunIntro onDone={dismissIntro} />}
+      {introShowing && <FirstRunIntro onDone={dismissIntro} />}
     </View>
   );
 }

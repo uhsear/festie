@@ -41,15 +41,15 @@ export default function MeetingPointCard({
   <div
     className={`p-3 rounded-lg bg-bg-card border animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none ${isEmergency ? 'border-accent-coral' : 'border-border'}`}
   >
-    <div className="flex items-start gap-3">
+    <div className="flex flex-wrap items-start gap-x-3">
       <KindIcon
         className={`w-5 h-5 shrink-0 mt-0.5 ${isEmergency ? 'text-accent-coral-strong' : 'text-text-secondary'}`}
         aria-hidden="true"
       />
       <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-x-2">
           <span className="font-semibold text-text-primary">{p.label}</span>
-          <span className="text-xs text-text-muted uppercase tracking-wide">{meta.label}</span>
+          <span className="text-xs text-text-muted uppercase tracking-wide whitespace-nowrap">{meta.label}</span>
         </div>
         <div className="text-sm text-text-secondary mt-0.5">{p.location}</div>
         <SyncMarker item={p} />
@@ -91,7 +91,8 @@ export default function MeetingPointCard({
           </div>
         )}
       </div>
-      <div className="flex items-center gap-1 shrink-0">
+      {/* Under 480px the buttons drop to their own row so the title keeps the width. */}
+      <div className="flex basis-full items-center justify-end gap-1 shrink-0 min-[480px]:basis-auto">
         <IconButton
           label={`Directions to ${p.label}`}
           icon={<Navigation className="w-4 h-4" />}

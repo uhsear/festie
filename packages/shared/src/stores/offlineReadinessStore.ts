@@ -101,8 +101,12 @@ function defaultDeps(): DownloadDeps {
     loadExpenses: (crewId) => useCrewStore.getState().loadExpenses(crewId),
     loadActivity: (crewId) => useCrewStore.getState().loadActivity(crewId),
     // The body is kept in weatherStore (zustand-persist), so weather works
-    // offline on mobile as well as on web.
-    fetchWeather: (festivalId) => useWeatherStore.getState().loadWeather(festivalId),
+    // offline on mobile as well as on web. The weather route needs a session (401 for guests), so a guest
+    // skips it, like profiles: otherwise the step errors forever and the checklist can never finish.
+    fetchWeather: async (festivalId) => {
+      if (!useAuthStore.getState().user) return;
+      await useWeatherStore.getState().loadWeather(festivalId);
+    },
     getSets: () => useFestivalDataStore.getState().sets,
     prefetchImage: async (url) => {
       // Best-effort image warm: a GET routes the response into the SW CacheFirst
@@ -259,3 +263,16 @@ export const useOfflineReadinessStore = create<OfflineReadinessStore>()(
     partialize: (state) => ({ byFestival: state.byFestival }),
   }),
 );
+
+/**
+ * A guest download skips weather and picks (both need a session) yet records them as ready. When that guest
+ * signs in nothing was cached for the account, so reset those two and let the checklist ask for a new download.
+ * authStore calls this: a subscription here would break the authStore -> resetStores -> this store import cycle.
+ */
+export function resetGuestSections(): void {
+  const { byFestival } = useOfflineReadinessStore.getState();
+  const next = Object.fromEntries(
+    Object.entries(byFestival).map(([id, r]) => [id, { ...r, picks: emptySection(), weather: emptySection() }]),
+  );
+  useOfflineReadinessStore.setState({ byFestival: next });
+}
