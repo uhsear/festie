@@ -36,7 +36,8 @@ export function createCrewNotifier({ stores, notificationService, log, windowMs 
   const lastFlushAt = new Map<string, number>();
   const lastNowAt = new Map<string, number>();
 
-  const enabled = () => !!notificationService?.isConfigured;
+  // Not gated on isConfigured: send() writes the inbox row even with no push provider.
+  const enabled = () => !!notificationService;
   const warn = (msg: string, err: any, extra: object = {}) => log?.warn?.(msg, { error: err?.message, ...extra });
   const dataFor = (crewId: string) => ({ crewId, deepLink: `rave://crew/${crewId}` });
 

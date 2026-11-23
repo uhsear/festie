@@ -102,11 +102,11 @@ describe('M3 re-engagement: PREF_MAP routing via createSendService', () => {
 // reengagement triggers — event-gated, deduped, opt-out + cap honored
 // =====================================================================
 describe('createReengagementTriggers.sendCrewReformed', () => {
-  function build({ existsForEvents }: any = {}) {
+  function build({ existsForEvents, isConfigured = true }: any = {}) {
     const sends: any[] = [];
     const logInserts: any[] = [];
     const notificationService = {
-      isConfigured: true,
+      isConfigured,
       send: async (args: any) => {
         sends.push(args);
         return { sent: 1 };
@@ -140,6 +140,16 @@ describe('createReengagementTriggers.sendCrewReformed', () => {
       assert.equal(s.type, 'crew_reformed');
       assert.equal(s.data.eventKey, 'reform:crew-2');
     }
+  });
+
+  it('without a push provider still calls send, so the inbox row exists', async () => {
+    const { triggers, sends } = build({ isConfigured: false });
+    await triggers.sendCrewReformed({
+      newCrewId: 'crew-2',
+      crewName: 'The Goblins',
+      invitedUserIds: ['u1', 'u2'],
+    });
+    assert.deepEqual(sends.map((s) => s.userId), ['u1', 'u2']);
   });
 
   it('dedups: a user already logged for this event is skipped', async () => {

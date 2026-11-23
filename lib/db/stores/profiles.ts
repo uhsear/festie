@@ -43,15 +43,16 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return result.rows.map(mapProfileRow);
     },
 
-    async listPicksByFestival(festivalId: string) {
+    async listPicksByFestival(festivalId: string, userIds?: string[]) {
       const result = await pool.query(
         `
         SELECT ${PROFILE_SELECT_PICKS}
         FROM festival_profiles fp
         WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL
+          AND ($2::text[] IS NULL OR fp.user_id = ANY($2::text[]))
         ORDER BY fp.created_at ASC, fp.id ASC
       `,
-        [festivalId],
+        [festivalId, userIds ?? null],
       );
       return result.rows.map(mapProfileRow);
     },
@@ -60,26 +61,31 @@ export default function createProfilesStore(pool: Pool, utils: any) {
      * One keyset page of the picks-only list, in the order paginateArray uses: created_at (cut to the
      * milliseconds a JS Date keeps, so a cursor round-trips), then id. An unusable cursor starts at the top.
      */
-    async listPicksPageByFestival(festivalId: string, { limit, cursor }: { limit: number; cursor?: string | null }) {
+    async listPicksPageByFestival(
+      festivalId: string,
+      { limit, cursor, userIds }: { limit: number; cursor?: string | null; userIds: string[] },
+    ) {
       const decoded = decodeCursor(cursor);
       const usable = typeof decoded?.id === 'string' && !Number.isNaN(Date.parse(decoded.value));
-      const params: any[] = [festivalId, limit + 1];
+      // $3 limits both the page and the total to the given users (the viewer and their crew mates).
+      const params: any[] = [festivalId, limit + 1, userIds];
       if (usable) params.push(decoded.value, decoded.id);
       const [page, total] = await Promise.all([
         pool.query(
           `
           SELECT ${PROFILE_SELECT_PICKS}
           FROM festival_profiles fp
-          WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL
-            ${usable ? "AND (date_trunc('milliseconds', fp.created_at), fp.id) > ($3::timestamptz, $4::text)" : ''}
+          WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL AND fp.user_id = ANY($3::text[])
+            ${usable ? "AND (date_trunc('milliseconds', fp.created_at), fp.id) > ($4::timestamptz, $5::text)" : ''}
           ORDER BY date_trunc('milliseconds', fp.created_at) ASC, fp.id ASC
           LIMIT $2
         `,
           params,
         ),
-        pool.query('SELECT count(*)::int AS n FROM festival_profiles WHERE festival_id = $1 AND deleted_at IS NULL', [
-          festivalId,
-        ]),
+        pool.query(
+          'SELECT count(*)::int AS n FROM festival_profiles WHERE festival_id = $1 AND deleted_at IS NULL AND user_id = ANY($2::text[])',
+          [festivalId, userIds],
+        ),
       ]);
       const hasMore = page.rows.length > limit;
       const items: any[] = page.rows.slice(0, limit).map(mapProfileRow);

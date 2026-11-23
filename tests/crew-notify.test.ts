@@ -196,11 +196,9 @@ describe('crew notifier', () => {
     assert.equal(warn.mock.callCount(), 1);
   });
 
-  test('does nothing when notifications are not configured', async () => {
+  test('still sends when no push provider is configured, so the inbox row is written', async () => {
     const { notifier, sent } = make({ configured: false });
-    notifier.queue({ crewId: 'crew1', actorId: null, kind: 'poll', text: 'p' });
     await notifier.toUsers({ crewId: 'crew1', userIds: ['a'], kind: 'poll', text: 't' });
-    await notifier.flushAll();
-    assert.equal(sent().length, 0);
+    assert.equal(sent().length, 1);
   });
 });

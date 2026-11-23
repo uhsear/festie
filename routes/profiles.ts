@@ -36,36 +36,34 @@ export default function createProfilesRoutes(deps: RouteDeps) {
         // Not joined is not an error: an empty list keeps the client console quiet.
         return sendSuccess(res, [], { pickCounts: {} });
       }
+      // Only the viewer and the people who share a crew with them on this festival are
+      // listed. Everyone else stays out of the response (no attendee directory); they
+      // reach the viewer only as anonymous per-set counts in meta.pickCounts. This limits the
+      // REST list only: presence:update and profile:created still go to the whole festival room.
+      const userCrews = await stores.crews.listByUserAndFestival(req.user.userId, festivalId);
+      const membersByCrew = await stores.crews.getMembersForCrews(userCrews.map((c: any) => c.id));
+      const visibleUserIds = new Set<string>([req.user.userId]);
+      for (const members of membersByCrew.values()) {
+        for (const m of members) visibleUserIds.add(m.userId);
+      }
       // listPicksByFestival leaves out notes and reminders, so the viewer's own row
       // comes from ownProfile. A row missing from the list (a delete race) stays missing.
       const paginated = Boolean(req.query.cursor || req.query.limit);
       // The paged read slices in SQL, so a large festival costs one page of rows, not all of them.
       const page = paginated && stores.profiles.listPicksPageByFestival
-        ? await stores.profiles.listPicksPageByFestival(festivalId, req.validatedQuery)
+        ? await stores.profiles.listPicksPageByFestival(festivalId, { ...req.validatedQuery, userIds: [...visibleUserIds] })
         : null;
       const swapOwn = (profile: any) => (profile.id === ownProfile.id ? ownProfile : profile);
       const rawProfiles = page
         ? page.profiles.map(swapOwn)
         : stores.profiles.listPicksByFestival
-          ? (await stores.profiles.listPicksByFestival(festivalId)).map(swapOwn)
+          ? (await stores.profiles.listPicksByFestival(festivalId, [...visibleUserIds])).map(swapOwn)
           : stores.profiles.getByFestival
             ? await stores.profiles.getByFestival(festivalId)
             : (await getProfiles()).filter((profile: any) => profile.festivalId === festivalId);
-      const userIds = [...new Set(rawProfiles.map((p: any) => p.userId).filter(Boolean))];
-      const usersById = stores.users.getByIds
-        ? await stores.users.getByIds(userIds)
-        : await getUserMap();
-      // Other users' picks go only to people who share a crew with them on this
-      // festival. Everyone else gets the profile with empty picks, plus anonymous
-      // per-set counts (other attendees, no user ids) in meta.pickCounts.
-      const userCrews = await stores.crews.listByUserAndFestival(req.user.userId, festivalId);
-      const membersByCrew = await stores.crews.getMembersForCrews(userCrews.map((c: any) => c.id));
-      const crewUserIds = new Set<string>();
-      for (const members of membersByCrew.values()) {
-        for (const m of members) crewUserIds.add(m.userId);
-      }
+      // Counts cover every other attendee, so take them before the list narrows to the visible users.
       let pickCounts: Record<string, number> = {};
-      if (page) {
+      if (page || (stores.profiles.listPicksByFestival && stores.profiles.pickCountsByFestival)) {
         pickCounts = await stores.profiles.pickCountsByFestival(festivalId, req.user.userId);
       } else {
         for (const profile of rawProfiles) {
@@ -73,10 +71,14 @@ export default function createProfilesRoutes(deps: RouteDeps) {
           for (const setId of Object.keys(profile.picks || {})) pickCounts[setId] = (pickCounts[setId] || 0) + 1;
         }
       }
-      const profiles = rawProfiles.map((profile: any) => {
-        const visible = profile.userId === req.user.userId || crewUserIds.has(profile.userId);
-        return serializeProfileForViewer(visible ? profile : { ...profile, picks: {} }, req.user.userId, usersById.get(profile.userId));
-      });
+      const visibleProfiles = rawProfiles.filter((p: any) => visibleUserIds.has(p.userId));
+      const userIds = [...new Set(visibleProfiles.map((p: any) => p.userId).filter(Boolean))];
+      const usersById = stores.users.getByIds
+        ? await stores.users.getByIds(userIds)
+        : await getUserMap();
+      const profiles = visibleProfiles.map((profile: any) =>
+        serializeProfileForViewer(profile, req.user.userId, usersById.get(profile.userId)),
+      );
       // Support paginated response when params present
       if (page) return sendSuccess(res, profiles, { pagination: page.pagination, pickCounts });
       if (paginated) {

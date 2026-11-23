@@ -68,7 +68,8 @@ describe('Integration — Picks', { concurrency: 1 }, () => {
     const visibleAlice = profileList.body.data.find((profile: any) => profile.id === aliceProfile.id);
 
     assert.equal(visibleAlice.notes['set-a'], 'Meet by the rail');
-    assert.equal(visibleBob.notes, undefined);
+    // alice and bob share no crew, so bob is not listed at all.
+    assert.equal(visibleBob, undefined);
     // reminders feature removed (migration 013)
 
     const exportResponse = await server.request
@@ -641,6 +642,9 @@ describe('profile soft-delete filtering', { concurrency: 1 }, () => {
     const u2 = await registerUser(server, 'count_u2');
     await joinFestivalProfile(server, u1.token, 'fest-1');
     const p2 = await joinFestivalProfile(server, u2.token, 'fest-1');
+    // The list shows only the caller and crew mates, so put both users in one crew.
+    const crew = (await server.request.post('/api/v1/crews').set('x-user-token', u1.token).send({ name: 'Counters', festivalId: 'fest-1' }).expect(201)).body.data;
+    await server.request.post('/api/v1/crews/join').set('x-user-token', u2.token).send({ inviteCode: crew.inviteCode }).expect(200);
 
     // Get profiles list — both should appear
     const resBefore = await server.request.get('/api/v1/profiles/fest-1').set('x-user-token', u1.token).expect(200);

@@ -223,6 +223,9 @@ describe('Integration — Auth', { concurrency: 1 }, () => {
     const bob = await registerUser(server, 'bob');
     const aliceProfile = await joinFestivalProfile(server, alice.token);
     await joinFestivalProfile(server, bob.token);
+    // Bob sees Alice in the profile list only because they share a crew.
+    const crew = (await server.request.post('/api/v1/crews').set('x-user-token', alice.token).send({ name: 'Avatars', festivalId: 'fest-1' }).expect(201)).body.data;
+    await server.request.post('/api/v1/crews/join').set('x-user-token', bob.token).send({ inviteCode: crew.inviteCode }).expect(200);
 
     await server.request
       .post('/api/v1/account/avatar')

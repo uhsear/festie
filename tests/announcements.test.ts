@@ -121,10 +121,12 @@ describe('createAnnouncer — deliverDue', () => {
     });
   }
 
-  test('push not configured: still records the audience count', async () => {
+  test('push not configured: still hands the audience to send, so the inbox rows exist, and records the count', async () => {
     const { announcer, notificationService, counts } = makeAnnouncer({ isConfigured: false, audience: ['a', 'b', 'c'] });
     await announcer.deliverDue();
-    assert.equal((notificationService.sendToOfflineUsers as any).mock.callCount(), 0);
+    const calls = (notificationService.sendToOfflineUsers as any).mock.calls;
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].arguments[0].userIds, ['a', 'b', 'c']);
     assert.deepEqual(counts(), [['ann-1', 3]]);
   });
 
