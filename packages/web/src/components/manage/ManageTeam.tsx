@@ -55,11 +55,12 @@ export default function ManageTeam({ organization }: Props) {
   const reauth = <T,>(run: () => Promise<T>) => withReauth(run, askPassword, { retryWrongPassword: true });
   const refresh = () => queryClient.invalidateQueries({ queryKey: adminKeys.manageOrganization(organization.id) });
 
-  const act = async (run: () => Promise<unknown>, done: string, fail: string) => {
+  const act = async <T,>(run: () => Promise<T>, done: string | ((result: T) => string), fail: string) => {
     setBusy(true);
     try {
-      if ((await run()) === null) return;
-      toast(done, 'success');
+      const result = await run();
+      if (result === null) return;
+      toast(typeof done === 'function' ? done(result) : done, 'success');
       await refresh();
     } catch (err) {
       toastError(err, fail);
@@ -95,7 +96,10 @@ export default function ManageTeam({ organization }: Props) {
         if (added !== null) setEmail('');
         return added;
       },
-      'Added. They get one email, and join when they sign in with this address and confirm it.',
+      (added) =>
+        added?.emailed === false
+          ? 'Added, but the email could not be sent. Tell them to sign in with this address.'
+          : 'Added. They get one email, and join when they sign in with this address and confirm it.',
       "Couldn't add them. Try again.",
     );
   };

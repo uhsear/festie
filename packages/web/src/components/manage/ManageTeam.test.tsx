@@ -97,6 +97,16 @@ describe('ManageTeam', () => {
     expect(toast).toHaveBeenCalledWith(expect.stringContaining('Added.'), 'success');
   });
 
+  it('says so when the invitation email could not be sent', async () => {
+    mockPost.mockResolvedValue({ kind: 'pending', role: 'editor', emailed: false });
+    render();
+    await userEvent.type(await screen.findByPlaceholderText('name@venue.example'), 'new@venue.example');
+    await userEvent.click(screen.getByRole('button', { name: 'Add member' }));
+    await waitFor(() =>
+      expect(toast).toHaveBeenCalledWith('Added, but the email could not be sent. Tell them to sign in with this address.', 'success'),
+    );
+  });
+
   it('removes a member only after the owner confirms', async () => {
     mockDelete.mockResolvedValue({ userId: 'u2', role: 'editor' });
     render();
