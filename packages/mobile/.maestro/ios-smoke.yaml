@@ -275,7 +275,7 @@ env:
     timeout: 30000
 - extendedWaitUntil:
     visible:
-      text: "Manage users|[0-9]+ users · .*|Admins only|Couldn't load admin data"
+      text: "Find|Admins only|Couldn't load admin data"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
