@@ -634,6 +634,8 @@ describe('routes/email-auth', () => {
   test('POST /reset-password — rejects weak password', async () => {
     const deps = buildEmailAuthDeps();
     deps.checkPasswordPolicy = mock.fn(() => 'Password must be at least 8 characters');
+    // A live link: the policy only runs once the token is known to be usable.
+    deps.stores.emailTokens.findResetToken = mock.fn(async () => ({ user_id: 'user-1' }));
     createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
     const router = createEmailAuthRoutes(deps);
     const app = mountApp(router);
@@ -664,6 +666,7 @@ describe('routes/email-auth', () => {
 
   test('POST /reset-password — succeeds with valid DB token', async () => {
     const deps = buildEmailAuthDeps();
+    deps.stores.emailTokens.findResetToken = mock.fn(async () => ({ user_id: 'user-1' }));
     deps.stores.emailTokens.consumeResetToken = mock.fn(async () => ({ user_id: 'user-1' }));
     createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
     const router = createEmailAuthRoutes(deps);
