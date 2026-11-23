@@ -32,6 +32,8 @@ export interface WebPushResult {
   sent: boolean;
   stale: boolean;
   error?: string;
+  /** True for a network error, timeout, 429 or 5xx. A local failure or another 4xx would fail again. */
+  retryable?: boolean;
 }
 
 interface WebPushPayload {
@@ -157,8 +159,13 @@ export function createWebPushSender(config: any, log: any): WebPushSender | null
     async send(token, payload, opts = {}) {
       const sub = parseWebPushSubscription(token);
       if (!sub) return { sent: false, stale: true };
+      let body: Buffer;
       try {
-        const body = encryptPayload(Buffer.from(JSON.stringify(payload)), sub.p256dh, sub.auth);
+        body = encryptPayload(Buffer.from(JSON.stringify(payload)), sub.p256dh, sub.auth);
+      } catch (error: any) {
+        return { sent: false, stale: false, error: error?.message || String(error) };
+      }
+      try {
         const res = await fetch(sub.endpoint, {
           method: 'POST',
           headers: {
@@ -174,9 +181,9 @@ export function createWebPushSender(config: any, log: any): WebPushSender | null
         if (res.status === 201 || res.status === 202) return { sent: true, stale: false };
         // 401/403: the subscription was made with another VAPID key. 404/410: gone.
         if ([401, 403, 404, 410].includes(res.status)) return { sent: false, stale: true };
-        return { sent: false, stale: false, error: `HTTP ${res.status}` };
+        return { sent: false, stale: false, error: `HTTP ${res.status}`, retryable: res.status === 429 || res.status >= 500 };
       } catch (error: any) {
-        return { sent: false, stale: false, error: error?.message || String(error) };
+        return { sent: false, stale: false, error: error?.message || String(error), retryable: true };
       }
     },
   };

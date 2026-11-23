@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { MARKETING_EMAIL_TYPES, unsubscribeSecret, unsubscribeToken, verifyUnsubscribeToken, sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail, verifyEmailUrl } from '../lib/email.js';
+import { NOTIFICATION_TYPE_ROWS } from '../packages/shared/src/utils/notificationSettings.js';
+import { MARKETING_EMAIL_TYPES, unsubscribeSecret, unsubscribeToken, verifyUnsubscribeToken, sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail, sendPublishDecisionEmail, verifyEmailUrl } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -414,16 +415,69 @@ describe('email: sendVerificationEmail', () => {
 // re-engagement emails
 // ---------------------------------------------------------------------------
 
+// The footer must quote a setting the user can find, so it reads the shared settings row labels.
+function rowLabel(key: string) {
+  const row = NOTIFICATION_TYPE_ROWS.find((r) => r.key === key);
+  assert.ok(row, key);
+  return row.label;
+}
+
+describe('email: token-bearing mail is never deduplicated', () => {
+  // A route that issues a new token invalidates the old one, so a suppressed second send would leave only a dead link.
+  const base = { username: 'u', config: createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test' }), log: createMockLog() };
+  const cases: Array<[string, any, any]> = [
+    ['password reset', sendPasswordResetEmail, { resetUrl: 'https://festie.test/r' }],
+    ['verification', sendVerificationEmail, { verifyUrl: 'https://festie.test/v' }],
+    ['email change confirm', sendEmailChangeConfirmEmail, { verifyUrl: 'https://festie.test/c' }],
+  ];
+  for (const [name, fn, extra] of cases) {
+    it(`${name}: two sends within 5 minutes both reach the provider`, async () => {
+      const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+      const input = { ...base, ...extra, to: `${name.replace(/ /g, '')}-dedupe@example.com`, _client: createMockClient(send) };
+      assert.equal(await fn(input), true);
+      assert.equal(await fn(input), true);
+      assert.equal(send.mock.callCount(), 2);
+    });
+  }
+});
+
+describe('email: layout and copy', () => {
+  it('the card is fluid (max-width, not a fixed 480 table) and the page has a title', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    await sendVerificationEmail({ to: 'layout@example.com', username: 'u', verifyUrl: 'https://festie.test/v', config: createMockConfig(), log: createMockLog(), _client: createMockClient(send) });
+    const { html } = (send.mock.calls as any[])[0].arguments[0];
+    assert.doesNotMatch(html, /width="480"/);
+    assert.match(html, /max-width:480px/);
+    assert.match(html, /<title>Festie: Verify Your Email<\/title>/);
+  });
+
+  it('the crew re-form fallback link lands on the crew screen', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    const config = createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', SESSION_SECRET: 's', EMAIL_POSTAL_ADDRESS: 'PO Box 1' });
+    await sendCrewReformEmail({ to: 'cr@example.com', userId: 'user-1', username: 'u', crewName: 'Crew', config, log: createMockLog(), _client: createMockClient(send) });
+    const msg = (send.mock.calls as any[])[0].arguments[0];
+    assert.ok(msg.text.includes('Join the crew: https://festie.test/crew\n'));
+  });
+
+  it('a declined publish note reads as one sentence with a single period', async () => {
+    const send = mock.fn(async () => ({ data: { id: 'm' }, error: null }));
+    await sendPublishDecisionEmail({ to: 'o@example.com', organizationName: 'Org', festivalName: 'Fest', decision: 'declined', note: 'Add the stage names.', config: createMockConfig(), log: createMockLog(), _client: createMockClient(send) });
+    const { text } = (send.mock.calls as any[])[0].arguments[0];
+    assert.ok(text.includes('Note from Festie: Add the stage names.\n'));
+    assert.ok(!text.includes('..'));
+  });
+});
+
 describe('email: re-engagement senders', () => {
   const base = { to: 'u@example.com', userId: 'user-1', username: 'u', festivalName: 'Fest', festivalId: 'f1', crewName: 'Crew', crewId: 'c1' };
   const POSTAL = 'PO Box 1 & Co, Orlando, FL 32801';
   const marketingConfig = (extra: any = {}) => createMockConfig({ PUBLIC_ORIGIN: 'https://festie.test', SESSION_SECRET: 'test-secret', EMAIL_POSTAL_ADDRESS: POSTAL, ...extra });
   const cases: Array<[string, any, string]> = [
-    ['wrap ready', sendWrapReadyEmail, 'Wrap-up ready'],
-    ['lineup drop', sendLineupDropEmail, 'New lineups'],
-    ['crew reform', sendCrewReformEmail, 'Crew re-forms'],
-    ['set times out', sendSetTimesOutEmail, 'New lineups and set times'],
-    ['days out', sendDaysOutEmail, 'New lineups, days and set times'],
+    ['wrap ready', sendWrapReadyEmail, rowLabel('wrapReady')],
+    ['lineup drop', sendLineupDropEmail, rowLabel('lineupDrops')],
+    ['crew reform', sendCrewReformEmail, rowLabel('crewReformed')],
+    ['set times out', sendSetTimesOutEmail, rowLabel('lineupDrops')],
+    ['days out', sendDaysOutEmail, rowLabel('lineupDrops')],
   ];
   const url = `https://festie.test/api/v1/auth/unsubscribe?token=${encodeURIComponent(unsubscribeToken('user-1', 'test-secret'))}`;
   for (const [name, fn, label] of cases) {

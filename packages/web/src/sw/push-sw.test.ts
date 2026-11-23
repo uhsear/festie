@@ -7,7 +7,14 @@ type Listener = (event: unknown) => void;
 
 const source = readFileSync(resolve(__dirname, '../../public/push-sw.js'), 'utf8');
 
-function setup(clients: Array<{ focus: () => Promise<void>; navigate?: (u: string) => Promise<void> }> = []) {
+type FakeClient = {
+  focus?: () => Promise<void>;
+  navigate?: (u: string) => Promise<FakeClient | null>;
+  focused?: boolean;
+  visibilityState?: string;
+};
+
+function setup(clients: FakeClient[] = []) {
   const listeners: Record<string, Listener> = {};
   const showNotification = vi.fn().mockResolvedValue(undefined);
   const openWindow = vi.fn().mockResolvedValue(undefined);
@@ -67,19 +74,63 @@ describe('push-sw.js', () => {
     expect(ctx.showNotification.mock.calls[0]![0]).toBe('Festie');
   });
 
+  it('renotifies when the tag is set so a second reminder is not silent', async () => {
+    const waits: Promise<unknown>[] = [];
+    ctx.listeners.push!({
+      data: { json: () => ({ title: 'A', tag: 'reminder-f1' }) },
+      waitUntil: (p: Promise<unknown>) => waits.push(p),
+    });
+    await Promise.all(waits);
+    expect(ctx.showNotification.mock.calls[0]![1]).toMatchObject({ renotify: true });
+  });
+
+  it('shows the generic notification for a JSON null payload', async () => {
+    const waits: Promise<unknown>[] = [];
+    ctx.listeners.push!({ data: { json: () => null }, waitUntil: (p: Promise<unknown>) => waits.push(p) });
+    await Promise.all(waits);
+    expect(ctx.showNotification.mock.calls[0]![0]).toBe('Festie');
+  });
+
+  it('opens the deep link, without focusing, when an open window cannot navigate', async () => {
+    const focus = vi.fn().mockResolvedValue(undefined);
+    const navigate = vi.fn().mockRejectedValue(new Error('uncontrolled'));
+    const c = setup([{ focus, navigate }]);
+    await click(c.listeners, 'https://festie.us/set/s1');
+    expect(c.openWindow).toHaveBeenCalledWith('https://festie.us/set/s1');
+    expect(focus).not.toHaveBeenCalled();
+  });
+
+  it('opens the deep link when navigate resolves with no client', async () => {
+    const navigate = vi.fn().mockResolvedValue(null);
+    const c = setup([{ focus: vi.fn(), navigate }]);
+    await click(c.listeners, '/set/s1');
+    expect(c.openWindow).toHaveBeenCalledWith('https://festie.us/set/s1');
+  });
+
+  it('navigates the focused window, not just the first one', async () => {
+    const hidden = { focus: vi.fn(), navigate: vi.fn(), visibilityState: 'hidden' };
+    const focusedResult = { focus: vi.fn().mockResolvedValue(undefined) };
+    const focused = { navigate: vi.fn().mockResolvedValue(focusedResult), focused: true, visibilityState: 'visible' };
+    const c = setup([hidden, focused]);
+    await click(c.listeners, 'https://festie.us/set/s1');
+    expect(hidden.navigate).not.toHaveBeenCalled();
+    expect(focused.navigate).toHaveBeenCalledWith('https://festie.us/set/s1');
+    expect(focusedResult.focus).toHaveBeenCalled();
+  });
+
   it('opens / for a cross-origin url', async () => {
     const close = await click(ctx.listeners, 'https://evil.example/x');
     expect(close).toHaveBeenCalled();
     expect(ctx.openWindow).toHaveBeenCalledWith('https://festie.us/');
   });
 
-  it('focuses and navigates an open client', async () => {
-    const focus = vi.fn().mockResolvedValue(undefined);
-    const navigate = vi.fn().mockResolvedValue(undefined);
-    const c = setup([{ focus, navigate }]);
+  it('navigates an open client, then focuses the window it returns', async () => {
+    const result = { focus: vi.fn().mockResolvedValue(undefined) };
+    const navigate = vi.fn().mockResolvedValue(result);
+    const c = setup([{ navigate }]);
     await click(c.listeners, 'https://festie.us/set/s1');
-    expect(focus).toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('https://festie.us/set/s1');
+    expect(result.focus).toHaveBeenCalled();
     expect(c.openWindow).not.toHaveBeenCalled();
   });
 

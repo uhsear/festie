@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildPicksIcsExport, buildPicksIcs, describeIcsExport } from './ics';
+import { buildPicksIcsExport, buildPicksIcs, describeIcsExport, foldIcsLine } from './ics';
 import type { FestivalSet, Stage } from '../types';
 
 const stages = [{ id: 'st1', name: 'Main' }] as unknown as Stage[];
@@ -12,6 +12,19 @@ const run = (sets: FestivalSet[], extra: Record<string, unknown> = {}) =>
     picks: Object.fromEntries(sets.map((s) => [s.id, 'must' as const])),
     ...extra,
   });
+
+describe('foldIcsLine', () => {
+  it('folds at 75 octets on code-point boundaries and unfolds to the original', () => {
+    const line = 'SUMMARY:' + '\u{1F389}'.repeat(30) + '\u65E5\u672C\u8A9E'.repeat(10);
+    const folded = foldIcsLine(line);
+    const encoder = new TextEncoder();
+    for (const part of folded.split('\r\n')) expect(encoder.encode(part).length).toBeLessThanOrEqual(75);
+    expect(folded.replace(/\r\n /g, '')).toBe(line);
+  });
+  it('leaves a short ASCII line alone', () => {
+    expect(foldIcsLine('SUMMARY:Short')).toBe('SUMMARY:Short');
+  });
+});
 
 describe('buildPicksIcsExport', () => {
   it('writes a timed event', () => {

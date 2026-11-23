@@ -763,7 +763,6 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
         username: user.username,
         crewName,
         festivalName,
-        crewId: newCrewId,
         inviteUrl,
         config,
         log,

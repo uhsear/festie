@@ -13,6 +13,7 @@ import {
 } from '@festie/shared/utils';
 import { useNotificationTopics } from '@festie/shared/hooks';
 import { NOTIFICATION_TOPIC_COPY } from '@festie/shared/constants';
+import { isApiClientError } from '@festie/shared/services/api';
 import { useToast } from '../../lib/toastContext';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { cn } from '../../lib/utils';
@@ -23,26 +24,40 @@ import { Card } from '../ui/Card';
 
 function Toggle({
   label,
+  ariaLabel,
   hint,
   checked,
   onChange,
   disabled,
 }: {
   label: string;
+  /** The accessible name, when the visible label alone does not tell this switch apart from another. */
+  ariaLabel?: string;
   hint?: string;
   checked: boolean;
   onChange: (v: boolean) => void;
   disabled?: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between py-2">
+    <div className="flex items-center justify-between gap-3 py-2">
       <div className="min-w-0">
         <div className="text-sm text-text-primary">{label}</div>
         {hint ? <div className="text-xs text-text-muted">{hint}</div> : null}
       </div>
-      <Switch checked={checked} onChange={onChange} label={label} disabled={disabled} />
+      <Switch checked={checked} onChange={onChange} label={ariaLabel ?? label} disabled={disabled} />
     </div>
   );
+}
+
+// A failed save snaps the switch back; the message in the card footer can be off screen, so toast it too.
+function usePrefsUpdater() {
+  const { toast } = useToast();
+  const updatePrefs = useNotificationPrefsStore((s) => s.updatePrefs);
+  return (patch: Parameters<typeof updatePrefs>[0]) =>
+    updatePrefs(patch).catch((err) => {
+      console.warn('Notification prefs update failed', err);
+      toast("Couldn't update notification setting. Try again.", 'error');
+    });
 }
 
 const windowLabel = (start: string, end: string) => `${formatTime(start)}–${formatTime(end)}`;
@@ -90,6 +105,7 @@ function FestivalTopicsSubsection() {
             <Toggle
               key={topic}
               label={label}
+              ariaLabel={`${label} for ${festival.name}`}
               hint={globalOff ? 'Off for every festival' : undefined}
               checked={!globalOff && subs[topic]}
               disabled={globalOff}
@@ -105,24 +121,24 @@ function FestivalTopicsSubsection() {
 }
 
 function QuietHoursEditor({ start, end }: { start: string; end: string }) {
-  const updatePrefs = useNotificationPrefsStore((s) => s.updatePrefs);
+  const updatePrefs = usePrefsUpdater();
   const [from, setFrom] = useState(start);
   const [to, setTo] = useState(end);
-  const [invalid, setInvalid] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
     setFrom(start);
     setTo(end);
-    setInvalid(false);
+    setProblem(null);
   }, [start, end]);
 
   const save = (nextFrom: string, nextTo: string) => {
     if (!isValidQuietWindow(nextFrom, nextTo)) {
-      setInvalid(true);
+      setProblem(nextFrom && nextTo ? "Start and end can't be the same." : 'Enter a start and end time.');
       return;
     }
-    setInvalid(false);
-    if (nextFrom !== start || nextTo !== end) updatePrefs({ dndStart: nextFrom, dndEnd: nextTo }).catch((err) => console.warn('Notification quiet hours update failed', err));
+    setProblem(null);
+    if (nextFrom !== start || nextTo !== end) void updatePrefs({ dndStart: nextFrom, dndEnd: nextTo });
   };
 
   return (
@@ -135,7 +151,7 @@ function QuietHoursEditor({ start, end }: { start: string; end: string }) {
               key={p.id}
               type="button"
               aria-pressed={active}
-              onClick={() => updatePrefs({ dndStart: p.start, dndEnd: p.end }).catch((err) => console.warn('Notification quiet hours update failed', err))}
+              onClick={() => void updatePrefs({ dndStart: p.start, dndEnd: p.end })}
               className={cn(
                 'min-h-11 px-3 rounded-full border text-xs',
                 active ? 'border-accent-aqua text-text-primary' : 'border-border text-text-muted',
@@ -170,7 +186,7 @@ function QuietHoursEditor({ start, end }: { start: string; end: string }) {
           />
         </label>
       </div>
-      {invalid ? <p className="text-xs text-[var(--color-text-danger)] mt-1">Start and end can't be the same.</p> : null}
+      {problem ? <p className="text-xs text-[var(--color-text-danger)] mt-1">{problem}</p> : null}
     </div>
   );
 }
@@ -179,6 +195,8 @@ function PushSubsection() {
   const { toast, toastError } = useToast();
   const push = usePushNotifications();
   const [pushBusy, setPushBusy] = useState(false);
+  // A browser or push-service failure carries a raw string ("Subscription failed - no active Service Worker"), so only a server error keeps its own message.
+  const toastPushError = (e: unknown, fallback: string) => toastError(isApiClientError(e) ? e : null, fallback);
   // Render nothing while the key request is in flight, so a supported browser never flashes "Not supported".
   if (push.unsupportedReason === 'not-configured' || push.checking) return null;
 
@@ -203,7 +221,7 @@ function PushSubsection() {
         toast('Permission prompt dismissed.', 'info');
       }
     } catch (e) {
-      toastError(e, "Couldn't turn on notifications. Try again.");
+      toastPushError(e, "Couldn't turn on notifications. Try again.");
     } finally {
       setPushBusy(false);
     }
@@ -216,7 +234,7 @@ function PushSubsection() {
       await push.registerToken();
       toast('Push notifications enabled', 'success');
     } catch (e) {
-      toastError(e, "Couldn't turn on notifications. Try again.");
+      toastPushError(e, "Couldn't turn on notifications. Try again.");
     } finally {
       setPushBusy(false);
     }
@@ -228,7 +246,7 @@ function PushSubsection() {
       await push.unregisterToken();
       toast('Push notifications disabled', 'success');
     } catch (e) {
-      toastError(e, "Couldn't turn off notifications. Try again.");
+      toastPushError(e, "Couldn't turn off notifications. Try again.");
     } finally {
       setPushBusy(false);
     }
@@ -314,7 +332,7 @@ function PrefsSubsection() {
   const isLoading = useNotificationPrefsStore((s) => s.isLoading);
   const error = useNotificationPrefsStore((s) => s.error);
   const loadPrefs = useNotificationPrefsStore((s) => s.loadPrefs);
-  const updatePrefs = useNotificationPrefsStore((s) => s.updatePrefs);
+  const updatePrefs = usePrefsUpdater();
 
   useEffect(() => {
     loadPrefs().catch((err) => console.warn('Notification prefs load failed', err));
@@ -350,10 +368,10 @@ function PrefsSubsection() {
                 label={row.label}
                 hint={row.hint}
                 checked={prefs[row.key]}
-                onChange={(v) => updatePrefs({ [row.key]: v }).catch((err) => console.warn('Notification prefs update failed', err))}
+                onChange={(v) => void updatePrefs({ [row.key]: v })}
               />
               {row.key === 'setReminders' ? (
-                <div className="flex items-center justify-between py-2">
+                <div className="flex items-center justify-between gap-3 py-2">
                   <label htmlFor="must-see-reminder" className="min-w-0">
                     <div className="text-sm text-text-primary">{NOTIFICATION_TOPIC_COPY.mustSeeTitle}</div>
                     <div className="text-xs text-text-muted">{NOTIFICATION_TOPIC_COPY.mustSeeHint}</div>
@@ -362,9 +380,9 @@ function PrefsSubsection() {
                     id="must-see-reminder"
                     value={prefs.mustSeeReminderMinutes ?? ''}
                     onChange={(e) =>
-                      updatePrefs({
+                      void updatePrefs({
                         mustSeeReminderMinutes: e.target.value === '' ? null : (Number(e.target.value) as MustSeeMinutes),
-                      }).catch((err) => console.warn('Notification prefs update failed', err))
+                      })
                     }
                     className="min-h-11 px-2 rounded border border-border bg-bg-card text-sm text-text-primary"
                   >
@@ -383,7 +401,7 @@ function PrefsSubsection() {
             hint={quietHint}
             checked={quietOn}
             onChange={(v) =>
-              updatePrefs(v ? { dndStart: win.start, dndEnd: win.end } : { dndStart: null, dndEnd: null }).catch((err) => console.warn('Notification quiet hours update failed', err))
+              void updatePrefs(v ? { dndStart: win.start, dndEnd: win.end } : { dndStart: null, dndEnd: null })
             }
           />
           {quietOn ? <QuietHoursEditor start={win.start} end={win.end} /> : null}

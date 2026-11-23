@@ -88,6 +88,7 @@ const HAND_VALIDATED_BODY: Record<string, string> = {
 };
 const HAND_VALIDATED_QUERY: Record<string, string> = {
   'email-auth.ts GET /verify-email': 'Reads one token string; the store lookup bounds it.',
+  'email-auth.ts POST /verify-email': 'Reads one token string; the store lookup bounds it.',
   'email-auth.ts GET /unsubscribe': 'Reads one token string; verifyUnsubscribeToken rejects anything but a valid signature.',
   'email-auth.ts POST /unsubscribe': 'Reads one token string; verifyUnsubscribeToken rejects anything but a valid signature.',
   'notifications.ts GET /history': 'Clamps limit and offset by hand.',

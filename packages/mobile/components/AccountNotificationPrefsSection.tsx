@@ -36,6 +36,7 @@ import SectionLabel from './SectionLabel';
  */
 const QUIET_START = '23:00';
 const QUIET_END = '08:00';
+const QUIET_TIME_ERROR = 'Use 24-hour time, like 23:00.';
 
 const ROW_ICONS: Record<NotificationBoolKey, keyof typeof Ionicons.glyphMap> = {
   setReminders: 'alarm-outline',
@@ -182,7 +183,9 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
   const quietCaption = formatQuietHours(prefs.dndStart, prefs.dndEnd);
   const set = (patch: Parameters<typeof updatePrefs>[0]) => {
     haptics.select();
-    updatePrefs(patch).catch(() => {});
+    updatePrefs(patch).catch(() => {
+      useUIStore.getState().showToast("Couldn't update notification setting. Try again.", { kind: 'error' });
+    });
   };
 
   // Save only a valid window; an invalid draft stays in the text fields.
@@ -334,13 +337,13 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
             </View>
             <View style={styles.timeFields}>
               <View style={styles.timeField}>
-                <TimeField label="From" value={startText} onChangeText={(v) => editWindow(v, endText)} />
+                <TimeField label="From" value={startText} onChangeText={(v) => editWindow(v, endText)} required errorText={QUIET_TIME_ERROR} />
               </View>
               <View style={styles.timeField}>
-                <TimeField label="To" value={endText} onChangeText={(v) => editWindow(startText, v)} />
+                <TimeField label="To" value={endText} onChangeText={(v) => editWindow(startText, v)} required errorText={QUIET_TIME_ERROR} />
               </View>
             </View>
-            {!isValidQuietWindow(startText, endText) ? (
+            {startText !== '' && startText === endText ? (
               <Text style={styles.errorText} accessibilityLiveRegion="polite">
                 Start and end can't be the same.
               </Text>
@@ -442,6 +445,8 @@ const useStyles = makeStyles((t) => ({
     borderRadius: t.radii.pill,
     paddingHorizontal: t.spacing[3],
     paddingVertical: t.spacing[2],
+    minHeight: 44,
+    justifyContent: 'center',
   },
   chipSelected: {
     borderColor: t.colors.accent.aqua,
