@@ -67,7 +67,7 @@ import EmptyState from '../ui/EmptyState';
 import ConfirmDialog from '../ui/ConfirmDialog';
 import { ArrowLeft, Plus, SearchX } from 'lucide-react';
 import { useAdminSearch, type AdminSearch } from './useAdminSearch';
-import { ADMIN_QUERY_OPTIONS, adminKeys, useAdminFestivals, useManageFestivals } from './adminQueries';
+import { ADMIN_QUERY_OPTIONS, adminKeys, useAdminFestivals, useManageFestivals, useReviewQueue } from './adminQueries';
 import type { Day } from './DayEditor';
 
 type ListView = 'live' | 'archived';
@@ -106,6 +106,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
   const queryClient = useQueryClient();
   const festivalsQuery = useAdminFestivals(!organizer);
   const manageQuery = useManageFestivals(organizer);
+  const waitingIds = new Set((useReviewQueue(!organizer).data?.requests ?? []).map((r) => r.festivalId));
   const festivals = festivalsQuery.data ?? [];
   const [archived, setArchived] = useState<ArchivedFestival[]>([]);
   const [listView, setListView] = useState<ListView>('live');
@@ -906,6 +907,7 @@ export default function AdminFestivals({ mode = 'admin', organizations = NO_ORGA
                 <FestivalListRow
                   key={festival.id}
                   festival={festival}
+                  waitingForReview={waitingIds.has(festival.id)}
                   selected={selected.has(festival.id)}
                   onToggleSelected={() => toggleSelected(festival.id)}
                   onOpen={(view) => setAdminSearch({ tab: 'festivals', festival: festival.id, view })}

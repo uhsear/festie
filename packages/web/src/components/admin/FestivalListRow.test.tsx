@@ -20,6 +20,14 @@ describe('FestivalListRow', () => {
     expect(screen.getByText('Orlando · 2 stages · 3 days')).toBeInTheDocument();
   });
 
+  it('shows Waiting for review in place of Draft while an organizer request is open', () => {
+    render(
+      <FestivalListRow festival={festival} waitingForReview selected={false} onToggleSelected={vi.fn()} onOpen={vi.fn()} onArtists={vi.fn()} onDelete={vi.fn()} />,
+    );
+    expect(screen.getByText('Waiting for review')).toBeInTheDocument();
+    expect(screen.queryByText('Draft')).not.toBeInTheDocument();
+  });
+
   it('uses singular nouns for one stage or one day', () => {
     render(
       <FestivalListRow festival={{ ...festival, stageCount: 1, dayCount: 1 }} selected={false} onToggleSelected={vi.fn()} onOpen={vi.fn()} onArtists={vi.fn()} onDelete={vi.fn()} />,
