@@ -14,7 +14,7 @@ env:
       visible: 'Skip'
     commands:
       - tapOn: 'Skip'
-# Reach login via the More tab gate
+# Reach login via the tab that says "Sign in" for a guest
 - tapOn:
     id: 'tab-account'
     optional: true
@@ -22,7 +22,7 @@ env:
     when:
       notVisible: 'Sign in to your account'
     commands:
-      - tapOn: 'More'
+      - tapOn: 'Sign in'
 - assertVisible: 'Sign in to your account'
 - tapOn:
     id: "login-username-input"

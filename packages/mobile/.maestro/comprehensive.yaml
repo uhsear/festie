@@ -1,6 +1,8 @@
 appId: us.festie.app
 env:
   FESTIVAL: "Forbidden Kingdom 2026"
+  TEST_USERNAME: ${TEST_USERNAME}
+  TEST_PASSWORD: ${TEST_PASSWORD}
 ---
 # Comprehensive end-to-end pass over the standalone build (points at prod):
 # auth -> schedule (timeline/grid/cards) -> festival mode -> picks -> set detail
@@ -8,13 +10,24 @@ env:
 - pressKey: Back
 - launchApp:
     clearState: true
+# A fresh launch lands on the intro or the festival picker (guests are not sent to sign-in).
+- extendedWaitUntil:
+    visible: "Skip|Choose a festival"
+    timeout: 90000
+- runFlow:
+    when:
+      visible: "Skip"
+    commands:
+      - tapOn: "Skip"
+# The tab that reads "Sign in" for a guest opens the sign-in screen.
+- tapOn: "Sign in"
 - extendedWaitUntil:
     visible: "Sign in to your account"
-    timeout: 90000
+    timeout: 30000
 - takeScreenshot: c01-login
 - tapOn:
     id: "login-username-input"
-- inputText: "asir"
+- inputText: "${TEST_USERNAME}"
 - tapOn: "Password"
 - inputText: "${TEST_PASSWORD}"
 - hideKeyboard

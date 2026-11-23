@@ -90,9 +90,6 @@ env:
       - tapOn:
           text: "Crew name"
           optional: true
-      - tapOn:
-          accessibility id: "Crew name"
-          optional: true
       # Fall back to placeholder text tap — whatever is visible for the input.
       - tapOn:
           text: "Sunset Squad"
@@ -182,7 +179,7 @@ env:
           text: "K7XQ2M"
           optional: true
       - tapOn:
-          accessibility id: "Invite code"
+          text: "Invite code"
           optional: true
       - inputText: "${OUTPUT_INVITE_CODE}"
       - hideKeyboard

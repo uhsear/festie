@@ -16,6 +16,7 @@ appId: us.festie.app
 env:
   TEST_USERNAME: ${TEST_USERNAME}
   TEST_PASSWORD: ${TEST_PASSWORD}
+  CREW_FESTIVAL_ID: ${CREW_FESTIVAL_ID || 'fk-2026'}
 ---
 - launchApp:
     clearState: true
@@ -65,6 +66,21 @@ env:
           notVisible:
             id: "login-username-input"
           timeout: 25000
+      # The FAB needs the crew's festival selected: pick it before opening the map.
+      - openLink: festie:///cards
+      - tapOn:
+          text: "Switch"
+          optional: true
+      - scrollUntilVisible:
+          element:
+            id: "festival-card-${CREW_FESTIVAL_ID}"
+          timeout: 30000
+      - tapOn:
+          id: "festival-card-${CREW_FESTIVAL_ID}"
+      - extendedWaitUntil:
+          visible:
+            text: "Timeline|Cards"
+          timeout: 90000
       # ── /map FAB ──
       - openLink: festie:///map
       - extendedWaitUntil:
