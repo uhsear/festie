@@ -283,16 +283,18 @@ describe('artist backfill', { skip }, () => {
   });
 
   test('a B2B split that would pass the artist cap is left whole and reported', async () => {
-    await set('s-b2b-five', 'fest-2026', 'A b2b B b2b C b2b D b2b E', [{ name: 'A b2b B b2b C b2b D b2b E', links: {} }]);
-    await set('s-b2b-multi', 'fest-2026', 'P b2b Q, R b2b S, T b2b U', [
+    await set('s-b2b-five', 'fest-2026', 'A b2b B b2b C b2b D b2b E b2b F b2b G b2b H b2b I', [{ name: 'A b2b B b2b C b2b D b2b E b2b F b2b G b2b H b2b I', links: {} }]);
+    await set('s-b2b-multi', 'fest-2026', 'P b2b Q, R b2b S, T b2b U, V b2b W, X b2b Y', [
       { name: 'P b2b Q', links: {} },
       { name: 'R b2b S', links: {} },
       { name: 'T b2b U', links: {} },
+      { name: 'V b2b W', links: {} },
+      { name: 'X b2b Y', links: {} },
     ]);
     const { plan } = await runBackfill(pool);
-    assert.deepEqual(plan.report.b2bNotSplit.map((s) => [s.ownerId, s.name]), [['s-b2b-five', 'A b2b B b2b C b2b D b2b E'], ['s-b2b-multi', 'R b2b S'], ['s-b2b-multi', 'T b2b U']]);
-    assert.deepEqual((await artistsOf('s-b2b-five')).artists.map((a: any) => a.name), ['A b2b B b2b C b2b D b2b E']);
-    assert.deepEqual((await artistsOf('s-b2b-multi')).artists.map((a: any) => a.name), ['P', 'Q', 'R b2b S', 'T b2b U']);
+    assert.deepEqual(plan.report.b2bNotSplit.map((s) => [s.ownerId, s.name]), [['s-b2b-five', 'A b2b B b2b C b2b D b2b E b2b F b2b G b2b H b2b I'], ['s-b2b-multi', 'V b2b W'], ['s-b2b-multi', 'X b2b Y']]);
+    assert.deepEqual((await artistsOf('s-b2b-five')).artists.map((a: any) => a.name), ['A b2b B b2b C b2b D b2b E b2b F b2b G b2b H b2b I']);
+    assert.deepEqual((await artistsOf('s-b2b-multi')).artists.map((a: any) => a.name), ['P', 'Q', 'R', 'S', 'T', 'U', 'V b2b W', 'X b2b Y']);
     assert.equal((await verifyBackfill(pool)).ok, true);
   });
 

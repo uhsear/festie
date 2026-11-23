@@ -322,6 +322,18 @@ describe('schemas: crewJoin', () => {
 
 // ── Festival schemas ────────────────────────────────────────────────────
 
+describe('schemas: artists per set', () => {
+  const festival = (n: number) => ({
+    name: 'F',
+    stages: [{ id: 'st', name: 'Main' }],
+    days: [{ date: '2027-01-01', label: 'Fri', sets: [{ id: 's1', stageId: 'st', startTime: '20:00', artists: Array.from({ length: n }, (_, i) => ({ name: `A${i}` })) }] }],
+  });
+  it('accepts an 8-artist set and rejects a 9-artist set', () => {
+    assert.equal(schemas.festivalCreate.safeParse(festival(8)).success, true);
+    assert.equal(schemas.festivalCreate.safeParse(festival(9)).success, false);
+  });
+});
+
 describe('schemas: festivalCreate', () => {
   it('accepts valid festival', () => {
     const result = schemas.festivalCreate.safeParse({
@@ -514,7 +526,7 @@ describe('schemas: normalizeSetArtists', () => {
   it('limits to MAX_ARTISTS_PER_SET', () => {
     const artists = Array.from({ length: 10 }, (_, i) => ({ name: `Artist ${i}` }));
     const result = normalizeSetArtists({ artists });
-    assert.ok(result.length <= 4); // MAX_ARTISTS_PER_SET = 4
+    assert.equal(result.length, 8);
   });
 
   it('includes linkUrl as spotify link in backward compat', () => {

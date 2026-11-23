@@ -39,7 +39,7 @@ export interface SetRow {
   endTime: string;
   /** The loaded link of a set that has no artists[] yet, sent back so a save keeps it. Not editable on mobile. */
   linkUrl: string;
-  /** Per-artist entries (B2B sets hold up to 4). Empty for a set not yet given structured artists. */
+  /** Per-artist entries (B2B sets hold up to 8). Empty for a set not yet given structured artists. */
   artists: Artist[];
 }
 

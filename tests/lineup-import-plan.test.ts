@@ -63,13 +63,13 @@ describe('planLineupImport: artists', () => {
     assert.deepEqual(p.rows[0]!.artists, ['Ab2bC']);
   });
 
-  it('rejects an empty artist and more than 4 artists', () => {
+  it('rejects an empty artist and more than 8 artists', () => {
     const { plan: p } = plan([
       row(2, { artist: '  ', stage: 'Forest', day: 'Friday' }),
-      row(3, { artist: 'A b2b B b2b C b2b D b2b E', stage: 'Forest', day: 'Friday' }),
+      row(3, { artist: 'A b2b B b2b C b2b D b2b E b2b F b2b G b2b H b2b I', stage: 'Forest', day: 'Friday' }),
     ]);
     assert.equal(p.rows[0]!.errors[0]!.message, 'Artist is empty.');
-    assert.equal(p.rows[1]!.errors[0]!.message, 'A set can have at most 4 artists.');
+    assert.equal(p.rows[1]!.errors[0]!.message, 'A set can have at most 8 artists.');
     assert.equal(p.counts.error, 2);
   });
 });

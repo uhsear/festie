@@ -71,8 +71,8 @@ describe('SetEditor B2B artists', () => {
     expect(last[2].links).toEqual({});
   });
 
-  it('hides the add button at 4 artists', () => {
-    renderSet({ artists: ['A', 'B', 'C', 'D'].map((name) => ({ name, links: {} })) });
+  it('hides the add button at the artist limit', () => {
+    renderSet({ artists: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((name) => ({ name, links: {} })) });
     expect(screen.queryByText('+ B2B artist')).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import { describe, it } from 'node:test';
 
 import {
   DEFAULT_CREW_MAX_MEMBERS,
+  MAX_ARTISTS_PER_SET,
   MAX_CREWS_PER_FESTIVAL,
   MAX_OPEN_POLLS_PER_CREW,
   PICK_PRIORITY_VALUES,
@@ -45,6 +46,10 @@ describe('root ↔ @festie/shared constant parity', () => {
       },
       { MAX_CREWS_PER_FESTIVAL, MAX_OPEN_POLLS_PER_CREW, DEFAULT_CREW_MAX_MEMBERS },
     );
+  });
+
+  it('artists per set matches the shared mirror', () => {
+    assert.equal(shared.MAX_ARTISTS_PER_SET, MAX_ARTISTS_PER_SET);
   });
 
   it('toCents matches the shared mirror', () => {

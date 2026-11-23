@@ -1,4 +1,5 @@
 import type { Artist, LineupEntry } from '../types/domain';
+import { MAX_ARTISTS_PER_SET } from '../constants/config';
 import { lineupEntryKey, lineupNameKey } from './lineupCover';
 
 // Paste parser and merge for the announced lineup (web admin "Announced names").
@@ -9,7 +10,6 @@ import { lineupEntryKey, lineupNameKey } from './lineupCover';
 export type LineupDraft = Omit<LineupEntry, 'id' | 'announcedAt'> & { id?: string; announcedAt?: string };
 
 export const MAX_LINEUP_LINES = 500;
-export const MAX_LINEUP_ARTISTS = 4;
 
 // Mirrors ALLOWED_LINK_PLATFORMS in lib/constants.ts; any other key is dropped here so the server never sees it.
 const LINK_PLATFORMS = ['spotify', 'soundcloud', 'instagram', 'twitter', 'tiktok', 'facebook', 'website', 'youtube', 'apple_music'];
@@ -83,8 +83,8 @@ const unbalanced = (s: string) =>
 function flagLine(line: number, names: string[], displayName: string | null): LineFlag[] {
   const flags: LineFlag[] = [];
   const add = (kind: LineFlagKind, message: string, blocking = false) => flags.push({ line, kind, message, blocking });
-  if (names.length > MAX_LINEUP_ARTISTS) {
-    add('too_many', `Line ${line} has more than 4 artists. Split the line, or put the full text after a bar as the name on the poster.`, true);
+  if (names.length > MAX_ARTISTS_PER_SET) {
+    add('too_many', `Line ${line} has more than ${MAX_ARTISTS_PER_SET} artists. Split the line, or put the full text after a bar as the name on the poster.`, true);
   }
   if (names.some((n) => n.split(',').length > 2)) {
     add('list', `Line ${line} looks like a list. Split it on the commas, or keep it as one name.`);
