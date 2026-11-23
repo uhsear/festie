@@ -22,7 +22,6 @@ const domTests = [
   'src/hooks/useNowIndicator.test.ts',
   'src/hooks/useOfflineDownload.test.ts',
   'src/hooks/useOfflineQueue.test.ts',
-  'src/hooks/usePushLanding.test.ts',
   'src/hooks/usePushNotifications.test.ts',
   'src/hooks/useRealtimeSync.test.ts',
   'src/hooks/useScrollFade.test.ts',

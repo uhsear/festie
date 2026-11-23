@@ -55,11 +55,12 @@ export default function ManageTeam({ organization }: Props) {
   const reauth = <T,>(run: () => Promise<T>) => withReauth(run, askPassword, { retryWrongPassword: true });
   const refresh = () => queryClient.invalidateQueries({ queryKey: adminKeys.manageOrganization(organization.id) });
 
-  const act = async (run: () => Promise<unknown>, done: string, fail: string) => {
+  const act = async <T,>(run: () => Promise<T>, done: string | ((result: T) => string), fail: string, warn?: (result: T) => boolean) => {
     setBusy(true);
     try {
-      if ((await run()) === null) return;
-      toast(done, 'success');
+      const result = await run();
+      if (result === null) return;
+      toast(typeof done === 'function' ? done(result) : done, warn?.(result) ? 'warning' : 'success');
       await refresh();
     } catch (err) {
       toastError(err, fail);
@@ -84,7 +85,7 @@ export default function ManageTeam({ organization }: Props) {
   const isOwner = data.role === 'owner';
   const suspended = data.status === 'suspended';
   const canManage = isOwner && data.status === 'active';
-  const owners = data.members.filter((m) => m.role === 'owner' && m.active).map((m) => m.name ?? 'An owner');
+  const owners = data.members.filter((m) => m.role === 'owner' && m.active).flatMap((m) => (m.name ? [m.name] : []));
 
   const addMember = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -95,8 +96,12 @@ export default function ManageTeam({ organization }: Props) {
         if (added !== null) setEmail('');
         return added;
       },
-      'Added. They get one email, and join when they sign in with this address and confirm it.',
+      (added) =>
+        added?.emailed === false
+          ? 'Added, but the email could not be sent. Tell them to sign in with this address.'
+          : 'Added. They get one email, and join when they sign in with this address and confirm it.',
       "Couldn't add them. Try again.",
+      (added) => added?.emailed === false,
     );
   };
 
@@ -230,11 +235,11 @@ export default function ManageTeam({ organization }: Props) {
           <form onSubmit={addMember} aria-label="Add a member" className="grid grid-cols-1 gap-3 rounded-lg border border-glass-border bg-bg-card/60 p-4 md:grid-cols-[1fr_auto_auto] md:items-end">
             <label className="flex flex-col gap-1 text-xs text-text-muted">
               Email
-              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="name@venue.example" className={INPUT_CLASS} />
+              <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} maxLength={254} placeholder="name@venue.example" className={`${INPUT_CLASS} min-h-11`} />
             </label>
             <label className="flex flex-col gap-1 text-xs text-text-muted">
               Role
-              <select value={role} onChange={(e) => setRole(e.target.value as OrgRole)} className={INPUT_CLASS}>
+              <select value={role} onChange={(e) => setRole(e.target.value as OrgRole)} className={`${INPUT_CLASS} min-h-11`}>
                 {ROLES.map((r) => (
                   <option key={r.value} value={r.value}>
                     {r.label}

@@ -11,6 +11,8 @@ interface HandOverDialogProps {
   onOpenChange: (open: boolean) => void;
   crewName: string;
   candidates: CrewMember[];
+  /** What leaving forgives, when the owner has money on the books. */
+  notice?: string;
   busy?: boolean;
   onConfirm: (newOwnerId: string) => void;
 }
@@ -21,6 +23,7 @@ export default function HandOverDialog({
   onOpenChange,
   crewName,
   candidates,
+  notice = '',
   busy = false,
   onConfirm,
 }: HandOverDialogProps) {
@@ -31,7 +34,7 @@ export default function HandOverDialog({
   }, [open, firstId]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} title={crewCopy.handOverTitle(crewName)} description={crewCopy.handOverBody}>
+    <Dialog open={open} onOpenChange={onOpenChange} title={crewCopy.handOverTitle(crewName)} description={notice ? `${crewCopy.handOverBody} ${notice}` : crewCopy.handOverBody}>
       <div role="radiogroup" aria-label="New owner" className="space-y-1">
         {candidates.map((m) => {
           const displayName = m.name || m.username || 'User';

@@ -64,6 +64,19 @@ export interface ReviewRequest {
   requestedAt: string;
 }
 
+export interface HeldChangeItem {
+  kind: 'moved' | 'removed' | 'entry_cancelled';
+  artist: string;
+  before: HeldSlot | null;
+  after: HeldSlot | null;
+}
+
+export interface HeldSlot {
+  dayLabel: string;
+  startTime: string | null;
+  stageName: string | null;
+}
+
 export interface HeldAlertGroup {
   festivalId: string;
   name: string;
@@ -72,6 +85,8 @@ export interface HeldAlertGroup {
   /** Held schedule changes, and the people they would tell. */
   changes: number;
   people: number;
+  /** What each held change is, so the admin sees what Send alert would say. */
+  items: HeldChangeItem[];
   updatedAt: string;
 }
 

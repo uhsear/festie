@@ -89,6 +89,7 @@ describe('offlineReadinessStore', () => {
     it('default fetchWeather loads into weatherStore', async () => {
       const loadWeather = vi.fn().mockResolvedValue(undefined);
       useWeatherStore.setState({ loadWeather });
+      useAuthStore.setState({ user: { id: 'u1' } as never });
       const { fetchWeather: _skip, ...deps } = mockDeps();
       await useOfflineReadinessStore.getState().downloadForOffline('fest-1', undefined, deps);
       expect(loadWeather).toHaveBeenCalledWith('fest-1');
@@ -207,6 +208,34 @@ describe('offlineReadinessStore', () => {
       } finally {
         useFestivalDataStore.setState({ loadProfiles: original });
       }
+    });
+
+    it('does not call the authenticated weather load for a guest, and the weather step is ready', async () => {
+      const loadWeather = vi.fn().mockRejectedValue(new Error('Please log in'));
+      useWeatherStore.setState({ loadWeather });
+      useAuthStore.setState({ user: null });
+      const { fetchWeather: _unused, ...deps } = mockDeps();
+      await useOfflineReadinessStore.getState().downloadForOffline('fest-1', undefined, deps);
+      expect(loadWeather).not.toHaveBeenCalled();
+      expect(useOfflineReadinessStore.getState().getReadiness('fest-1').weather.status).toBe('ready');
+    });
+  });
+  describe('guest sign-in', () => {
+    it('resets weather and picks readiness when a checked guest signs in, but not on a cold-start rehydrate', async () => {
+      useAuthStore.setState({ user: null, sessionChecked: false });
+      await useOfflineReadinessStore.getState().downloadForOffline('fest-1', undefined, mockDeps());
+      const ready = () => useOfflineReadinessStore.getState().getReadiness('fest-1');
+      expect(ready().weather.status).toBe('ready');
+
+      useAuthStore.setState({ user: { id: 'u1' } as never });
+      expect(ready().weather.status).toBe('ready');
+
+      useAuthStore.setState({ user: null, sessionChecked: true });
+      useAuthStore.setState({ user: { id: 'u1' } as never });
+      expect(ready().weather).toEqual({ status: 'idle', syncedAt: null });
+      expect(ready().picks).toEqual({ status: 'idle', syncedAt: null });
+      expect(ready().schedule.status).toBe('ready');
+      useAuthStore.setState({ user: null, sessionChecked: false });
     });
   });
 });

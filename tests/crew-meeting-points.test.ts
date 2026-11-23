@@ -298,7 +298,7 @@ describe('routes/crew-meeting-points.js -- PUT /:crewId/home-base', () => {
       },
     });
 
-    await request(app).put('/crew-1/home-base').send({ time: '3pm' });
+    await request(app).put('/crew-1/home-base').send({ location: null, time: '3pm' });
 
     assert.equal((activityLog.mock.calls as any[])[0].arguments[0].detail, null);
   });

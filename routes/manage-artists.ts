@@ -5,7 +5,7 @@
  * The artist routes of an organization member, mounted by routes/manage.ts at /api/v1/manage/artists (so they exist
  * only while ORGANIZER_PLATFORM_ENABLED is on, behind userAuth). They apply the artist rules of plan section 8:
  *   - A member sees an artist only when it is used on a published festival, used on a festival of the member's
- *     organizations, or created by one of them (lib/db/stores/artist-visibility.ts). Nothing in any answer differs
+ *     organizations, or created by the member itself (lib/db/stores/artist-visibility.ts). Nothing in any answer differs
  *     because a hidden artist exists.
  *   - A member creates artists (unverified) and uses existing ones on its festivals through the festival save.
  *   - A member edits an artist directly only while every festival that lists it belongs to its organizations. Filling

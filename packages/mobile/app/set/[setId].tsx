@@ -21,7 +21,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { WebView } from 'react-native-webview';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useFestivalDataStore, useAuthStore, useUIStore, useNotificationPrefsStore } from '@festie/shared/stores';
+import { useFestivalDataStore, selectMyPicks, useAuthStore, useUIStore, useNotificationPrefsStore } from '@festie/shared/stores';
 import {
   usePicks,
   useCanPick,
@@ -169,9 +169,9 @@ export default function SetDetailScreen() {
   const sets = useFestivalDataStore((s) => s.sets);
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const nowMs = useNow(60_000);
-  const currentFestivalId = useFestivalDataStore((s) => s.currentFestivalId);
   const selectFestival = useFestivalDataStore((s) => s.selectFestival);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
+  const myPicks = useFestivalDataStore(selectMyPicks);
   const allProfiles = useFestivalDataStore((s) => s.allProfiles);
   const days = useFestivalDataStore((s) => s.days);
   const stages = useFestivalDataStore((s) => s.stages);
@@ -200,7 +200,10 @@ export default function SetDetailScreen() {
     (async () => {
       try {
         const { festivalId } = await locateSet(setId);
-        if (festivalId && festivalId !== currentFestivalId) {
+        // currentFestivalId is set before the festival arrives, so only a loaded festival can be skipped.
+        const loaded = useFestivalDataStore.getState();
+        const alreadyLoaded = loaded.currentFestival?.id === festivalId && loaded.days.length > 0 && !loaded.isLoading;
+        if (festivalId && !alreadyLoaded) {
           await selectFestival(festivalId);
         }
         if (!useFestivalDataStore.getState().sets.some((x) => x.id === setId)) {
@@ -211,7 +214,7 @@ export default function SetDetailScreen() {
         setResolveFailed(true);
       }
     })();
-  }, [set, setId, currentFestivalId, selectFestival, resolveAttempt]);
+  }, [set, setId, selectFestival, resolveAttempt]);
 
   const b2bSeparator = currentFestival?.b2bSeparator;
 
@@ -262,7 +265,7 @@ export default function SetDetailScreen() {
   const { minutes: myReminder, isDefault: reminderIsDefault } = reminderLeadForSet(
     set?.id ?? '',
     currentProfile?.reminders,
-    currentProfile?.picks as Record<string, Priority> | undefined,
+    myPicks as Record<string, Priority> | undefined,
     mustSeeLead,
   );
 
@@ -273,15 +276,15 @@ export default function SetDetailScreen() {
 
   // Conflicts: other picked sets whose times overlap this one (web parity).
   const conflicts = useMemo(() => {
-    if (!set || !currentProfile) return [];
+    if (!set || !myPicks) return [];
     const detected = detectConflicts(sets, (id: string) => {
-      const val = currentProfile.picks?.[id];
+      const val = myPicks[id];
       return (val as Priority) || null;
     });
     return detected
       .filter((c) => c.setA.id === set.id || c.setB.id === set.id)
       .map((c) => (c.setA.id === set.id ? c.setB : c.setA));
-  }, [sets, currentProfile, set]);
+  }, [sets, myPicks, set]);
 
   // Crew / who's going.
   const others = useMemo(() => {
@@ -869,7 +872,7 @@ export default function SetDetailScreen() {
               "N scheduling conflicts" box that used to sit below was the
               duplicate coral surface and has been removed. ClashPrompt also keeps a
               quiet "Clashes with" line after "Keep both". */}
-        {currentProfile && conflicts.length > 0 ? (
+        {conflicts.length > 0 ? (
           <ClashPrompt
             currentSet={set}
             conflicts={conflicts}

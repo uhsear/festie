@@ -9,18 +9,19 @@ import { useToast } from '../lib/toastContext';
 
 const REF_KEY = 'festie-ref';
 const REF_PATTERN = /^[a-z0-9_-]{1,40}$/;
+const EDITOR_PATH = /^\/(admin|manage)(\/|$)/;
 
 function stripJoinCrewParam() {
   const url = new URL(window.location.href);
   url.searchParams.delete('joinCrew');
-  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
 
 /** Drops only ?festival= so ?ref= and the rest survive. */
 function stripFestivalParam() {
   const url = new URL(window.location.href);
   url.searchParams.delete('festival');
-  window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+  window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
 }
 
 /** Remembers an anonymous ?ref= source for sign-up counts. The first valid value wins. */
@@ -98,8 +99,11 @@ export function useFestivalLoader() {
 
   // Auto-load festivals + select first one on boot (mirrors legacy init())
   useEffect(() => {
-    // ?festival=<id> from a public festival page; read before the load, on the root path only.
-    const linkedId = window.location.pathname === '/' ? new URLSearchParams(window.location.search).get('festival') : null;
+    // ?festival=<id> from a public festival page, an email or a push; this hook is its only reader.
+    // On /admin and /manage the param is the festival being edited, not a deep link.
+    const linkedId = EDITOR_PATH.test(window.location.pathname)
+      ? null
+      : new URLSearchParams(window.location.search).get('festival');
     loadFestivals()
       .then(() => {
         const fests = useFestivalStore.getState().festivals;

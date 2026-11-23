@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, ScrollView, AppState, Linking } from 'react-native';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { Ionicons } from '@expo/vector-icons';
-import { useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
+import { selectMyPicks, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import {
   decodePlanSnapshot,
   extractPlanSnapshotText,
@@ -48,7 +48,7 @@ function buildPreview(snapshot: PlanSnapshot): ScanPreview {
   const crew = useCrewStore.getState();
   const preview = previewPlanImport(snapshot, {
     currentFestivalId: fest.currentFestivalId,
-    picks: fest.currentProfile?.picks as Record<string, Priority> | undefined,
+    picks: (selectMyPicks(fest) ?? undefined) as Record<string, Priority> | undefined,
     setIds: new Set((fest.sets as FestivalSet[]).map((s) => s.id)),
   });
 

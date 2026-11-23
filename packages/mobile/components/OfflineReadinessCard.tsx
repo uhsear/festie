@@ -131,8 +131,8 @@ function StepRow({
 /**
  * Mobile offline-download card (mirror of web's OfflineReadinessCard).
  *
- * One header row (status text, action button, chevron) that stays one line
- * until opened; the chevron reveals the description and the per-step list
+ * One header row (status text, chevron) that stays compact until opened, with
+ * the action button on its own row below it; the chevron reveals the description and the per-step list
  * (schedule / picks / crew / weather / art, plus "Offline map" for festivals
  * with an archive). State comes from `useOfflineDownload`, which also drives
  * the status chips. Hidden for a past festival when nothing was saved.
@@ -183,31 +183,8 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
       <View style={styles.header}>
         <View style={styles.statusIcon}>{icon}</View>
         <Text style={styles.statusText} numberOfLines={2}>
-          {offlineStatusLabel(summary) + sizeNote}
+          {offlineStatusLabel(summary) + sizeNote + '\u00A0'}
         </Text>
-        <TouchableOpacity
-          onPress={download}
-          disabled={isDownloading || offlineMode}
-          accessibilityRole="button"
-          accessibilityLabel={
-            isDownloading
-              ? 'Downloading'
-              : offlineMode
-                ? 'Connect to download'
-                : summary.hasDownloaded
-                  ? 'Update offline cache'
-                  : 'Download for offline'
-          }
-          accessibilityState={{ busy: isDownloading, disabled: isDownloading || offlineMode }}
-          style={[styles.button, (isDownloading || offlineMode) && styles.buttonBusy]}
-          activeOpacity={0.8}
-        >
-          <View style={styles.buttonBg} pointerEvents="none" />
-          {/* Trailing NBSP absorbs Fabric's single-line under-measure (see OfflineStatusChip). */}
-          <Text style={styles.buttonText} textBreakStrategy="simple">
-            {offlineActionLabel(summary, offlineMode) + ' '}
-          </Text>
-        </TouchableOpacity>
         <TouchableOpacity
           onPress={() => setExpanded((v) => !v)}
           accessibilityRole="button"
@@ -218,6 +195,29 @@ export default function OfflineReadinessCard({ festivalId }: Props) {
           <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.muted} />
         </TouchableOpacity>
       </View>
+      <TouchableOpacity
+        onPress={download}
+        disabled={isDownloading || offlineMode}
+        accessibilityRole="button"
+        accessibilityLabel={
+          isDownloading
+            ? 'Downloading'
+            : offlineMode
+              ? 'Connect to download'
+              : summary.hasDownloaded
+                ? 'Update offline cache'
+                : 'Download for offline'
+        }
+        accessibilityState={{ busy: isDownloading, disabled: isDownloading || offlineMode }}
+        style={[styles.button, styles.buttonRow, (isDownloading || offlineMode) && styles.buttonBusy]}
+        activeOpacity={0.8}
+      >
+        <View style={styles.buttonBg} pointerEvents="none" />
+        {/* Trailing NBSP absorbs Fabric's single-line under-measure (see OfflineStatusChip). */}
+        <Text style={styles.buttonText} textBreakStrategy="simple">
+          {offlineActionLabel(summary, offlineMode) + ' '}
+        </Text>
+      </TouchableOpacity>
 
       {mapMessage ? (
         <Text style={styles.notice} accessibilityRole="alert">
@@ -310,6 +310,11 @@ const useCardStyles = makeStyles((t) => ({
     left: 0,
     borderRadius: t.radii.sm,
     backgroundColor: t.colors.accent.aqua,
+  },
+  // Own row under the status text: beside it the label ellipsized mid-count on narrow screens and at large text.
+  buttonRow: {
+    alignSelf: 'stretch',
+    marginTop: t.spacing[3],
   },
   buttonBusy: {
     opacity: 0.7,

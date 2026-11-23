@@ -26,7 +26,6 @@ import { useRealtimeSync } from '../../hooks/useRealtimeSync';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
 import { useIOSInstall } from '../../hooks/useIOSInstall';
 import { useInboxRefresh } from '../../hooks/useInboxRefresh';
-import { usePushLanding } from '../../hooks/usePushLanding';
 import { useScrollReset } from '../../hooks/useScrollReset';
 import { OfflineQueueContext, useOfflineQueueBridge } from '../../hooks/useOfflineQueueBridge';
 import { useFestivalLoader } from '../../hooks/useFestivalLoader';
@@ -103,7 +102,6 @@ export default function AppShell() {
   // Gated to a return visit (second session), 10s + 1 interaction, and a 30-day cooldown.
   const iosInstall = useIOSInstall();
   useInboxRefresh();
-  usePushLanding();
   const offlineQueue = useOfflineQueueBridge();
   const { pendingJoinCode, clearPendingJoin } = useFestivalLoader();
   const { showDayBanner } = useFestivalMode(location.pathname);

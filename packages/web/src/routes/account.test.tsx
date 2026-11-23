@@ -223,6 +223,14 @@ describe('AccountPage', () => {
     expect(privacy.compareDocumentPosition(pub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('links organization members to /manage and shows nobody else the card', () => {
+    render(<AccountPage />);
+    expect(screen.queryByRole('link', { name: /Manage your festivals/ })).not.toBeInTheDocument();
+    setStoreState({ user: { id: 'u1', name: 'Test User', username: 'testuser', email: 'test@festie.us', organizations: [{ id: 'o1', name: 'Venue', role: 'owner', status: 'active', verified: false }] } });
+    render(<AccountPage />);
+    expect(screen.getByRole('link', { name: /Manage your festivals/ })).toHaveAttribute('href', '/manage');
+  });
+
   it('links Festival Wrap to /wrap', () => {
     render(<AccountPage />);
     expect(screen.getByRole('link', { name: /Festival Wrap/ })).toHaveAttribute('href', '/wrap');

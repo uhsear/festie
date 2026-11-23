@@ -81,7 +81,7 @@ function ManagePageInner() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             {organizations.length > 1 ? (
               <label className="flex flex-col gap-1 text-xs text-text-muted">
-                Organization
+                Team and new festivals for
                 <select
                   value={current.id}
                   onChange={(e) => {

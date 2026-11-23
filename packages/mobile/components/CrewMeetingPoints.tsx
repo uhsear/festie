@@ -85,6 +85,7 @@ export default function CrewMeetingPoints({
   onDone,
 }: CrewMeetingPointsProps) {
   const t = useTokens();
+  const pickerTheme = useUIStore((s) => s.theme) === 'daylight' ? 'light' : 'dark';
   const router = useRouter();
   const haptics = useHaptics();
   const styles = useStyles();
@@ -595,7 +596,7 @@ export default function CrewMeetingPoints({
                       setTimeTouched(true);
                     }
                   }}
-                  themeVariant="dark"
+                  themeVariant={pickerTheme}
                   textColor={t.colors.text.primary}
                 />
               ) : null}

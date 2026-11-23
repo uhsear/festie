@@ -3,9 +3,9 @@ import * as Notifications from 'expo-notifications';
 import * as Sentry from '@sentry/react-native';
 import { useFestivalDataStore, useNotificationPrefsStore } from '@festie/shared/stores';
 import {
-  OFFLINE_REMINDER_TEXT,
   offlineReminderAt,
   offlineReminderId,
+  offlineReminderText,
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
 
@@ -16,7 +16,7 @@ import {
  * festival gets at most one reminder. Only reads notification permission; the
  * set sheet asks for it.
  */
-export function useOfflinePackReminder(festivalId: string, packReady: boolean, enabled: boolean): void {
+export function useOfflinePackReminder(festivalId: string, packReady: boolean, enabled: boolean, hasMap: boolean): void {
   const festival = useFestivalDataStore((s) => s.currentFestival);
   const days = useFestivalDataStore((s) => s.days);
   const dndStart = useNotificationPrefsStore((s) => s.prefs.dndStart);
@@ -48,12 +48,12 @@ export function useOfflinePackReminder(festivalId: string, packReady: boolean, e
         identifier: id,
         content: {
           title: 'Get ready for no signal',
-          body: OFFLINE_REMINDER_TEXT,
+          body: offlineReminderText(hasMap),
           data: { kind: 'offline-pack-reminder', festivalId },
         },
         // Android-only channel (created by useMobilePush); ignored on iOS.
         trigger: { type: Notifications.SchedulableTriggerInputTypes.DATE, date: new Date(at), channelId: 'updates' },
       });
     })().catch((e) => Sentry.captureException(e));
-  }, [enabled, sameFestival, festivalId, at]);
+  }, [enabled, sameFestival, festivalId, at, hasMap]);
 }

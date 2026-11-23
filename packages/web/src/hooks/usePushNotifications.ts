@@ -26,13 +26,13 @@ let _currentToken: string | null = null;
 let _vapidKey: string | null | undefined;
 
 /**
- * Fetch the server's VAPID public key once per page. Resolves null when web push is not set up (404).
+ * Fetch the server's VAPID public key once per page. Resolves null when web push is not set up (a null key, or a 404 from an older server).
  * Rejects on any other failure, which is not cached, so a retry can succeed.
  */
 async function loadVapidKey(): Promise<string | null> {
   if (_vapidKey !== undefined) return _vapidKey;
   try {
-    const { publicKey } = await api.get<{ publicKey: string }>('/notifications/vapid-key');
+    const { publicKey } = await api.get<{ publicKey: string | null }>('/notifications/vapid-key');
     _vapidKey = publicKey; // eslint-disable-line require-atomic-updates -- module-level cache, not a real race
   } catch (err) {
     if ((err as { status?: number }).status !== 404) throw err;

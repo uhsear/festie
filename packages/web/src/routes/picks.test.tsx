@@ -214,6 +214,12 @@ describe('PicksView', () => {
     expect(screen.getByText('No picks yet')).toBeInTheDocument();
   });
 
+  it('offers the offline download when a signed-in user has no profile yet', () => {
+    setStoreState({ profile: null });
+    render(<PicksView />);
+    expect(screen.getByTestId('offline-readiness-card')).toBeInTheDocument();
+  });
+
   it('shows "No picks yet" with no day name when the user has zero picks', () => {
     render(<PicksView />);
     expect(screen.getByTestId('empty-state')).toBeInTheDocument();
