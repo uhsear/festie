@@ -8,6 +8,9 @@
  * desktop (3-col x 3 rows partial) without over-reserving on mobile where
  * only the first 2 are visible above the fold.
  *
+ * min-h-dvh keeps the guest footer below the fold while the skeleton shows, so it does not jump
+ * down when the cards render (it was a layout-shift culprit on desktop).
+ *
  * Inner placeholder uses a non-animated frame + animated bars to avoid the
  * full-tile shimmer flashing the whole card — cheaper on mobile and reads
  * more like "loading content" than "loading tile".
@@ -15,7 +18,7 @@
 export default function CardsSkeleton() {
   return (
     <div
-      className="card-grid grid w-full [grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4 mx-auto pb-5 px-3 sm:px-4 md:gap-5 max-w-[1440px]"
+      className="card-grid grid w-full min-h-dvh content-start [grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr))] gap-4 mx-auto pb-5 px-3 sm:px-4 md:gap-5 max-w-[1440px]"
       aria-busy="true"
       aria-label="Loading sets" role="status" aria-live="polite"
     >

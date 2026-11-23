@@ -146,6 +146,11 @@ export function meetingPointKind(type: string) {
   return type === 'emergency' ? MEETING_POINT_KINDS[1] : MEETING_POINT_KINDS[0];
 }
 
+/** The calendar subscription link is a bearer link: web and mobile show the same warning. */
+export const CALENDAR_LINK_COPY = {
+  privacy: 'Anyone with this calendar link can see your picks. If it leaks, reset your links in Account.',
+} as const;
+
 /** Share a festival's public page (T50), shared by the web picker and the mobile festival card. */
 export const FESTIVAL_SHARE_COPY = {
   button: 'Share',

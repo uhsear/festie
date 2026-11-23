@@ -1,5 +1,5 @@
 import { FESTIVAL_READY_COPY } from '../constants/config';
-import type { FestivalReadiness } from '../stores/offlineReadinessStore';
+import type { FestivalReadiness, SectionReadiness } from '../stores/offlineReadinessStore';
 import type { InterestMark } from '../types';
 
 export type FestivalReadyKey = 'picks' | 'crew' | 'reminders' | 'offline';
@@ -11,8 +11,15 @@ export interface FestivalReadyItem {
   a11y: string;
 }
 
-/** True when readiness.schedule and readiness.picks both have status 'ready'. False for undefined. */
-export function isFestivalDownloaded(readiness: FestivalReadiness | undefined): boolean {
+/**
+ * True when readiness.schedule and readiness.picks both have status 'ready'. False for undefined.
+ * A festival with an offline map (mobile) also needs that step saved; pass null when it has none.
+ */
+export function isFestivalDownloaded(
+  readiness: FestivalReadiness | undefined,
+  offlineMap: SectionReadiness | null = null,
+): boolean {
+  if (offlineMap && offlineMap.status !== 'ready') return false;
   return readiness?.schedule.status === 'ready' && readiness.picks.status === 'ready';
 }
 

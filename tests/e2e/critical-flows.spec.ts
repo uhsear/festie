@@ -70,7 +70,7 @@ test.describe('critical flows', () => {
     await page.getByRole('button', { name: 'Add meeting point', exact: true }).click();
     await page.getByLabel('Label', { exact: true }).fill(label);
     await page.getByLabel('Location', { exact: true }).fill('By the ticket booth');
-    await page.getByLabel(/^Meet at time/).fill(meetAt);
+    await page.getByLabel(/^Meet at/).fill(meetAt);
     await page.getByRole('button', { name: 'Add', exact: true }).click();
 
     // Exact: the crew activity feed also echoes the label as ": <label>".

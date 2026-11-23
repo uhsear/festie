@@ -47,12 +47,13 @@ export function getInitials(name: string): string {
     return v;
   }
 
-  const result = name
+  // Split by code point so an emoji's surrogate pair is never cut in half.
+  const joined = name
     .split(' ')
-    .map((w) => w[0])
+    .map((w) => Array.from(w)[0])
     .join('')
-    .toUpperCase()
-    .slice(0, 2);
+    .toUpperCase();
+  const result = Array.from(joined).slice(0, 2).join('');
 
   _initialsCache.set(name, result);
 

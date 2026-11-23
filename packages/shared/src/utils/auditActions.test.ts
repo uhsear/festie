@@ -2,12 +2,21 @@ import { describe, it, expect } from 'vitest';
 import {
   AUDIT_ACTION_LABELS,
   auditActionLabel,
+  auditRowLabel,
   parseAuditQuery,
   removeAuditQueryToken,
   setAuditQueryAction,
   describeAuditChanges,
   auditEntriesToCsv,
 } from './auditActions';
+
+describe('auditRowLabel', () => {
+  it('marks a refused or failed attempt and leaves a success alone', () => {
+    expect(auditRowLabel('festival.deleted', 'success')).toBe('Festival deleted');
+    expect(auditRowLabel('festival.deleted', 'failure')).toBe('Attempted: Festival deleted');
+    expect(auditRowLabel('festivals.deleted', 'failure')).toBe('Attempted: Festivals deleted');
+  });
+});
 
 describe('auditActionLabel', () => {
   it.each(Object.entries(AUDIT_ACTION_LABELS))('labels %s', (action, label) => {

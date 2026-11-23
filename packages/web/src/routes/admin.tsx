@@ -4,6 +4,7 @@ import { useNavigate } from '@tanstack/react-router';
 import AdminLayout from '../components/admin/AdminLayout';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import AdminCommandPalette, { openAdminPalette } from '../components/admin/AdminCommandPalette';
+import { useReviewQueue } from '../components/admin/adminQueries';
 import { ADMIN_TABS, useAdminSearch, type AdminTab } from '../components/admin/useAdminSearch';
 import { LayoutDashboard, Tent, Users, UsersRound, ClipboardList, TrendingUp, Search, DatabaseZap, Building2, ListChecks } from 'lucide-react';
 
@@ -32,6 +33,9 @@ function AdminPanelInner() {
   const navigate = useNavigate();
   const [{ tab }, setAdminSearch] = useAdminSearch();
   const activeTab: AdminTab = ADMIN_TABS.find((t) => t === tab) ?? ADMIN_TABS[0];
+  // The owner of a festival waiting for review is promised a reply, so the admin sees the count without opening Organizations.
+  const reviewQueue = useReviewQueue(!!user?.isAdmin && user.organizerPlatform !== false);
+  const waiting = reviewQueue.data?.requests.length ?? 0;
 
   if (!user?.isAdmin) {
     return (
@@ -55,7 +59,7 @@ function AdminPanelInner() {
     { id: 'crews', label: 'Crews', icon: <UsersRound /> },
     { id: 'audit', label: 'Audit Log', icon: <ClipboardList /> },
     { id: 'analytics', label: 'Analytics', icon: <TrendingUp /> },
-    { id: 'organizations', label: 'Organizations', icon: <Building2 /> },
+    { id: 'organizations', label: waiting ? `Organizations (${waiting})` : 'Organizations', icon: <Building2 /> },
     { id: 'backfill', label: 'Artist backfill', icon: <DatabaseZap /> },
     { id: 'review', label: 'Artist review', icon: <ListChecks /> },
   ].filter((t) => t.id !== 'organizations' || user.organizerPlatform !== false) as Array<{

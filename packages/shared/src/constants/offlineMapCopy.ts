@@ -10,6 +10,8 @@ export const OFFLINE_MAP_COPY = {
     }). Free up some space and try again.`,
   // Used when the archive size is unknown (the size lookup failed before the write did).
   notEnoughSpaceUnknownSize: 'Not enough free space to save the map. Free up some space and try again.',
+  // Any failure that is not a space refusal: 404, network, HTTP error.
+  downloadFailed: "Couldn't save the map. Check your connection and try again.",
   basemapNotSaved: 'Base map not saved. Download it on the Picks tab while you have signal.',
   siteplanNeedsConnection: 'The site plan needs a connection. The base map still works offline.',
 } as const;

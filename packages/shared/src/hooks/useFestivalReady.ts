@@ -4,7 +4,7 @@ import { useAuthStore } from '../stores/authStore';
 import { useCrewStore } from '../stores/crewStore';
 import { useFestivalDataStore } from '../stores/festivalDataStore';
 import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
-import { useOfflineReadinessStore } from '../stores/offlineReadinessStore';
+import { useOfflineReadinessStore, type SectionReadiness } from '../stores/offlineReadinessStore';
 import {
   countOpenInterests,
   formatReadyProgress,
@@ -38,6 +38,8 @@ function peekHidden(festivalId: string): boolean | null {
 export function useFestivalReady(
   notificationsAllowed: boolean,
   now?: Date,
+  /** The offline map step, or null/omitted when the festival has none. */
+  offlineMap: SectionReadiness | null = null,
 ): {
   visible: boolean;
   items: FestivalReadyItem[];
@@ -101,7 +103,7 @@ export function useFestivalReady(
     hasLineup: (currentFestival?.lineup?.length ?? 0) > 0,
     hasCrew: !!currentFestival && crews.some((c) => !c.festivalId || c.festivalId === currentFestival.id),
     remindersOn: notificationsAllowed && prefs.setReminders,
-    offlineReady: isFestivalDownloaded(readiness),
+    offlineReady: isFestivalDownloaded(readiness, offlineMap),
   });
 
   // Once per festival, so an async adapter (mobile) does not start a new read on every render.

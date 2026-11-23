@@ -171,6 +171,7 @@ export function useRealtimeStoreSync({
     const handleSetUpdated = (_data: FestivalIdPayload) => reloadFestival();
 
     const handlePresenceUpdate = (data: PresenceUpdatePayload) => {
+      if (data.festivalId && data.festivalId !== useFestivalDataStore.getState().currentFestivalId) return;
       if (data.online) {
         setOnlineUsers(
           data.online.map((u) => ({ id: u.userId, name: u.username, avatar: u.avatarUrl, status: 'online' as const })),

@@ -420,6 +420,37 @@ export default function createCrewsStore(pool: Pool, _utils: unknown) {
       return membersByCrewId;
     },
 
+    /**
+     * Crew mates of the given users within one festival, for presence fan-out.
+     * Loads only the crews those users belong to, never every crew in the festival.
+     * Each user maps to the ids of everyone sharing a crew with them, themselves included.
+     */
+    async listCrewmateIds(userIds: string[], festivalId: string): Promise<Map<string, string[]>> {
+      const matesByUser = new Map<string, string[]>();
+      if (userIds.length === 0) return matesByUser;
+      const result = await pool.query(
+        `
+        SELECT
+          me.user_id AS "userId",
+          mate.user_id AS "mateId"
+        FROM
+          crew_members me
+          JOIN crews c ON c.id = me.crew_id
+          JOIN crew_members mate ON mate.crew_id = me.crew_id
+        WHERE
+          me.user_id = ANY($1)
+          AND c.festival_id = $2
+      `,
+        [userIds, festivalId],
+      );
+      for (const row of result.rows) {
+        const mates = matesByUser.get(row.userId);
+        if (mates) mates.push(row.mateId);
+        else matesByUser.set(row.userId, [row.mateId]);
+      }
+      return matesByUser;
+    },
+
     async getMember(crewId: string, userId: string) {
       const result = await pool.query(
         'SELECT crew_id AS "crewId", user_id AS "userId", role, joined_at AS "joinedAt" FROM crew_members WHERE crew_id = $1 AND user_id = $2',

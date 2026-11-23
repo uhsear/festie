@@ -210,7 +210,7 @@ function AdminUsersList() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="type-heading text-text-primary">Users ({total})</h2>
+        <h2 className="type-heading text-text-primary">{error && users.length === 0 ? 'Users' : `Users (${total})`}</h2>
       </div>
 
       <input

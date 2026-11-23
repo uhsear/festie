@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 
 const festivalState: Record<string, unknown> = {};
@@ -14,6 +14,9 @@ import SetTimesBanner from './SetTimesBanner';
 
 describe('SetTimesBanner', () => {
   beforeEach(() => {
+    // Pin the clock before the fixture's day so the festival never reads as finished.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(Date.UTC(2027, 0, 1));
     follow.festivalIds = [];
     Object.assign(festivalState, {
       currentFestival: { id: 'f1', name: 'Alpha' },
@@ -24,6 +27,10 @@ describe('SetTimesBanner', () => {
       ],
       currentProfile: null,
     });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('guest: shows the title and a Follow button', () => {

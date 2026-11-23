@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
-import { Alert, Linking } from 'react-native';
+import { Alert, Linking, Share } from 'react-native';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { selectMyPicks, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { buildPicksIcsExport, describeIcsExport } from '@festie/shared/utils';
+import { CALENDAR_LINK_COPY } from '@festie/shared/constants';
 import { mapErrorToUserMessage, fetchCalendarLinks } from '@festie/shared/services';
 import { useHaptics } from './useHaptics';
 
@@ -77,14 +78,30 @@ export function usePicksCalendar() {
         .showToast("Couldn't get your calendar link. Check your connection and try again.", { kind: 'error' });
       return;
     }
-    try {
-      await Linking.openURL(links.webcalUrl);
-    } catch {
-      Linking.openURL(links.googleUrl).catch(() => {
-        haptics.warning();
-        useUIStore.getState().showToast("Couldn't open your calendar. Try Download once.", { kind: 'error' });
-      });
-    }
+    const openInCalendar = async () => {
+      try {
+        await Linking.openURL(links.webcalUrl);
+      } catch {
+        Linking.openURL(links.googleUrl).catch(() => {
+          haptics.warning();
+          useUIStore.getState().showToast("Couldn't open your calendar. Try Download once.", { kind: 'error' });
+        });
+      }
+    };
+    // The link is a bearer link, so say so before it leaves the app. An Android alert shows three buttons at most.
+    Alert.alert(
+      'Your calendar link',
+      CALENDAR_LINK_COPY.privacy,
+      [
+        { text: 'Open in calendar', onPress: () => void openInCalendar() },
+        {
+          text: 'Share or copy link',
+          onPress: () => void Share.share({ message: links.httpsUrl, url: links.httpsUrl }).catch(() => undefined),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ],
+      { cancelable: true },
+    );
   }, [currentFestival, haptics]);
 
   const handleAddToCalendar = useCallback(() => {

@@ -11,6 +11,9 @@ const festivalState = {
   festivals: [{ id: 'f1' }],
   sets: [] as Array<{ id: string }>,
   currentFestivalId: 'f1',
+  currentFestival: null as { id: string } | null,
+  days: [] as unknown[],
+  isLoading: false,
   loadFestivals: vi.fn(),
   selectFestival: vi.fn(),
 };
@@ -31,6 +34,9 @@ describe('SetDeepLink', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     festivalState.sets = [];
+    festivalState.currentFestival = null;
+    festivalState.days = [];
+    festivalState.isLoading = false;
   });
 
   it('toasts and redirects home when the set cannot be found', async () => {
@@ -61,5 +67,29 @@ describe('SetDeepLink', () => {
     await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith({ to: '/', replace: true }));
     expect(mockSetDetailSet).toHaveBeenCalledWith({ id: 's1' });
     expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it('waits for the festival load when the store already points at it but has not finished loading', async () => {
+    // selectFestival sets currentFestivalId before the festival arrives, so the id alone proves nothing.
+    festivalState.isLoading = true;
+    mockApiGet.mockResolvedValue({ festivalId: 'f1' });
+    festivalState.selectFestival.mockImplementation(async () => {
+      festivalState.sets = [{ id: 's1' }];
+    });
+    render(<SetDeepLink />);
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith({ to: '/', replace: true }));
+    expect(festivalState.selectFestival).toHaveBeenCalledWith('f1');
+    expect(mockSetDetailSet).toHaveBeenCalledWith({ id: 's1' });
+    expect(mockToast).not.toHaveBeenCalled();
+  });
+
+  it('does not reload a festival that is already loaded', async () => {
+    festivalState.currentFestival = { id: 'f1' };
+    festivalState.days = [{}];
+    mockApiGet.mockResolvedValue({ festivalId: 'f1' });
+    render(<SetDeepLink />);
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith({ to: '/', replace: true }));
+    expect(festivalState.selectFestival).not.toHaveBeenCalled();
+    expect(mockToast).toHaveBeenCalledWith('That set link is no longer available.', 'info');
   });
 });

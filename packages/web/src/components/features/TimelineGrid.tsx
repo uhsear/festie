@@ -76,7 +76,8 @@ const TimelineStaticLayer = React.memo(function TimelineStaticLayerImpl({
             key={`time-${i}`}
             className={cn(
               'sticky left-0 z-5',
-              'px-2.5 py-1',
+              // 52px gutter on a phone: px-2.5 left 31px of text room and clipped "12:30a".
+              'px-1 py-1 sm:px-2.5',
               'text-[length:var(--font-size-12)] font-semibold text-[var(--color-text-muted)]',
               'bg-[var(--color-bg-primary)]',
               'border-r border-r-[var(--color-border)]',

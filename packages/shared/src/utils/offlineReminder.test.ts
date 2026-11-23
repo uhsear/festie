@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { offlineReminderAt, offlineReminderId } from './offlineReminder';
+import { offlineReminderAt, offlineReminderId, offlineReminderText } from './offlineReminder';
 
 const NY = 'America/New_York';
 const hourIn = (ms: number, timeZone: string) =>
@@ -66,5 +66,12 @@ describe('offlineReminderAt', () => {
 describe('offlineReminderId', () => {
   it('is stable per festival', () => {
     expect(offlineReminderId('f1')).toBe('festie-offline-pack-f1');
+  });
+});
+
+describe('offlineReminderText', () => {
+  it('names the map only when the festival has one', () => {
+    expect(offlineReminderText(true)).toBe('Open Festie on wifi to save the map and lineup for no signal.');
+    expect(offlineReminderText(false)).toBe('Open Festie on wifi to save the lineup for no signal.');
   });
 });

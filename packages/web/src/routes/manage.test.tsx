@@ -88,7 +88,7 @@ describe('/manage', () => {
     render();
     await userEvent.click(await screen.findByRole('button', { name: 'Activity' }));
     expect(screen.getByRole('button', { name: 'Activity' })).toHaveAttribute('aria-pressed', 'true');
-    await userEvent.selectOptions(screen.getByLabelText('Organization'), 'o2');
+    await userEvent.selectOptions(screen.getByLabelText('Team and new festivals for'), 'o2');
     expect(screen.getByRole('button', { name: 'Festivals' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.queryByRole('button', { name: 'Activity' })).not.toBeInTheDocument();
   });

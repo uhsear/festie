@@ -487,6 +487,8 @@ describe('a festival save and a lineup import resolve names for an organizer', {
     const commit = await as('editorA').post(`${MANAGE}/f-a/import-lineup`, { rows: [rows[0]!, rows[2]!], skipSpotify: true });
     assert.equal(commit.status, 200, JSON.stringify(commit.body));
     assert.equal(commit.body.data.committed, true, JSON.stringify(commit.body));
+    // An organizer has no Artists tab, so the link hint names Festie.
+    assert.ok(commit.body.data.result.warnings.includes('Ask Festie to add links. The import does not search Spotify.'), JSON.stringify(commit.body.data.result.warnings));
     const sets = (await sql(`SELECT artists FROM festival_sets WHERE festival_id = 'f-a' AND artist IN ('Import Hidden', 'Import Verified')`)).rows;
     const ids = sets.map((s: any) => s.artists[0].id);
     assert.ok(ids.includes(verified) && !ids.includes(hidden));

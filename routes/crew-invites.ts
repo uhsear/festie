@@ -19,6 +19,7 @@ export default function createCrewInviteRoutes(deps: RouteDeps) {
     validate,
     validateParams,
     emitter,
+    io,
     crewNotify,
   } = deps;
 
@@ -111,6 +112,9 @@ export default function createCrewInviteRoutes(deps: RouteDeps) {
         return sendError(res, 400, 'Crew is full', ErrorCodes.MAX_LIMIT_REACHED);
       }
 
+      // A first-time joiner has no crew yet when ensureFestivalProfile emits profile:created, so crew mates
+      // learn of them through crew:member-joined and the presence update below, not through that event.
+      deps.emitPresence?.(crew.festivalId, io);
       const members = await stores.crews.getMembers(crew.id);
 
       // Broadcast new member to crew room

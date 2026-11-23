@@ -146,10 +146,14 @@ export function createRequestHelpers({
   }
 
   // Paths that are explicitly exempt from CSRF origin enforcement.
-  // Must be fire-and-forget, unauthenticated, and already hardened at the
-  // route level (rate-limited, no auth, no DB writes, strict input validation).
+  // Must be unauthenticated (no cookie is read) and already hardened at the
+  // route level (rate-limited, strict input validation).
   const ORIGIN_EXEMPT_PATHS = new Set([
     '/api/v1/metrics/web-vitals', // sendBeacon sends Origin: null in opaque contexts
+    // The signed token in the link is the credential. A same-origin form POST sends Origin: null
+    // when the page's Referrer-Policy is no-referrer, which would refuse the confirm button.
+    // verify-email is not listed: its confirm page is the SPA, whose fetch sends a real Origin.
+    '/api/v1/auth/unsubscribe',
   ]);
 
   function enforceAllowedOrigin(req: any, res: any, next: any) {

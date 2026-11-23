@@ -221,6 +221,11 @@ describe('groupScheduleSets', () => {
       '#:sym,num',
     ]);
   });
+
+  it('az: folds letters NFD leaves alone, so Ø files under O and Æ under A', () => {
+    const xs = [set('oe', 'A', 'Ørjan Nilsen'), set('ae', 'A', 'Æon Flux')];
+    expect(labels(groupScheduleSets(xs, 'az', stages)).map((l) => l.split(':')[0]).sort()).toEqual(['A', 'O']);
+  });
 });
 
 describe('sanitizeSchedulePrefs', () => {

@@ -35,7 +35,10 @@ function ResetPasswordPageInner() {
     const found = validateNewPassword(password, confirmPassword);
     setPasswordError(found.password ?? '');
     setConfirmError(found.confirmPassword ?? '');
-    if (found.password || found.confirmPassword) return;
+    if (found.password || found.confirmPassword) {
+      document.getElementById(found.password ? 'reset-new-password' : 'reset-confirm-password')?.focus();
+      return;
+    }
 
     setBusy(true);
     try {
@@ -43,7 +46,11 @@ function ResetPasswordPageInner() {
       await navigate({ to: '/login', search: { reset: true }, replace: true });
     } catch (err) {
       if (isResetLinkExpired(err)) setExpired(true);
-      else setPasswordError(mapErrorToUserMessage(err, "Couldn't reset your password. Try again."));
+      else {
+        setPasswordError(mapErrorToUserMessage(err, "Couldn't reset your password. Try again."));
+        // The field is disabled while busy, so focus it after the re-enable commits.
+        window.requestAnimationFrame(() => document.getElementById('reset-new-password')?.focus());
+      }
     } finally {
       setBusy(false);
     }
@@ -72,6 +79,7 @@ function ResetPasswordPageInner() {
             className="bg-bg-card border border-border rounded-lg p-6 space-y-4 text-left"
           >
             <Input
+              id="reset-new-password"
               label={AUTH_COPY.newPasswordLabel}
               isPassword
               autoComplete="new-password"
@@ -86,6 +94,7 @@ function ResetPasswordPageInner() {
             />
             <PasswordStrengthMeter password={password} />
             <Input
+              id="reset-confirm-password"
               label={AUTH_COPY.confirmNewPasswordLabel}
               isPassword
               autoComplete="new-password"

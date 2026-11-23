@@ -32,12 +32,19 @@ export function validateIcsTime(t: unknown): string | null {
 
 /** Fold a content line per RFC 5545 (max 75 octets per line). */
 export function foldIcsLine(line: string): string {
-  if (line.length <= 75) return line;
-  let folded = line.substring(0, 75);
-  let rest = line.substring(75);
-  while (rest.length > 0) {
-    folded += '\r\n ' + rest.substring(0, 74);
-    rest = rest.substring(74);
+  let folded = '';
+  let octets = 0;
+  let limit = 75;
+  for (const ch of line) {
+    const cp = ch.codePointAt(0) as number;
+    const size = cp < 0x80 ? 1 : cp < 0x800 ? 2 : cp < 0x10000 ? 3 : 4;
+    if (octets + size > limit) {
+      folded += '\r\n ';
+      octets = 0;
+      limit = 74;
+    }
+    folded += ch;
+    octets += size;
   }
   return folded;
 }

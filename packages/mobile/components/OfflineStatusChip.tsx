@@ -23,9 +23,9 @@ export default function OfflineStatusChip({ remind = false }: { remind?: boolean
 function Chip({ festivalId, remind }: { festivalId: string; remind: boolean }) {
   const t = useTokens();
   const styles = useStyles();
-  const { summary, download, isDownloading } = useOfflineDownload(festivalId);
+  const { summary, download, isDownloading, hasMap } = useOfflineDownload(festivalId);
   // Only one surface (the festival home) owns the day-before reminder.
-  useOfflinePackReminder(festivalId, summary.overall === 'ready', remind);
+  useOfflinePackReminder(festivalId, summary.overall === 'ready', remind, hasMap);
 
   if (summary.hidden) return null;
 

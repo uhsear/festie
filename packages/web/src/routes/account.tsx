@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Gauge, LogOut, Sparkles } from 'lucide-react';
+import { Building2, Gauge, LogOut, Sparkles } from 'lucide-react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { ACCOUNT_COPY, ACCOUNT_SECTIONS, COPY } from '@festie/shared/constants';
 import type { AccountSectionId } from '@festie/shared/constants';
@@ -53,10 +53,28 @@ function AccountPageInner() {
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
   }, [user, navigate]);
-  // The public /delete-account page links to /account#danger; the sections render after the lazy chunk, so scroll once the user is known.
+  // The public /delete-account page links to /account#danger. useScrollReset leaves a hash target alone, but async
+  // sections above the zone still shift the layout after mount, so re-pin every 100 ms for 2 s. Move focus to the zone
+  // once, then stop pinning as soon as the user scrolls or focus moves (assistive tech raises focusin, not wheel/keys).
+  const hasUser = !!user;
   useEffect(() => {
-    if (user && window.location.hash === '#danger') document.getElementById('danger')?.scrollIntoView();
-  }, [user]);
+    if (!hasUser || window.location.hash !== '#danger') return;
+    const pin = () => document.getElementById('danger')?.scrollIntoView();
+    const stopEvents = ['wheel', 'touchstart', 'pointerdown', 'keydown', 'focusin'];
+    const stop = () => {
+      window.clearInterval(timer);
+      stopEvents.forEach((e) => window.removeEventListener(e, stop));
+    };
+    pin();
+    document.getElementById('danger')?.focus({ preventScroll: true });
+    const timer = window.setInterval(pin, 100);
+    const timeout = window.setTimeout(stop, 2000);
+    stopEvents.forEach((e) => window.addEventListener(e, stop, { passive: true }));
+    return () => {
+      window.clearTimeout(timeout);
+      stop();
+    };
+  }, [hasUser]);
   if (!user) return null;
 
   const handleSignOut = async () => {
@@ -102,6 +120,18 @@ function AccountPageInner() {
     ),
     festivals: (
       <>
+        {!!user.organizations?.length && (
+          <Link
+            to="/manage"
+            className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 min-h-11 hover:bg-surface-hover"
+          >
+            <Building2 className="h-5 w-5 text-accent-aqua" aria-hidden="true" />
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold text-text-primary">{ACCOUNT_COPY.manageTitle}</span>
+              <span className="text-xs text-text-secondary">{ACCOUNT_COPY.manageHint}</span>
+            </span>
+          </Link>
+        )}
         <Link
           to="/wrap"
           className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 hover:bg-surface-hover"
@@ -185,7 +215,11 @@ function AccountPageInner() {
  */
 function Section({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
   return (
-    <div id={id === 'danger' ? id : undefined} className="space-y-3">
+    <div
+      id={id === 'danger' ? id : undefined}
+      tabIndex={id === 'danger' ? -1 : undefined}
+      className="space-y-3 focus:outline-none"
+    >
       {label ? (
         <h2 className="px-1 text-xs font-semibold text-text-secondary uppercase tracking-[.8px]">{label}</h2>
       ) : null}

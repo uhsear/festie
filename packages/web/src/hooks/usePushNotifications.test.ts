@@ -53,6 +53,14 @@ describe('usePushNotifications', () => {
     expect(result.current.isSupported).toBe(false);
   });
 
+  it('reports not-configured when /vapid-key answers with a null key', async () => {
+    get.mockResolvedValue({ publicKey: null });
+    getSubscription.mockResolvedValue(null);
+    const { result } = await freshHook();
+    await waitFor(() => expect(result.current.unsupportedReason).toBe('not-configured'));
+    expect(result.current.isSupported).toBe(false);
+  });
+
   it('reports a retryable key error, not not-configured, on a 5xx', async () => {
     get.mockRejectedValueOnce(Object.assign(new Error('boom'), { status: 503 }));
     getSubscription.mockResolvedValue(null);

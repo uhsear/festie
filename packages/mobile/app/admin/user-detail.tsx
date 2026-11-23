@@ -4,7 +4,7 @@ import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ApiClientError, fetchAdminUserDetail, type AdminUserDetail } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
-import { auditActionLabel, maskEmail, PRIVATE_VIEW_NOTICE, timeAgoFromIso } from '@festie/shared/utils';
+import { auditRowLabel, maskEmail, PRIVATE_VIEW_NOTICE, timeAgoFromIso } from '@festie/shared/utils';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
@@ -84,7 +84,7 @@ export default function AdminUserDetailScreen() {
       ['Joined', new Date(user.createdAt).toLocaleDateString()],
       ['Last active', user.lastActiveAt ? timeAgoFromIso(user.lastActiveAt) : 'No active session'],
       ['Public schedule', user.publicSchedule ? 'On' : 'Off'],
-      ['Role', user.roles.includes('admin') ? 'Admin' : 'Member'],
+      ['Role', user.roles.includes('admin') ? 'Admin' : 'User'],
     ];
     return (
       <ScrollView
@@ -155,7 +155,8 @@ export default function AdminUserDetailScreen() {
           {activity.length === 0 ? <Text style={styles.empty}>No activity in the last 90 days.</Text> : null}
           {activity.map((a) => (
             <View key={a.id} style={styles.listRow}>
-              <Text style={styles.value}>{auditActionLabel(a.action)}</Text>
+              <Text style={styles.value}>{auditRowLabel(a.action, a.status)}</Text>
+              {a.status !== 'success' ? <Text style={styles.failed}>Failed</Text> : null}
               <Text style={styles.caption}>
                 {a.actorUsername ?? 'system'} · {a.targetLabel ?? '—'} · {timeAgoFromIso(a.createdAt)}
               </Text>
@@ -209,6 +210,7 @@ const useStyles = makeStyles((t) => ({
   label: { ...typeStyle('caption'), color: t.colors.text.secondary, width: 110 },
   value: { ...typeStyle('body'), color: t.colors.text.primary },
   caption: { ...typeStyle('caption'), color: t.colors.text.muted },
+  failed: { ...typeStyle('caption'), color: t.colors.text.danger },
   empty: { ...typeStyle('caption'), color: t.colors.text.muted, padding: t.spacing[4] },
   sectionTitle: { ...typeStyle('label', 600), color: t.colors.text.primary },
   link: { ...typeStyle('label', 600), color: t.colors.accent.aqua },

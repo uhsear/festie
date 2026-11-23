@@ -616,23 +616,38 @@ export function createSendService({
     safeTitle,
     safeBody,
     safeData,
-  }: { device: Device; userId: string; type: string; threadId?: string | null } & PushContent) {
+    retryQueue: deviceRetryQueue,
+  }: { device: Device; userId: string; type: string; threadId?: string | null; retryQueue: RetryQueue } & PushContent) {
     const origin = appOrigin(config);
     const deepLink = safeData.deepLink;
     const url = typeof deepLink === 'string' && deepLink.startsWith(origin + '/') ? deepLink : origin + '/';
     const urgent = URGENT_WEB_TYPES.has(type);
-    let result: WebPushResult;
-    try {
+    const sendOnce = () =>
       // Callers route a device here only when webPush is configured.
-      result = await (webPush as WebPushSender).send(
+      (webPush as WebPushSender).send(
         device.token,
         { title: safeTitle, body: safeBody, url, tag: threadId || type },
         { ttl: urgent ? 3600 : 86400, urgency: urgent ? 'high' : 'normal' },
       );
+    let result: WebPushResult;
+    try {
+      result = await sendOnce();
     } catch (error) {
       result = { sent: false, stale: false, error: (error as Failure).message };
     }
     if (!result.sent) log.debug('web push send failed', { userId, error: result.error });
+    // Network errors, timeouts, 429 and 5xx are transient, as for FCM. The sender marks them retryable.
+    if (!result.sent && !result.stale && result.retryable) {
+      deviceRetryQueue.enqueue({
+        userId,
+        sendFn: async () => {
+          const retried = await sendOnce();
+          if (retried.sent) return;
+          // The queue drops an entry whose error code says the subscription is gone.
+          throw Object.assign(new Error(retried.error || 'web push failed'), { code: retried.stale ? 'not-registered' : '' });
+        },
+      });
+    }
     await logNotification({
       userId,
       type,
@@ -816,7 +831,7 @@ export function createSendService({
           log.debug('web push not configured — skipping web token', { userId });
           continue;
         }
-        const result = await sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData });
+        const result = await sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData, retryQueue });
         if (result.sent) sent += 1;
         if (result.stale) staleTokens.push(device.token);
         continue;
@@ -1268,7 +1283,7 @@ export function createSendService({
     const webNotified = new Set<string>();
     let webSent = 0;
     for (const { userId, device } of webSends) {
-      const r = await sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData });
+      const r = await sendToWebDevice({ device, userId, type, threadId, safeTitle, safeBody, safeData, retryQueue });
       if (r.sent) {
         webSent += 1;
         webNotified.add(userId);

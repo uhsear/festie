@@ -18,7 +18,7 @@ function isApiError(err: unknown): err is Error & ApiErrorLike {
   return err instanceof Error && typeof (err as unknown as ApiErrorLike).status === 'number';
 }
 
-type ErrorKind = 'network' | 'not-found' | 'server' | 'generic';
+type ErrorKind = 'network' | 'update' | 'not-found' | 'server' | 'generic';
 
 /** A failed lazy route chunk: the browser caches the rejected import, so only a reload can recover. */
 function isChunkLoadError(error: Error): boolean {
@@ -28,6 +28,9 @@ function isChunkLoadError(error: Error): boolean {
 }
 
 function classifyError(error: Error): ErrorKind {
+  // Before the TypeError branch below: Chromium words a missing chunk as "Failed to fetch ...".
+  if (isChunkLoadError(error) && navigator.onLine !== false) return 'update';
+
   // ApiClientError from shared/services/api
   if (isApiError(error)) {
     if (error.isNetworkError || error.status === 0) return 'network';
@@ -70,6 +73,13 @@ function presentationFor(kind: ErrorKind, error: Error): ErrorPresentation {
         icon: <WifiOff className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
         heading: 'You appear to be offline',
         description: 'Check your connection and try again. Your data is safe; we’ll sync it when you reconnect.',
+        showBack: false,
+      };
+    case 'update':
+      return {
+        icon: <RefreshCw className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
+        heading: 'Festie was updated',
+        description: 'A new version is available. Reload to continue.',
         showBack: false,
       };
     case 'not-found':
@@ -143,13 +153,24 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
         <p className="my-1 mb-3 text-sm text-[var(--color-text-secondary)] italic max-w-[400px]">{contextMessage}</p>
       )}
       <div className="mt-4 flex justify-center gap-2">
-        {kind !== 'not-found' && (
+        {kind === 'update' && (
           <Button
             variant="primary"
             size="sm"
             type="button"
             icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
-            onClick={() => (isChunkLoadError(error) ? window.location.reload() : reset())}
+            onClick={() => window.location.reload()}
+          >
+            Reload
+          </Button>
+        )}
+        {kind !== 'not-found' && kind !== 'update' && (
+          <Button
+            variant="primary"
+            size="sm"
+            type="button"
+            icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
+            onClick={reset}
           >
             Retry
           </Button>
@@ -165,9 +186,11 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
             Go home
           </Button>
         )}
-        <Button variant="ghost" size="sm" type="button" onClick={() => window.location.reload()}>
-          Reload page
-        </Button>
+        {kind !== 'update' && (
+          <Button variant="ghost" size="sm" type="button" onClick={() => window.location.reload()}>
+            Reload page
+          </Button>
+        )}
       </div>
     </div>
   );

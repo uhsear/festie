@@ -38,8 +38,8 @@ export default function createProfilesRoutes(deps: RouteDeps) {
       }
       // Only the viewer and the people who share a crew with them on this festival are
       // listed. Everyone else stays out of the response (no attendee directory); they
-      // reach the viewer only as anonymous per-set counts in meta.pickCounts. This limits the
-      // REST list only: presence:update and profile:created still go to the whole festival room.
+      // reach the viewer only as anonymous per-set counts in meta.pickCounts. The socket events
+      // presence:update and profile:created follow the same crew-only rule.
       const userCrews = await stores.crews.listByUserAndFestival(req.user.userId, festivalId);
       const membersByCrew = await stores.crews.getMembersForCrews(userCrews.map((c: any) => c.id));
       const visibleUserIds = new Set<string>([req.user.userId]);

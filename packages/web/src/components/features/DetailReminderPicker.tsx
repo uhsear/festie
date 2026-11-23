@@ -3,6 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useNotificationPrefsStore } from '@festie/shared/stores';
 import { reminderDeliveryProblem, type ReminderPermission } from '@festie/shared/utils';
 import { usePushNotifications } from '../../hooks/usePushNotifications';
+import { useToast } from '../../lib/toastContext';
 import { cn } from '../../lib/utils';
 
 interface Props {
@@ -35,6 +36,7 @@ export default function DetailReminderPicker({
   onReminderClick,
 }: Props) {
   const navigate = useNavigate();
+  const { toastError } = useToast();
   const { permissionState, unsupportedReason, requestPermission, registerToken } = usePushNotifications();
   const setRemindersPref = useNotificationPrefsStore((s) => s.prefs.setReminders);
   const loadPrefs = useNotificationPrefsStore((s) => s.loadPrefs);
@@ -53,8 +55,12 @@ export default function DetailReminderPicker({
 
   // Ask only from this button, after the user set a reminder; never on mount.
   const turnOn = async () => {
-    const result = await requestPermission();
-    if (result === 'granted') await registerToken();
+    try {
+      const result = await requestPermission();
+      if (result === 'granted') await registerToken();
+    } catch (e) {
+      toastError(e, "Couldn't turn on notifications. Try again.");
+    }
   };
 
   return (
@@ -114,9 +120,12 @@ export default function DetailReminderPicker({
             </>
           )}
           {problem === 'denied' &&
-            'Notifications are blocked for festie.us. Allow them in your browser settings to get this reminder.'}
+            `Notifications are blocked for ${window.location.host}. Allow them in your browser settings to get this reminder.`}
           {problem === 'ios-needs-install' && 'To get reminders on iPhone, add Festie to your Home Screen first.'}
-          {problem === 'unsupported' && "This browser can't show reminders. Use the Festie app or another browser."}
+          {problem === 'unsupported' &&
+            (unsupportedReason === 'not-configured'
+              ? "Reminders aren't set up on this server."
+              : "This browser can't show reminders. Use the Festie app or another browser.")}
           {problem === 'pref-off' && (
             <>
               Set reminders are turned off in Account.{' '}

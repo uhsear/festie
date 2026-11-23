@@ -194,6 +194,40 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
     assert.match(res.body.error.message, /expired|already been used/i);
   });
 
+  test('a browser GET only asks for confirmation and leaves the token live for the POST', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const username = `ve-get-${Date.now()}`;
+    await registerUser(server, username, DEFAULT_PASSWORD);
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    const verifyToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(verifyToken).digest('hex');
+    try {
+      const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+      await pool.query(
+        `INSERT INTO email_verification_tokens (user_id, token_hash, email, expires_at)
+         VALUES ($1, $2, $3, NOW() + INTERVAL '1 hour')`,
+        [rows[0].id, tokenHash, `${username}@example.com`],
+      );
+      const url = `/api/v1/auth/verify-email?token=${verifyToken}`;
+      for (let i = 0; i < 2; i++) {
+        const get = await server.request.get(url).set('Accept', 'text/html');
+        assert.equal(get.status, 302);
+        assert.equal(get.headers.location, `/verify-email?token=${verifyToken}`);
+      }
+      const used = await pool.query('SELECT used_at FROM email_verification_tokens WHERE token_hash = $1', [tokenHash]);
+      assert.equal(used.rows[0].used_at, null, 'GET must not consume the token');
+      // The confirm page is the SPA, so verify-email is not exempt from the Origin check.
+      const opaque = await server.request.post('/api/v1/auth/verify-email').set('Origin', 'null').send({ token: verifyToken });
+      assert.equal(opaque.status, 403);
+      const post = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: verifyToken });
+      assert.equal(post.status, 200);
+      assert.equal(post.body.data.verified, true);
+    } finally {
+      await pool.end();
+    }
+  });
+
   test('verifies email end-to-end with valid token', async () => {
     const server = await startServer();
     servers.push(server);
@@ -243,6 +277,28 @@ describe('email-auth: reset-password', { concurrency: 1 }, () => {
       .post('/api/v1/auth/reset-password')
       .set(TRUSTED_MUTATION_HEADER, '1')
       .send({ token: crypto.randomBytes(32).toString('hex'), newPassword: 'freshpassword9', confirmPassword: 'freshpassword9' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+  });
+
+  test('malformed token (truncated link): 400 with TOKEN_EXPIRED, not a field validation error', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const res = await server.request
+      .post('/api/v1/auth/reset-password')
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ token: 'bogus', newPassword: 'freshpassword9', confirmPassword: 'freshpassword9' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+  });
+
+  test('dead token with a policy-failing password still gets TOKEN_EXPIRED, not a field error', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const res = await server.request
+      .post('/api/v1/auth/reset-password')
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ token: 'bogus', newPassword: 'password123', confirmPassword: 'password123' });
     assert.equal(res.status, 400);
     assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
   });
@@ -315,6 +371,38 @@ describe('email-auth: reset-password', { concurrency: 1 }, () => {
         confirmPassword: 'short',
       });
     assert.ok(res.status >= 400);
+  });
+
+  test('rejects a password containing the token owner username and keeps the token usable', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const username = `rpctx${Date.now()}`;
+    await registerUser(server, username, DEFAULT_PASSWORD);
+
+    const pool = new Pool({ connectionString: TEST_DATABASE_URL });
+    const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    try {
+      const { rows } = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
+      await pool.query(
+        `INSERT INTO password_reset_tokens (user_id, token_hash, expires_at)
+         VALUES ($1, $2, NOW() + INTERVAL '1 hour')`,
+        [rows[0].id, tokenHash],
+      );
+
+      const weak = `${username}-Zq7`;
+      const res = await server.request
+        .post('/api/v1/auth/reset-password')
+        .set(TRUSTED_MUTATION_HEADER, '1')
+        .send({ token, newPassword: weak, confirmPassword: weak });
+      assert.equal(res.status, 400);
+      assert.equal(res.body.error.message, 'Password must not contain your username');
+
+      const { rows: left } = await pool.query('SELECT used_at FROM password_reset_tokens WHERE token_hash = $1', [tokenHash]);
+      assert.equal(left[0].used_at, null, 'a rejected password must not burn the reset link');
+    } finally {
+      await pool.end();
+    }
   });
 
   test('happy path: valid token resets password and invalidates sessions', async () => {
@@ -588,6 +676,18 @@ describe('email-auth: unsubscribe', { concurrency: 1 }, () => {
     assert.equal((await server.request.post(url)).status, 200, 'replaying it is harmless');
   });
 
+  test('the confirm page asks a question without a success icon, and the form POST works with Origin: null', async () => {
+    const { server, userId } = await setup(`unsub-origin-${Date.now()}`);
+    const token = unsubscribeToken(userId, SECRET);
+    const get = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
+    assert.doesNotMatch(get.text, /&#10003;/);
+    const url = `/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}&from=page`;
+    // A same-origin form POST sends Origin: null under Referrer-Policy: no-referrer.
+    const res = await server.request.post(url).set('Origin', 'null');
+    assert.equal(res.status, 200);
+    assert.match(res.text, /You are unsubscribed/);
+  });
+
   test('POST (RFC 8058 one-click) with a valid token unsubscribes', async () => {
     const { server, userId } = await setup(`unsub-post-${Date.now()}`);
     const token = unsubscribeToken(userId, SECRET);
@@ -612,6 +712,7 @@ describe('email-auth: unsubscribe', { concurrency: 1 }, () => {
       const get = await server.request.get(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`);
       assert.equal(get.status, 400, token);
       assert.match(get.text, /Link not valid/);
+      assert.match(get.text, /href="\/account"/, 'the invalid page links to notification settings');
       assert.doesNotMatch(get.text, /Need a new link/, 'the sign-in retry hint does not apply to an unsubscribe link');
       const post = await server.request.post(`/api/v1/auth/unsubscribe?token=${encodeURIComponent(token)}`).type('form').send('List-Unsubscribe=One-Click');
       assert.equal(post.status, 400, token);
