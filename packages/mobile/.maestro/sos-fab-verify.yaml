@@ -34,8 +34,12 @@ env:
     when:
       visible: "Choose a festival"
     commands:
+      - scrollUntilVisible:
+          element:
+            id: "festival-card-${CREW_FESTIVAL_ID}"
+          timeout: 30000
       - tapOn:
-          id: "festival-card-fk-2026"
+          id: "festival-card-${CREW_FESTIVAL_ID}"
       - extendedWaitUntil:
           visible:
             text: "Switch|Timeline|Cards"
@@ -69,7 +73,7 @@ env:
       # The FAB needs the crew's festival selected: pick it before opening the map.
       - openLink: festie:///cards
       - tapOn:
-          text: "Switch"
+          text: ".*Switch festival"
           optional: true
       - scrollUntilVisible:
           element:

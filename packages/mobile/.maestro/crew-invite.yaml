@@ -104,20 +104,15 @@ env:
 
 # ── Capture invite code ────────────────────────────────────────────────────────
 # The invite code is displayed in the crew chrome with accessibilityLabel
-# "Invite code <CODE>" and the raw code in a sibling Text node.  We copy the
-# text from the code element itself via copyTextFrom so Maestro captures it
-# into the OUTPUT_INVITE_CODE variable.
+# "Invite code <CODE>" and the raw code in a sibling Text node (testID
+# crew-invite-code).  We copy the text from the code element via copyTextFrom so
+# Maestro captures it into the OUTPUT_INVITE_CODE variable.
 - extendedWaitUntil:
     visible: "Invite code"
     timeout: 20000
 - takeScreenshot: ci-05-invite-visible
 - copyTextFrom:
-    text: "Invite code"
-    # Maestro copies the TEXT of the matched element. The label reads "Invite
-    # code" and the next sibling Text shows the raw code (e.g. "A1B2C3").
-    # We match the label and capture the adjacent code text.
-    # If copyTextFrom picks up "Invite code" itself rather than the code we
-    # fall back to the accessibilityLabel approach below.
+    id: "crew-invite-code"
     outputVariable: OUTPUT_INVITE_CODE
 - takeScreenshot: ci-06-code-captured
 

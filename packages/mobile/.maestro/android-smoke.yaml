@@ -210,7 +210,7 @@ env:
 - takeScreenshot: 18-plan-share
 - openLink: "festie://privacy"
 - extendedWaitUntil:
-    visible: "1. Data Controller & Contact Information"
+    visible: "1. Who runs Festie"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000

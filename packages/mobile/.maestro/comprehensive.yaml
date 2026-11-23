@@ -106,7 +106,7 @@ env:
 # --- More (prefs / data / legal) ---
 - tapOn: "More"
 - extendedWaitUntil:
-    visible: "Settings & preferences"
+    visible: "Settings & preferences.*"
     timeout: 20000
 - takeScreenshot: c10-account
 - scrollUntilVisible:
