@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import { useOfflineReadinessStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { SectionReadiness } from '@festie/shared/stores';
@@ -10,6 +10,7 @@ import {
   extractSiteplan,
   headContentLength,
 } from '@festie/shared/utils';
+import { getMapOutcome, setMapOutcome, subscribeMapOutcome, type MapOutcome } from '../lib/offlineMapOutcome';
 import {
   basemapCacheInfo,
   clearBasemapCache,
@@ -60,44 +61,61 @@ export async function downloadOfflineMap(
   return { section: section.status === 'ready' ? section : { status: 'error', syncedAt: Date.now() }, message: null };
 }
 
+/**
+ * The map step as the screen should show it: a saved archive on disk is always `ready`; otherwise the
+ * last attempt's syncing/error (with its message) survives here, so a card that unmounted during the
+ * download still shows why the map was not saved. Nothing at all is plain `idle`.
+ */
+export function mapStateFor(pmtilesUrl: string | null | undefined): MapOutcome {
+  const disk = sectionFromDisk(pmtilesUrl);
+  if (disk.status === 'ready') return { section: disk, message: null };
+  return getMapOutcome(pmtilesUrl) ?? { section: IDLE, message: null };
+}
+
 function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | null) {
-  // Seed from disk during the first render rather than setting state inside an
-  // effect: the cache is readable synchronously, so an effect would render IDLE
-  // once and immediately re-render, and it trips react-hooks/set-state-in-effect.
-  const [section, setSection] = useState<SectionReadiness>(() => sectionFromDisk(pmtilesUrl));
-  const [siteplanBytes, setSiteplanBytes] = useState(() => basemapCacheInfo(siteplanUrl).bytes);
-  const [message, setMessage] = useState<string | null>(null);
-
-  const readFromDisk = useCallback(() => {
-    setSection(sectionFromDisk(pmtilesUrl));
-    setSiteplanBytes(basemapCacheInfo(siteplanUrl).bytes);
-  }, [pmtilesUrl, siteplanUrl]);
-
-  // Re-read only when the festival's archive or site-plan URL changes; the initialisers
-  // above cover the first render.
-  const seenUrl = useRef(`${pmtilesUrl}|${siteplanUrl}`);
+  // Disk and the last attempt are both readable synchronously, so derive the state at render time and
+  // re-render when either changes (another hook instance, the map screen, or an attempt settling).
+  const [, bump] = useState(0);
   useEffect(() => {
-    const key = `${pmtilesUrl}|${siteplanUrl}`;
-    if (seenUrl.current === key) return;
-    seenUrl.current = key;
-    setMessage(null);
-    readFromDisk();
-  }, [pmtilesUrl, siteplanUrl, readFromDisk]);
-
-  // Another hook instance (Picks card, a status chip) or the map screen may cache
-  // the archive; re-read when any attempt settles so every surface agrees.
-  useEffect(() => subscribeBasemapCache(readFromDisk), [readFromDisk]);
+    const rerender = () => bump((n) => n + 1);
+    const offDisk = subscribeBasemapCache(rerender);
+    const offOutcome = subscribeMapOutcome(rerender);
+    return () => {
+      offDisk();
+      offOutcome();
+    };
+  }, []);
+  const { section, message } = mapStateFor(pmtilesUrl);
+  const siteplanBytes = basemapCacheInfo(siteplanUrl).bytes;
 
   const download = useCallback(async () => {
     if (!pmtilesUrl) return;
-    setMessage(null);
-    setSection({ status: 'syncing', syncedAt: null });
+    setMapOutcome(pmtilesUrl, { section: { status: 'syncing', syncedAt: null }, message: null });
     const result = await downloadOfflineMap(pmtilesUrl, siteplanUrl);
-    setMessage(result.message);
-    setSection(result.section);
+    setMapOutcome(pmtilesUrl, result.section.status === 'ready' ? null : result);
   }, [pmtilesUrl, siteplanUrl]);
 
   return { section, download, message, siteplanBytes };
+}
+
+/** The map step for a festival (null when it has no offline map), for the "Festival ready" checklist. */
+export function useOfflineMapStatus(festivalId: string): SectionReadiness | null {
+  const currentFestival = useFestivalDataStore((s) => s.currentFestival);
+  const mapUrl = offlineMapUrl(currentFestival, festivalId);
+  const { section } = useOfflineMapSection(mapUrl, null);
+  return mapUrl ? section : null;
+}
+
+function offlineMapUrl(
+  festival: ReturnType<typeof useFestivalDataStore.getState>['currentFestival'],
+  festivalId: string,
+): string | null {
+  // expo-file-system has no web implementation (downloadFileAsync warns and
+  // resolves without writing), so the Expo web export shows NO map step rather
+  // than one that could never go ready.
+  return festival?.id === festivalId && hasOfflineBasemap(festival.mapConfig) && Platform.OS !== 'web'
+    ? festival.mapConfig.offlineBasemap.pmtilesUrl
+    : null;
 }
 
 /**
@@ -113,13 +131,7 @@ export function useOfflineDownload(festivalId: string) {
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const days = useFestivalDataStore((s) => s.days);
 
-  // expo-file-system has no web implementation (downloadFileAsync warns and
-  // resolves without writing), so the Expo web export shows NO map step rather
-  // than one that could never go ready.
-  const mapUrl =
-    currentFestival?.id === festivalId && hasOfflineBasemap(currentFestival.mapConfig) && Platform.OS !== 'web'
-      ? currentFestival.mapConfig.offlineBasemap.pmtilesUrl
-      : null;
+  const mapUrl = offlineMapUrl(currentFestival, festivalId);
   const siteplanUrl = mapUrl ? (extractSiteplan(currentFestival?.mapConfig)?.imageUrl ?? null) : null;
   const {
     section: mapSection,

@@ -289,6 +289,7 @@ function SetCardMobileImpl({
           style={styles.nameFill}
           onPress={onPress}
           accessible={false}
+          focusable={false}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"
         />
@@ -298,6 +299,7 @@ function SetCardMobileImpl({
         style={styles.body}
         onPress={onPress}
         accessible={false}
+        focusable={false}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
       >

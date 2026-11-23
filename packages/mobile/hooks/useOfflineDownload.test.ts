@@ -46,7 +46,8 @@ vi.mock('../lib/basemapCache', async (importOriginal) => {
   };
 });
 
-const { sectionFromDisk, downloadOfflineMap } = await import('./useOfflineDownload');
+const { sectionFromDisk, downloadOfflineMap, mapStateFor } = await import('./useOfflineDownload');
+const { setMapOutcome } = await import('../lib/offlineMapOutcome');
 const { basemapCacheFile, ensureBasemapCached, checkArchiveSpace } = await import('../lib/basemapCache');
 
 const PMTILES = 'https://festie.us/uploads/basemaps/big-2026.pmtiles';
@@ -129,5 +130,27 @@ describe('free-space check before the map download', () => {
     expect((await checkArchiveSpace(PMTILES)).ok).toBe(false);
     fs.free = 400 * MIB;
     expect((await checkArchiveSpace(PMTILES)).ok).toBe(true);
+  });
+});
+
+describe('map step outcome survives the card unmounting', () => {
+  it('keeps the error and its message after the attempt, so a remounted card still shows why', async () => {
+    fs.free = 3.7 * 1024 * MIB;
+    vi.stubGlobal('fetch', head(139 * 1024 * MIB));
+    const result = await downloadOfflineMap(PMTILES, null);
+    expect(result.section.status).toBe('error');
+    setMapOutcome(PMTILES, result);
+    // A fresh hook instance (the card remounted) has no state of its own: it reads this.
+    const remounted = mapStateFor(PMTILES);
+    expect(remounted.section.status).toBe('error');
+    expect(remounted.message).toMatch(/Not enough free space to save the map \(needs .* MB, .* MB free\)/);
+    setMapOutcome(PMTILES, null);
+  });
+
+  it('a saved archive on disk wins over a stale error', () => {
+    setMapOutcome(PMTILES, { section: { status: 'error', syncedAt: 1 }, message: 'old' });
+    fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
+    expect(mapStateFor(PMTILES)).toEqual({ section: { status: 'ready', syncedAt: 1_700_000_000_000 }, message: null });
+    setMapOutcome(PMTILES, null);
   });
 });
