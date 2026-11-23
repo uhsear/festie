@@ -5,7 +5,7 @@
 appId: us.festie.app
 # Always keep a last screenshot, so a failed run shows where it stopped.
 onFlowComplete:
-  - takeScreenshot: zz-last
+  - takeScreenshot: screenshots/zz-last
 # ios-e2e.yml passes -e TEST_*; the EAS workflow e2e-ios.yml exports only MAESTRO_TEST_*, which Maestro imports.
 env:
   TEST_USERNAME: ${TEST_USERNAME || MAESTRO_TEST_USERNAME}
@@ -17,7 +17,7 @@ env:
     visible:
       id: "intro-skip|festival-card-.*"
     timeout: 90000
-- takeScreenshot: 01-launch
+- takeScreenshot: screenshots/01-launch
 - runFlow:
     when:
       visible:
@@ -31,7 +31,7 @@ env:
     timeout: 30000
 - assertVisible:
     id: "festival-card-fk-2026"
-- takeScreenshot: 02-festival-picker
+- takeScreenshot: screenshots/02-festival-picker
 # At large Dynamic Type a festival card is taller than half the screen and its
 # centre sits under the tab bar, so a plain tap lands on a tab. Centre it first.
 - scrollUntilVisible:
@@ -45,7 +45,7 @@ env:
       text: "Timeline|Cards"
     timeout: 150000
 - assertNotVisible: "Choose a festival"
-- takeScreenshot: 03-schedule-guest
+- takeScreenshot: screenshots/03-schedule-guest
 
 # Public/auth screens.
 # The first link after launch is sometimes dropped on a loaded runner (the app stays on the
@@ -64,12 +64,12 @@ env:
       - extendedWaitUntil:
           visible: "Create your account"
           timeout: 15000
-- takeScreenshot: 04-register
+- takeScreenshot: screenshots/04-register
 - openLink: "festie://forgot-password"
 - extendedWaitUntil:
     visible: "Reset your password|Forgot password"
     timeout: 30000
-- takeScreenshot: 05-forgot-password
+- takeScreenshot: screenshots/05-forgot-password
 - openLink: "festie://login"
 - extendedWaitUntil:
     visible: "Sign in to your account"
@@ -100,7 +100,7 @@ env:
 # tap the button. Anchor ^Sign in$ so it hits the button, not this subtitle.
 - tapOn:
     text: "Sign in to your account"
-- takeScreenshot: 05-login-ready
+- takeScreenshot: screenshots/05-login-ready
 - tapOn:
     text: "^Sign in$"
 - tapOn:
@@ -130,7 +130,7 @@ env:
     selected: true
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 06-cards
+- takeScreenshot: screenshots/06-cards
 - tapOn:
     text: "Day: Sunday.*"
 - assertVisible:
@@ -138,14 +138,14 @@ env:
     selected: true
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 07-cards-sunday
+- takeScreenshot: screenshots/07-cards-sunday
 
 # Switch the Picks/Crew/Lineup NativeTabs by their label, exactly as the
 # passing Android smoke does. Each screenshot is taken BEFORE its assertion so a
 # failure still captures the real screen — the "Remove credential-bearing Maestro
 # metadata" CI step strips Maestro's own debug hierarchy from the artifact.
 - tapOn: "Picks"
-- takeScreenshot: 10-picks
+- takeScreenshot: screenshots/10-picks
 - extendedWaitUntil:
     visible:
       id: "picks-screen"
@@ -153,7 +153,7 @@ env:
 - waitForAnimationToEnd:
     timeout: 6000
 - tapOn: "Crew"
-- takeScreenshot: 11-crew
+- takeScreenshot: screenshots/11-crew
 - extendedWaitUntil:
     visible:
       id: "crew-screen"
@@ -177,21 +177,21 @@ env:
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 08-timeline
+- takeScreenshot: screenshots/08-timeline
 - openLink: "festie://grid"
 - extendedWaitUntil:
     visible: ".*· Grid"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 09-grid
+- takeScreenshot: screenshots/09-grid
 - openLink: "festie://crew-plan"
 - extendedWaitUntil:
     visible: "Meet up|No crew yet|Joining when you're back online"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 12-crew-plan
+- takeScreenshot: screenshots/12-crew-plan
 - openLink: "festie://crew-compare"
 - extendedWaitUntil:
     notVisible: "Loading crew picks…"
@@ -204,14 +204,14 @@ env:
     text: "^No crew$"
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 13-crew-compare
+- takeScreenshot: screenshots/13-crew-compare
 - openLink: "festie://festival-mode"
 - extendedWaitUntil:
     visible: "Now & Next"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 14-now-next
+- takeScreenshot: screenshots/14-now-next
 - openLink: "festie://map"
 - extendedWaitUntil:
     visible:
@@ -222,7 +222,7 @@ env:
 - waitForAnimationToEnd:
     timeout: 6000
 - assertNotVisible: "Find your crew"
-- takeScreenshot: 16-map
+- takeScreenshot: screenshots/16-map
 - openLink: "festie://compass"
 - extendedWaitUntil:
     visible:
@@ -230,7 +230,7 @@ env:
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 17-compass
+- takeScreenshot: screenshots/17-compass
 - openLink: "festie://plan-share"
 - extendedWaitUntil:
     visible: "Share picks"
@@ -246,14 +246,14 @@ env:
     timeout: 10000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 18-plan-share
+- takeScreenshot: screenshots/18-plan-share
 - openLink: "festie://privacy"
 - extendedWaitUntil:
     visible: "1. Who runs Festie"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 19-privacy
+- takeScreenshot: screenshots/19-privacy
 # Return to the tabs (privacy is a standalone route), then switch to More by
 # its NativeTab label, matching the Android smoke. Screenshot before the assert.
 - openLink: "festie://cards"
@@ -262,7 +262,7 @@ env:
       id: "schedule-screen"
     timeout: 20000
 - tapOn: "More"
-- takeScreenshot: 20-account
+- takeScreenshot: screenshots/20-account
 - extendedWaitUntil:
     visible:
       id: "account-screen"
@@ -279,4 +279,4 @@ env:
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 21-admin
+- takeScreenshot: screenshots/21-admin
