@@ -71,7 +71,7 @@ export async function createUserWithProfile(userData: any, deps: any) {
  * Issue a refresh token for mobile clients and persist it.
  * Returns the raw refresh token string, or null if refresh tokens are disabled.
  */
-export async function issueRefreshToken(userId: string, sessionToken: string, deps: any) {
+export async function issueRefreshToken(userId: string, sessionToken: string, deps: any, familyId: string) {
   const { stores, config, createOpaqueId } = deps;
   if (!stores.refreshTokens) return null;
   const { hashSessionToken: hashToken } = deps;
@@ -81,6 +81,7 @@ export async function issueRefreshToken(userId: string, sessionToken: string, de
     userId,
     sessionToken: hashToken(sessionToken),
     expiresAt: new Date(Date.now() + config.REFRESH_TOKEN_TTL),
+    familyId,
   });
   return refreshToken;
 }
@@ -160,10 +161,11 @@ export async function finishSignIn(
     log.info('account:reactivated', { userId: user.id, username: user.username, restoredProfiles });
   }
 
-  const token = await createUserSession(user.id, user.username, deviceOf(req));
+  const familyId = deps.createOpaqueId('rtf');
+  const token = await createUserSession(user.id, user.username, deviceOf(req), null, familyId);
   setNoStore(res);
   setUserSessionCookie(res, token);
-  const refreshToken = await issueRefreshToken(user.id, token, deps);
+  const refreshToken = await issueRefreshToken(user.id, token, deps, familyId);
 
   const { serializePublicUser, sendSuccess } = deps;
   const roles = await stores.roles.getUserRoles(user.id);

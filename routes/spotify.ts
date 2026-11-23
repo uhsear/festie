@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getToken } from '../lib/spotify.js';
+import { getToken, SPOTIFY_TIMEOUT_MS } from '../lib/spotify.js';
 import type { RouteDeps } from '../lib/types';
 
 export default function createSpotifyRoutes(deps: RouteDeps) {
@@ -89,7 +89,7 @@ export default function createSpotifyRoutes(deps: RouteDeps) {
         const token = await getToken(config.SPOTIFY_CLIENT_ID, config.SPOTIFY_CLIENT_SECRET);
         const topRes = await fetch(
           'https://api.spotify.com/v1/artists/' + artistId + '/top-tracks?market=US',
-          { headers: { 'Authorization': 'Bearer ' + token } }
+          { headers: { 'Authorization': 'Bearer ' + token }, signal: AbortSignal.timeout(SPOTIFY_TIMEOUT_MS) }
         );
 
         if (topRes.ok) {

@@ -245,6 +245,26 @@ describe('emitter: profileUpdated', () => {
     emitter.flushAll();
   });
 
+  it('queues the crew pick push without a provider but sends no silent sync', async (t) => {
+    t.mock.timers.enable({ apis: ['setTimeout'] });
+    const send = mock.fn(async (_a: any) => ({ sent: 0, reason: 'firebase_not_configured' }));
+    const sendSilentSync = mock.fn(async () => ({ sent: 0 }));
+    const stores = crewStores({ c1: ['user-1', 'user-2'] });
+    const emitter = createSocketEmitter(
+      defaultDeps({ notificationService: { isConfigured: false, send, sendSilentSync }, stores }),
+    );
+    emitter.profileUpdated({
+      profile: { festivalId: 'fest-1', id: 'prof-1', name: 'Alice', userId: 'user-1', picks: {} },
+      user: {},
+      changedFields: { picks: true },
+    });
+    t.mock.timers.tick(10 * 60 * 1000);
+    for (let i = 0; i < 20; i++) await Promise.resolve();
+    assert.deepEqual(send.mock.calls.map((c: any) => c.arguments[0].userId), ['user-2']);
+    assert.equal(sendSilentSync.mock.callCount(), 0);
+    emitter.flushAll();
+  });
+
   it('skips crewmates who muted the festival crew topic and sends nothing without crews', async (t) => {
     t.mock.timers.enable({ apis: ['setTimeout'] });
     const send = mock.fn(async (_a: any) => ({ sent: 1 }));
@@ -525,6 +545,21 @@ describe('emitter: scheduleChanged', () => {
       setId: 'set-1',
       deepLink: 'https://festie.example/set/set-1',
     });
+  });
+
+  it('still sends the alert, which writes the inbox row, when no push provider is configured', async () => {
+    const send = mock.fn(async (_args: any) => ({ sent: 0, reason: 'firebase_not_configured' }));
+    const emitter = createSocketEmitter(defaultDeps({ notificationService: { isConfigured: false, send } }));
+
+    const result = await emitter.scheduleChanged({
+      festival,
+      changes: [{ kind: 'moved', setId: 'set-1', artist: 'Peggy Gou', before: slot('22:00'), after: slot('23:30') }],
+      pickersBySet: new Map([['set-1', ['u1']]]),
+    });
+
+    assert.equal(send.mock.callCount(), 1);
+    assert.equal(send.mock.calls[0]!.arguments[0].userId, 'u1');
+    assert.deepEqual(result, { ok: true });
   });
 
   it('links a removal to /picks', async () => {

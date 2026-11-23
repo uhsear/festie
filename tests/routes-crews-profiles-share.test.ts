@@ -1462,8 +1462,8 @@ describe('routes/profiles.js', () => {
       const res = await request(app).get('/profiles/f1');
       assert.equal(res.status, 200);
       assert.equal(res.body.error, null);
-      // user-2 shares no crew with the caller: picks hidden, counted anonymously.
-      assert.deepEqual(res.body.data.find((p: { userId: string }) => p.userId === 'user-2').picks, {});
+      // user-2 shares no crew with the caller: left out of the list, counted anonymously.
+      assert.equal(res.body.data.find((p: { userId: string }) => p.userId === 'user-2'), undefined);
       assert.deepEqual(res.body.data.find((p: { userId: string }) => p.userId === 'user-1').picks, { s1: 'must' });
       assert.deepEqual(res.body.meta.pickCounts, { s1: 1, s2: 1 });
     });

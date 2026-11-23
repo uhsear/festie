@@ -45,6 +45,9 @@ export const DEFAULTS = {
   MAX_RATE_LIMIT_ENTRIES: 10_000,
   AUTH_RATE_LIMIT_WINDOW: 300_000,
   AUTH_RATE_LIMIT_MAX: 10,
+  // Per-IP cap on POST /auth/login attempts per AUTH_RATE_LIMIT_WINDOW. Looser than AUTH_RATE_LIMIT_MAX because
+  // the per-(IP, username) route bucket already holds one account to 10 tries; this only bounds one IP across accounts.
+  AUTH_LOGIN_IP_RATE_LIMIT_MAX: 30,
   SESSION_CLEANUP_INTERVAL_MS: 60_000,
   SESSION_TTL: 24 * 60 * 60 * 1000,
   SOCKET_CONNECT_WINDOW: 60_000,
@@ -128,6 +131,7 @@ export const DEFAULTS = {
   API_VERSION: '1',
   REFRESH_TOKEN_TTL: 90 * 24 * 60 * 60 * 1000,
   MAX_LOGIN_FAILURES: 10,
+  LOGIN_GLOBAL_LOCK_FAILURES: 50,
   LOGIN_LOCKOUT_MS: 15 * 60 * 1000,
   PROFILE_RATE_LIMIT_MAX: 60,
   OVERLAP_RATE_LIMIT_MAX: 30,
@@ -333,6 +337,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   MAX_RATE_LIMIT_ENTRIES: number;
   AUTH_RATE_LIMIT_WINDOW: number;
   AUTH_RATE_LIMIT_MAX: number;
+  AUTH_LOGIN_IP_RATE_LIMIT_MAX: number;
   SESSION_CLEANUP_INTERVAL_MS: number;
   SESSION_TTL: number;
   SOCKET_CONNECT_WINDOW: number;
@@ -414,6 +419,7 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   EMAIL_UNSUBSCRIBE_SECRET: string;
   REFRESH_TOKEN_TTL: number;
   MAX_LOGIN_FAILURES: number;
+  LOGIN_GLOBAL_LOCK_FAILURES: number;
   LOGIN_LOCKOUT_MS: number;
   PROFILE_RATE_LIMIT_MAX: number;
   OVERLAP_RATE_LIMIT_MAX: number;
@@ -468,6 +474,11 @@ export function loadConfig(overrides: Record<string, any> = {}): {
   const APP_VERSION: string =
     typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : require('../package.json').version;
 
+  const maxLoginFailures = readInt(
+    overrides.MAX_LOGIN_FAILURES || process.env.MAX_LOGIN_FAILURES,
+    DEFAULTS.MAX_LOGIN_FAILURES,
+    1,
+  );
   const nodeEnv = overrides.NODE_ENV || process.env.NODE_ENV || 'development';
   const publicDir = path.resolve(
     overrides.PUBLIC_DIR || process.env.PUBLIC_DIR || path.join(import.meta.dirname, '..', 'public'),
@@ -558,6 +569,10 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     AUTH_RATE_LIMIT_MAX: readInt(
       overrides.AUTH_RATE_LIMIT_MAX || process.env.AUTH_RATE_LIMIT_MAX,
       DEFAULTS.AUTH_RATE_LIMIT_MAX,
+    ),
+    AUTH_LOGIN_IP_RATE_LIMIT_MAX: readInt(
+      overrides.AUTH_LOGIN_IP_RATE_LIMIT_MAX || process.env.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
+      DEFAULTS.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
     ),
     SESSION_CLEANUP_INTERVAL_MS: readInt(
       overrides.SESSION_CLEANUP_INTERVAL_MS || process.env.SESSION_CLEANUP_INTERVAL_MS,
@@ -818,10 +833,15 @@ export function loadConfig(overrides: Record<string, any> = {}): {
       DEFAULTS.REFRESH_TOKEN_TTL,
       60000,
     ),
-    MAX_LOGIN_FAILURES: readInt(
-      overrides.MAX_LOGIN_FAILURES || process.env.MAX_LOGIN_FAILURES,
-      DEFAULTS.MAX_LOGIN_FAILURES,
-      1,
+    MAX_LOGIN_FAILURES: maxLoginFailures,
+    // Account-wide lock across all IPs. Kept above MAX_LOGIN_FAILURES so it never pre-empts the per-IP lock.
+    LOGIN_GLOBAL_LOCK_FAILURES: Math.max(
+      readInt(
+        overrides.LOGIN_GLOBAL_LOCK_FAILURES || process.env.LOGIN_GLOBAL_LOCK_FAILURES,
+        DEFAULTS.LOGIN_GLOBAL_LOCK_FAILURES,
+        1,
+      ),
+      maxLoginFailures + 1,
     ),
     LOGIN_LOCKOUT_MS: readInt(
       overrides.LOGIN_LOCKOUT_MS || process.env.LOGIN_LOCKOUT_MS,
@@ -959,11 +979,9 @@ export function loadConfig(overrides: Record<string, any> = {}): {
     ).trim().toUpperCase().slice(0, 20),
     APP_VERSION: overrides.APP_VERSION || process.env.APP_VERSION || APP_VERSION || DEFAULTS.APP_VERSION,
 
-    // SESSION_SECRET: reserved for future HMAC-signed session tokens.
-    // Currently NOT used cryptographically — session tokens are random opaque
-    // strings stored server-side (SHA-256 hashed). The production startup
-    // check in server.ts ensures this is set to a strong value so the key is
-    // available when session signing is introduced without a redeployment.
+    // SESSION_SECRET keys the HMAC that hashes client IPs for the per-IP login lockout (lib/helpers/ip-key.ts).
+    // Rotating it resets every per-IP lockout counter. Session tokens themselves are random opaque
+    // strings stored server-side (SHA-256 hashed), not signed with it.
     // See ADR-004 for the CSRF/session security design rationale.
     SESSION_SECRET: overrides.SESSION_SECRET || process.env.SESSION_SECRET || '',
   };

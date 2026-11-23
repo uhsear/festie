@@ -782,7 +782,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
    * Returns the total number of pushes delivered.
    */
   async function pushFanout(userIds: string[], buildPayload: (uid: string) => any): Promise<number> {
-    if (!userIds.length || !notify.isConfigured || typeof notify.send !== 'function') return 0;
+    if (!userIds.length || typeof notify.send !== 'function') return 0;
     const CHUNK = 25;
     let sent = 0;
     for (let i = 0; i < userIds.length; i += CHUNK) {

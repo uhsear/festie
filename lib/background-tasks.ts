@@ -175,11 +175,13 @@ export function createBackgroundTasks(ctx: any, { io }: any) {
           `DELETE FROM email_verification_tokens WHERE expires_at < NOW()`,
         );
         const { rowCount: refreshPurged } = await stores.pool.query(
-          'DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked = TRUE',
+          // A rotated token stays until it expires so a replay is still detected (routes/auth.ts, refresh-token).
+          'DELETE FROM refresh_tokens WHERE expires_at < NOW() OR (revoked = TRUE AND rotated_at IS NULL)',
         );
         const deviceTokensPurged = await stores.deviceTokens.deleteExpired();
-        if (resetPurged > 0 || verifyPurged > 0 || refreshPurged > 0 || deviceTokensPurged > 0) {
-          log.info('token cleanup', { resetPurged, verifyPurged, refreshPurged, deviceTokensPurged });
+        const loginIpsPurged = await stores.loginFailures.purgeStaleIps(config.LOGIN_LOCKOUT_MS);
+        if (resetPurged > 0 || verifyPurged > 0 || refreshPurged > 0 || deviceTokensPurged > 0 || loginIpsPurged > 0) {
+          log.info('token cleanup', { resetPurged, verifyPurged, refreshPurged, deviceTokensPurged, loginIpsPurged });
         }
         recordJobRun('token_cleanup', true);
       } catch (err: any) {

@@ -941,7 +941,7 @@ describe('createSessionsStore', () => {
           sessionToken: 'st1',
           expiresAt: '2026-07-01T00:00:00.000Z',
         });
-        assert.deepEqual(pool.calls[0].params, ['rt1', 'u1', 'st1', '2026-07-01T00:00:00.000Z']);
+        assert.deepEqual(pool.calls[0].params, ['rt1', 'u1', 'st1', '2026-07-01T00:00:00.000Z', null]);
       });
 
       it('executes exactly one query', async () => {
@@ -1006,7 +1006,7 @@ describe('createSessionsStore', () => {
         assert.deepEqual(pool.calls[2].params, ['rt1']);
       });
 
-      it('returns null and deletes when token is revoked', async () => {
+      it('returns null and keeps the row when token is revoked, so a replay stays detectable', async () => {
         const row = {
           token: 'rt1',
           userId: 'u1',
@@ -1015,16 +1015,12 @@ describe('createSessionsStore', () => {
           expiresAt: new Date(Date.now() + 86400000).toISOString(),
           revoked: true,
         };
-        const pool = mockPool([
-          { rows: [row], rowCount: 1 }, // SELECT
-          { rows: [], rowCount: 1 }, // DELETE
-        ]);
+        const pool = mockPool([{ rows: [row], rowCount: 1 }]);
         const sessions = createSessionsStore(pool, mockUtils);
 
         const result = await sessions.refreshTokens.validate('rt1');
         assert.equal(result, null);
-        assert.equal(pool.calls.length, 2);
-        assert.deepEqual(pool.calls[1].params, ['rt1']);
+        assert.equal(pool.calls.length, 1);
       });
 
       it('returns null and deletes when token is expired', async () => {
@@ -1185,11 +1181,12 @@ describe('createSessionsStore', () => {
         await assert.doesNotReject(() => sessions.loginFailures.reset('u1'));
       });
 
-      it('executes exactly one query', async () => {
-        const pool = mockPool([{ rows: [] }]);
+      it('clears the account total and every per-IP row', async () => {
+        const pool = mockPool([{ rows: [] }, { rows: [] }]);
         const sessions = createSessionsStore(pool, mockUtils);
         await sessions.loginFailures.reset('u1');
-        assert.equal(pool.calls.length, 1);
+        assert.equal(pool.calls.length, 2);
+        assert.ok(pool.calls[1].sql.includes('login_failure_ips'));
       });
     });
 

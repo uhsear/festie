@@ -90,7 +90,10 @@ export default function createAdminSiteplanRoutes(deps: RouteDeps) {
             fit: 'inside',
           });
         } catch (error: any) {
-          if (error.statusCode) return sendError(res, 400, error.message, ErrorCodes.INVALID_INPUT);
+          if (error.statusCode) {
+            log.warn('siteplan image rejected', { festivalId, error: error.message, detail: error.detail });
+            return sendError(res, 400, error.message, ErrorCodes.INVALID_INPUT);
+          }
           log.warn('siteplan image processing failed', { festivalId, error: error.message });
           return sendError(res, 400, "We couldn't read that image. Try a PNG or JPEG.", ErrorCodes.INVALID_INPUT);
         }

@@ -117,7 +117,12 @@ describe('POST /api/v1/auth/forgot-password', () => {
 
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });
     try {
-      const tokens = await pool.query('SELECT * FROM password_reset_tokens WHERE user_id = $1', [reg.body.data.user.id]);
+      // The route answers before it writes the token, so poll for the row.
+      let tokens = await pool.query('SELECT * FROM password_reset_tokens WHERE user_id = $1', [reg.body.data.user.id]);
+      for (let attempt = 0; attempt < 40 && tokens.rows.length === 0; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        tokens = await pool.query('SELECT * FROM password_reset_tokens WHERE user_id = $1', [reg.body.data.user.id]);
+      }
       assert.ok(tokens.rows.length > 0, 'Reset token should be created in DB');
     } finally { await pool.end(); }
   });

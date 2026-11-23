@@ -401,8 +401,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
         setNoStore(res);
         return sendSuccess(res, { user: serializePublicUser(updatedUser) });
       } catch (error) {
-        const e = error as { statusCode?: number; message: string };
+        const e = error as { statusCode?: number; message: string; detail?: string };
         if (e.statusCode) {
+          log.warn('avatar image rejected', { error: e.message, detail: e.detail });
           return sendError(res, e.statusCode, e.message, ErrorCodes.INVALID_INPUT);
         }
         log.error('avatar upload failed', { error: e.message });
