@@ -123,6 +123,7 @@ export default function FestivalEditForm({
   const organizer = mode === 'organizer';
   const { toast } = useToast();
   const rootRef = useRef<HTMLDivElement>(null);
+  const actionBarRef = useRef<HTMLDivElement>(null);
   const [expandedDays, setExpandedDays] = useState<Set<string>>(initialExpandedDays ?? new Set());
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -176,6 +177,21 @@ export default function FestivalEditForm({
   }, [resolved]);
   const dayHasIssue = (day: Day, index: number) =>
     byKey.has(`day:${index}`) || (day.sets || []).some((st) => byKey.has(`set:${st.id}`));
+
+  // Publish the sticky Save/Cancel bar height so the toast stack sits above it instead of covering Save.
+  useEffect(() => {
+    const el = actionBarRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver((entries) => {
+      const h = entries[0]?.borderBoxSize?.[0]?.blockSize ?? entries[0]?.contentRect?.height ?? 0;
+      document.documentElement.style.setProperty('--sticky-bar-h', `${h}px`);
+    });
+    ro.observe(el);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--sticky-bar-h');
+    };
+  }, []);
 
   useEffect(() => {
     if (issues.length === 0) return;
@@ -405,6 +421,7 @@ export default function FestivalEditForm({
             value={formData.name || ''}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
             disabled={identityLocked}
+            aria-describedby={identityLocked ? 'festival-identity-locked' : undefined}
             aria-invalid={nameIssues.length ? true : undefined}
             className={`w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${nameIssues.length ? ERROR_RING : ''}`}
           />
@@ -425,6 +442,7 @@ export default function FestivalEditForm({
             value={formData.location || ''}
             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             disabled={identityLocked}
+            aria-describedby={identityLocked ? 'festival-identity-locked' : undefined}
             className="w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           />
           {venueGuessed && (
@@ -434,7 +452,7 @@ export default function FestivalEditForm({
           )}
         </div>
         {identityLocked && (
-          <p className="text-xs text-text-muted md:col-span-2">
+          <p id="festival-identity-locked" className="text-xs text-text-muted md:col-span-2">
             Ask Festie to change the name or location of a live festival.{' '}
             <a href="mailto:support@festie.us" className="text-accent-aqua underline">
               Contact Festie
@@ -737,7 +755,7 @@ export default function FestivalEditForm({
 
       </fieldset>
 
-      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-glass-border bg-bg-primary px-2 pb-2 pt-4">
+      <div ref={actionBarRef} className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-glass-border bg-bg-primary px-2 pb-2 pt-4">
         {editingId && (
           <span className="w-full text-sm text-text-muted sm:mr-auto sm:w-auto">
             {total > 0 ? `${plural(total, 'unsaved change')}` : 'All changes saved'}
