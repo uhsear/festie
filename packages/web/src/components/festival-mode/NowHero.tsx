@@ -162,11 +162,14 @@ export default function NowHero({
     const stage = getStageName(next.set.stageId) || '';
     const mins = Math.floor((next.start - nowMs) / 60_000);
     const imminent = mins <= IMMINENT_MIN;
+    const startsIn = fmtStartsIn(next.start, nowMs, timeZone);
+    // Past 12 hours the countdown is already a weekday and clock, so a second clock would repeat it.
+    const relative = startsIn === 'starting now' || startsIn.startsWith('in ');
     body = (
       <div data-testid="fm-next-hero" className={cn(card, 'border-border')}>
         <RowOpenButton
           onClick={() => onOpenSet(next.set)}
-          label={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${fmtStartsIn(next.start, nowMs, timeZone)}${walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : ''}. Open details`}
+          label={`Next: ${name(next.set)}${stage ? ` at ${stage}` : ''}, ${startsIn}${walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : ''}. Open details`}
         />
         <span className="block type-micro text-text-secondary">Next</span>
         <span className="block font-display font-bold text-2xl leading-tight text-text-primary break-words mt-1">
@@ -186,9 +189,9 @@ export default function NowHero({
                 imminent || walk?.late ? 'text-accent-coral font-bold' : 'text-accent-aqua',
               )}
             >
-              {fmtStartsIn(next.start, nowMs, timeZone)}
+              {startsIn}
             </span>
-            <span className="type-numeral text-text-secondary">{fmtZonedClock(next.start, timeZone)}</span>
+            {relative && <span className="type-numeral text-text-secondary">{fmtZonedClock(next.start, timeZone)}</span>}
           </span>
         </span>
       </div>

@@ -169,6 +169,8 @@ export function NowHero({
     const stage = getStageName(next.set.stageId) || '';
     const imminent = Math.floor((next.start - nowMs) / 60_000) <= IMMINENT_MIN;
     const startsIn = fmtStartsIn(next.start, nowMs, timeZone);
+    // Past 12 hours the countdown is already a weekday and clock, so a second clock would repeat it.
+    const relative = startsIn === 'starting now' || startsIn.startsWith('in ');
     const walkA11y = walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : '';
     body = (
       <AppPressable
@@ -191,7 +193,7 @@ export function NowHero({
           ) : null}
           <View style={s.countdownRow}>
             <Text style={[s.countdown, (imminent || walk?.late) && s.countdownImminent]}>{startsIn}</Text>
-            <Text style={s.figureMuted}>{fmtZonedClock(next.start, timeZone)}</Text>
+            {relative && <Text style={s.figureMuted}>{fmtZonedClock(next.start, timeZone)}</Text>}
           </View>
         </View>
       </AppPressable>
