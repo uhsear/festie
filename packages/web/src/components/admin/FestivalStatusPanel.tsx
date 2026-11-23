@@ -158,7 +158,9 @@ export default function FestivalStatusPanel({
 
   const hint =
     organizer && !orgActive
-      ? 'Festie is checking your organization. Submit unlocks when we approve you.'
+      ? organizer.orgStatus === 'suspended'
+        ? "Your organization's access is paused. Contact Festie."
+        : 'Festie is checking your organization. Submit unlocks when we approve you.'
       : blocked
         ? 'Finish the open items first.'
         : dirty
