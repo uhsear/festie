@@ -396,6 +396,9 @@ export default function AccountScreen() {
     ),
   };
 
+  // A signed-out visitor is redirected to sign-in by AuthGate; draw nothing so the settings rows never flash.
+  if (!user) return null;
+
   return (
     // KAV is dropped: behavior='padding' is a no-op on Android, and on iOS it
     // doesn't scroll the focused field into view when it's deep in the list.
