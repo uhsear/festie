@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import {
   Alert,
   KeyboardAvoidingView,
-  Linking,
   Modal,
   Platform,
   Pressable,
@@ -19,16 +18,16 @@ import DateTimePicker, { DateTimePickerAndroid } from '@react-native-community/d
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { isApiClientError, mapErrorToUserMessage } from '@festie/shared/services';
 import { REGISTER_COPY, isAtLeast18, registerErrorField, usernameError } from '@festie/shared/utils';
-import { AUTH_COPY, PROVIDER_COPY } from '@festie/shared/constants';
+import { AUTH_COPY, GUEST_LEGAL_COPY, PROVIDER_COPY } from '@festie/shared/constants';
 import type { ProviderSignupPayload } from '@festie/shared/types';
 import Button from '../../components/Button';
 import BrandMark from '../../components/BrandMark';
+import { openPage } from '../../components/GuestLegalFooter';
 import { takePendingSignup } from '../../components/ProviderButtons';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
-const TERMS_URL = 'https://festie.us/terms.html';
 
 const useStyles = makeStyles((t) => ({
   container: { flex: 1, backgroundColor: t.colors.bg.primary },
@@ -281,7 +280,7 @@ export default function CompleteSignupScreen() {
           <View style={styles.tosTextWrap}>
             <Text style={styles.tosText}>I agree to the </Text>
             <TouchableOpacity
-              onPress={() => void Linking.openURL(TERMS_URL)}
+              onPress={() => void openPage(GUEST_LEGAL_COPY.termsPath)}
               accessibilityRole="link"
               accessibilityLabel="Read the Terms of Service, opens in browser"
             >

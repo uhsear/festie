@@ -30,4 +30,22 @@ describe('guest legal footer (source-level guards)', () => {
     expect(list).toContain('useAuthStore((s) => !s.user)');
     expect(list).toContain('{isGuest ? <GuestLegalFooter /> : null}');
   });
+
+  it('also shows on register and forgot-password, as on web', () => {
+    expect(read('app/(auth)/register.tsx')).toContain('<GuestLegalFooter />');
+    expect(read('app/(auth)/forgot-password.tsx')).toContain('<GuestLegalFooter />');
+  });
+
+  it('opens Terms through the footer opener from register, complete-signup, Account and the privacy screen', () => {
+    expect(src).toMatch(/export async function openPage/);
+    for (const file of ['app/(auth)/register.tsx', 'app/(auth)/complete-signup.tsx', 'app/(tabs)/account.tsx', 'app/privacy.tsx']) {
+      const text = read(file);
+      expect(text).toContain('openPage(GUEST_LEGAL_COPY.termsPath)');
+      expect(text).not.toMatch(/Linking\.openURL\((TERMS_URL|SUPPORT_URL_TERMS)\)/);
+    }
+  });
+
+  it('labels the forgot-password email field visibly, as web does', () => {
+    expect(read('app/(auth)/forgot-password.tsx')).toContain('AUTH_COPY.emailLabel');
+  });
 });

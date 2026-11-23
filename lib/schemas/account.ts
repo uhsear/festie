@@ -14,10 +14,9 @@ export const resetPasswordSchema = z.object({
 });
 
 export const resetPasswordPublicSchema = z.object({
-  token: z
-    .string()
-    .regex(/^[a-f0-9]{64}$/, 'Invalid token')
-    .max(64),
+  // Any non-empty string: a truncated or mangled link must reach the handler and get TOKEN_EXPIRED
+  // (the "link expired" card), not a field-level VALIDATION_ERROR the clients show under the password.
+  token: z.string().min(1).max(4096),
   newPassword: password,
   confirmPassword: z.string().min(8).max(100),
 });
