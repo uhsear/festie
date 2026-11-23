@@ -18,6 +18,7 @@ import {
   searchLineupEntries,
   selectLineupEntries,
   setTimesBannerKind,
+  dayTimesNotOut,
 } from './lineup';
 
 const entry = (id: string, names: string[], extra: Partial<LineupEntry> = {}): LineupEntry => ({
@@ -300,6 +301,21 @@ describe('setTimesBannerKind', () => {
   it('is null once the festival is over, even with no set times', () => {
     expect(kind(festival(), days, [], AFTER)).toBeNull();
     expect(kind(festival(), days, [timedSet(null)], AFTER)).toBeNull();
+  });
+});
+
+describe('dayTimesNotOut', () => {
+  const festival = { id: 'f', name: 'F', lineup: [] } as unknown as Festival;
+  const days = [{ date: '2027-02-05' }] as FestivalDay[];
+  const untimed = [{ id: 's', startTime: null, endTime: null }] as unknown as FestivalSet[];
+  const timed = [{ id: 's', startTime: '20:00', endTime: '21:00' }] as unknown as FestivalSet[];
+  const BEFORE = Date.UTC(2027, 0, 1);
+  const AFTER = Date.UTC(2027, 1, 20);
+
+  it('is true only for a day with no timed set at a festival that is not over', () => {
+    expect(dayTimesNotOut(festival, days, untimed, BEFORE)).toBe(true);
+    expect(dayTimesNotOut(festival, days, timed, BEFORE)).toBe(false);
+    expect(dayTimesNotOut(festival, days, untimed, AFTER)).toBe(false);
   });
 });
 

@@ -3,6 +3,7 @@ import { festivalPhase } from './festivalTime';
 import { formatTime } from './format';
 import { coverLineup, entryDayIndex, lineupNameKey, type LineupCover } from './lineupCover';
 import { byStartTime, formatDayChip } from './scheduleFormat';
+import { dayHasTimedSets } from './scheduleFilters';
 import { joinedArtistNames, searchMatcher } from './setSearch';
 
 // Everything the attendee lineup (web today, mobile from phase A5) decides: the badge on a row, the
@@ -278,6 +279,16 @@ export function lineupReplacesEmptyState(model: AnnouncedLineupModel, searchQuer
     model.daySetCount === 0 &&
     (model.noSets || model.selection.active.length > 0)
   );
+}
+
+/** Whether the grid says "Set times aren't out yet" for a day: no set on it has a time and the festival is not over. */
+export function dayTimesNotOut(
+  festival: Festival | null | undefined,
+  days: readonly FestivalDay[] | null | undefined,
+  daySets: readonly FestivalSet[],
+  now: number = Date.now(),
+): boolean {
+  return !dayHasTimedSets(daySets) && festivalPhase(festival, days, new Date(now)) !== 'post';
 }
 
 /**
