@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   QUEUED_WRITE_MESSAGE,
   UNDO_WINDOW_MS,
-  forgivenSharesNotice,
+  exitBalanceNotice,
   createSettleUpFlow,
   payOptionsFor,
   isPending,
@@ -131,32 +131,41 @@ describe('payOptionsFor currency', () => {
   });
 });
 
-describe('forgivenSharesNotice', () => {
-  it('says nothing when both amounts are zero', () => {
-    expect(forgivenSharesNotice('Sam', { owesCents: 0, owedCents: 0 }, 'leave')).toBe('');
+describe('exitBalanceNotice', () => {
+  const bal = (userId: string, balance: number) => ({ userId, balance });
+  const pick = (balances: ReturnType<typeof bal>[], over = {}) =>
+    exitBalanceNotice({ balances, userId: 's', name: 'Sam', action: 'leave', ...over });
+
+  it('says nothing when the net balance is zero (a settled-up member owes nothing)', () => {
+    // Alex paid 30 split 3 ways; Sam paid Alex 10 back: the server nets Sam to 0.
+    expect(pick([bal('a', 0), bal('s', 0), bal('z', 0)])).toBe('');
+    expect(pick([bal('a', 0.004)])).toBe('');
+    expect(pick([])).toBe('');
   });
 
-  it('names what the member owes', () => {
-    expect(forgivenSharesNotice('Sam', { owesCents: 1240, owedCents: 0 }, 'leave')).toBe(
-      "Sam still owes $12.40. Leaving forgives this, and the crew's balances change.",
-    );
+  it('names the net amount owed, once, not the gross', () => {
+    expect(pick([bal('s', -12.4)])).toBe("Sam still owes $12.40. Leaving forgives this, and the crew's balances change.");
   });
 
-  it('names what the member is owed', () => {
-    expect(forgivenSharesNotice('Sam', { owesCents: 0, owedCents: 300 }, 'remove')).toBe(
-      "Sam is still owed $3.00. Removing forgives this, and the crew's balances change.",
-    );
-  });
-
-  it('names both amounts', () => {
-    expect(forgivenSharesNotice('Sam', { owesCents: 1240, owedCents: 300 }, 'leave')).toBe(
-      "Sam still owes $12.40 and is owed $3.00. Leaving forgives these, and the crew's balances change.",
+  it('names the net amount the member is owed', () => {
+    expect(pick([bal('s', 10)], { action: 'remove' })).toBe(
+      "Sam is still owed $10.00. Removing forgives this, and the crew's balances change.",
     );
   });
 
   it('speaks to the user when the leaver is you, in the crew currency', () => {
-    expect(forgivenSharesNotice(null, { owesCents: 500, owedCents: 250 }, 'leave', 'EUR')).toBe(
-      "You still owe €5.00 and are owed €2.50. Leaving forgives these, and the crew's balances change.",
+    expect(pick([bal('s', -5)], { name: null, currency: 'EUR' })).toBe(
+      "You still owe €5.00. Leaving forgives this, and the crew's balances change.",
     );
+    expect(pick([bal('s', 2.5)], { name: null })).toBe(
+      "You are still owed $2.50. Leaving forgives this, and the crew's balances change.",
+    );
+  });
+
+  it('delete states the crew-wide outstanding total and that every balance is cleared', () => {
+    expect(pick([bal('a', 20), bal('s', -10), bal('z', -10)], { action: 'delete', name: null })).toBe(
+      "The crew has $20.00 unsettled. Deleting the crew clears every member's balance.",
+    );
+    expect(pick([bal('a', 0), bal('s', 0)], { action: 'delete', name: null })).toBe('');
   });
 });

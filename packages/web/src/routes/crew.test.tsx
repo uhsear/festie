@@ -29,8 +29,8 @@ const h = vi.hoisted(() => ({
   status: undefined as string | undefined,
   retry: vi.fn(),
   confirms: {} as Record<string, { open: boolean; description?: string; onConfirm: () => void }>,
-  forgiven: { owesCents: 0, owedCents: 0, currency: 'USD' },
-  handOver: null as null | { open: boolean; candidates: { userId: string }[]; onConfirm: (id: string) => void },
+  plan: { balances: [] as { userId: string; balance: number }[], settlements: [], currency: 'USD' },
+  handOver: null as null | { open: boolean; notice?: string; candidates: { userId: string }[]; onConfirm: (id: string) => void },
   members: null as null | { onLeaveCrew?: () => void; onDeleteCrew?: () => void; onKick?: (m: unknown) => void },
 }));
 
@@ -143,7 +143,7 @@ vi.mock('../components/crew/HandOverDialog', () => ({
 }));
 vi.mock('@festie/shared/services', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@festie/shared/services')>()),
-  fetchForgivenOnExit: vi.fn(async () => h.forgiven),
+  fetchCrewSettlementPlan: vi.fn(async () => h.plan),
 }));
 vi.mock('../components/crew/MeetingPointsTab', () => ({ default: () => <div data-testid="MeetingPointsTab" /> }));
 vi.mock('../components/crew/PollsTab', () => ({ default: () => <div data-testid="PollsTab" /> }));
@@ -240,7 +240,7 @@ describe('CrewView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.search = {};
-    h.forgiven = { owesCents: 0, owedCents: 0, currency: 'USD' };
+    h.plan = { balances: [], settlements: [], currency: 'USD' };
     h.status = undefined;
     h.confirms = {};
     h.handOver = null;
@@ -495,22 +495,22 @@ describe('CrewView', () => {
     expect(h.toast).toHaveBeenCalledWith('You left Squad. Bob owns it now.', 'success');
   });
 
-  it('kick confirm spells out what removing forgives', async () => {
+  it('kick confirm spells out the net amount removing forgives', async () => {
     h.search = { tab: 'members' };
-    h.forgiven = { owesCents: 1240, owedCents: 300, currency: 'USD' };
+    h.plan.balances = [{ userId: 'u2', balance: -12.4 }];
     ownerCrew([me, bob]);
     render(<CrewView />);
     act(() => h.members!.onKick!(bob));
     await waitFor(() =>
       expect(h.confirms['Remove member']!.description).toContain(
-        "Bob still owes $12.40 and is owed $3.00. Removing forgives these, and the crew's balances change.",
+        "Bob still owes $12.40. Removing forgives this, and the crew's balances change.",
       ),
     );
   });
 
-  it('kick confirm adds nothing when the balance is zero', async () => {
+  it('kick confirm adds nothing when the net balance is zero', async () => {
     h.search = { tab: 'members' };
-    h.forgiven = { owesCents: 0, owedCents: 0, currency: 'USD' };
+    h.plan.balances = [{ userId: 'u2', balance: 0 }];
     ownerCrew([me, bob]);
     render(<CrewView />);
     act(() => h.members!.onKick!(bob));
@@ -520,7 +520,7 @@ describe('CrewView', () => {
 
   it('member leave confirm says what leaving forgives', async () => {
     h.search = { tab: 'members' };
-    h.forgiven = { owesCents: 500, owedCents: 0, currency: 'USD' };
+    h.plan.balances = [{ userId: 'u2', balance: -5 }];
     setStoreState({
       user: { id: 'u2', username: 'bob' },
       crews: [{ id: 'c1', name: 'Squad', owner: 'u1' }],
@@ -531,6 +531,35 @@ describe('CrewView', () => {
     await waitFor(() =>
       expect(h.confirms['Leave crew']!.description).toContain(
         "You still owe $5.00. Leaving forgives this, and the crew's balances change.",
+      ),
+    );
+  });
+
+  it('hand-over sheet carries the leaving owner net notice', async () => {
+    h.search = { tab: 'members' };
+    h.plan.balances = [{ userId: 'u1', balance: 7.5 }];
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    act(() => h.members!.onLeaveCrew!());
+    await waitFor(() =>
+      expect(h.handOver!.notice).toBe(
+        "You are still owed $7.50. Leaving forgives this, and the crew's balances change.",
+      ),
+    );
+  });
+
+  it('delete confirm states the crew-wide total and that every balance is cleared', async () => {
+    h.search = { tab: 'members' };
+    h.plan.balances = [
+      { userId: 'u1', balance: 20 },
+      { userId: 'u2', balance: -20 },
+    ];
+    ownerCrew([me]);
+    render(<CrewView />);
+    act(() => h.members!.onLeaveCrew!());
+    await waitFor(() =>
+      expect(h.confirms['Delete crew']!.description).toContain(
+        "The crew has $20.00 unsettled. Deleting the crew clears every member's balance.",
       ),
     );
   });

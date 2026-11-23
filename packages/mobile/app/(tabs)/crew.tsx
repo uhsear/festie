@@ -19,7 +19,7 @@ import * as Sentry from '@sentry/react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuthStore, useCrewStore, useFestivalStore, useFestivalModeStore, useUIStore } from '@festie/shared/stores';
 import { useActiveCrew, useCrewSections } from '@festie/shared/hooks';
-import { fetchForgivenOnExit, mapErrorToUserMessage } from '@festie/shared/services';
+import { mapErrorToUserMessage } from '@festie/shared/services';
 import {
   buildJoinUrl,
   formatInviteExpiry,
@@ -30,7 +30,7 @@ import {
   handOverCandidates,
   memberCountLabel,
   deleteCrewConfirmMessage,
-  forgivenSharesNotice,
+  exitBalanceNotice,
   leaveCrewConfirmMessage,
   removeMemberConfirmMessage,
   isCrewOwner,
@@ -122,6 +122,7 @@ export default function CrewScreen() {
   const packingItems = useCrewStore((s) => s.packingItems);
   const rideOffers = useCrewStore((s) => s.rideOffers);
   const expenseBalances = useCrewStore((s) => s.expenseBalances);
+  const expenseCurrency = useCrewStore((s) => s.expenseCurrency);
   const crewLoading = useCrewStore((s) => s.crewLoading);
   const error = useCrewStore((s) => s.error);
   const loadCrews = useCrewStore((s) => s.loadCrews);
@@ -519,28 +520,22 @@ export default function CrewScreen() {
     }
   };
 
-  // What leaving, removing or deleting forgives, in plain words. Empty when the balance is zero
-  // or the ledger cannot be loaded (the confirm still shows its usual copy).
-  const exitNotice = async (
+  // What leaving, removing or deleting forgives, from the store's net balances (instant, works
+  // offline). Empty when nothing is outstanding or the crew is not the one whose balances are loaded.
+  const exitNotice = (
     crewId: string,
     userId: string,
     name: string | null,
     action: 'leave' | 'remove' | 'delete',
-  ): Promise<string> => {
-    try {
-      const memberIds = (crews.find((c) => c.id === crewId)?.members ?? activeCrew?.members ?? []).map((m) => m.userId);
-      const forgiven = await fetchForgivenOnExit(crewId, userId, memberIds);
-      return forgivenSharesNotice(name, forgiven, action, forgiven.currency);
-    } catch (err) {
-      Sentry.captureException(err);
-      return '';
-    }
-  };
+  ): string =>
+    crewId === activeCrew?.id
+      ? exitBalanceNotice({ balances: expenseBalances, userId, name, action, currency: expenseCurrency })
+      : '';
   const withNotice = (message: string, notice: string) => (notice ? `${message} ${notice}` : message);
 
-  const handleKick = async (crewId: string, member: CrewMember) => {
+  const handleKick = (crewId: string, member: CrewMember) => {
     const crewName = crews.find((c) => c.id === crewId)?.name ?? 'this crew';
-    const notice = await exitNotice(crewId, member.userId, member.name || member.username || 'This member', 'remove');
+    const notice = exitNotice(crewId, member.userId, member.name || member.username || 'This member', 'remove');
     Alert.alert('Remove member', withNotice(removeMemberConfirmMessage(member.name || 'this member', crewName), notice), [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -601,9 +596,9 @@ export default function CrewScreen() {
     }
   };
 
-  const handleLeave = async (crewId: string) => {
+  const handleLeave = (crewId: string) => {
     const crewName = crews.find((c) => c.id === crewId)?.name ?? 'this crew';
-    const notice = user ? await exitNotice(crewId, user.id, null, 'leave') : '';
+    const notice = user ? exitNotice(crewId, user.id, null, 'leave') : '';
     Alert.alert('Leave crew', withNotice(leaveCrewConfirmMessage(crewName), notice), [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -618,8 +613,8 @@ export default function CrewScreen() {
     ], { cancelable: true });
   };
 
-  const handleDelete = async (crewId: string, crewName: string, memberCount: number) => {
-    const notice = user ? await exitNotice(crewId, user.id, null, 'delete') : '';
+  const handleDelete = (crewId: string, crewName: string, memberCount: number) => {
+    const notice = user ? exitNotice(crewId, user.id, null, 'delete') : '';
     Alert.alert('Delete crew', withNotice(deleteCrewConfirmMessage(crewName, memberCount), notice), [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -634,12 +629,12 @@ export default function CrewScreen() {
     ], { cancelable: true });
   };
 
-  const handleOwnerLeave = async (crewId: string, crewName: string, members: CrewMember[], selfId: string) => {
+  const handleOwnerLeave = (crewId: string, crewName: string, members: CrewMember[], selfId: string) => {
     if (handOverCandidates(members, selfId).length === 0) {
-      await handleDelete(crewId, crewName, members.length);
+      handleDelete(crewId, crewName, members.length);
       return;
     }
-    setHandOverNotice(await exitNotice(crewId, selfId, null, 'leave'));
+    setHandOverNotice(exitNotice(crewId, selfId, null, 'leave'));
     setHandOverOpen(true);
   };
 

@@ -1,5 +1,4 @@
 import { api } from './api';
-import { forgivenOnExit } from '../utils/expenseSplit';
 import type { CreateCrewExpenseRequest, CrewExpense, CrewSettlementPlan } from '../types';
 
 const expensesPath = (crewId: string) => `/crews/${encodeURIComponent(crewId)}/expenses`;
@@ -19,9 +18,3 @@ export const createCrewExpense = (crewId: string, payload: CreateCrewExpenseRequ
 
 export const deleteCrewExpense = (crewId: string, id: string) =>
   api.delete(`${expensesPath(crewId)}/${encodeURIComponent(id)}`);
-
-/** What leaving or removing `userId` forgives, with the crew currency for formatting it. */
-export async function fetchForgivenOnExit(crewId: string, userId: string, memberIds: string[]) {
-  const [expenses, plan] = await Promise.all([fetchCrewExpenses(crewId), fetchCrewSettlementPlan(crewId)]);
-  return { ...forgivenOnExit(expenses, memberIds, userId), currency: plan.currency ?? 'USD' };
-}

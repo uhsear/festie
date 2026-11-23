@@ -33,7 +33,7 @@ import UserPickerDialog from '../components/admin/UserPickerDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useActiveCrew } from '@festie/shared/hooks';
-import { fetchForgivenOnExit } from '@festie/shared/services';
+import { fetchCrewSettlementPlan } from '@festie/shared/services';
 import { balancesQueryOptions, pollsQueryOptions } from '../hooks/useCrewAttention';
 import {
   DEFAULT_CREW_TAB,
@@ -43,7 +43,7 @@ import {
   openPollIds,
   crewCopy,
   deleteCrewConfirmMessage,
-  forgivenSharesNotice,
+  exitBalanceNotice,
   handOverCandidates,
   leaveCrewConfirmMessage,
   parseInviteCode,
@@ -154,18 +154,24 @@ function CrewViewInner() {
     navigate({ from: '/crew', to: '/crew', search: (prev) => ({ ...prev, start: undefined }), replace: true });
   }, [userId, start, navigate]);
 
-  // Fetched only while a leave, hand-over, delete or remove dialog is open: what that exit forgives.
+  // Same cache entry as the Money tab: net balances and currency, fetched only while an exit dialog is open.
   const exitingUserId = kickTarget?.userId ?? userId;
   const exitDialogOpen = kickTarget !== null || confirmKind !== null || handOverOpen;
-  const forgivenMemberIds = (activeCrew?.members ?? []).map((m) => m.userId);
-  const { data: forgiven } = useQuery({
-    queryKey: ['forgiven-on-exit', activeCrewId, exitingUserId],
-    queryFn: () => fetchForgivenOnExit(activeCrewId!, exitingUserId!, forgivenMemberIds),
-    enabled: exitDialogOpen && !!activeCrewId && !!exitingUserId,
-    gcTime: 0,
+  const { data: exitPlan } = useQuery({
+    queryKey: ['settlement-plan', activeCrewId],
+    queryFn: () => fetchCrewSettlementPlan(activeCrewId!),
+    enabled: exitDialogOpen && !!activeCrewId,
   });
   const exitNotice = (name: string | null, action: 'leave' | 'remove' | 'delete') =>
-    forgiven ? forgivenSharesNotice(name, forgiven, action, forgiven.currency) : '';
+    exitPlan && exitingUserId
+      ? exitBalanceNotice({
+          balances: exitPlan.balances,
+          userId: exitingUserId,
+          name,
+          action,
+          currency: exitPlan.currency ?? 'USD',
+        })
+      : '';
   const withNotice = (message: string, notice: string) => (notice ? `${message} ${notice}` : message);
 
   if (!user)
