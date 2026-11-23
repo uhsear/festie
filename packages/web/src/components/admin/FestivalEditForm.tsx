@@ -548,19 +548,19 @@ export default function FestivalEditForm({
                     aria-invalid={stageIssues.length ? true : undefined}
                     value={stage.name}
                     onChange={(e) => handleStageName(i, e.target.value)}
-                    className={`flex-1 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${stageIssues.length ? ERROR_RING : ''}`}
+                    className={`flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${stageIssues.length ? ERROR_RING : ''}`}
                   />
                   <input
                     type="color"
                     aria-label={`Stage colour for ${stage.name || 'new stage'}`}
                     value={stage.color}
                     onChange={(e) => handleStageColor(i, e.target.value)}
-                    className="w-12 h-10 rounded-lg cursor-pointer"
+                    className="w-12 min-w-10 h-10 shrink-0 rounded-lg cursor-pointer"
                   />
                   <button
                     onClick={() => handleRemoveStage(stage.id)}
                     aria-label={`Remove stage ${stage.name || 'new stage'}`}
-                    className="px-2 py-2 min-h-11 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
+                    className="px-2 py-2 min-h-11 shrink-0 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
                   >
                     Remove
                   </button>
