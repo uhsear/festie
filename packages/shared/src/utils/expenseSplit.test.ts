@@ -3,6 +3,7 @@ import {
   balanceSentence,
   evenShares,
   expenseShareCents,
+  forgivenOnExit,
   expenseTrailLine,
   paymentStatusLine,
   paymentsToConfirm,
@@ -229,5 +230,23 @@ describe('expenseTrailLine', () => {
     expect(expenseTrailLine(e, members)).toBe('Added by Alex · Edited by sam 2h ago');
     expect(expenseTrailLine(expense({ created_by: 'a' }), members)).toBeNull();
     expect(expenseTrailLine(expense({ paid_by: 's', created_by: 'a' }), members)).toBe('Added by Alex');
+  });
+});
+
+describe('forgivenOnExit', () => {
+  const ids = ['a', 's', 'z'];
+  it('sums what the member owes payers and is owed by the others', () => {
+    const rows = [
+      expense({ paid_by: 'a', amount: '30.00' }), // 10 each: Sam owes Alex 10
+      expense({ paid_by: 's', amount: '9.00', split_with: ['a', 's'] }), // Sam fronted, Alex owes 4.50
+      expense({ paid_by: 'a', amount: '99.00', planned: true }), // plan: ignored
+    ];
+    expect(forgivenOnExit(rows, ids, 's')).toEqual({ owesCents: 1000, owedCents: 450 });
+  });
+  it('is zero for a member with no shares', () => {
+    expect(forgivenOnExit([expense({ paid_by: 'a', amount: '10.00', split_with: ['a'] })], ids, 's')).toEqual({
+      owesCents: 0,
+      owedCents: 0,
+    });
   });
 });

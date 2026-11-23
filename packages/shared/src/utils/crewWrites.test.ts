@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import {
   QUEUED_WRITE_MESSAGE,
   UNDO_WINDOW_MS,
+  forgivenSharesNotice,
   createSettleUpFlow,
   payOptionsFor,
   isPending,
@@ -127,5 +128,35 @@ describe('payOptionsFor currency', () => {
   it('createSettleUpFlow passes the currency through', () => {
     const flow = createSettleUpFlow(settlement, vi.fn(), 'EUR');
     expect(flow.options.map((o) => o.label)).toEqual(['PayPal']);
+  });
+});
+
+describe('forgivenSharesNotice', () => {
+  it('says nothing when both amounts are zero', () => {
+    expect(forgivenSharesNotice('Sam', { owesCents: 0, owedCents: 0 }, 'leave')).toBe('');
+  });
+
+  it('names what the member owes', () => {
+    expect(forgivenSharesNotice('Sam', { owesCents: 1240, owedCents: 0 }, 'leave')).toBe(
+      "Sam still owes $12.40. Leaving forgives this, and the crew's balances change.",
+    );
+  });
+
+  it('names what the member is owed', () => {
+    expect(forgivenSharesNotice('Sam', { owesCents: 0, owedCents: 300 }, 'remove')).toBe(
+      "Sam is still owed $3.00. Removing forgives this, and the crew's balances change.",
+    );
+  });
+
+  it('names both amounts', () => {
+    expect(forgivenSharesNotice('Sam', { owesCents: 1240, owedCents: 300 }, 'leave')).toBe(
+      "Sam still owes $12.40 and is owed $3.00. Leaving forgives these, and the crew's balances change.",
+    );
+  });
+
+  it('speaks to the user when the leaver is you, in the crew currency', () => {
+    expect(forgivenSharesNotice(null, { owesCents: 500, owedCents: 250 }, 'leave', 'EUR')).toBe(
+      "You still owe €5.00 and are owed €2.50. Leaving forgives these, and the crew's balances change.",
+    );
   });
 });

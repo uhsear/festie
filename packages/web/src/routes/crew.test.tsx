@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, within, act } from '@testing-library/react';
+import { screen, fireEvent, within, act, waitFor } from '@testing-library/react';
 import { createTestQueryClient, renderWithQueryClient } from '../test-utils';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 
@@ -28,7 +28,8 @@ const h = vi.hoisted(() => ({
   search: {} as Record<string, unknown>,
   status: undefined as string | undefined,
   retry: vi.fn(),
-  confirms: {} as Record<string, { open: boolean; onConfirm: () => void }>,
+  confirms: {} as Record<string, { open: boolean; description?: string; onConfirm: () => void }>,
+  forgiven: { owesCents: 0, owedCents: 0, currency: 'USD' },
   handOver: null as null | { open: boolean; candidates: { userId: string }[]; onConfirm: (id: string) => void },
   members: null as null | { onLeaveCrew?: () => void; onDeleteCrew?: () => void; onKick?: (m: unknown) => void },
 }));
@@ -140,6 +141,10 @@ vi.mock('../components/crew/HandOverDialog', () => ({
     return props.open ? <div data-testid="handover-dialog" /> : null;
   },
 }));
+vi.mock('@festie/shared/services', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@festie/shared/services')>()),
+  fetchForgivenOnExit: vi.fn(async () => h.forgiven),
+}));
 vi.mock('../components/crew/MeetingPointsTab', () => ({ default: () => <div data-testid="MeetingPointsTab" /> }));
 vi.mock('../components/crew/PollsTab', () => ({ default: () => <div data-testid="PollsTab" /> }));
 vi.mock('../components/crew/PackingTab', () => ({ default: () => <div data-testid="PackingTab" /> }));
@@ -183,7 +188,7 @@ vi.mock('../components/crew/JoinCrewSheet', () => ({
 }));
 
 vi.mock('../components/ui/ConfirmDialog', () => ({
-  default: (props: { open: boolean; title: string; onConfirm: () => void }) => {
+  default: (props: { open: boolean; title: string; description?: string; onConfirm: () => void }) => {
     h.confirms[props.title] = props;
     return null;
   },
@@ -235,6 +240,7 @@ describe('CrewView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     h.search = {};
+    h.forgiven = { owesCents: 0, owedCents: 0, currency: 'USD' };
     h.status = undefined;
     h.confirms = {};
     h.handOver = null;
@@ -487,6 +493,46 @@ describe('CrewView', () => {
     await act(async () => h.handOver!.onConfirm('u2'));
     expect(storeState.handOverAndLeave).toHaveBeenCalledWith('c1', 'u2');
     expect(h.toast).toHaveBeenCalledWith('You left Squad. Bob owns it now.', 'success');
+  });
+
+  it('kick confirm spells out what removing forgives', async () => {
+    h.search = { tab: 'members' };
+    h.forgiven = { owesCents: 1240, owedCents: 300, currency: 'USD' };
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    act(() => h.members!.onKick!(bob));
+    await waitFor(() =>
+      expect(h.confirms['Remove member']!.description).toContain(
+        "Bob still owes $12.40 and is owed $3.00. Removing forgives these, and the crew's balances change.",
+      ),
+    );
+  });
+
+  it('kick confirm adds nothing when the balance is zero', async () => {
+    h.search = { tab: 'members' };
+    h.forgiven = { owesCents: 0, owedCents: 0, currency: 'USD' };
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    act(() => h.members!.onKick!(bob));
+    await waitFor(() => expect(h.confirms['Remove member']!.open).toBe(true));
+    expect(h.confirms['Remove member']!.description).not.toContain('forgives');
+  });
+
+  it('member leave confirm says what leaving forgives', async () => {
+    h.search = { tab: 'members' };
+    h.forgiven = { owesCents: 500, owedCents: 0, currency: 'USD' };
+    setStoreState({
+      user: { id: 'u2', username: 'bob' },
+      crews: [{ id: 'c1', name: 'Squad', owner: 'u1' }],
+      activeCrew: { id: 'c1', name: 'Squad', owner: 'u1', members: [me, bob] },
+    });
+    render(<CrewView />);
+    act(() => h.members!.onLeaveCrew!());
+    await waitFor(() =>
+      expect(h.confirms['Leave crew']!.description).toContain(
+        "You still owe $5.00. Leaving forgives this, and the crew's balances change.",
+      ),
+    );
   });
 
   it('kick success shows the Removed toast', async () => {

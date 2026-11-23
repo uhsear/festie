@@ -156,3 +156,28 @@ export function expenseTrailLine(expense: CrewExpense, members: CrewMember[]): s
   }
   return parts.length > 0 ? parts.join(' · ') : null;
 }
+
+/**
+ * What the ledger forgives when `userId` leaves or is removed: shares they owe
+ * the members who paid, and shares the others owe them for what they paid.
+ * Integer cents; plans and expenses whose payer already left are skipped, as
+ * computeBalanceCents does.
+ */
+export function forgivenOnExit(
+  expenses: CrewExpense[],
+  memberIds: string[],
+  userId: string,
+): { owesCents: number; owedCents: number } {
+  let owesCents = 0;
+  let owedCents = 0;
+  for (const expense of expenses) {
+    if (expense.paid_by === userId) {
+      for (const id of memberIds) {
+        if (id !== userId) owedCents += expenseShareCents(expense, id, memberIds) ?? 0;
+      }
+    } else {
+      owesCents += expenseShareCents(expense, userId, memberIds) ?? 0;
+    }
+  }
+  return { owesCents, owedCents };
+}

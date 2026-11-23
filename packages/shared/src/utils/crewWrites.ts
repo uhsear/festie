@@ -9,6 +9,7 @@
  * in the PendingSyncSheet).
  */
 import type { CrewSettlement } from '../types';
+import { formatCents } from './money';
 import { cashAppLink, payPalLink, venmoLink, type PaymentLink } from './paymentLinks';
 
 export type WriteOutcome = 'sent' | 'queued';
@@ -69,6 +70,39 @@ export function leaveCrewConfirmMessage(crewName: string): string {
 /** Confirm copy for an owner removing a member. */
 export function removeMemberConfirmMessage(memberName: string, crewName: string): string {
   return `Remove ${memberName} from "${crewName}"? They lose access to the crew's plans and expenses until they rejoin with an invite code.`;
+}
+
+/** What leaving, removing or deleting forgives for one member, in integer cents. */
+export interface ForgivenAmounts {
+  owesCents: number;
+  owedCents: number;
+}
+
+const FORGIVE_VERB = { leave: 'Leaving', remove: 'Removing', delete: 'Deleting the crew' } as const;
+
+/**
+ * Plain-words line for the leave, remove and delete confirms: what the ledger
+ * forgives (computeBalanceCents drops a departed member's shares). `name` is
+ * null when the leaver is the viewer. Empty when both amounts are zero.
+ */
+export function forgivenSharesNotice(
+  name: string | null,
+  { owesCents, owedCents }: ForgivenAmounts,
+  action: keyof typeof FORGIVE_VERB,
+  currency = 'USD',
+): string {
+  if (owesCents <= 0 && owedCents <= 0) return '';
+  const self = name === null;
+  const owes = `${self ? 'You still owe' : `${name} still owes`} ${formatCents(owesCents, currency)}`;
+  const owed = `${self ? 'are' : 'is'} owed ${formatCents(owedCents, currency)}`;
+  const facts =
+    owesCents > 0 && owedCents > 0
+      ? `${owes} and ${owed}`
+      : owesCents > 0
+        ? owes
+        : `${self ? 'You are' : `${name} is`} still owed ${formatCents(owedCents, currency)}`;
+  const these = owesCents > 0 && owedCents > 0 ? 'these' : 'this';
+  return `${facts}. ${FORGIVE_VERB[action]} forgives ${these}, and the crew's balances change.`;
 }
 
 // ── Undoable delete ─────────────────────────────────────────────────────────
