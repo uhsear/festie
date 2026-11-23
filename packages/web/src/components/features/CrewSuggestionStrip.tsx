@@ -96,10 +96,10 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
           return (
             <li key={set.id} className="flex items-center gap-3 rounded-lg border border-border bg-bg-card px-3 py-2">
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="truncate text-sm font-bold text-text-primary">
-                    <ArtistName set={set} separator={b2bSeparator} />
-                  </span>
+                <div className="break-words text-sm font-bold text-text-primary">
+                  <ArtistName set={set} separator={b2bSeparator} />
+                </div>
+                <div className="mt-1">
                   <StageBadge variant="pick" stageName={stageName} stageColor={stageColor} />
                 </div>
                 <div className="mt-1 flex items-center gap-2">

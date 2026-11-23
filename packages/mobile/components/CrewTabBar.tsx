@@ -97,8 +97,13 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
               {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
               <Ionicons name={TAB_ICONS[tab.key]} size={16} color={active ? t.colors.accent.aqua : t.colors.text.secondary} />
               {!largeText || active ? (
-                <Text style={[styles.label, active && styles.labelActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                  {tab.label}
+                // Trailing NBSP absorbs Fabric's single-line under-measure that clipped "Money" to "Mone" (see OfflineStatusChip).
+                <Text
+                  style={[styles.label, active && styles.labelActive]}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  textBreakStrategy="simple"
+                >
+                  {tab.label + ' '}
                 </Text>
               ) : null}
               {typeof badge === 'number' && badge > 0 ? (

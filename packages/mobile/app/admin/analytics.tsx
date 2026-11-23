@@ -3,7 +3,7 @@ import { View, Text, ScrollView, RefreshControl, TouchableOpacity } from 'react-
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fetchAdminAnalytics } from '@festie/shared/services';
+import { fetchAdminAnalytics, mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import {
   timeAgoFromIso,
@@ -83,19 +83,19 @@ export default function AdminAnalyticsScreen() {
   const [pills, setPills] = useState<{ id?: string; name: string }[]>([{ name: 'All festivals' }]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [refreshToken, setRefreshToken] = useState(0);
 
   const fetchAnalytics = useCallback(async () => {
-    setError(false);
+    setError(null);
     try {
       const next = await fetchAdminAnalytics(festivalId);
       setData(next);
       if (!next.scope.festivalId) {
         setPills([{ name: 'All festivals' }, ...next.festivalStats.map((f) => ({ id: f.id, name: f.name }))]);
       }
-    } catch {
-      setError(true);
+    } catch (err) {
+      setError(mapErrorToUserMessage(err, 'Something went wrong reaching the server.'));
       setData(null);
     }
   }, [festivalId]);
@@ -180,7 +180,7 @@ export default function AdminAnalyticsScreen() {
         <EmptyState
           icon="cloud-offline-outline"
           title="Couldn't load analytics"
-          message="Something went wrong reaching the server."
+          message={error}
           action={{ label: 'Try again', onPress: onRefresh }}
         />
       ) : data ? (

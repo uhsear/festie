@@ -3,6 +3,7 @@ import { PRIORITY_OPTIONS } from '../constants/config';
 import { artistDisplayName } from './format';
 import { getSetTimeBounds, isSetScheduled } from './setStatus';
 import { setMatchesSearch } from './setSearch';
+import type { PlanListItem } from './myDay';
 
 // ── My Picks plan: stats, filters, grouping and bulk-add helpers ──────────────
 // Pure (RN + web safe). One source of truth so web and mobile Picks show the
@@ -79,6 +80,40 @@ export function comparePicksByTime(
   };
 }
 
+function isPickVisible(
+  set: FestivalSet,
+  priority: Priority | undefined,
+  { stages, filter, search, clashIds }: { stages: Stage[]; filter: PicksFilter; search: string; clashIds: ReadonlySet<string> },
+): boolean {
+  if (!priority) return false;
+  if (!setMatchesSearch(set, search, stages)) return false;
+  if (filter === 'clashes') return clashIds.has(set.id);
+  return filter === 'all' || priority === filter;
+}
+
+/** The picks the focus filter and search keep, as a map. Web and mobile My day list these. */
+export function filterPickMap(input: {
+  sets: FestivalSet[];
+  picks: Record<string, Priority> | undefined;
+  stages: Stage[];
+  filter: PicksFilter;
+  search: string;
+  clashIds: ReadonlySet<string>;
+}): Record<string, Priority> {
+  const { sets, picks, ...rest } = input;
+  const kept: Record<string, Priority> = {};
+  for (const set of sets) {
+    const priority = picks?.[set.id];
+    if (priority && isPickVisible(set, priority, rest)) kept[set.id] = priority;
+  }
+  return kept;
+}
+
+/** Reminder and note list items whose set matches the search (artist, B2B artist or stage). */
+export function filterPlanListItems(items: PlanListItem[], search: string, stages: Stage[]): PlanListItem[] {
+  return search.trim() ? items.filter((item) => setMatchesSearch(item.set, search, stages)) : items;
+}
+
 /**
  * Flattened row list. In `day` mode the outer header is the festival day and the
  * inner sub-group is the priority tier (must, want, maybe); `priority` mode
@@ -100,14 +135,7 @@ export function buildPicksRows(input: {
 }): PicksRow[] {
   const { sets, picks, days, stages, groupMode, filter, search, collapsed, clashIds, compare } = input;
 
-  const eligible = sets.filter((s) => {
-    const p = picks?.[s.id];
-    if (!p) return false;
-    if (!setMatchesSearch(s, search, stages)) return false;
-    if (filter === 'clashes') return clashIds.has(s.id);
-    if (filter !== 'all' && p !== filter) return false;
-    return true;
-  });
+  const eligible = sets.filter((s) => isPickVisible(s, picks?.[s.id], { stages, filter, search, clashIds }));
 
   const out: PicksRow[] = [];
   const prioOf = (s: FestivalSet) => picks![s.id]!;

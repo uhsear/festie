@@ -39,7 +39,7 @@ export default function AccountDevicesSection() {
     Alert.alert(ACCOUNT_COPY.signOutOthersTitle, ACCOUNT_COPY.signOutOthersBody, [
       { text: 'Cancel', style: 'cancel' },
       { text: ACCOUNT_COPY.signOutOthersConfirm, style: 'destructive', onPress: () => void run(signOutOthers, ACCOUNT_COPY.signedOutOthers) },
-    ]);
+    ], { cancelable: true });
   };
 
   const renderRow = (d: SignedInDevice) => (

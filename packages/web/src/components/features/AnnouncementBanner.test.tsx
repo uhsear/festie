@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalAnnouncement } from '@festie/shared/types';
@@ -55,6 +55,16 @@ describe('AnnouncementBanner', () => {
     expect(screen.getByText('Urgent · From Festie')).toBeInTheDocument();
   });
 
+  it('announces an urgent announcement assertively and an info one politely', () => {
+    state.items = [fa({ severity: 'urgent' })];
+    const { unmount } = render(<AnnouncementBanner />);
+    expect(screen.getByTestId('announcement-banner')).toHaveAttribute('role', 'alert');
+    unmount();
+    state.items = [fa()];
+    render(<AnnouncementBanner />);
+    expect(screen.getByTestId('announcement-banner')).toHaveAttribute('role', 'status');
+  });
+
   it('has no Open link for home', () => {
     state.items = [fa({ screen: 'home' })];
     render(<AnnouncementBanner />);
@@ -79,5 +89,44 @@ describe('AnnouncementBanner', () => {
     state.dismissed = ['a1'];
     const { container } = render(<AnnouncementBanner />);
     expect(container.firstChild).toBeNull();
+  });
+  describe('long body', () => {
+    const setOverflow = (overflowing: boolean) => {
+      Object.defineProperty(HTMLElement.prototype, 'scrollHeight', { configurable: true, get: () => (overflowing ? 100 : 20) });
+      Object.defineProperty(HTMLElement.prototype, 'clientHeight', { configurable: true, get: () => 40 });
+    };
+    afterEach(() => {
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>).scrollHeight;
+      delete (HTMLElement.prototype as unknown as Record<string, unknown>).clientHeight;
+    });
+
+    it('clamps the body to two lines and expands it with a Read more control', async () => {
+      setOverflow(true);
+      render(<AnnouncementBanner />);
+      const body = screen.getByText('Doors at 2 PM.');
+      expect(body).toHaveClass('line-clamp-2');
+      const more = screen.getByRole('button', { name: 'Read more' });
+      expect(more).toHaveAttribute('aria-expanded', 'false');
+      expect(more).toHaveAttribute('aria-controls', body.id);
+      await userEvent.click(more);
+      expect(body).not.toHaveClass('line-clamp-2');
+      expect(screen.getByRole('button', { name: 'Show less' })).toHaveAttribute('aria-expanded', 'true');
+    });
+
+    it('is keyboard operable', async () => {
+      setOverflow(true);
+      render(<AnnouncementBanner />);
+      const more = screen.getByRole('button', { name: 'Read more' });
+      for (let i = 0; i < 10 && document.activeElement !== more; i++) await userEvent.tab();
+      expect(more).toHaveFocus();
+      await userEvent.keyboard('{Enter}');
+      expect(screen.getByRole('button', { name: 'Show less' })).toBeInTheDocument();
+    });
+
+    it('offers no Read more for a short body', () => {
+      setOverflow(false);
+      render(<AnnouncementBanner />);
+      expect(screen.queryByTestId('announcement-banner-more')).toBeNull();
+    });
   });
 });

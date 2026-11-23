@@ -7,6 +7,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 const festivalState: Record<string, unknown> = {};
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(festivalState)),
+  selectMyPicks: (s: { currentProfile?: { picks?: unknown }; guestPicks?: Record<string, unknown> }) =>
+    s.currentProfile?.picks ?? s.guestPicks?.f1 ?? null,
 }));
 
 const mockFetchCalendarLinks = vi.fn();
@@ -53,7 +55,7 @@ describe('CalendarDialog', () => {
     });
   });
 
-  const open = () => fireEvent.click(screen.getByRole('button', { name: 'Add picks to calendar' }));
+  const open = () => fireEvent.click(screen.getByRole('button', { name: 'Add to calendar' }));
 
   it('Download once builds the export with reminders and toasts the summary', () => {
     Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
@@ -62,6 +64,20 @@ describe('CalendarDialog', () => {
     open();
     fireEvent.click(screen.getByRole('button', { name: 'Download once' }));
     expect(mockBuild).toHaveBeenCalledWith(expect.objectContaining({ reminders: { s1: 15 } }));
+    expect(mockToast).toHaveBeenCalledWith('Added 1 set to your calendar file.', 'success');
+    clickSpy.mockRestore();
+  });
+
+  it('gives a guest a direct Download .ics button, with no Subscribe, from the picks on the device', () => {
+    Object.assign(URL, { createObjectURL: vi.fn(() => 'blob:x'), revokeObjectURL: vi.fn() });
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    festivalState.currentProfile = null;
+    festivalState.guestPicks = { f1: { s9: 'want' } };
+    render(<CalendarDialog />);
+    expect(screen.queryByRole('button', { name: 'Add picks to calendar' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Download picks as a calendar file' }));
+    expect(mockBuild).toHaveBeenCalledWith(expect.objectContaining({ picks: { s9: 'want' } }));
+    expect(mockFetchCalendarLinks).not.toHaveBeenCalled();
     expect(mockToast).toHaveBeenCalledWith('Added 1 set to your calendar file.', 'success');
     clickSpy.mockRestore();
   });
@@ -75,6 +91,14 @@ describe('CalendarDialog', () => {
     expect(screen.getByRole('button', { name: 'Copy calendar link' })).toBeInTheDocument();
     expect(screen.getByText(/Anyone with this calendar link/)).toBeInTheDocument();
     expect(mockFetchCalendarLinks).toHaveBeenCalledWith('f1');
+  });
+
+  it('Done closes the chooser after the links appear', async () => {
+    render(<CalendarDialog />);
+    open();
+    fireEvent.click(screen.getByRole('button', { name: 'Subscribe (stays up to date)' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Done' }));
+    await vi.waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('keeps its title and closes on Escape', async () => {

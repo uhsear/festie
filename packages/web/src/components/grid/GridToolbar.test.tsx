@@ -21,12 +21,12 @@ function renderToolbar(overrides: Partial<React.ComponentProps<typeof GridToolba
 describe('GridToolbar', () => {
   it('hides the clash chip when there are no clashes', () => {
     renderToolbar();
-    expect(screen.queryByRole('button', { name: /schedule clash/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /clash/ })).not.toBeInTheDocument();
   });
 
   it('labels the chip for one and for several clashes', () => {
     const { onShowClash } = renderToolbar({ clashCount: 1 });
-    const one = screen.getByRole('button', { name: 'You have 1 schedule clash. Open it in Picks.' });
+    const one = screen.getByRole('button', { name: '1 clash. Open it in Picks.' });
     expect(one).toHaveTextContent('1 clash');
     fireEvent.click(one);
     expect(onShowClash).toHaveBeenCalledOnce();
@@ -34,7 +34,7 @@ describe('GridToolbar', () => {
 
   it('labels the chip for three clashes', () => {
     renderToolbar({ clashCount: 3 });
-    const three = screen.getByRole('button', { name: 'You have 3 schedule clashes. Open them in Picks.' });
+    const three = screen.getByRole('button', { name: '3 clashes. Open them in Picks.' });
     expect(three).toHaveTextContent('3 clashes');
   });
 

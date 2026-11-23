@@ -170,7 +170,7 @@ function QuietHoursEditor({ start, end }: { start: string; end: string }) {
           />
         </label>
       </div>
-      {invalid ? <p className="text-xs text-danger mt-1">Start and end can't be the same.</p> : null}
+      {invalid ? <p className="text-xs text-[var(--color-text-danger)] mt-1">Start and end can't be the same.</p> : null}
     </div>
   );
 }
@@ -337,6 +337,11 @@ function PrefsSubsection() {
       </h3>
       {!loaded && isLoading ? (
         <SkeletonRows count={4} />
+      ) : !loaded && error ? (
+        // The server's real values never arrived; default switches would show settings the user never chose.
+        <Button variant="secondary" size="sm" onClick={() => loadPrefs().catch((err) => console.warn('Notification prefs load failed', err))}>
+          Try again
+        </Button>
       ) : (
         <>
           {visibleNotificationRows().map((row) => (
@@ -385,11 +390,11 @@ function PrefsSubsection() {
         </>
       )}
       {error ? (
-        <p role="alert" className="text-xs text-danger mt-2">
+        <p role="alert" className="text-xs text-[var(--color-text-danger)] mt-2">
           {error}
         </p>
       ) : null}
-      <FestivalTopicsSubsection />
+      {loaded ? <FestivalTopicsSubsection /> : null}
     </div>
   );
 }

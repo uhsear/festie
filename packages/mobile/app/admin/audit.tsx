@@ -17,6 +17,7 @@ import * as Sharing from 'expo-sharing';
 import {
   exportAuditCsv,
   fetchAuditPage,
+  mapErrorToUserMessage,
   type AuditEntry,
 } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
@@ -82,13 +83,13 @@ export default function AdminAuditScreen() {
   const [total, setTotal] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Expanded row ids
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
 
   const fetchAudit = useCallback(async (cursor: string | null, query: string, auditScope: AuditScope) => {
-    setError(false);
+    setError(null);
     try {
       const page = await fetchAuditPage({
         scope: auditScope,
@@ -99,8 +100,8 @@ export default function AdminAuditScreen() {
       setEntries(page.entries);
       setTotal(page.total);
       setNextCursor(page.nextCursor);
-    } catch {
-      setError(true);
+    } catch (err) {
+      setError(mapErrorToUserMessage(err, 'Something went wrong reaching the server.'));
     }
   }, []);
 
@@ -288,7 +289,7 @@ export default function AdminAuditScreen() {
           label="Search the audit log"
           value={draft}
           onChangeText={setDraft}
-          placeholder="actor:asir action:festival.*"
+          placeholder="actor:sam action:festival.*"
           onSubmitEditing={applySearch}
         />
         {submitErrors.map((message) => (
@@ -297,7 +298,7 @@ export default function AdminAuditScreen() {
           </Text>
         ))}
         {parsed.tokens.length === 0 ? (
-          <Text style={styles.rowHint}>Try: actor:asir · user:sam · action:festival.* · after:2026-10-01</Text>
+          <Text style={styles.rowHint}>Try: actor:sam · user:alex · action:festival.* · after:2026-10-01</Text>
         ) : (
           <View style={styles.chipWrap}>
             {parsed.tokens.map((token) => (
@@ -348,7 +349,7 @@ export default function AdminAuditScreen() {
         <EmptyState
           icon="cloud-offline-outline"
           title="Couldn't load audit log"
-          message="Something went wrong reaching the server."
+          message={error}
           action={{ label: 'Try again', onPress: onRefresh }}
         />
       ) : (
@@ -506,7 +507,7 @@ export default function AdminAuditScreen() {
 
 // ---------------------------------------------------------------------------
 // Inline filter text-input (local to this screen — simpler than importing
-// LabeledTextInput because we need 2-column layout with tight spacing).
+// LabeledTextInput because we need tight spacing).
 // ---------------------------------------------------------------------------
 
 interface FilterInputProps {
@@ -560,7 +561,6 @@ function FilterInput({
 
 const useFilterStyles = makeStyles((t) => ({
   field: {
-    flex: 1,
     gap: t.spacing[1],
   },
   label: {

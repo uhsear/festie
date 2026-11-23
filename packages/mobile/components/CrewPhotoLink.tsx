@@ -85,7 +85,7 @@ export default function CrewPhotoLink({ crewId, photoAlbumUrl, onSaved }: CrewPh
     Alert.alert('Remove the crew album?', 'Everyone in the crew loses this link. You can add it again later.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Remove', style: 'destructive', onPress: () => void write(null, 'Crew album removed') },
-    ]);
+    ], { cancelable: true });
 
   const cancel = () => {
     setUrl(photoAlbumUrl ?? '');

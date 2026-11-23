@@ -47,6 +47,8 @@ export interface AuthActions {
   checkSession: () => Promise<boolean>;
   forgotPassword: (request: ForgotPasswordRequest) => Promise<void>;
   resetPassword: (request: { token: string; newPassword: string; confirmPassword: string }) => Promise<void>;
+  /** Consumes the emailed token. Throws the API error so the confirm page can show why the link failed. */
+  verifyEmail: (token: string) => Promise<{ email: string; sessionsRevoked: boolean }>;
   resendVerification: () => Promise<void>;
   /** `password` is omitted for a provider-only account, which confirms with a recent re-auth instead. */
   requestEmailChange: (email: string, password?: string) => Promise<string>;
@@ -400,6 +402,16 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
     if (get().user) await get().logout();
   },
 
+  verifyEmail: async (token) => {
+    const result = await api.post<{ verified: true; email: string; sessionsRevoked: boolean }>('/auth/verify-email', { token });
+    // A moved login address revoked every session; otherwise refresh the signed-in user's verified flag.
+    if (get().user) {
+      if (result.sessionsRevoked) await get().logout();
+      else await get().checkSession();
+    }
+    return { email: result.email, sessionsRevoked: result.sessionsRevoked };
+  },
+
   resendVerification: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -559,11 +571,14 @@ const authStore: StateCreator<AuthStore> = (set, get) => ({
   },
 
   updatePaymentHandles: async (h) => {
-    const res = await api.put<{ user: User }>('/account/payment-handles', {
-      venmoHandle: h.venmoHandle.trim(),
-      cashappCashtag: h.cashappCashtag.trim(),
-      paypalHandle: h.paypalHandle.trim(),
-    });
+    // Send only the handles that changed, so a legacy value the user never opened is not re-validated.
+    const stored = get().user;
+    const body: Partial<typeof h> = {};
+    for (const key of ['venmoHandle', 'cashappCashtag', 'paypalHandle'] as const) {
+      const next = h[key].trim();
+      if (next !== (stored?.[key] ?? '')) body[key] = next;
+    }
+    const res = await api.put<{ user: User }>('/account/payment-handles', body);
     set((s) => ({
       user: s.user
         ? {

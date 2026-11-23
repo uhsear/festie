@@ -1,3 +1,5 @@
+// Must stay first: it sets zod jitless before any schema is built (see the module header).
+import '@festie/shared/zodJitless';
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import * as Sentry from '@sentry/react';

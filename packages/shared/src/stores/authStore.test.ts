@@ -335,6 +335,26 @@ describe('authStore', () => {
     });
   });
 
+  describe('verifyEmail', () => {
+    const token = 'a'.repeat(64);
+    it('posts the token and returns the confirmed address', async () => {
+      vi.mocked(api.post).mockResolvedValue({ verified: true, email: 'a@b.co', sessionsRevoked: false });
+      await expect(useAuthStore.getState().verifyEmail(token)).resolves.toEqual({ email: 'a@b.co', sessionsRevoked: false });
+      expect(api.post).toHaveBeenCalledWith('/auth/verify-email', { token });
+    });
+    it('logs out a signed-in user when the login address moved', async () => {
+      useAuthStore.setState({ user: mockUser });
+      vi.mocked(api.post).mockResolvedValue({ verified: true, email: 'a@b.co', sessionsRevoked: true });
+      await useAuthStore.getState().verifyEmail(token);
+      expect(api.post).toHaveBeenCalledWith('/auth/logout', {});
+      expect(useAuthStore.getState().user).toBeNull();
+    });
+    it('rethrows so the page can show the reason', async () => {
+      vi.mocked(api.post).mockRejectedValueOnce(new Error('expired'));
+      await expect(useAuthStore.getState().verifyEmail(token)).rejects.toThrow('expired');
+    });
+  });
+
   describe('logout', () => {
     it('clears user state and calls resetAllStores', async () => {
       useAuthStore.setState({
@@ -773,7 +793,7 @@ describe('authStore', () => {
   });
 
   describe('account settings actions', () => {
-    it('updatePaymentHandles trims, PUTs and merges the three fields', async () => {
+    it('updatePaymentHandles trims, PUTs the changed fields and merges all three', async () => {
       useAuthStore.setState({ user: mockUser });
       vi.mocked(api.put).mockResolvedValueOnce({
         user: { venmoHandle: 'sam', cashappCashtag: null, paypalHandle: 'sp' },
@@ -783,11 +803,19 @@ describe('authStore', () => {
         .updatePaymentHandles({ venmoHandle: ' sam ', cashappCashtag: '', paypalHandle: 'sp ' });
       expect(api.put).toHaveBeenCalledWith('/account/payment-handles', {
         venmoHandle: 'sam',
-        cashappCashtag: '',
         paypalHandle: 'sp',
       });
       expect(res.venmoHandle).toBe('sam');
       expect(useAuthStore.getState().user).toMatchObject({ venmoHandle: 'sam', cashappCashtag: null, paypalHandle: 'sp' });
+    });
+
+    it('updatePaymentHandles sends only the handles that changed', async () => {
+      useAuthStore.setState({ user: { ...mockUser, venmoHandle: 'old', cashappCashtag: 'jane_doe', paypalHandle: null } });
+      vi.mocked(api.put).mockResolvedValueOnce({ user: { venmoHandle: 'new', cashappCashtag: 'jane_doe', paypalHandle: null } });
+      await useAuthStore
+        .getState()
+        .updatePaymentHandles({ venmoHandle: 'new', cashappCashtag: 'jane_doe', paypalHandle: '' });
+      expect(api.put).toHaveBeenCalledWith('/account/payment-handles', { venmoHandle: 'new' });
     });
 
     it('setPublicSchedule PUTs and sets the flag', async () => {

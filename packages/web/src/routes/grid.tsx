@@ -16,6 +16,7 @@ import {
   defaultZoomIndex,
   buildGridCrewAvatarsBySet,
   lineupReplacesEmptyState,
+  dayHasTimedSets,
   type GridCrewProfile,
 } from '@festie/shared/utils';
 import RefreshableView from '../components/layout/RefreshableView';
@@ -29,7 +30,6 @@ import OtherDayMatches from '../components/features/OtherDayMatches';
 import TBASection from '../components/timeline/TBASection';
 import AnnouncedLineup from '../components/features/AnnouncedLineup';
 import TimelineLegend from '../components/timeline/TimelineLegend';
-import LastSyncedBadge from '../components/features/LastSyncedBadge';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
 import GridToolbar from '../components/grid/GridToolbar';
 import ScheduleImageDialog from '../components/features/ScheduleImageDialog';
@@ -138,9 +138,9 @@ function GridViewInner() {
   const rowHeight = Math.round((GRID_ZOOM_LEVELS[zoom] ?? GRID_ZOOM_LEVELS[0]) * 15);
 
   // R11: scroll-driven aqua beam in the left gutter. The hook updates a
-  // --scroll-progress custom property on the scroll container (fallback path);
+  // --scroll-progress custom property on the beam itself (fallback path);
   // modern engines fill the beam natively via animation-timeline: scroll().
-  const { ref: scrollRef, handleScroll: handleBeamScroll } = useScrollProgress<HTMLDivElement>();
+  const { ref: scrollRef, varsRef: beamRef, handleScroll: handleBeamScroll } = useScrollProgress<HTMLDivElement>();
 
   // --- Live mode -----------------------------------------------------------
   // A 60s shared-clock tick drives the auto-scroll.
@@ -235,8 +235,9 @@ function GridViewInner() {
     );
   }
 
-  // TBA-only fallback (no timed sets but there are timeless sets)
+  // Filters left only untimed sets. The "times aren't out yet" copy fits only when the whole day has no times.
   if (timedSets.length === 0 && timelessSets.length > 0) {
+    const dayHasTimes = dayHasTimedSets((sets ?? []).filter((s) => s.dayIndex === selectedDay));
     return (
       <RefreshableView queryKeys={[['sets'], ['festival']]} className="timeline-view">
         <div
@@ -246,7 +247,7 @@ function GridViewInner() {
           data-scroll-sentinel
         >
           <TBASection
-            allTba
+            allTba={!dayHasTimes}
             sets={timelessSets}
             stages={stages}
             getMyPick={getMyPick}
@@ -346,7 +347,7 @@ function GridViewInner() {
             against scroll content, not the viewport. The beam fills top→current
             scroll position in the left gutter. */}
         <div className="timeline-content relative min-h-full max-w-[1440px] mx-auto">
-          <div className="timeline-beam" aria-hidden="true" />
+          <div ref={beamRef} className="timeline-beam" aria-hidden="true" />
           {/* Not sticky: it scrolls away so the stage header row owns the top edge (stage names stay visible).
               Its own snap point keeps the proximity snap on the hour rows from pinning it out of view at scrollTop 0. */}
           <div className="bg-bg-sticky [scroll-snap-align:start_none]">
@@ -365,7 +366,6 @@ function GridViewInner() {
                 />
                 <ScheduleImageDialog initialMode="full" />
                 <LowPowerIndicator />
-                <LastSyncedBadge surface="schedule" />
               </div>
             </div>
           </div>

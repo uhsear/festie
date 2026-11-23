@@ -18,6 +18,9 @@ Merged to `main` but not yet deployed to production.
 - **Admin**: an Artist review tab. Import a JSON batch of researched link, merge and rename proposals, then approve or reject each one. An approval uses the same edit and merge code as the Artists tab.
 
 ### Changed
+- `GET /profiles/:festivalId` lists only your own profile and the profiles of people who share a crew with you for that festival. Other attendees are not in that list; their picks show only as the anonymous per-set counts in `meta.pickCounts`. Live socket events (`presence:update`, `profile:created`) still reach the whole festival room.
+- A set reminder due in quiet hours now lands in the inbox without a push, once.
+- Announcements, schedule-change alerts, crew pick updates and re-engagement messages write their inbox rows even when no push provider is configured.
 - Log retention is 14 days across pm2-logrotate, logrotate and log cleanup.
 - Space Grotesk is self-hosted on web; no page loads fonts from Google any more.
 - Pending organization invitations expire after 90 days and are deleted after 120, so an owner still sees them as expired in between.

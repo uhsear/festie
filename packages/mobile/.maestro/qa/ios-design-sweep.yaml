@@ -15,7 +15,7 @@ env:
 - launchApp
 - extendedWaitUntil:
     visible:
-      text: "Plan your weekend|Select a Festival"
+      id: "intro-skip|festival-card-.*"
     timeout: 90000
 - extendedWaitUntil:
     visible: "__wait_for_ota_download__"
@@ -25,16 +25,19 @@ env:
 - launchApp
 - extendedWaitUntil:
     visible:
-      text: "Plan your weekend|Select a Festival"
+      id: "intro-skip|festival-card-.*"
     timeout: 90000
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/00-intro
 - runFlow:
     when:
-      visible: "Plan your weekend"
+      visible:
+        id: "intro-skip"
     commands:
-      - tapOn: "Skip intro"
+      - tapOn:
+          id: "intro-skip"
 - extendedWaitUntil:
-    visible: "Select a Festival"
+    visible:
+      id: "festival-card-.*"
     timeout: 30000
 - takeScreenshot: ${MAESTRO_TESTS_DIR}/01-festival-picker
 # North Coast has artist photos on about half its sets.
@@ -42,10 +45,10 @@ env:
 # centre sits under the tab bar, so a plain tap lands on a tab. Centre it first.
 - scrollUntilVisible:
     element:
-      id: "festival-card-nc-2026"
+      id: "festival-card-fk-2026"
     centerElement: true
 - tapOn:
-    id: "festival-card-nc-2026"
+    id: "festival-card-fk-2026"
 - extendedWaitUntil:
     visible:
       text: "Timeline|Cards"

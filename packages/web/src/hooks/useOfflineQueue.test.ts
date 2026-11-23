@@ -8,7 +8,7 @@
  * rather than retried forever.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 
 // A small stateful uiStore: the queue (and the shared failed-sync helpers it
 // calls) read and write failedSync / offlineMode through getState().
@@ -17,7 +17,7 @@ const ui = vi.hoisted(() => {
   const state = {
     failedSync: [] as FailedItem[],
     offlineMode: false,
-    setPendingSync: () => {},
+    setPendingSync: vi.fn(),
     setOfflineMode: (offline: boolean) => {
       state.offlineMode = offline;
     },
@@ -157,6 +157,30 @@ describe('useOfflineQueue — localStorage fallback', () => {
     expect(queue).toHaveLength(1);
     expect(queue[0].clientId).toBe('test-client-1');
     expect(queue[0].status).toBe('pending');
+  });
+
+  it('publishes the persisted pending count to the ui store on mount', async () => {
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify([
+        { clientId: 'seeded-1', type: 'api', url: '/api/profiles/p1', method: 'PUT', status: 'pending', retries: 0, createdAt: Date.now() },
+      ]),
+    );
+    renderHook(() => useOfflineQueue());
+    await waitFor(() => expect(ui.setPendingSync).toHaveBeenCalledWith(1));
+  });
+
+  it('counts pending writes after the stale prune, so expired ones are not shown as pending', async () => {
+    const entry = (clientId: string, createdAt: number) => ({
+      clientId, type: 'api', url: '/api/profiles/p1', method: 'PUT', status: 'pending', retries: 0, createdAt,
+    });
+    localStorage.setItem(
+      LS_KEY,
+      JSON.stringify([entry('old-1', Date.now() - 8 * 24 * 3600 * 1000), entry('fresh-1', Date.now())]),
+    );
+    renderHook(() => useOfflineQueue());
+    await waitFor(() => expect(ui.setPendingSync).toHaveBeenCalledWith(1));
+    expect(ui.setPendingSync).not.toHaveBeenCalledWith(2);
   });
 
   it('removes a successfully replayed entry from localStorage (no re-send)', async () => {
@@ -392,6 +416,23 @@ describe('useOfflineQueue — localStorage fallback', () => {
     expect(apiFn).toHaveBeenCalledTimes(MAX_RETRIES);
     expect(JSON.parse(localStorage.getItem(LS_KEY) || '[]')).toHaveLength(0);
     expect(ui.failedSync).toEqual([expect.objectContaining({ clientId: 'srv-1', error: 'Server error' })]);
+  });
+
+  it('a surfaced failure uses the queued label, else a plain-words name with the meeting point label', async () => {
+    const { result } = renderHook(() => useOfflineQueue());
+    await act(async () => {
+      await result.current.queueMutation({
+        clientId: 'mp-1', type: 'api', url: '/crews/c1/meeting-points', method: 'POST', body: { label: 'Doomed one' },
+      });
+      await result.current.queueMutation({
+        clientId: 'pick-1', type: 'api', url: '/profiles/p1', method: 'PUT', body: {}, label: 'Update picks',
+      });
+    });
+    const apiFn = vi.fn().mockRejectedValue(Object.assign(new Error('Not a crew member'), { status: 403 }));
+    await act(async () => {
+      await result.current.processQueue(apiFn);
+    });
+    expect(ui.failedSync.map((f) => f.label)).toEqual(['Add meeting point: Doomed one', 'Update picks']);
   });
 
   it('a surfaced failure is in storage and comes back after hydrate', async () => {

@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, TouchableOpacity, View } from 'react-native';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { fetchWrap, markCaught } from '@festie/shared/services';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
+import { WRAP_STATE_COPY } from '@festie/shared/constants';
 import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
-import { formatTime, isWrapUnlocked, selectSetsToRate } from '@festie/shared/utils';
+import { formatTime, isWrapUnlocked, isWrapUpcoming, selectSetsToRate } from '@festie/shared/utils';
 import type { WrapFestival, WrapPlannedSet } from '@festie/shared/types';
 import EmptyState from '../components/EmptyState';
 import Button from '../components/Button';
@@ -31,15 +33,18 @@ export default function RateScreen() {
   const router = useRouter();
   const reduceMotion = useReduceMotion();
   const haptics = useHaptics();
+  const insets = useSafeAreaInsets();
   const { festival: festivalParam } = useLocalSearchParams<{ festival?: string }>();
   const currentFestivalId = useFestivalDataStore((s) => s.currentFestival?.id);
   const festivalId = festivalParam || currentFestivalId;
 
   const [data, setData] = useState<Loaded | null>(null);
   const [error, setError] = useState(false);
+  const [notFound, setNotFound] = useState(false);
   const [reload, setReload] = useState(0);
   const [index, setIndex] = useState(0);
   const [seenId, setSeenId] = useState<string | null>(null);
+  const [anyRated, setAnyRated] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userId = useAuthStore((s) => s.user?.id);
 
@@ -52,8 +57,10 @@ export default function RateScreen() {
         setData({ festival: res.festival, sets: selectSetsToRate(res.planned, res.festival) });
         setError(false);
       })
-      .catch(() => {
-        if (!cancelled) setError(true);
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setNotFound(isApiClientError(e) && e.status === 404);
+        setError(true);
       });
     return () => {
       cancelled = true;
@@ -67,7 +74,7 @@ export default function RateScreen() {
     [],
   );
 
-  // Clearing the pending auto-advance keeps a quick Skip or Skipped from advancing twice.
+  // Clearing the pending auto-advance keeps a quick Next or Missed it from advancing twice.
   const advance = useCallback(() => {
     if (timer.current) clearTimeout(timer.current);
     setIndex((i) => i + 1);
@@ -90,18 +97,20 @@ export default function RateScreen() {
 
   const header = <Stack.Screen options={{ title: 'Rate your night', headerShown: true }} />;
 
-  const fullListLink = festivalId ? (
-    <TouchableOpacity
-      onPress={() => router.push({ pathname: '/caught', params: { festival: festivalId } })}
-      style={styles.fullList}
-      accessibilityRole="link"
-      accessibilityLabel="See the full list"
-    >
-      <Text style={styles.fullListText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        See the full list
-      </Text>
-    </TouchableOpacity>
-  ) : null;
+  // Under the empty states the link is the last item, so it clears the gesture bar; atop the rating card it must not.
+  const fullListLink = (clearBottomInset: boolean) =>
+    festivalId ? (
+      <TouchableOpacity
+        onPress={() => router.push({ pathname: '/caught', params: { festival: festivalId } })}
+        style={[styles.fullList, clearBottomInset && { paddingBottom: insets.bottom + t.spacing[2] }]}
+        accessibilityRole="link"
+        accessibilityLabel="See the full list"
+      >
+        <Text style={styles.fullListText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          See the full list
+        </Text>
+      </TouchableOpacity>
+    ) : null;
 
   if (!festivalId) {
     return (
@@ -111,6 +120,19 @@ export default function RateScreen() {
           icon="musical-notes-outline"
           title="Nothing to rate right now"
           message="Sets you picked show up here after they end."
+        />
+      </View>
+    );
+  }
+
+  if (error && !data && notFound) {
+    return (
+      <View style={styles.screen}>
+        {header}
+        <EmptyState
+          icon="musical-notes-outline"
+          title={WRAP_STATE_COPY.notFound.title}
+          message={WRAP_STATE_COPY.notFound.description}
         />
       </View>
     );
@@ -144,6 +166,19 @@ export default function RateScreen() {
     );
   }
 
+  if (isWrapUpcoming(data.festival)) {
+    return (
+      <View style={styles.screen}>
+        {header}
+        <EmptyState
+          icon="musical-notes-outline"
+          title={WRAP_STATE_COPY.notStarted.title}
+          message={WRAP_STATE_COPY.notStarted.description}
+        />
+      </View>
+    );
+  }
+
   if (data.sets.length === 0) {
     return (
       <View style={styles.screen}>
@@ -153,7 +188,7 @@ export default function RateScreen() {
           title="Nothing to rate right now"
           message="Sets you picked show up here after they end."
         />
-        {fullListLink}
+        {fullListLink(true)}
       </View>
     );
   }
@@ -165,8 +200,8 @@ export default function RateScreen() {
         {header}
         <EmptyState
           icon="checkmark-circle-outline"
-          title="All rated"
-          message="Thanks. Your ratings go into your wrap."
+          title={anyRated ? 'All rated' : "That's everything for now"}
+          message={anyRated ? 'Thanks. Your ratings go into your wrap.' : 'Rate any set from the full list whenever you like.'}
           action={{
             label: unlocked ? 'See your wrap' : 'Back to picks',
             onPress: () =>
@@ -175,7 +210,7 @@ export default function RateScreen() {
                 : router.replace('/(tabs)/picks'),
           }}
         />
-        {fullListLink}
+        {fullListLink(true)}
       </View>
     );
   }
@@ -185,7 +220,7 @@ export default function RateScreen() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
       {header}
-      {fullListLink}
+      {fullListLink(false)}
       <Text style={styles.progress} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {`${index + 1} of ${data.sets.length}`}
       </Text>
@@ -209,7 +244,7 @@ export default function RateScreen() {
           style={styles.caughtButton}
         />
         <Button
-          label="Skipped"
+          label="Missed it"
           variant="secondary"
           onPress={() => {
             mark(set.setId, false);
@@ -225,12 +260,13 @@ export default function RateScreen() {
           festivalId={festivalId}
           showMemory={false}
           onRated={() => {
+            setAnyRated(true);
             mark(set.setId, true);
             next();
           }}
         />
       </View>
-      <Button label="Skip" variant="ghost" onPress={advance} />
+      <Button label="Next" variant="ghost" onPress={advance} />
     </ScrollView>
   );
 }

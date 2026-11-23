@@ -58,4 +58,31 @@ describe('the activity view of an organization', { skip }, () => {
     assert.doesNotMatch(shown, /f-sec-b-draft/);
     assert.doesNotMatch(shown, /festivalsUpdated|festivalIds/);
   });
+
+  test('records one row for one festival create, not a second generic one', async () => {
+    const { server, users } = await boot();
+    const created = await o.as(server, users.ownerA.token).post(`${MANAGE}/festivals`, { organizationId: 'org-a', name: 'One Row Fest' });
+    assert.equal(created.status, 201, JSON.stringify(created.body));
+    // The generic audit middleware writes on the response's finish event, so give it time to land.
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const rows = (
+      await o.sql(server, "SELECT action FROM audit_log WHERE actor_id = $1 AND action IN ('festival.created', 'festivals.created')", [users.ownerA.id])
+    ).rows;
+    assert.deepEqual(rows.map((r: any) => r.action), ['festival.created']);
+  });
+
+  test('leaves out the nameless generic row of a refused write', async () => {
+    const { server, users } = await boot();
+    // org-p is pending with one draft and a cap of two: the second create passes, the third is refused.
+    const create = (name: string) => o.as(server, users.ownerP.token).post(`${MANAGE}/festivals`, { organizationId: 'org-p', name });
+    assert.equal((await create('Second Draft')).status, 201);
+    assert.equal((await create('Third Draft')).status, 403);
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const generic = await o.sql(server, "SELECT status FROM audit_log WHERE action = 'festivals.created' AND organization_id = 'org-p'");
+    assert.deepEqual(generic.rows.map((r: any) => r.status), ['failure'], 'the refused write left its generic row');
+
+    const audit = await o.as(server, users.ownerP.token).get(`${MANAGE}/organizations/org-p/audit`);
+    assert.equal(audit.status, 200, JSON.stringify(audit.body));
+    assert.deepEqual(audit.body.data.map((entry: any) => entry.action), ['festival.created']);
+  });
 });

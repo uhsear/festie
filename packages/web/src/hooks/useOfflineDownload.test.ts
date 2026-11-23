@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
+import { OFFLINE_MAP_COPY } from '@festie/shared/constants';
 import { useOfflineDownload } from './useOfflineDownload';
 
 const h = vi.hoisted(() => ({
@@ -90,16 +91,28 @@ describe('useOfflineDownload', () => {
     expect(result.current.summary.overall).toBe('ready');
   });
 
+  it('does not claim 0 MB free when the browser gave no free-space estimate', async () => {
+    h.readiness.byFestival = { f1: allReady };
+    h.cache.ensure = { ok: false, reason: 'quota', bytes: 6_000_000 };
+    const { result } = renderHook(() => useOfflineDownload('f1'));
+    await act(async () => {
+      await result.current.download();
+    });
+    expect(result.current.mapMessage).toContain('needs 6 MB)');
+    expect(result.current.mapMessage).not.toContain('0 MB free');
+  });
+
   it('shows the not-enough-space detail after a quota failure while other rows finish', async () => {
     h.readiness.byFestival = { f1: allReady };
-    h.cache.ensure = { ok: false, reason: 'quota', bytes: 4_200_000 };
+    h.cache.ensure = { ok: false, reason: 'quota', bytes: 4_200_000, freeBytes: 1_300_000 };
     const { result } = renderHook(() => useOfflineDownload('f1'));
     await act(async () => {
       await result.current.download();
     });
     const map = result.current.steps.find((s) => s.key === 'map');
     expect(map?.section.status).toBe('error');
-    expect(map?.detail).toBe('Not enough space for the map (4 MB). Free up space, then retry.');
+    expect(result.current.mapMessage).toBe(OFFLINE_MAP_COPY.notEnoughSpace(4_200_000, 1_300_000));
+    expect(result.current.mapMessage).toContain('needs 5 MB, 1 MB free');
     expect(result.current.summary.overall).toBe('partial');
   });
 

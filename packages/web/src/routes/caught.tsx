@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
-import { api, fetchWrap, markCaught } from '@festie/shared/services';
+import { api, fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
+import { WRAP_STATE_COPY } from '@festie/shared/constants';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { FestivalDay, FestivalSet, Stage } from '@festie/shared/types';
 import type { WrapResponse } from '@festie/shared/types';
@@ -13,6 +14,7 @@ import {
   findSetsToAdd,
   formatTime,
   isWrapUnlocked,
+  isWrapUpcoming,
   lineupFromDays,
   resolveFestivalTimeZone,
 } from '@festie/shared/utils';
@@ -50,6 +52,7 @@ function CaughtPageInner() {
   if (!festivalId) {
     return (
       <EmptyState
+        headingLevel={1}
         icon={<Music className="w-9 h-9" aria-hidden="true" />}
         title="Nothing to check off yet"
         description="Choose a festival first."
@@ -65,7 +68,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
   const { toastError } = useToast();
   const [announcement, setAnnouncement] = useState('');
 
-  const { data, isLoading, isError, refetch } = useQuery<WrapResponse>({
+  const { data, error, isLoading, isError, refetch } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId],
     queryFn: () => fetchWrap(festivalId),
   });
@@ -94,8 +97,19 @@ function CaughtList({ festivalId }: { festivalId: string }) {
   const checklist = useMemo(() => (data ? buildCaughtChecklist(data) : null), [data]);
 
   if (isError) {
+    if (isApiClientError(error) && error.status === 404) {
+      return (
+        <EmptyState
+          headingLevel={1}
+          icon={<Music className="w-9 h-9" aria-hidden="true" />}
+          title={WRAP_STATE_COPY.notFound.title}
+          description={WRAP_STATE_COPY.notFound.description}
+        />
+      );
+    }
     return (
       <EmptyState
+        headingLevel={1}
         icon={<Music className="w-9 h-9" aria-hidden="true" />}
         title="Couldn't load your sets"
         cta={{ label: 'Try again', onClick: () => refetch() }}
@@ -107,6 +121,17 @@ function CaughtList({ festivalId }: { festivalId: string }) {
       <div className="max-w-[560px] mx-auto w-full space-y-3 py-4">
         <Skeleton variant="card" />
       </div>
+    );
+  }
+
+  if (isWrapUpcoming(data.festival)) {
+    return (
+      <EmptyState
+        headingLevel={1}
+        icon={<Music className="w-9 h-9" aria-hidden="true" />}
+        title={WRAP_STATE_COPY.notStarted.title}
+        description={WRAP_STATE_COPY.notStarted.description}
+      />
     );
   }
 
@@ -170,7 +195,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
                       <div role="group" aria-label={name} className="flex gap-2">
                         <button
                           type="button"
-                          aria-label={`Saw ${name}`}
+                          aria-label={`Saw it, ${name}`}
                           aria-pressed={row.caught === true}
                           onClick={() =>
                             row.caught === true
@@ -183,16 +208,16 @@ function CaughtList({ festivalId }: { festivalId: string }) {
                         </button>
                         <button
                           type="button"
-                          aria-label={`Skipped ${name}`}
+                          aria-label={`Missed it ${name}`}
                           aria-pressed={row.caught === false}
                           onClick={() =>
                             row.caught === false
                               ? apply(row.setId, null, 'Mark removed')
-                              : apply(row.setId, false, 'Marked as skipped')
+                              : apply(row.setId, false, 'Marked as missed')
                           }
                           className={cn(chipClass, row.caught === false && pressedClass)}
                         >
-                          Skipped
+                          Missed it
                         </button>
                       </div>
                     )}

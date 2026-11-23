@@ -201,9 +201,9 @@ describe('festivalTimeLabel', () => {
     if (new Date(ms).getTimezoneOffset() === 0) expect(festivalTimeLabel('UTC', ms)).toBeNull();
   });
 
-  it("is 'Festival time' when the offsets differ", () => {
+  it('names the festival zone when the offsets differ', () => {
     expect(isValidTimeZone(awayZone)).toBe(true);
-    expect(festivalTimeLabel(awayZone, ms)).toBe('Festival time');
+    expect(festivalTimeLabel(awayZone, ms)).toBe(`Festival time (${timeZoneCity(awayZone)})`);
   });
 
   it('is null without a valid zone', () => {

@@ -105,7 +105,7 @@ export interface UIActions {
   /** Picks a fixed theme and leaves system mode. */
   setTheme: (theme: ThemePreference) => void;
   setThemeMode: (mode: ThemeMode) => void;
-  /** Applies the OS colour scheme to `theme`; does nothing unless followSystemTheme is on. */
+  /** Applies the OS colour scheme to `theme`; does nothing unless followSystemTheme is on and storage has hydrated. */
   applySystemScheme: (scheme: 'light' | 'dark' | null | undefined) => void;
   setHapticsEnabled: (enabled: boolean) => void;
   setWrapShowHandle: (v: boolean) => void;
@@ -126,7 +126,7 @@ const uiStore: StateCreator<UIStore> = (set, get) => ({
   onlineUsers: [],
   toasts: [],
   theme: 'stage',
-  followSystemTheme: false,
+  followSystemTheme: true,
   hapticsEnabled: true,
   wrapShowHandle: true,
   crewBadgeSeen: {},
@@ -214,7 +214,8 @@ const uiStore: StateCreator<UIStore> = (set, get) => ({
   },
 
   applySystemScheme: (scheme) => {
-    if (!get().followSystemTheme) return;
+    // Before hydration a set would persist the defaults over the saved record.
+    if (!get().followSystemTheme || !useUIStore.persist.hasHydrated()) return;
     set({ theme: scheme === 'light' ? 'daylight' : 'stage' });
   },
 
@@ -256,6 +257,11 @@ export const useUIStore = create<UIStore>()(
   persist(uiStore, {
     name: THEME_STORAGE_KEY,
     storage: createJSONStorage(() => getStorage()),
+    // A store saved before followSystemTheme existed chose its theme by hand: keep that choice fixed.
+    merge: (persisted, current) => {
+      const saved = (persisted ?? {}) as Partial<UIStore>;
+      return { ...current, ...saved, followSystemTheme: saved.followSystemTheme ?? (saved.theme !== undefined ? false : current.followSystemTheme) };
+    },
     partialize: (state) => ({
       theme: state.theme,
       followSystemTheme: state.followSystemTheme,

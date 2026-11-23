@@ -117,7 +117,12 @@ describe('POST /api/v1/auth/forgot-password', () => {
 
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });
     try {
-      const tokens = await pool.query('SELECT * FROM password_reset_tokens WHERE user_id = $1', [reg.body.data.user.id]);
+      // The route answers before it writes the token, so poll for the row.
+      let tokens = await pool.query('SELECT * FROM password_reset_tokens WHERE user_id = $1', [reg.body.data.user.id]);
+      for (let attempt = 0; attempt < 40 && tokens.rows.length === 0; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 50));
+        tokens = await pool.query('SELECT * FROM password_reset_tokens WHERE user_id = $1', [reg.body.data.user.id]);
+      }
       assert.ok(tokens.rows.length > 0, 'Reset token should be created in DB');
     } finally { await pool.end(); }
   });
@@ -146,7 +151,7 @@ describe('POST /api/v1/auth/forgot-password', () => {
 // Verify-email
 // ════════════════════════════════════════════════════════════════════════
 
-describe('GET /api/v1/auth/verify-email', () => {
+describe('/api/v1/auth/verify-email', () => {
   test('invalid token format (includes empty token) returns 400', async () => {
     // NOTE: folded-in from dropped "rejects empty token" duplicate — the
     // empty-string case is an invalid-format variant, so we assert both.
@@ -160,7 +165,13 @@ describe('GET /api/v1/auth/verify-email', () => {
   test('non-existent valid-format token returns 400', async () => {
     const server = await startServer(); servers.push(server);
     const fakeToken = crypto.randomBytes(32).toString('hex');
-    const res = await server.request.get('/api/v1/auth/verify-email?token=' + fakeToken);
+    const res = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: fakeToken });
+    assert.equal(res.status, 400);
+  });
+
+  test('POST with a malformed token fails validation', async () => {
+    const server = await startServer(); servers.push(server);
+    const res = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: 'short' });
     assert.equal(res.status, 400);
   });
 
@@ -181,7 +192,14 @@ describe('GET /api/v1/auth/verify-email', () => {
         [reg.body.data.user.id, tokenHash, 'verify@example.com']
       );
 
-      const res = await server.request.get('/api/v1/auth/verify-email?token=' + rawToken);
+      // A browser GET (a mail scanner prefetch) must not burn the token.
+      const prefetch = await server.request.get('/api/v1/auth/verify-email?token=' + rawToken).set('Accept', 'text/html');
+      assert.equal(prefetch.status, 302);
+      assert.equal(prefetch.headers.location, '/verify-email?token=' + rawToken);
+      const unchanged = await pool.query('SELECT email_verified_at FROM users WHERE id = $1', [reg.body.data.user.id]);
+      assert.equal(unchanged.rows[0].email_verified_at, null, 'a GET must not verify');
+
+      const res = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: rawToken });
       assert.equal(res.status, 200);
 
       const userCheck = await pool.query('SELECT email_verified_at FROM users WHERE id = $1', [reg.body.data.user.id]);
@@ -202,10 +220,10 @@ describe('GET /api/v1/auth/verify-email', () => {
         [user.user.id, tokenHash, 'test@example.com']
       );
 
-      const r1 = await server.request.get('/api/v1/auth/verify-email').query({ token: rawToken });
+      const r1 = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: rawToken });
       assert.equal(r1.status, 200, 'First verification should succeed');
 
-      const r2 = await server.request.get('/api/v1/auth/verify-email').query({ token: rawToken });
+      const r2 = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: rawToken });
       assert.equal(r2.status, 400, 'Reused token should be rejected');
     } finally { await pool.end(); }
   });

@@ -41,6 +41,11 @@ describe('PlaceCard', () => {
     expect(screen.getByRole('button', { name: 'Show the way' })).toHaveFocus();
   });
 
+  it('sits above the map attribution button instead of covering it', () => {
+    renderCard();
+    expect(screen.getByRole('dialog', { name: 'Mainstage' }).className).toContain('bottom-9');
+  });
+
   it('asks for location when there is no fix', () => {
     const props = renderCard({ selfCoord: null, geoState: 'idle' });
     fireEvent.click(screen.getByRole('button', { name: 'Turn on location to see how far it is' }));
@@ -77,6 +82,22 @@ describe('PlaceCard', () => {
       vi.advanceTimersByTime(2000);
     });
     expect(screen.queryByText('Copied')).toBeNull();
+  });
+
+  it('says so when the link cannot be copied, then clears the message', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
+    renderCard();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+    });
+    expect(screen.getByRole('status')).toHaveTextContent('Could not copy the link.');
+    act(() => {
+      vi.advanceTimersByTime(2000);
+    });
+    expect(screen.queryByRole('status')).toBeNull();
   });
 
   it('uses navigator.share when present', async () => {

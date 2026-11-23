@@ -897,9 +897,6 @@ export function createSendService({
     data?: Record<string, unknown>;
     threadId?: string | null;
   }) {
-    // Bail only when NO transport exists. FCM-less + APNs-configured is a
-    // valid deploy: the per-device branch below routes iOS to APNs.
-    if (!messaging && !getApns() && !webPush) return { sent: 0, reason: 'firebase_not_configured' };
     if (!ALLOWED_NOTIFICATION_TYPES.has(type)) {
       log.warn('invalid notification type rejected', { type, userId });
       return { sent: 0, reason: 'invalid_type' };
@@ -919,6 +916,10 @@ export function createSendService({
     if (!isCritical && prefs && prefKey && !prefs[prefKey]) return { sent: 0, reason: 'user_disabled' };
     const held = await holdOrLogInbox({ userId, type, isCritical, prefs, safeTitle, safeBody, safeData });
     if (held) return { sent: 0, reason: held };
+
+    // Bail only when NO transport exists, after the inbox row is written. FCM-less +
+    // APNs-configured is a valid deploy: the per-device branch below routes iOS to APNs.
+    if (!messaging && !getApns() && !webPush) return { sent: 0, reason: 'firebase_not_configured' };
 
     const tokens = await stores.deviceTokens.listByUser(userId);
     if (tokens.length === 0) return { sent: 0, reason: 'no_tokens' };
@@ -1183,7 +1184,6 @@ export function createSendService({
     topic?: string | null;
     threadId?: string | null;
   }) {
-    if (!messaging && !getApns() && !webPush) return { sent: 0 };
     if (!ALLOWED_NOTIFICATION_TYPES.has(type)) return { sent: 0, reason: 'invalid_type' };
 
     // An explicit recipient list (e.g. one crew) replaces the festival-wide audience.
@@ -1210,6 +1210,12 @@ export function createSendService({
     const prefKey = PREF_MAP[type];
     const channelId = TYPE_CHANNEL_MAP[type] ?? 'updates';
     const apns = getApns();
+
+    // No push provider: still write the inbox rows, then stop before the device step.
+    if (!messaging && !getApns() && !webPush) {
+      await logBatchInbox({ batch, type, prefKey, safeTitle, safeBody, safeData });
+      return { sent: 0 };
+    }
 
     // Count-then-log runs under the users' budget locks so a concurrent send cannot pass the cap between them.
     const [recipients, tokensMap, badgeMap] = await Promise.all([

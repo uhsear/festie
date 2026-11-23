@@ -121,6 +121,7 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
               { text: LIVE_SHARE_COPY.bgDeniedShareOpen, onPress: startForeground },
               { text: LIVE_SHARE_COPY.openSettings, onPress: () => void Linking.openSettings() },
             ],
+            { cancelable: true },
           );
         } catch {
           Alert.alert('Location unavailable', "Couldn't start location sharing. Try again.");
@@ -141,6 +142,7 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
                 { text: 'Not now', style: 'cancel' },
                 { text: 'Open Settings', onPress: () => void Linking.openSettings() },
               ],
+              { cancelable: true },
             );
           } else {
             Alert.alert(
@@ -162,6 +164,7 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
             { text: LIVE_SHARE_COPY.cancel, style: 'cancel' },
             { text: LIVE_SHARE_COPY.bgDisclosureContinue, onPress: () => void requestBackground() },
           ],
+          { cancelable: true },
         );
       } catch {
         Alert.alert('Location unavailable', "Couldn't start location sharing. Try again.");
@@ -318,13 +321,13 @@ export default function CrewLiveLocation({ crewId }: CrewLiveLocationProps) {
                       style={[styles.durationChip, isDefault && styles.durationChipDefault]}
                       activeOpacity={0.8}
                       accessibilityRole="button"
-                      accessibilityLabel={`Share for ${d.label}`}
+                      accessibilityLabel={isDefault ? `Share for ${d.label}, ${LIVE_SHARE_COPY.recommended}` : `Share for ${d.label}`}
                     >
                       <Text
                         style={[styles.durationChipText, isDefault && styles.durationChipTextDefault]}
                         maxFontSizeMultiplier={MAX_FONT_SCALE}
                       >
-                        {d.label}
+                        {isDefault ? `${d.label} · ${LIVE_SHARE_COPY.recommended}` : d.label}
                       </Text>
                     </TouchableOpacity>
                   );

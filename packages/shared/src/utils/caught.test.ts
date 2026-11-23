@@ -183,8 +183,8 @@ describe('buildCaughtChecklist', () => {
 
 describe('checklistCountLine', () => {
   it('leaves out zero parts', () => {
-    expect(checklistCountLine({ saw: 3, skipped: 1, toMark: 2 })).toBe('3 seen · 1 skipped · 2 to mark');
-    expect(checklistCountLine({ saw: 0, skipped: 1, toMark: 0 })).toBe('1 skipped');
+    expect(checklistCountLine({ saw: 3, skipped: 1, toMark: 2 })).toBe('3 seen · 1 missed · 2 to mark');
+    expect(checklistCountLine({ saw: 0, skipped: 1, toMark: 0 })).toBe('1 missed');
     expect(checklistCountLine({ saw: 0, skipped: 0, toMark: 0 })).toBe('');
   });
 });

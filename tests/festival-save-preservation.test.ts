@@ -116,6 +116,7 @@ async function cleanupById(pool: any) {
   await pool.query('DELETE FROM audit_log WHERE target_id = $1', [FEST_ID]);
   await pool.query('DELETE FROM festivals WHERE id = $1', [FEST_ID]);
   const like = [`fsp-${RUN_ID}%`];
+  await pool.query('DELETE FROM notification_log WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
   await pool.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
   await pool.query('DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);
   await pool.query('DELETE FROM user_roles WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', like);

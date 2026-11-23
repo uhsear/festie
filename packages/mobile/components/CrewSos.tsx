@@ -169,6 +169,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
             onPress: () => void doClear(sos.userId),
           },
         ],
+        { cancelable: true },
       );
     },
     [doClear, currentUserId],
@@ -176,7 +177,8 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
 
   const renderBanner = (sos: SosEntry) => {
     const isMine = sos.userId === currentUserId;
-    const target = sosTargetFor(sos);
+    // Directions to your own position are no use to the raiser.
+    const target = isMine ? null : sosTargetFor(sos);
     const clearing = clearingId === sos.userId;
     // Banner View is not `accessible`: an accessible container would merge its buttons into one VoiceOver element.
     return (
@@ -194,9 +196,11 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
         <Text style={styles.bannerBody}>
           {sos.message
             ? sos.message
-            : target
-              ? 'Tap “Get directions” to walk toward their last location.'
-              : 'No location was attached — reach them by phone or radio.'}
+            : isMine
+              ? 'Your crew has been alerted.'
+              : target
+                ? 'Tap “Get directions” to walk toward their last location.'
+                : 'No location was attached — reach them by phone or radio.'}
         </Text>
         <Text style={styles.bannerSeen}>{sosSeenLabel(sos)}</Text>
         <View style={styles.bannerActions}>

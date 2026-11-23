@@ -80,6 +80,8 @@ export default function SetEditor({
 }: SetEditorProps) {
   const invalid = (field: string) => (issueFields.includes(field) ? true : undefined);
   const [drafts, setDrafts] = useState<string[]>(() => artistNamesOf(s));
+  // Names this set in the labels of its controls, so a screen reader can tell the rows apart.
+  const setName = joinArtistNames(drafts, separator) || 'artist';
   const [origin, setOrigin] = useState<Artist[] | undefined>(() => s.artists);
 
   const [matches, setMatches] = useState<Record<number, SlotMatch>>({});
@@ -136,7 +138,7 @@ export default function SetEditor({
     <div
       data-issue-key={`set:${s.id}`}
       data-issue={issues.length > 0 ? 'true' : undefined}
-      className={`grid grid-cols-2 gap-2 rounded-lg border border-glass-border p-3 md:grid-cols-[auto_1fr_140px_90px_90px_auto] md:rounded-none md:border-0 md:p-0 ${
+      className={`grid grid-cols-2 gap-2 rounded-lg border border-glass-border p-3 md:grid-cols-[auto_1fr_140px_7.5rem_7.5rem_auto] md:rounded-none md:border-0 md:p-0 ${
         status ? 'border-l-2 border-l-accent-aqua md:pl-2' : ''
       } ${issues.length > 0 ? 'ring-1 ring-accent-coral md:p-1' : ''}`}
     >
@@ -214,7 +216,7 @@ export default function SetEditor({
             <button
               type="button"
               onClick={() => changeDrafts([...drafts, ''])}
-              className="text-xs text-accent-aqua hover:underline"
+              className="min-h-11 px-2 text-xs text-accent-aqua hover:underline"
             >
               + B2B artist
             </button>
@@ -225,7 +227,7 @@ export default function SetEditor({
         <span className={FIELD_CAPTION}>Stage</span>
         <select
           value={s.stageId || ''}
-          aria-label="Stage"
+          aria-label={`Stage for ${setName}`}
           aria-invalid={invalid('stageId')}
           onChange={(e) => onField('stageId', e.target.value)}
           className="px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
@@ -238,33 +240,33 @@ export default function SetEditor({
           ))}
         </select>
       </label>
-      <label className={FIELD_LABEL}>
+      <label className={`${FIELD_LABEL} col-span-2 sm:col-span-1`}>
         <span className={FIELD_CAPTION}>Start</span>
         <input
           type="time"
-          aria-label="Start time"
+          aria-label={`Start time for ${setName}`}
           aria-invalid={invalid('startTime')}
           value={s.startTime && s.startTime !== 'TBA' ? s.startTime : ''}
           onChange={(e) => onField('startTime', e.target.value || 'TBA')}
-          className="px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
+          className="w-full min-w-0 px-1.5 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
         />
       </label>
-      <label className={FIELD_LABEL}>
+      <label className={`${FIELD_LABEL} col-span-2 sm:col-span-1`}>
         <span className={FIELD_CAPTION}>End</span>
         <input
           type="time"
-          aria-label="End time"
+          aria-label={`End time for ${setName}`}
           aria-invalid={invalid('endTime')}
           value={s.endTime && s.endTime !== 'TBA' ? s.endTime : ''}
           onChange={(e) => onField('endTime', e.target.value || null)}
-          className="px-2 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
+          className="w-full min-w-0 px-1.5 py-1.5 rounded bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-1 focus:ring-accent-aqua"
         />
       </label>
       <button
         type="button"
         onClick={onRemove}
         className="col-span-2 md:col-span-1 px-2 py-1.5 md:py-0 min-h-11 md:min-w-11 rounded bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-xs"
-        aria-label={`Remove ${joinArtistNames(drafts, separator) || 'artist'}`}
+        aria-label={`Remove set: ${setName}`}
       >
         <span className="md:hidden">Remove set</span>
         <span className="hidden md:inline">×</span>

@@ -43,6 +43,7 @@ import { ConfirmDialog } from '../../components/admin';
 import type { AuthoringMode } from '../../lib/webviewBridge';
 import { useTokens } from '../../hooks/useTokens';
 import MapAuthoringPane from '../../components/admin/festival-map/MapAuthoringPane';
+import { UNFINISHED_ZONE_MESSAGE } from '../../components/admin/festival-map/zoneDrawing';
 import VenueSection from '../../components/admin/festival-map/VenueSection';
 import StageLocationsSection from '../../components/admin/festival-map/StageLocationsSection';
 import ZonesSection from '../../components/admin/festival-map/ZonesSection';
@@ -474,6 +475,10 @@ export default function FestivalMapEditorScreen() {
   const handleSave = async () => {
     if (!editingId || !detail) return;
     setFormError(null);
+    if (draftVertices.length > 0) {
+      setFormError(UNFINISHED_ZONE_MESSAGE);
+      return;
+    }
     const payload: Record<string, unknown> = {
       name: detail.name?.trim() || name.trim(),
       location: detail.location?.trim() || '',

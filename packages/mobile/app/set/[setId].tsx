@@ -65,7 +65,7 @@ import { useTokens, makeStyles, typeStyle, useLargeText, typeScaleCap, MAX_FONT_
 import { setReturnTo } from '../../lib/returnTo';
 import { safeStageColor } from '../../lib/stageColor';
 import { priorityColor } from '../../lib/priorityColor';
-import { PRIORITY_SYMBOLS, GUEST_PROMPT_COPY } from '@festie/shared/constants';
+import { PRIORITY_SYMBOLS, GUEST_PROMPT_COPY, genreChipLabel } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS, priorityIconName } from '../../lib/prioritySymbol';
 import { useListBottomInset } from '../../hooks/useListBottomInset';
 import { ensureStageTextContrast } from '../../lib/stageTextContrast';
@@ -94,13 +94,16 @@ async function askNotificationPermission(artist: string): Promise<void> {
     const { status } = await Notifications.getPermissionsAsync();
     if (status !== 'undetermined') return;
     if (await AsyncStorage.getItem(REMINDER_ASK_DISMISSED_KEY)) return;
+    const dismissAsk = () => void AsyncStorage.setItem(REMINDER_ASK_DISMISSED_KEY, '1');
     Alert.alert(
       `Get a heads-up before ${artist}?`,
       'Allow notifications so Festie can remind you before sets start, even when the app is closed.',
       [
-        { text: 'Not now', style: 'cancel', onPress: () => void AsyncStorage.setItem(REMINDER_ASK_DISMISSED_KEY, '1') },
+        { text: 'Not now', style: 'cancel', onPress: dismissAsk },
         { text: 'Allow', onPress: () => void Notifications.requestPermissionsAsync() },
       ],
+      // Back counts as "Not now", so the ask does not return on every save.
+      { cancelable: true, onDismiss: dismissAsk },
     );
   } catch {
     // Best effort: the reminder is saved either way and the delivery line explains a missing permission.
@@ -892,7 +895,7 @@ export default function SetDetailScreen() {
           <View style={styles.chipRow}>
             {allGenres.map((g) => (
               <View key={g} style={styles.chip}>
-                <Text style={styles.chipText}>{g}</Text>
+                <Text style={styles.chipText}>{genreChipLabel(g)}</Text>
               </View>
             ))}
           </View>
@@ -1152,7 +1155,7 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.bg.secondary,
   },
   chipText: {
-    ...typeStyle('micro'),
+    ...typeStyle('label'),
     color: t.colors.text.secondary,
   },
   linkRow: {

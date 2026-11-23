@@ -27,7 +27,7 @@ export function useOtaUpdatePrompt(): { updateReady: boolean } {
           Updates.reloadAsync().catch((err: unknown) => console.warn('ota: restart failed', err));
         },
       },
-    ]);
+    ], { cancelable: true });
   }, [isUpdatePending]);
 
   useEffect(() => {

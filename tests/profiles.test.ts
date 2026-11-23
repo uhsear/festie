@@ -112,6 +112,8 @@ async function cleanupCreated() {
         [createdUserIds],
       );
       await pool.query('DELETE FROM festival_profiles WHERE user_id = ANY($1)', [createdUserIds]);
+      await pool.query('DELETE FROM crews WHERE id IN (SELECT crew_id FROM crew_members WHERE user_id = ANY($1))', [createdUserIds]);
+      await pool.query('DELETE FROM notification_log WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM refresh_tokens WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM user_sessions WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM user_roles WHERE user_id = ANY($1)', [createdUserIds]);
@@ -542,6 +544,7 @@ describe('profiles: festival list reads picks only', () => {
       profiles: {
         listPicksByFestival: mock.fn(async () => list),
         getByFestival: mock.fn(async () => []),
+        pickCountsByFestival: mock.fn(async () => ({ s1: 1 })),
       },
       users: { getByIds: mock.fn(async () => new Map()) },
       crews: {
@@ -581,20 +584,30 @@ describe('profiles: festival list reads picks only', () => {
     assert.equal(stores.profiles.listPicksByFestival.mock.callCount(), 1);
     assert.equal(stores.profiles.getByFestival.mock.callCount(), 0);
     const mine = res.body.data.find((p: any) => p.id === 'p-own');
-    const other = res.body.data.find((p: any) => p.id === 'p-other');
     assert.deepEqual(mine.notes, { s1: 'front left' });
     assert.deepEqual(mine.reminders, { s1: 15 });
-    assert.equal('notes' in other, false);
-    assert.equal('reminders' in other, false);
-    assert.deepEqual(other.picks, {});
     assert.deepEqual(res.body.meta.pickCounts, { s1: 1 });
+  });
+
+  test('reads only the visible users profiles and takes counts from the store', async () => {
+    const { app, stores } = buildApp(listed);
+    await request(app).get('/profiles/f1');
+    assert.deepEqual(stores.profiles.listPicksByFestival.mock.calls[0]!.arguments, ['f1', ['u-own']]);
+    assert.deepEqual(stores.profiles.pickCountsByFestival.mock.calls[0]!.arguments, ['f1', 'u-own']);
   });
 
   test('a viewer row missing from the list is not added back', async () => {
     const { app } = buildApp(listed.slice(1));
     const res = await request(app).get('/profiles/f1');
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.data.map((p: any) => p.id), ['p-other']);
+    assert.deepEqual(res.body.data, []);
+  });
+
+  test('drops attendees who share no crew with the viewer, and counts their picks anonymously', async () => {
+    const { app } = buildApp(listed);
+    const res = await request(app).get('/profiles/f1');
+    assert.deepEqual(res.body.data.map((p: any) => p.id), ['p-own']);
+    assert.deepEqual(res.body.meta.pickCounts, { s1: 1 });
   });
 });
 
@@ -615,6 +628,13 @@ describe('profiles: festival list pages in SQL', { concurrency: 1 }, () => {
         .send({ picks: { [setId]: 'must' } })
         .expect(200);
       tokens.push(user.token);
+    }
+    // The list shows only the caller and crew mates, so put all three in one crew to page through them.
+    const crew = (
+      await server.request.post('/api/v1/crews').set('x-user-token', tokens[0]!).send({ name: 'Pager', festivalId: server.festival.id }).expect(201)
+    ).body.data;
+    for (const token of tokens.slice(1)) {
+      await server.request.post('/api/v1/crews/join').set('x-user-token', token).send({ inviteCode: crew.inviteCode }).expect(200);
     }
     const url = `/api/v1/profiles/${server.festival.id}`;
     const seen: string[] = [];

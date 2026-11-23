@@ -204,6 +204,12 @@ describe('CrewPlanView', () => {
     expect(label).not.toHaveClass('truncate');
   });
 
+  it('keeps the Up next link free of nested buttons', () => {
+    render(<CrewPlanView />);
+    const link = screen.getByText('Disclosure').closest('a')!;
+    expect(link.querySelector('button')).toBeNull();
+  });
+
   it('opens the set panel in place on a plain click, not on a modified click', () => {
     setDetailSet.mockClear();
     render(<CrewPlanView />);

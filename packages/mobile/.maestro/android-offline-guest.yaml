@@ -1,0 +1,47 @@
+# Guest-level offline check: a festival opened online must still open after a cold
+# relaunch in airplane mode, with no crash and no return to the picker. No account,
+# no production writes. Android only (setAirplaneMode).
+appId: us.festie.app
+tags:
+  - nightly
+  - offline
+onFlowComplete:
+  - setAirplaneMode: disabled
+---
+- launchApp:
+    clearState: true
+- extendedWaitUntil:
+    visible:
+      text: "Plan.your.weekend|Choose.a.festival"
+    timeout: 120000
+- runFlow:
+    when:
+      visible: "Plan.your.weekend"
+    commands:
+      - tapOn:
+          id: "intro-skip"
+- extendedWaitUntil:
+    visible: "Choose.a.festival"
+    timeout: 30000
+# Any listed festival works; the first card keeps the flow valid as festivals come and go.
+- tapOn:
+    id: "festival-card-.*"
+    index: 0
+- extendedWaitUntil:
+    visible:
+      id: "schedule-screen"
+    timeout: 150000
+- waitForAnimationToEnd:
+    timeout: 6000
+- takeScreenshot: offline-01-online-festival
+- setAirplaneMode: enabled
+- stopApp
+- launchApp
+- extendedWaitUntil:
+    visible:
+      id: "schedule-screen"
+    timeout: 60000
+- waitForAnimationToEnd:
+    timeout: 6000
+- assertNotVisible: "Choose.a.festival"
+- takeScreenshot: offline-02-relaunch-airplane

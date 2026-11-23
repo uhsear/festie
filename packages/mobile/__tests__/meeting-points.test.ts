@@ -13,6 +13,12 @@ describe('T26 mobile meeting points', () => {
     expect(src).toContain("'/meeting-point-new'");
     expect(src).not.toContain('mpLat');
   });
+  it('waits for the crew store instead of bouncing back from the sheet', () => {
+    const src = read('app/meeting-point-new.tsx');
+    expect(src).toContain('useActiveCrew(');
+    expect(src).toContain('isCrewOwner(');
+    expect(src).not.toContain('useEffect');
+  });
   it('labels the map button "Add meeting point"', () => {
     const src = read('components/OfflineMap.tsx');
     expect(src).toContain("'Add meeting point'");

@@ -51,12 +51,12 @@ export default memo(function CompareRow({
         <Link
           to="/set/$setId"
           params={{ setId: set.id }}
-          aria-label={`Open ${artist} set`}
           className="block min-h-11 text-xs text-text-secondary"
         >
           {formatTime(set.startTime)}
           {'–'}
           {formatTime(set.endTime)}
+          <span className="sr-only">, open {artist} set</span>
         </Link>
         <div className="text-xs" style={{ color: stageTextColor(stageColor, theme) }}>
           {stageName}

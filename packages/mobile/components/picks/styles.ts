@@ -37,6 +37,14 @@ export const useStyles = makeStyles((t) => ({
     color: t.colors.accent.aqua,
     flexShrink: 1,
   },
+  // At large text the three actions wrap two per row instead of truncating their labels.
+  headerActionsLarge: {
+    flexWrap: 'wrap',
+  },
+  calendarButtonLarge: {
+    flexBasis: 'auto',
+    minWidth: '45%',
+  },
   calendarButtonDisabled: {
     opacity: 0.5,
   },

@@ -41,7 +41,7 @@ export default function PlaceCard({
   onClose,
 }: Props) {
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [copyState, setCopyState] = useState<'copied' | 'failed' | null>(null);
 
   useEffect(() => {
     cardRef.current?.querySelector<HTMLButtonElement>('[data-show-way]')?.focus();
@@ -56,10 +56,10 @@ export default function PlaceCard({
   }, [onClose]);
 
   useEffect(() => {
-    if (!copied) return;
-    const t = setTimeout(() => setCopied(false), 2000);
+    if (!copyState) return;
+    const t = setTimeout(() => setCopyState(null), 2000);
     return () => clearTimeout(t);
-  }, [copied]);
+  }, [copyState]);
 
   const share = async () => {
     const text = placeShareText(place);
@@ -73,9 +73,10 @@ export default function PlaceCard({
     }
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
+      setCopyState('copied');
     } catch (err) {
       console.warn('Could not copy the place link', err);
+      setCopyState('failed');
     }
   };
 
@@ -86,7 +87,7 @@ export default function PlaceCard({
       ref={cardRef}
       role="dialog"
       aria-label={place.name}
-      className="absolute left-2 right-2 bottom-2 z-10 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
+      className="absolute left-2 right-2 bottom-9 z-10 rounded-lg border bg-bg-elevated/95 px-3 py-2 shadow-lg"
       style={{ borderColor: 'var(--color-accent-aqua)' }}
     >
       <div className="flex items-start gap-2">
@@ -126,9 +127,9 @@ export default function PlaceCard({
         <Button variant="secondary" size="sm" className="min-h-11" onClick={share}>
           {MAP_COPY.share}
         </Button>
-        {copied && (
+        {copyState && (
           <span role="status" className="text-xs text-text-secondary">
-            {MAP_COPY.copied}
+            {copyState === 'copied' ? MAP_COPY.copied : MAP_COPY.copyFailed}
           </span>
         )}
       </div>

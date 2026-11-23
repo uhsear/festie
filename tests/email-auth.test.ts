@@ -104,13 +104,19 @@ describe('email-auth: forgot-password', { concurrency: 1 }, () => {
     // Verify a token row exists
     const pool = new Pool({ connectionString: TEST_DATABASE_URL });
     try {
-      const { rows } = await pool.query(
-        `SELECT COUNT(*)::int AS c FROM password_reset_tokens t
-           JOIN users u ON u.id = t.user_id
-          WHERE u.username = $1 AND t.used_at IS NULL`,
-        [username],
-      );
-      assert.ok(rows[0].c >= 1, 'expected at least one active reset token');
+      // The route answers before it writes the token, so poll for the row.
+      let count = 0;
+      for (let attempt = 0; attempt < 40 && count < 1; attempt++) {
+        const { rows } = await pool.query(
+          `SELECT COUNT(*)::int AS c FROM password_reset_tokens t
+             JOIN users u ON u.id = t.user_id
+            WHERE u.username = $1 AND t.used_at IS NULL`,
+          [username],
+        );
+        count = rows[0].c;
+        if (count < 1) await new Promise((resolve) => setTimeout(resolve, 50));
+      }
+      assert.ok(count >= 1, 'expected at least one active reset token');
     } finally {
       await pool.end();
     }
@@ -183,11 +189,9 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
     const server = await startServer();
     servers.push(server);
     const fakeToken = crypto.randomBytes(32).toString('hex');
-    const res = await server.request.get(`/api/v1/auth/verify-email?token=${fakeToken}`);
+    const res = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: fakeToken });
     assert.equal(res.status, 400);
-    assert.match(res.text, /expired|already been used/i);
-    assert.match(res.text, /Link expired/);
-    assert.match(res.text, /Need a new link\? Sign in to Festie and send another from your account\./);
+    assert.match(res.body.error.message, /expired|already been used/i);
   });
 
   test('verifies email end-to-end with valid token', async () => {
@@ -211,11 +215,9 @@ describe('email-auth: verify-email', { concurrency: 1 }, () => {
         [userId, tokenHash, pendingEmail],
       );
 
-      const res = await server.request.get(`/api/v1/auth/verify-email?token=${verifyToken}`);
+      const res = await server.request.post('/api/v1/auth/verify-email').set(TRUSTED_MUTATION_HEADER, '1').send({ token: verifyToken });
       assert.equal(res.status, 200);
-      assert.match(res.text, /verified/i);
-      assert.match(res.text, /Email verified/);
-      assert.match(res.text, /Open Festie/);
+      assert.equal(res.body.data.verified, true);
 
       // email_verified_at should now be set
       const after = await pool.query('SELECT email, email_verified_at FROM users WHERE id = $1', [userId]);

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
 import crypto from 'crypto';
+import { readFileSync } from 'node:fs';
 
 import createPageRoutes from '../routes/pages';
 
@@ -169,7 +170,14 @@ describe('pages: /join/:code', () => {
     assert.equal(res._redirectUrl, null);
     assert.equal(res._headers['Content-Type'], 'text/html; charset=utf-8');
     assert.equal(res._headers['Cache-Control'], 'public, max-age=60');
-    assert.equal(res._headers['Content-Security-Policy'], "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    assert.equal(res._headers['Content-Security-Policy'], "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    assert.equal(res._headers['X-Robots-Tag'], 'noindex');
+    assert.ok(res._sent.includes('<meta name="robots" content="noindex">'));
+  });
+
+  it('does not block /join/ in robots.txt, so crawlers can read the preview and the noindex', () => {
+    const robots = readFileSync(new URL('../public/robots.txt', import.meta.url), 'utf8');
+    assert.ok(!/^Disallow:\s*\/join/m.test(robots));
   });
 
   it('returns 404 with the error page for an unknown code', async () => {

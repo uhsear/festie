@@ -22,4 +22,26 @@ describe('admin screens', () => {
     const layout = readFileSync(join(here, '..', '_layout.tsx'), 'utf8');
     expect(layout).toContain("seg[0] === 'admin' && !!user && !isAdmin");
   });
+
+  it('crews names each button per crew and falls back to the user id', () => {
+    const src = readFileSync(join(here, 'crews.tsx'), 'utf8');
+    expect(src).toContain("accessibilityLabel={`${isExpanded ? 'Hide' : 'View'} ${crew.name}`}");
+    expect(src).toContain('accessibilityLabel={`Delete ${crew.name}`}');
+    expect(src).toContain('accessibilityLabel={`Remove ${m.username || m.userId} from ${crew.name}`}');
+  });
+});
+
+describe('admin hub web note', () => {
+  const hub = readFileSync(join(here, 'index.tsx'), 'utf8');
+
+  it('points to the web admin for the features mobile does not have', () => {
+    expect(hub).toContain('Organizations, artist backfill and the artist review queue are on the web admin.');
+    expect(hub).toContain("const WEB_ADMIN_URL = 'https://festie.us/admin';");
+    expect(hub).toContain('Linking.openURL(WEB_ADMIN_URL)');
+  });
+
+  it('names real web admin tabs', () => {
+    const webTabs = readFileSync(join(here, '..', '..', '..', 'web', 'src', 'components', 'admin', 'useAdminSearch.ts'), 'utf8');
+    for (const tab of ['organizations', 'backfill', 'review']) expect(webTabs).toContain(`'${tab}'`);
+  });
 });

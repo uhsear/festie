@@ -1,7 +1,11 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FestivalDayBanner from './FestivalDayBanner';
+import { useAnnouncementStore } from '@festie/shared/stores/announcementStore';
+import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
+import { useAuthStore } from '@festie/shared/stores/authStore';
+import type { FestivalAnnouncement, SosEntry } from '@festie/shared/types';
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode; [k: string]: unknown }) => (
@@ -87,5 +91,39 @@ describe('FestivalDayBanner', () => {
   it('has accessible dismiss label', () => {
     render(<FestivalDayBanner />);
     expect(screen.getByLabelText('Dismiss festival day reminder')).toBeInTheDocument();
+  });
+
+  describe('while a higher-priority banner shows', () => {
+    afterEach(() => {
+      useAnnouncementStore.setState({ items: [], dismissed: [] });
+      useLiveLocationStore.setState({ activeSosList: [] });
+      useAuthStore.setState({ user: null });
+    });
+
+    it('hides for an urgent announcement and returns when it clears', () => {
+      const urgent = { id: 'a1', festivalId: 'f1', severity: 'urgent', title: 't', body: 'b', screen: 'home', sentAt: '2026-11-01T10:00:00Z' } as FestivalAnnouncement;
+      useAnnouncementStore.setState({ items: [urgent], dismissed: [] });
+      const { rerender } = render(<FestivalDayBanner />);
+      expect(screen.queryByTestId('festival-day-banner')).not.toBeInTheDocument();
+      act(() => useAnnouncementStore.setState({ dismissed: ['a1'] }));
+      rerender(<FestivalDayBanner />);
+      expect(screen.getByTestId('festival-day-banner')).toBeInTheDocument();
+    });
+
+    it('stays for an info announcement', () => {
+      const info = { id: 'a2', festivalId: 'f1', severity: 'info', title: 't', body: 'b', screen: 'home', sentAt: '2026-11-01T10:00:00Z' } as FestivalAnnouncement;
+      useAnnouncementStore.setState({ items: [info], dismissed: [] });
+      render(<FestivalDayBanner />);
+      expect(screen.getByTestId('festival-day-banner')).toBeInTheDocument();
+    });
+
+    it('hides for an active SOS', () => {
+      useAuthStore.setState({ user: { id: 'u1', username: 'me' } as never });
+      useLiveLocationStore.setState({
+        activeSosList: [{ crewId: 'c1', userId: 'u2', username: 'sam', raisedAt: new Date().toISOString() } as SosEntry],
+      });
+      render(<FestivalDayBanner />);
+      expect(screen.queryByTestId('festival-day-banner')).not.toBeInTheDocument();
+    });
   });
 });

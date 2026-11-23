@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import RovingGroup from './ui/RovingGroup';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useFestival, useBulkAddPicks } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
@@ -58,7 +59,7 @@ export default function PickBulkActions() {
       {open && (
         <div className="px-4 pb-4 pt-1 border-t border-border">
           {/* Priority selector — which bucket the bulk add lands in. */}
-          <div className="flex items-center gap-2 mb-3" role="radiogroup" aria-label="Priority for bulk add">
+          <RovingGroup itemRole="radio" className="flex flex-wrap items-center gap-2 mb-3" role="radiogroup" aria-label="Priority for bulk add">
             <span className="text-xs text-text-muted">Add as</span>
             {PRIORITY_OPTIONS.map((p) => (
               <button
@@ -68,7 +69,7 @@ export default function PickBulkActions() {
                 aria-checked={priority === p.value}
                 aria-label={p.label}
                 onClick={() => setPriority(p.value)}
-                className={`inline-flex items-center gap-1 text-xs px-2.5 py-1 rounded-full border cursor-pointer transition-colors ${
+                className={`inline-flex items-center gap-1 text-xs px-3 min-h-11 rounded-full border cursor-pointer transition-colors focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 ${
                   priority === p.value
                     ? 'border-accent-aqua text-accent-aqua bg-bg-card-hover'
                     : 'border-border text-text-secondary hover:bg-bg-card-hover'
@@ -78,7 +79,7 @@ export default function PickBulkActions() {
                 {p.short}
               </button>
             ))}
-          </div>
+          </RovingGroup>
 
           {stageGroups.length > 0 && (
             <div className="mb-3">

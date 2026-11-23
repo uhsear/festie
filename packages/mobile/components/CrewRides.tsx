@@ -371,7 +371,7 @@ export default function CrewRides({ crewId, currentUserId, isOwner }: CrewRidesP
         <EmptyState
           illustration="emptyList"
           title="No rides yet"
-          message="Offer a ride, or ask for one."
+          message="Offer a ride so the crew can take a seat."
           action={{ label: 'Offer a ride', onPress: openCreate }}
         />
       ) : (

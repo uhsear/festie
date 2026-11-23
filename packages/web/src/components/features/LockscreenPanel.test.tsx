@@ -5,6 +5,8 @@ const festivalState: Record<string, unknown> = {};
 const crewState: Record<string, unknown> = {};
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (sel: (s: Record<string, unknown>) => unknown) => sel(festivalState),
+  selectMyPicks: (s: { currentProfile?: { picks?: unknown }; guestPicks?: Record<string, unknown> }) =>
+    s.currentProfile?.picks ?? s.guestPicks?.f1 ?? null,
   useCrewStore: (sel: (s: Record<string, unknown>) => unknown) => sel(crewState),
   useAuthStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ user: { id: 'u1' } }),
 }));

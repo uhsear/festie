@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { isCancelledError, useQueryClient } from '@tanstack/react-query';
 import type { QueryClient } from '@tanstack/react-query';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
@@ -35,6 +35,10 @@ import type { CrewRealtimeSink } from '@festie/shared/realtime/crewRealtimeSink'
  * invalidating ['<key>', crewId] always targets the open crew's data.
  */
 export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
+  // A newer invalidate cancels the older in-flight fetch; that is routine, not a failure worth a console warning.
+  const warnUnlessCancelled = (message: string) => (err: unknown) => {
+    if (!isCancelledError(err)) console.warn(message, err);
+  };
   // One fetch per event: invalidate (an active observer refetches), then fetchQuery
   // joins that in-flight request or starts it. The result is written into the store.
   const reloadMeetingPoints = (crewId: string) => {
@@ -42,7 +46,7 @@ export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
     queryClient
       .fetchQuery({ ...meetingPointsQuery(crewId), staleTime: 0 })
       .then((meetingPoints) => useCrewStore.setState({ meetingPoints }))
-      .catch((err) => console.warn('Crew meeting points reload failed', err));
+      .catch(warnUnlessCancelled('Crew meeting points reload failed'));
   };
   const reloadPolls = (crewId: string) => {
     void queryClient.invalidateQueries({ queryKey: ['polls', crewId] });
@@ -56,7 +60,7 @@ export function buildCrewQuerySink(queryClient: QueryClient): CrewRealtimeSink {
           })),
         }),
       )
-      .catch((err) => console.warn('Crew polls reload failed', err));
+      .catch(warnUnlessCancelled('Crew polls reload failed'));
   };
   const sink: CrewRealtimeSink = {
     onHomeBaseUpdated: (crewId, payload) => {

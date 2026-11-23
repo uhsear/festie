@@ -73,3 +73,14 @@ export function parseArtistReviewBatch(text: string): { ok: true; batch: unknown
   if (!Array.isArray(items) || items.length === 0) return { ok: false, message: 'The batch needs an "items" list with at least one item.' };
   return { ok: true, batch, count: items.length };
 }
+
+/**
+ * The server names a bad batch field as "items.0.kind: <reason>". Say which item and field it is, counting
+ * items from 1 as a person reads the file. Returns null for any other message.
+ */
+export function describeBatchIssue(message: string): string | null {
+  const match = /^items\.(\d+)(?:\.([\w.]+))?: (.+)$/.exec(message);
+  if (!match) return null;
+  const [, index, field, reason] = match;
+  return `Item ${Number(index) + 1}${field ? `, field "${field}"` : ''}: ${reason}`;
+}

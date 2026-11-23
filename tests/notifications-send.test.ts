@@ -1344,3 +1344,91 @@ describe('notifications/send: batched fan-out reads', () => {
     assert.ok(result.sent > 0);
   });
 });
+
+describe('notifications/send: inbox rows with and without a push provider', () => {
+  const log = { info() {}, warn() {}, error() {}, debug() {} };
+
+  function build({ configured, prefs = null }: { configured: boolean; prefs?: any }) {
+    const insert = mock.fn(async () => null);
+    const messaging = configured ? { send: mock.fn(async () => 'id'), sendEach: mock.fn(async (m: any[]) => ({ responses: m.map(() => ({ success: true })) })) } : null;
+    const svc = createSendService({
+      stores: {
+        notificationPrefs: { get: mock.fn(async () => prefs) },
+        deviceTokens: {
+          listByUser: mock.fn(async () => [{ token: 't'.repeat(40), platform: 'android' }]),
+          listByUsers: mock.fn(async () => [{ userId: 'u1', token: 't'.repeat(40), platform: 'android' }]),
+          unregister: mock.fn(async () => {}),
+        },
+        notificationCounts: { getByUser: mock.fn(async () => []), increment: mock.fn(async () => {}) },
+        notificationLog: { insert },
+        profiles: { userIdsByFestival: mock.fn(async () => ['u1']) },
+      },
+      config: { PUBLIC_ORIGIN: 'https://festie.us' },
+      log,
+      messaging,
+      retryQueue: { enqueue() {} },
+    } as any);
+    const rows = () => insert.mock.calls.map((c: any) => c.arguments[0]).filter((r: any) => r.platform === 'inbox');
+    return { svc, rows, messaging };
+  }
+
+  const msg = { userId: 'u1', type: 'schedule_change', title: 'Set moved', body: 'b', data: { festivalId: 'f1' } };
+
+  it('send() without a provider writes one inbox row and returns firebase_not_configured', async () => {
+    const { svc, rows } = build({ configured: false });
+    const result = await svc.send(msg);
+    assert.equal(result.reason, 'firebase_not_configured');
+    assert.deepEqual(rows().map((r: any) => [r.userId, r.type, r.status]), [['u1', 'schedule_change', 'inbox']]);
+  });
+
+  it('send() with a provider writes the inbox row once and pushes', async () => {
+    const { svc, rows, messaging } = build({ configured: true });
+    const result = await svc.send(msg);
+    assert.equal(result.sent, 1);
+    assert.equal(rows().length, 1);
+    assert.equal(messaging!.send.mock.callCount(), 1);
+  });
+
+  it('send() without a provider in quiet hours writes a held row, not an inbox row', async () => {
+    const { svc, rows } = build({ configured: false, prefs: { scheduleChanges: 1, dndStart: '00:00', dndEnd: '23:59' } });
+    const result = await svc.send(msg);
+    assert.equal(result.reason, 'dnd_active');
+    assert.deepEqual(rows().map((r: any) => r.status), ['held']);
+  });
+
+  it('send() honours an opted-out type with no provider: no row', async () => {
+    const { svc, rows } = build({ configured: false, prefs: { scheduleChanges: 0 } });
+    const result = await svc.send(msg);
+    assert.equal(result.reason, 'user_disabled');
+    assert.equal(rows().length, 0);
+  });
+
+  it('sendToOfflineUsers() without a provider writes the inbox row and pushes nothing', async () => {
+    const { svc, rows } = build({ configured: false });
+    const result = await svc.sendToOfflineUsers({
+      festivalId: 'f1',
+      type: 'festival_announcement',
+      title: 'Gates open',
+      body: 'b',
+      data: { festivalId: 'f1' },
+      userIds: ['u1'],
+    });
+    assert.equal(result.sent, 0);
+    assert.deepEqual(rows().map((r: any) => [r.userId, r.type, r.status]), [['u1', 'festival_announcement', 'inbox']]);
+  });
+
+  it('sendToOfflineUsers() with a provider writes the inbox row once and pushes', async () => {
+    const { svc, rows, messaging } = build({ configured: true });
+    const result = await svc.sendToOfflineUsers({
+      festivalId: 'f1',
+      type: 'festival_announcement',
+      title: 'Gates open',
+      body: 'b',
+      data: { festivalId: 'f1' },
+      userIds: ['u1'],
+    });
+    assert.equal(result.sent, 1);
+    assert.equal(rows().length, 1);
+    assert.equal(messaging!.sendEach.mock.callCount(), 1);
+  });
+});

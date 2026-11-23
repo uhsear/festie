@@ -1,6 +1,6 @@
 import { Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useTokens, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useStyles } from './styles';
 
 interface PicksCalendarButtonProps {
@@ -16,9 +16,10 @@ export default function PicksCalendarButton({
 }: PicksCalendarButtonProps) {
   const styles = useStyles();
   const t = useTokens();
+  const largeText = useLargeText();
   return (
 <TouchableOpacity
-  style={[styles.calendarButton, (exportBusy || noPicks) && styles.calendarButtonDisabled]}
+  style={[styles.calendarButton, largeText && styles.calendarButtonLarge, (exportBusy || noPicks) && styles.calendarButtonDisabled]}
   onPress={handleAddToCalendar}
   disabled={exportBusy || noPicks}
   activeOpacity={0.8}

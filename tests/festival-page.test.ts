@@ -102,7 +102,7 @@ async function getOg(deps: any, slug: string, handler = handlerFor(deps, '/f/:sl
   return res;
 }
 
-const CSP = "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'";
+const CSP = "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'";
 
 describe('festival page: routes', () => {
   it('registers /f/:slug and the og image before the SPA catch-all, with their rate limits', () => {

@@ -10,3 +10,4 @@ export * from './announcementCopy';
 export * from './providerCopy';
 export * from './inboxCopy';
 export * from './privacyCopy';
+export * from './offlineMapCopy';

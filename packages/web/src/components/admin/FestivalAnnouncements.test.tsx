@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import FestivalAnnouncements from './FestivalAnnouncements';
+import { useToast } from '../../lib/toastContext';
 
 const api = vi.hoisted(() => ({ adminList: vi.fn(), create: vi.fn(), cancel: vi.fn() }));
 vi.mock('@festie/shared/services/announcements', () => ({ announcementsApi: api }));
@@ -122,7 +123,7 @@ describe('FestivalAnnouncements', () => {
     const user = userEvent.setup();
     api.adminList.mockResolvedValue({ festivalName: 'Fest', recipients: 3, announcements: [row()] });
     renderIt();
-    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await user.click(await screen.findByRole('button', { name: /^Cancel: / }));
     await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('f1', 'a1', 'admin'));
   });
 
@@ -134,7 +135,7 @@ describe('FestivalAnnouncements', () => {
       announcements: [row({ sentAt: new Date(Date.now() - 60_000).toISOString(), recipientCount: 2 })],
     });
     renderIt();
-    await user.click(await screen.findByRole('button', { name: 'Take down banner' }));
+    await user.click(await screen.findByRole('button', { name: /^Take down banner: / }));
     expect(api.cancel).not.toHaveBeenCalled();
     await user.click(await screen.findByRole('button', { name: 'Take down' }));
     await waitFor(() => expect(api.cancel).toHaveBeenCalledWith('f1', 'a1', 'admin'));
@@ -149,7 +150,7 @@ describe('FestivalAnnouncements', () => {
     });
     renderIt();
     expect(await screen.findByText(/^Sent /)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Take down banner' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Take down banner: / })).not.toBeInTheDocument();
   });
 
   it('load fails, shows the error, disables submit, Retry reloads', async () => {
@@ -188,6 +189,8 @@ describe('FestivalAnnouncements for an organization owner', () => {
     await waitFor(() =>
       expect(api.create).toHaveBeenCalledWith('f1', { severity: 'info', title: 'Hello', body: 'World', screen: 'home' }, 'manage'),
     );
+    // The audience is hidden under the floor, so the toast must not state a count.
+    await waitFor(() => expect(useToast().toast).toHaveBeenCalledWith('Announcement queued.', 'success'));
   });
 
   it('a verified organization sees no banner-only note and its confirm says a push goes out', async () => {

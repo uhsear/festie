@@ -211,15 +211,17 @@ export function hasSetStarted(
 }
 
 /**
- * `'Festival time'` when the festival zone's UTC offset at `nowMs` differs from
- * the device's, else null. Compares offsets, not names, because two zone ids
+ * `'Festival time (Los Angeles)'` when the festival zone's UTC offset at `nowMs`
+ * differs from the device's, else null. Compares offsets, not names, because two zone ids
  * can share one clock (`America/Detroit` and `America/New_York`). Set times are
  * stored as festival wall-clock, so this only labels what is already shown.
  */
-export function festivalTimeLabel(timeZone: string | undefined, nowMs: number = Date.now()): 'Festival time' | null {
+export function festivalTimeLabel(timeZone: string | undefined, nowMs: number = Date.now()): string | null {
   if (!isValidTimeZone(timeZone)) return null;
   const deviceOffsetMs = -new Date(nowMs).getTimezoneOffset() * 60_000;
-  return zoneOffsetMsAt(nowMs, timeZone) !== deviceOffsetMs ? 'Festival time' : null;
+  return zoneOffsetMsAt(nowMs, timeZone) !== deviceOffsetMs
+    ? `Festival time (${timeZoneCity(timeZone)})`
+    : null;
 }
 
 /** The city part of an IANA zone id: `America/Los_Angeles` gives `Los Angeles`, `UTC` gives `UTC`. */

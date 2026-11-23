@@ -2,7 +2,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { COPY } from '@festie/shared/constants';
-import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
+import { useTokens, useLargeText, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import GuestPicksBanner from '../GuestPicksBanner';
 import CrewSuggestionStrip from '../CrewSuggestionStrip';
 import RateNightBanner from '../RateNightBanner';
@@ -51,42 +51,41 @@ export default function PicksHeader({
   const styles = useStyles();
   const t = useTokens();
   const router = useRouter();
+  const largeText = useLargeText();
   return (
 <View>
   {!user ? <GuestPicksBanner /> : null}
-  {user ? (
-    <View style={styles.headerActions}>
-      {calendarButton}
-      <TouchableOpacity
-        style={[styles.calendarButton, noPicks && styles.calendarButtonDisabled]}
-        onPress={() => router.push('/picks-image')}
-        disabled={noPicks}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: noPicks }}
-        accessibilityLabel="Save my picks as an image"
-      >
-        <Ionicons name="image-outline" size={16} color={t.colors.accent.aqua} />
-        <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-          {COPY.picks.saveImage}
-        </Text>
-      </TouchableOpacity>
-      <TouchableOpacity
-        style={[styles.calendarButton, !currentFestival && styles.calendarButtonDisabled]}
-        onPress={handleSharePicks}
-        disabled={!currentFestival}
-        activeOpacity={0.8}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !currentFestival }}
-        accessibilityLabel="Share my picks"
-      >
-        <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
-        <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
-          {COPY.picks.share}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  ) : null}
+  <View style={[styles.headerActions, largeText && styles.headerActionsLarge]}>
+    {calendarButton}
+    <TouchableOpacity
+      style={[styles.calendarButton, largeText && styles.calendarButtonLarge, noPicks && styles.calendarButtonDisabled]}
+      onPress={() => router.push('/picks-image')}
+      disabled={noPicks}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: noPicks }}
+      accessibilityLabel="Save my picks as an image"
+    >
+      <Ionicons name="image-outline" size={16} color={t.colors.accent.aqua} />
+      <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+        {COPY.picks.saveImage}
+      </Text>
+    </TouchableOpacity>
+    <TouchableOpacity
+      style={[styles.calendarButton, largeText && styles.calendarButtonLarge, !currentFestival && styles.calendarButtonDisabled]}
+      onPress={handleSharePicks}
+      disabled={!currentFestival}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !currentFestival }}
+      accessibilityLabel="Share my picks"
+    >
+      <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+      <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
+        {COPY.picks.share}
+      </Text>
+    </TouchableOpacity>
+  </View>
   {currentFestival && (
     <View style={styles.offlineCard}>
       <OfflineReadinessCard festivalId={currentFestival.id} />

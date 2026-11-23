@@ -11,15 +11,15 @@ import {
   headContentLength,
 } from '@festie/shared/utils';
 import {
-  MAX_INLINE_BYTES,
   basemapCacheInfo,
   clearBasemapCache,
+  checkArchiveSpace,
   ensureBasemapCached,
+  siteplanNeedsConnection,
   subscribeBasemapCache,
 } from '../lib/basemapCache';
 
 const IDLE: SectionReadiness = { status: 'idle', syncedAt: null };
-const TOO_LARGE: SectionReadiness = { status: 'error', syncedAt: null };
 
 /**
  * The offline-map step. Deliberately NOT part of the shared readiness store:
@@ -32,11 +32,32 @@ const TOO_LARGE: SectionReadiness = { status: 'error', syncedAt: null };
  *
  * So this status is READ FROM THE FILESYSTEM on mount and after every attempt.
  */
-function sectionFromDisk(pmtilesUrl: string | null | undefined): SectionReadiness {
+export function sectionFromDisk(pmtilesUrl: string | null | undefined): SectionReadiness {
   const info = basemapCacheInfo(pmtilesUrl);
-  // The map document takes at most MAX_INLINE_BYTES from the file, so a bigger one is not offline-ready.
-  if (info.cached && info.bytes > MAX_INLINE_BYTES) return TOO_LARGE;
+  // No size gate: the archive is read by byte range (readArchiveRange), never whole.
   return info.cached ? { status: 'ready', syncedAt: info.syncedAt } : IDLE;
+}
+
+/**
+ * Saves the archive (and the site-plan overlay image, best effort: it is not part of the
+ * step) and re-reads the disk. ensureBasemapCached never throws and never publishes a short
+ * archive when the server reports a length, so a failure is simply "still not downloaded":
+ * the map keeps working online, and Retry re-runs this. No size cap: the archive is read
+ * by byte range.
+ *
+ * A map that is not saved yet is checked against the free disk space first (HEAD length plus
+ * a margin). When it does not fit, nothing is downloaded and `message` says why. If either
+ * number is unknown the download runs as before.
+ */
+export async function downloadOfflineMap(
+  pmtilesUrl: string,
+  siteplanUrl: string | null,
+): Promise<{ section: SectionReadiness; message: string | null }> {
+  const space = await checkArchiveSpace(pmtilesUrl);
+  if (!space.ok) return { section: { status: 'error', syncedAt: Date.now() }, message: space.message };
+  await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
+  const section = sectionFromDisk(pmtilesUrl);
+  return { section: section.status === 'ready' ? section : { status: 'error', syncedAt: Date.now() }, message: null };
 }
 
 function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | null) {
@@ -44,19 +65,24 @@ function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | n
   // effect: the cache is readable synchronously, so an effect would render IDLE
   // once and immediately re-render, and it trips react-hooks/set-state-in-effect.
   const [section, setSection] = useState<SectionReadiness>(() => sectionFromDisk(pmtilesUrl));
+  const [siteplanBytes, setSiteplanBytes] = useState(() => basemapCacheInfo(siteplanUrl).bytes);
+  const [message, setMessage] = useState<string | null>(null);
 
   const readFromDisk = useCallback(() => {
     setSection(sectionFromDisk(pmtilesUrl));
-  }, [pmtilesUrl]);
+    setSiteplanBytes(basemapCacheInfo(siteplanUrl).bytes);
+  }, [pmtilesUrl, siteplanUrl]);
 
-  // Re-read only when the festival's archive URL changes; the initialiser above
-  // covers the first render.
-  const seenUrl = useRef(pmtilesUrl);
+  // Re-read only when the festival's archive or site-plan URL changes; the initialisers
+  // above cover the first render.
+  const seenUrl = useRef(`${pmtilesUrl}|${siteplanUrl}`);
   useEffect(() => {
-    if (seenUrl.current === pmtilesUrl) return;
-    seenUrl.current = pmtilesUrl;
+    const key = `${pmtilesUrl}|${siteplanUrl}`;
+    if (seenUrl.current === key) return;
+    seenUrl.current = key;
+    setMessage(null);
     readFromDisk();
-  }, [pmtilesUrl, readFromDisk]);
+  }, [pmtilesUrl, siteplanUrl, readFromDisk]);
 
   // Another hook instance (Picks card, a status chip) or the map screen may cache
   // the archive; re-read when any attempt settles so every surface agrees.
@@ -64,27 +90,14 @@ function useOfflineMapSection(pmtilesUrl: string | null, siteplanUrl: string | n
 
   const download = useCallback(async () => {
     if (!pmtilesUrl) return;
+    setMessage(null);
     setSection({ status: 'syncing', syncedAt: null });
-    // Do not spend mobile data on an archive the map cannot read back offline.
-    const size = await headContentLength(pmtilesUrl);
-    if (size !== null && size > MAX_INLINE_BYTES) {
-      setSection(TOO_LARGE);
-      return;
-    }
-    // ensureBasemapCached never throws and never publishes a short archive when
-    // the server reports a length, so a failure here is simply "still not
-    // downloaded" — the map keeps working online, and Retry re-runs this.
-    // The site-plan overlay image is saved alongside, best effort: it is not part of the step.
-    await Promise.all([ensureBasemapCached(pmtilesUrl), siteplanUrl ? ensureBasemapCached(siteplanUrl) : null]);
-    const info = basemapCacheInfo(pmtilesUrl);
-    setSection(
-      info.cached && info.bytes <= MAX_INLINE_BYTES
-        ? { status: 'ready', syncedAt: info.syncedAt }
-        : { status: 'error', syncedAt: Date.now() },
-    );
+    const result = await downloadOfflineMap(pmtilesUrl, siteplanUrl);
+    setMessage(result.message);
+    setSection(result.section);
   }, [pmtilesUrl, siteplanUrl]);
 
-  return { section, download };
+  return { section, download, message, siteplanBytes };
 }
 
 /**
@@ -108,7 +121,12 @@ export function useOfflineDownload(festivalId: string) {
       ? currentFestival.mapConfig.offlineBasemap.pmtilesUrl
       : null;
   const siteplanUrl = mapUrl ? (extractSiteplan(currentFestival?.mapConfig)?.imageUrl ?? null) : null;
-  const { section: mapSection, download: downloadMap } = useOfflineMapSection(mapUrl, siteplanUrl);
+  const {
+    section: mapSection,
+    download: downloadMap,
+    message: mapMessage,
+    siteplanBytes,
+  } = useOfflineMapSection(mapUrl, siteplanUrl);
 
   // The archive size, shown before the download so people on mobile data can decide.
   const [mapBytes, setMapBytes] = useState<number | null>(null);
@@ -150,7 +168,12 @@ export function useOfflineDownload(festivalId: string) {
     hasMap: !!mapUrl,
     mapBytes: mapUrl ? mapBytes : null,
     mapReady: mapSection.status === 'ready',
-    mapTooLarge: mapBytes !== null && mapBytes > MAX_INLINE_BYTES,
+    // Why the map was not saved (not enough space). Only while the step is in error: a later
+    // success or a reset to idle must not leave the old refusal on the card.
+    mapMessage: mapUrl && mapSection.status === 'error' ? mapMessage : null,
+    // The map is saved but the site-plan overlay still needs a connection.
+    siteplanNeedsConnection:
+      !!mapUrl && mapSection.status === 'ready' && siteplanNeedsConnection(siteplanUrl, siteplanBytes),
     removeMap,
   };
 }

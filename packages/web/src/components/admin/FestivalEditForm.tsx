@@ -385,7 +385,10 @@ export default function FestivalEditForm({
 
   return (
     <div ref={rootRef} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6 space-y-6">
-      <fieldset disabled={readOnly} className="m-0 min-w-0 space-y-6 border-0 p-0">
+      <fieldset
+        disabled={readOnly}
+        className="m-0 min-w-0 space-y-6 border-0 p-0 [&_:is(input,select,textarea,button):disabled]:cursor-not-allowed [&_:is(input,select,textarea,button):disabled]:opacity-60"
+      >
       <legend className="sr-only">Festival details</legend>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div data-issue-key="festival:name" data-issue={nameIssues.length ? 'true' : undefined}>
@@ -624,8 +627,9 @@ export default function FestivalEditForm({
         <div className="space-y-3">
           {(formData.days || []).map((day, dayIndex) => {
             const visibleSets = filterLineup(day.sets || [], formData.stages || [], query);
+            // A viewer's expand button sits in the disabled fieldset, so every day opens for reading.
             const expanded =
-              expandedDays.has(day.id) || dayHasIssue(day, dayIndex) || (filtering && visibleSets.length > 0);
+              readOnly || expandedDays.has(day.id) || dayHasIssue(day, dayIndex) || (filtering && visibleSets.length > 0);
             return (
               <div
                 key={day.id}
@@ -719,9 +723,9 @@ export default function FestivalEditForm({
 
       </fieldset>
 
-      <div className="sticky bottom-0 flex items-center gap-2 justify-end border-t border-glass-border bg-bg-card pt-4">
+      <div className="sticky bottom-0 z-10 flex flex-wrap items-center justify-end gap-2 border-t border-glass-border bg-bg-primary px-2 pb-2 pt-4">
         {editingId && (
-          <span className="mr-auto text-sm text-text-muted">
+          <span className="w-full text-sm text-text-muted sm:mr-auto sm:w-auto">
             {total > 0 ? `${plural(total, 'unsaved change')}` : 'All changes saved'}
           </span>
         )}
@@ -729,7 +733,7 @@ export default function FestivalEditForm({
           onClick={onCancel}
           className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
         >
-          Cancel
+          {readOnly ? 'Close' : 'Cancel'}
         </button>
         {!readOnly && editingId && total > 0 && (
           <button
@@ -743,9 +747,9 @@ export default function FestivalEditForm({
         <button
           onClick={onSave}
           disabled={saving || (!!editingId && total === 0)}
-          className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {saving ? 'Saving…' : editingId ? `Save ${plural(total, 'change')}` : 'Create festival'}
+          {saving ? 'Saving…' : editingId ? (total > 0 ? `Save ${plural(total, 'change')}` : 'Save') : 'Create festival'}
         </button>
         )}
       </div>

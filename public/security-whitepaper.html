@@ -60,7 +60,7 @@
         }
         a {
             color: #00e5a0;
-            text-decoration: none;
+            text-decoration: underline;
             transition: color 0.2s ease;
         }
         a:hover {
@@ -100,6 +100,7 @@
             border-radius: 3px;
             color: #00e5a0;
             font-size: 0.9rem;
+            overflow-wrap: anywhere;
         }
         .info-box {
             background: rgba(0, 229, 160, 0.08);
@@ -111,6 +112,14 @@
         }
         .info-box strong {
             color: #00e5a0;
+        }
+        .table-scroll {
+            max-width: 100%;
+            overflow-x: auto;
+        }
+        .table-scroll:focus-visible {
+            outline: 2px solid #00e5a0;
+            outline-offset: 2px;
         }
         table {
             width: 100%;
@@ -199,7 +208,9 @@
     </style>
 </head>
 <body>
+    <nav aria-label="Back to the app">
     <a href="/" class="back-link">← Back to Festie</a>
+    </nav>
 
     <header>
         <h1>Security Whitepaper</h1>
@@ -293,6 +304,7 @@
             </ul>
 
             <h3>Account Lockout & Brute-Force Protection</h3>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Account lockout and brute-force protection">
             <table>
                 <thead>
                     <tr>
@@ -319,6 +331,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
 
             <h3>Rate Limiting on Authentication Endpoints</h3>
             <div class="security-feature">
@@ -408,6 +421,7 @@
             <p>Multi-layered rate limiting protects against brute-force attacks, DDoS, and resource exhaustion attacks.</p>
 
             <h3>Rate Limiting Tiers</h3>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Rate limiting tiers">
             <table>
                 <thead>
                     <tr>
@@ -444,6 +458,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
 
             <h3>Implementation Details</h3>
             <div class="security-feature">
@@ -499,6 +514,7 @@
             </ul>
 
             <h3>Data Retention Policy</h3>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Data retention policy">
             <table>
                 <thead>
                     <tr>
@@ -530,6 +546,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
 
             <h3>GDPR Compliance</h3>
             <div class="security-feature">
@@ -632,6 +649,7 @@
             </div>
 
             <h3>Retention Policy</h3>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Backup retention by backup type">
             <table>
                 <thead>
                     <tr>
@@ -656,6 +674,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
 
             <h3>Backup Integrity</h3>
             <ul>
@@ -747,6 +766,7 @@
             </ol>
 
             <h3>Severity Classification</h3>
+            <div class="table-scroll" tabindex="0" role="region" aria-label="Severity classification">
             <table>
                 <thead>
                     <tr>
@@ -778,6 +798,7 @@
                     </tr>
                 </tbody>
             </table>
+            </div>
 
             <h3>Post-Incident Process</h3>
             <ul>

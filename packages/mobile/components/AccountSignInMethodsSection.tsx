@@ -89,7 +89,7 @@ export default function AccountSignInMethodsSection({ identities: state, onChang
     Alert.alert(`${PROVIDER_COPY.unlink} ${label}?`, undefined, [
       { text: 'Cancel', style: 'cancel' },
       { text: PROVIDER_COPY.unlink, style: 'destructive', onPress: () => void unlink(provider) },
-    ]);
+    ], { cancelable: true });
   };
 
   return (

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, AlertCircle, ChevronDown, Download, RefreshCw } from 'lucide-react';
 import type { SectionReadiness } from '@festie/shared/stores/offlineReadinessStore';
+import { useUIStore } from '@festie/shared/stores/uiStore';
 import { offlineActionLabel, offlineStatusLabel, timeAgo } from '@festie/shared/utils';
 import { useOfflineDownload } from '../../hooks/useOfflineDownload';
 import { cn } from '../../lib/utils';
@@ -115,8 +116,9 @@ function StepRow({
  * the same offline-honesty pattern as FreshnessChip.
  */
 export default function OfflineReadinessCard({ festivalId, className }: Props) {
-  const { steps, summary, download, isDownloading, mapBytes, hasMap, mapProgress, mapReady, removeMap } =
+  const { steps, summary, download, isDownloading, mapBytes, hasMap, mapProgress, mapReady, mapMessage, removeMap } =
     useOfflineDownload(festivalId);
+  const offlineMode = useUIStore((s) => s.offlineMode);
   const [expanded, setExpanded] = useState(false);
 
   // 30s tick so "synced N ago" keeps advancing from the device clock.
@@ -165,7 +167,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
         <span className="flex-shrink-0 flex items-center justify-center w-5 h-5">
           {summary.overall === 'ready' ? (
             <Check className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
-          ) : summary.overall === 'partial' ? (
+          ) : summary.overall === 'partial' && summary.hasError ? (
             <AlertCircle className="w-4 h-4 text-accent-coral" aria-hidden="true" />
           ) : summary.overall === 'syncing' ? (
             <span
@@ -184,7 +186,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
         <button
           type="button"
           onClick={handleDownload}
-          disabled={isDownloading}
+          disabled={isDownloading || offlineMode}
           aria-busy={isDownloading || undefined}
           className={cn(
             'inline-flex flex-shrink-0 items-center gap-2 rounded-xl px-3 py-1.5 text-sm font-semibold min-h-11',
@@ -194,7 +196,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
             'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
         >
-          {offlineActionLabel(summary)}
+          {offlineActionLabel(summary, offlineMode)}
         </button>
         <button
           type="button"
@@ -206,6 +208,12 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
           <ChevronDown className={cn('w-4 h-4 transition-transform', expanded && 'rotate-180')} aria-hidden="true" />
         </button>
       </div>
+
+      {mapMessage && (
+        <p role="alert" className="pb-2 text-xs text-accent-coral">
+          {mapMessage}
+        </p>
+      )}
 
       {expanded && (
         <div className="pb-3">
@@ -226,7 +234,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
                 section={section}
                 tick={tick}
                 detail={detail}
-                onRetry={section.status === 'error' ? handleDownload : undefined}
+                onRetry={section.status === 'error' && !offlineMode ? handleDownload : undefined}
               />
             ))}
           </ul>

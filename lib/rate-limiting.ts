@@ -25,6 +25,8 @@ import crypto from 'crypto';
 import { loadConfig } from './config.js';
 import { redisRateCheck as redisRateCheckFn } from './redis.js';
 import { MAX_SHARE_WINDOW_MS } from './live-location-cache.js';
+import { redactInviteCodePath } from './helpers/sanitize.js';
+import { clientIpKey } from './helpers/ip-key.js';
 
 const FALLBACK_WARN_INTERVAL_MS = 30_000;
 // Guests behind one festival IP keep their own token buckets; one caller cycling tokens is capped per IP.
@@ -68,6 +70,7 @@ function createRateLimiters({
   resolveRequestToken,
   redisRateLimiter,
   redisAuthRateLimiter,
+  redisLoginIpRateLimiter,
   redisSocketConnectLimiter,
   redis,
   redisRateCheck,
@@ -243,7 +246,7 @@ function createRateLimiters({
             log.warn('rate-limit:exceeded', {
               scope: result.fallback ? rateLimitKey : `${scope}:${rateLimitKey}`,
               ip: getRequestIp(req),
-              path: req.path,
+              path: redactInviteCodePath(req.path),
               userId: req.user?.userId,
               ...(result.fallback ? { fallback: true } : {}),
             });
@@ -289,7 +292,7 @@ function createRateLimiters({
           log.warn('rate-limit:exceeded', {
             scope: rateLimitKey,
             ip: getRequestIp(req),
-            path: req.path,
+            path: redactInviteCodePath(req.path),
             userId: req.user?.userId,
             ...(result.fallback ? { fallback: true } : {}),
           });
@@ -302,15 +305,17 @@ function createRateLimiters({
     };
   }
 
-  function createAuthRateLimiter(map: any, redisLimiter: any) {
+  function createAuthRateLimiter(map: any, redisLimiter: any, max: number = config.AUTH_RATE_LIMIT_MAX, scopePrefix = 'auth', keyIp = false) {
     return async (req: any, res: any, next: any) => {
-      const ip = getRequestIp(req);
+      const rawIp = getRequestIp(req);
+      // Login keys IPv6 by /64: one client rotating addresses in its prefix must not get a fresh budget each time.
+      const ip = keyIp ? clientIpKey(rawIp) : rawIp;
       if (redisLimiter) {
         try {
           const result = await redisLimiter.check(ip);
           if (!result.fallback) {
             if (result.limited) {
-              log.warn('rate-limit:exceeded', { scope: `auth:${ip}`, ip, path: req.path, userId: req.user?.userId });
+              log.warn('rate-limit:exceeded', { scope: `${scopePrefix}:${ip}`, ip, path: redactInviteCodePath(req.path), userId: req.user?.userId });
               res.set('Retry-After', String(Math.max(1, Math.ceil(result.resetMs / 1000))));
               promMetrics?.rateLimitHitsCounter?.inc({ tier: 'auth', action: 'default' });
               return sendError(res, 429, 'Too many attempts. Wait a few minutes.', ErrorCodes.RATE_LIMITED);
@@ -322,7 +327,7 @@ function createRateLimiters({
           recordFallback('auth', err);
         }
       }
-      const effectiveMax = fallbackMax(config.AUTH_RATE_LIMIT_MAX);
+      const effectiveMax = fallbackMax(max);
       const now = Date.now();
       let entry = getAndTouch(map, ip);
       if (!entry || now - entry.start > config.AUTH_RATE_LIMIT_WINDOW) {
@@ -333,9 +338,9 @@ function createRateLimiters({
       entry.count += 1;
       if (entry.count > effectiveMax) {
         log.warn('rate-limit:exceeded', {
-          scope: `auth:${ip}`,
+          scope: `${scopePrefix}:${ip}`,
           ip,
-          path: req.path,
+          path: redactInviteCodePath(req.path),
           userId: req.user?.userId,
           fallback: true,
         });
@@ -404,12 +409,21 @@ function createRateLimiters({
 
   const authRateLimit = createAuthRateLimiter(state.authRateLimits, redisAuthRateLimiter);
   const adminAuthRateLimit = createAuthRateLimiter(state.adminAuthRateLimits, redisAuthRateLimiter);
+  // Login only: a looser per-IP cap than the strict one above. Like it, it also counts the shared 'unknown' IP.
+  const loginIpRateLimit = createAuthRateLimiter(
+    state.loginIpRateLimits,
+    redisLoginIpRateLimiter,
+    config.AUTH_LOGIN_IP_RATE_LIMIT_MAX,
+    'auth-login-ip',
+    true,
+  );
 
   return {
     enforceRateLimitMapCap,
     rateLimit,
     createAuthRateLimiter,
     authRateLimit,
+    loginIpRateLimit,
     adminAuthRateLimit,
     consumeSocketRateLimit,
     consumeUserAuthRateLimit,

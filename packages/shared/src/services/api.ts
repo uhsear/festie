@@ -5,6 +5,7 @@ import { canQueueOnEdgeError } from './errors';
 import { legacyPickBody } from './pickDeltas';
 import { enqueueMutation, drainQueue } from './offlineQueue';
 import { getOfflineQueue } from './offlineQueueRegistry';
+import { describeMutation } from '../utils/mutationLabel';
 
 type AuthMode = 'cookie' | 'bearer';
 
@@ -35,6 +36,8 @@ interface ApiOptions {
    */
   onOptimisticCreate?: (result: unknown) => void;
   _bypassOfflineQueue?: boolean;
+  /** Receives the raw 2xx Response before the body is read (e.g. for its `Date` header). */
+  onResponse?: (response: Response) => void;
   /** Return the whole `{ data, meta }` body instead of unwrapping `data`. */
   _envelope?: boolean;
   /** Return the response body as text instead of parsing JSON (e.g. the HTML export). */
@@ -159,7 +162,7 @@ function randomId(): string {
 async function enqueueOfflineMutation<T>(path: string, method: string, options: ApiOptions): Promise<T> {
   // POST creates stay distinct; PUT/PATCH/DELETE coalesce per-resource.
   const clientId = options.clientId ?? (method === 'POST' ? `POST:${path}:${randomId()}` : `${method}:${path}`);
-  const label = options.offlineLabel ?? `${method} ${path}`;
+  const label = options.offlineLabel ?? describeMutation(method, path, options.body);
   const body = options.body;
   // PUT/PATCH/DELETE clientIds are per-resource, so two different offline edits share one
   // clientId. Key each queued version separately: the server caches a key for 5 min and would
@@ -173,7 +176,7 @@ async function enqueueOfflineMutation<T>(path: string, method: string, options: 
   // one durable queue surface per platform.
   const webQueue = getOfflineQueue();
   if (webQueue) {
-    await webQueue.queueMutation({ type: 'api', url: path, method, body, clientId, idempotencyKey });
+    await webQueue.queueMutation({ type: 'api', url: path, method, body, clientId, idempotencyKey, label });
   } else {
     // Native: offlineQueue only uses api inside functions, so the api <-> offlineQueue cycle is safe.
     await enqueueMutation({
@@ -423,6 +426,7 @@ async function apiRequest<T>(path: string, options: ApiOptions = {}, _isRetry = 
     // Reachability confirmed (from the network) — recover from a prior
     // false-offline and drain. Guards inside reject cached/offline false 200s.
     markOnlineAndDrain(path);
+    options.onResponse?.(response);
 
     if (asText) return (await response.text()) as T;
 

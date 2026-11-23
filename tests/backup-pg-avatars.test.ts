@@ -90,7 +90,8 @@ describe('scripts/backup-pg.sh avatar archive', { skip }, () => {
     const r = runScript('scripts/backup-pg.sh', [], env);
     assert.equal(r.status, 76, r.stdout + r.stderr);
     assert.match(r.stdout + r.stderr, /avatar archive failed/);
-    assert.equal(readdirSync(backupDir).filter((f) => f.endsWith('.dump.gpg')).length, 1);
+    // On a Sunday the script also writes a _weekly copy, so count only the daily dump.
+    assert.equal(readdirSync(backupDir).filter((f) => f.endsWith('.dump.gpg') && !f.includes('_weekly')).length, 1);
     assert.equal(archives(backupDir).length, 0);
   });
 

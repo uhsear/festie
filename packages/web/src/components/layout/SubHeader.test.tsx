@@ -281,6 +281,24 @@ describe('SubHeader guarded My picks and hidden days', () => {
   });
 });
 
+describe('SubHeader My picks scope', () => {
+  afterEach(() => {
+    mockPathname = '/cards';
+  });
+
+  it.each(['/compare', '/wrap', '/crew-plan', '/picks'])('hides My picks on %s, which ignore the filter', (path) => {
+    mockPathname = path;
+    render(<SubHeader dayOnly={true} festivalOnly={false} />);
+    expect(screen.queryByRole('button', { name: 'Show only my picks' })).not.toBeInTheDocument();
+  });
+
+  it.each(['/', '/cards', '/timeline', '/grid'])('shows My picks on %s', (path) => {
+    mockPathname = path;
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.getByRole('button', { name: 'Show only my picks' })).toBeInTheDocument();
+  });
+});
+
 describe('SubHeader route scope', () => {
   afterEach(() => {
     mockPathname = '/cards';
@@ -293,15 +311,15 @@ describe('SubHeader route scope', () => {
   });
 });
 
-describe('SubHeader save status chip', () => {
-  it('mounts for a signed-in profile and not for a guest', () => {
+describe('SubHeader status line', () => {
+  it('mounts the one status line on schedule routes, for guests too', () => {
     const { unmount } = render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(screen.getByTestId('save-status-chip')).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-status-line')).toBeInTheDocument();
     unmount();
     const prev = storeState.currentProfile;
     storeState.currentProfile = null;
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
-    expect(screen.queryByTestId('save-status-chip')).not.toBeInTheDocument();
+    expect(screen.getByTestId('schedule-status-line')).toBeInTheDocument();
     storeState.currentProfile = prev;
   });
 });

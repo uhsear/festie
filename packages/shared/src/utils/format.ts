@@ -216,3 +216,9 @@ export function getSetLinks(set: FestivalSet): Array<{ name: string; links: Reco
     links: Record<string, string>;
   }>;
 }
+
+/** "1 stage", "2 stages". Pass `many` for a plural that is not `one` plus "s". */
+export function pluralize(count: number, one: string, many = `${one}s`): string {
+  return `${count} ${count === 1 ? one : many}`;
+}
+

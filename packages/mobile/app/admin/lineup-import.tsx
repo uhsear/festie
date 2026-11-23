@@ -19,6 +19,7 @@ import {
   parseLineupTable,
   parseNameList,
   planSummary,
+  pluralize,
   toImportRows,
   withArtistChoice,
   updateOffBanner,
@@ -33,7 +34,6 @@ import {
   type LineupImportUndoResult,
 } from '@festie/shared/utils';
 import { useAuthStore } from '@festie/shared/stores';
-import ScreenHeader from '../../components/ScreenHeader';
 import AppSwitch from '../../components/AppSwitch';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
@@ -447,13 +447,12 @@ export default function LineupImportScreen() {
   if (!isAdmin) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Import lineup" subtitle="Admin" icon="cloud-upload-outline" />
         <EmptyState
           icon="lock-closed-outline"
           title="Admins only"
           message="This area is restricted to festival administrators."
         />
-        <Stack.Screen options={{ headerShown: false }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Import lineup' }} />
       </View>
     );
   }
@@ -462,14 +461,13 @@ export default function LineupImportScreen() {
   if (!festivalId) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Import lineup" subtitle="Admin" icon="cloud-upload-outline" />
         <EmptyState
           icon="alert-circle-outline"
           title="No festival selected"
           message="Open this screen from a festival to import its lineup."
           action={{ label: 'Back to admin', onPress: goBack }}
         />
-        <Stack.Screen options={{ headerShown: false }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Import lineup' }} />
       </View>
     );
   }
@@ -691,8 +689,8 @@ export default function LineupImportScreen() {
           <SectionLabel>Result</SectionLabel>
           <View style={[styles.banner, styles.bannerOk]}>
             <Text style={styles.bannerText}>
-              Import done. Added {result.created} sets, updated {result.updated}, created {result.newStages} stages and{' '}
-              {result.newDays} days.
+              Import done. Added {pluralize(result.created, 'set')}, updated {result.updated}, created{' '}
+              {pluralize(result.newStages, 'stage')} and {pluralize(result.newDays, 'day')}.
               {result.announced || result.announcedUpdated
                 ? ` Announced lineup: ${result.announced ?? 0} added, ${result.announcedUpdated ?? 0} updated.`
                 : ''}
@@ -777,7 +775,7 @@ export default function LineupImportScreen() {
             {h.createdBy ? ` by ${h.createdBy}` : ''}
           </Text>
           <Text style={styles.previewMeta}>
-            Added {h.counts.created} · Updated {h.counts.updated} · {h.counts.newStages} stages · {h.counts.newDays} days
+            Added {h.counts.created} · Updated {h.counts.updated} · {pluralize(h.counts.newStages, 'stage')} · {pluralize(h.counts.newDays, 'day')}
             {h.counts.announced || h.counts.announcedUpdated
               ? ` · Announced ${h.counts.announced ?? 0} added, ${h.counts.announcedUpdated ?? 0} updated`
               : ''}
@@ -822,12 +820,6 @@ export default function LineupImportScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader
-        title="Import lineup"
-        subtitle="Paste, match, check, approve"
-        icon="cloud-upload-outline"
-        right={<Button label="Back" variant="ghost" size="sm" icon="chevron-back" onPress={goBack} />}
-      />
 
       <FlatList
         data={step === 'preview' ? items : []}
@@ -985,7 +977,7 @@ export default function LineupImportScreen() {
         onCancel={() => setAnnounceVisible(false)}
       />
 
-      <Stack.Screen options={{ headerShown: false }} />
+      <Stack.Screen options={{ headerShown: true, title: 'Import lineup' }} />
     </View>
   );
 }

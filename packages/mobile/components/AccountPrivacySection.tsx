@@ -82,7 +82,7 @@ export default function AccountPrivacySection() {
     Alert.alert(PRIVACY_COPY.confirmTitle, PRIVACY_COPY.confirmBody, [
       { text: PRIVACY_COPY.cancel, style: 'cancel' },
       { text: PRIVACY_COPY.confirmButton, style: 'destructive', onPress: () => void stop() },
-    ]);
+    ], { cancelable: true });
   };
 
   const stopDisabled = !summary.canStop || busy || offlineMode;

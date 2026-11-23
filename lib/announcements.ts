@@ -78,7 +78,8 @@ export function createAnnouncer({ stores: looseStores, notificationService, conf
       return;
     }
     const audience: string[] = await stores.profiles.userIdsByFestival(festivalId);
-    if (notificationService?.isConfigured && row.push !== false) {
+    // No isConfigured gate: with no push provider the send still writes the inbox rows.
+    if (notificationService && row.push !== false) {
       const deepLink = announcementDeepLink(config, row);
       for (let i = 0; i < audience.length; i += PUSH_CHUNK) {
         await notificationService.sendToOfflineUsers({

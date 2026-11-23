@@ -229,7 +229,7 @@ test.describe('festival planner browser regression', () => {
     }
 
     await openScheduleView(page, 'Grid');
-    const chip = page.getByRole('button', { name: 'You have 1 schedule clash. Open it in Picks.' });
+    const chip = page.getByRole('button', { name: '1 clash. Open it in Picks.' });
     await expect(chip).toBeVisible();
     await chip.click();
     await expect(page).toHaveURL(/\/picks$/);

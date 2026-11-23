@@ -17,7 +17,7 @@ import type { CrewMeetingPoint } from '@festie/shared/types';
 import type { MeetingPointPayload } from '@festie/shared/services';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
-import { meetingPointPrefill, type MapPlace } from '@festie/shared/utils';
+import { MEETING_POINT_PAST_ERROR, meetAtIsPast, meetingPointPrefill, type MapPlace } from '@festie/shared/utils';
 import { useCurrentPosition } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useToast } from '../../lib/toastContext';
@@ -301,9 +301,17 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
     window.open(meetingPointDirectionsUrl(p), '_blank', 'noopener,noreferrer');
   }
 
+  // An edit that leaves the time alone may keep a time that has since passed.
+  const meetAtError =
+    meetAt && (!editingId || meetAt !== editBaseline.current?.meetAt)
+      ? meetAtIsPast(meetAtFromWallInput(meetAt, festivalTimeZone), recursDaily, nowMs)
+        ? MEETING_POINT_PAST_ERROR
+        : undefined
+      : undefined;
+
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!label.trim() || !location.trim()) return;
+    if (!label.trim() || !location.trim() || meetAtError) return;
     const payload: MeetingPointPayload = {
       label: label.trim(),
       location: location.trim(),
@@ -416,6 +424,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           location={location}
           stageRef={stageRef}
           meetAt={meetAt}
+          meetAtError={meetAtError}
           recursDaily={recursDaily}
           coords={coords}
           festivalTimeZone={festivalTimeZone}
@@ -453,7 +462,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
         </Button>
         {placing && (
           <p role="status" className="text-xs text-text-secondary">
-            Click the map where you want to meet.
+            Tap or click the map where you want to meet.
           </p>
         )}
         <Suspense
@@ -478,7 +487,7 @@ export default function MeetingPointsTab({ crewId, currentUserId, focusSosUserId
           {/* With no points the empty state carries the only Add button. */}
           {!showForm && (current.length > 0 || past.length > 0) && (
             <Button variant="primary" onClick={() => setShowForm(true)} className="w-full min-h-11">
-              <Plus className="w-4 h-4" aria-hidden="true" /> Add Meeting Point
+              <Plus className="w-4 h-4" aria-hidden="true" /> Add meeting point
             </Button>
           )}
 

@@ -34,7 +34,7 @@ export default function FollowButton({ festivalId, festivalName, style }: Props)
         { text: COPY.notNow, style: 'cancel' },
         { text: GUEST_PROMPT_COPY.signIn, onPress: () => router.push('/(auth)/login') },
         { text: GUEST_PROMPT_COPY.createAccount, onPress: () => router.push('/(auth)/register') },
-      ]);
+      ], { cancelable: true });
       return;
     }
     const on = !following;

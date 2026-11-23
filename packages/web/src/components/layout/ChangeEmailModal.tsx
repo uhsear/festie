@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import Dialog from '../ui/Dialog';
-import { inputBase } from '../../lib/styles';
 import Button from '../ui/Button';
 import Input from '../ui/Input';
 
@@ -34,26 +33,20 @@ export default function ChangeEmailModal({ currentEmail, needsPassword = true, o
   };
 
   return (
-    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }} title="Change email">
+    <Dialog open onOpenChange={(o) => { if (!o) onClose(); }} title={currentEmail ? 'Change email' : 'Add email'}>
       <section className="pt-3 mt-3 border-t border-border first-of-type:pt-0 first-of-type:mt-0 first-of-type:border-t-0">
-        <div className="text-[length:var(--font-size-12)] font-bold tracking-[1.2px] uppercase text-text-secondary mb-1.5">
-          {currentEmail ? 'Change Email' : 'Add Email'}
-        </div>
         <p className="text-[length:var(--font-size-14)] text-text-secondary mb-1.5">
           We send a verification link to the new address, and tell{' '}
           {currentEmail ? 'your current address' : 'the address on file'} that a change was requested. Your login email
           stays the same until you open that link.
         </p>
         <form onSubmit={handleSubmit} className="space-y-3">
-          <div className="flex flex-col items-stretch gap-1.5 py-2.5">
-            <label className="text-xs font-semibold text-text-secondary uppercase tracking-[.8px]" htmlFor="ce-email">
-              New email
-            </label>
-            <input
+          <div className="py-2.5">
+            <Input
               id="ce-email"
+              label="New email"
               type="email"
               autoComplete="email"
-              className={inputBase}
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               maxLength={254}
@@ -76,17 +69,17 @@ export default function ChangeEmailModal({ currentEmail, needsPassword = true, o
           {error && (
             <div
               role="alert"
-              className="text-[length:var(--font-size-14)] text-[var(--color-text-danger)] overflow-hidden text-ellipsis whitespace-nowrap flex items-center gap-[var(--space-3)]"
+              className="text-[length:var(--font-size-14)] text-[var(--color-text-danger)]"
             >
               {error}
             </div>
           )}
           <div className="flex flex-col gap-[var(--space-3)]">
-            <Button variant="ghost" size="sm" type="button" onClick={onClose} disabled={busy}>
-              Cancel
-            </Button>
             <Button variant="primary" size="sm" type="submit" disabled={busy || !email || (needsPassword && !password)}>
               {busy ? 'Sending…' : 'Send Verification Link'}
+            </Button>
+            <Button variant="ghost" size="sm" type="button" onClick={onClose} disabled={busy}>
+              Cancel
             </Button>
           </div>
         </form>

@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import { createTestQueryClient, renderWithQueryClient } from '../../test-utils';
-import ManageActivity, { describeAction } from './ManageActivity';
+import ManageActivity from './ManageActivity';
 import ManageInterest from './ManageInterest';
 
 const mockGet = vi.fn();
@@ -18,11 +18,11 @@ beforeEach(() => vi.clearAllMocks());
 describe('ManageActivity', () => {
   it('names the actor and the action, and reads the organization audit route', async () => {
     mockGet.mockResolvedValue([
-      { id: 'a1', action: 'festival.publish_requested', targetType: 'festival', targetId: 'f1', createdAt: '2026-11-02T10:00:00.000Z', actor: 'Alex at Venue A', details: {} },
+      { id: 'a1', action: 'festival.publish_requested', targetType: 'festival', targetId: 'f1', createdAt: '2026-11-02T10:00:00.000Z', actor: 'Alex at Venue A', details: { name: 'Sunset Fest' } },
       { id: 'a2', action: 'festival.published', targetType: 'festival', targetId: 'f1', createdAt: '2026-11-03T10:00:00.000Z', actor: 'Festie support', details: null },
     ]);
     render(<ManageActivity organizationId="org-a" />);
-    expect(await screen.findByText('Festival publish requested')).toBeInTheDocument();
+    expect(await screen.findByText('Review requested: Sunset Fest')).toBeInTheDocument();
     expect(screen.getByText(/Alex at Venue A/)).toBeInTheDocument();
     expect(screen.getByText(/Festie support/)).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledWith('/manage/organizations/org-a/audit');
@@ -39,8 +39,12 @@ describe('ManageActivity', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
   });
 
-  it('turns an action key into a sentence', () => {
-    expect(describeAction('organization.member_added')).toBe('Organization member added');
+  it('uses the shared audit labels, so a generic fallback row reads as words', () => {
+    mockGet.mockResolvedValue([
+      { id: 'a1', action: 'organization.pending_member_added', targetType: 'organization', targetId: 'o1', createdAt: '2026-11-02T10:00:00.000Z', actor: 'Alex', details: {} },
+    ]);
+    render(<ManageActivity organizationId="org-a" />);
+    return screen.findByText('Organization member invited by email');
   });
 });
 

@@ -60,6 +60,15 @@ export const AUDIT_ACTION_LABELS: Readonly<Record<string, string>> = {
   'organization.pending_member_added': 'Organization member invited by email',
   'organization.pending_member_removed': 'Organization invitation removed',
   'organization.updated': 'Organization profile updated',
+  // Rows the generic audit middleware writes for routes with no explicit action.
+  'login.created': 'Signed in',
+  'reauth.created': 'Confirmed password',
+  'import-lineup.created': 'Lineup checked',
+  'crews.created': 'Crew created',
+  'unknown.created': 'Other activity',
+  'unknown.updated': 'Other activity',
+  'unknown.replaced': 'Other activity',
+  'unknown.deleted': 'Other activity',
 };
 
 const COLON_VERBS: Record<string, string> = {

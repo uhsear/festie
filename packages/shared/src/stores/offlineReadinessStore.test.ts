@@ -117,6 +117,25 @@ describe('offlineReadinessStore', () => {
       expect(r.art.status).toBe('ready');
     });
 
+    it('a refresh that fails keeps a previously ready section ready with its old syncedAt', async () => {
+      const ok = mockDeps();
+      await useOfflineReadinessStore.getState().downloadForOffline('fest-1', 'crew-1', ok);
+      const before = useOfflineReadinessStore.getState().getReadiness('fest-1');
+
+      const offline = mockDeps({
+        selectFestival: vi.fn().mockRejectedValue(new Error('offline')),
+        loadProfiles: vi.fn().mockRejectedValue(new Error('offline')),
+        fetchWeather: vi.fn().mockRejectedValue(new Error('offline')),
+      });
+      await useOfflineReadinessStore.getState().downloadForOffline('fest-1', 'crew-1', offline);
+
+      const r = useOfflineReadinessStore.getState().getReadiness('fest-1');
+      for (const sec of ['schedule', 'picks', 'weather'] as const) {
+        expect(r[sec].status).toBe('ready');
+        expect(r[sec].syncedAt).toBe(before[sec].syncedAt);
+      }
+    });
+
     it('never rejects even when the schedule loader fails, and dependent art still settles', async () => {
       const deps = mockDeps({ selectFestival: vi.fn().mockRejectedValue(new Error('offline')) });
       await expect(

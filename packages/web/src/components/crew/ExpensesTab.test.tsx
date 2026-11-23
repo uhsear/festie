@@ -57,17 +57,18 @@ function mockApi(expenses: unknown[], settlementPlan: unknown = plan) {
 
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <ExpensesTab crewId="crew-1" members={members} currentUserId="me" />
     </QueryClientProvider>,
   );
+  return view;
 }
 
 describe('ExpensesTab', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    useCrewStore.setState({ activeCrew: { id: 'crew-1', owner: 'sam' } } as never);
+    useCrewStore.setState({ activeCrew: { id: 'crew-1', owner: 'sam' }, remindedOn: {} } as never);
   });
 
   it('shows the currency label and no filter tabs with no expenses', async () => {
@@ -124,7 +125,7 @@ describe('ExpensesTab', () => {
     mockApi([]);
     const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 'e9' } as never);
     setup();
-    await userEvent.click(await screen.findByRole('button', { name: 'Add Expense' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add expense' }));
     await userEvent.type(screen.getByLabelText('Description'), 'Gas');
     await userEvent.type(screen.getByLabelText('Amount'), '60');
     await userEvent.click(screen.getByRole('button', { name: 'Add' }));
@@ -196,5 +197,50 @@ describe('ExpensesTab', () => {
     });
     setup();
     expect(await screen.findByText("You're all settled up.")).toBeInTheDocument();
+  });
+
+  describe('Remind', () => {
+    const owedToMe = {
+      currency: 'USD',
+      balances: [
+        { userId: 'me', username: 'me', balance: 20 },
+        { userId: 'sam', username: 'sam', balance: -20 },
+      ],
+      settlements: [
+        { fromUserId: 'sam', fromName: 'Sam', toUserId: 'me', toName: 'Me', amountCents: 2000, amount: 20, payeeHandles: {} },
+      ],
+    };
+
+    it('turns into a disabled Reminded today after a reminder is sent', async () => {
+      mockApi([expense({})], owedToMe);
+      const post = vi.spyOn(api, 'post').mockResolvedValue({} as never);
+      setup();
+      await userEvent.click(await screen.findByRole('button', { name: 'Remind Sam' }));
+      expect(await screen.findByRole('button', { name: 'Reminded today' })).toBeDisabled();
+      expect(post).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps Reminded today after leaving the tab and coming back', async () => {
+      mockApi([expense({})], owedToMe);
+      vi.spyOn(api, 'post').mockResolvedValue({} as never);
+      const first = setup();
+      await userEvent.click(await screen.findByRole('button', { name: 'Remind Sam' }));
+      await screen.findByRole('button', { name: 'Reminded today' });
+      first.unmount();
+      setup();
+      expect(await screen.findByRole('button', { name: 'Reminded today' })).toBeDisabled();
+    });
+
+    it('does the same when the server says that person was already reminded today', async () => {
+      mockApi([expense({})], owedToMe);
+      const conflict = Object.assign(new Error('You already reminded Sam today.'), {
+        name: 'ApiClientError',
+        status: 409,
+      });
+      vi.spyOn(api, 'post').mockRejectedValue(conflict);
+      setup();
+      await userEvent.click(await screen.findByRole('button', { name: 'Remind Sam' }));
+      expect(await screen.findByRole('button', { name: 'Reminded today' })).toBeDisabled();
+    });
   });
 });

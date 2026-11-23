@@ -258,6 +258,73 @@ describe('routes/email-auth', () => {
     assert.ok(!JSON.stringify(warn.mock.calls).includes('alice@test.com'), 'the address must not be logged at warn');
   });
 
+  test('POST /forgot-password — a null rejection from the detached send is logged without throwing', async () => {
+    const error = mock.fn();
+    const deps = buildEmailAuthDeps({ log: { ...makeLog(), error } });
+    deps.stores.emailTokens.findUserByEmail = mock.fn(() => Promise.reject(null));
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => unhandled.push(reason);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+      await request(mountApp(createEmailAuthRoutes(deps))).post('/forgot-password').send({ email: 'null@test.com' }).expect(200);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+    assert.equal(unhandled.length, 0, 'the detached catch must not throw');
+    assert.ok(error.mock.calls.some((c: any) => c.arguments[0] === 'forgot-password failed'));
+  });
+
+  test('POST /forgot-password — answers before the lookup and send finish, so latency does not reveal an account (SEC-FORGOT-TIMING)', async () => {
+    const known = buildEmailAuthDeps();
+    known.stores.emailTokens.findUserByEmail = mock.fn(
+      () => new Promise((resolve) => setTimeout(() => resolve({ id: 'user-1', username: 'alice', email: 'alice@test.com' }), 600)),
+    );
+    const unknown = buildEmailAuthDeps();
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+
+    const timed = async (deps: any, email: string) => {
+      const start = Date.now();
+      await request(mountApp(createEmailAuthRoutes(deps))).post('/forgot-password').send({ email }).expect(200);
+      return Date.now() - start;
+    };
+    const knownMs = await timed(known, 'alice@test.com');
+    const unknownMs = await timed(unknown, 'nobody@test.com');
+
+    assert.ok(knownMs < 300, `known email took ${knownMs} ms, it waited on the lookup`);
+    assert.ok(unknownMs < 150, `unknown email took ${unknownMs} ms, it still sleeps`);
+    // The detached work still finishes.
+    await new Promise((resolve) => setTimeout(resolve, 800));
+    assert.ok(known.stores.emailTokens.invalidateResetTokens.mock.calls.length >= 1);
+  });
+
+  test('POST /forgot-password — a failure in the detached work is logged and the answer stays 200', async () => {
+    const error = mock.fn();
+    const deps = buildEmailAuthDeps({ log: { ...makeLog(), error } });
+    deps.stores.emailTokens.findUserByEmail = mock.fn(async () => {
+      throw new Error('db down');
+    });
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+
+    await request(mountApp(createEmailAuthRoutes(deps))).post('/forgot-password').send({ email: 'alice@test.com' }).expect(200);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.ok(error.mock.calls.some((c: any) => c.arguments[0] === 'forgot-password failed'));
+  });
+
+  test('POST /forgot-password — the request log line carries the user id, not the address (SEC-LOG-PII)', async () => {
+    const info = mock.fn();
+    const deps = buildEmailAuthDeps({ log: { ...makeLog(), info } });
+    deps.stores.emailTokens.findUserByEmail = mock.fn(async () => ({ id: 'user-1', username: 'alice', email: 'alice@test.com' }));
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+
+    await request(mountApp(createEmailAuthRoutes(deps))).post('/forgot-password').send({ email: 'alice@test.com' }).expect(200);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const line = info.mock.calls.find((c: any) => c.arguments[0] === 'forgot-password:requested');
+    assert.ok(line, 'expected the forgot-password:requested line');
+    assert.deepEqual(line.arguments[1], { userId: 'user-1' });
+  });
+
   test('POST /forgot-password — per-email rate limit kicks in after 3 attempts', async () => {
     const deps = buildEmailAuthDeps();
     deps.stores.emailTokens.findUserByEmail = mock.fn(async () => ({
@@ -276,20 +343,6 @@ describe('routes/email-auth', () => {
     }
     // 4th request exceeds the per-email limiter (3/hour) and gets 429
     const res = await request(app).post('/forgot-password').send({ email: 'ratelimit-test@test.com' }).expect(429);
-    assert.equal(res.body.data, null);
-  });
-
-  test('POST /forgot-password — returns 500 on unexpected error', async () => {
-    const deps = buildEmailAuthDeps();
-    deps.stores.emailTokens.findUserByEmail = mock.fn(async () => {
-      throw new Error('DB down');
-    });
-    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
-    const router = createEmailAuthRoutes(deps);
-    const app = mountApp(router);
-
-    const res = await request(app).post('/forgot-password').send({ email: 'err@test.com' }).expect(500);
-
     assert.equal(res.body.data, null);
   });
 
@@ -315,7 +368,7 @@ describe('routes/email-auth', () => {
     assert.match(res.text, /invalid/i);
   });
 
-  test('GET /verify-email — returns error for expired/used token', async () => {
+  test('POST /verify-email — returns error for expired/used token', async () => {
     const deps = buildEmailAuthDeps();
     // consumeVerificationToken returns null by default (expired/used)
     createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
@@ -323,12 +376,46 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'a'.repeat(64);
-    const res = await request(app).get(`/verify-email?token=${validHex}`).expect(400);
+    const res = await request(app).post('/verify-email').send({ token: validHex }).expect(400);
 
-    assert.match(res.text, /expired|already been used/i);
+    assert.match(res.body.error.message, /expired|already been used/i);
   });
 
-  test('GET /verify-email — confirming the address already on file does not sign the user out', async () => {
+  test('GET /verify-email — a browser GET with a well-formed token redirects and consumes nothing', async () => {
+    const deps = buildEmailAuthDeps();
+    deps.stores.emailTokens.consumeVerificationToken = mock.fn(async () => ({
+      id: 'tok-1',
+      user_id: 'user-1',
+      email: 'alice@test.com',
+    }));
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+    const app = mountApp(createEmailAuthRoutes(deps));
+
+    const validHex = 'd'.repeat(64);
+    const res = await request(app).get(`/verify-email?token=${validHex}`).set('Accept', 'text/html').expect(302);
+
+    assert.equal(res.headers.location, `/verify-email?token=${validHex}`);
+    assert.equal(deps.stores.emailTokens.consumeVerificationToken.mock.calls.length, 0, 'a link prefetch must not burn the token');
+  });
+
+  test('POST /verify-email — consumes the token and returns JSON', async () => {
+    const deps = buildEmailAuthDeps();
+    deps.stores.emailTokens.consumeVerificationToken = mock.fn(async () => ({
+      id: 'tok-1',
+      user_id: 'user-1',
+      email: 'alice@test.com',
+    }));
+    createEmailAuthRoutes = (await import('../routes/email-auth.js')).default;
+    const app = mountApp(createEmailAuthRoutes(deps));
+
+    const res = await request(app).post('/verify-email').send({ token: 'e'.repeat(64) }).expect(200);
+
+    assert.equal(res.body.data.verified, true);
+    assert.equal(res.body.data.sessionsRevoked, false);
+    assert.equal(deps.stores.emailTokens.consumeVerificationToken.mock.calls.length, 1);
+  });
+
+  test('POST /verify-email — confirming the address already on file does not sign the user out', async () => {
     const deps = buildEmailAuthDeps();
     // getUserById reports alice@test.com, so this token re-confirms the address
     // the account already holds: a signup/resend confirmation, not a move.
@@ -342,9 +429,9 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'b'.repeat(64);
-    const res = await request(app).get(`/verify-email?token=${validHex}`).expect(200);
+    const res = await request(app).post('/verify-email').send({ token: validHex }).expect(200);
 
-    assert.match(res.text, /verified/i);
+    assert.equal(res.body.data.verified, true);
     assert.ok(deps.invalidateUserCache.mock.calls.length >= 1);
     assert.equal(deps.invalidateUserSessions.mock.calls.length, 0, 'nothing moved, so nothing to revoke');
   });
@@ -441,7 +528,7 @@ describe('routes/email-auth', () => {
     assert.match(res.text, /invalid/i);
   });
 
-  test('GET /verify-email — returns 500 on DB error', async () => {
+  test('POST /verify-email — returns 500 on DB error', async () => {
     const deps = buildEmailAuthDeps();
     deps.stores.emailTokens.consumeVerificationToken = mock.fn(async () => {
       throw new Error('DB fail');
@@ -451,9 +538,9 @@ describe('routes/email-auth', () => {
     const app = mountApp(router);
 
     const validHex = 'c'.repeat(64);
-    const res = await request(app).get(`/verify-email?token=${validHex}`).expect(500);
+    const res = await request(app).post('/verify-email').send({ token: validHex }).expect(500);
 
-    assert.match(res.text, /wrong/i);
+    assert.match(res.body.error.message, /wrong/i);
   });
 
   test('POST /update-email — the route is not mounted at all', async () => {
@@ -1503,6 +1590,7 @@ describe('routes/expenses', () => {
 describe('routes/ratings', () => {
   function buildRatingDeps(overrides: any = {}) {
     return baseDeps({
+      getFestivalById: mock.fn(async () => ({ id: 'fest-1', publishedAt: '2026-01-01T00:00:00.000Z' })),
       stores: {
         pool: {
           query: mock.fn(async () => ({ rows: [{ id: 'set-a', festival_id: 'fest-1' }] })),

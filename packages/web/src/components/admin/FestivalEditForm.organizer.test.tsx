@@ -50,8 +50,23 @@ describe('FestivalEditForm in organizer mode', () => {
     expect(group).toContainElement(screen.getByLabelText('Festival Name'));
     expect(screen.queryByRole('button', { name: /^Save/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Discard' })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Close' })).toBeEnabled();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
     expect(screen.queryByText('Attendees are alerted after Festie checks the change.')).not.toBeInTheDocument();
+  });
+
+  it('dims the buttons of a viewer and opens every day so the lineup can be read', () => {
+    const day = { id: 'd1', label: 'Day One', date: '2026-07-04', sets: [{ id: 's1', artist: 'AAT', startTime: '20:00' }] };
+    render(<FestivalEditForm {...props} mode="organizer" readOnly formData={{ ...props.formData, days: [day] } as never} />);
+    expect(screen.getByRole('group', { name: 'Festival details' }).className).toContain('button):disabled]:opacity-60');
+    expect(screen.getByRole('button', { name: 'Remove Day One' })).toBeDisabled();
+    expect(screen.getByLabelText('Start time for AAT')).toBeInTheDocument();
+  });
+
+  it('shows a plain disabled Save when nothing changed', () => {
+    render(<FestivalEditForm {...props} mode="organizer" changes={{ ...props.changes, total: 0 }} />);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
   });
 
   it('shows Save for an editor', () => {

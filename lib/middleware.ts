@@ -16,6 +16,7 @@ import { mountSwaggerUI } from './swagger-ui-setup.js';
 import { mountTiles } from './tiles.js';
 import { default as createAuditMiddleware } from './audit-middleware.js';
 import { recordRecentRequest } from './recent-requests.js';
+import { redactInviteCodePath } from './helpers/sanitize.js';
 import { sentry } from './sentry.js';
 import { runWithRequestContext } from './logger.js';
 import type { AppConfig } from './config.js';
@@ -85,6 +86,8 @@ function createIdempotencyMiddleware({
   function middleware(req: IdempotencyRequest, looseRes: Partial<IdempotencyResponse>, next: NextFunction) {
     const res = looseRes as IdempotencyResponse;
     if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next();
+    // Auth responses carry session and refresh tokens; never store them for replay.
+    if (`${req.baseUrl ?? ''}${req.path ?? ''}`.toLowerCase().startsWith('/api/v1/auth')) return next();
     const key = req.headers['idempotency-key'];
     if (!key || typeof key !== 'string' || key.length > 128) return next();
     if (!resolveUserId) return handle(clientIp(req));
@@ -193,6 +196,26 @@ function createIdempotencyMiddleware({
   return { middleware, cache, timer };
 }
 
+/** True when any string, or object key, in a parsed JSON body holds U+0000, which Postgres text columns cannot store. */
+function bodyHasNul(body: unknown): boolean {
+  const pending: unknown[] = [body];
+  while (pending.length > 0) {
+    const value = pending.pop();
+    if (typeof value === 'string') {
+      if (value.includes('\u0000')) return true;
+    } else if (Array.isArray(value)) {
+      // A spread would pass every element as an argument and overflow the stack on a large array.
+      for (const item of value) pending.push(item);
+    } else if (value && typeof value === 'object') {
+      for (const [key, child] of Object.entries(value)) {
+        if (key.includes('\u0000')) return true;
+        pending.push(child);
+      }
+    }
+  }
+  return false;
+}
+
 /**
  * Configure all Express middleware on the app instance.
  * @returns {{ inFlightRequests: { count: number } }} References needed by shutdown
@@ -214,6 +237,7 @@ function configureMiddleware(app: Application, ctx: AppContext) {
     validateUserSession,
     resolveRequestToken,
     authRateLimit,
+    loginIpRateLimit,
     sendError,
     ErrorCodes,
     generateOpenAPISpec,
@@ -563,7 +587,7 @@ function configureMiddleware(app: Application, ctx: AppContext) {
   app.use('/api', (req: Request, res: Response, next: NextFunction) => {
     const timeout = setTimeout(() => {
       if (!res.headersSent) {
-        log.warn('request timeout', { method: req.method, path: req.path, reqId: req.id });
+        log.warn('request timeout', { method: req.method, path: redactInviteCodePath(req.path), reqId: req.id });
         sendError(res, 408, 'Request timeout', ErrorCodes.INTERNAL_ERROR);
       }
     }, config.REQUEST_TIMEOUT_MS);
@@ -589,7 +613,8 @@ function configureMiddleware(app: Application, ctx: AppContext) {
       const duration = Date.now() - start;
       const meta: Record<string, unknown> = {
         method: req.method,
-        path: (req.originalUrl || req.path || '').split('?')[0],
+        // An invite code in the path is a live credential; keep it out of the log.
+        path: redactInviteCodePath((req.originalUrl || req.path || '').split('?')[0]!),
         status: res.statusCode,
         ms: duration,
         ip: getRequestIp(req),
@@ -638,8 +663,24 @@ function configureMiddleware(app: Application, ctx: AppContext) {
   const globalLimiter = rateLimit();
   app.use('/api', (req: Request, res: Response, next: NextFunction) =>
     req.method === 'POST' && req.path === '/v1/metrics/web-vitals' ? next() : globalLimiter(req, res, next));
-  app.use('/api/v1/auth/login', authRateLimit);
+
+  // Login keeps its per-(IP, username) route bucket (routes/auth.ts) and gets a looser per-IP cap here.
+  app.use('/api/v1/auth/login', loginIpRateLimit);
   app.use('/api/v1/auth/register', authRateLimit);
+
+  // ── NUL bytes ─────────────────────────────────────────────────────────
+  // Postgres rejects U+0000 in text (22021), which would surface as a retryable 500 on any route
+  // that stores or looks up the value. Refuse it once here instead of in each route. The raw
+  // `%00` check covers path params and the query string. The body walk is bounded by JSON_LIMIT.
+  // It runs after the metrics and global rate limit, so a rejected request is logged, counted and limited.
+  // Multipart upload routes read only `req.file`, never text fields, so nothing else needs the guard.
+  app.use('/api', (req: Request, res: Response, next: NextFunction) => {
+    if (/%00/.test(req.originalUrl) || bodyHasNul(req.body)) {
+      return sendError(res, 400, 'Input contains a null character. Remove it and try again.', ErrorCodes.INVALID_INPUT);
+    }
+    next();
+  });
+
   // L7: extend the strict Redis-backed (cluster-accurate) auth limiter across
   // the full credential surface, not just login/register.
   app.use('/api/v1/auth/refresh-token', authRateLimit);

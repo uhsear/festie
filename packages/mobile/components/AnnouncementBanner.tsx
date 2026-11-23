@@ -1,10 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { AccessibilityInfo, AppState, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAnnouncementStore, useFestivalDataStore } from '@festie/shared/stores';
 import { announcementTarget, pickBannerAnnouncement } from '@festie/shared/utils';
+import type { FestivalAnnouncement } from '@festie/shared/types';
 import { ANNOUNCEMENT_COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import { pushTargetHref } from '../lib/pushRoutes';
@@ -15,6 +16,58 @@ interface AnnouncementBannerProps {
   padTop: boolean;
   /** Reports whether the banner is showing, so the chrome applies the top inset once. */
   onActiveChange?: (active: boolean) => void;
+}
+
+const BODY_LINES = 2;
+
+/** The announcement text column. Keyed by id at the call site, so a new announcement starts collapsed. */
+function AnnouncementText({ a, kicker, label }: { a: FestivalAnnouncement; kicker: string; label: string }) {
+  const t = useTokens();
+  const s = useStyles();
+  const [expanded, setExpanded] = useState(false);
+  const [measuredLines, setMeasuredLines] = useState(0);
+  const urgent = a.severity === 'urgent';
+  const canExpand = measuredLines > BODY_LINES;
+  const readLabel = expanded ? ANNOUNCEMENT_COPY.banner.readLess : ANNOUNCEMENT_COPY.banner.readMore;
+
+  return (
+    <View style={s.column}>
+      {/* Label the text group, not the row, so iOS keeps Read more, Open and Dismiss focusable. */}
+      <View style={s.body} accessible accessibilityRole="summary" accessibilityLabel={label}>
+        <View style={s.kickerRow}>
+          {urgent ? <Ionicons name="warning-outline" size={iconSize.sm} color={t.colors.text.danger} /> : null}
+          <Text style={[s.kicker, urgent && { color: t.colors.text.danger }]}>{kicker}</Text>
+        </View>
+        <Text style={s.title}>{a.title}</Text>
+        <Text
+          style={s.text}
+          numberOfLines={expanded ? undefined : BODY_LINES}
+        >
+          {a.body}
+        </Text>
+      </View>
+      {/* iOS reports only the clamped lines, so count them on an unclamped hidden copy. */}
+      <Text
+        style={[s.text, s.measure]}
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        onTextLayout={(e) => setMeasuredLines(e.nativeEvent.lines.length)}
+      >
+        {a.body}
+      </Text>
+      {canExpand ? (
+        <AppPressable
+          style={s.readMore}
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityLabel={readLabel}
+          accessibilityState={{ expanded }}
+        >
+          <Text style={s.actionText}>{readLabel}</Text>
+        </AppPressable>
+      ) : null}
+    </View>
+  );
 }
 
 /**
@@ -68,15 +121,7 @@ export default function AnnouncementBanner({ padTop, onActiveChange }: Announcem
         { borderColor: urgent ? t.colors.text.danger : t.colors.accent.aqua, paddingTop: (padTop ? insets.top : 0) + t.spacing[2] },
       ]}
     >
-      {/* Label the text column, not the row, so iOS keeps Open and Dismiss focusable. */}
-      <View style={s.body} accessible accessibilityRole="summary" accessibilityLabel={label}>
-        <View style={s.kickerRow}>
-          {urgent ? <Ionicons name="warning-outline" size={iconSize.sm} color={t.colors.text.danger} /> : null}
-          <Text style={[s.kicker, urgent && { color: t.colors.text.danger }]}>{kicker}</Text>
-        </View>
-        <Text style={s.title}>{a.title}</Text>
-        <Text style={s.text}>{a.body}</Text>
-      </View>
+      <AnnouncementText key={a.id} a={a} kicker={kicker} label={label} />
       {a.screen !== 'home' ? (
         <AppPressable
           style={s.action}
@@ -113,8 +158,10 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.bg.secondary,
     borderBottomWidth: 2,
   },
-  body: {
+  column: {
     flex: 1,
+  },
+  body: {
     gap: t.spacing[1],
   },
   kickerRow: {
@@ -134,10 +181,21 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('body'),
     color: t.colors.text.secondary,
   },
+  measure: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    opacity: 0,
+  },
   action: {
     minWidth: 44,
     minHeight: 44,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readMore: {
+    minHeight: 44,
+    alignSelf: 'flex-start',
     justifyContent: 'center',
   },
   actionText: {

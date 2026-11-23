@@ -38,7 +38,7 @@ describe('CrewSelector', () => {
 
   it('renders the select crew trigger button', () => {
     render(<CrewSelector {...defaultProps} />);
-    expect(screen.getByLabelText('Select crew')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Select crew/ })).toBeInTheDocument();
   });
 
   it('shows selected crew name in the trigger', () => {
@@ -59,7 +59,7 @@ describe('CrewSelector', () => {
   it('expands on click to show crew list', async () => {
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} />);
-    await user.click(screen.getByLabelText('Select crew'));
+    await user.click(screen.getByRole('button', { name: /^Select crew/ }));
     expect(screen.getByRole('listbox')).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Alpha Crew/ })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /Beta Squad/ })).toBeInTheDocument();
@@ -68,7 +68,7 @@ describe('CrewSelector', () => {
   it('marks selected crew with aria-selected', async () => {
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} />);
-    await user.click(screen.getByLabelText('Select crew'));
+    await user.click(screen.getByRole('button', { name: /^Select crew/ }));
     expect(screen.getByRole('option', { name: /Alpha Crew/ })).toHaveAttribute('aria-selected', 'true');
     expect(screen.getByRole('option', { name: /Beta Squad/ })).toHaveAttribute('aria-selected', 'false');
   });
@@ -77,7 +77,7 @@ describe('CrewSelector', () => {
     const onSelectCrew = vi.fn();
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} onSelectCrew={onSelectCrew} />);
-    await user.click(screen.getByLabelText('Select crew'));
+    await user.click(screen.getByRole('button', { name: /^Select crew/ }));
     await user.click(screen.getByRole('option', { name: /Beta Squad/ }));
     expect(onSelectCrew).toHaveBeenCalledWith('crew-2');
     // Panel should close after selection
@@ -87,7 +87,7 @@ describe('CrewSelector', () => {
   it('renders Create crew and Join with code buttons in the dropdown', async () => {
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} />);
-    await user.click(screen.getByLabelText('Select crew'));
+    await user.click(screen.getByRole('button', { name: /^Select crew/ }));
     expect(screen.getByRole('button', { name: /Create crew/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Join with code/ })).toBeInTheDocument();
   });
@@ -96,7 +96,7 @@ describe('CrewSelector', () => {
     const onCreateCrew = vi.fn();
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} onCreateCrew={onCreateCrew} />);
-    await user.click(screen.getByLabelText('Select crew'));
+    await user.click(screen.getByRole('button', { name: /^Select crew/ }));
     await user.click(screen.getByRole('button', { name: /Create crew/ }));
     expect(onCreateCrew).toHaveBeenCalledOnce();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -106,7 +106,7 @@ describe('CrewSelector', () => {
     const onJoinCrew = vi.fn();
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} onJoinCrew={onJoinCrew} />);
-    await user.click(screen.getByLabelText('Select crew'));
+    await user.click(screen.getByRole('button', { name: /^Select crew/ }));
     await user.click(screen.getByRole('button', { name: /Join with code/ }));
     expect(onJoinCrew).toHaveBeenCalledOnce();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
@@ -115,7 +115,7 @@ describe('CrewSelector', () => {
   it('sets aria-expanded correctly on the trigger button', async () => {
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} />);
-    const trigger = screen.getByLabelText('Select crew');
+    const trigger = screen.getByRole('button', { name: /^Select crew/ });
     expect(trigger).toHaveAttribute('aria-expanded', 'false');
     await user.click(trigger);
     expect(trigger).toHaveAttribute('aria-expanded', 'true');
@@ -123,13 +123,13 @@ describe('CrewSelector', () => {
 
   it('has aria-haspopup=listbox on the trigger', () => {
     render(<CrewSelector {...defaultProps} />);
-    expect(screen.getByLabelText('Select crew')).toHaveAttribute('aria-haspopup', 'listbox');
+    expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveAttribute('aria-haspopup', 'listbox');
   });
 
   it('moves focus between options with the arrow keys', async () => {
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} />);
-    await user.click(screen.getByLabelText('Select crew'));
+    await user.click(screen.getByRole('button', { name: /^Select crew/ }));
     const alpha = screen.getByRole('option', { name: /Alpha Crew/ });
     const beta = screen.getByRole('option', { name: /Beta Squad/ });
     // Opening focuses the first option in a requestAnimationFrame. Wait for it, or it can land after the first arrow key and steal focus back.
@@ -147,7 +147,7 @@ describe('CrewSelector', () => {
   it('closes on Escape key', async () => {
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} />);
-    const trigger = screen.getByLabelText('Select crew');
+    const trigger = screen.getByRole('button', { name: /^Select crew/ });
     await user.click(trigger);
     expect(screen.getByRole('listbox')).toBeInTheDocument();
     await user.keyboard('{Escape}');
@@ -157,7 +157,7 @@ describe('CrewSelector', () => {
   it('toggles closed on second click', async () => {
     const user = userEvent.setup();
     render(<CrewSelector {...defaultProps} />);
-    const trigger = screen.getByLabelText('Select crew');
+    const trigger = screen.getByRole('button', { name: /^Select crew/ });
     await user.click(trigger);
     expect(screen.getByRole('listbox')).toBeInTheDocument();
     await user.click(trigger);
@@ -186,7 +186,7 @@ describe('CrewSelector', () => {
     it('renders labelled groups with the current festival first and past ones dimmed', async () => {
       const user = userEvent.setup();
       render(<CrewSelector {...props} />);
-      await user.click(screen.getByLabelText('Select crew'));
+      await user.click(screen.getByRole('button', { name: /^Select crew/ }));
       const groups = screen.getAllByRole('group');
       expect(groups.map((g) => g.getAttribute('aria-label'))).toEqual(['EDC Orlando 2026', 'Lost Lands 2025']);
       expect(groups[1]).toHaveClass('opacity-60');
@@ -195,7 +195,7 @@ describe('CrewSelector', () => {
 
     it('shows the festival label of the selected crew under its name in the trigger', () => {
       render(<CrewSelector {...props} />);
-      expect(screen.getByLabelText('Select crew')).toHaveTextContent('New CrewEDC Orlando 2026');
+      expect(screen.getByRole('button', { name: /^Select crew/ })).toHaveTextContent('New CrewEDC Orlando 2026');
     });
   });
 });

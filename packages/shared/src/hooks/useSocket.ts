@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Socket } from 'socket.io-client';
 import { createSocket, createAuthErrorHandler } from '../services/socket';
 import { useAuthStore } from '../stores/authStore';
@@ -15,6 +15,9 @@ export interface UseSocketReturn {
 
 export function useSocket(festivalId?: string): UseSocketReturn {
   const socketRef = useRef<Socket | null>(null);
+  // Published as state so consumers re-render and re-attach listeners once the
+  // effect creates the socket; a ref read at render time stays null for them.
+  const [liveSocket, setLiveSocket] = useState<Socket | null>(null);
   // Invariant: joinedFestivalIdRef.current holds the festivalId that the
   // currently-live socket emitted `join:festival` for. Updated
   // synchronously at the top of each effect run and read in the cleanup.
@@ -79,6 +82,7 @@ export function useSocket(festivalId?: string): UseSocketReturn {
     socket.on('error', handleError);
 
     socketRef.current = socket;
+    setLiveSocket(socket);
 
     return () => {
       // Leave the festival room before tearing down so the server stops
@@ -96,11 +100,12 @@ export function useSocket(festivalId?: string): UseSocketReturn {
       socket.off('error', handleError);
       socket.disconnect();
       socketRef.current = null;
+      setLiveSocket(null);
     };
   }, [userToken, festivalId, currentFestivalId, canJoin, setConnected, addOnlineUser, removeOnlineUser]);
 
   return {
-    socket: socketRef.current,
+    socket: liveSocket,
     connected,
     onlineUsers,
   };

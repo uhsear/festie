@@ -13,7 +13,7 @@ import { artistNameKey } from './artist-key';
 const SPOTIFY_TOKEN_URL = 'https://accounts.spotify.com/api/token';
 const SPOTIFY_API_BASE = 'https://api.spotify.com/v1';
 
-const SPOTIFY_TIMEOUT_MS = 10_000;
+export const SPOTIFY_TIMEOUT_MS = 10_000;
 
 /**
  * Spotify answered 429. Callers stop calling it and tell the admin to wait.

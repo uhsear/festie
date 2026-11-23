@@ -1,8 +1,8 @@
 import type { Festival, FestivalDay, FestivalSet, Priority } from '../types/domain';
 import type { WrapCaughtSet, WrapCard, WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
 import { ConflictDetected, detectConflicts } from './conflicts';
-import { formatFestivalDateRange, timeToMinutes } from './format';
-import { isFestivalOver, resolveFestivalTimeZone } from './festivalTime';
+import { formatFestivalDateRange, pluralize, timeToMinutes } from './format';
+import { festivalStatus, isFestivalOver, resolveFestivalTimeZone } from './festivalTime';
 import { getSetTimeBounds } from './setStatus';
 
 const UNKNOWN_ARTIST = 'Unknown artist';
@@ -10,7 +10,6 @@ const MAX_ROWS = 5;
 
 type Row = NonNullable<WrapCard['rows']>[number];
 
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
 export const artistOf = (s: { artist: string | null }) => s.artist || UNKNOWN_ARTIST;
 
 /** Wrap ratings: best first, ties by start time, so web and mobile list the same order. */
@@ -28,6 +27,14 @@ export function isWrapUnlocked(festival: WrapFestival, now: Date = new Date()): 
     { id: festival.id, name: festival.name, timeZone: festival.timeZone } as Festival,
     festival.days,
     now,
+  );
+}
+
+/** True before the first festival day begins, so there is nothing to rate or mark yet. */
+export function isWrapUpcoming(festival: WrapFestival, now: Date = new Date()): boolean {
+  return (
+    festivalStatus({ id: festival.id, name: festival.name, timeZone: festival.timeZone } as Festival, festival.days, now) ===
+    'upcoming'
   );
 }
 
@@ -131,8 +138,8 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
     cards.push({
       kind: 'plan',
       kicker: 'YOUR PLAN',
-      headline: `${plural(plan.planned, 'set', 'sets')} planned`,
-      sub: `${plural(plan.mustSees, 'must-see', 'must-sees')} · ${plural(plan.days, 'day', 'days')} · ${plural(distinctCount(planned.map((s) => s.stageId)), 'stage', 'stages')}`,
+      headline: `${pluralize(plan.planned, 'set', 'sets')} planned`,
+      sub: `${pluralize(plan.mustSees, 'must-see', 'must-sees')} · ${pluralize(plan.days, 'day', 'days')} · ${pluralize(distinctCount(planned.map((s) => s.stageId)), 'stage', 'stages')}`,
       rows: mustSees.slice(0, MAX_ROWS).map(plannedRow),
     });
   }
@@ -142,7 +149,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
       kind: 'top',
       kicker: 'YOUR TOP SETS',
       headline: artistOf(topSets[0]!),
-      sub: `#1 of ${plural(stats.totalRated, 'set', 'sets')} you rated`,
+      sub: `#1 of ${pluralize(stats.totalRated, 'set', 'sets')} you rated`,
       rows: topSets.slice(0, MAX_ROWS).map(ratedRow),
     });
   }
@@ -152,7 +159,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
     cards.push({
       kind: 'clash',
       kicker: 'CLASHES SURVIVED',
-      headline: `You survived ${plural(plan.clashes.length, 'clash', 'clashes')}`,
+      headline: `You survived ${pluralize(plan.clashes.length, 'clash', 'clashes')}`,
       sub: `Hardest call: ${hardest.setA.artist || UNKNOWN_ARTIST} vs ${hardest.setB.artist || UNKNOWN_ARTIST}`,
     });
   }
@@ -163,7 +170,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
     cards.push({
       kind: 'crew',
       kicker: 'YOUR CREW',
-      headline: `${crew.name} agreed on ${plural(agreed.length, 'set', 'sets')}`,
+      headline: `${crew.name} agreed on ${pluralize(agreed.length, 'set', 'sets')}`,
       rows: top.map((s) => ({ ...plannedRow(s), badge: `${s.crewAlso! + 1} of ${crew.memberCount}` })),
     });
   }

@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import SpotifyAttribution from '../SpotifyAttribution';
-import { DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
+import { COPY, DISCOVER_COPY, genreChipLabel } from '@festie/shared/constants';
 import {
   toggleStageFilter,
   toggleGenreFilter,
@@ -29,8 +29,7 @@ import PhaseHomeActions from '../PhaseHomeActions';
 import FestivalReadyCard from '../FestivalReadyCard';
 import ScheduleDayChips from '../ScheduleDayChips';
 import ScheduleResultsRow from '../ScheduleResultsRow';
-import FreshnessChip from '../FreshnessChip';
-import SaveStatusChip from '../SaveStatusChip';
+import ScheduleStatusLine from '../ScheduleStatusLine';
 import OfflineStatusChip from '../OfflineStatusChip';
 import { useStyles } from './styles';
 import type { UseViewAsReturn } from '@festie/shared/hooks';
@@ -77,7 +76,7 @@ interface ScheduleControlsProps {
   viewMode: "timeline" | "cards";
   visibleDays: number[];
   width: number;
-  zoneLabel: "Festival time" | null;
+  zoneLabel: string | null;
 }
 
 export default function ScheduleControls({
@@ -160,8 +159,7 @@ export default function ScheduleControls({
       matching the crew tab's chip. Driven by festivalDataStore's
       _festivalCachedAt; renders nothing until the schedule is cached once. */}
   <View style={[styles.freshnessRow, { paddingHorizontal: hPad }]}>
-    <FreshnessChip surface="schedule" />
-    {currentProfile ? <SaveStatusChip /> : null}
+    <ScheduleStatusLine showSave={!!currentProfile} />
     {/* Cards and fallback views support pull-to-refresh. Timeline owns both
         scroll axes, so narrow phones need this compact manual action after
         the header sheds secondary icons to preserve the festival title. */}
@@ -259,7 +257,7 @@ export default function ScheduleControls({
               activeOpacity={canFilterMine ? 0.7 : 1}
               accessibilityRole="button"
               accessibilityState={canFilterMine ? { selected: onlyMine } : { disabled: true, selected: false }}
-              accessibilityLabel="Show only my picks"
+              accessibilityLabel={canFilterMine ? COPY.picks.filterA11y : undefined}
             >
               <Ionicons
                 name={CONCEPT_IONICON.picks}

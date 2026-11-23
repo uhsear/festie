@@ -250,7 +250,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
           }).catch(() => {});
         },
       },
-    ]);
+    ], { cancelable: true });
   };
 
   const pollState = openPollState(polls);

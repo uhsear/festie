@@ -302,7 +302,8 @@ describe('Integration: interest marks', { concurrency: 1 }, () => {
     await alice.put({ interestAdd: [entry('Zeta')] }).expect(200);
 
     const seenByBob = (await server.request.get('/api/v1/profiles/fest-1').set('x-user-token', bob.account.token).expect(200)).body.data;
-    assert.equal(seenByBob.find((p: any) => p.id === alice.profile.id).interests, undefined);
+    // Bob shares no crew with Alice yet, so her profile is not listed at all.
+    assert.equal(seenByBob.find((p: any) => p.id === alice.profile.id), undefined);
 
     const crew = (
       await server.request.post('/api/v1/crews').set('x-user-token', alice.account.token).send({ name: 'Squad', festivalId: 'fest-1' }).expect(201)

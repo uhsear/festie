@@ -57,6 +57,7 @@ export function resetAllStores(): void {
     expenseBalances: [],
     settlements: [],
     activity: [],
+    remindedOn: {},
     crewLoading: false,
     error: null,
     _cachedAt: null,

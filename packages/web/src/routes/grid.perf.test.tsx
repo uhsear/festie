@@ -14,6 +14,7 @@ const storeState: Record<string, unknown> = {};
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
   useAuthStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
+  selectMyPicks: (s: { currentProfile?: { picks?: unknown } }) => s.currentProfile?.picks ?? null,
 }));
 
 vi.mock('../hooks/useUndoNotifier', () => ({
@@ -31,7 +32,6 @@ vi.mock('@festie/shared/stores/festivalModeStore', () => ({
   useFestivalModeStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel({ lowPowerMode: false })),
 }));
 
-vi.mock('../components/features/LastSyncedBadge', () => ({ default: () => null }));
 vi.mock('../components/features/LowPowerIndicator', () => ({ default: () => null }));
 
 vi.mock('../components/layout/RefreshableView', () => ({
@@ -156,7 +156,7 @@ describe('GridView perf (EDC Orlando-sized lineup)', () => {
     expect(day1).toHaveLength(35);
     for (const s of day1) expect(root.querySelectorAll(`[data-set-id="${s.id}"]`)).toHaveLength(1);
     expect(root.querySelectorAll('[data-set-id]')).toHaveLength(35);
-    expect(screen.getByRole('button', { name: 'You have 5 schedule clashes. Open them in Picks.' })).toHaveTextContent(
+    expect(screen.getByRole('button', { name: '5 clashes. Open them in Picks.' })).toHaveTextContent(
       '5 clashes',
     );
 

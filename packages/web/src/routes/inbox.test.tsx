@@ -66,6 +66,15 @@ describe('InboxView', () => {
     await waitFor(() => expect(order).toEqual(['load', 'markAllSeen']));
   });
 
+  it('names the festival under the time and in the row label, without a doubled period', () => {
+    setState({
+      items: [{ id: 'c', type: 'announcement', title: 'Third', body: 'Bloom.', festivalName: 'EDC Orlando', createdAt: '2026-11-01T10:00:00.000Z', data: {} }],
+    });
+    render(<InboxView />);
+    expect(screen.getByText('EDC Orlando')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Third\. Bloom\. EDC Orlando\. [^.]*\.$/ })).toBeTruthy();
+  });
+
   it('opens a set row', () => {
     render(<InboxView />);
     fireEvent.click(screen.getByText('Set soon'));

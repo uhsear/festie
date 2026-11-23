@@ -59,12 +59,12 @@ describe('GET /profiles/:festivalId crew-only picks', { skip, concurrency: 1 }, 
 
   const byUser = (body: any, user: any) => body.data.find((p: any) => p.userId === user.user.id);
 
-  test('a non-crew attendee gets no picks of others, only anonymous counts', async () => {
+  test('a non-crew attendee gets only their own profile, plus anonymous counts', async () => {
     const body = await list(carl);
-    assert.equal(body.data.length, 3);
+    assert.equal(body.data.length, 1);
     assert.deepEqual(byUser(body, carl).picks, { 'set-a': 'want-to-see' });
-    assert.deepEqual(byUser(body, alice).picks, {});
-    assert.deepEqual(byUser(body, bob).picks, {});
+    assert.equal(byUser(body, alice), undefined);
+    assert.equal(byUser(body, bob), undefined);
     // Counts include everyone except the caller, crew or not.
     assert.deepEqual(body.meta.pickCounts, { 'set-a': 2, 'set-b': 1 });
     assert.ok(!JSON.stringify(body.meta).includes(alice.user.id));
@@ -72,8 +72,9 @@ describe('GET /profiles/:festivalId crew-only picks', { skip, concurrency: 1 }, 
 
   test('a crew mate gets the crew mate picks but not an outsider picks', async () => {
     const body = await list(bob);
+    assert.equal(body.data.length, 2);
     assert.deepEqual(byUser(body, alice).picks, { 'set-a': 'must' });
-    assert.deepEqual(byUser(body, carl).picks, {});
+    assert.equal(byUser(body, carl), undefined);
     assert.deepEqual(byUser(body, bob).picks, { 'set-a': 'maybe', 'set-b': 'must' });
     assert.deepEqual(body.meta.pickCounts, { 'set-a': 2 });
   });
@@ -93,6 +94,16 @@ describe('GET /profiles/:festivalId crew-only picks', { skip, concurrency: 1 }, 
     ).body;
     assert.equal(body.data.length, 2);
     assert.ok(body.meta.pagination);
+    assert.equal(body.meta.pagination.total, 2);
     assert.deepEqual(body.meta.pickCounts, { 'set-a': 2, 'set-b': 1 });
+  });
+
+  test('the paginated form also hides non-crew attendees', async () => {
+    const body = (
+      await server.request.get('/api/v1/profiles/fest-1?limit=1').set('x-user-token', carl.token).expect(200)
+    ).body;
+    assert.deepEqual(body.data.map((p: any) => p.userId), [carl.user.id]);
+    assert.equal(body.meta.pagination.total, 1);
+    assert.equal(body.meta.pagination.hasMore, false);
   });
 });

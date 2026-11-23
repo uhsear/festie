@@ -41,7 +41,9 @@ export default function createPageRoutes(deps: RouteDeps) {
     const origin = requestOrigin(req);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=60');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    // The URL carries a join code, so keep invite pages out of search results.
+    res.setHeader('X-Robots-Tag', 'noindex');
     try {
       const result = await loadInvitePreview({ stores, getFestivalById }, code);
       if (result.status === 'ok') {
@@ -97,7 +99,7 @@ export default function createPageRoutes(deps: RouteDeps) {
     const slug = String(req.params.slug || '');
     const origin = config.PUBLIC_ORIGIN || `${req.protocol}://${req.get('host')}`;
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
     res.setHeader('X-Robots-Tag', 'noindex');
     try {
       const festival = await loadPublicFestival(slug);

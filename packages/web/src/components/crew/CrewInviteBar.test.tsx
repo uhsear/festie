@@ -42,15 +42,14 @@ describe('CrewInviteBar', () => {
     expect(await screen.findByText('Copied')).toBeInTheDocument();
   });
 
-  it('offers the link to select when the clipboard write fails', async () => {
+  it('shows the link in a toast when the clipboard write fails', async () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn().mockRejectedValue(new Error('denied')) }, configurable: true });
-    const prompt = vi.fn();
-    vi.stubGlobal('prompt', prompt);
     renderBar();
     fireEvent.click(screen.getByRole('button', { name: 'Copy link' }));
-    await waitFor(() => expect(prompt).toHaveBeenCalledWith('Copy this invite link', expect.stringContaining('/join/K7XQ2M')));
+    await waitFor(() =>
+      expect(toastMock).toHaveBeenCalledWith(expect.stringContaining('/join/K7XQ2M'), 'error', 10000),
+    );
     expect(screen.queryByText('Copied')).toBeNull();
-    vi.unstubAllGlobals();
   });
 
   it('hides regenerate from a non-owner and shows it to the owner', () => {
@@ -59,6 +58,23 @@ describe('CrewInviteBar', () => {
     unmount();
     renderBar({ isOwner: true });
     expect(screen.getByRole('button', { name: 'Regenerate invite code' })).toBeInTheDocument();
+  });
+
+  it('says the crew is full at the cap and keeps the code visible', () => {
+    renderBar({ memberCount: 30, maxMembers: 30, isOwner: true });
+    expect(screen.getByText('Crew is full. Remove a member to invite.')).toBeInTheDocument();
+    expect(screen.getByText('K7XQ2M')).toBeInTheDocument();
+  });
+
+  it('tells a member to ask the owner when the crew is full', () => {
+    renderBar({ memberCount: 30, maxMembers: 30, isOwner: false });
+    expect(screen.getByText('Crew is full. Ask the owner to make room.')).toBeInTheDocument();
+    expect(screen.queryByText('Crew is full. Remove a member to invite.')).not.toBeInTheDocument();
+  });
+
+  it('stays quiet below the cap', () => {
+    renderBar({ memberCount: 29, maxMembers: 30 });
+    expect(screen.queryByText('Crew is full. Remove a member to invite.')).not.toBeInTheDocument();
   });
 
   it('shows the QR button to a non-owner', () => {

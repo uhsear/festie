@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, FlatList } from 'react-native';
-import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useLocalSearchParams } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -9,18 +9,18 @@ import {
   fetchAdminCrews,
   fetchCrewMembers,
   removeCrewMember,
+  withReauth,
   type AdminCrewMember,
   type AdminCrewRow,
   type AdminUserRow,
 } from '@festie/shared/services';
 import { useAuthStore } from '@festie/shared/stores';
 import { filterAdminCrews, removeMemberCopy } from '@festie/shared/utils';
-import ScreenHeader from '../../components/ScreenHeader';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
-import { ConfirmDialog, UserPicker } from '../../components/admin';
+import { ConfirmDialog, UserPicker, useReauthPrompt } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
@@ -69,7 +69,6 @@ export default function AdminCrewsScreen() {
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
-  const router = useRouter();
   const isAdmin = useAuthStore((s) => s.isAdmin);
 
   const [crews, setCrews] = useState<AdminCrewRow[]>([]);
@@ -90,18 +89,9 @@ export default function AdminCrewsScreen() {
   const [confirmTargetId, setConfirmTargetId] = useState<string | null>(null);
   const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
   const [busy, setBusy] = useState(false);
+  const { ask: askReauth, reauthDialog } = useReauthPrompt();
 
   const [banner, setBanner] = useState<{ text: string; error: boolean } | null>(null);
-
-  // Safe dismiss: a cold deep link has no back stack, so router.back() would
-  // strand the user on a blank screen. Fall back to the admin root.
-  const goBack = useCallback(() => {
-    if (router.canGoBack()) {
-      router.back();
-    } else {
-      router.replace('/admin');
-    }
-  }, [router]);
 
   const load = useCallback(async () => {
     setError(false);
@@ -199,7 +189,20 @@ export default function AdminCrewsScreen() {
     try {
       if (confirm.kind === 'delete-crew' && confirmTargetId) {
         const name = crews.find((c) => c.id === confirmTargetId)?.name || 'crew';
-        await api.delete<void>(`/admin/crews/${confirmTargetId}`);
+        // The server gates crew deletion behind a recent password check. null means the prompt was cancelled.
+        const done = await withReauth(
+          async () => {
+            await api.delete<void>(`/admin/crews/${confirmTargetId}`);
+            return true;
+          },
+          askReauth,
+          { retryWrongPassword: true },
+        );
+        if (!done) {
+          setConfirm(null);
+          setConfirmTargetId(null);
+          return;
+        }
         setCrews((prev) => prev.filter((c) => c.id !== confirmTargetId));
         if (expandedId === confirmTargetId) setExpandedId(null);
         setBanner({ text: `Deleted ${name}.`, error: false });
@@ -219,7 +222,7 @@ export default function AdminCrewsScreen() {
     } finally {
       setBusy(false);
     }
-  }, [confirm, confirmTargetId, removeTarget, crews, expandedId]);
+  }, [confirm, confirmTargetId, removeTarget, crews, expandedId, askReauth]);
 
   const cancelConfirm = useCallback(() => {
     if (busy) return;
@@ -232,13 +235,12 @@ export default function AdminCrewsScreen() {
   if (!isAdmin) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader title="Crews" subtitle="Admin" icon="people-outline" />
         <EmptyState
           icon="lock-closed-outline"
           title="Admins only"
           message="This area is restricted to festival administrators."
         />
-        <Stack.Screen options={{ headerShown: false }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Crews' }} />
       </View>
     );
   }
@@ -246,14 +248,8 @@ export default function AdminCrewsScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader
-          title="Crews"
-          subtitle="Members and invite codes"
-          icon="people-outline"
-          right={<Button label="Back" variant="ghost" size="sm" icon="chevron-back" onPress={goBack} />}
-        />
         <LoadingState label="Loading crews" />
-        <Stack.Screen options={{ headerShown: false }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Crews' }} />
       </View>
     );
   }
@@ -261,19 +257,13 @@ export default function AdminCrewsScreen() {
   if (error) {
     return (
       <View style={styles.screen}>
-        <ScreenHeader
-          title="Crews"
-          subtitle="Members and invite codes"
-          icon="people-outline"
-          right={<Button label="Back" variant="ghost" size="sm" icon="chevron-back" onPress={goBack} />}
-        />
         <EmptyState
           icon="cloud-offline-outline"
           title="Couldn't load crews"
           message="Something went wrong reaching the server."
           action={{ label: 'Try again', onPress: () => { setLoading(true); void load().finally(() => setLoading(false)); } }}
         />
-        <Stack.Screen options={{ headerShown: false }} />
+        <Stack.Screen options={{ headerShown: true, title: 'Crews' }} />
       </View>
     );
   }
@@ -282,12 +272,6 @@ export default function AdminCrewsScreen() {
 
   return (
     <View style={styles.screen}>
-      <ScreenHeader
-        title="Crews"
-        subtitle="Members and invite codes"
-        icon="people-outline"
-        right={<Button label="Back" variant="ghost" size="sm" icon="chevron-back" onPress={goBack} />}
-      />
 
       <FlatList
         data={filteredCrews}
@@ -345,6 +329,7 @@ export default function AdminCrewsScreen() {
                   size="sm"
                   icon={isExpanded ? 'chevron-up' : 'people-outline'}
                   onPress={() => toggleExpand(crew.id)}
+                  accessibilityLabel={`${isExpanded ? 'Hide' : 'View'} ${crew.name}`}
                   style={styles.flexBtn}
                 />
                 <Button
@@ -353,6 +338,7 @@ export default function AdminCrewsScreen() {
                   size="sm"
                   icon="trash-outline"
                   onPress={() => requestDeleteCrew(crew)}
+                  accessibilityLabel={`Delete ${crew.name}`}
                   style={styles.flexBtn}
                 />
               </View>
@@ -385,7 +371,7 @@ export default function AdminCrewsScreen() {
                             size="sm"
                             onPress={() => requestRemoveMember(crew, m)}
                             style={styles.removeBtn}
-                            accessibilityLabel={`Remove ${m.username}`}
+                            accessibilityLabel={`Remove ${m.username || m.userId} from ${crew.name}`}
                           />
                         )}
                       </View>
@@ -436,7 +422,8 @@ export default function AdminCrewsScreen() {
         onPick={addMember}
       />
 
-      <Stack.Screen options={{ headerShown: false }} />
+      {reauthDialog}
+      <Stack.Screen options={{ headerShown: true, title: 'Crews' }} />
     </View>
   );
 }

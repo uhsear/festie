@@ -38,6 +38,7 @@ export * from './links';
 export * from './spotifyAttribution';
 export * from './invite';
 export * from './crewWrites';
+export * from './mutationLabel';
 export * from './dayOf';
 export * from './crewStatus';
 export * from './meetingPoints';

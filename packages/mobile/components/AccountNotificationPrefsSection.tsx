@@ -21,6 +21,7 @@ import {
 import { Skeleton } from './Skeleton';
 import { ModalSelect, TimeField } from './admin/AdminFields';
 import AppPressable from './AppPressable';
+import Button from './Button';
 import { formatQuietHours } from '../lib/accountFormat';
 import { mutedPrefKeys } from '../lib/notificationChannels';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
@@ -194,6 +195,8 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
   // Until the first load resolves, the switches would show defaults (all on)
   // which is a quiet lie — render a skeleton instead so toggles reflect truth.
   const showSkeleton = !loaded && isLoading;
+  // The server's values never arrived, so default switches would show settings the user never chose.
+  const loadFailed = !loaded && !!storeError;
 
   const renderRow = (r: NotificationTypeRow) => {
     const value = prefs[r.key];
@@ -231,7 +234,21 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
             ))}
           </View>
         </View>
-        <FestivalTopicsRows />
+      </>
+    );
+  }
+
+  if (loadFailed) {
+    return (
+      <>
+        <SectionLabel>Notification types</SectionLabel>
+        <View style={styles.card}>
+          <View style={styles.errorRow} accessibilityLiveRegion="polite">
+            <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
+            <Text style={styles.errorText}>{storeError}</Text>
+          </View>
+          <Button label="Try again" variant="ghost" onPress={() => loadPrefs().catch(() => {})} />
+        </View>
       </>
     );
   }

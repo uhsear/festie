@@ -9,9 +9,14 @@ describe('EmptyState', () => {
     expect(screen.getByText('No picks yet')).toBeInTheDocument();
   });
 
-  it('renders title as h3', () => {
+  it('renders the title as h2 so it follows a page h1 without skipping a level', () => {
     render(<EmptyState title="Empty" />);
-    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Empty');
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Empty');
+  });
+
+  it('renders the title as h1 when the empty state is the whole page', () => {
+    render(<EmptyState title="Empty" headingLevel={1} />);
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Empty');
   });
 
   it('renders description when provided', () => {

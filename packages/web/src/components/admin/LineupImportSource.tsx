@@ -51,12 +51,12 @@ export default function LineupImportSource({
       </button>
       <button
         type="button"
-        className="text-sm text-accent-aqua underline"
+        className="min-h-11 text-sm text-accent-aqua underline"
         onClick={() => downloadText('festie-lineup-sample.csv', LINEUP_SAMPLE_CSV)}
       >
         Download sample CSV
       </button>
-      <button type="button" className="text-sm text-accent-aqua underline" onClick={onExport}>
+      <button type="button" className="min-h-11 text-sm text-accent-aqua underline" onClick={onExport}>
         Export lineup CSV
       </button>
       <span className="text-sm text-text-muted">Up to 500 rows and 200 KB.</span>

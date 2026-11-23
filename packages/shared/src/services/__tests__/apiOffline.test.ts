@@ -144,6 +144,19 @@ describe('api offline interception', () => {
       }
     });
 
+    it('hands the web bridge a plain-words label naming the change', async () => {
+      const queueMutation = vi.fn(async () => {});
+      const unregister = registerOfflineQueue({ queueMutation, processQueue: vi.fn(async () => {}) });
+      try {
+        await api.post('/crews/c1/meeting-points', { label: 'Main gate' });
+        await api.put('/profiles/p1', { picks: {} }, { offlineLabel: 'Update notes' });
+        expect(queueMutation).toHaveBeenNthCalledWith(1, expect.objectContaining({ label: 'Add meeting point: Main gate' }));
+        expect(queueMutation).toHaveBeenNthCalledWith(2, expect.objectContaining({ label: 'Update notes' }));
+      } finally {
+        unregister();
+      }
+    });
+
     it('falls back to the native queue once the bridge unregisters', async () => {
       const queueMutation = vi.fn(async () => {});
       registerOfflineQueue({ queueMutation, processQueue: vi.fn(async () => {}) })();

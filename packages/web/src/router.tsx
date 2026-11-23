@@ -50,6 +50,7 @@ const loadRegister = () => import('./routes/register');
 const loadFinishSignup = () => import('./routes/finish-signup');
 const loadForgot = () => import('./routes/forgot-password');
 const loadReset = () => import('./routes/reset-password');
+const loadVerifyEmail = () => import('./routes/verify-email');
 const loadAccount = () => import('./routes/account');
 const loadInbox = () => import('./routes/inbox');
 const loadCompare = () => import('./routes/compare');
@@ -108,6 +109,7 @@ const RegisterPage = withSkeleton(lazyRouteComponent(loadRegister), MinimalFallb
 const FinishSignupPage = withSkeleton(lazyRouteComponent(loadFinishSignup), MinimalFallback);
 const ForgotPasswordPage = withSkeleton(lazyRouteComponent(loadForgot), MinimalFallback);
 const ResetPasswordPage = withSkeleton(lazyRouteComponent(loadReset), MinimalFallback);
+const VerifyEmailPage = withSkeleton(lazyRouteComponent(loadVerifyEmail), MinimalFallback);
 
 /**
  * Prefetch all authenticated main-tab chunks. Called from AppShell on idle
@@ -214,9 +216,9 @@ const loginRoute = new Route({
   path: '/login',
   component: LoginPage,
   validateSearch: (s: Record<string, unknown>): { next?: string; reset?: true } => {
-    const next = safeReturnPath(s.next);
+    // `next` is always returned: the router spreads the raw search under the validated one, so omitting it would leave the unchecked value in place.
     return {
-      ...(next ? { next } : {}),
+      next: safeReturnPath(s.next) ?? undefined,
       ...(s.reset === 1 || s.reset === '1' || s.reset === true ? { reset: true as const } : {}),
     };
   },
@@ -228,8 +230,7 @@ const registerRoute = new Route({
   path: '/register',
   component: RegisterPage,
   validateSearch: (s: Record<string, unknown>): { next?: string } => {
-    const next = safeReturnPath(s.next);
-    return next ? { next } : {};
+    return { next: safeReturnPath(s.next) ?? undefined };
   },
   beforeLoad: ({ search }) => redirectIfSignedIn(search.next),
 });
@@ -254,6 +255,15 @@ const resetPasswordRoute = new Route({
   getParentRoute: () => rootRoute,
   path: '/reset-password',
   component: ResetPasswordPage,
+  validateSearch: (s: Record<string, unknown>): { token?: string } =>
+    typeof s.token === 'string' ? { token: s.token } : {},
+});
+
+// The emailed confirmation link lands here. It needs a button press: a GET alone never consumes the token.
+const verifyEmailRoute = new Route({
+  getParentRoute: () => rootRoute,
+  path: '/verify-email',
+  component: VerifyEmailPage,
   validateSearch: (s: Record<string, unknown>): { token?: string } =>
     typeof s.token === 'string' ? { token: s.token } : {},
 });
@@ -400,6 +410,7 @@ const routeTree = rootRoute.addChildren([
   finishSignupRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
+  verifyEmailRoute,
   cardsRoute,
   timelineRoute,
   picksRoute,

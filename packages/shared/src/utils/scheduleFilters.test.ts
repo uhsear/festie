@@ -8,6 +8,7 @@ import {
   sanitizeSchedulePrefs,
   scheduleEmptyCopy,
   scheduleEmptyReason,
+  dayHasTimedSets,
   scheduleResultsSummary,
   searchEmptyCopy,
   searchHiddenByFilters,
@@ -144,6 +145,14 @@ describe('scheduleEmptyReason', () => {
     expect(searchHiddenByFilters(sets, 'garden', stages)).toBe(true);
     expect(searchHiddenByFilters(sets, 'nobody', stages)).toBe(false);
     expect(searchHiddenByFilters(sets, '  ', stages)).toBe(false);
+  });
+});
+
+describe('dayHasTimedSets', () => {
+  it('is true only when a set has both a start and an end time', () => {
+    expect(dayHasTimedSets(sets)).toBe(false);
+    expect(dayHasTimedSets([...sets, set('5', 'A', 'Odesza', { startTime: '20:00', endTime: '21:00' })])).toBe(true);
+    expect(dayHasTimedSets([set('6', 'A', 'Zhu', { startTime: '20:00' })])).toBe(false);
   });
 });
 

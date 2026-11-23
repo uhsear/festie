@@ -188,6 +188,35 @@ a:focus-visible,
   min-height: 44px;
 }
 @media (forced-colors: active) {
+  /* Tailwind's reset drops a button's border and fill, so a filled button reads as plain text.
+     A selected tab, toggle or current-page link gets the system selection colours instead. */
+  button,
+  [role='tab'] {
+    border: 1px solid ButtonText;
+  }
+  [aria-pressed='true']:not(.day-tab-underline),
+  [aria-selected='true']:not(.day-tab-underline),
+  [aria-current='page']:not(.day-tab-underline) {
+    /* Without this the browser paints a Canvas plate behind the label, and HighlightText on that plate is invisible. */
+    forced-color-adjust: none;
+    border-color: Highlight;
+    background: Highlight;
+    color: HighlightText;
+  }
+  /* forced-color-adjust is inherited, so a child with its own colour (a badge, an icon) would keep it on the Highlight plate. */
+  [aria-pressed='true']:not(.day-tab-underline) *,
+  [aria-selected='true']:not(.day-tab-underline) *,
+  [aria-current='page']:not(.day-tab-underline) * {
+    color: inherit;
+    background-color: transparent;
+    border-color: currentColor;
+  }
+  /* An empty child is a dot, not a label, so it keeps a fill that contrasts with the plate. */
+  [aria-pressed='true']:not(.day-tab-underline) *:empty,
+  [aria-selected='true']:not(.day-tab-underline) *:empty,
+  [aria-current='page']:not(.day-tab-underline) *:empty {
+    background-color: currentColor;
+  }
   .card-priority-btn {
     border: 2px solid ButtonText;
   }
@@ -307,6 +336,19 @@ button[aria-label='Back to app'] {
   border: 2px solid #fff;
   box-shadow: 0 0 8px rgba(255, 51, 102, 0.6);
   cursor: pointer;
+  z-index: 2;
+}
+/* A 44px invisible tap target around each small marker (stage, meeting point, amenity). */
+.festie-map-marker::after,
+.festie-stage-marker::after,
+.festie-amenity-marker::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  inline-size: 44px;
+  block-size: 44px;
+  transform: translate(-50%, -50%);
 }
 .festie-map-canvas .maplibregl-popup-content {
   background: var(--color-bg-elevated, #18182c);
@@ -363,6 +405,7 @@ button[aria-label='Back to app'] {
   line-height: 1;
   box-shadow: 0 0 8px rgba(25, 227, 211, 0.6);
   cursor: pointer;
+  z-index: 3;
 }
 .festie-peer-marker::before {
   content: '';
@@ -440,6 +483,7 @@ button[aria-label='Back to app'] {
   line-height: 1;
   box-shadow: 0 0 14px rgba(255, 51, 102, 0.85);
   cursor: pointer;
+  z-index: 4;
 }
 .festie-sos-marker::before {
   content: '';
@@ -482,6 +526,8 @@ button[aria-label='Back to app'] {
   border: 2px solid #fff;
   box-shadow: 0 0 6px rgba(0, 0, 0, 0.5);
   cursor: pointer;
+  /* Above amenity discs, which are added later and would cover the stage name. */
+  z-index: 2;
 }
 .festie-stage-tag {
   position: absolute;

@@ -1,7 +1,7 @@
 import { useEffect, Suspense } from 'react';
 import { Outlet, useLocation } from '@tanstack/react-router';
 import { Loader } from 'lucide-react';
-import { useFestivalModeStore } from '@festie/shared';
+import { useAuthStore, useFestivalModeStore } from '@festie/shared';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useOffline } from '@festie/shared/hooks';
 import Header from './Header';
@@ -10,6 +10,7 @@ import SubHeader from './SubHeader';
 import ScheduleViewSwitcher, { isSchedulePath } from './ScheduleViewSwitcher';
 import PageTransition from './PageTransition';
 import RouteAnnouncer from './RouteAnnouncer';
+import GuestFooter from './GuestFooter';
 import DetailPanel from '../features/DetailPanel';
 import OfflineBanner from '../features/OfflineBanner';
 import UpdatePrompt from '../features/UpdatePrompt';
@@ -36,7 +37,7 @@ import { cn } from '../../lib/utils';
 import { SocketContext } from '../../lib/socketContext';
 import { useThemeSync } from '../../lib/theme';
 
-const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password'];
+const authRoutes = ['/login', '/register', '/signup/finish', '/forgot-password', '/reset-password', '/verify-email'];
 
 // Centered branded loader for lazy-route chunk loads. Replaces the bare
 // "Loading..." text the Suspense boundaries used to fall back to.
@@ -66,10 +67,14 @@ const dayOnlySubHeaderRoutes = ['/compare'];
 // Routes that keep ONLY the festival selector.
 const festivalOnlySubHeaderRoutes = ['/wrap', '/picks'];
 
+// Routes whose content fills the shell (grid, timeline, map); a footer would shrink them.
+const FILL_SHELL_PATHS = ['/grid', '/timeline', '/map'];
+
 export default function AppShell() {
   const location = useLocation();
   // Runs on every route, including sign-in pages that render no Header, so a first visit follows the OS theme.
   useThemeSync();
+  const isGuest = useAuthStore((s) => !s.user);
   const detailSet = useUIStore((s) => s.detailSet);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const detailAutoSpotify = useUIStore((s) => s.detailAutoSpotify);
@@ -139,6 +144,7 @@ export default function AppShell() {
         <Suspense fallback={<RouteFallback />}>
           <Outlet />
         </Suspense>
+        {isGuest && <GuestFooter />}
         {joinCrewSheet}
       </main>
     );
@@ -197,6 +203,8 @@ export default function AppShell() {
             <Suspense fallback={<RouteFallback />}>
               <PageTransition>
                 <Outlet />
+                {/* Inside the wrapper so it flows after content taller than the viewport. */}
+                {isGuest && !FILL_SHELL_PATHS.includes(location.pathname) && <GuestFooter />}
               </PageTransition>
             </Suspense>
           </main>

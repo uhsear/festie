@@ -56,6 +56,8 @@ export default function WrapScreen() {
   // Bumped by the error-state "Try again" action and after a crew album save.
   const [reloadKey, setReloadKey] = useState(0);
   const posterRef = useRef<HostInstance>(null);
+  const cardListRef = useRef<FlatList>(null);
+  const reduceMotion = useReduceMotion();
 
   // Refetch on every focus: Rate and Caught change what the wrap shows, and Back returns to this mounted screen.
   useFocusEffect(
@@ -84,6 +86,16 @@ export default function WrapScreen() {
   const festivalName = data?.festival.name ?? '';
   const byline = data ? wrapByline(data.festival, username, showHandle) : null;
   const current = cards[Math.min(cardIndex, Math.max(cards.length - 1, 0))];
+
+  // The dots are the non-swipe way to move between cards (screen readers, switch control).
+  const goToCard = useCallback(
+    (i: number) => {
+      cardListRef.current?.scrollToIndex({ index: i, animated: !reduceMotion });
+      setCardIndex(i);
+      if (i === cards.length - 1) setReachedEnd(true);
+    },
+    [cards.length, reduceMotion],
+  );
 
   const stageLabel = (s: WrapRatedSet): string => s.stageName || 'Stage';
 
@@ -224,6 +236,7 @@ export default function WrapScreen() {
 
         <View style={styles.shareBlock}>
           <FlatList
+            ref={cardListRef}
             data={cards}
             horizontal
             pagingEnabled
@@ -245,11 +258,16 @@ export default function WrapScreen() {
           />
           <View style={styles.dots}>
             {cards.map((c, i) => (
-              <View
+              <TouchableOpacity
                 key={c.kind}
+                onPress={() => goToCard(i)}
+                style={styles.dotTarget}
+                accessibilityRole="button"
                 accessibilityLabel={`Card ${i + 1} of ${cards.length}`}
-                style={[styles.dot, i === cardIndex && styles.dotActive]}
-              />
+                accessibilityState={{ selected: i === cardIndex }}
+              >
+                <View style={[styles.dot, i === cardIndex && styles.dotActive]} />
+              </TouchableOpacity>
             ))}
           </View>
           {reachedEnd ? <ConfettiBurst /> : null}
@@ -973,8 +991,14 @@ const useStyles = makeStyles((t) => ({
   },
   dots: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     justifyContent: 'center',
-    gap: t.spacing[1],
+  },
+  dotTarget: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dot: {
     width: 8,

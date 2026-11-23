@@ -6,7 +6,7 @@
  * for upcoming sets with active reminders.
  *
  * Runs every 60s. For each active festival, queries profiles with non-empty
- * reminders_json, computes fire times, checks prefs/DND/dedup, sends FCM.
+ * reminders_json, computes fire times, checks prefs/dedup, and hands each to send(), which holds the push in quiet hours but still writes the inbox row.
  *
  * Leader election: PM2 cluster runs 4 workers. Only the worker with
  * NODE_APP_INSTANCE === '0' runs the scheduler to prevent duplicate
@@ -14,11 +14,14 @@
  */
 
 import { isLeader } from './process-role.js';
-import { isInDndWindow } from './notifications/index.js';
 import { appLink } from './notifications/links.js';
 import { FESTIVAL_DAY_START_HOUR, formatClock12, zonedWallTimeToMs } from './time-zone.js';
 
 const REMINDER_SEND_CONCURRENCY = 10;
+
+// send() wrote the inbox row but sent no push: no device, no push provider, or quiet hours.
+// A second tick would write the row again, so these count as delivered.
+const INBOX_ONLY_REASONS = new Set(['no_tokens', 'firebase_not_configured', 'dnd_active']);
 
 // Must picks get the user's default lead; an explicit per-set reminder wins.
 // Mirrors effectiveReminders in packages/shared/src/utils/reminderSchedule.ts
@@ -150,9 +153,7 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
       try {
         const prefs = await stores.notificationPrefs.get(profile.userId);
         if (prefs && prefs.setReminders === false) continue;
-
-        // DND check
-        if (isInDndWindow(prefs)) continue;
+        // Quiet hours are not checked here: send() writes a silent inbox row and holds the push.
       } catch {
         // If pref lookup fails, send anyway
       }
@@ -175,13 +176,13 @@ function createReminderScheduler({ pool, stores, notificationService, log, confi
           },
           threadId: `reminder-${festival.id}`,
         });
-        // no_tokens still wrote the inbox row; a second tick would write it again.
-        if (result?.sent > 0 || result?.localCovered > 0 || result?.reason === 'no_tokens') {
+        const inboxOnly = INBOX_ONLY_REASONS.has(result?.reason);
+        if (result?.sent > 0 || result?.localCovered > 0 || inboxOnly) {
           _firedCache.set(dedupKey, now);
           if (result?.sent > 0) {
             logger.debug('reminder fired', { userId: profile.userId, setId, minutesBefore });
-          } else if (result?.reason === 'no_tokens') {
-            logger.debug('reminder in inbox only', { userId: profile.userId, setId, minutesBefore });
+          } else if (inboxOnly) {
+            logger.debug('reminder in inbox only', { userId: profile.userId, setId, minutesBefore, reason: result.reason });
           } else {
             logger.debug('reminder covered by device', { userId: profile.userId, setId, minutesBefore });
           }

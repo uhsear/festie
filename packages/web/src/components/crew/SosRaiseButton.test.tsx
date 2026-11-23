@@ -43,12 +43,19 @@ beforeEach(() => {
 });
 
 describe('SosRaiseButton', () => {
+  it('does not promise a compass: the web has none', async () => {
+    const user = userEvent.setup();
+    render(<SosRaiseButton crewId="c1" />);
+    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
+    expect(screen.getByRole('dialog').textContent).not.toMatch(/compass/i);
+  });
+
   it('confirms before sending, then raises with the message and toasts success', async () => {
     const user = userEvent.setup();
     raiseSosSpy.mockResolvedValueOnce({});
     render(<SosRaiseButton crewId="c1" />);
 
-    await user.click(screen.getByRole('button', { name: 'Send an SOS to your crew' }));
+    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
     expect(screen.getByText('Send an SOS to your crew?')).toBeInTheDocument();
     expect(raiseSosSpy).not.toHaveBeenCalled();
 
@@ -71,7 +78,7 @@ describe('SosRaiseButton', () => {
     raiseSosSpy.mockResolvedValueOnce({});
     const user = userEvent.setup();
     render(<SosRaiseButton crewId="c1" />);
-    await user.click(screen.getByRole('button', { name: 'Send an SOS to your crew' }));
+    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
     await user.click(screen.getByRole('button', { name: 'Send SOS' }));
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith('SOS sent to your crew', 'success'));
   });
@@ -84,7 +91,7 @@ describe('SosRaiseButton', () => {
     raiseSosSpy.mockResolvedValueOnce({});
     const user = userEvent.setup();
     render(<SosRaiseButton crewId="c1" />);
-    await user.click(screen.getByRole('button', { name: 'Send an SOS to your crew' }));
+    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
     await user.click(screen.getByRole('button', { name: 'Send SOS' }));
     expect(raiseSosSpy).not.toHaveBeenCalled();
     await waitFor(() => expect(raiseSosSpy).toHaveBeenCalledWith('c1', {}), { timeout: 6_000 });
@@ -95,7 +102,7 @@ describe('SosRaiseButton', () => {
     raiseSosSpy.mockRejectedValueOnce({ status: 429 });
     render(<SosRaiseButton crewId="c1" />);
 
-    await user.click(screen.getByRole('button', { name: 'Send an SOS to your crew' }));
+    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
     await user.click(screen.getByRole('button', { name: 'Send SOS' }));
 
     expect(toastSpy).toHaveBeenCalledWith('Your SOS is already active. Your crew can see it.', 'error');
@@ -118,7 +125,7 @@ describe('SosRaiseButton', () => {
   it('returns focus to the opener on Escape', async () => {
     const user = userEvent.setup();
     render(<SosRaiseButton crewId="c1" />);
-    const opener = screen.getByRole('button', { name: 'Send an SOS to your crew' });
+    const opener = screen.getByRole('button', { name: 'Send SOS to your crew' });
     await user.click(opener);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     await user.keyboard('{Escape}');

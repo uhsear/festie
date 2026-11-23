@@ -130,7 +130,7 @@ export default function AdminCrews() {
       const done = await withReauth(async () => {
         await api.delete<void>(`/admin/crews/${id}`);
         return true;
-      }, askPassword);
+      }, askPassword, { retryWrongPassword: true });
       if (done === null) return;
       setCrews(crews.filter((c) => c.id !== id));
       toast(`Deleted ${name}`, 'success');
@@ -250,13 +250,15 @@ export default function AdminCrews() {
                   <div className="flex gap-2">
                     <button
                       onClick={() => handleToggleExpand(crew.id)}
-                      className="text-xs px-3 py-1.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
+                      aria-label={`${isExpanded ? 'Hide' : 'View'} ${crew.name}`}
+                      className="text-xs px-3 py-1.5 min-h-11 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
                     >
                       {isExpanded ? 'Hide' : 'View'}
                     </button>
                     <button
                       onClick={() => handleDelete(crew.id)}
-                      className="text-xs px-3 py-1.5 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
+                      aria-label={`Delete ${crew.name}`}
+                      className="text-xs px-3 py-1.5 min-h-11 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
                     >
                       Delete
                     </button>
@@ -272,7 +274,8 @@ export default function AdminCrews() {
                           <span>Invite code {crew.inviteCode}</span>
                           <button
                             onClick={() => copyInviteCode(crew.inviteCode!)}
-                            className="px-2 py-0.5 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
+                            aria-label={`Copy invite code for ${crew.name}`}
+                            className="inline-flex items-center min-h-11 px-3 rounded-md bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors"
                           >
                             Copy
                           </button>
@@ -295,7 +298,7 @@ export default function AdminCrews() {
                       ) : !members || members.length === 0 ? (
                         <p className="text-xs text-text-muted italic">No members.</p>
                       ) : (
-                        <ul className="space-y-1.5">
+                        <ul className="list-none p-0 space-y-1.5">
                           {members.map((m) => (
                             <li key={m.userId} className="flex items-center gap-2 text-xs text-text-secondary">
                               {memberAvatarUrl(m) ? (
@@ -323,7 +326,8 @@ export default function AdminCrews() {
                               ) : (
                                 <button
                                   onClick={() => setRemoveTarget({ crewId: crew.id, member: m })}
-                                  className="ml-auto px-2 py-0.5 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
+                                  aria-label={`Remove ${m.username || m.userId} from ${crew.name}`}
+                                  className="ml-auto inline-flex items-center min-h-11 px-3 rounded-md bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors"
                                 >
                                   Remove
                                 </button>

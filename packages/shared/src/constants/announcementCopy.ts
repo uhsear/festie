@@ -42,7 +42,7 @@ export const ANNOUNCEMENT_COPY = {
     cancel: 'Keep',
     confirm: 'Take down',
   },
-  queued: (n: number) => `Announcement queued for ${people(n)}.`,
+  queued: (n: number | null) => (n === null ? 'Announcement queued.' : `Announcement queued for ${people(n)}.`),
   scheduled: (when: string) => `Announcement scheduled for ${when}.`,
   cancelledToast: 'Announcement cancelled',
   takenDownToast: 'Banner taken down',
@@ -80,6 +80,8 @@ export const ANNOUNCEMENT_COPY = {
     kicker: (severity: AnnouncementSeverity) => (severity === 'urgent' ? 'Urgent · From Festie' : 'From Festie'),
     open: 'Open',
     dismiss: 'Dismiss announcement',
+    readMore: 'Read more',
+    readLess: 'Show less',
     label: (kicker: string, title: string, body: string) => `${kicker}: ${title}. ${body}`,
   },
 } as const;

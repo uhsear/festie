@@ -16,6 +16,8 @@ interface MeetingPointFormProps {
   location: string;
   stageRef: string;
   meetAt: string;
+  /** Why the time cannot be saved; blocks Add and Save. */
+  meetAtError?: string;
   recursDaily: boolean;
   coords: { lat: number; lng: number } | null;
   festivalTimeZone: ReturnType<typeof resolveFestivalTimeZone>;
@@ -42,6 +44,7 @@ export default function MeetingPointForm({
   location,
   stageRef,
   meetAt,
+  meetAtError,
   recursDaily,
   coords,
   festivalTimeZone,
@@ -126,7 +129,13 @@ export default function MeetingPointForm({
       onChange={(e) => onMeetAtChange(e.target.value)}
     />
     {festivalTimeZone && <p className="text-xs text-text-muted -mt-1">Festival time</p>}
-    {meetAt && !recursDaily && <p className="text-xs text-text-muted">{MEETING_POINT_PAST_HINT}</p>}
+    {meetAtError ? (
+      <p role="alert" className="text-xs text-[var(--color-text-danger)]">
+        {meetAtError}
+      </p>
+    ) : (
+      meetAt && !recursDaily && <p className="text-xs text-text-muted">{MEETING_POINT_PAST_HINT}</p>
+    )}
 
     {/* 055: daily-recurrence toggle — only meaningful for a timed point.
         Aqua = selected (accent discipline); 44px target. */}
@@ -183,7 +192,7 @@ export default function MeetingPointForm({
       variant="primary"
       isLoading={submitting}
       className="w-full min-h-11"
-      disabled={!label.trim() || !location.trim()}
+      disabled={!label.trim() || !location.trim() || !!meetAtError}
     >
       {editing ? 'Save' : 'Add'}
     </Button>

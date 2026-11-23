@@ -11,6 +11,8 @@ export interface InboxItem {
   title: string;
   body: string;
   createdAt: string;
+  /** The festival the row names; null or absent when it names none. */
+  festivalName?: string | null;
   data: { deepLink?: string; setId?: string; festivalId?: string; crewId?: string };
 }
 

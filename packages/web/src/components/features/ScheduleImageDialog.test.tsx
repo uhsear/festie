@@ -4,6 +4,8 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 const festivalState: Record<string, unknown> = {};
 vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(festivalState)),
+  selectMyPicks: (s: { currentProfile?: { picks?: unknown }; guestPicks?: Record<string, unknown> }) =>
+    s.currentProfile?.picks ?? s.guestPicks?.f1 ?? null,
   useCrewStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ activeCrew: null, crewOverlap: {} }),
   useAuthStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ user: null }),
 }));
@@ -50,7 +52,7 @@ function setup(sets: unknown[], picks: Record<string, string>, initialMode?: 'fu
     selectedDay: 0,
   });
   render(<ScheduleImageDialog initialMode={initialMode} />);
-  fireEvent.click(screen.getByRole('button', { name: initialMode ? 'Lock screen image' : 'Save my picks as an image' }));
+  fireEvent.click(screen.getByRole('button', { name: initialMode ? 'Lock screen image' : 'Save image' }));
   // The dialog opens on Lock screen; most cases here exercise the Story shape.
   if (!initialMode && story) fireEvent.click(screen.getByRole('button', { name: 'Story' }));
 }
@@ -69,6 +71,24 @@ describe('ScheduleImageDialog', () => {
     expect(screen.getByRole('button', { name: 'Story' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'Lock screen' })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByLabelText('Day')).toBeInTheDocument();
+  });
+
+  it('lets a guest save an image from the picks on this device, without the printable page', () => {
+    Object.keys(festivalState).forEach((k) => delete festivalState[k]);
+    Object.assign(festivalState, {
+      currentFestival: { id: 'f1', name: 'Bonnaroo' },
+      currentProfile: null,
+      guestPicks: { f1: { s1: 'must' } },
+      sets: [set('s1', 0, '20:00')],
+      stages: [{ id: 'st1', name: 'Main', color: '#00e8d0' }],
+      days: [{ id: 'd0', label: 'Day 1', date: '2026-06-10' }],
+      selectedDay: 0,
+    });
+    render(<ScheduleImageDialog />);
+    fireEvent.click(screen.getByRole('button', { name: 'Save image' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Story' }));
+    expect(screen.getByRole('button', { name: 'Save image' })).toBeInTheDocument();
+    expect(screen.queryByText("A web page with your picks and your crew's schedules, ready to print.")).toBeNull();
   });
 
   it('swaps in the lock-screen options when Lock screen is selected', () => {

@@ -10,6 +10,12 @@ describe('t47 mobile inbox wiring', () => {
     expect(src).toContain('routeNotification(');
   });
 
+  it('each row names its festival and uses the shared label', () => {
+    const src = read('app/inbox.tsx');
+    expect(src).toContain('inboxRowLabel(item, ago, unread)');
+    expect(src).toContain('item.festivalName');
+  });
+
   it('_layout imports routeNotification instead of defining it', () => {
     const src = read('app/_layout.tsx');
     expect(src).toContain("from '../lib/routeNotification'");

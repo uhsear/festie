@@ -4,15 +4,17 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '@festie/shared';
 import type { CrewMeetingPoint } from '@festie/shared/types';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
-import { useActiveCrew } from '@festie/shared/hooks';
+import { useMapCrew } from '@festie/shared/hooks';
 import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { Map as MapIcon } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
-import { festivalLoadState } from '@festie/shared/utils';
+import { festivalLoadState, mapCrewHintCopy } from '@festie/shared/utils';
 import EmptyState from '../components/ui/EmptyState';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import SosRaiseButton from '../components/crew/SosRaiseButton';
+import FreshnessChip from '../components/features/FreshnessChip';
+import OfflineStatusChip from '../components/features/OfflineStatusChip';
 
 // Lazy: CrewMap pulls in maplibre-gl, so it stays out of the main bundle.
 const CrewMap = lazy(() => import('../components/crew/CrewMap'));
@@ -40,9 +42,9 @@ function MapViewInner() {
     [currentFestival, festivalStages],
   );
   const user = useAuthStore((s) => s.user);
-  // Also selects the first crew, so a hard load of /map joins the crew room without a visit to /crew.
-  const { crew: activeCrew } = useActiveCrew();
-  const crewId = user && activeCrew ? activeCrew.id : '';
+  // The crew for the selected festival; also joins the crew room on a hard load of /map.
+  const { crew: mapCrew, otherFestivalName } = useMapCrew();
+  const crewId = user && mapCrew ? mapCrew.id : '';
   const hasCrew = crewId !== '';
 
   const peersMap = useLiveLocationStore((s) => s.peers);
@@ -95,12 +97,18 @@ function MapViewInner() {
     );
   }
 
-  // The row is min-h-11 plus space-y-2 (3.25rem); the canvas calc below gives that back.
   const showSosRow = hasCrew && !sosList.some((e) => e.userId === user?.id);
 
   return (
-    <div className="space-y-2 px-4 py-2">
+    <div className="map-page flex h-full min-h-0 flex-col gap-2 px-4 pt-2 pb-4">
       <h1 className="sr-only">Map</h1>
+      {/* So a user offline can see how stale the shown pins are, as on mobile. */}
+      {user && (
+        <div className="flex flex-wrap items-center gap-2">
+          {hasCrew && <FreshnessChip surface="crew" />}
+          <OfflineStatusChip />
+        </div>
+      )}
       {/* A row above the canvas, not an overlay, so it never fights the place card or pursue bar. */}
       {showSosRow && (
         <div className="flex justify-end">
@@ -121,14 +129,19 @@ function MapViewInner() {
           festival={mapFestival}
           focusPinId={focusStage ?? null}
           onFocusHandled={() => navigate({ to: '/map', search: {}, replace: true })}
-          canvasClassName={
-            showSosRow
-              ? 'h-[calc(100dvh-var(--bottom-nav-h,0px)-14.25rem)] min-h-[320px]'
-              : 'h-[calc(100dvh-var(--bottom-nav-h,0px)-11rem)] min-h-[320px]'
-          }
+          fill
         />
       </Suspense>
-      {hasCrew && pointsFailed && (
+      {/* Setting a point reuses the Meet tab form and its map; the full-page map stays read-only. */}
+      {hasCrew && (
+        <Link to="/crew" search={{ tab: 'find' }} className="min-h-11 self-start text-sm underline">
+          Add a meeting point
+        </Link>
+      )}
+      {hasCrew && pointsFailed && points.length > 0 && (
+        <p className="text-sm text-text-muted">{COPY.meetingPoint.showingSaved}</p>
+      )}
+      {hasCrew && pointsFailed && points.length === 0 && (
         <div className="flex flex-wrap items-center gap-3 text-sm text-text-secondary">
           <p role="alert">{COPY.meetingPoint.loadFailed}</p>
           <button type="button" className="min-h-11 underline" onClick={() => void refetchPoints()}>
@@ -137,13 +150,12 @@ function MapViewInner() {
         </div>
       )}
       {!hasCrew && (
-        <p className="text-sm text-text-muted">
-          {user ? (
-            <>
-              Join a <Link to="/crew" className="underline">crew</Link> to see friends and meeting points here.
-            </>
-          ) : (
-            'Sign in and join a crew to see friends and meeting points here.'
+        <p className="text-center text-sm text-text-muted">
+          {mapCrewHintCopy(!!user, otherFestivalName)}{' '}
+          {user && (
+            <Link to="/crew" className="underline">
+              Open Crew
+            </Link>
           )}
         </p>
       )}

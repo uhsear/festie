@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it, mock } from 'node:test';
-import { MARKETING_EMAIL_TYPES, unsubscribeSecret, unsubscribeToken, verifyUnsubscribeToken, sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail } from '../lib/email.js';
+import { MARKETING_EMAIL_TYPES, unsubscribeSecret, unsubscribeToken, verifyUnsubscribeToken, sendEmail, sendPasswordResetEmail, sendVerificationEmail, sendWrapReadyEmail, sendLineupDropEmail, sendCrewReformEmail, sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, sendEmailChangedEmail, sendSetTimesOutEmail, sendDaysOutEmail, verifyEmailUrl } from '../lib/email.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -544,6 +544,12 @@ describe('email: sendEmailChangeConfirmEmail', () => {
     assert.ok(msg.html.includes('&lt;b&gt;eve&lt;/b&gt;'));
     assert.ok(!msg.html.includes('<b>eve</b>'));
     assert.ok(msg.html.includes('Your account email stays the same.'));
+  });
+});
+
+describe('email: verifyEmailUrl', () => {
+  it('points at the web confirm page, not the consuming API route', () => {
+    assert.equal(verifyEmailUrl({ PUBLIC_ORIGIN: 'https://festie.us' }, 'abc'), 'https://festie.us/verify-email?token=abc');
   });
 });
 

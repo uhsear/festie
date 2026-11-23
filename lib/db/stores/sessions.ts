@@ -3,7 +3,7 @@ import { withTransaction } from '../connection';
 
 export default function createSessionsStore(pool: Pool, _utils: any) {
   const sessions: any = {
-    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser, deviceLabel, replaceToken }: any) {
+    async createUserSession({ token, userId, username, createdAt, lastAccess, maxPerUser, deviceLabel, replaceToken, familyId }: any) {
       return withTransaction(pool, async (client) => {
         await client.query(
           `
@@ -14,12 +14,32 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
               username,
               created_at,
               last_access,
-              device_label
+              device_label,
+              family_id
             )
           VALUES
-            ($1, $2, $3, $4, $5, $6)
+            (
+              $1,
+              $2,
+              $3,
+              $4,
+              $5,
+              $6,
+              COALESCE(
+                $7::text,
+                (
+                  SELECT
+                    family_id
+                  FROM
+                    user_sessions
+                  WHERE
+                    token = $8::text
+                    AND user_id = $2
+                )
+              )
+            )
         `,
-          [token, userId, username, createdAt, lastAccess, deviceLabel ?? null],
+          [token, userId, username, createdAt, lastAccess, deviceLabel ?? null, familyId ?? null, replaceToken ?? null],
         );
 
         // A rotating session leaves in the same transaction so it never counts toward eviction
@@ -143,20 +163,23 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
 
   // ── Refresh Tokens (90-day, rotation) ────────────────────────────
   const refreshTokens = {
-    async create({ token, userId, sessionToken, expiresAt }: any) {
+    // familyId ties a rotated token to the sign-in it descends from; a fresh sign-in starts its own family.
+    async create({ token, userId, sessionToken, expiresAt, familyId }: any) {
       await pool.query(
-        'INSERT INTO refresh_tokens (token, user_id, session_token, expires_at) VALUES ($1, $2, $3, $4)',
-        [token, userId, sessionToken, expiresAt],
+        'INSERT INTO refresh_tokens (token, user_id, session_token, expires_at, family_id) VALUES ($1, $2, $3, $4, COALESCE($5, $1))',
+        [token, userId, sessionToken, expiresAt, familyId ?? null],
       );
     },
     async validate(token: string) {
       const result = await pool.query(
-        'SELECT token, user_id AS "userId", session_token AS "sessionToken", created_at AS "createdAt", expires_at AS "expiresAt", revoked FROM refresh_tokens WHERE token = $1',
+        'SELECT token, user_id AS "userId", session_token AS "sessionToken", COALESCE(family_id, token) AS "familyId", created_at AS "createdAt", expires_at AS "expiresAt", revoked FROM refresh_tokens WHERE token = $1',
         [token],
       );
       const row = result.rows[0];
       if (!row) return null;
-      if (row.revoked || new Date() > new Date(row.expiresAt)) {
+      // A revoked row stays: a rotated one is the evidence findRotated needs to spot a reused token.
+      if (row.revoked) return null;
+      if (new Date() > new Date(row.expiresAt)) {
         await pool.query('DELETE FROM refresh_tokens WHERE token = $1', [token]);
         return null;
       }
@@ -184,11 +207,55 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
       );
       return result.rows[0] ?? null;
     },
+    // An unexpired token that was spent by a rotation: its family id and how long ago it was spent.
+    // Tokens revoked any other way (revokeAll, revokeFamily) have no rotated_at and are not reuse.
+    async findRotated(token: string): Promise<{ userId: string; familyId: string; ageMs: number } | null> {
+      const result = await pool.query(
+        `
+  SELECT
+    user_id AS "userId",
+    COALESCE(family_id, token) AS "familyId",
+    (
+      EXTRACT(
+        EPOCH
+        FROM
+          (NOW() - rotated_at)
+      ) * 1000
+    )::float8 AS "ageMs"
+  FROM
+    refresh_tokens
+  WHERE
+    token = $1
+    AND revoked = TRUE
+    AND rotated_at IS NOT NULL
+    AND expires_at > NOW()
+`,
+        [token],
+      );
+      return result.rows[0] ?? null;
+    },
+    // Revoke every token of a family and delete its sessions: those stamped with the family id (this covers
+    // sessions renewed through POST /auth/refresh) and those the family's tokens minted. Returns the deleted session hashes.
+    async revokeFamily(familyId: string): Promise<string[]> {
+      return withTransaction(pool, async (client) => {
+        const tokens = await client.query(
+          'UPDATE refresh_tokens SET revoked = TRUE WHERE (family_id = $1 OR token = $1) RETURNING session_token AS "sessionToken"',
+          [familyId],
+        );
+        const sessionTokens = tokens.rows.map((row: any) => row.sessionToken).filter(Boolean);
+        const deleted = await client.query(
+          'DELETE FROM user_sessions WHERE family_id = $1 OR token = ANY($2::text[]) RETURNING token',
+          [familyId, sessionTokens],
+        );
+        return deleted.rows.map((row: any) => row.token);
+      });
+    },
     async revokeAll(userId: string) {
       await pool.query('UPDATE refresh_tokens SET revoked = TRUE WHERE user_id = $1 AND revoked = FALSE', [userId]);
     },
+    // Rotated tokens outlive their rotation until they expire, so a replay stays detectable.
     async deleteExpired() {
-      await pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR revoked = TRUE');
+      await pool.query('DELETE FROM refresh_tokens WHERE expires_at < NOW() OR (revoked = TRUE AND rotated_at IS NULL)');
     },
   };
 
@@ -206,8 +273,14 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
         [userId, new Date()],
       );
     },
+    // Clears the account-wide count only.
+    async resetTotal(userId: string) {
+      await pool.query('DELETE FROM login_failures WHERE user_id = $1', [userId]);
+    },
+    // Clears the account-wide count and every per-IP count, so an admin unlock or a password reset frees all IPs.
     async reset(userId: string) {
       await pool.query('DELETE FROM login_failures WHERE user_id = $1', [userId]);
+      await pool.query('DELETE FROM login_failure_ips WHERE user_id = $1', [userId]);
     },
     async get(userId: string) {
       const result = await pool.query(
@@ -218,6 +291,45 @@ export default function createSessionsStore(pool: Pool, _utils: any) {
     },
     async lock(userId: string, lockedUntil: any) {
       await pool.query('UPDATE login_failures SET locked_until = $1 WHERE user_id = $2', [lockedUntil, userId]);
+    },
+    // Per (account, client IP): ipHash is an HMAC-SHA-256 hex digest of the client IP (IPv6: its /64), keyed with SESSION_SECRET.
+    async recordIp(userId: string, ipHash: string) {
+      await pool.query(
+        `
+        INSERT INTO login_failure_ips (user_id, ip_hash, consecutive_failures, last_failure_at)
+        VALUES ($1, $2, 1, $3)
+        ON CONFLICT (user_id, ip_hash) DO UPDATE SET
+          consecutive_failures = login_failure_ips.consecutive_failures + 1,
+          last_failure_at = $3
+      `,
+        [userId, ipHash, new Date()],
+      );
+    },
+    async resetIp(userId: string, ipHash: string) {
+      await pool.query('DELETE FROM login_failure_ips WHERE user_id = $1 AND ip_hash = $2', [userId, ipHash]);
+    },
+    async getIp(userId: string, ipHash: string) {
+      const result = await pool.query(
+        'SELECT consecutive_failures AS "consecutiveFailures", last_failure_at AS "lastFailureAt", locked_until AS "lockedUntil" FROM login_failure_ips WHERE user_id = $1 AND ip_hash = $2',
+        [userId, ipHash],
+      );
+      return result.rows[0] || null;
+    },
+    // Rows nobody refreshed within the lockout window and that hold no active lock: they no longer count.
+    async purgeStaleIps(windowMs: number) {
+      const result = await pool.query(
+        `DELETE FROM login_failure_ips
+         WHERE last_failure_at < NOW() - make_interval(secs => $1) AND (locked_until IS NULL OR locked_until < NOW())`,
+        [windowMs / 1000],
+      );
+      return result.rowCount ?? 0;
+    },
+    async lockIp(userId: string, ipHash: string, lockedUntil: any) {
+      await pool.query('UPDATE login_failure_ips SET locked_until = $1 WHERE user_id = $2 AND ip_hash = $3', [
+        lockedUntil,
+        userId,
+        ipHash,
+      ]);
     },
   };
 

@@ -30,7 +30,7 @@
 import { sanitizeLinkRecord } from './helpers';
 import { changePasswordSchema, loginSchema, oauthCompleteSchema, oauthProviderParams, oauthSignInSchema, registerSchema, setPasswordSchema } from './schemas/auth';
 import { joinFestivalSchema, profileUpdateSchema } from './schemas/profile';
-import { accountDeleteSchema, deleteTokenSchema, displayNameChangeSchema, forgotPasswordSchema, markReadSchema, notificationPrefsSchema, paymentHandlesSchema, publicScheduleSchema, pushTokenSchema, reauthSchema, resetPasswordPublicSchema, resetPasswordSchema, topicSubscriptionSchema, updateEmailSchema, usernameChangeSchema } from './schemas/account';
+import { accountDeleteSchema, deleteTokenSchema, displayNameChangeSchema, forgotPasswordSchema, markReadSchema, notificationPrefsSchema, paymentHandlesSchema, publicScheduleSchema, pushTokenSchema, reauthSchema, resetPasswordPublicSchema, resetPasswordSchema, topicSubscriptionSchema, updateEmailSchema, usernameChangeSchema, verifyEmailSchema } from './schemas/account';
 import { festivalAnnouncementSchema, festivalCreateSchema, festivalMapConfigSchema, festivalUpdateSchema, timeReleaseSendSchema } from './schemas/festival';
 import { organizationCreateSchema, organizationFestivalParams, organizationIdParams, organizationListQuery, organizationMemberAddSchema, organizationMemberParams, organizationMemberRoleSchema, organizationPendingParams, organizationProfileSchema, organizationStatusSchema, organizationTransferSchema, organizationVerifiedSchema, organizerAuditQuery, organizerFestivalCreateSchema, heldAlertParams, publishDeclineSchema } from './schemas/organization';
 import { crewAddMemberSchema, crewCreateSchema, crewDaysSchema, crewInviteCodeParams, crewJoinSchema, crewReformSchema, crewTransferSchema, crewUpdateSchema, meetingPointComingSchema, meetingPointCreateSchema, meetingPointUpdateSchema } from './schemas/crew';
@@ -68,6 +68,7 @@ export const schemas = {
   joinFestival: joinFestivalSchema,
   resetPassword: resetPasswordSchema,
   resetPasswordPublic: resetPasswordPublicSchema,
+  verifyEmail: verifyEmailSchema,
   notificationPrefs: notificationPrefsSchema,
   pushToken: pushTokenSchema,
   deleteToken: deleteTokenSchema,

@@ -20,6 +20,9 @@ vi.mock('@festie/shared/services', () => ({
   fetchShareLink: (...args: unknown[]) => mockFetchShareLink(...args),
 }));
 
+const mockToast = vi.fn();
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: mockToast }) }));
+
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => <a href={to}>{children}</a>,
 }));
@@ -50,7 +53,7 @@ function setState({
 }
 
 function open() {
-  fireEvent.click(screen.getByRole('button', { name: 'Share my picks' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Share picks' }));
 }
 
 describe('SharePicksDialog', () => {
@@ -63,7 +66,7 @@ describe('SharePicksDialog', () => {
 
   it('renders the trigger as "Share picks"', () => {
     render(<SharePicksDialog />);
-    expect(screen.getByRole('button', { name: 'Share my picks' })).toHaveTextContent('Share picks');
+    expect(screen.getByRole('button', { name: 'Share picks' })).toHaveTextContent('Share picks');
   });
 
   it('keeps its title and closes on Escape', async () => {
@@ -84,6 +87,33 @@ describe('SharePicksDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
     await waitFor(() => expect(writeText).toHaveBeenCalledWith('http://localhost:3000/s/abcdefghijklmnopqrstuv'));
     expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument();
+  });
+
+  it('toasts when the clipboard is blocked, and keeps the link and Copy button', async () => {
+    const writeText = vi.fn().mockRejectedValue(new Error('denied'));
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true, writable: true });
+    render(<SharePicksDialog />);
+    open();
+    await screen.findByTestId('share-link-url');
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await waitFor(() => expect(mockToast).toHaveBeenCalledWith("Couldn't copy the link. Select it and copy it by hand.", 'error'));
+    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument();
+  });
+
+  it('keeps the link visible and toasts when navigator.share fails', async () => {
+    const share = vi.fn().mockRejectedValue(new Error('no share'));
+    Object.defineProperty(navigator, 'share', { value: share, configurable: true, writable: true });
+    try {
+      render(<SharePicksDialog />);
+      open();
+      await screen.findByTestId('share-link-url');
+      fireEvent.click(screen.getByRole('button', { name: 'Share' }));
+      await waitFor(() => expect(mockToast).toHaveBeenCalledWith("Couldn't open the share sheet. Copy the link instead.", 'error'));
+      expect(screen.getByTestId('share-link-url')).toHaveTextContent('/s/abcdefghijklmnopqrstuv');
+      expect(screen.queryByTestId('share-link-error')).toBeNull();
+    } finally {
+      Reflect.deleteProperty(navigator, 'share');
+    }
   });
 
   it('shows the offline text when the link fetch fails, and the QR still renders', async () => {

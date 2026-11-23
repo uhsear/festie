@@ -5,7 +5,7 @@ import CaughtPage from './caught';
 
 const mocks = vi.hoisted(() => ({
   wrap: null as unknown,
-  fail: false,
+  fail: false as boolean | 'notFound',
   current: { id: 'f1' } as { id: string } | null,
   search: { festival: 'f1' } as { festival?: string },
   markCaught: vi.fn(async () => ({})),
@@ -14,10 +14,16 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@tanstack/react-router', () => ({ useSearch: () => mocks.search }));
 vi.mock('@festie/shared/services', () => {
   const load = async () => {
+    if (mocks.fail === 'notFound') throw Object.assign(new Error('not found'), { status: 404 });
     if (mocks.fail) throw new Error('boom');
     return JSON.parse(JSON.stringify(mocks.wrap));
   };
-  return { api: { get: vi.fn(load) }, fetchWrap: vi.fn(load), markCaught: mocks.markCaught };
+  return {
+    api: { get: vi.fn(load) },
+    fetchWrap: vi.fn(load),
+    isApiClientError: (e: unknown) => !!e && typeof e === 'object' && 'status' in e,
+    markCaught: mocks.markCaught,
+  };
 });
 vi.mock('../lib/toastContext', () => ({ useToast: () => ({ toastError: vi.fn() }) }));
 vi.mock('@festie/shared/stores', () => {
@@ -101,25 +107,33 @@ describe('CaughtPage', () => {
     mocks.wrap = { festival, planned: [planned({ caught: true }), planned({ setId: 'c', artist: 'C', caught: false })] };
     renderPage();
     expect(await screen.findByRole('heading', { level: 2, name: 'Friday' })).toBeInTheDocument();
-    expect(screen.getByText('1 seen · 1 skipped')).toBeInTheDocument();
+    expect(screen.getByText('1 seen · 1 missed')).toBeInTheDocument();
   });
 
-  it('toggles Saw it and Skipped through markCaught', async () => {
+  it('toggles Saw it and Missed it through markCaught', async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: 'Saw Artist A' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Saw it, Artist A' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', true, 'u1');
-    expect(screen.getByRole('button', { name: 'Saw Artist A' })).toHaveAttribute('aria-pressed', 'true');
-    fireEvent.click(screen.getByRole('button', { name: 'Saw Artist A' }));
+    expect(screen.getByRole('button', { name: 'Saw it, Artist A' })).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(screen.getByRole('button', { name: 'Saw it, Artist A' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', null, 'u1');
-    fireEvent.click(screen.getByRole('button', { name: 'Skipped Artist A' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it Artist A' }));
     expect(mocks.markCaught).toHaveBeenLastCalledWith('a', false, 'u1');
   });
 
-  it('says Not played yet for a future set and shows no buttons', async () => {
+  it('says the festival has not started, with no list or add button, for an upcoming festival', async () => {
     mocks.wrap = { festival: future, planned: [planned({})] };
     renderPage();
-    expect(await screen.findByText('Not played yet')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Saw Artist A' })).toBeNull();
+    expect(await screen.findByText("The festival hasn't started")).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Saw it, Artist A' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add a set I caught' })).toBeNull();
+  });
+
+  it('says the festival is not found on a 404', async () => {
+    mocks.fail = 'notFound';
+    renderPage();
+    expect(await screen.findByText('Festival not found')).toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load your sets")).toBeNull();
   });
 
   it('marks a rated set as seen', async () => {

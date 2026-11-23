@@ -3,7 +3,7 @@
 
 import crypto from 'crypto';
 
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import type { z } from 'zod';
 
 import { createPasswordResetRateLimit } from '../lib/rate-limiting';
@@ -15,7 +15,7 @@ import type {
   paymentHandlesSchema,
   updateEmailSchema,
 } from '../lib/schemas';
-import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail } from '../lib/email';
+import { sendEmailChangeConfirmEmail, sendEmailChangeNoticeEmail, verifyEmailUrl } from '../lib/email';
 import { revokeAppleForUser } from '../lib/oauth/revoke-user';
 import type { Identity } from '../lib/db/stores/identities';
 import { collectAuthoredRecords } from '../lib/account-export-records';
@@ -401,8 +401,9 @@ export default function createAccountRoutes(deps: RouteDeps) {
         setNoStore(res);
         return sendSuccess(res, { user: serializePublicUser(updatedUser) });
       } catch (error) {
-        const e = error as { statusCode?: number; message: string };
+        const e = error as { statusCode?: number; message: string; detail?: string };
         if (e.statusCode) {
+          log.warn('avatar image rejected', { error: e.message, detail: e.detail });
           return sendError(res, e.statusCode, e.message, ErrorCodes.INVALID_INPUT);
         }
         log.error('avatar upload failed', { error: e.message });
@@ -483,21 +484,38 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // ── PUT|PATCH /payment-handles — set Venmo / Cash App / PayPal handles ─
   // Used to build prefilled settle-up deep links. Each field is independently
   // optional: only the provided keys are updated; an explicit empty string
-  // clears that handle (stored as NULL). A leading '@' or '$' is stripped so
-  // the deep-link builders get a bare identifier.
+  // clears that handle (stored as NULL). The Zod schema reduces a pasted URL or
+  // a leading '@'/'$' to the bare handle; this route only maps empty to NULL.
+  const HANDLE_KEYS = ['venmoHandle', 'cashappCashtag', 'paypalHandle'] as const;
+
+  // Older clients resend all three handles. Drop any equal to the stored value so a
+  // legacy handle saved under looser rules does not block an edit to another one.
+  const dropUnchangedHandles = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const body = req.body as Record<string, unknown> | undefined;
+      if (!body || typeof body !== 'object') return next();
+      const stored = await getUserById(req.user.userId);
+      if (stored) {
+        for (const key of HANDLE_KEYS) {
+          const sent = body[key];
+          if (typeof sent === 'string' && sent.trim() === (stored[key] ?? '')) delete body[key];
+        }
+      }
+      return next();
+    } catch (error) {
+      log.error('payment handles lookup failed', { error: (error as Error).message, userId: req.user.userId });
+      return sendError(res, 500, 'Failed to update payment handles', ErrorCodes.INTERNAL_ERROR);
+    }
+  };
+
   const updatePaymentHandles = async (req: Request, res: Response) => {
     try {
       setNoStore(res);
       const body = req.validatedBody as z.infer<typeof paymentHandlesSchema>;
 
-      // Normalize a raw handle: trim, drop a leading @/$, cap length. Empty
-      // (or whitespace-only) clears the handle.
       const clean = (raw: string | undefined): string | null | undefined => {
         if (raw === undefined) return undefined; // not provided → leave unchanged
-        const trimmed = sanitizeString(raw, 64)
-          .replace(/^[@$]+/, '')
-          .trim();
-        return trimmed.length > 0 ? trimmed : null;
+        return raw.length > 0 ? raw : null;
       };
 
       const fields: Record<string, string | null> = {};
@@ -529,6 +547,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     '/payment-handles',
     userAuth,
     rateLimit(10, 'payment-handles-change'),
+    dropUnchangedHandles,
     validate(schemas.paymentHandles),
     updatePaymentHandles,
   );
@@ -536,6 +555,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
     '/payment-handles',
     userAuth,
     rateLimit(10, 'payment-handles-change'),
+    dropUnchangedHandles,
     validate(schemas.paymentHandles),
     updatePaymentHandles,
   );
@@ -656,7 +676,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
   // The security-critical difference from the removed POST /api/v1/auth/update-email
   // is that the submitted address is NEVER written to `users` here. It lives
   // only in the hashed, single-use, expiring `email_verification_tokens` row
-  // until GET /api/v1/auth/verify-email promotes it via `updateUserEmail`, so a
+  // until POST /api/v1/auth/verify-email promotes it via `updateUserEmail`, so a
   // stolen session cannot move the login identity on request alone. The address
   // currently on file is notified that a change was requested, by a sender that
   // opts out of the dedup guard so the alert cannot be suppressed. When that
@@ -724,7 +744,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
           currentUser.email ?? null,
         );
 
-        const verifyUrl = `${deps.config.PUBLIC_ORIGIN}/api/v1/auth/verify-email?token=${verifyToken}`;
+        const verifyUrl = verifyEmailUrl(deps.config, verifyToken);
         const confirmSent = await sendEmailChangeConfirmEmail({
           to: cleanEmail,
           username: currentUser.username,

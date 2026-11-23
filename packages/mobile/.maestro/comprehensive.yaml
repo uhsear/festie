@@ -57,7 +57,7 @@ env:
     timeout: 20000
 # Festival context preserved — we are back on the schedule, NOT the picker.
 - assertVisible: "${FESTIVAL}"
-- assertNotVisible: "Select a Festival"
+- assertNotVisible: "Choose a festival"
 
 # --- Picks ---
 - tapOn: "Picks"

@@ -29,7 +29,7 @@ import { DISCOVER_COPY, FESTIVAL_STATUS_LABEL, genreChipLabel } from '@festie/sh
 import { CONCEPT_ICON } from '../../lib/conceptIcons';
 import { cn } from '../../lib/utils';
 import Input from '../ui/Input';
-import SaveStatusChip from '../features/SaveStatusChip';
+import ScheduleStatusLine from '../features/ScheduleStatusLine';
 import SpotifyAttribution from '../features/SpotifyAttribution';
 import FestivalPicker from './FestivalPicker';
 import { isSchedulePath } from './ScheduleViewSwitcher';
@@ -77,7 +77,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
     [getStageColorRaw],
   );
   const { select: selectHaptic } = useHaptics();
-  // Below md the search box and filters fold behind two buttons; md+ ignores both.
+  // Below md the search box and filters fold behind two buttons; md+ folds only genres and Days I'm going.
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const searchBoxRef = useRef<HTMLDivElement>(null);
@@ -135,11 +135,11 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const showDayTabs = !festivalOnly && currentFestival && days.length > 0;
   const showStageFilter = !dayOnly && !festivalOnly && currentFestival && stages.length > 0;
   const showSearch = !dayOnly && !festivalOnly;
-  // /picks lists only your picks, so My picks and the stage filter are moot there.
-  const showMyPicks = !festivalOnly && !!currentFestival && !!currentProfile && pathname !== '/picks';
+  // Only the Lineup views filter by picks: /picks lists only picks, and /compare, /wrap and /crew-plan ignore the filter.
+  const showMyPicks = !festivalOnly && !!currentFestival && !!currentProfile && onSchedulePath;
   // Profile still loading for a signed-in user: hold the My picks chip's place so it does not pop in.
   const showMyPicksSkeleton =
-    !festivalOnly && !!currentFestival && !!user && !currentProfile && isLoading && pathname !== '/picks';
+    !festivalOnly && !!currentFestival && !!user && !currentProfile && isLoading && onSchedulePath;
   const canFilterMine = hasAnyPick(currentProfile?.picks);
   // CLS: while currentFestival is still loading, reserve the day-tab and
   // stage-chip rows' height with skeletons instead of letting them pop in
@@ -154,6 +154,9 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   // The genre chips come from Spotify, so the filter carries the attribution (Spotify Developer Policy II.4).
   const genreAttribution = useMemo(() => spotifyAttributionFor((sets ?? []).flatMap((set) => set.artists ?? [])), [sets]);
   const showFold = showSearch || !!showStageFilter;
+  // From md up the stage chips stay in view; only genres and Days I'm going fold behind Filters, so the schedule keeps the screen.
+  const showDaysGoing = onSchedulePath && days.length > 1;
+  const hasWideFold = showGenreFilter || showDaysGoing;
   const filterCount = Number(activeStages.length > 0) + Number(activeGenres.length > 0) + Number(onlyMine) + Number(searchQuery !== '');
   const currentStatus = currentFestival ? festivalStatus(currentFestival, days) : null;
 
@@ -219,7 +222,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             <button
               type="button"
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px] md:hidden',
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
+                !hasWideFold && 'md:hidden',
                 'cursor-pointer border-2 border-border text-text-secondary',
                 'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
               )}
@@ -251,7 +255,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {showDayTabs && (
           <div
             className={cn(
-              'day-tabs-scroll relative min-w-0',
+              // The time-zone label wraps under the chips on a narrow row instead of being cut off.
+              'day-tabs-scroll relative min-w-0 flex flex-wrap items-center gap-x-[var(--space-3)] gap-y-1',
               dayCanScrollLeft && 'fade-left',
               dayCanScrollRight && 'fade-right',
             )}
@@ -260,7 +265,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
               ref={dayScrollRef}
               className={cn(
                 'day-tabs hover-scroll',
-                'flex gap-[var(--space-3)] snap-x snap-mandatory scroll-smooth touch-pan-y overflow-x-auto scrollbar-hide min-w-0',
+                'flex gap-[var(--space-3)] snap-x snap-mandatory scroll-smooth touch-pan-y overflow-x-auto scrollbar-hide min-w-0 max-w-full',
               )}
               role="group"
               aria-label="Festival days"
@@ -333,17 +338,60 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   {`+${hiddenDays.length} hidden`}
                 </button>
               )}
-              {timeLabel && (
-                <span className="self-center shrink-0 whitespace-nowrap text-xs text-text-muted">{timeLabel}</span>
+            </div>
+            {timeLabel && <span className="shrink-0 whitespace-nowrap text-xs text-text-muted">{timeLabel}</span>}
+          </div>
+        )}
+
+        {(currentProfile || onSchedulePath) && <ScheduleStatusLine showFreshness={onSchedulePath} />}
+
+        {/* Artist search. Sits before the filters in the DOM so it shares the day-tab row from md up; phones keep it last. */}
+        {showSearch && (
+          <div
+            id="subheader-search"
+            ref={searchBoxRef}
+            className={cn(
+              'search-box max-md:order-last ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
+              !searchOpen && searchQuery === '' && 'max-md:hidden',
+            )}
+            role="search"
+          >
+            {/* Sized so the full placeholder fits from 640px up. */}
+            <div className="relative w-full sm:max-w-[clamp(100px,34vw,240px)] lg:max-w-none">
+              <Input
+                variant="search"
+                className={cn('min-h-[44px] w-full text-[length:var(--font-size-14)]', searchQuery !== '' && 'pr-11')}
+                placeholder="Search artists or stages"
+                value={searchQuery}
+                aria-label="Search festival artists"
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              {searchQuery !== '' && (
+                <button
+                  type="button"
+                  aria-label="Clear search"
+                  onClick={() => {
+                    setSearchQuery('');
+                    searchBoxRef.current?.querySelector('input')?.focus();
+                  }}
+                  className={cn(
+                    'absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center min-h-11 min-w-11',
+                    'text-text-muted hover:text-text-secondary cursor-pointer',
+                    'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                  )}
+                >
+                  <X className="w-4 h-4" aria-hidden="true" />
+                </button>
               )}
             </div>
           </div>
         )}
 
-        {currentProfile && <SaveStatusChip />}
-
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
-        <div id="subheader-filters" className={cn('md:contents', showFold && !filtersOpen && 'max-md:hidden')}>
+        <div
+          id="subheader-filters"
+          className={cn('md:contents max-md:w-full max-md:min-w-0', showFold && !filtersOpen && 'max-md:hidden')}
+        >
         {/* My picks filter */}
         {showMyPicks && (
           <button
@@ -432,16 +480,17 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                     key={stage.id}
                     className={cn(
                       'inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
-                      'min-h-[44px] min-w-[44px]',
+                      'min-h-[44px] min-w-[44px] max-w-[16rem]',
                       'cursor-pointer border-2 border-transparent transition-[border-color,background-color,color] duration-200',
                       isActive && 'border-current',
                     )}
                     style={style}
                     type="button"
                     aria-pressed={isActive}
-                                        onClick={() => handleStageToggle(stage.id)}
+                    title={stage.name}
+                    onClick={() => handleStageToggle(stage.id)}
                   >
-                    {stage.name}
+                    <span className="truncate">{stage.name}</span>
                   </button>
                 );
               })}
@@ -450,9 +499,14 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         )}
 
         {showGenreFilter && (
-          <div className="genre-filter-scroll relative min-w-0 w-full">
+          <div
+            className={cn(
+              'genre-filter-scroll relative min-w-0 w-full md:flex md:items-center md:gap-[var(--space-3)]',
+              !filtersOpen && 'md:hidden',
+            )}
+          >
             <div
-              className="filter-genre hover-scroll flex gap-[var(--space-3)] flex-nowrap overflow-x-auto scrollbar-hide"
+              className="filter-genre hover-scroll flex gap-[var(--space-3)] flex-nowrap overflow-x-auto scrollbar-hide md:min-w-0 md:flex-1"
               role="group"
               aria-label={DISCOVER_COPY.genres.groupA11y}
             >
@@ -464,7 +518,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   setActiveGenres([]);
                 }}
                 className={cn(
-                  'inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold',
+                  'inline-flex shrink-0 items-center justify-center rounded-full px-3 py-2 text-xs font-semibold whitespace-nowrap',
                   'min-h-[44px] min-w-[44px] cursor-pointer border-2 transition-[border-color,background-color,color] duration-200',
                   'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                   activeGenres.length === 0
@@ -486,7 +540,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                       setActiveGenres(toggleGenreFilter(activeGenres, genre));
                     }}
                     className={cn(
-                      'inline-flex items-center justify-center rounded-full px-3 py-2 text-xs font-semibold whitespace-nowrap',
+                      'inline-flex shrink-0 items-center justify-center rounded-full px-3 py-2 text-xs font-semibold whitespace-nowrap',
                       'min-h-[44px] min-w-[44px] cursor-pointer border-2 transition-[border-color,background-color,color] duration-200',
                       'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
                       isActive
@@ -499,15 +553,15 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                 );
               })}
             </div>
-            {genreAttribution && <SpotifyAttribution href={genreAttribution.href} />}
+            {genreAttribution && <SpotifyAttribution href={genreAttribution.href} className="md:shrink-0" />}
           </div>
         )}
 
-        {onSchedulePath && days.length > 1 && (
+        {showDaysGoing && (
           <div
             role="group"
             aria-label="Days I'm going"
-            className="flex items-center gap-[var(--space-3)] flex-wrap w-full"
+            className={cn('flex items-center gap-[var(--space-3)] flex-wrap w-full', !filtersOpen && 'md:hidden')}
           >
             <span className="type-micro text-text-muted">Days I'm going</span>
             {days.map((day, i) => {
@@ -542,47 +596,6 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
 
         </div>
 
-        {/* Artist search */}
-        {showSearch && (
-          <div
-            id="subheader-search"
-            ref={searchBoxRef}
-            className={cn(
-              'search-box ml-auto w-full min-w-0 sm:w-auto sm:flex-1 lg:flex-none lg:w-[260px]',
-              !searchOpen && searchQuery === '' && 'max-md:hidden',
-            )}
-            role="search"
-          >
-            {/* Sized so the full placeholder fits from 640px up. */}
-            <div className="relative w-full sm:max-w-[clamp(100px,34vw,240px)] lg:max-w-none">
-              <Input
-                variant="search"
-                className={cn('min-h-[44px] w-full text-[length:var(--font-size-14)]', searchQuery !== '' && 'pr-11')}
-                placeholder="Search artists or stages"
-                value={searchQuery}
-                aria-label="Search festival artists"
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              {searchQuery !== '' && (
-                <button
-                  type="button"
-                  aria-label="Clear search"
-                  onClick={() => {
-                    setSearchQuery('');
-                    searchBoxRef.current?.querySelector('input')?.focus();
-                  }}
-                  className={cn(
-                    'absolute right-0 top-1/2 -translate-y-1/2 inline-flex items-center justify-center min-h-11 min-w-11',
-                    'text-text-muted hover:text-text-secondary cursor-pointer',
-                    'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
-                  )}
-                >
-                  <X className="w-4 h-4" aria-hidden="true" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
       </nav>
       {onSchedulePath && <ScheduleResultsRow />}
     </div>

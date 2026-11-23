@@ -139,7 +139,14 @@ export default function AdminDashboard() {
             <div className="divide-y divide-glass-border">
               {recentActivity.slice(0, 10).map((activity) => (
                 <div key={activity.id} className="px-6 py-4 hover:bg-bg-primary/20 transition-colors">
-                  <div className="text-sm font-medium text-text-primary">{auditActionLabel(activity.action)}</div>
+                  <div className="text-sm font-medium text-text-primary">
+                    {auditActionLabel(activity.action)}
+                    {activity.status === 'failure' && (
+                      <span className="ml-2 px-2 py-0.5 rounded-full bg-accent-coral/20 text-accent-coral text-xs">
+                        Failed
+                      </span>
+                    )}
+                  </div>
                   <div className="text-xs text-text-muted mt-1">
                     {activity.actorUsername ?? 'System'} · {timeAgoFromIso(activity.createdAt)}
                   </div>

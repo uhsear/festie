@@ -41,7 +41,7 @@ describe('FestivalReadyCard', () => {
 
   it('navigates from the crew row, and the picks row is not a button', () => {
     render(<FestivalReadyCard ready={makeReady()} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Start or join a crew, not done yet' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Start or join a crew.*not done yet$/ }));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew' });
     expect(screen.queryByRole('button', { name: /Pick your first sets/ })).toBeNull();
     expect(screen.getByText('Pick your first sets')).toBeInTheDocument();

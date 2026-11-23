@@ -13,6 +13,12 @@ function renderInTable(ui: React.ReactElement) {
 }
 
 describe('CompareColumn', () => {
+  it('sticks to the top of the scrolling table so rows stay attributable', () => {
+    renderInTable(<CompareColumn id="other" name="Bob" isMe={false} color="hsl(35 70% 58%)" />);
+    const th = screen.getByRole('columnheader');
+    expect(th).toHaveClass('sticky', 'top-0', 'bg-bg-primary');
+  });
+
   it('renders "You" for the current user', () => {
     renderInTable(<CompareColumn id="me" name="Alice" isMe color="hsl(35 70% 58%)" />);
     expect(screen.getByText('You')).toBeInTheDocument();

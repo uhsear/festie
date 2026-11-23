@@ -13,6 +13,8 @@ export const crewCopy = {
   deleted: (crew: string) => `Deleted ${crew}`,
   transferred: (name: string) => `${name} now owns the crew`,
   inviteRegenerated: 'New invite code ready',
+  inviteCrewFull: (isOwner: boolean) =>
+    isOwner ? 'Crew is full. Remove a member to invite.' : 'Crew is full. Ask the owner to make room.',
   renamed: 'Crew renamed',
   added: (username: string) => `Added ${username}`,
   noUserCalled: (q: string) => `No user called "${q}". Check the spelling.`,
@@ -58,6 +60,24 @@ export interface CrewFestivalGroup {
   status: FestivalStatus | null;
   isCurrent: boolean;
   crews: Crew[];
+}
+
+/** The server's reminder day: one settle-up reminder per person per UTC day. */
+export const utcDay = (now: Date = new Date()): string => now.toISOString().slice(0, 10);
+
+/** Members this crew's owner-to-be-paid already reminded today, from the crew store's `remindedOn`. */
+export function remindedUserIdsToday(
+  remindedOn: Record<string, string>,
+  crewId: string,
+  now: Date = new Date(),
+): ReadonlySet<string> {
+  const prefix = `${crewId}:`;
+  const today = utcDay(now);
+  return new Set(
+    Object.entries(remindedOn)
+      .filter(([key, day]) => key.startsWith(prefix) && day === today)
+      .map(([key]) => key.slice(prefix.length)),
+  );
 }
 
 const byStart = (a: Festival, b: Festival) => (a.startDate ?? '').localeCompare(b.startDate ?? '');

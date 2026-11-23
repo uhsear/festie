@@ -1,7 +1,8 @@
 import { useEffect, type RefObject } from 'react';
 
 /**
- * Adds WAI-ARIA roving-tabindex keyboard support to a `role="tablist"` container.
+ * Adds WAI-ARIA roving-tabindex keyboard support to a `role="tablist"` container, or to a
+ * `role="radiogroup"` when `itemRole` is 'radio' (items then carry `aria-checked`, not `aria-selected`).
  *
  * - Arrow keys (Left/Right, or Up/Down when `vertical`) plus Home/End move focus
  *   between the `role="tab"` children.
@@ -15,22 +16,23 @@ import { useEffect, type RefObject } from 'react';
  * Non-invasive: a consumer only needs to attach the ref to the tablist element —
  * no per-tab wiring. Reads the `aria-selected` the consumer already sets.
  */
-export function useRovingTabs(containerRef: RefObject<HTMLElement | null>, vertical = false) {
+export function useRovingTabs(containerRef: RefObject<HTMLElement | null>, vertical = false, itemRole: 'tab' | 'radio' = 'tab') {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
-    const tabs = () => Array.from(el.querySelectorAll<HTMLElement>('[role="tab"]'));
+    const stateAttr = itemRole === 'radio' ? 'aria-checked' : 'aria-selected';
+    const tabs = () => Array.from(el.querySelectorAll<HTMLElement>(`[role="${itemRole}"]`));
 
     const syncTabIndex = () => {
       for (const t of tabs()) {
-        t.tabIndex = t.getAttribute('aria-selected') === 'true' ? 0 : -1;
+        t.tabIndex = t.getAttribute(stateAttr) === 'true' ? 0 : -1;
       }
     };
     syncTabIndex();
 
     const observer = new MutationObserver(syncTabIndex);
-    observer.observe(el, { attributes: true, subtree: true, attributeFilter: ['aria-selected'] });
+    observer.observe(el, { attributes: true, subtree: true, attributeFilter: [stateAttr] });
 
     const nextKey = vertical ? 'ArrowDown' : 'ArrowRight';
     const prevKey = vertical ? 'ArrowUp' : 'ArrowLeft';
@@ -56,5 +58,5 @@ export function useRovingTabs(containerRef: RefObject<HTMLElement | null>, verti
       el.removeEventListener('keydown', onKeyDown);
       observer.disconnect();
     };
-  }, [containerRef, vertical]);
+  }, [containerRef, vertical, itemRole]);
 }

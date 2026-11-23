@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
-import { useActiveCrew, useCrewFestival } from '../useActiveCrew';
+import { useActiveCrew, useCrewFestival, useMapCrew } from '../useActiveCrew';
 import { useCrewStore } from '../../stores/crewStore';
 import { useAuthStore } from '../../stores/authStore';
 import { useFestivalDataStore } from '../../stores/festivalDataStore';
@@ -72,6 +72,27 @@ describe('useActiveCrew', () => {
     expect(selectCrew).not.toHaveBeenCalled();
   });
 
+  it('selects crews[0] once a load running at mount finishes with no crew open', async () => {
+    useCrewStore.setState({ crews: [crew('c1'), crew('c2')], crewLoading: true });
+    renderHook(() => useActiveCrew());
+    expect(selectCrew).not.toHaveBeenCalled();
+    act(() => useCrewStore.setState({ crewLoading: false }));
+    await waitFor(() => expect(selectCrew).toHaveBeenCalledWith('c1'));
+  });
+
+  it('does not retry the first crew forever when its select fails', async () => {
+    selectCrew.mockImplementation(async () => {
+      useCrewStore.setState({ crewLoading: true });
+      await new Promise((r) => setTimeout(r, 5));
+      useCrewStore.setState({ crewLoading: false, activeCrew: null });
+    });
+    useCrewStore.setState({ crews: [crew('c1')] });
+    renderHook(() => useActiveCrew());
+    await waitFor(() => expect(selectCrew).toHaveBeenCalledWith('c1'));
+    await act(async () => { await new Promise((r) => setTimeout(r, 100)); });
+    expect(selectCrew).toHaveBeenCalledTimes(1);
+  });
+
   it('loads crews once when there are none', async () => {
     const { result, rerender } = renderHook(() => useActiveCrew());
     await waitFor(() => expect(loadCrews).toHaveBeenCalledTimes(1));
@@ -97,6 +118,31 @@ describe('useActiveCrew', () => {
     await waitFor(() => expect(loadCrews).toHaveBeenCalledTimes(1));
     act(() => useCrewStore.setState({ error: 'Invalid invite code' }));
     expect(result.current.status).toBe('none');
+  });
+});
+
+describe('useMapCrew', () => {
+  it('returns the active crew when it belongs to the selected festival', () => {
+    useCrewStore.setState({ crews: [crew('c1', 'f1')], activeCrew: crew('c1', 'f1') });
+    const { result } = renderHook(() => useMapCrew());
+    expect(result.current.crew?.id).toBe('c1');
+    expect(result.current.otherFestivalName).toBeNull();
+  });
+
+  it('selects the crew of the selected festival when another crew is active, and shows no layers until it is', async () => {
+    useCrewStore.setState({ crews: [crew('c1', 'f2'), crew('c2', 'f1')], activeCrew: crew('c1', 'f2') });
+    const { result, rerender } = renderHook(() => useMapCrew());
+    await waitFor(() => expect(selectCrew).toHaveBeenCalledWith('c2'));
+    expect(result.current.crew).toBeNull();
+    rerender();
+    expect(selectCrew.mock.calls.filter(([id]) => id === 'c2')).toHaveLength(1);
+  });
+
+  it('names the other festival when no crew fits the selected one', () => {
+    useCrewStore.setState({ crews: [crew('c1', 'f2')], activeCrew: crew('c1', 'f2') });
+    const { result } = renderHook(() => useMapCrew());
+    expect(result.current.crew).toBeNull();
+    expect(result.current.otherFestivalName).toBe('Two');
   });
 });
 
