@@ -1,11 +1,31 @@
 import type { FestivalSet, Stage } from '../types/domain';
 import { byStartTime } from './scheduleFormat';
 
-/** Lowercase and strip diacritics so "Bacardi" finds "Bacardí". */
-export const foldSearch = (s: string): string => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const LETTER_FOLDS: Record<string, string> = { ø: 'o', æ: 'ae', œ: 'oe', ß: 'ss', ł: 'l', đ: 'd' };
+
+/** Lowercase and strip diacritics, and fold the letters NFD leaves alone, so "Orjan" finds "Ørjan". */
+export const foldLetters = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[øæœßłđ]/g, (c) => LETTER_FOLDS[c]!);
 
 /**
- * Lineup search match, shared by web and mobile. Case- and accent-insensitive substring
+ * foldLetters plus no punctuation, so "dr strangelove" finds "Dr. Strangelove & The Orchestra".
+ * A string that is all punctuation keeps it, so a lone "&" never turns into the empty match-everything query.
+ */
+export const foldSearch = (s: string): string => {
+  const folded = foldLetters(s);
+  return folded.replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, ' ').trim() || folded;
+};
+
+/** Every artist name in one string, so "illenium slander" finds a B2B set without the separator word. */
+export const joinedArtistNames = (artists: readonly { name: string }[] | undefined): string =>
+  (artists ?? []).map((a) => a.name).join(' ');
+
+/**
+ * Lineup search match, shared by web and mobile. Case-, accent- and punctuation-insensitive substring
  * match on the headline artist, any B2B artist name, or the stage name. An
  * empty (or whitespace-only) query matches every set.
  */
@@ -15,6 +35,7 @@ export function setMatchesSearch(set: FestivalSet, query: string, stages: Stage[
   if (set.artist && foldSearch(set.artist).includes(q)) return true;
   if (set.displayName && foldSearch(set.displayName).includes(q)) return true;
   if (set.artists?.some((a) => foldSearch(a.name).includes(q))) return true;
+  if (foldSearch(joinedArtistNames(set.artists)).includes(q)) return true;
   const stageName = stages.find((s) => s.id === set.stageId)?.name;
   return stageName ? foldSearch(stageName).includes(q) : false;
 }

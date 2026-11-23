@@ -153,6 +153,11 @@ describe('lineupEntryMatchesSearch and searchLineupEntries', () => {
     expect(lineupEntryMatchesSearch(a, 'nope')).toBe(false);
     expect(lineupEntryMatchesSearch(a, '  ')).toBe(true);
   });
+  it('folds Ø and punctuation, and matches a B2B pair without the separator word', () => {
+    expect(lineupEntryMatchesSearch(entry('2', ['Ørjan Nilsen']), 'orjan')).toBe(true);
+    expect(lineupEntryMatchesSearch(entry('3', ['Dr. Strangelove']), 'dr strangelove')).toBe(true);
+    expect(lineupEntryMatchesSearch(entry('4', ['ILLENIUM', 'SLANDER']), 'illenium slander')).toBe(true);
+  });
   it('lists only matching acts that still have no set and are not cancelled', () => {
     const lineup = [entry('1', ['Alpha']), entry('2', ['Alpine'], { status: 'cancelled' }), entry('3', ['Alps']), entry('4', ['Beta'])];
     const { cover } = build(lineup, [set('s', 'Alps', 0)]);

@@ -36,6 +36,25 @@ describe('setMatchesSearch', () => {
     expect(setMatchesSearch(acc, 'menu', st)).toBe(true);
   });
 
+  it('folds letters NFD leaves alone, and ignores punctuation and the B2B separator word', () => {
+    const orjan = mk('o', { artist: 'Ørjan Nilsen' });
+    const aeon = mk('ae', { artist: 'Æon Flux' });
+    const dr = mk('dr', { artist: 'Dr. Strangelove & The Orchestra' });
+    const b2b = mk('b', { artist: 'ILLENIUM B2B SLANDER', artists: [{ name: 'ILLENIUM' }, { name: 'SLANDER' }] });
+    expect(setMatchesSearch(orjan, 'orjan', stages)).toBe(true);
+    expect(setMatchesSearch(orjan, 'Ørjan', stages)).toBe(true);
+    expect(setMatchesSearch(aeon, 'aeon', stages)).toBe(true);
+    expect(setMatchesSearch(aeon, 'Æon', stages)).toBe(true);
+    expect(setMatchesSearch(dr, 'dr strangelove', stages)).toBe(true);
+    expect(setMatchesSearch(b2b, 'illenium slander', stages)).toBe(true);
+    expect(setMatchesSearch(b2b, 'illenium b2b', stages)).toBe(true);
+    expect(setMatchesSearch(orjan, 'nilsen ørjan', stages)).toBe(false);
+  });
+
+  it('keeps a punctuation-only query from matching every set', () => {
+    expect(setMatchesSearch(mk('p', { artist: 'Daft Punk' }), '&', stages)).toBe(false);
+  });
+
   const set = mk('a', { artist: 'Daft Punk' });
 
   it('matches case-insensitively and ignores surrounding whitespace', () => {
