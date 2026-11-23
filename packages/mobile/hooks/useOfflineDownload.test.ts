@@ -26,6 +26,9 @@ vi.mock('expo-file-system', () => {
     get lastModified() {
       return 1_700_000_000_000;
     }
+    delete() {
+      fs.files.delete(this.uri);
+    }
     async base64() {
       return `b64:${this.size}`;
     }
@@ -46,7 +49,8 @@ vi.mock('../lib/basemapCache', async (importOriginal) => {
   };
 });
 
-const { sectionFromDisk, downloadOfflineMap } = await import('./useOfflineDownload');
+const { sectionFromDisk, downloadOfflineMap, mapStateFor, runMapDownload, removeOfflineMap } = await import('./useOfflineDownload');
+const { setMapOutcome, getMapOutcome } = await import('../lib/offlineMapOutcome');
 const { basemapCacheFile, ensureBasemapCached, checkArchiveSpace } = await import('../lib/basemapCache');
 
 const PMTILES = 'https://festie.us/uploads/basemaps/big-2026.pmtiles';
@@ -78,7 +82,9 @@ describe('offline map readiness size gate', () => {
 
   it('ends in error when the archive did not land on disk', async () => {
     vi.mocked(ensureBasemapCached).mockResolvedValueOnce(null);
-    expect((await downloadOfflineMap(PMTILES, SITEPLAN)).section.status).toBe('error');
+    const result = await downloadOfflineMap(PMTILES, SITEPLAN);
+    expect(result.section.status).toBe('error');
+    expect(result.message).toBe("Couldn't save the map. Check your connection and try again.");
     expect(ensureBasemapCached).toHaveBeenCalledWith(SITEPLAN);
   });
 
@@ -129,5 +135,64 @@ describe('free-space check before the map download', () => {
     expect((await checkArchiveSpace(PMTILES)).ok).toBe(false);
     fs.free = 400 * MIB;
     expect((await checkArchiveSpace(PMTILES)).ok).toBe(true);
+  });
+});
+
+describe('map step outcome survives the card unmounting', () => {
+  it('keeps the error and its message after the attempt, so a remounted card still shows why', async () => {
+    fs.free = 3.7 * 1024 * MIB;
+    vi.stubGlobal('fetch', head(139 * 1024 * MIB));
+    const result = await downloadOfflineMap(PMTILES, null);
+    expect(result.section.status).toBe('error');
+    setMapOutcome(PMTILES, result);
+    // A fresh hook instance (the card remounted) has no state of its own: it reads this.
+    const remounted = mapStateFor(PMTILES);
+    expect(remounted.section.status).toBe('error');
+    expect(remounted.message).toMatch(/Not enough free space to save the map \(needs .* MB, .* MB free\)/);
+    setMapOutcome(PMTILES, null);
+  });
+
+  it('a saved archive on disk wins over a stale error', () => {
+    setMapOutcome(PMTILES, { section: { status: 'error', syncedAt: 1 }, message: 'old' });
+    fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
+    expect(mapStateFor(PMTILES)).toEqual({ section: { status: 'ready', syncedAt: 1_700_000_000_000 }, message: null });
+    setMapOutcome(PMTILES, null);
+  });
+
+  it('forgets a stale error once disk is ready, so an evicted cache comes back idle', () => {
+    setMapOutcome(PMTILES, { section: { status: 'error', syncedAt: 1 }, message: 'old' });
+    fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
+    mapStateFor(PMTILES);
+    fs.files.clear();
+    expect(mapStateFor(PMTILES)).toEqual({ section: { status: 'idle', syncedAt: null }, message: null });
+  });
+
+  it('keeps a running attempt even when disk is ready', () => {
+    const syncing = { section: { status: 'syncing' as const, syncedAt: null }, message: null };
+    setMapOutcome(PMTILES, syncing);
+    fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
+    mapStateFor(PMTILES);
+    expect(getMapOutcome(PMTILES)).toEqual(syncing);
+    setMapOutcome(PMTILES, null);
+  });
+});
+
+describe('card-started download and remove', () => {
+  it('runMapDownload stores the refusal, and a later success clears it', async () => {
+    fs.free = 3.7 * 1024 * MIB;
+    vi.stubGlobal('fetch', head(139 * 1024 * MIB));
+    await runMapDownload(PMTILES, null);
+    expect(getMapOutcome(PMTILES)?.section.status).toBe('error');
+    expect(getMapOutcome(PMTILES)?.message).toMatch(/Not enough free space/);
+    fs.free = undefined;
+    await runMapDownload(PMTILES, null);
+    expect(getMapOutcome(PMTILES)).toBeNull();
+  });
+
+  it('removing a saved map drops an old error so it does not resurface', async () => {
+    setMapOutcome(PMTILES, { section: { status: 'error', syncedAt: 1 }, message: 'old' });
+    fs.files.set(basemapCacheFile(PMTILES).uri, 40 * MIB);
+    removeOfflineMap(PMTILES, null);
+    expect(mapStateFor(PMTILES)).toEqual({ section: { status: 'idle', syncedAt: null }, message: null });
   });
 });

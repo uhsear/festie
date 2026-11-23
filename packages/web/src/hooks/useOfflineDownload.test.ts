@@ -116,6 +116,25 @@ describe('useOfflineDownload', () => {
     expect(result.current.summary.overall).toBe('partial');
   });
 
+  it('says the download failed when the map did not save for a reason other than space', async () => {
+    h.readiness.byFestival = { f1: allReady };
+    h.cache.ensure = { ok: false, reason: 'network' };
+    const { result } = renderHook(() => useOfflineDownload('f1'));
+    await act(async () => {
+      await result.current.download();
+    });
+    expect(result.current.steps.find((s) => s.key === 'map')?.section.status).toBe('error');
+    expect(result.current.mapMessage).toBe(OFFLINE_MAP_COPY.downloadFailed);
+  });
+
+  it('exposes the map step for the checklist, or null without a map', () => {
+    const { result } = renderHook(() => useOfflineDownload('f1'));
+    expect(result.current.mapStatus?.status).toBe('idle');
+    h.festival = { currentFestival: { id: 'f1', mapConfig: null }, days: [] };
+    const none = renderHook(() => useOfflineDownload('f1'));
+    expect(none.result.current.mapStatus).toBeNull();
+  });
+
   it('passes an undefined crew id when there is no crew', async () => {
     h.crew = { activeCrew: null };
     const { result } = renderHook(() => useOfflineDownload('f1'));

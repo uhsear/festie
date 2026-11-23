@@ -4,6 +4,7 @@ import { getStorage } from '../platform/storage';
 import { useFestivalDataStore } from './festivalDataStore';
 import { useWeatherStore } from './weatherStore';
 import { useCrewStore } from './crewStore';
+import { useAuthStore } from './authStore';
 import type { FestivalSet } from '../types';
 
 // ── F5: "Download this festival for offline" keystone ──────────────────────
@@ -88,7 +89,12 @@ export interface DownloadDeps {
 function defaultDeps(): DownloadDeps {
   return {
     selectFestival: (festivalId) => useFestivalDataStore.getState().selectFestival(festivalId),
-    loadProfiles: (festivalId) => useFestivalDataStore.getState().loadProfiles(festivalId),
+    // Profiles need a session (401 for guests), and a guest's picks already live on the device, so there is
+    // nothing to fetch. Calling it anyway fails the load and replaces the Picks screen with an error.
+    loadProfiles: async (festivalId) => {
+      if (!useAuthStore.getState().user) return;
+      await useFestivalDataStore.getState().loadProfiles(festivalId);
+    },
     selectCrew: (crewId) => useCrewStore.getState().selectCrew(crewId),
     loadMeetingPoints: (crewId) => useCrewStore.getState().loadMeetingPoints(crewId),
     loadPolls: (crewId) => useCrewStore.getState().loadPolls(crewId),

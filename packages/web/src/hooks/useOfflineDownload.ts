@@ -91,10 +91,12 @@ export function useOfflineDownload(festivalId: string) {
 
   // Why the map was not saved. Only while the step is in error, so a later success or reset clears it.
   const mapMessage =
-    mapUrl && quotaFailure && mapSection.status === 'error'
-      ? quotaFailure.bytes != null
-        ? OFFLINE_MAP_COPY.notEnoughSpace(quotaFailure.bytes, quotaFailure.freeBytes)
-        : OFFLINE_MAP_COPY.notEnoughSpaceUnknownSize
+    mapUrl && mapSection.status === 'error'
+      ? quotaFailure
+        ? quotaFailure.bytes != null
+          ? OFFLINE_MAP_COPY.notEnoughSpace(quotaFailure.bytes, quotaFailure.freeBytes)
+          : OFFLINE_MAP_COPY.notEnoughSpaceUnknownSize
+        : OFFLINE_MAP_COPY.downloadFailed
       : null;
 
   const steps = buildOfflineSteps(readiness, {
@@ -112,6 +114,7 @@ export function useOfflineDownload(festivalId: string) {
     mapBytes,
     hasMap: !!mapUrl,
     mapProgress,
+    mapStatus: mapUrl ? mapSection : null,
     mapReady: mapSection.status === 'ready',
     mapMessage,
     removeMap,
