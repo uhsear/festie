@@ -54,7 +54,7 @@ export default function EmptyState({
             alt=""
             aria-hidden="true"
             src={illustrationDataUri(illustration, ink)}
-            className="w-40 h-28 object-contain [@media(max-height:900px)]:h-14"
+            className="w-40 h-28 object-contain [@media(max-width:640px)_and_(max-height:900px)]:h-14"
           />
         ) : (
           icon && (
