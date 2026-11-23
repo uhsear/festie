@@ -83,12 +83,12 @@ describe('JoinCrewSheet', () => {
     expect(screen.queryByText('Crew members can see your picks and your status.')).not.toBeInTheDocument();
   });
 
-  it.each(['invalid', 'expired', 'locked'])('offers one Close and no Join button when the invite is %s', (status) => {
+  it.each(['invalid', 'expired', 'locked'])('offers one Done button beside the header Close and no Join button when the invite is %s', (status) => {
     h.preview = { status, preview: null };
     const onClose = renderSheet();
     expect(screen.queryByRole('button', { name: 'Join crew' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Not now' })).toBeNull();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close' }).at(-1)!);
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
     expect(onClose).toHaveBeenCalled();
   });
 
@@ -109,6 +109,23 @@ describe('JoinCrewSheet', () => {
     renderSheet();
     expect(screen.getByText(/Can't check this invite right now/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Join crew' })).toBeEnabled();
+  });
+
+  it('renders a centred dialog, not the bottom drawer, at desktop width', () => {
+    vi.stubGlobal('matchMedia', (query: string) => ({
+      matches: true,
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }));
+    try {
+      renderSheet();
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(document.querySelector('[data-vaul-drawer]')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Join crew' })).toBeEnabled();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('toasts, navigates to /crew and closes after joining', async () => {
