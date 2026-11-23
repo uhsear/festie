@@ -128,7 +128,8 @@ export default function ScreenHeader({
         )}
         {subtitle ? (
           <Text style={styles.subtitle} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {subtitle}
+            {/* Trailing NBSP absorbs Fabric's single-line under-measure that ellipsized "3 members" (see OfflineStatusChip). */}
+            {subtitle + '\u00A0'}
           </Text>
         ) : null}
       </View>

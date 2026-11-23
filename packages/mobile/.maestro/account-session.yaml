@@ -14,15 +14,12 @@ env:
       visible: 'Skip'
     commands:
       - tapOn: 'Skip'
-# Reach login via the More tab gate
-- tapOn:
-    id: 'tab-account'
-    optional: true
+# Reach login via the tab that says "Sign in" for a guest
 - runFlow:
     when:
       notVisible: 'Sign in to your account'
     commands:
-      - tapOn: 'More'
+      - tapOn: 'Sign in'
 - assertVisible: 'Sign in to your account'
 - tapOn:
     id: "login-username-input"
@@ -37,12 +34,12 @@ env:
     timeout: 20000
 - tapOn: 'More'
 - extendedWaitUntil:
-    visible: 'Settings & preferences'
+    visible: 'Settings & preferences.*'
     timeout: 20000
 - takeScreenshot: as1-account-loaded
 # Linger — let every Account section fetch settle; then confirm still authed
 - waitForAnimationToEnd
-- assertVisible: 'Settings & preferences'
+- assertVisible: 'Settings & preferences.*'
 - swipe:
     direction: UP
 - takeScreenshot: as2-account-scrolled

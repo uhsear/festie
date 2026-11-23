@@ -191,7 +191,7 @@ export default function WrapScreen() {
 
     const { stats, planned } = data;
     const heroValue = planned.length > 0 ? planned.length : stats.totalRated;
-    const heroLabel = planned.length > 0 ? 'sets planned' : 'sets rated';
+    const heroLabel = `${heroValue === 1 ? 'set' : 'sets'} ${planned.length > 0 ? 'planned' : 'rated'}`;
     const pageW = screenW - t.spacing[4] * 2;
     const handleText = `Show @${username ?? 'you'} on cards`;
 

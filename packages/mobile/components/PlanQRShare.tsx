@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
-import { useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
+import { selectMyPicks, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import {
   encodePlanSnapshot,
   buildPlanSnapshotInput,
@@ -21,7 +21,7 @@ import EmptyState from './EmptyState';
 
 // ── Snapshot assembly (offline-native, zero network) ───────────────────────
 // Builds the compact P2P snapshot ENTIRELY from the persisted stores already in
-// memory — currentFestival + currentProfile.picks (festivalDataStore) and the
+// memory — currentFestival + the viewer's picks (festivalDataStore) and the
 // active meeting point (crewStore). No fetches: this works on a dead-signal
 // device. Picks are priority-ranked (must > want > maybe) and capped to MAX_PICKS
 // so an over-long plan still produces a single scannable code; the codec also
@@ -37,7 +37,8 @@ export default function PlanQRShare() {
   const bottomPad = useListBottomInset();
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
-  const currentProfile = useFestivalDataStore((s) => s.currentProfile);
+  // A guest's picks live outside currentProfile, so read the viewer's picks through the selector.
+  const myPicks = useFestivalDataStore(selectMyPicks);
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
   const activeCrew = useCrewStore((s) => s.activeCrew);
   // A crew from another festival never leaks its Plan B into this festival's code.
@@ -47,7 +48,7 @@ export default function PlanQRShare() {
   const now = useNow();
 
   const { encoded, picksCount, meetingPoint, tooLong } = useMemo(() => {
-    if (!currentFestival || !currentProfile) {
+    if (!currentFestival) {
       return {
         encoded: null as string | null,
         picksCount: 0,
@@ -58,7 +59,7 @@ export default function PlanQRShare() {
 
     const { input, picksCount, meetingPoint: mp } = buildPlanSnapshotInput({
       festival: currentFestival,
-      picks: currentProfile.picks as Record<string, Priority> | undefined,
+      picks: (myPicks ?? undefined) as Record<string, Priority> | undefined,
       meetingPoints,
       nowMs: now,
       planB,
@@ -71,9 +72,9 @@ export default function PlanQRShare() {
       meetingPoint: mp,
       tooLong: enc.length > MAX_ENCODED_LENGTH,
     };
-  }, [currentFestival, currentProfile, meetingPoints, now, planB]);
+  }, [currentFestival, myPicks, meetingPoints, now, planB]);
 
-  if (!currentFestival || !currentProfile) {
+  if (!currentFestival) {
     return (
       <EmptyState
         icon="qr-code-outline"

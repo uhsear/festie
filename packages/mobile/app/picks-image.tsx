@@ -32,8 +32,10 @@ import {
   formatDayChip,
   formatTime,
   formatTimeCompact,
+  logicalDayIndexAt,
   lockscreenSavedKey,
   lockscreenSnapshot,
+  resolveFestivalTimeZone,
   setMinuteRange,
   type LockscreenCanvas,
   type LockscreenMode,
@@ -360,6 +362,9 @@ export default function PicksImageScreen() {
       onePage,
     ],
   );
+
+  // Only the real current festival day reads "Today"; selectedDay is just the day last viewed.
+  const todayIndex = logicalDayIndexAt(days, nowMs, resolveFestivalTimeZone(festival));
 
   const dayChips = useMemo(
     () =>
@@ -827,7 +832,7 @@ export default function PicksImageScreen() {
               {dayChips.map((c) =>
                 chip(
                   String(c.index),
-                  c.index === selectedDay ? `${c.label} · Today` : c.label,
+                  c.index === todayIndex ? `${c.label} · Today` : c.label,
                   c.index === dayValue,
                   () => setChosenDay(c.index),
                   c.enabled,

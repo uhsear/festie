@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
+import { selectMyPicks, useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { fetchSharedPicks, mapErrorToUserMessage, type SharedPicksPayload } from '@festie/shared/services';
 import {
   compareSharedPicks,
@@ -52,6 +52,7 @@ export default function FriendPicksScreen() {
   const user = useAuthStore((s) => s.user);
   const currentFestivalId = useFestivalDataStore((s) => s.currentFestivalId);
   const currentProfile = useFestivalDataStore((s) => s.currentProfile);
+  const myPicks = useFestivalDataStore(selectMyPicks);
 
   const [payload, setPayload] = useState<SharedPicksPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +85,7 @@ export default function FriendPicksScreen() {
   }, [ref, reload]);
 
   const sameFestival = !!payload && currentFestivalId === payload.festivalId;
-  const mine = sameFestival ? currentProfile?.picks : undefined;
+  const mine = sameFestival ? myPicks ?? undefined : undefined;
   const comparison = useMemo(() => (payload ? compareSharedPicks(payload, mine) : null), [payload, mine]);
 
   const items = useMemo<Item[]>(
@@ -113,7 +114,7 @@ export default function FriendPicksScreen() {
     [ticked],
   );
 
-  const canAdd = !!user && !!mine;
+  const canAdd = !!user && !!currentProfile && !!mine;
   const addableCount = items.filter((i) => i.kind === 'row' && i.row.addable).length;
   const plan = useMemo(() => (comparison ? planSharedPicksAdd(comparison, ticked) : null), [comparison, ticked]);
 

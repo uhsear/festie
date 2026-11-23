@@ -58,7 +58,7 @@ const SECTIONS: PolicySection[] = [
   {
     title: 'Who runs Festie',
     body: [
-      'Festie is run by an individual developer, Asir Khan, in Florida, United States. In this policy, "we" and "us" mean Asir Khan. Under EU and UK data protection law, Asir Khan is the controller of your personal data.',
+      'Festie is run by an individual developer, Asir Khan, in Florida, United States. In this policy, “we” and “us” mean Asir Khan. Under EU and UK data protection law, Asir Khan is the controller of your personal data.',
       'Email privacy@festie.us with any privacy question or request. Send security reports to security@festie.us. We answer privacy requests within 30 days.',
     ],
   },
