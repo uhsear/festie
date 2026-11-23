@@ -84,7 +84,7 @@ export default function AdminUserDetailScreen() {
       ['Joined', new Date(user.createdAt).toLocaleDateString()],
       ['Last active', user.lastActiveAt ? timeAgoFromIso(user.lastActiveAt) : 'No active session'],
       ['Public schedule', user.publicSchedule ? 'On' : 'Off'],
-      ['Role', user.roles.includes('admin') ? 'Admin' : 'Member'],
+      ['Role', user.roles.includes('admin') ? 'Admin' : 'User'],
     ];
     return (
       <ScrollView
