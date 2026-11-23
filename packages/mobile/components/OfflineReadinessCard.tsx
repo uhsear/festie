@@ -131,8 +131,8 @@ function StepRow({
 /**
  * Mobile offline-download card (mirror of web's OfflineReadinessCard).
  *
- * One header row (status text, action button, chevron) that stays one line
- * until opened; the chevron reveals the description and the per-step list
+ * One header row (status text, chevron) that stays compact until opened, with
+ * the action button on its own row below it; the chevron reveals the description and the per-step list
  * (schedule / picks / crew / weather / art, plus "Offline map" for festivals
  * with an archive). State comes from `useOfflineDownload`, which also drives
  * the status chips. Hidden for a past festival when nothing was saved.
