@@ -94,7 +94,6 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
           <input
             type="time"
             className={`${inputBase} min-h-11 mt-1`}
-            aria-label="Meet at time"
             value={time}
             onChange={(e) => setTime(e.target.value)}
           />

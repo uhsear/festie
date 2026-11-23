@@ -72,7 +72,7 @@ describe('HomeBaseCard', () => {
     renderCard('18:00');
 
     await user.click(screen.getByRole('button'));
-    await user.clear(screen.getByLabelText('Meet at time'));
+    await user.clear(screen.getByLabelText('Meet at (optional)'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: null, planB: null });
