@@ -37,6 +37,7 @@ const smallButton =
 export default function ManageFestivalList({ query, organizations, onOpen, onNew, onDelete }: Props) {
   const { toast } = useToast();
   const canCreate = organizations.some((o) => o.role === 'owner' && o.status !== 'suspended');
+  const canImport = organizations.some((o) => o.role !== 'viewer' && o.status !== 'suspended');
   const festivals = (query.data ?? []).filter((f) => !f.deleted);
   const [qr, setQr] = useState<{ name: string; link: string } | null>(null);
 
@@ -170,7 +171,7 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
         </div>
       )}
       {body}
-      {canCreate && (
+      {canImport && (
         <p className="text-sm text-text-muted">
           Starting a lineup?{' '}
           <button type="button" className="inline-flex min-h-11 items-center text-accent-aqua underline" onClick={() => downloadText('festie-lineup-sample.csv', LINEUP_SAMPLE_CSV)}>

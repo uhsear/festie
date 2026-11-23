@@ -91,6 +91,16 @@ describe('ManageFestivalList', () => {
     expect(screen.queryByRole('button', { name: 'New festival' })).not.toBeInTheDocument();
   });
 
+  it('offers the sample import file to an editor but not to a viewer', () => {
+    const { unmount } = render(
+      <ManageFestivalList query={result({ data: [festival({})] })} organizations={[org({ role: 'viewer' })]} onOpen={vi.fn()} onNew={vi.fn()} onDelete={vi.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Download a sample import file' })).not.toBeInTheDocument();
+    unmount();
+    renderList([festival({})], [org({ role: 'editor' })]);
+    expect(screen.getByRole('button', { name: 'Download a sample import file' })).toBeInTheDocument();
+  });
+
   it('opens a festival and starts a new one', async () => {
     const { onOpen, onNew } = renderList([festival({})], [org()]);
     await userEvent.click(screen.getByRole('button', { name: 'Draft Fest' }));

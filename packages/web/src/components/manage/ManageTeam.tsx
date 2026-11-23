@@ -55,12 +55,12 @@ export default function ManageTeam({ organization }: Props) {
   const reauth = <T,>(run: () => Promise<T>) => withReauth(run, askPassword, { retryWrongPassword: true });
   const refresh = () => queryClient.invalidateQueries({ queryKey: adminKeys.manageOrganization(organization.id) });
 
-  const act = async <T,>(run: () => Promise<T>, done: string | ((result: T) => string), fail: string) => {
+  const act = async <T,>(run: () => Promise<T>, done: string | ((result: T) => string), fail: string, warn?: (result: T) => boolean) => {
     setBusy(true);
     try {
       const result = await run();
       if (result === null) return;
-      toast(typeof done === 'function' ? done(result) : done, 'success');
+      toast(typeof done === 'function' ? done(result) : done, warn?.(result) ? 'warning' : 'success');
       await refresh();
     } catch (err) {
       toastError(err, fail);
@@ -85,7 +85,7 @@ export default function ManageTeam({ organization }: Props) {
   const isOwner = data.role === 'owner';
   const suspended = data.status === 'suspended';
   const canManage = isOwner && data.status === 'active';
-  const owners = data.members.filter((m) => m.role === 'owner' && m.active).map((m) => m.name ?? 'An owner');
+  const owners = data.members.filter((m) => m.role === 'owner' && m.active).flatMap((m) => (m.name ? [m.name] : []));
 
   const addMember = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -101,6 +101,7 @@ export default function ManageTeam({ organization }: Props) {
           ? 'Added, but the email could not be sent. Tell them to sign in with this address.'
           : 'Added. They get one email, and join when they sign in with this address and confirm it.',
       "Couldn't add them. Try again.",
+      (added) => added?.emailed === false,
     );
   };
 
