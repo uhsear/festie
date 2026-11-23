@@ -375,6 +375,11 @@ button[aria-label='Back to app'] {
   background: var(--color-bg-primary);
   color: var(--color-text-primary, #eaeaf2);
 }
+/* Zoom buttons: 44px touch targets (maplibre ships 29px). */
+.festie-map-canvas .maplibregl-ctrl-group button {
+  width: 44px;
+  height: 44px;
+}
 /* maplibre's toggle is a black SVG; invert it on the dark themes. */
 :root:not([data-theme='daylight']) .festie-map-canvas .maplibregl-ctrl-attrib-button {
   filter: invert(1);

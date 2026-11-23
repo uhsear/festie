@@ -1,4 +1,4 @@
-import type { Dispatch, RefObject, SetStateAction, FormEvent } from 'react';
+import { useId, type Dispatch, RefObject, SetStateAction, FormEvent } from 'react';
 import { COPY, MEETING_POINT_KINDS } from '@festie/shared/constants';
 import { MEETING_POINT_PAST_HINT, type resolveFestivalTimeZone } from '@festie/shared';
 import { Check, LocateFixed, Repeat, X } from 'lucide-react';
@@ -61,6 +61,7 @@ export default function MeetingPointForm({
   onReset,
   onCapture,
 }: MeetingPointFormProps) {
+  const festivalTimeId = useId();
   return (
   <form ref={formRef} onSubmit={onSubmit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
     <div className="flex items-center justify-between">
@@ -120,15 +121,21 @@ export default function MeetingPointForm({
       onChange={(e) => onStageRefChange(e.target.value)}
       maxLength={100}
     />
-    <input
-      type="datetime-local"
-      className={`${inputBase} min-h-11`}
-      placeholder="Meet at (optional)"
-      aria-label={festivalTimeZone ? 'Meet at time, festival time' : 'Meet at time'}
-      value={meetAt}
-      onChange={(e) => onMeetAtChange(e.target.value)}
-    />
-    {festivalTimeZone && <p className="text-xs text-text-muted -mt-1">Festival time</p>}
+    <label className="block text-xs text-text-muted">
+      Meet at (optional)
+      <input
+        type="datetime-local"
+        className={`${inputBase} min-h-11 mt-1`}
+        aria-describedby={festivalTimeZone ? festivalTimeId : undefined}
+        value={meetAt}
+        onChange={(e) => onMeetAtChange(e.target.value)}
+      />
+    </label>
+    {festivalTimeZone && (
+      <p id={festivalTimeId} className="text-xs text-text-muted -mt-1">
+        Festival time
+      </p>
+    )}
     {meetAtError ? (
       <p role="alert" className="text-xs text-[var(--color-text-danger)]">
         {meetAtError}

@@ -322,7 +322,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
               type="button"
               aria-label="Cancel"
               onClick={() => setShowPresets(false)}
-              className="text-text-muted hover:text-text-primary"
+              className="inline-flex items-center justify-center min-h-11 min-w-11 text-text-muted hover:text-text-primary"
             >
               <X className="w-5 h-5" />
             </button>
@@ -355,7 +355,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
               type="button"
               aria-label="Cancel"
               onClick={reset}
-              className="text-text-muted hover:text-text-primary"
+              className="inline-flex items-center justify-center min-h-11 min-w-11 text-text-muted hover:text-text-primary"
             >
               <X className="w-5 h-5" />
             </button>
