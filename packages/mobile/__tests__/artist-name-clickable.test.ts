@@ -74,6 +74,11 @@ describe('artist names open the shared artist sheet', () => {
     expect(card).toContain('importantForAccessibility="no-hide-descendants"');
   });
 
+  it('the set card does not clip a B2B name, so every artist stays pressable', () => {
+    const card = read('components/SetCardMobile.tsx');
+    expect(card).not.toMatch(/<ArtistName[^>]*numberOfLines=\{2\}/s);
+  });
+
   it.each(['components/TimelineView.tsx', 'app/grid.tsx'])(
     '%s keeps the cell as the only target so tap and hold-to-pick still work',
     (file) => {

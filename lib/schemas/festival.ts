@@ -37,13 +37,16 @@ const artistLinkSchema = z.object({
     ),
 });
 
+// The joined display string of a full set: every name at its 300 cap plus the ' b2b ' separators between them.
+const MAX_JOINED_ARTIST_LENGTH = MAX_ARTISTS_PER_SET * 300 + (MAX_ARTISTS_PER_SET - 1) * 5;
+
 const setSchema = z
   .object({
     id: z.string().max(100).optional(),
     // An empty list or no artist at all is reported by validateFestivalIssues, which names the set.
     artists: z.array(artistLinkSchema).max(MAX_ARTISTS_PER_SET).optional(),
     // Backward compat — old clients may still send artist/linkUrl
-    artist: z.string().max(300).optional(),
+    artist: z.string().max(MAX_JOINED_ARTIST_LENGTH).optional(),
     // Billed name for the whole set. Absent keeps the stored name; null or '' clears it.
     displayName: z.string().max(300).optional().nullable(),
     stageId: z.string().max(100).optional().nullable(),
@@ -257,7 +260,7 @@ const lineupImportRowSchema = z
   .object({
     row: z.number().int().min(1).max(100_000), // 1-based line number in the source file
     setId: z.string().max(100).optional(), // a re-imported export matches by id first
-    artist: z.string().max(300),
+    artist: z.string().max(MAX_JOINED_ARTIST_LENGTH),
     day: z.string().max(100).optional(),
     date: z.string().max(20).optional(),
     stage: z.string().max(100).optional(),

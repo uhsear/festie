@@ -9,6 +9,7 @@ import {
   normalizeReminderPayload,
   artistDisplayName,
   normalizeSetArtists,
+  lineupImportRequestSchema,
 } from '../lib/schemas.js';
 import {
   userResponseSchema,
@@ -331,6 +332,19 @@ describe('schemas: artists per set', () => {
   it('accepts an 8-artist set and rejects a 9-artist set', () => {
     assert.equal(schemas.festivalCreate.safeParse(festival(8)).success, true);
     assert.equal(schemas.festivalCreate.safeParse(festival(9)).success, false);
+  });
+  it('accepts the joined artist string of 8 long names next to artists[]', () => {
+    const names = Array.from({ length: 8 }, (_, i) => `${i}`.padEnd(40, 'x'));
+    const f = festival(8);
+    const set: Record<string, unknown> = f.days[0]!.sets[0]!;
+    set.artists = names.map((name) => ({ name }));
+    set.artist = names.join(' b2b ');
+    assert.equal(schemas.festivalCreate.safeParse(f).success, true);
+  });
+  it('accepts an import row that joins 8 long names', () => {
+    const artist = Array.from({ length: 8 }, (_, i) => `${i}`.padEnd(40, 'x')).join(' b2b ');
+    const r = lineupImportRequestSchema.safeParse({ rows: [{ row: 1, artist }] });
+    assert.equal(r.success, true);
   });
 });
 
