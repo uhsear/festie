@@ -43,15 +43,16 @@ export default function createProfilesStore(pool: Pool, utils: any) {
       return result.rows.map(mapProfileRow);
     },
 
-    async listPicksByFestival(festivalId: string) {
+    async listPicksByFestival(festivalId: string, userIds?: string[]) {
       const result = await pool.query(
         `
         SELECT ${PROFILE_SELECT_PICKS}
         FROM festival_profiles fp
         WHERE fp.festival_id = $1 AND fp.deleted_at IS NULL
+          AND ($2::text[] IS NULL OR fp.user_id = ANY($2::text[]))
         ORDER BY fp.created_at ASC, fp.id ASC
       `,
-        [festivalId],
+        [festivalId, userIds ?? null],
       );
       return result.rows.map(mapProfileRow);
     },

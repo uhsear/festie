@@ -63,6 +63,7 @@ async function cleanupById(pool: Pool) {
   await pool.query('DELETE FROM festival_days WHERE festival_id = $1', [FEST_ID]);
   await pool.query('DELETE FROM festival_stages WHERE festival_id = $1', [FEST_ID]);
   await pool.query('DELETE FROM festivals WHERE id = $1', [FEST_ID]);
+  await pool.query('DELETE FROM notification_log WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', [users]);
   await pool.query('DELETE FROM refresh_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', [users]);
   await pool.query('DELETE FROM user_sessions WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', [users]);
   await pool.query('DELETE FROM email_verification_tokens WHERE user_id IN (SELECT id FROM users WHERE username LIKE $1)', [users]);

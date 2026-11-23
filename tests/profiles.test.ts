@@ -113,6 +113,7 @@ async function cleanupCreated() {
       );
       await pool.query('DELETE FROM festival_profiles WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM crews WHERE id IN (SELECT crew_id FROM crew_members WHERE user_id = ANY($1))', [createdUserIds]);
+      await pool.query('DELETE FROM notification_log WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM refresh_tokens WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM user_sessions WHERE user_id = ANY($1)', [createdUserIds]);
       await pool.query('DELETE FROM user_roles WHERE user_id = ANY($1)', [createdUserIds]);
@@ -543,6 +544,7 @@ describe('profiles: festival list reads picks only', () => {
       profiles: {
         listPicksByFestival: mock.fn(async () => list),
         getByFestival: mock.fn(async () => []),
+        pickCountsByFestival: mock.fn(async () => ({ s1: 1 })),
       },
       users: { getByIds: mock.fn(async () => new Map()) },
       crews: {
@@ -585,6 +587,13 @@ describe('profiles: festival list reads picks only', () => {
     assert.deepEqual(mine.notes, { s1: 'front left' });
     assert.deepEqual(mine.reminders, { s1: 15 });
     assert.deepEqual(res.body.meta.pickCounts, { s1: 1 });
+  });
+
+  test('reads only the visible users profiles and takes counts from the store', async () => {
+    const { app, stores } = buildApp(listed);
+    await request(app).get('/profiles/f1');
+    assert.deepEqual(stores.profiles.listPicksByFestival.mock.calls[0]!.arguments, ['f1', ['u-own']]);
+    assert.deepEqual(stores.profiles.pickCountsByFestival.mock.calls[0]!.arguments, ['f1', 'u-own']);
   });
 
   test('a viewer row missing from the list is not added back', async () => {

@@ -38,7 +38,8 @@ export default function createProfilesRoutes(deps: RouteDeps) {
       }
       // Only the viewer and the people who share a crew with them on this festival are
       // listed. Everyone else stays out of the response (no attendee directory); they
-      // reach the viewer only as anonymous per-set counts in meta.pickCounts.
+      // reach the viewer only as anonymous per-set counts in meta.pickCounts. This limits the
+      // REST list only: presence:update and profile:created still go to the whole festival room.
       const userCrews = await stores.crews.listByUserAndFestival(req.user.userId, festivalId);
       const membersByCrew = await stores.crews.getMembersForCrews(userCrews.map((c: any) => c.id));
       const visibleUserIds = new Set<string>([req.user.userId]);
@@ -56,13 +57,13 @@ export default function createProfilesRoutes(deps: RouteDeps) {
       const rawProfiles = page
         ? page.profiles.map(swapOwn)
         : stores.profiles.listPicksByFestival
-          ? (await stores.profiles.listPicksByFestival(festivalId)).map(swapOwn)
+          ? (await stores.profiles.listPicksByFestival(festivalId, [...visibleUserIds])).map(swapOwn)
           : stores.profiles.getByFestival
             ? await stores.profiles.getByFestival(festivalId)
             : (await getProfiles()).filter((profile: any) => profile.festivalId === festivalId);
       // Counts cover every other attendee, so take them before the list narrows to the visible users.
       let pickCounts: Record<string, number> = {};
-      if (page) {
+      if (page || (stores.profiles.listPicksByFestival && stores.profiles.pickCountsByFestival)) {
         pickCounts = await stores.profiles.pickCountsByFestival(festivalId, req.user.userId);
       } else {
         for (const profile of rawProfiles) {
