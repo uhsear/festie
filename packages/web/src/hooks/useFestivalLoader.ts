@@ -9,6 +9,7 @@ import { useToast } from '../lib/toastContext';
 
 const REF_KEY = 'festie-ref';
 const REF_PATTERN = /^[a-z0-9_-]{1,40}$/;
+const EDITOR_PATH = /^\/(admin|manage)(\/|$)/;
 
 function stripJoinCrewParam() {
   const url = new URL(window.location.href);
@@ -98,8 +99,11 @@ export function useFestivalLoader() {
 
   // Auto-load festivals + select first one on boot (mirrors legacy init())
   useEffect(() => {
-    // ?festival=<id> from a public festival page; read before the load, on the root path only.
-    const linkedId = window.location.pathname === '/' ? new URLSearchParams(window.location.search).get('festival') : null;
+    // ?festival=<id> from a public festival page, an email or a push; this hook is its only reader.
+    // On /admin and /manage the param is the festival being edited, not a deep link.
+    const linkedId = EDITOR_PATH.test(window.location.pathname)
+      ? null
+      : new URLSearchParams(window.location.search).get('festival');
     loadFestivals()
       .then(() => {
         const fests = useFestivalStore.getState().festivals;
@@ -111,7 +115,8 @@ export function useFestivalLoader() {
         const cached = useFestivalStore.getState().currentFestival;
         // Signed-in users revalidate in the effect below; guests would otherwise keep the cache forever.
         if (cached && !useAuthStore.getState().user) selectFestival(cached.id).catch((err) => console.warn('Festival select failed', err));
-        if (fests.length > 0 && !cached) {
+        // isLoading: a linked select may still be in flight when this reruns after sign-in.
+        if (fests.length > 0 && !cached && !useFestivalStore.getState().isLoading) {
           const pick = pickDefaultFestival(fests);
           if (pick) selectFestival(pick.id).catch((err) => console.warn('Festival select failed', err));
         }

@@ -229,12 +229,33 @@ describe('useFestivalLoader ?festival deep link', () => {
     expect(window.location.search).toBe('');
   });
 
-  it('leaves other paths alone', async () => {
-    window.history.pushState({}, '', '/wrap?festival=f2');
+  it('selects the linked festival on any non-editor path', async () => {
+    window.history.pushState({}, '', '/wrap?festival=f2&x=1');
     renderHook(() => useFestivalLoader());
     await act(async () => {});
-    expect(window.location.search).toBe('?festival=f2');
+    expect(h.selectFestival).toHaveBeenCalledWith('f2');
+    expect(h.selectFestival).toHaveBeenCalledTimes(1);
+    expect(window.location.search).toBe('?x=1');
   });
+
+  it('drops an id that matches no festival', async () => {
+    window.history.pushState({}, '', '/?festival=../etc');
+    renderHook(() => useFestivalLoader());
+    await act(async () => {});
+    expect(h.selectFestival).not.toHaveBeenCalledWith('../etc');
+    expect(window.location.search).toBe('');
+  });
+
+  it.each(['/admin?tab=festivals&festival=f2&view=import', '/manage?festival=f2'])(
+    'leaves the festival editor link %s alone',
+    async (url) => {
+      window.history.pushState({}, '', url);
+      renderHook(() => useFestivalLoader());
+      await act(async () => {});
+      expect(h.selectFestival).not.toHaveBeenCalledWith('f2');
+      expect(window.location.search).toContain('festival=f2');
+    },
+  );
 });
 
 describe('useFestivalLoader follow link from /f/', () => {
