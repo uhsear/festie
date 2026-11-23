@@ -434,6 +434,38 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     aliceSocket.close();
   });
 
+  test('kicking a member removes them from former crew mate presence', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    const bob = await registerUser(server, 'bob');
+    await joinFestivalProfile(server, alice.token);
+    await joinFestivalProfile(server, bob.token);
+    const crew = (
+      await server.request.post('/api/v1/crews').set('x-user-token', alice.token).send({ name: 'Pair', festivalId: 'fest-1' }).expect(201)
+    ).body.data;
+    await server.request.post('/api/v1/crews/join').set('x-user-token', bob.token).send({ inviteCode: crew.inviteCode }).expect(200);
+
+    const aliceSocket = connectSocket(server.baseUrl);
+    const bobSocket = connectSocket(server.baseUrl);
+    await Promise.all([waitForEvent(aliceSocket, 'connect'), waitForEvent(bobSocket, 'connect')]);
+    aliceSocket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token });
+    await waitForEvent(aliceSocket, 'presence:update', (p) => p.online.length === 2);
+
+    const aliceAfterKick = waitForEvent(aliceSocket, 'presence:update', (p) => p.online.length === 1);
+    const bobAfterKick = waitForEvent(bobSocket, 'presence:update', (p) => p.online.length === 1);
+    await server.request
+      .delete(`/api/v1/crews/${crew.id}/members/${bob.user.id}`)
+      .set('x-user-token', alice.token)
+      .expect(200);
+    await Promise.all([aliceAfterKick, bobAfterKick]);
+
+    aliceSocket.close();
+    bobSocket.close();
+  });
+
   test('join:crew — user joins a crew room and receives ack', async () => {
     const server = await startServer();
     servers.push(server);

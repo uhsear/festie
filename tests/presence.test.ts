@@ -77,12 +77,20 @@ function makeStores(users: any[] = [], profiles: any[] = [], membersByCrew: Reco
       readAll: mock.fn(async () => profiles),
     },
     crews: {
-      listByFestival: mock.fn(async () => Object.keys(membersByCrew).map((id) => ({ id }))),
+      listByFestival: mock.fn(async () => {
+        throw new Error('presence must not load every crew in the festival');
+      }),
       listByUserAndFestival: mock.fn(async (userId: string) =>
         Object.keys(membersByCrew).filter((id) => membersByCrew[id]!.includes(userId)).map((id) => ({ id }))),
-      getMembersForCrews: mock.fn(
-        async (ids: string[]) => new Map(ids.map((id) => [id, (membersByCrew[id] || []).map((userId) => ({ userId }))])),
-      ),
+      listCrewmateIds: mock.fn(async (userIds: string[]) => {
+        const mates = new Map<string, string[]>();
+        for (const members of Object.values(membersByCrew)) {
+          for (const userId of members) {
+            if (userIds.includes(userId)) mates.set(userId, [...(mates.get(userId) ?? []), ...members]);
+          }
+        }
+        return mates;
+      }),
     },
   };
 }
@@ -655,12 +663,13 @@ describe('presence: emitPresence', () => {
     t.mock.timers.tick(200);
     for (let i = 0; i < 20; i++) await Promise.resolve();
 
-    const seenBy = (room: string) => io._byRoom.find((c) => c.room === room)!.payload.online.map((u: any) => u.userId);
+    const seenBy = (room: string) => io._byRoom.find((c) => c.room === room)!.payload.online.map((u: any) => u.userId).sort();
     assert.deepEqual(seenBy('user:alice'), ['alice', 'bob']);
     assert.deepEqual(seenBy('user:bob'), ['alice', 'bob']);
     assert.deepEqual(seenBy('user:cara'), ['cara']);
     assert.deepEqual(seenBy('user:eve'), ['eve']);
     assert.ok(io._byRoom.every((c) => c.room !== 'fest-1'), 'never broadcast to the festival room');
+    assert.ok(io._byRoom.every((c) => c.payload.festivalId === 'fest-1'), 'payload names its festival');
     pm.clearPresenceTimers();
   });
 
@@ -736,5 +745,19 @@ describe('presence: heartbeat', () => {
     } finally {
       mock.timers.reset();
     }
+  });
+
+  it('falls back to the own-device room when the crew lookup fails', async () => {
+    const stores = makeStores([], [{ userId: 'user-1', festivalId: 'fest-1', id: 'prof-1' }]);
+    stores.crews.listByUserAndFestival = mock.fn(async () => {
+      throw new Error('db down');
+    });
+    const pm = createPresenceManager(defaultDeps({ stores }));
+    const io = makeIo();
+
+    await pm.emitProfileIdentity({ id: 'user-1', username: 'alice', displayName: null }, io);
+
+    assert.deepEqual(io._byRoom[0]!.room, ['user:user-1']);
+    pm.clearPresenceTimers();
   });
 });

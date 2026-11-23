@@ -199,6 +199,14 @@ describe('useRealtimeStoreSync: event handlers', () => {
     socket.fire('presence:update', { online: [{ userId: 'u1', username: 'Ann', avatarUrl: 'a.png' }] });
     expect(setOnlineUsers).toHaveBeenCalledWith([{ id: 'u1', name: 'Ann', avatar: 'a.png', status: 'online' }]);
   });
+
+  it('drops a presence list that belongs to another festival than the current one', () => {
+    mount();
+    socket.fire('presence:update', { festivalId: 'other', online: [{ userId: 'u1', username: 'Ann' }] });
+    expect(setOnlineUsers).not.toHaveBeenCalled();
+    socket.fire('presence:update', { festivalId: 'f1', online: [{ userId: 'u1', username: 'Ann' }] });
+    expect(setOnlineUsers).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('useRealtimeStoreSync: quiet-hours time zone on foreground', () => {

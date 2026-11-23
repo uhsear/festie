@@ -163,29 +163,30 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
 
   /** Room names for the user's own devices and every crew they share for the festival. */
   async function crewAudienceRooms(userId: string, festivalId: string): Promise<string[]> {
-    const crews: { id: string }[] = stores.crews ? await stores.crews.listByUserAndFestival(userId, festivalId) : [];
-    return [`user:${userId}`, ...crews.map((c) => `crew:${c.id}`)];
+    try {
+      const crews: { id: string }[] = stores.crews ? await stores.crews.listByUserAndFestival(userId, festivalId) : [];
+      return [`user:${userId}`, ...crews.map((c) => `crew:${c.id}`)];
+    } catch (err) {
+      log.warn('crew audience lookup failed', { userId, festivalId, error: (err as Error).message });
+      return [`user:${userId}`];
+    }
   }
 
   // Each viewer gets themselves plus the online users who share a crew with them in this festival.
   async function emitPresenceToCrewmates(festivalId: string, online: { userId: string }[], io: PresenceIo) {
-    const crews: { id: string }[] = stores.crews ? await stores.crews.listByFestival(festivalId) : [];
-    const membersByCrew: Map<string, { userId: string }[]> = crews.length
-      ? await stores.crews.getMembersForCrews(crews.map((c) => c.id))
+    const onlineIds = online.map((u) => u.userId);
+    const matesByUser: Map<string, string[]> = stores.crews
+      ? await stores.crews.listCrewmateIds(onlineIds, festivalId)
       : new Map();
-    const mates = new Map<string, Set<string>>();
-    for (const members of membersByCrew.values()) {
-      for (const { userId } of members) {
-        const set = mates.get(userId) ?? new Set<string>();
-        for (const other of members) set.add(other.userId);
-        mates.set(userId, set);
-      }
-    }
+    const onlineById = new Map(online.map((u) => [u.userId, u]));
     for (const viewer of online) {
-      const visible = mates.get(viewer.userId);
-      io.to(`user:${viewer.userId}`).emit('presence:update', {
-        online: online.filter((u) => u.userId === viewer.userId || visible?.has(u.userId)),
-      });
+      const visible = new Set<string>([viewer.userId, ...(matesByUser.get(viewer.userId) ?? [])]);
+      const list: { userId: string }[] = [];
+      for (const id of visible) {
+        const user = onlineById.get(id);
+        if (user) list.push(user);
+      }
+      io.to(`user:${viewer.userId}`).emit('presence:update', { festivalId, online: list });
     }
   }
 
