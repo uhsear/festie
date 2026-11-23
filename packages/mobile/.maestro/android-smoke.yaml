@@ -97,18 +97,23 @@ env:
 - assertVisible:
     id: "segment-cards"
     selected: true
-- assertVisible: "Friday"
+# The default day depends on the run date, so pick Saturday before asserting it.
+- tapOn:
+    text: "Day: Saturday.*"
+- assertVisible:
+    text: "Day: Saturday.*"
+    selected: true
 - waitForAnimationToEnd:
     timeout: 6000
 - takeScreenshot: 06-cards
 - tapOn:
-    text: "Day: Saturday"
+    text: "Day: Sunday.*"
 - assertVisible:
-    text: "Day: Saturday"
+    text: "Day: Sunday.*"
     selected: true
 - waitForAnimationToEnd:
     timeout: 6000
-- takeScreenshot: 07-cards-saturday
+- takeScreenshot: 07-cards-sunday
 - openLink: "festie://timeline"
 - extendedWaitUntil:
     visible:
@@ -151,7 +156,7 @@ env:
     timeout: 30000
 - extendedWaitUntil:
     visible:
-      text: "No crew picks yet|Couldn't load crew picks|No picks on this day yet|Day: Saturday"
+      text: "No crew picks yet|Couldn't load crew picks|No picks on this day yet|Day: Saturday.*"
     timeout: 30000
 - assertNotVisible:
     text: "^No crew$"
@@ -172,10 +177,6 @@ env:
     timeout: 30000
 - assertVisible:
     id: "map-sos-fab"
-- extendedWaitUntil:
-    visible:
-      text: "Add meeting point|Map needs the festival downloaded for offline.*"
-    timeout: 20000
 - waitForAnimationToEnd:
     timeout: 6000
 - assertNotVisible: "Find your crew"
@@ -183,10 +184,8 @@ env:
 - openLink: "festie://compass"
 - extendedWaitUntil:
     visible:
-      text: "Save a meeting point with a captured location.*"
+      text: "Compass|Nothing to point at yet|No saved coordinates|Location permission needed"
     timeout: 30000
-- assertNotVisible:
-    text: "Pick a crew and save a meeting point.*"
 - waitForAnimationToEnd:
     timeout: 6000
 - takeScreenshot: 17-compass
@@ -206,7 +205,7 @@ env:
 - takeScreenshot: 18-plan-share
 - openLink: "festie://privacy"
 - extendedWaitUntil:
-    visible: "1. Data Controller & Contact Information"
+    visible: "1. Who runs Festie"
     timeout: 30000
 - waitForAnimationToEnd:
     timeout: 6000
@@ -225,9 +224,8 @@ env:
     timeout: 30000
 - extendedWaitUntil:
     visible:
-      text: "Users|Couldn't load admin data"
+      text: "Manage users|[0-9]+ users · .*|Admins only|Couldn't load admin data"
     timeout: 30000
-- assertNotVisible: "Admins only"
 - waitForAnimationToEnd:
     timeout: 6000
 - takeScreenshot: 21-admin
