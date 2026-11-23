@@ -1,6 +1,6 @@
 import { festivalStartMinutes, startsAfterMidnight } from './setStatus';
 import { timeAgo } from './timeAgo';
-import { pluralize } from './format';
+import { formatTime, pluralize } from './format';
 
 // FestivalIssueTarget, FestivalIssue and ChecklistItem mirror lib/helpers/validation.ts (server).
 export interface FestivalIssueTarget {
@@ -290,15 +290,44 @@ export function festivalStatusLine(
   return { state: published ? 'published' : 'draft', chip: published ? 'Published' : 'Draft', edited };
 }
 
-export function describeDeleteImpact(impact: DeleteImpact | null): string {
-  if (!impact) return 'People who joined this festival lose access until you restore it from Archived.';
+// An organizer has no Archived view, so only an admin can restore a deleted festival.
+const ORGANIZER_RESTORE = 'Festie can restore it if you ask. Contact support.';
+
+export function describeDeleteImpact(impact: DeleteImpact | null, scope: 'admin' | 'manage' = 'admin'): string {
+  const manage = scope === 'manage';
+  if (!impact) {
+    return manage
+      ? `People who joined this festival lose access. ${ORGANIZER_RESTORE}`
+      : 'People who joined this festival lose access until you restore it from Archived.';
+  }
   if (impact.profiles === 0 && impact.crews === 0) {
-    return 'Nobody has joined this festival yet. You can restore it later from Archived.';
+    return manage
+      ? `Nobody has joined this festival yet. ${ORGANIZER_RESTORE}`
+      : 'Nobody has joined this festival yet. You can restore it later from Archived.';
   }
   const p = impact.profiles === 1 ? '1 person' : `${impact.profiles} people`;
   const c =
     impact.crews === 0 ? 'no crews use it' : impact.crews === 1 ? '1 crew uses it' : `${impact.crews} crews use it`;
-  return `${p} joined this festival and ${c}. They lose access until you restore it from Archived. Their picks are kept.`;
+  return manage
+    ? `${p} joined this festival and ${c}. They lose access. ${ORGANIZER_RESTORE} Their picks are kept.`
+    : `${p} joined this festival and ${c}. They lose access until you restore it from Archived. Their picks are kept.`;
+}
+
+interface HeldChangeLike {
+  kind: 'moved' | 'removed' | 'entry_cancelled';
+  artist: string;
+  before: { dayLabel: string; startTime: string | null; stageName: string | null } | null;
+  after: { dayLabel: string; startTime: string | null; stageName: string | null } | null;
+}
+
+const describeSlot = (slot: HeldChangeLike['before']): string =>
+  slot ? [slot.dayLabel, slot.startTime ? formatTime(slot.startTime) : 'Time TBA', slot.stageName].filter(Boolean).join(', ') : 'unknown';
+
+/** One line of a held alert: what changed for one act, in the words an attendee would read. */
+export function describeHeldChange(item: HeldChangeLike): string {
+  if (item.kind === 'removed') return `${item.artist}: removed`;
+  if (item.kind === 'entry_cancelled') return `${item.artist}: cancelled`;
+  return `${item.artist}: ${describeSlot(item.before)} to ${describeSlot(item.after)}`;
 }
 
 export function describeShiftResult(

@@ -206,6 +206,7 @@ function PicksViewInner() {
   if (user && !currentProfile) {
     return (
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
+        <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
         <EmptyState
           icon={<UserPlus className="w-9 h-9" aria-hidden="true" />}
           title="No picks yet"

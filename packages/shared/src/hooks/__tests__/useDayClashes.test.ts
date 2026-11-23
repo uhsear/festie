@@ -59,6 +59,15 @@ describe('useDayClashes', () => {
     expect(result.current.picked).toBe(0);
   });
 
+  it('marks clashes from guest picks when there is no profile', () => {
+    seed(null);
+    useFestivalStore.setState({ guestPicks: { f: { a: 'want-to-see', b: 'want-to-see' } } });
+    const { result } = renderHook(() => useDayClashes());
+    expect(result.current.count).toBe(1);
+    expect(result.current.picked).toBe(2);
+    useFestivalStore.setState({ guestPicks: {} });
+  });
+
   it('counts my picks on the selected day only', () => {
     const later = { id: 'c', festivalId: 'f', stageId: 's1', artist: 'Gamma', dayIndex: 1, startTime: '14:00', ...stamp };
     const unpicked = { id: 'd', festivalId: 'f', stageId: 's1', artist: 'Delta', dayIndex: 0, startTime: '18:00', ...stamp };

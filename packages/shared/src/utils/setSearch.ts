@@ -1,22 +1,50 @@
 import type { FestivalSet, Stage } from '../types/domain';
 import { byStartTime } from './scheduleFormat';
 
-/** Lowercase and strip diacritics so "Bacardi" finds "Bacardí". */
-export const foldSearch = (s: string): string => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+const LETTER_FOLDS: Record<string, string> = { ø: 'o', æ: 'ae', œ: 'oe', ß: 'ss', ł: 'l', đ: 'd' };
+
+/** Lowercase and strip diacritics, and fold the letters NFD leaves alone, so "Orjan" finds "Ørjan". */
+export const foldLetters = (s: string): string =>
+  s
+    .normalize('NFD')
+    .replace(/\p{M}/gu, '')
+    .toLowerCase()
+    .replace(/[øæœßłđ]/g, (c) => LETTER_FOLDS[c]!);
 
 /**
- * Lineup search match, shared by web and mobile. Case- and accent-insensitive substring
+ * A match test for one search query, or null for a blank query (which matches everything). Case-, accent-,
+ * punctuation- and space-insensitive substring: "jay z" finds "Jay-Z", "above beyond" finds "Above&Beyond",
+ * "dont stop" finds "Don't Stop". A query that is all punctuation matches literally, so a lone "&" finds
+ * "Above & Beyond" and never becomes the empty match-everything query.
+ */
+export function searchMatcher(query: string): ((text: string) => boolean) | null {
+  const trimmed = query.trim();
+  if (!trimmed) return null;
+  const key = /[\p{L}\p{N}]/u.test(trimmed)
+    ? (s: string) => foldLetters(s).replace(/[^\p{L}\p{N}\s]/gu, '').replace(/\s+/g, '')
+    : (s: string) => foldLetters(s).replace(/\s+/g, '');
+  const needle = key(trimmed);
+  return (text) => key(text).includes(needle);
+}
+
+/** Every artist name in one string, so "illenium slander" finds a B2B set without the separator word. */
+export const joinedArtistNames = (artists: readonly { name: string }[] | undefined): string =>
+  (artists ?? []).map((a) => a.name).join(' ');
+
+/**
+ * Lineup search match, shared by web and mobile. Case-, accent-, punctuation- and space-insensitive substring
  * match on the headline artist, any B2B artist name, or the stage name. An
  * empty (or whitespace-only) query matches every set.
  */
 export function setMatchesSearch(set: FestivalSet, query: string, stages: Stage[]): boolean {
-  const q = foldSearch(query.trim());
-  if (!q) return true;
-  if (set.artist && foldSearch(set.artist).includes(q)) return true;
-  if (set.displayName && foldSearch(set.displayName).includes(q)) return true;
-  if (set.artists?.some((a) => foldSearch(a.name).includes(q))) return true;
+  const matches = searchMatcher(query);
+  if (!matches) return true;
+  if (set.artist && matches(set.artist)) return true;
+  if (set.displayName && matches(set.displayName)) return true;
+  if (set.artists?.some((a) => matches(a.name))) return true;
+  if (matches(joinedArtistNames(set.artists))) return true;
   const stageName = stages.find((s) => s.id === set.stageId)?.name;
-  return stageName ? foldSearch(stageName).includes(q) : false;
+  return stageName ? matches(stageName) : false;
 }
 
 /**

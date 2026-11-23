@@ -15,7 +15,7 @@ import { captureRef } from 'react-native-view-shot';
 import * as Sharing from 'expo-sharing';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useFestivalDataStore, useFestivalStore, useCrewStore } from '@festie/shared/stores';
+import { selectMyPicks, useFestivalDataStore, useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { usePicks, useCanPick, useFestival, useDayClashes, useViewAs, useCrew } from '@festie/shared/hooks';
 import { COPY, DISCOVER_COPY } from '@festie/shared/constants';
 import {
@@ -41,7 +41,7 @@ import {
   type GridCrewProfile,
   searchEmptyCopy,
   searchHiddenByFilters,
-  dayHasTimedSets,
+  dayTimesNotOut,
   searchLineupEntries,
   searchOtherDays,
   type GridBounds,
@@ -122,6 +122,7 @@ export default function GridScreen() {
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const stages = useFestivalDataStore((s) => s.stages);
+  const festivalDays = useFestivalDataStore((s) => s.days);
   const festivals = useFestivalDataStore((s) => s.festivals);
   const festivalsLoading = useFestivalDataStore((s) => s.isLoading);
   const festivalsError = useFestivalDataStore((s) => s.error);
@@ -144,7 +145,7 @@ export default function GridScreen() {
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
   const setSearchQuery = useFestivalStore((s) => s.setSearchQuery);
   const setSelectedDay = useFestivalStore((s) => s.setSelectedDay);
-  const picks = useFestivalDataStore((s) => s.currentProfile)?.picks;
+  const picks = useFestivalDataStore(selectMyPicks) ?? undefined;
   const { getMyPick, getOtherPicks } = usePicks();
   const allSets = useFestivalDataStore((s) => s.sets);
   const { getStageColor, getStageName, getDays, getFilteredSets, getCurrentDaySets } = useFestival();
@@ -432,7 +433,7 @@ export default function GridScreen() {
               onSavePick={setPick}
               onOpenDetail={openSet}
               defaultExpanded
-              allTba={!dayHasTimedSets(getCurrentDaySets())}
+              allTba={dayTimesNotOut(currentFestival, festivalDays, getCurrentDaySets())}
             />
             <AnnouncedLineup model={announced} hPad={t.spacing[4]} />
           </ScrollView>

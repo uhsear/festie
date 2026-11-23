@@ -145,6 +145,13 @@ describe('CrewStatus', () => {
     expect(screen.queryByText('At camp')).not.toBeInTheDocument();
   });
 
+  it('keeps the presets Cancel a 44px touch target', async () => {
+    const user = userEvent.setup();
+    renderStatus();
+    await user.click(await screen.findByRole('button', { name: 'Share status' }));
+    expect(screen.getByRole('button', { name: 'Cancel' })).toHaveClass('min-h-11', 'min-w-11');
+  });
+
   it('sends the At camp preset', async () => {
     const user = userEvent.setup();
     renderStatus();

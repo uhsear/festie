@@ -30,6 +30,7 @@ import {
   handOverCandidates,
   memberCountLabel,
   deleteCrewConfirmMessage,
+  exitBalanceNotice,
   leaveCrewConfirmMessage,
   removeMemberConfirmMessage,
   isCrewOwner,
@@ -121,6 +122,7 @@ export default function CrewScreen() {
   const packingItems = useCrewStore((s) => s.packingItems);
   const rideOffers = useCrewStore((s) => s.rideOffers);
   const expenseBalances = useCrewStore((s) => s.expenseBalances);
+  const expenseCurrency = useCrewStore((s) => s.expenseCurrency);
   const crewLoading = useCrewStore((s) => s.crewLoading);
   const error = useCrewStore((s) => s.error);
   const loadCrews = useCrewStore((s) => s.loadCrews);
@@ -177,6 +179,7 @@ export default function CrewScreen() {
   const [renameBusy, setRenameBusy] = useState(false);
   const [handOverOpen, setHandOverOpen] = useState(false);
   const [handOverBusy, setHandOverBusy] = useState(false);
+  const [handOverNotice, setHandOverNotice] = useState('');
   // Short success line in the crew chrome. Cleared after 4s.
   const [notice, setNotice] = useState<string | null>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -517,9 +520,23 @@ export default function CrewScreen() {
     }
   };
 
+  // What leaving, removing or deleting forgives, from the store's net balances (instant, works
+  // offline). Empty when nothing is outstanding or the crew is not the one whose balances are loaded.
+  const exitNotice = (
+    crewId: string,
+    userId: string,
+    name: string | null,
+    action: 'leave' | 'remove' | 'delete',
+  ): string =>
+    crewId === activeCrew?.id
+      ? exitBalanceNotice({ balances: expenseBalances, userId, name, action, currency: expenseCurrency })
+      : '';
+  const withNotice = (message: string, notice: string) => (notice ? `${message} ${notice}` : message);
+
   const handleKick = (crewId: string, member: CrewMember) => {
     const crewName = crews.find((c) => c.id === crewId)?.name ?? 'this crew';
-    Alert.alert('Remove member', removeMemberConfirmMessage(member.name || 'this member', crewName), [
+    const notice = exitNotice(crewId, member.userId, member.name || member.username || 'This member', 'remove');
+    Alert.alert('Remove member', withNotice(removeMemberConfirmMessage(member.name || 'this member', crewName), notice), [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Remove',
@@ -581,7 +598,8 @@ export default function CrewScreen() {
 
   const handleLeave = (crewId: string) => {
     const crewName = crews.find((c) => c.id === crewId)?.name ?? 'this crew';
-    Alert.alert('Leave crew', leaveCrewConfirmMessage(crewName), [
+    const notice = user ? exitNotice(crewId, user.id, null, 'leave') : '';
+    Alert.alert('Leave crew', withNotice(leaveCrewConfirmMessage(crewName), notice), [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Leave crew',
@@ -596,7 +614,8 @@ export default function CrewScreen() {
   };
 
   const handleDelete = (crewId: string, crewName: string, memberCount: number) => {
-    Alert.alert('Delete crew', deleteCrewConfirmMessage(crewName, memberCount), [
+    const notice = user ? exitNotice(crewId, user.id, null, 'delete') : '';
+    Alert.alert('Delete crew', withNotice(deleteCrewConfirmMessage(crewName, memberCount), notice), [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete crew',
@@ -615,6 +634,7 @@ export default function CrewScreen() {
       handleDelete(crewId, crewName, members.length);
       return;
     }
+    setHandOverNotice(exitNotice(crewId, selfId, null, 'leave'));
     setHandOverOpen(true);
   };
 
@@ -781,6 +801,7 @@ export default function CrewScreen() {
         visible={handOverOpen}
         crewName={crew.name}
         candidates={handOverCandidates(members, user.id)}
+        notice={handOverNotice}
         busy={handOverBusy}
         onConfirm={(id) => handleHandOver(crew, members, id)}
         onClose={() => setHandOverOpen(false)}

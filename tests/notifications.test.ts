@@ -304,11 +304,11 @@ describe('Notification routes — web push', () => {
     assert.equal(registered[0].platform, 'web');
   });
 
-  test('GET /vapid-key returns 404 without keys', async () => {
+  test('GET /vapid-key returns a null key without keys, not an error status', async () => {
     const { app } = buildApp();
-    const res = await request(app).get('/vapid-key').expect(404);
-    assert.equal(res.body.error.code, 'NOT_FOUND');
-    assert.equal(res.body.error.message, 'Web push is not set up on this server.');
+    const res = await request(app).get('/vapid-key').expect(200);
+    assert.equal(res.body.data.publicKey, null);
+    assert.equal(res.headers['cache-control'], undefined);
   });
 
   test('GET /vapid-key returns the public key when both keys are set', async () => {

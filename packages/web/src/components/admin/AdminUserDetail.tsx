@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { fetchAdminUserDetail, type AdminUserDetail as Detail } from '@festie/shared/services/admin';
 import { ApiClientError } from '@festie/shared/services/api';
-import { auditActionLabel, maskEmail, timeAgoFromIso, PRIVATE_VIEW_NOTICE } from '@festie/shared/utils';
+import { auditRowLabel, maskEmail, timeAgoFromIso, PRIVATE_VIEW_NOTICE } from '@festie/shared/utils';
 import { UserX } from 'lucide-react';
 import EmptyState from '../ui/EmptyState';
 import Button from '../ui/Button';
@@ -147,7 +147,12 @@ export default function AdminUserDetail({ userId }: { userId: string }) {
           <ul className="space-y-2 text-sm">
             {activity.map((a) => (
               <li key={a.id}>
-                <div className="text-text-primary">{auditActionLabel(a.action)}</div>
+                <div className="text-text-primary">
+                  {auditRowLabel(a.action, a.status)}
+                  {a.status !== 'success' && (
+                    <span className="ml-2 px-2 py-0.5 rounded-full bg-accent-coral/20 text-accent-coral text-xs">Failed</span>
+                  )}
+                </div>
                 <div className="text-xs text-text-muted">
                   {a.actorUsername ?? 'system'} · {a.targetLabel ?? '—'} · {timeAgoFromIso(a.createdAt)}
                 </div>

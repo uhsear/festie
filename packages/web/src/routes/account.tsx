@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { Gauge, LogOut, Sparkles } from 'lucide-react';
+import { Building2, Gauge, LogOut, Sparkles } from 'lucide-react';
 import { useAuthStore } from '@festie/shared/stores/authStore';
 import { ACCOUNT_COPY, ACCOUNT_SECTIONS, COPY } from '@festie/shared/constants';
 import type { AccountSectionId } from '@festie/shared/constants';
@@ -120,6 +120,18 @@ function AccountPageInner() {
     ),
     festivals: (
       <>
+        {!!user.organizations?.length && (
+          <Link
+            to="/manage"
+            className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 min-h-11 hover:bg-surface-hover"
+          >
+            <Building2 className="h-5 w-5 text-accent-aqua" aria-hidden="true" />
+            <span className="flex flex-col">
+              <span className="text-sm font-semibold text-text-primary">{ACCOUNT_COPY.manageTitle}</span>
+              <span className="text-xs text-text-secondary">{ACCOUNT_COPY.manageHint}</span>
+            </span>
+          </Link>
+        )}
         <Link
           to="/wrap"
           className="flex items-center gap-3 rounded-xl border border-border px-3 py-3 hover:bg-surface-hover"

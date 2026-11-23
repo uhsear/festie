@@ -7,6 +7,7 @@ import { getStorage } from '../platform/storage';
 import { writeOutcomeOf, type WriteOutcome } from '../utils/crewWrites';
 import { crewCopy, utcDay } from '../utils/crewManage';
 import { useAuthStore } from './authStore';
+import { useFestivalDataStore } from './festivalDataStore';
 import { useLiveLocationStore } from './liveLocationStore';
 import {
   Crew,
@@ -304,6 +305,29 @@ function dropOptimistic<T extends { _optimistic?: boolean }>(list: T[]): T[] {
 
 let _lastSelectCrewId: string | null = null;
 
+/**
+ * After sign-in nothing else picks the festival the crew is at, so Map would stay on
+ * "No festival selected". Fills an empty selection only: a chosen festival, a deep link
+ * or a push landing has already set currentFestivalId, and selectFestival sets it
+ * synchronously, so a repeat call is a no-op.
+ */
+function selectCrewFestivalIfNone(crews: Crew[], activeCrew: Crew | null): void {
+  if (!useAuthStore.getState().user) return;
+  // Mobile restores the saved festival asynchronously; a live selection would beat it in the persist merge.
+  if (!useFestivalDataStore.persist.hasHydrated()) {
+    const unsub = useFestivalDataStore.persist.onFinishHydration(() => {
+      unsub();
+      selectCrewFestivalIfNone(crews, activeCrew);
+    });
+    return;
+  }
+  const data = useFestivalDataStore.getState();
+  if (data.currentFestivalId) return;
+  const festivalId = (activeCrew ?? crews.find((c) => !c._optimistic))?.festivalId;
+  if (!festivalId) return;
+  data.selectFestival(festivalId).catch((err) => console.warn('crew festival select failed', err));
+}
+
 const crewStore: StateCreator<CrewStore> = (set, get) => ({
   crews: [],
   activeCrew: null,
@@ -332,6 +356,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
     try {
       const crews = await api.get<Crew[]>('/crews');
       set({ crews, crewLoading: false });
+      selectCrewFestivalIfNone(crews, get().activeCrew);
     } catch (err) {
       const message = mapErrorToUserMessage(err, 'Failed to load crews');
       set({ error: message, crewLoading: false });
@@ -381,6 +406,7 @@ const crewStore: StateCreator<CrewStore> = (set, get) => ({
         _cachedAt: Date.now(),
         _cachedCrewId: crewId,
       });
+      selectCrewFestivalIfNone(get().crews, crew);
       // Fire and forget: a failed days read must not fail the crew load.
       void Promise.resolve(get().loadCrewDays(crewId)).catch(() => {});
     } catch (err) {

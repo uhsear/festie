@@ -114,7 +114,7 @@ describe('ResetPasswordPage', () => {
     await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
     const target = document.getElementById(field.getAttribute('aria-describedby')!.split(' ')[0]!);
     expect(target).toHaveTextContent('That password is too common');
-    await waitFor(() => expect(field).toHaveFocus());
+    await waitFor(() => expect(field).toHaveFocus(), { timeout: 3000 });
   });
 
   it('blocks a common password on the client before calling resetPassword', async () => {

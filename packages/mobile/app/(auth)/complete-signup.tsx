@@ -101,6 +101,7 @@ const toIso = (d: Date) =>
 export default function CompleteSignupScreen() {
   const styles = useStyles();
   const t = useTokens();
+  const pickerTheme = useUIStore((s) => s.theme) === 'daylight' ? 'light' : 'dark';
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { k } = useLocalSearchParams<{ k?: string }>();
@@ -345,7 +346,7 @@ export default function CompleteSignupScreen() {
                 onChange={(_evt, selected) => {
                   if (selected) pickDob(selected);
                 }}
-                themeVariant="dark"
+                themeVariant={pickerTheme}
                 textColor={t.colors.text.primary}
               />
             </Pressable>

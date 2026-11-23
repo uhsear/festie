@@ -75,3 +75,14 @@ describe('expense edit while the form is open', () => {
     expect(src).toMatch(/if \(showForm\) onFormShown\?\.\(formY\.current\);\s*else scrollOnLayout\.current = true;/);
   });
 });
+
+describe('crew exits show what they forgive', () => {
+  it('kick, leave, delete and hand-over confirms append the forgiven-amounts notice', () => {
+    expect(crew).toContain("exitNotice(crewId, member.userId");
+    expect(crew).toContain("exitNotice(crewId, user.id, null, 'leave')");
+    expect(crew).toContain("exitNotice(crewId, user.id, null, 'delete')");
+    expect(crew).toContain("exitNotice(crewId, selfId, null, 'leave')");
+    expect(crew).toContain('notice={handOverNotice}');
+    expect(read('components', 'HandOverSheet.tsx')).toContain('crewCopy.handOverBody} ${notice}');
+  });
+});

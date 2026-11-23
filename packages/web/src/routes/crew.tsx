@@ -33,6 +33,7 @@ import UserPickerDialog from '../components/admin/UserPickerDialog';
 import ConfirmDialog from '../components/ui/ConfirmDialog';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useActiveCrew } from '@festie/shared/hooks';
+import { fetchCrewSettlementPlan } from '@festie/shared/services';
 import { balancesQueryOptions, pollsQueryOptions } from '../hooks/useCrewAttention';
 import {
   DEFAULT_CREW_TAB,
@@ -42,6 +43,7 @@ import {
   openPollIds,
   crewCopy,
   deleteCrewConfirmMessage,
+  exitBalanceNotice,
   handOverCandidates,
   leaveCrewConfirmMessage,
   parseInviteCode,
@@ -151,6 +153,26 @@ function CrewViewInner() {
     else setJoinOpen(true);
     navigate({ from: '/crew', to: '/crew', search: (prev) => ({ ...prev, start: undefined }), replace: true });
   }, [userId, start, navigate]);
+
+  // Same cache entry as the Money tab: net balances and currency, fetched only while an exit dialog is open.
+  const exitingUserId = kickTarget?.userId ?? userId;
+  const exitDialogOpen = kickTarget !== null || confirmKind !== null || handOverOpen;
+  const { data: exitPlan } = useQuery({
+    queryKey: ['settlement-plan', activeCrewId],
+    queryFn: () => fetchCrewSettlementPlan(activeCrewId!),
+    enabled: exitDialogOpen && !!activeCrewId,
+  });
+  const exitNotice = (name: string | null, action: 'leave' | 'remove' | 'delete') =>
+    exitPlan && exitingUserId
+      ? exitBalanceNotice({
+          balances: exitPlan.balances,
+          userId: exitingUserId,
+          name,
+          action,
+          currency: exitPlan.currency ?? 'USD',
+        })
+      : '';
+  const withNotice = (message: string, notice: string) => (notice ? `${message} ${notice}` : message);
 
   if (!user)
     return (
@@ -461,6 +483,7 @@ function CrewViewInner() {
         onOpenChange={setHandOverOpen}
         crewName={activeCrew?.name ?? ''}
         candidates={handOverCandidates(members, user.id)}
+        notice={exitNotice(null, 'leave')}
         busy={handOverBusy}
         onConfirm={submitHandOver}
       />
@@ -473,8 +496,8 @@ function CrewViewInner() {
         description={
           activeCrew
             ? confirmKind === 'delete'
-              ? deleteCrewConfirmMessage(activeCrew.name, members.length)
-              : leaveCrewConfirmMessage(activeCrew.name)
+              ? withNotice(deleteCrewConfirmMessage(activeCrew.name, members.length), exitNotice(null, 'delete'))
+              : withNotice(leaveCrewConfirmMessage(activeCrew.name), exitNotice(null, 'leave'))
             : undefined
         }
         confirmLabel={confirmKind === 'delete' ? 'Delete crew' : 'Leave crew'}
@@ -488,9 +511,12 @@ function CrewViewInner() {
           if (!open) setKickTarget(null);
         }}
         title="Remove member"
-        description={removeMemberConfirmMessage(
-          kickTarget?.name || kickTarget?.username || 'this member',
-          activeCrew?.name ?? 'this crew',
+        description={withNotice(
+          removeMemberConfirmMessage(
+            kickTarget?.name || kickTarget?.username || 'this member',
+            activeCrew?.name ?? 'this crew',
+          ),
+          exitNotice(kickTarget?.name || kickTarget?.username || 'This member', 'remove'),
         )}
         confirmLabel="Remove"
         destructive

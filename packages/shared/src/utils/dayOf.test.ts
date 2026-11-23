@@ -2,6 +2,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest';
 import type { CrewMeetingPoint, FestivalDay, FestivalSet, SosEntry } from '../types/domain';
 import {
   fmtStartsIn,
+  startsInIsRelative,
   fmtTimeLeft,
   fmtZonedClock,
   fmtZonedWeekday,
@@ -132,6 +133,9 @@ describe('time labels', () => {
     expect(fmtStartsIn(now + 25 * 60_000, now, TZ)).toBe('in 25m');
     expect(fmtStartsIn(now + 190 * 60_000, now, TZ)).toBe('in 3h 10m');
     expect(fmtStartsIn(ny('2026-09-05', '20:00'), now, TZ)).toBe('Sat 8:00 PM');
+    expect(startsInIsRelative(now + 30_000, now)).toBe(true);
+    expect(startsInIsRelative(now + 719 * 60_000, now)).toBe(true);
+    expect(startsInIsRelative(now + 720 * 60_000, now)).toBe(false);
     expect(fmtTimeLeft(now + 65 * 60_000, now)).toBe('1h 5m left');
     expect(fmtZonedClock(ny('2026-09-05', '00:30'), TZ)).toBe('12:30 AM');
   });

@@ -78,7 +78,7 @@ describe('ManageFestivalList', () => {
     expect(screen.queryByRole('button', { name: 'Delete Live Fest' })).not.toBeInTheDocument();
   });
 
-  it('hides Delete and New festival from a viewer, and Delete from an editor', () => {
+  it('hides Delete and New festival from a viewer and an editor', () => {
     const { unmount } = render(
       <ManageFestivalList query={result({ data: [festival({})] })} organizations={[org({ role: 'viewer' })]} onOpen={vi.fn()} onNew={vi.fn()} onDelete={vi.fn()} />,
     );
@@ -87,7 +87,18 @@ describe('ManageFestivalList', () => {
     unmount();
     renderList([festival({})], [org({ role: 'editor' })]);
     expect(screen.queryByRole('button', { name: /Delete/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'New festival' })).toBeInTheDocument();
+    // The server lets only an owner create (festival.create), so an editor is not offered the button.
+    expect(screen.queryByRole('button', { name: 'New festival' })).not.toBeInTheDocument();
+  });
+
+  it('offers the sample import file to an editor but not to a viewer', () => {
+    const { unmount } = render(
+      <ManageFestivalList query={result({ data: [festival({})] })} organizations={[org({ role: 'viewer' })]} onOpen={vi.fn()} onNew={vi.fn()} onDelete={vi.fn()} />,
+    );
+    expect(screen.queryByRole('button', { name: 'Download a sample import file' })).not.toBeInTheDocument();
+    unmount();
+    renderList([festival({})], [org({ role: 'editor' })]);
+    expect(screen.getByRole('button', { name: 'Download a sample import file' })).toBeInTheDocument();
   });
 
   it('opens a festival and starts a new one', async () => {

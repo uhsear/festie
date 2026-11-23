@@ -19,7 +19,7 @@ describe('inboxCopy', () => {
 
   it('inboxRowLabel names the festival and the unread state', () => {
     expect(inboxRowLabel({ title: 'Shuttle update', body: 'Runs late', festivalName: 'EDC Orlando' }, '1h ago', true)).toBe(
-      'Shuttle update. Runs late. EDC Orlando. 1h ago. Unread.',
+      'Shuttle update. Runs late. 1h ago. EDC Orlando. Unread.',
     );
   });
 

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import type { NowNextSelection } from '@festie/shared/utils';
+import { fmtZonedClock, type NowNextSelection } from '@festie/shared/utils';
 import NowHero from './NowHero';
 
 const NOW = Date.parse('2026-06-12T17:30:00Z');
@@ -52,6 +52,42 @@ describe('NowHero walk time', () => {
     renderHero();
     expect(screen.getByText('Head to Main')).toBeInTheDocument();
     expect(screen.getByText('in 1h 30m')).not.toHaveClass('text-accent-coral');
+  });
+});
+
+describe('NowHero next card clock', () => {
+  const hero = (startMs: number) =>
+    render(
+      <NowHero
+        selection={
+          {
+            phase: 'during',
+            current: [],
+            upcoming: [{ set: { id: 's3', artist: 'Gus', stageId: 'main', startTime: '14:00', endTime: '15:00' }, start: startMs, end: startMs + 3_600_000 }],
+            todayCount: 1,
+            startsAt: null,
+          } as unknown as NowNextSelection
+        }
+        nowMs={NOW}
+        timeZone="UTC"
+        lineupMode
+        getStageName={() => 'Main'}
+        onOpenSet={vi.fn()}
+        onBrowse={vi.fn()}
+      />,
+    );
+  const count = (text: string, part: string) => text.split(part).length - 1;
+
+  it('shows the clock beside a relative countdown', () => {
+    const start = NOW + 90 * 60_000;
+    hero(start);
+    expect(count(screen.getByTestId('fm-next-hero').textContent ?? '', fmtZonedClock(start, 'UTC'))).toBe(1);
+  });
+
+  it('shows one time label when the countdown is already a weekday and clock', () => {
+    const start = NOW + 26 * 3_600_000;
+    hero(start);
+    expect(count(screen.getByTestId('fm-next-hero').textContent ?? '', fmtZonedClock(start, 'UTC'))).toBe(1);
   });
 });
 

@@ -337,6 +337,21 @@ export function createFestivalReviewStore(pool: Pool) {
       WHERE
         h2.festival_id = h.festival_id
     ) AS "people",
+    -- What each held change is, so the admin sees what Send alert would tell people. A set moved back to its
+    -- old slot is left out: Send alert does not send it either.
+    COALESCE(
+      jsonb_agg(
+        jsonb_build_object('kind', h.kind, 'artist', h.artist, 'before', h.before_slot, 'after', h.after_slot)
+        ORDER BY
+          h.artist,
+          h.set_id
+      ) FILTER (
+        WHERE
+          h.kind <> 'moved'
+          OR h.before_slot IS DISTINCT FROM h.after_slot
+      ),
+      '[]'::jsonb
+    ) AS "items",
     MAX(h.updated_at) AS "updatedAt"
   FROM
     festival_held_schedule_changes h

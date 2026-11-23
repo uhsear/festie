@@ -244,7 +244,14 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
           }}
           onCloseAutoFocus={returnFocus.onCloseAutoFocus}
         >
-          <div aria-hidden="true" className="mx-auto mt-2 mb-1 h-1.5 w-12 rounded-full bg-border-light flex-shrink-0 lg:hidden" />
+          <button
+            type="button"
+            aria-label={snap === 1 ? 'Collapse set details' : 'Expand set details'}
+            className="mx-auto mt-0.5 flex min-h-11 w-24 flex-shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 lg:hidden"
+            onClick={() => setSnap(snap === 1 ? 0.5 : 1)}
+          >
+            <span aria-hidden="true" className="h-1.5 w-12 rounded-full bg-border-light" />
+          </button>
           <Drawer.Title className="sr-only">{artistDisplayName(set, b2bSeparator)}</Drawer.Title>
           <Drawer.Description className="sr-only">
             Set details, schedule, and crew info for {artistDisplayName(set, b2bSeparator)}
@@ -269,6 +276,11 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
           <div
             className={`min-h-0 flex flex-col gap-[var(--space-4)] ${isLg || snap === 1 ? 'overflow-y-auto' : 'overflow-hidden'} overscroll-contain p-7 pt-[72px] pb-[max(12px,env(safe-area-inset-bottom))]`}
             ref={panelRef}
+            // The peeking sheet runs past the viewport, so keyboard focus on a control below the fold must open it fully.
+            // Pointer taps focus controls too, and must not re-expand a sheet the user just collapsed.
+            onFocusCapture={(e) => {
+              if ((e.target as Element).matches(':focus-visible')) setSnap(1);
+            }}
           >
             <div>
               <div

@@ -250,18 +250,20 @@ export default function createLineupImportRoute(deps: RouteDeps) {
       invalidateFestivalCache();
       announceSetsChanged(festival);
       await applyLinkFills(outcome.refs?.linkFills ?? [], req.user?.userId ?? null, getRequestIp(req), viewer);
+      // An organizer has no Artists tab, so the hint sends them to Festie instead.
+      const organizerImport = isOrganizerRequest(req);
       if (outcome.refs?.ignoredLinkEdits) {
         warnings.push(
-          `${outcome.refs.ignoredLinkEdits} ${outcome.refs.ignoredLinkEdits === 1 ? 'link differs' : 'links differ'} from the artist's links and ${outcome.refs.ignoredLinkEdits === 1 ? 'was' : 'were'} not used. Change them on the Artists tab.`,
+          `${outcome.refs.ignoredLinkEdits} ${outcome.refs.ignoredLinkEdits === 1 ? 'link differs' : 'links differ'} from the artist's links and ${outcome.refs.ignoredLinkEdits === 1 ? 'was' : 'were'} not used. ${organizerImport ? 'Ask Festie to change them.' : 'Change them on the Artists tab.'}`,
         );
       }
       if (outcome.writes.inserts.some((s: any) => s.artists.some((a: any) => !Object.keys(a.links ?? {}).length))) {
-        warnings.push('Add links on the Artists tab. The import does not search Spotify.');
+        warnings.push(`${organizerImport ? 'Ask Festie to add links.' : 'Add links on the Artists tab.'} The import does not search Spotify.`);
       }
       // After the response is built, so the save never waits. It logs its own failure.
       void deps.interestConversion?.convert(festivalId);
       const alerting = alertPickersOfFirstTimes(festival, req);
-      if (isOrganizerRequest(req)) await alerting;
+      if (organizerImport) await alerting;
       const result = buildResult(outcome.plan, outcome.writes, outcome.importId, warnings, festival.b2bSeparator || 'b2b');
       log.info('lineup imported', {
         festivalId,

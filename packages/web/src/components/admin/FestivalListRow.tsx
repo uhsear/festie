@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { pluralize } from '@festie/shared/utils/format';
 import { rowButton } from './adminFestivalStyles';
 import type { OpenView } from './AdminFestivalSubTabs';
 
@@ -11,6 +12,8 @@ interface FestivalListRowProps {
     stageCount?: number;
     dayCount?: number;
   };
+  /** An organizer submitted this draft and Festie has not answered yet. */
+  waitingForReview?: boolean;
   selected: boolean;
   onToggleSelected: () => void;
   onOpen: (view: OpenView) => void;
@@ -20,6 +23,7 @@ interface FestivalListRowProps {
 
 export default function FestivalListRow({
   festival,
+  waitingForReview = false,
   selected,
   onToggleSelected,
   onOpen,
@@ -42,12 +46,12 @@ export default function FestivalListRow({
         {festival.name}
         {!festival.published && (
           <span className="ml-2 px-2 py-0.5 rounded-full bg-accent-amber/20 text-accent-amber text-xs font-semibold">
-            Draft
+            {waitingForReview ? 'Waiting for review' : 'Draft'}
           </span>
         )}
       </h2>
       <p className="text-sm text-text-muted">
-        {festival.location} · {festival.stageCount ?? 0} stages · {festival.dayCount ?? 0} days
+        {festival.location} · {pluralize(festival.stageCount ?? 0, 'stage')} · {pluralize(festival.dayCount ?? 0, 'day')}
       </p>
     </div>
     <div className="flex flex-wrap gap-2">
