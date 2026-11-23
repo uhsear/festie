@@ -552,7 +552,7 @@ export default function FestivalEditForm({
                   />
                   <input
                     type="color"
-                    aria-label={`Stage colour for ${stage.name || 'new stage'}`}
+                    aria-label={`Stage color for ${stage.name || 'new stage'}`}
                     value={stage.color}
                     onChange={(e) => handleStageColor(i, e.target.value)}
                     className="w-12 min-w-10 h-10 shrink-0 rounded-lg cursor-pointer"
