@@ -5,28 +5,37 @@ import { z } from 'zod';
 import { identifier } from './primitives';
 
 // ── Poll Schemas ──────────────────────────────────────────────────
-export const crewHomeBaseSchema = z.object({
-  location: z.string().trim().max(200).optional().nullable(),
-  time: z.string().trim().max(100).optional().nullable(),
-  // T54: undefined keeps the stored Plan B; null or '' clears it.
-  planB: z.string().trim().max(140).optional().nullable(),
-});
+// A write whose fields are all optional must still name one, or a stale client's body
+// (unknown keys are stripped) would silently clear the stored value. null still clears.
+const hasDefinedField = (d: object) => Object.values(d).some((v) => v !== undefined);
+const AT_LEAST_ONE_FIELD = { message: 'At least one field required' };
+
+export const crewHomeBaseSchema = z
+  .object({
+    location: z.string().trim().max(200).optional().nullable(),
+    time: z.string().trim().max(100).optional().nullable(),
+    // T54: undefined keeps the stored Plan B; null or '' clears it.
+    planB: z.string().trim().max(140).optional().nullable(),
+  })
+  .refine(hasDefinedField, AT_LEAST_ONE_FIELD);
 
 // M6 Crew Photo Wall (Phase 1, link-out only). A single shared-album URL per
 // crew (e.g. Google Photos / Apple shared album). https-only and length-bounded
 // to avoid javascript:/data: schemes and oversized values; nullable / empty so
 // a member can clear the link. Festie hosts no photos yet — this is a link-out.
-export const crewPhotoAlbumSchema = z.object({
-  photoAlbumUrl: z
-    .string()
-    .trim()
-    .url('Must be a valid URL')
-    .max(2048)
-    .refine((u) => u.startsWith('https://'), 'Must be an https URL')
-    .nullable()
-    .optional()
-    .or(z.literal('')),
-});
+export const crewPhotoAlbumSchema = z
+  .object({
+    photoAlbumUrl: z
+      .string()
+      .trim()
+      .url('Must be a valid URL')
+      .max(2048)
+      .refine((u) => u.startsWith('https://'), 'Must be an https URL')
+      .nullable()
+      .optional()
+      .or(z.literal('')),
+  })
+  .refine(hasDefinedField, AT_LEAST_ONE_FIELD);
 
 // A schedule poll's set link for one option. The server stores these
 // index-aligned with `options` and makes the winner a meeting point on close.
@@ -78,9 +87,7 @@ export const packingUpdateSchema = z
     claimed: z.boolean().optional(),
     packed: z.boolean().optional(),
   })
-  .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), {
-    message: 'At least one field required',
-  });
+  .refine(hasDefinedField, AT_LEAST_ONE_FIELD);
 
 export const packingBatchSchema = z.object({
   labels: z.array(z.string().trim().min(1).max(200)).min(1).max(30),
@@ -241,15 +248,17 @@ export const checkinStartSchema = z
   .strip();
 
 // ── Crew carpool / ride-board schemas (M2 logistics) ────────────────
-export const rideCreateSchema = z.object({
-  driver: z.string().trim().max(100).optional().nullable(),
-  seats: z.number().int().min(0).max(99).optional().nullable(),
-  departFrom: z.string().trim().max(200).optional().nullable(),
-  departAt: z.string().trim().max(100).optional().nullable(),
-  note: z.string().trim().max(500).optional().nullable(),
-  direction: z.enum(['to_festival', 'home']).optional().nullable(),
-  departTime: z.string().datetime().optional().nullable(),
-});
+export const rideCreateSchema = z
+  .object({
+    driver: z.string().trim().max(100).optional().nullable(),
+    seats: z.number().int().min(0).max(99).optional().nullable(),
+    departFrom: z.string().trim().max(200).optional().nullable(),
+    departAt: z.string().trim().max(100).optional().nullable(),
+    note: z.string().trim().max(500).optional().nullable(),
+    direction: z.enum(['to_festival', 'home']).optional().nullable(),
+    departTime: z.string().datetime().optional().nullable(),
+  })
+  .refine(hasDefinedField, AT_LEAST_ONE_FIELD);
 
 export const rideUpdateSchema = z
   .object({
@@ -261,9 +270,7 @@ export const rideUpdateSchema = z
     direction: z.enum(['to_festival', 'home']).optional().nullable(),
     departTime: z.string().datetime().optional().nullable(),
   })
-  .refine((d) => Object.keys(d).some((k) => (d as Record<string, unknown>)[k] !== undefined), {
-    message: 'At least one field required',
-  });
+  .refine(hasDefinedField, AT_LEAST_ONE_FIELD);
 
 // ── Refresh Token schema ────────────────────────────────────────
 export const refreshTokenSchema = z.object({

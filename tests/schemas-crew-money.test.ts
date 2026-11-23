@@ -138,3 +138,19 @@ describe('schemas: expense amount bounds and cursor (FND-006, FND-014)', () => {
     assert.equal(schemas.paginationQuery.safeParse({ cursor: 'garbage' }).success, true);
   });
 });
+
+describe('schemas: crew writes need at least one known field', () => {
+  it('rejects a body with no recognised field (a stale client or a typo)', () => {
+    assert.equal(schemas.crewHomeBase.safeParse({ locaton: 'typo' }).success, false);
+    assert.equal(schemas.crewPhotoAlbum.safeParse({ photoAlbm: 'x' }).success, false);
+    assert.equal(schemas.rideCreate.safeParse({}).success, false);
+  });
+
+  it('still accepts an explicit null or empty string to clear a value', () => {
+    assert.equal(schemas.crewHomeBase.safeParse({ location: null, time: null }).success, true);
+    assert.equal(schemas.crewHomeBase.safeParse({ planB: '' }).success, true);
+    assert.equal(schemas.crewPhotoAlbum.safeParse({ photoAlbumUrl: null }).success, true);
+    assert.equal(schemas.crewPhotoAlbum.safeParse({ photoAlbumUrl: '' }).success, true);
+    assert.equal(schemas.rideCreate.safeParse({ seats: 3 }).success, true);
+  });
+});
