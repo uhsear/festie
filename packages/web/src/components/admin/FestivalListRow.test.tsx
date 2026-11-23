@@ -20,6 +20,13 @@ describe('FestivalListRow', () => {
     expect(screen.getByText('Orlando · 2 stages · 3 days')).toBeInTheDocument();
   });
 
+  it('uses singular nouns for one stage or one day', () => {
+    render(
+      <FestivalListRow festival={{ ...festival, stageCount: 1, dayCount: 1 }} selected={false} onToggleSelected={vi.fn()} onOpen={vi.fn()} onArtists={vi.fn()} onDelete={vi.fn()} />,
+    );
+    expect(screen.getByText('Orlando · 1 stage · 1 day')).toBeInTheDocument();
+  });
+
   it('routes each action', async () => {
     const onOpen = vi.fn();
     const onArtists = vi.fn();

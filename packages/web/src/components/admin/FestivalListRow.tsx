@@ -1,4 +1,5 @@
 import { Link } from '@tanstack/react-router';
+import { pluralize } from '@festie/shared/utils/format';
 import { rowButton } from './adminFestivalStyles';
 import type { OpenView } from './AdminFestivalSubTabs';
 
@@ -47,7 +48,7 @@ export default function FestivalListRow({
         )}
       </h2>
       <p className="text-sm text-text-muted">
-        {festival.location} · {festival.stageCount ?? 0} stages · {festival.dayCount ?? 0} days
+        {festival.location} · {pluralize(festival.stageCount ?? 0, 'stage')} · {pluralize(festival.dayCount ?? 0, 'day')}
       </p>
     </div>
     <div className="flex flex-wrap gap-2">
