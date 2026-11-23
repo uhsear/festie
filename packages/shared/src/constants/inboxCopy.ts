@@ -21,7 +21,8 @@ export function inboxRowLabel(
   unread: boolean,
 ): string {
   const bare = (s: string) => s.trim().replace(/\.+$/, '');
-  const parts = [bare(item.title), bare(item.body), ...(item.festivalName ? [bare(item.festivalName)] : []), ago];
+  // Same order as the row's visible text, so voice control can say what it sees (WCAG 2.5.3).
+  const parts = [bare(item.title), bare(item.body), ago, ...(item.festivalName ? [bare(item.festivalName)] : [])];
   const sentence = (part: string) => (/[?!]$/.test(part) ? part : `${part}.`);
   return `${parts.map(sentence).join(' ')}${unread ? ` ${INBOX_COPY.unreadA11y}.` : ''}`;
 }
