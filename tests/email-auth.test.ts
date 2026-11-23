@@ -281,6 +281,17 @@ describe('email-auth: reset-password', { concurrency: 1 }, () => {
     assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
   });
 
+  test('malformed token (truncated link): 400 with TOKEN_EXPIRED, not a field validation error', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const res = await server.request
+      .post('/api/v1/auth/reset-password')
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ token: 'bogus', newPassword: 'freshpassword9', confirmPassword: 'freshpassword9' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+  });
+
   test('rejects invalid token', async () => {
     const server = await startServer();
     servers.push(server);
