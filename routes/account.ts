@@ -273,6 +273,13 @@ export default function createAccountRoutes(deps: RouteDeps) {
     invalidateUserCache,
   } = deps;
 
+  // Fire-and-forget: a failed lookup must not become an unhandled rejection, which shuts the server down.
+  const announceIdentity = (user: Parameters<typeof emitProfileIdentity>[0], ioServer: Parameters<typeof emitProfileIdentity>[1]) => {
+    void Promise.resolve(emitProfileIdentity(user, ioServer)).catch((err: Error) =>
+      log.warn('profile identity emit failed', { error: err.message }),
+    );
+  };
+
   const router = express.Router();
 
   // Per-recipient tier for POST /email — 3 verification mails per hour to any
@@ -397,7 +404,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
 
         if (!updatedUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
         deps.invalidateUserCache();
-        emitProfileIdentity(updatedUser, io);
+        announceIdentity(updatedUser, io);
         setNoStore(res);
         return sendSuccess(res, { user: serializePublicUser(updatedUser) });
       } catch (error) {
@@ -430,7 +437,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
 
       if (!updatedUser) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
       deps.invalidateUserCache();
-      emitProfileIdentity(updatedUser, io);
+      announceIdentity(updatedUser, io);
       setNoStore(res);
       return sendSuccess(res, { user: serializePublicUser(updatedUser) });
     } catch (error) {
@@ -459,7 +466,7 @@ export default function createAccountRoutes(deps: RouteDeps) {
       if (!result) return sendError(res, 404, 'User not found', ErrorCodes.NOT_FOUND);
       invalidateUserCache();
 
-      emitProfileIdentity(result, io);
+      announceIdentity(result, io);
       return sendSuccess(res, { user: serializePublicUser(result) });
     } catch (error) {
       log.error('display name change failed', { error: (error as Error).message, userId: req.user.userId });

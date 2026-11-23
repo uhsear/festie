@@ -14,7 +14,6 @@
  * - Deep link payloads in push notifications for mobile app navigation
  */
 
-import type { PresenceUser } from '../packages/shared/src/types/socket-events.js';
 import type { createLogger } from './logger.js';
 import type { AppConfig } from './config.js';
 import type { createNotificationService } from './notifications/index.js';
@@ -198,8 +197,15 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     if (crewRooms.length > 0) io.to(crewRooms).emit('profile:updated', { ...body, interestsChanged: false });
   }
 
-  function profileCreated({ festivalId, profile, user }: { festivalId: string; profile: { id: string; name: string }; user: unknown }) {
-    io.to(festivalId).emit('profile:created', {
+  // Only the joiner's own devices and their crew mates learn of a new profile, never the whole festival room.
+  async function profileCreated({ festivalId, profile, user }: { festivalId: string; profile: { id: string; name: string; userId: string }; user: unknown }) {
+    const crews = stores?.crews
+      ? await stores.crews.listByUserAndFestival(profile.userId, festivalId).catch((err: Error) => {
+        log.warn('profile:created crew lookup failed', { error: err.message });
+        return [];
+      })
+      : [];
+    io.to(['user:' + profile.userId, ...(crews || []).map((c: { id: string }) => 'crew:' + c.id)]).emit('profile:created', {
       _v: EVENT_VERSION,
       festivalId,
       profile: {
@@ -340,10 +346,6 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
 
 
 
-  function presenceUpdate({ festivalId, online }: { festivalId: string; online: (Omit<PresenceUser, 'username'> & { username?: string })[] }) {
-    io.to(festivalId).emit('presence:update', { _v: EVENT_VERSION, online });
-  }
-
   // Flush all pending batches (useful for graceful shutdown)
   // Resolves once every flushed batch has finished its crew lookup and emit.
   async function flushAll() {
@@ -402,7 +404,6 @@ export function createSocketEmitter({ io, log, notificationService, buildAvatarU
     festivalUpdated,
     scheduleChanged,
     festivalDeleted,
-    presenceUpdate,
     flushAll,
     crewExpenseAdded,
     crewExpenseDeleted,

@@ -418,6 +418,8 @@ export default function setupSocketHandlers(deps: SocketHandlerDeps | RouteDeps)
 
         socket.join(`crew:${crewId}`);
         socket.data.crewId = crewId;
+        // The viewer's presence list is crew-scoped, so a new crew changes who they see.
+        if (crew.festivalId) emitPresence(crew.festivalId, io);
 
         log.debug('join:crew', { userId: session.userId, crewId });
         respond({ ok: true, crewId });

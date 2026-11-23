@@ -724,6 +724,7 @@ export default function createCrewRoutes(deps: RouteDeps) {
         await evictAllFromCrewRoom(crewId);
 
         await stores.crews.delete(crewId);
+        deps.emitPresence?.(crew.festivalId, io);
 
         crewNotify?.toUsers({
           crewId,
