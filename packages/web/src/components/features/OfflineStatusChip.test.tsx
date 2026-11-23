@@ -6,7 +6,7 @@ const h = vi.hoisted(() => ({
   user: { id: 'u1' } as { id: string } | null,
   festivalId: 'f1' as string | null,
   days: [] as { date: string }[],
-  hook: { summary: { overall: 'none', hasDownloaded: false, lastSyncedAt: null as number | null, hidden: false }, isDownloading: false },
+  hook: { summary: { overall: 'none', hasDownloaded: false, lastSyncedAt: null as number | null, hidden: false }, isDownloading: false, hasMap: false },
   download: vi.fn(),
 }));
 
@@ -25,6 +25,7 @@ function setHook(overall: string, extra: Record<string, unknown> = {}) {
   h.hook = {
     summary: { overall, hasDownloaded: overall !== 'none', lastSyncedAt: Date.now(), hidden: false, ...extra },
     isDownloading: overall === 'syncing',
+    hasMap: false,
   };
 }
 
@@ -48,6 +49,11 @@ describe('OfflineStatusChip', () => {
     const at = render(<OfflineStatusChip remind />);
     expect(at.getByText('Open Festie on wifi to save the lineup for no signal.')).toBeInTheDocument();
     at.unmount();
+    h.hook.hasMap = true;
+    const withMap = render(<OfflineStatusChip remind />);
+    expect(withMap.getByText('Open Festie on wifi to save the map and lineup for no signal.')).toBeInTheDocument();
+    withMap.unmount();
+    h.hook.hasMap = false;
     const noRemind = render(<OfflineStatusChip />);
     expect(noRemind.queryByText(/Open Festie on wifi/)).toBeNull();
     noRemind.unmount();
