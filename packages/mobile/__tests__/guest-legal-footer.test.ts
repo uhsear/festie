@@ -36,9 +36,9 @@ describe('guest legal footer (source-level guards)', () => {
     expect(read('app/(auth)/forgot-password.tsx')).toContain('<GuestLegalFooter />');
   });
 
-  it('opens Terms through the footer opener from register, complete-signup and Account', () => {
+  it('opens Terms through the footer opener from register, complete-signup, Account and the privacy screen', () => {
     expect(src).toMatch(/export async function openPage/);
-    for (const file of ['app/(auth)/register.tsx', 'app/(auth)/complete-signup.tsx', 'app/(tabs)/account.tsx']) {
+    for (const file of ['app/(auth)/register.tsx', 'app/(auth)/complete-signup.tsx', 'app/(tabs)/account.tsx', 'app/privacy.tsx']) {
       const text = read(file);
       expect(text).toContain('openPage(GUEST_LEGAL_COPY.termsPath)');
       expect(text).not.toMatch(/Linking\.openURL\((TERMS_URL|SUPPORT_URL_TERMS)\)/);

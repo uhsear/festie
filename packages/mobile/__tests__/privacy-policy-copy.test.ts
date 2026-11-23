@@ -55,6 +55,6 @@ describe('T33 privacy policy copy (source-level guards)', () => {
   });
 
   it('the privacy screen opens Terms the same way', () => {
-    expect(MOBILE).toContain('WebBrowser.openBrowserAsync(TERMS_URL)');
+    expect(MOBILE).toContain('openPage(GUEST_LEGAL_COPY.termsPath)');
   });
 });

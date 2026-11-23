@@ -145,6 +145,24 @@ describe('AccountPage', () => {
     }
   });
 
+  it('moves focus to the Danger zone and stops re-pinning when focus moves (assistive tech)', () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.location.hash = '#danger';
+    try {
+      render(<AccountPage />);
+      expect(screen.getByTestId('danger-zone').parentElement).toHaveFocus();
+      window.dispatchEvent(new Event('focusin'));
+      scrollIntoView.mockClear();
+      vi.advanceTimersByTime(500);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      window.location.hash = '';
+    }
+  });
+
   it('does not scroll without the #danger hash', () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;

@@ -21,11 +21,6 @@ describe('t47 mobile inbox wiring', () => {
     expect(read('../web/src/routes/inbox.tsx')).toContain('Artist:');
   });
 
-  it('the artist line carries the same "Artist:" prefix as web', () => {
-    expect(read('app/inbox.tsx')).toContain('Artist:');
-    expect(read('../web/src/routes/inbox.tsx')).toContain('Artist:');
-  });
-
   it('_layout imports routeNotification instead of defining it', () => {
     const src = read('app/_layout.tsx');
     expect(src).toContain("from '../lib/routeNotification'");

@@ -6,8 +6,14 @@ import { useEffect } from 'react';
  * `scrollTop = 0` lands on an empty Suspense placeholder and the newly
  * mounted content (esp. pages with min-h-screen) can restore a previous
  * scroll offset. Two rAFs ensure the reset sticks after Suspense commits
- * and layout settles.
+ * and layout settles. A URL hash that names an element on the page (e.g. /account#danger) is a deep
+ * link: the page scrolls itself there, so the reset must not undo it.
  */
+const hasHashTarget = () => {
+  const id = window.location.hash.slice(1);
+  return id !== '' && document.getElementById(id) !== null;
+};
+
 export function useScrollReset(pathname: string) {
   useEffect(() => {
     const mainContent = document.getElementById('main-content');
@@ -16,7 +22,10 @@ export function useScrollReset(pathname: string) {
     if (mainContent) scrollEls.push(mainContent);
     if (parentScroller && parentScroller.scrollTop > 0) scrollEls.push(parentScroller);
     if (scrollEls.length === 0) return;
-    const resetAll = () => { scrollEls.forEach((el) => { el.scrollTop = 0; }); };
+    const resetAll = () => {
+      if (hasHashTarget()) return;
+      scrollEls.forEach((el) => { el.scrollTop = 0; });
+    };
     resetAll();
     const r1 = requestAnimationFrame(() => {
       resetAll();

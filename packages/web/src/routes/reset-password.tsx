@@ -46,7 +46,11 @@ function ResetPasswordPageInner() {
       await navigate({ to: '/login', search: { reset: true }, replace: true });
     } catch (err) {
       if (isResetLinkExpired(err)) setExpired(true);
-      else setPasswordError(mapErrorToUserMessage(err, "Couldn't reset your password. Try again."));
+      else {
+        setPasswordError(mapErrorToUserMessage(err, "Couldn't reset your password. Try again."));
+        // The field is disabled while busy, so focus it after the re-enable commits.
+        window.requestAnimationFrame(() => document.getElementById('reset-new-password')?.focus());
+      }
     } finally {
       setBusy(false);
     }
