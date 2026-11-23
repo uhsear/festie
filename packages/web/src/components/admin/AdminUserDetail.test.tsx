@@ -14,6 +14,22 @@ import AdminUserDetail from './AdminUserDetail';
 beforeEach(() => vi.clearAllMocks());
 
 describe('AdminUserDetail', () => {
+  it('marks a refused attempt as failed instead of reading as a done action', async () => {
+    fetchDetail.mockResolvedValue({
+      user: { id: 'u2', username: 'bob', displayName: null, email: 'bob@example.com', emailVerified: true, createdAt: '2026-01-01T00:00:00Z', lastActiveAt: null, roles: [], publicSchedule: false },
+      festivals: [],
+      crews: [],
+      activity: [
+        { id: 'a1', action: 'festival.deleted', status: 'failure', actorUsername: 'bob', targetLabel: 'Fest', createdAt: '2026-01-02T00:00:00Z' },
+        { id: 'a2', action: 'festival.created', status: 'success', actorUsername: 'bob', targetLabel: 'Fest', createdAt: '2026-01-02T00:00:00Z' },
+      ],
+    });
+    render(<AdminUserDetail userId="u2" />);
+    expect(await screen.findByText('Attempted: Festival deleted')).toBeInTheDocument();
+    expect(screen.getAllByText('Failed')).toHaveLength(1);
+    expect(screen.getByText('Festival created')).toBeInTheDocument();
+  });
+
   it('renders pick counts, crew roles and the audit notice', async () => {
     fetchDetail.mockResolvedValue({
       user: {
