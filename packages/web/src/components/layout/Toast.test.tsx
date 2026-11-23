@@ -56,6 +56,15 @@ describe('Toast', () => {
     },
   );
 
+  it('lets clicks pass through the toast body and keeps Undo and Close clickable', () => {
+    setupMockToast([{ id: '1', message: 'Saved', type: 'success', onUndo: vi.fn() }]);
+    render(<Toast />);
+    const card = screen.getByText('Saved').closest('.toast-enter')!;
+    expect(card).not.toHaveClass('pointer-events-auto');
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveClass('pointer-events-auto');
+    expect(screen.getByRole('button', { name: 'Undo: Saved' })).toHaveClass('pointer-events-auto');
+  });
+
   it('renders multiple toasts', () => {
     setupMockToast([
       { id: '1', message: 'First', type: 'success' },

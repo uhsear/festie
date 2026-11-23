@@ -38,9 +38,11 @@ export default function Toast() {
           <div
             key={t.id}
             className={cn(
-              'glass p-4 rounded-lg flex-between gap-3 pointer-events-auto toast-enter',
+              'glass p-4 rounded-lg flex-between gap-3 toast-enter',
               getColorClasses(t.type),
             )}
+            // The toast text passes clicks through: a toast must never cover the Save or Cancel it was raised
+            // by. Only its Undo and Close buttons take the pointer.
             // An undo toast must not outlive its pending action's own timer, which
             // hover/focus cannot pause; so only plain toasts pause.
             onMouseEnter={t.onUndo ? undefined : () => pauseToast(t.id)}
@@ -63,7 +65,7 @@ export default function Toast() {
                   removeToast(t.id);
                 }}
                 aria-label={`Undo: ${t.message}`}
-                className="text-sm font-semibold underline-offset-2 hover:underline inline-flex items-center gap-1 min-h-11 min-w-11 px-2 flex-shrink-0"
+                className="text-sm font-semibold underline-offset-2 hover:underline inline-flex items-center gap-1 min-h-11 min-w-11 px-2 flex-shrink-0 pointer-events-auto"
               >
                 <RotateCcw className="w-4 h-4" aria-hidden="true" />
                 Undo
@@ -73,7 +75,7 @@ export default function Toast() {
             <button
               type="button"
               onClick={() => removeToast(t.id)}
-              className="p-1 hover:bg-[var(--color-overlay-3)] rounded transition-colors flex-shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center"
+              className="p-1 hover:bg-[var(--color-overlay-3)] rounded transition-colors flex-shrink-0 min-h-11 min-w-11 inline-flex items-center justify-center pointer-events-auto"
               aria-label="Close"
             >
               <X className="w-4 h-4" aria-hidden="true" />
