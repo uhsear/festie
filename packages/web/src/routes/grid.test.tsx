@@ -193,7 +193,8 @@ describe('GridView', () => {
     storeState.allProfiles = [];
     Object.assign(storeState, {
       stages: [{ id: 'st1', name: 'Main Stage' }],
-      days: [{ index: 0, label: 'Friday', date: '2026-06-12' }],
+      // Far future so the festival never reads as over, whatever the clock says.
+      days: [{ index: 0, label: 'Friday', date: '2099-06-12' }],
       activeStages: [],
       festivals: [],
       error: null,
@@ -256,6 +257,17 @@ describe('GridView', () => {
     expect(screen.getByRole('heading', { name: "Set times aren't out yet" })).toBeInTheDocument();
     expect(screen.getByText('TBA Artist')).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Schedule grid' })).toBeInTheDocument();
+  });
+
+  it('does not say set times are not out once the festival is over', () => {
+    storeState.days = [{ index: 0, label: 'Friday', date: '2020-06-12' }];
+    setFilters({
+      timedSets: [],
+      timelessSets: [{ id: 's1', artist: 'TBA Artist', stageId: 'st1', dayIndex: 0 }],
+    });
+    render(<GridView />);
+    expect(screen.getByText('TBA Artist')).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: "Set times aren't out yet" })).not.toBeInTheDocument();
   });
 
   it('says the act has no time yet, not that no times are out, when a filter leaves only an untimed set', () => {
