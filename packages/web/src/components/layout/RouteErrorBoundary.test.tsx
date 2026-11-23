@@ -62,6 +62,15 @@ describe('RouteErrorBoundary', () => {
     expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
   });
 
+  it('says offline, not updated, when a route chunk fails to load while the device is offline', () => {
+    const onLine = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    const error = new TypeError('Failed to fetch dynamically imported module: /assets/map-abc.js');
+    render(<RouteErrorBoundary error={error} reset={vi.fn()} />);
+    expect(screen.getByText('You appear to be offline')).toBeInTheDocument();
+    expect(screen.queryByText('Festie was updated')).not.toBeInTheDocument();
+    onLine.mockRestore();
+  });
+
   // ── Generic / unknown errors ─────────────────────────────────────────
 
   it('renders generic error heading for unknown errors', () => {

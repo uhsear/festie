@@ -29,7 +29,7 @@ function isChunkLoadError(error: Error): boolean {
 
 function classifyError(error: Error): ErrorKind {
   // Before the TypeError branch below: Chromium words a missing chunk as "Failed to fetch ...".
-  if (isChunkLoadError(error)) return 'update';
+  if (isChunkLoadError(error) && navigator.onLine !== false) return 'update';
 
   // ApiClientError from shared/services/api
   if (isApiError(error)) {
