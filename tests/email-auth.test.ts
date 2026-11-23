@@ -292,6 +292,17 @@ describe('email-auth: reset-password', { concurrency: 1 }, () => {
     assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
   });
 
+  test('dead token with a policy-failing password still gets TOKEN_EXPIRED, not a field error', async () => {
+    const server = await startServer();
+    servers.push(server);
+    const res = await server.request
+      .post('/api/v1/auth/reset-password')
+      .set(TRUSTED_MUTATION_HEADER, '1')
+      .send({ token: 'bogus', newPassword: 'password123', confirmPassword: 'password123' });
+    assert.equal(res.status, 400);
+    assert.equal(res.body.error.code, 'TOKEN_EXPIRED');
+  });
+
   test('rejects invalid token', async () => {
     const server = await startServer();
     servers.push(server);

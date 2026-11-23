@@ -384,7 +384,8 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
         // Look the account up without consuming the link, so the policy can reject a password that
         // contains the username or email and the user can still retry with the same link.
         const live = await stores.emailTokens.findResetToken(hashResetToken(token));
-        const owner = live ? await getUserById(live.user_id) : null;
+        if (!live) return sendError(res, 400, RESET_LINK_EXPIRED, ErrorCodes.TOKEN_EXPIRED);
+        const owner = await getUserById(live.user_id);
         const pwError = checkPasswordPolicy(newPassword, { username: owner?.username, email: owner?.email });
         if (pwError) {
           return sendError(res, 400, pwError, ErrorCodes.INVALID_INPUT);
