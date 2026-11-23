@@ -1,4 +1,4 @@
-import { crewFestivalName } from '@festie/shared/utils';
+import { crewFestivalName, memberCountLabel } from '@festie/shared/utils';
 import { useFestivalStore } from '@festie/shared/stores';
 import type { Crew, CrewMember } from '@festie/shared/types';
 import Avatar from '../ui/Avatar';
@@ -40,7 +40,7 @@ export default function CrewHeader({ crew, members, onOpenMembers }: CrewHeaderP
           ))}
         </span>
         {extra > 0 && <span aria-hidden="true" className="ml-1 text-xs font-semibold text-text-secondary">+{extra}</span>}
-        <span className="sr-only">See all {count} members</span>
+        <span className="sr-only">See all {memberCountLabel(count)}</span>
       </button>
     </header>
   );

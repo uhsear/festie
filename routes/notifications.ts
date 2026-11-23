@@ -53,7 +53,8 @@ export default function createNotificationRoutes(deps: RouteDeps) {
 
   // ── GET /vapid-key — public VAPID key for browser push subscriptions ─
   router.get('/vapid-key', rl(60, 'notif-vapid'), (_req: any, res: any) => {
-    if (!webPush) return sendError(res, 404, 'Web push is not set up on this server.', ErrorCodes.NOT_FOUND);
+    // 200 with a null key, not 404: the browser logs every 404 as a console error on a server without push.
+    if (!webPush) return sendSuccess(res, { publicKey: null });
     res.set('Cache-Control', 'public, max-age=3600');
     return sendSuccess(res, { publicKey: webPush.publicKey });
   });

@@ -195,7 +195,7 @@ function FinishForm({ payload, next }: { payload: ProviderSignupPayload; next?: 
             disabled={isLoading || expired}
             aria-invalid={Boolean(errors.tosAccepted)}
             aria-describedby={errors.tosAccepted ? 'authTos-error' : undefined}
-            className="auth-tos-checkbox mt-0.5 h-[22px] w-[22px] min-w-[22px] p-0"
+            className="auth-tos-checkbox mt-0.5 h-6 w-6 min-w-6 p-0"
           />
           <span>
             I agree to the{' '}

@@ -89,6 +89,11 @@ describe('getInitials', () => {
     expect(getInitials('')).toBe('');
   });
 
+  it('keeps an emoji whole instead of splitting its surrogate pair', () => {
+    expect(getInitials('😀 álice')).toBe('😀Á');
+    expect(getInitials('😀')).toBe('😀');
+  });
+
   it('caches results', () => {
     const first = getInitials('CacheInit');
     const second = getInitials('CacheInit');

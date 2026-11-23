@@ -205,7 +205,7 @@ export default function Header() {
                   aria-current={active ? 'page' : undefined}
                   aria-label={badged ? badgeA11yLabel(tab.label, crewBadge) : undefined}
                   className={cn(
-                    'px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
+                    'inline-flex items-center min-h-11 px-4 py-2 no-underline bg-transparent text-text-secondary text-[length:var(--font-size-14)] font-semibold rounded-sm',
                     'transition-colors duration-[250ms] ease-standard tracking-[0.3px]',
                     'hover:text-text-primary',
                     'border border-transparent',

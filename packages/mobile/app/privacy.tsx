@@ -1,9 +1,10 @@
 import { View, Text, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { Stack } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
+import { GUEST_LEGAL_COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
+import { openPage } from '../components/GuestLegalFooter';
 
 /**
  * Privacy Policy screen — a self-contained native mirror of the canonical
@@ -23,7 +24,6 @@ const EFFECTIVE_DATE = 'November 18, 2026';
 const OPERATOR_NAME = 'Asir Khan';
 const CONTACT_EMAIL = 'privacy@festie.us';
 const SERVICE_URL = 'https://festie.us';
-const TERMS_URL = 'https://festie.us/terms.html';
 
 const openEmail = () => {
   void Linking.openURL(`mailto:${CONTACT_EMAIL}`);
@@ -31,16 +31,6 @@ const openEmail = () => {
 
 const openService = () => {
   void Linking.openURL(SERVICE_URL);
-};
-
-// An in-app sheet, with the system browser as fallback.
-const openTerms = async () => {
-  try {
-    await WebBrowser.openBrowserAsync(TERMS_URL);
-  } catch (err) {
-    console.warn('terms: in-app browser failed', err);
-    void Linking.openURL(TERMS_URL);
-  }
 };
 
 interface Subsection {
@@ -624,7 +614,7 @@ export default function PrivacyScreen() {
             {section.title === 'Other documents' ? (
               <TouchableOpacity
                 style={styles.linkRow}
-                onPress={() => void openTerms()}
+                onPress={() => void openPage(GUEST_LEGAL_COPY.termsPath)}
                 activeOpacity={0.7}
                 accessibilityRole="link"
                 accessibilityLabel="Read the Terms of Service"

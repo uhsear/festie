@@ -166,6 +166,7 @@ describe('AdminUsers', () => {
     listState = { ...listState, users: [], total: 0, error: 'Network down', refresh };
     render(<AdminUsers />);
     expect(screen.getByRole('alert')).toHaveTextContent('Network down');
+    expect(screen.getByRole('heading', { name: 'Users' })).toBeInTheDocument();
     await userEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(refresh).toHaveBeenCalledTimes(1);
   });

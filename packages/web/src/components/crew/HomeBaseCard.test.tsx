@@ -48,6 +48,13 @@ describe('HomeBaseCard', () => {
     expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: '6:00 PM', planB: null });
   });
 
+  it('labels the optional meet time while editing', async () => {
+    const user = userEvent.setup();
+    renderCard('18:00');
+    await user.click(screen.getByRole('button'));
+    expect(screen.getByText('Meet at (optional)')).toBeVisible();
+  });
+
   it('lets the owner remove Home Base', async () => {
     const user = userEvent.setup();
     putMock.mockClear();
@@ -65,7 +72,7 @@ describe('HomeBaseCard', () => {
     renderCard('18:00');
 
     await user.click(screen.getByRole('button'));
-    await user.clear(screen.getByLabelText('Meet at time'));
+    await user.clear(screen.getByLabelText('Meet at (optional)'));
     await user.click(screen.getByRole('button', { name: 'Save' }));
 
     expect(putMock).toHaveBeenCalledWith('/crews/c1/home-base', { location: 'Camp', time: null, planB: null });

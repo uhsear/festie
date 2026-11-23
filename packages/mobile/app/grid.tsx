@@ -41,7 +41,7 @@ import {
   type GridCrewProfile,
   searchEmptyCopy,
   searchHiddenByFilters,
-  dayHasTimedSets,
+  dayTimesNotOut,
   searchLineupEntries,
   searchOtherDays,
   type GridBounds,
@@ -122,6 +122,7 @@ export default function GridScreen() {
 
   const currentFestival = useFestivalDataStore((s) => s.currentFestival);
   const stages = useFestivalDataStore((s) => s.stages);
+  const festivalDays = useFestivalDataStore((s) => s.days);
   const festivals = useFestivalDataStore((s) => s.festivals);
   const festivalsLoading = useFestivalDataStore((s) => s.isLoading);
   const festivalsError = useFestivalDataStore((s) => s.error);
@@ -432,7 +433,7 @@ export default function GridScreen() {
               onSavePick={setPick}
               onOpenDetail={openSet}
               defaultExpanded
-              allTba={!dayHasTimedSets(getCurrentDaySets())}
+              allTba={dayTimesNotOut(currentFestival, festivalDays, getCurrentDaySets())}
             />
             <AnnouncedLineup model={announced} hPad={t.spacing[4]} />
           </ScrollView>

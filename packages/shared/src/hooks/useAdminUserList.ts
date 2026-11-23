@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { fetchAdminUsers, type AdminUserRow } from '../services/admin';
+import { mapErrorToUserMessage } from '../services/errors';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -39,7 +40,7 @@ export function useAdminUserList({ enabled = true, pageSize = 50 }: { enabled?: 
           setUsers([]);
           setTotal(0);
           setNextCursor(null);
-          setError(err instanceof Error ? err.message : 'Failed to load users');
+          setError(mapErrorToUserMessage(err, "Couldn't load users. Try again."));
         })
         .finally(() => {
           if (id === requestId.current) setLoading(false);
@@ -59,7 +60,7 @@ export function useAdminUserList({ enabled = true, pageSize = 50 }: { enabled?: 
       setTotal(page.total);
       setNextCursor(page.nextCursor);
     } catch (err) {
-      if (id === requestId.current) setError(err instanceof Error ? err.message : 'Failed to load users');
+      if (id === requestId.current) setError(mapErrorToUserMessage(err, "Couldn't load users. Try again."));
     } finally {
       setLoadingMore(false);
     }

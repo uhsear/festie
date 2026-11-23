@@ -72,6 +72,15 @@ describe('useAdminUserList', () => {
     expect(result.current.total).toBe(1);
   });
 
+  it('maps a server failure to a plain sentence instead of the raw server text', async () => {
+    getEnvelope.mockRejectedValueOnce(Object.assign(new Error('SQL exploded at line 4'), { status: 500, isNetworkError: false }));
+    const { result } = renderHook(() => useAdminUserList());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(0);
+    });
+    expect(result.current.error).toBe('Something went wrong on our side. Try again in a minute.');
+  });
+
   it('a failed search drops the previous rows and sets the error', async () => {
     getEnvelope.mockResolvedValueOnce(page(['a', 'b'], null, 2));
     const { result } = renderHook(() => useAdminUserList());

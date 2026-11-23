@@ -125,6 +125,44 @@ describe('AccountPage', () => {
     }
   });
 
+  it('keeps re-pinning #danger after mount, because the route scroll reset and late layout shifts undo a single scroll', () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.location.hash = '#danger';
+    try {
+      render(<AccountPage />);
+      scrollIntoView.mockClear();
+      vi.advanceTimersByTime(500);
+      expect(scrollIntoView.mock.calls.length).toBeGreaterThan(1);
+      window.dispatchEvent(new Event('wheel'));
+      scrollIntoView.mockClear();
+      vi.advanceTimersByTime(500);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      window.location.hash = '';
+    }
+  });
+
+  it('moves focus to the Danger zone and stops re-pinning when focus moves (assistive tech)', () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.location.hash = '#danger';
+    try {
+      render(<AccountPage />);
+      expect(screen.getByTestId('danger-zone').parentElement).toHaveFocus();
+      window.dispatchEvent(new Event('focusin'));
+      scrollIntoView.mockClear();
+      vi.advanceTimersByTime(500);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      window.location.hash = '';
+    }
+  });
+
   it('does not scroll without the #danger hash', () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
@@ -183,6 +221,14 @@ describe('AccountPage', () => {
     const privacy = screen.getByTestId('privacy-section');
     const pub = screen.getByTestId('public-schedule-section');
     expect(privacy.compareDocumentPosition(pub) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('links organization members to /manage and shows nobody else the card', () => {
+    render(<AccountPage />);
+    expect(screen.queryByRole('link', { name: /Manage your festivals/ })).not.toBeInTheDocument();
+    setStoreState({ user: { id: 'u1', name: 'Test User', username: 'testuser', email: 'test@festie.us', organizations: [{ id: 'o1', name: 'Venue', role: 'owner', status: 'active', verified: false }] } });
+    render(<AccountPage />);
+    expect(screen.getByRole('link', { name: /Manage your festivals/ })).toHaveAttribute('href', '/manage');
   });
 
   it('links Festival Wrap to /wrap', () => {

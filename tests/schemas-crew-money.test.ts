@@ -138,3 +138,33 @@ describe('schemas: expense amount bounds and cursor (FND-006, FND-014)', () => {
     assert.equal(schemas.paginationQuery.safeParse({ cursor: 'garbage' }).success, true);
   });
 });
+
+describe('schemas: crew writes need at least one known field', () => {
+  it('rejects a body with no recognised field (a stale client or a typo)', () => {
+    assert.equal(schemas.crewHomeBase.safeParse({ locaton: 'typo' }).success, false);
+    assert.equal(schemas.crewPhotoAlbum.safeParse({ photoAlbm: 'x' }).success, false);
+    assert.equal(schemas.rideCreate.safeParse({}).success, false);
+  });
+
+  it('rejects a ride offer whose fields are all null, empty or only a direction', () => {
+    assert.equal(schemas.rideCreate.safeParse({ driver: null, seats: null, departFrom: null, departTime: null }).success, false);
+    assert.equal(schemas.rideCreate.safeParse({ driver: '  ', note: '' }).success, false);
+    assert.equal(schemas.rideCreate.safeParse({ direction: 'home' }).success, false);
+    assert.equal(schemas.rideCreate.safeParse({ direction: 'home', seats: 0 }).success, true);
+    assert.equal(schemas.rideCreate.safeParse({ note: 'Leaving at noon' }).success, true);
+  });
+
+  it('rejects a home-base body that omits location, since the store would clear it', () => {
+    assert.equal(schemas.crewHomeBase.safeParse({ time: '8pm' }).success, false);
+    assert.equal(schemas.crewHomeBase.safeParse({ planB: 'Gate B' }).success, false);
+    assert.equal(schemas.crewHomeBase.safeParse({ location: 'Gate A', planB: 'Gate B' }).success, true);
+  });
+
+  it('still accepts an explicit null or empty string to clear a value', () => {
+    assert.equal(schemas.crewHomeBase.safeParse({ location: null, time: null }).success, true);
+    assert.equal(schemas.crewHomeBase.safeParse({ location: null, planB: '' }).success, true);
+    assert.equal(schemas.crewPhotoAlbum.safeParse({ photoAlbumUrl: null }).success, true);
+    assert.equal(schemas.crewPhotoAlbum.safeParse({ photoAlbumUrl: '' }).success, true);
+    assert.equal(schemas.rideCreate.safeParse({ seats: 3 }).success, true);
+  });
+});

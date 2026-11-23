@@ -1,5 +1,4 @@
 export const SUPPORT_EMAIL = 'support@festie.us';
-export const SUPPORT_URL_TERMS = 'https://festie.us/terms';
 export const SUPPORT_URL_PAYPAL = 'https://paypal.me/uhsear';
 
 /** Quiet legal line for signed-out visitors. Paths are relative to the site origin; Help is the support mailbox. */
