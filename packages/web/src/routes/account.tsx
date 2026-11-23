@@ -53,10 +53,27 @@ function AccountPageInner() {
   useEffect(() => {
     if (!user) navigate({ to: '/login' }).catch(() => {});
   }, [user, navigate]);
-  // The public /delete-account page links to /account#danger; the sections render after the lazy chunk, so scroll once the user is known.
+  // The public /delete-account page links to /account#danger. One scroll is not enough: the shell's route scroll reset
+  // (useScrollReset, two rAF ticks) and async sections above the zone both move it after mount. Re-pin every 100 ms
+  // for 2 s, and stop as soon as the user scrolls themselves.
+  const hasUser = !!user;
   useEffect(() => {
-    if (user && window.location.hash === '#danger') document.getElementById('danger')?.scrollIntoView();
-  }, [user]);
+    if (!hasUser || window.location.hash !== '#danger') return;
+    const pin = () => document.getElementById('danger')?.scrollIntoView();
+    const userEvents = ['wheel', 'touchstart', 'pointerdown', 'keydown'];
+    const stop = () => {
+      window.clearInterval(timer);
+      userEvents.forEach((e) => window.removeEventListener(e, stop));
+    };
+    pin();
+    const timer = window.setInterval(pin, 100);
+    const timeout = window.setTimeout(stop, 2000);
+    userEvents.forEach((e) => window.addEventListener(e, stop, { passive: true }));
+    return () => {
+      window.clearTimeout(timeout);
+      stop();
+    };
+  }, [hasUser]);
   if (!user) return null;
 
   const handleSignOut = async () => {

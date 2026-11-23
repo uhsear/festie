@@ -125,6 +125,26 @@ describe('AccountPage', () => {
     }
   });
 
+  it('keeps re-pinning #danger after mount, because the route scroll reset and late layout shifts undo a single scroll', () => {
+    vi.useFakeTimers();
+    const scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
+    window.location.hash = '#danger';
+    try {
+      render(<AccountPage />);
+      scrollIntoView.mockClear();
+      vi.advanceTimersByTime(500);
+      expect(scrollIntoView.mock.calls.length).toBeGreaterThan(1);
+      window.dispatchEvent(new Event('wheel'));
+      scrollIntoView.mockClear();
+      vi.advanceTimersByTime(500);
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      window.location.hash = '';
+    }
+  });
+
   it('does not scroll without the #danger hash', () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;
