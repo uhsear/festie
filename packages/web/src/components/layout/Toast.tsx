@@ -32,7 +32,7 @@ export default function Toast() {
   };
 
   return (
-    <div className="fixed bottom-[calc(var(--bottom-nav-h,0px)+16px+env(safe-area-inset-bottom,0px))] right-4 left-4 z-[var(--z-toast)] flex flex-col gap-2 pointer-events-none sm:left-auto sm:max-w-sm">
+    <div className="fixed bottom-[calc(var(--bottom-nav-h,0px)+var(--sticky-bar-h,0px)+16px+env(safe-area-inset-bottom,0px))] right-4 left-4 z-[var(--z-toast)] flex flex-col gap-2 pointer-events-none sm:left-auto sm:max-w-sm">
       {toasts.map((t) => {
         return (
           <div

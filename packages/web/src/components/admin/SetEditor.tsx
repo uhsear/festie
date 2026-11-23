@@ -50,6 +50,8 @@ export interface SetEditorProps {
   /** Fields (target.field) the issues name, so the matching input gets aria-invalid. */
   issueFields?: string[];
   status?: 'new' | 'changed' | null;
+  /** An organizer has no Artists tab, so the links hint says to ask Festie. */
+  organizer?: boolean;
 }
 
 /**
@@ -77,6 +79,7 @@ export default function SetEditor({
   issues = [],
   issueFields = [],
   status = null,
+  organizer = false,
 }: SetEditorProps) {
   const invalid = (field: string) => (issueFields.includes(field) ? true : undefined);
   const [drafts, setDrafts] = useState<string[]>(() => artistNamesOf(s));
@@ -206,7 +209,7 @@ export default function SetEditor({
                 )}
                 {readOnlyLinks.length > 0 && !match && (
                   <p className="text-xs text-text-muted">
-                    {readOnlyLinks.map(platformLabel).join(', ')}. Edit links on the Artists tab.
+                    {readOnlyLinks.map(platformLabel).join(', ')}. {organizer ? 'Ask Festie to change links.' : 'Edit links on the Artists tab.'}
                   </p>
                 )}
               </div>

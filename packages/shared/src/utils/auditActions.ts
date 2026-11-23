@@ -92,6 +92,12 @@ export function auditActionLabel(action: string): string {
   return upperFirst(action.replace(/[._:]/g, ' '));
 }
 
+/** A refused or failed attempt reads "Attempted: ...", so "Festivals deleted" never suggests the festival went away. */
+export function auditRowLabel(action: string, status: string): string {
+  const label = auditActionLabel(action);
+  return status === 'success' ? label : `Attempted: ${label}`;
+}
+
 export interface AuditChange {
   field: string;
   label: string;
