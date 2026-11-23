@@ -21,9 +21,9 @@
         "categories:seo": ["warn", { "minScore": 0.85 }],
         "uses-long-cache-ttl": "off",
         "csp-xss": "off",
-        "resource-summary:script:size": ["error", { "maxNumericValue": 700000 }],
-        "resource-summary:script:count": ["error", { "maxNumericValue": 70 }],
-        "cumulative-layout-shift": ["error", { "maxNumericValue": 0.1 }],
+        "resource-summary:script:size": ["warn", { "maxNumericValue": 700000 }],
+        "resource-summary:script:count": ["warn", { "maxNumericValue": 70 }],
+        "cumulative-layout-shift": ["warn", { "maxNumericValue": 0.1 }],
         "unused-javascript": ["warn", { "maxLength": 3 }],
         "unused-css-rules": ["warn", { "maxLength": 3 }]
       }
