@@ -212,6 +212,11 @@ describe('buildCrewMix', () => {
     expect(buildCrewMix({ sets, days, profiles, nowMs: at(12) }).map((e) => e.set.id)).toEqual(['a', 'b', 'c']);
     expect(buildCrewMix({ sets, days, profiles, minCount: 3 }).map((e) => e.set.id)).toEqual(['a']);
   });
+  it('counts a legacy NULL priority as want-to-see, like buildSlots', () => {
+    const profiles = [profile('m1', 'Ann', { a: null as never }), profile('m2', 'Bo', { a: 'must' })];
+    const [entry] = buildCrewMix({ sets, days, profiles });
+    expect(entry).toMatchObject({ count: 2, memberIds: ['m1', 'm2'], topPriority: 'must' });
+  });
   it('with isAttending skips absent profiles and counts total per day', () => {
     const profiles = [
       profile('m1', 'Ann', { a: 'must' }),

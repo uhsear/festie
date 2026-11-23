@@ -308,8 +308,9 @@ export function buildCrewMix(i: {
     const here =
       isAttending && set.dayIndex != null ? profiles.filter((p) => isAttending(p, set.dayIndex as number)) : profiles;
     for (const profile of here) {
-      const priority = profile.picks?.[set.id] as Priority | undefined;
-      if (!priority) continue;
+      // A missing key means no pick; a legacy NULL priority counts as the default pick, as in buildSlots.
+      if (!(set.id in (profile.picks ?? {}))) continue;
+      const priority = (profile.picks?.[set.id] ?? 'want-to-see') as Priority;
       memberIds.push(profile.id);
       weight += PRIORITY_WEIGHT[priority];
       if (!top || PRIORITY_WEIGHT[priority] > PRIORITY_WEIGHT[top]) top = priority;
