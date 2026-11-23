@@ -12,13 +12,15 @@ interface HandOverSheetProps {
   visible: boolean;
   crewName: string;
   candidates: CrewMember[];
+  /** What leaving forgives, when the owner has money on the books. */
+  notice?: string;
   busy: boolean;
   onConfirm: (newOwnerId: string) => void;
   onClose: () => void;
 }
 
 /** Owner picks who takes over the crew before leaving it. The first candidate is preselected. */
-export default function HandOverSheet({ visible, crewName, candidates, busy, onConfirm, onClose }: HandOverSheetProps) {
+export default function HandOverSheet({ visible, crewName, candidates, notice = '', busy, onConfirm, onClose }: HandOverSheetProps) {
   const t = useTokens();
   const styles = useStyles();
   const firstId = candidates[0]?.userId ?? null;
@@ -37,7 +39,7 @@ export default function HandOverSheet({ visible, crewName, candidates, busy, onC
         {crewCopy.handOverTitle(crewName)}
       </Text>
       <Text style={styles.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        {crewCopy.handOverBody}
+        {notice ? `${crewCopy.handOverBody} ${notice}` : crewCopy.handOverBody}
       </Text>
       <ScrollView style={styles.list} contentContainerStyle={styles.listContent}>
         {candidates.map((m) => {
