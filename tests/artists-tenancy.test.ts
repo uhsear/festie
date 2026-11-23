@@ -3,7 +3,7 @@ import 'dotenv/config';
  * Artist rules for organizations (master plan M7 slice 5, artist plan section 8, conflict rows C5 and C6).
  * Runs the real app on the throwaway test database, with ORGANIZER_PLATFORM_ENABLED on.
  *
- * Covers: which artists an organizer sees (published, own festivals, created by its organization) and that a
+ * Covers: which artists an organizer sees (published, own festivals, created by the viewer itself) and that a
  * hidden artist changes no answer; create (unverified, neutral automatic note on a hidden clash); direct edit,
  * the flagged fill carve-out and the suggestion path; what a draft of another tenant never reveals; the admin
  * decision of a suggestion; the festival save and the lineup import resolving names the same way.
@@ -71,7 +71,7 @@ const patch = async (who: string, id: string, changes: object, extra: object = {
   as(who).patch(`${ARTISTS}/${id}`, { expectedUpdatedAt: await tokenOf(id), changes, ...extra });
 
 describe('what an organizer sees', { skip }, () => {
-  test('published, own and own-created artists are visible; another tenant draft and an admin-only draft are not', async () => {
+  test('published and own-festival artists are visible, an org mate unplaced artist is not; another tenant draft and an admin-only draft are not', async () => {
     const own = await seedArtist({ name: 'Vis Own' });
     await festival('fv-own', 'org-a', false, [{ id: own, name: 'Vis Own' }]);
     const draftOfB = await seedArtist({ name: 'Vis Draft' });
@@ -88,14 +88,14 @@ describe('what an organizer sees', { skip }, () => {
     assert.equal(match.status, 200, JSON.stringify(match.body));
     assert.deepEqual(
       match.body.data.results.map((r: any) => [r.name, r.outcome]),
-      [['Vis Own', 'linked'], ['Vis Draft', 'new'], ['Vis Platform', 'new'], ['Vis Live', 'linked'], ['Vis Teammate', 'linked'], ['Vis Stranger', 'new']],
+      [['Vis Own', 'linked'], ['Vis Draft', 'new'], ['Vis Platform', 'new'], ['Vis Live', 'linked'], ['Vis Teammate', 'new'], ['Vis Stranger', 'new']],
     );
     // A hidden artist answers exactly like a name nobody has.
     const nobody = await as('editorA').post(`${ARTISTS}/match`, { items: [{ name: 'Vis Nobody Has This' }] });
     assert.deepEqual({ ...match.body.data.results[1], name: '' }, { ...nobody.body.data.results[0], name: '' });
 
     const list = await as('editorA').get(`${ARTISTS}?q=Vis`);
-    assert.deepEqual(list.body.data.artists.map((a: any) => a.name).sort(), ['Vis Live', 'Vis Own', 'Vis Teammate']);
+    assert.deepEqual(list.body.data.artists.map((a: any) => a.name).sort(), ['Vis Live', 'Vis Own']);
 
     assert.equal((await as('editorA').get(`${ARTISTS}/${own}/impact`)).status, 200);
     for (const hidden of [draftOfB, adminOnly]) assert.equal((await as('editorA').get(`${ARTISTS}/${hidden}/impact`)).status, 404);
@@ -103,6 +103,24 @@ describe('what an organizer sees', { skip }, () => {
     // The viewer role reads too; a stranger with no organization does not.
     assert.equal((await as('viewerA').get(`${ARTISTS}?q=Vis`)).status, 200);
     assert.equal((await as('stranger').get(`${ARTISTS}?q=Vis`)).status, 403);
+  });
+
+  test('a creator in two organizations does not bridge an unannounced artist to the other one; the creator still sees it', async () => {
+    const bridge = await o.makeUser(server, `bridge-${Date.now()}`);
+    await o.addMember(server, 'org-a', bridge.id, 'editor');
+    await o.addMember(server, 'org-b', bridge.id, 'viewer');
+    const unplaced = await seedArtist({ name: 'Bridge Unplaced', verified: false, createdBy: bridge.id });
+    const placed = await seedArtist({ name: 'Bridge Placed', verified: false, createdBy: bridge.id });
+    await festival('fbr-a', 'org-a', false, [{ id: placed, name: 'Bridge Placed' }]);
+
+    const names = ['Bridge Unplaced', 'Bridge Placed'];
+    const outcomes = async (who: string) => (await as(who).post(`${ARTISTS}/match`, { items: names.map((name) => ({ name })) })).body.data.results.map((r: any) => r.outcome);
+    assert.deepEqual(await outcomes('ownerB'), ['new', 'new'], 'an owner of the other organization sees neither');
+    assert.deepEqual(await outcomes('editorA'), ['new', 'linked'], 'org A sees only the artist its festival uses');
+    assert.deepEqual((await as('ownerB').get(`${ARTISTS}?q=Bridge`)).body.data.artists, []);
+    assert.deepEqual((await as('editorA').get(`${ARTISTS}?q=Bridge`)).body.data.artists.map((a: any) => a.name), ['Bridge Placed']);
+    for (const id of [unplaced, placed]) assert.equal((await as('ownerB').get(`${ARTISTS}/${id}/impact`)).status, 404);
+    assert.equal((await o.as(server, bridge.token).get(`${ARTISTS}/${unplaced}/impact`)).status, 200, 'the creator keeps seeing its own artist');
   });
 
   test('a stranger draft is neither named nor counted in the impact line, and a live festival is', async () => {
