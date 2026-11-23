@@ -10,6 +10,7 @@ import {
   fmtZonedClock,
   fmtZonedDayClock,
   settleUpLine,
+  startsInIsRelative,
   formatBatteryLabel,
   lostContactLabel,
   timeAgo,
@@ -170,7 +171,7 @@ export function NowHero({
     const imminent = Math.floor((next.start - nowMs) / 60_000) <= IMMINENT_MIN;
     const startsIn = fmtStartsIn(next.start, nowMs, timeZone);
     // Past 12 hours the countdown is already a weekday and clock, so a second clock would repeat it.
-    const relative = startsIn === 'starting now' || startsIn.startsWith('in ');
+    const relative = startsInIsRelative(next.start, nowMs);
     const walkA11y = walk ? `, ${walk.minutes} minute walk${walk.late ? ', leave now' : ''}` : '';
     body = (
       <AppPressable

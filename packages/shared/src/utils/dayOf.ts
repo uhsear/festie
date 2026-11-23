@@ -212,6 +212,13 @@ export function zonedCalendarDayDiff(fromMs: number, targetMs: number, timeZone?
   return dayNumber(targetMs) - dayNumber(fromMs);
 }
 
+const RELATIVE_START_MINS = 12 * 60;
+
+/** True while `fmtStartsIn` still counts down (`in 3h 10m`); false once it shows a weekday and clock. */
+export function startsInIsRelative(startMs: number, nowMs: number): boolean {
+  return Math.floor((startMs - nowMs) / 60_000) < RELATIVE_START_MINS;
+}
+
 /**
  * When a set starts, relative to now: `starting now`, `in 25m`, `in 3h 10m`,
  * then a weekday and clock (`Sat 20:00`) once it is 12 hours or more away.
@@ -220,7 +227,7 @@ export function fmtStartsIn(startMs: number, nowMs: number, timeZone?: string): 
   const mins = Math.floor((startMs - nowMs) / 60_000);
   if (mins < 1) return 'starting now';
   if (mins < 60) return `in ${mins}m`;
-  if (mins < 12 * 60) {
+  if (startsInIsRelative(startMs, nowMs)) {
     const h = Math.floor(mins / 60);
     const m = mins % 60;
     return m ? `in ${h}h ${m}m` : `in ${h}h`;

@@ -8,6 +8,7 @@ import {
   fmtZonedClock,
   fmtZonedDayClock,
   fmtZonedWeekday,
+  startsInIsRelative,
   type DayOfSet,
   type NowNextSelection,
   type StageWalk,
@@ -164,7 +165,7 @@ export default function NowHero({
     const imminent = mins <= IMMINENT_MIN;
     const startsIn = fmtStartsIn(next.start, nowMs, timeZone);
     // Past 12 hours the countdown is already a weekday and clock, so a second clock would repeat it.
-    const relative = startsIn === 'starting now' || startsIn.startsWith('in ');
+    const relative = startsInIsRelative(next.start, nowMs);
     body = (
       <div data-testid="fm-next-hero" className={cn(card, 'border-border')}>
         <RowOpenButton
