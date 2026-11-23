@@ -247,7 +247,7 @@ export default function DetailPanel({ set, onClose, autoOpenSpotify = false }: D
           <button
             type="button"
             aria-label={snap === 1 ? 'Collapse set details' : 'Expand set details'}
-            className="mx-auto mt-0.5 flex h-8 w-24 flex-shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 lg:hidden"
+            className="mx-auto mt-0.5 flex min-h-11 w-24 flex-shrink-0 cursor-pointer items-center justify-center rounded-full focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 lg:hidden"
             onClick={() => setSnap(snap === 1 ? 0.5 : 1)}
           >
             <span aria-hidden="true" className="h-1.5 w-12 rounded-full bg-border-light" />
