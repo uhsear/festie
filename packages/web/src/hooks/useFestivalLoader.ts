@@ -111,7 +111,8 @@ export function useFestivalLoader() {
         const cached = useFestivalStore.getState().currentFestival;
         // Signed-in users revalidate in the effect below; guests would otherwise keep the cache forever.
         if (cached && !useAuthStore.getState().user) selectFestival(cached.id).catch((err) => console.warn('Festival select failed', err));
-        if (fests.length > 0 && !cached) {
+        // A festival chosen while the list loaded (crew festival, push landing) keeps its place.
+        if (fests.length > 0 && !cached && !useFestivalStore.getState().currentFestivalId) {
           const pick = pickDefaultFestival(fests);
           if (pick) selectFestival(pick.id).catch((err) => console.warn('Festival select failed', err));
         }
