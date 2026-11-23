@@ -157,9 +157,8 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
   return (
     <div className="space-y-4">
       {banners}
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="type-heading text-text-primary">Festivals</h2>
-        {canCreate && (
+      {canCreate && (
+        <div className="flex justify-end">
           <button
             type="button"
             onClick={onNew}
@@ -168,8 +167,8 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
             <Plus className="w-4 h-4" aria-hidden="true" />
             New festival
           </button>
-        )}
-      </div>
+        </div>
+      )}
       {body}
       {canCreate && (
         <p className="text-sm text-text-muted">
