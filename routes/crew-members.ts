@@ -135,6 +135,7 @@ export default function createCrewMemberRoutes(deps: RouteDeps) {
         }
 
         await stores.crews.removeMember(crewId, req.user.userId);
+        deps.emitPresence?.(crew.festivalId, io);
 
         if (emitter) {
           emitter.toCrew(crewId, 'crew:member-left', {
@@ -181,6 +182,7 @@ export default function createCrewMemberRoutes(deps: RouteDeps) {
         if (!target) return sendError(res, 404, 'Member not found', ErrorCodes.NOT_FOUND);
 
         await stores.crews.removeMember(crewId, targetUserId);
+        deps.emitPresence?.(kickCrew.festivalId, io);
 
         if (emitter) {
           emitter.toCrew(crewId, 'crew:member-kicked', {
@@ -379,6 +381,7 @@ export default function createCrewMemberRoutes(deps: RouteDeps) {
           details: { crewId: crew.id, crewName: crew.name, targetUsername: targetUser.username },
         });
 
+        deps.emitPresence?.(crew.festivalId, io);
         const members = await stores.crews.getMembers(crew.id);
 
         if (emitter) {

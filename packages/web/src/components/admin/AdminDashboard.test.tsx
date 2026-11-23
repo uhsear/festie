@@ -13,6 +13,12 @@ vi.mock('@festie/shared/services/admin', () => ({
   fetchAdminDashboard: () => mockFetch(),
 }));
 
+let waitingRequests: unknown[] = [];
+vi.mock('./adminQueries', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./adminQueries')>()),
+  useReviewQueue: () => ({ data: { requests: waitingRequests, held: [] } }),
+}));
+
 const dashboard = {
   stats: { users: 11, festivals: 3, profiles: 20, picks: 140 },
   health: {
@@ -35,6 +41,7 @@ function renderDashboard() {
 beforeEach(() => {
   vi.clearAllMocks();
   mockFetch.mockResolvedValue(dashboard);
+  waitingRequests = [];
 });
 
 describe('AdminDashboard', () => {
@@ -44,6 +51,18 @@ describe('AdminDashboard', () => {
     const link = screen.getByRole('link', { name: 'Open the full status page' });
     expect(link).toHaveAttribute('href', '/api/v1/admin/status');
     expect(screen.getByText('Role granted')).toBeInTheDocument();
+  });
+
+  it('says how many festivals wait for review and opens Organizations, and says nothing when none wait', async () => {
+    waitingRequests = [{ festivalId: 'f1' }, { festivalId: 'f2' }];
+    const { unmount } = renderDashboard();
+    await userEvent.click(await screen.findByRole('button', { name: /2 festivals are waiting for review/ }));
+    expect(setAdminSearch).toHaveBeenCalledWith({ tab: 'organizations' });
+    unmount();
+    waitingRequests = [];
+    renderDashboard();
+    await screen.findByText('Statistics');
+    expect(screen.queryByText(/waiting for review/)).not.toBeInTheDocument();
   });
 
   it('marks a failed activity row', async () => {

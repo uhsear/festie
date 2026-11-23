@@ -3,7 +3,7 @@ import { View, Text, ScrollView, BackHandler, TouchableOpacity } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter, Stack } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useAuthStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
+import { selectMyPicks, useAuthStore, useCrewStore, useFestivalDataStore } from '@festie/shared/stores';
 import { useCrewDayOf, useFestival } from '@festie/shared/hooks';
 import { COPY } from '@festie/shared/constants';
 import type { FestivalSet } from '@festie/shared/types';
@@ -64,7 +64,7 @@ export default function FestivalModeScreen() {
   const loadState = festivalLoadState({ currentFestival, festivals, isLoading: festivalsLoading, error: festivalsError });
   const sets = useFestivalDataStore((s) => s.sets) as FestivalSet[];
   const days = useFestivalDataStore((s) => s.days);
-  const picks = useFestivalDataStore((s) => s.currentProfile?.picks);
+  const picks = useFestivalDataStore(selectMyPicks) ?? undefined;
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
   const expenseBalances = useCrewStore((s) => s.expenseBalances);
   const { getStageName } = useFestival();

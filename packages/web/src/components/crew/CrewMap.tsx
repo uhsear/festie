@@ -1039,7 +1039,6 @@ export default function CrewMap({
                   })
                 }
                 aria-pressed={on}
-                aria-label={`${on ? 'Hide' : 'Show'} ${name}`}
                 className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-1 min-h-11 text-xs ${
                   on
                     ? 'border-accent-aqua bg-accent-aqua/10 text-text-primary'

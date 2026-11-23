@@ -26,6 +26,7 @@ import {
   selectMyPicks,
   followTodayOnResume,
 } from '@festie/shared/stores';
+import { useOfflineMapStatus } from '../../hooks/useOfflineDownload';
 import { usePicks, useCanPick, useFestival, usePickClear, useFestivalReady, useViewAs } from '@festie/shared/hooks';
 import { DISCOVER_COPY } from '@festie/shared/constants';
 import {
@@ -41,7 +42,7 @@ import {
   searchOtherDays,
   searchEmptyCopy,
   searchHiddenByFilters,
-  dayHasTimedSets,
+  dayTimesNotOut,
   groupScheduleSets,
   defaultScheduleView,
   hasAnyPick,
@@ -309,7 +310,8 @@ export default function TimelineScreen() {
         .catch(() => setNotificationsAllowed(false));
     }, []),
   );
-  const ready = useFestivalReady(notificationsAllowed);
+  const offlineMapStatus = useOfflineMapStatus(currentFestivalId ?? '');
+  const ready = useFestivalReady(notificationsAllowed, undefined, offlineMapStatus);
 
   // The person's remembered view for this festival wins; otherwise Timeline on a
   // live day with timed sets, Cards. A stored 'grid' never reaches here because
@@ -616,7 +618,9 @@ export default function TimelineScreen() {
         onSavePick={handlePickChange}
         onOpenDetail={handleSetPress}
         defaultExpanded={timedSets.length === 0}
-        allTba={timedSets.length === 0 && !dayHasTimedSets(allSets.filter((s) => s.dayIndex === selectedDay))}
+        allTba={
+          timedSets.length === 0 && dayTimesNotOut(currentFestival, festivalDays, allSets.filter((s) => s.dayIndex === selectedDay))
+        }
       />
     ) : null;
 

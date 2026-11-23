@@ -9,6 +9,7 @@
  * in the PendingSyncSheet).
  */
 import type { CrewSettlement } from '../types';
+import { formatCents } from './money';
 import { cashAppLink, payPalLink, venmoLink, type PaymentLink } from './paymentLinks';
 
 export type WriteOutcome = 'sent' | 'queued';
@@ -69,6 +70,44 @@ export function leaveCrewConfirmMessage(crewName: string): string {
 /** Confirm copy for an owner removing a member. */
 export function removeMemberConfirmMessage(memberName: string, crewName: string): string {
   return `Remove ${memberName} from "${crewName}"? They lose access to the crew's plans and expenses until they rejoin with an invite code.`;
+}
+
+const FORGIVE_VERB = { leave: 'Leaving', remove: 'Removing', delete: 'Deleting the crew' } as const;
+
+/**
+ * Plain-words line for the leave, remove and delete confirms. Built from the
+ * server's net balances (settle-up payments already netted in), because a
+ * departing member's net balance is what the ledger drops. `name` is null when
+ * the leaver is the viewer. Delete clears every member's balance, so it states
+ * the crew-wide total owed. Empty when nothing is outstanding.
+ */
+export function exitBalanceNotice({
+  balances,
+  userId,
+  name,
+  action,
+  currency = 'USD',
+}: {
+  balances: ReadonlyArray<{ userId: string; balance: number }>;
+  userId: string;
+  name: string | null;
+  action: keyof typeof FORGIVE_VERB;
+  currency?: string;
+}): string {
+  if (action === 'delete') {
+    const totalCents = balances.reduce((sum, b) => sum + Math.max(0, Math.round(b.balance * 100)), 0);
+    if (totalCents <= 0) return '';
+    return `The crew has ${formatCents(totalCents, currency)} unsettled. ${FORGIVE_VERB.delete} clears every member's balance.`;
+  }
+  const cents = Math.round((balances.find((b) => b.userId === userId)?.balance ?? 0) * 100);
+  if (cents === 0) return '';
+  const self = name === null;
+  const amount = formatCents(Math.abs(cents), currency);
+  const facts =
+    cents < 0
+      ? `${self ? 'You still owe' : `${name} still owes`} ${amount}`
+      : `${self ? 'You are' : `${name} is`} still owed ${amount}`;
+  return `${facts}. ${FORGIVE_VERB[action]} forgives this, and the crew's balances change.`;
 }
 
 // ── Undoable delete ─────────────────────────────────────────────────────────

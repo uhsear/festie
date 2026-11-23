@@ -64,6 +64,14 @@ describe('isFestivalDownloaded', () => {
     expect(isFestivalDownloaded(readiness('ready', 'idle'))).toBe(false);
     expect(isFestivalDownloaded(readiness('ready', 'ready'))).toBe(true);
   });
+
+  it('needs the offline map saved when the festival has one', () => {
+    const all = readiness('ready', 'ready');
+    expect(isFestivalDownloaded(all, { status: 'idle', syncedAt: null })).toBe(false);
+    expect(isFestivalDownloaded(all, { status: 'error', syncedAt: 1 })).toBe(false);
+    expect(isFestivalDownloaded(all, { status: 'ready', syncedAt: 1 })).toBe(true);
+    expect(isFestivalDownloaded(all, null)).toBe(true);
+  });
 });
 
 describe('formatReadyProgress', () => {

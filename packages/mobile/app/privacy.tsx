@@ -1,9 +1,10 @@
 import { View, Text, ScrollView, TouchableOpacity, Linking } from 'react-native';
 import { Stack } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { Ionicons } from '@expo/vector-icons';
+import { GUEST_LEGAL_COPY } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
+import { openPage } from '../components/GuestLegalFooter';
 
 /**
  * Privacy Policy screen — a self-contained native mirror of the canonical
@@ -13,17 +14,16 @@ import { useListBottomInset } from '../hooks/useListBottomInset';
  * on November 3, 2026. No attorney has reviewed it.
  *
  * The web policy remains the single source of truth; this screen reproduces
- * its text word for word (effective [TODO-D: effective date]) as a typed data array so it
+ * its text word for word (effective December 23, 2026) as a typed data array so it
  * renders like the rest of the app and works offline. Emails open the mail
  * client and the Terms reference opens the web Terms of Service in an in-app
  * browser sheet.
  */
 
-const EFFECTIVE_DATE = '[TODO-D: effective date]';
+const EFFECTIVE_DATE = 'December 23, 2026';
 const OPERATOR_NAME = 'Asir Khan';
 const CONTACT_EMAIL = 'privacy@festie.us';
 const SERVICE_URL = 'https://festie.us';
-const TERMS_URL = 'https://festie.us/terms.html';
 const DELETE_ACCOUNT_URL = 'https://festie.us/delete-account';
 
 const openEmail = () => {
@@ -32,16 +32,6 @@ const openEmail = () => {
 
 const openService = () => {
   void Linking.openURL(SERVICE_URL);
-};
-
-// An in-app sheet, with the system browser as fallback.
-const openTerms = async () => {
-  try {
-    await WebBrowser.openBrowserAsync(TERMS_URL);
-  } catch (err) {
-    console.warn('terms: in-app browser failed', err);
-    void Linking.openURL(TERMS_URL);
-  }
 };
 
 interface Subsection {
@@ -69,7 +59,7 @@ const SECTIONS: PolicySection[] = [
   {
     title: 'Who runs Festie',
     body: [
-      'Festie is run by an individual developer, Asir Khan, in Florida, United States. In this policy, "we" and "us" mean Asir Khan. Under EU and UK data protection law, Asir Khan is the controller of your personal data.',
+      'Festie is run by an individual developer, Asir Khan, in Florida, United States. In this policy, “we” and “us” mean Asir Khan. Under EU and UK data protection law, Asir Khan is the controller of your personal data.',
       'Email privacy@festie.us with any privacy question or request. Send security reports to security@festie.us. We answer privacy requests within 30 days.',
     ],
   },
@@ -506,7 +496,7 @@ const SECTIONS: PolicySection[] = [
       {
         heading: 'Version history',
         paragraphs: [
-          '[TODO-D: effective date]: added festival organizers and what they can see; corrected how long we keep notification history and backups; Spotify cookies; how to confirm deletion if you use Apple or Google. No new use of the data we already had.',
+          'December 23, 2026: added festival organizers and what they can see; corrected how long we keep notification history and backups; Spotify cookies; how to confirm deletion if you use Apple or Google. No new use of the data we already had.',
           'November 18, 2026: clarified the examples of sign-up source tags. No change in how we collect, use or share data.',
           'November 3, 2026: full rewrite of this policy.',
         ],
@@ -636,7 +626,7 @@ export default function PrivacyScreen() {
             {section.title === 'Other documents' ? (
               <TouchableOpacity
                 style={styles.linkRow}
-                onPress={() => void openTerms()}
+                onPress={() => void openPage(GUEST_LEGAL_COPY.termsPath)}
                 activeOpacity={0.7}
                 accessibilityRole="link"
                 accessibilityLabel="Read the Terms of Service"

@@ -90,9 +90,9 @@ describe('AnnouncedNames', () => {
     fireEvent.blur(input);
     expect(screen.getByRole('alert').textContent).toMatch(/at least one artist/);
     expect(input.value).toBe('Mira');
-    fireEvent.change(input, { target: { value: 'A b2b B b2b C b2b D b2b E' } });
+    fireEvent.change(input, { target: { value: 'A b2b B b2b C b2b D b2b E b2b F b2b G b2b H b2b I' } });
     fireEvent.blur(input);
-    expect(screen.getByRole('alert').textContent).toMatch(/at most 4 artists/);
+    expect(screen.getByRole('alert').textContent).toMatch(/at most 8 artists/);
     expect(input.value).toBe('Mira');
     expect(state()[0]!.artists.map((a) => a.name)).toEqual(['Mira']);
   });
@@ -154,8 +154,8 @@ describe('AnnouncedNames', () => {
   it('blocks Add on a blocking flag', () => {
     render(<Harness initial={[]} />);
     fireEvent.click(screen.getByRole('button', { name: 'Paste names' }));
-    fireEvent.change(dialogOf().getByLabelText('Names'), { target: { value: 'A b2b B b2b C b2b D b2b E' } });
-    expect(dialogOf().getByText(/more than 4 artists/)).toBeTruthy();
+    fireEvent.change(dialogOf().getByLabelText('Names'), { target: { value: 'A b2b B b2b C b2b D b2b E b2b F b2b G b2b H b2b I' } });
+    expect(dialogOf().getByText(/more than 8 artists/)).toBeTruthy();
     expect((dialogOf().getByRole('button', { name: 'Add' }) as HTMLButtonElement).disabled).toBe(true);
   });
 

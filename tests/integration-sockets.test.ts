@@ -228,21 +228,19 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     const alicePresence: any = await presenceForAlice;
     assert.equal(alicePresence.online[0].avatarUrl, avatar.user.avatarUrl);
 
-    const profileCreated = waitForEvent(aliceSocket, 'profile:created', (payload) => payload.profile.name === 'bob');
+    // Bob is a stranger to Alice: she must hear nothing about his profile or presence.
+    const leaked: string[] = [];
+    aliceSocket.on('profile:created', () => leaked.push('profile:created'));
+    aliceSocket.on('profile:identity', () => leaked.push('profile:identity'));
+    aliceSocket.on('presence:update', (payload: any) => {
+      if (payload.online.length !== 1) leaked.push('presence:update');
+    });
+    const bobOwnPresence = waitForEvent(bobSocket, 'presence:update', (payload) => payload.online.length === 1);
     const bobProfile = await joinFestivalProfile(server, bob.token);
-    await profileCreated;
-
-    const presenceForBoth = waitForEvent(aliceSocket, 'presence:update', (payload) => payload.online.length === 2);
     bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token });
-    await presenceForBoth;
-
-    const presenceAfterLeave = waitForEvent(aliceSocket, 'presence:update', (payload) => payload.online.length === 1);
-    bobSocket.emit('leave:festival');
-    await presenceAfterLeave;
-
-    const presenceAfterRejoin = waitForEvent(aliceSocket, 'presence:update', (payload) => payload.online.length === 2);
-    bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token });
-    await presenceAfterRejoin;
+    await bobOwnPresence;
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    assert.deepEqual(leaked, []);
 
     // Picks reach only crew mates, through the crew room.
     const crew = (
@@ -257,10 +255,26 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
       .set('x-user-token', bob.token)
       .send({ inviteCode: crew.inviteCode })
       .expect(200);
+    // Joining the crew makes Bob visible to Alice, and Alice to Bob.
+    const presenceForBoth = waitForEvent(aliceSocket, 'presence:update', (payload) => payload.online.length === 2);
     const joinedCrew: any = await new Promise((resolve) =>
       bobSocket.emit('join:crew', { _v: 1, crewId: crew.id }, resolve),
     );
     assert.equal(joinedCrew.ok, true);
+
+    await presenceForBoth;
+
+    const presenceAfterLeave = waitForEvent(aliceSocket, 'presence:update', (payload) => payload.online.length === 1);
+    bobSocket.emit('leave:festival');
+    await presenceAfterLeave;
+
+    const presenceAfterRejoin = waitForEvent(aliceSocket, 'presence:update', (payload) => payload.online.length === 2);
+    bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token });
+    await presenceAfterRejoin;
+    const rejoinedCrew: any = await new Promise((resolve) =>
+      bobSocket.emit('join:crew', { _v: 1, crewId: crew.id }, resolve),
+    );
+    assert.equal(rejoinedCrew.ok, true);
 
     const updatedProfile = waitForEvent(bobSocket, 'profile:updated', (payload) => payload.profileId === aliceProfile.id);
     await server.request
@@ -398,6 +412,12 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     await joinFestivalProfile(server, alice.token);
     await joinFestivalProfile(server, bob.token);
 
+    // Presence is crew-scoped, so Alice sees Bob only as a crew mate.
+    const crew = (
+      await server.request.post('/api/v1/crews').set('x-user-token', alice.token).send({ name: 'Pair', festivalId: 'fest-1' }).expect(201)
+    ).body.data;
+    await server.request.post('/api/v1/crews/join').set('x-user-token', bob.token).send({ inviteCode: crew.inviteCode }).expect(200);
+
     const aliceSocket = connectSocket(server.baseUrl);
     const bobSocket = connectSocket(server.baseUrl);
     await Promise.all([waitForEvent(aliceSocket, 'connect'), waitForEvent(bobSocket, 'connect')]);
@@ -412,6 +432,38 @@ describe('Integration — Sockets', { concurrency: 1 }, () => {
     await presenceAfterDisconnect;
 
     aliceSocket.close();
+  });
+
+  test('kicking a member removes them from former crew mate presence', async () => {
+    const server = await startServer();
+    servers.push(server);
+
+    const alice = await registerUser(server, 'alice');
+    const bob = await registerUser(server, 'bob');
+    await joinFestivalProfile(server, alice.token);
+    await joinFestivalProfile(server, bob.token);
+    const crew = (
+      await server.request.post('/api/v1/crews').set('x-user-token', alice.token).send({ name: 'Pair', festivalId: 'fest-1' }).expect(201)
+    ).body.data;
+    await server.request.post('/api/v1/crews/join').set('x-user-token', bob.token).send({ inviteCode: crew.inviteCode }).expect(200);
+
+    const aliceSocket = connectSocket(server.baseUrl);
+    const bobSocket = connectSocket(server.baseUrl);
+    await Promise.all([waitForEvent(aliceSocket, 'connect'), waitForEvent(bobSocket, 'connect')]);
+    aliceSocket.emit('join:festival', 'fest-1', { userToken: alice.token });
+    bobSocket.emit('join:festival', 'fest-1', { userToken: bob.token });
+    await waitForEvent(aliceSocket, 'presence:update', (p) => p.online.length === 2);
+
+    const aliceAfterKick = waitForEvent(aliceSocket, 'presence:update', (p) => p.online.length === 1);
+    const bobAfterKick = waitForEvent(bobSocket, 'presence:update', (p) => p.online.length === 1);
+    await server.request
+      .delete(`/api/v1/crews/${crew.id}/members/${bob.user.id}`)
+      .set('x-user-token', alice.token)
+      .expect(200);
+    await Promise.all([aliceAfterKick, bobAfterKick]);
+
+    aliceSocket.close();
+    bobSocket.close();
   });
 
   test('join:crew — user joins a crew room and receives ack', async () => {

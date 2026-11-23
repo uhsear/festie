@@ -11,6 +11,8 @@ const push = {
 const navigate = vi.fn();
 vi.mock('../../hooks/usePushNotifications', () => ({ usePushNotifications: () => push }));
 vi.mock('@tanstack/react-router', () => ({ useNavigate: () => navigate }));
+const toastError = vi.fn();
+vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toastError }) }));
 
 import { useNotificationPrefsStore } from '@festie/shared/stores';
 import DetailReminderPicker from './DetailReminderPicker';
@@ -44,14 +46,24 @@ describe('DetailReminderPicker', () => {
 
   it.each([
     ['default', null, "Notifications are off, so this reminder can't reach you."],
-    ['denied', null, 'Notifications are blocked for festie.us. Allow them in your browser settings to get this reminder.'],
+    ['denied', null, `Notifications are blocked for ${window.location.host}. Allow them in your browser settings to get this reminder.`],
     ['unsupported', 'ios-needs-install', 'To get reminders on iPhone, add Festie to your Home Screen first.'],
     ['unsupported', 'browser', "This browser can't show reminders. Use the Festie app or another browser."],
+    ['unsupported', 'not-configured', "Reminders aren't set up on this server."],
   ])('shows the copy for permission %s / %s', (state, reason, copy) => {
     push.permissionState = state;
     push.unsupportedReason = reason;
     renderWith(15);
     expect(screen.getByRole('status')).toHaveTextContent(copy);
+  });
+
+  it('toasts when turning notifications on fails', async () => {
+    push.permissionState = 'default';
+    const err = new Error('denied by policy');
+    push.requestPermission.mockRejectedValueOnce(err);
+    renderWith(15);
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Turn on' }));
+    expect(toastError).toHaveBeenCalledWith(err, expect.any(String));
   });
 
   it('shows the Account line when the preference is off and navigates', async () => {

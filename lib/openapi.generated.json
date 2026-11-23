@@ -4513,7 +4513,7 @@
                         },
                         "artist": {
                           "type": "string",
-                          "maxLength": 300
+                          "maxLength": 2435
                         },
                         "day": {
                           "type": "string",
@@ -4667,7 +4667,7 @@
                         },
                         "artist": {
                           "type": "string",
-                          "maxLength": 300
+                          "maxLength": 2435
                         },
                         "day": {
                           "type": "string",

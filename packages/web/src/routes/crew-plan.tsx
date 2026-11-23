@@ -426,7 +426,7 @@ function BackLink() {
     <Link
       to="/crew"
       aria-label="Back to crew"
-      className="inline-flex items-center gap-1.5 text-sm text-text-secondary hover:text-text-primary transition-colors"
+      className="inline-flex items-center gap-1.5 min-h-11 min-w-11 text-sm text-text-secondary hover:text-text-primary transition-colors"
     >
       <ArrowLeft className="w-4 h-4" aria-hidden="true" />
       <span>Back to crew</span>

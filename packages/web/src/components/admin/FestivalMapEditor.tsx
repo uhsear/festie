@@ -510,7 +510,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
               : armed.kind === 'move-amenity'
                 ? `Click the map where ${amenityFeatures.find((f) => f.properties.id === armed.id)?.properties.label || 'this amenity'} should go`
                 : armed.kind === 'move-zone'
-                  ? `Click the map where the centre of ${placedZones.find((z) => z.id === armed.id)?.label || 'this zone'} should go`
+                  ? `Click the map where the center of ${placedZones.find((z) => z.id === armed.id)?.label || 'this zone'} should go`
                   : armed.kind === 'stage'
                     ? 'Click the map to set this stage’s location'
                     : armed.kind === 'amenity'

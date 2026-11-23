@@ -7,6 +7,7 @@ import { AVATAR_COPY } from '../constants/accountSettings';
 import { validateAvatarFile, type AvatarUploadFile } from '../utils/avatarFile';
 import { getStorage, getSecureStorage, hasSecureStorage } from '../platform/storage';
 import { resetAllStores } from './resetStores';
+import { resetGuestSections } from './offlineReadinessStore';
 import { useFestivalDataStore } from './festivalDataStore';
 import {
   User,
@@ -628,3 +629,8 @@ export const useAuthStore = create<AuthStore>()(
     }),
   }),
 );
+
+// `sessionChecked` keeps a cold-start rehydration (null -> persisted user) from counting as a guest signing in.
+useAuthStore.subscribe((state, prev) => {
+  if (prev.sessionChecked && !prev.user && state.user) resetGuestSections();
+});

@@ -72,7 +72,7 @@ describe('InboxView', () => {
     });
     render(<InboxView />);
     expect(screen.getByText('EDC Orlando')).toBeTruthy();
-    expect(screen.getByRole('button', { name: /^Third\. Bloom\. EDC Orlando\. [^.]*\.$/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Third\. Bloom\. [^.]*\. EDC Orlando\.$/ })).toBeTruthy();
   });
 
   it('opens a set row', () => {

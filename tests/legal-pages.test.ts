@@ -53,7 +53,9 @@ test('security whitepaper no longer makes the claims the code does not back', ()
   for (const stale of ['tamper-evident', 'SHA-256 checksums', 'Origin and Referer headers', 'explicit re-acceptance', 'Monthly restoration', 'WAL files retained for 7 days', 'geographically distributed']) {
     assert.ok(!html.includes(stale), `security-whitepaper.html still says "${stale}"`);
   }
-  assert.match(html, /SameSite=Strict \[TODO-confirm: production \.env/, 'SameSite claim must match ecosystem.config.cjs and stay marked');
+  // Production leaves COOKIE_SAME_SITE unset, so lib/config.ts normalizeSameSite falls back to lax.
+  assert.match(html, /SameSite=Lax/, 'the whitepaper must state the SameSite=Lax default production uses');
+  assert.ok(!html.includes('SameSite=Strict'), 'the whitepaper must not claim SameSite=Strict');
 });
 
 test('release check flags a placeholder left in a legal page or the mobile privacy screen', () => {

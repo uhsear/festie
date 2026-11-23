@@ -36,9 +36,9 @@ export function getHomeActions(input: {
       hasCrew ? { key: 'find', kind: 'link', label: COPY.find.action, a11y: 'Find your crew on the map' } : CREW,
     );
   } else {
-    actions.push({ key: 'wrap', kind: 'link', label: COPY.wrap.open, a11y: `Open your ${COPY.wrap.name}` });
+    actions.push({ key: 'wrap', kind: 'link', label: COPY.wrap.open, a11y: COPY.wrap.open });
     if (hasCrew) {
-      actions.push({ key: 'settle', kind: 'link', label: 'Settle up with your crew', a11y: 'Settle up crew expenses' });
+      actions.push({ key: 'settle', kind: 'link', label: 'Settle up with your crew', a11y: 'Settle up with your crew' });
     }
   }
   return actions;

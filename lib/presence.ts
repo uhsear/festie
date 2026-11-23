@@ -42,7 +42,7 @@ type RevocableSocket = {
 
 /** The slice of the Socket.IO `Server` that presence uses; tests pass a fake. */
 export interface PresenceIo {
-  to(room: string): { emit(event: string, payload: unknown): unknown };
+  to(room: string | string[]): { emit(event: string, payload: unknown): unknown };
   of(namespace: string): {
     fetchSockets?: () => Promise<RevocableSocket[]>;
     sockets: Map<string, RevocableSocket>;
@@ -161,6 +161,35 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
 
   const _presenceDebounce = new Map<string, NodeJS.Timeout>();
 
+  /** Room names for the user's own devices and every crew they share for the festival. */
+  async function crewAudienceRooms(userId: string, festivalId: string): Promise<string[]> {
+    try {
+      const crews: { id: string }[] = stores.crews ? await stores.crews.listByUserAndFestival(userId, festivalId) : [];
+      return [`user:${userId}`, ...crews.map((c) => `crew:${c.id}`)];
+    } catch (err) {
+      log.warn('crew audience lookup failed', { userId, festivalId, error: (err as Error).message });
+      return [`user:${userId}`];
+    }
+  }
+
+  // Each viewer gets themselves plus the online users who share a crew with them in this festival.
+  async function emitPresenceToCrewmates(festivalId: string, online: { userId: string }[], io: PresenceIo) {
+    const onlineIds = online.map((u) => u.userId);
+    const matesByUser: Map<string, string[]> = stores.crews
+      ? await stores.crews.listCrewmateIds(onlineIds, festivalId)
+      : new Map();
+    const onlineById = new Map(online.map((u) => [u.userId, u]));
+    for (const viewer of online) {
+      const visible = new Set<string>([viewer.userId, ...(matesByUser.get(viewer.userId) ?? [])]);
+      const list: { userId: string }[] = [];
+      for (const id of visible) {
+        const user = onlineById.get(id);
+        if (user) list.push(user);
+      }
+      io.to(`user:${viewer.userId}`).emit('presence:update', { festivalId, online: list });
+    }
+  }
+
   // Well inside the 120s Redis TTL so a connected socket never ages out.
   const HEARTBEAT_MS = 40_000;
   const _heartbeat = redisPresence?.heartbeat
@@ -187,7 +216,7 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
               log.warn('redis presence refresh failed', { festivalId, error: err.message });
             });
           }
-          io.to(festivalId).emit('presence:update', { online });
+          await emitPresenceToCrewmates(festivalId, online, io);
         } catch (err) {
           log.warn('emitPresence failed', { festivalId, error: (err as Error).message });
         }
@@ -207,7 +236,7 @@ export function createPresenceManager({ state, redisPresence, redis, log, stores
     const festivals = new Set<string>();
     for (const profile of profiles) {
       festivals.add(profile.festivalId);
-      io.to(profile.festivalId).emit('profile:identity', {
+      io.to(await crewAudienceRooms(user.id, profile.festivalId)).emit('profile:identity', {
         festivalId: profile.festivalId,
         profileId: profile.id,
         username: user.username,

@@ -123,6 +123,11 @@ export default defineConfig({
           /^\/s\//,
           /^\/f\//,
           /^\/cal\//,
+          // Files the server owns: crawlers, user uploads and Prometheus scrapes must not get the SPA shell.
+          /^\/robots\.txt$/,
+          /^\/sitemap\.xml$/,
+          /^\/uploads\//,
+          /^\/metrics/,
         ],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         // Vite's manualChunks does not produce admin-prefixed filenames; the

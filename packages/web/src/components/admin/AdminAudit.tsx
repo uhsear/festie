@@ -324,15 +324,15 @@ export default function AdminAudit() {
           <button
             onClick={goPrev}
             disabled={stack.length === 0}
-            className="px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
+            className="px-4 py-2 min-h-11 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
           >
             Previous
           </button>
-          <span className="px-4 py-2 text-text-muted text-sm">Page {stack.length + 1}</span>
+          <span className="px-4 py-2 flex items-center text-text-muted text-sm">Page {stack.length + 1}</span>
           <button
             onClick={goNext}
             disabled={!data?.nextCursor}
-            className="px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
+            className="px-4 py-2 min-h-11 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
           >
             Next
           </button>

@@ -29,6 +29,7 @@ import SetTimesBanner from '../components/features/SetTimesBanner';
 import AnnouncedLineup from '../components/features/AnnouncedLineup';
 import DiscoverRow from '../components/features/DiscoverRow';
 import FestivalLoadError from '../components/features/FestivalLoadError';
+import { useOfflineDownload } from '../hooks/useOfflineDownload';
 import CardsSkeleton from '../components/ui/skeletons/CardsSkeleton';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { ChevronDown, ChevronUp } from 'lucide-react';
@@ -142,7 +143,8 @@ function CardsViewInner() {
 
   // AppShell already runs usePushNotifications; read the permission directly instead of a second instance.
   const notificationsAllowed = typeof Notification !== 'undefined' && Notification.permission === 'granted';
-  const ready = useFestivalReady(notificationsAllowed);
+  const { mapStatus } = useOfflineDownload(currentFestival?.id ?? '');
+  const ready = useFestivalReady(notificationsAllowed, undefined, mapStatus);
 
   // Show layout-matched skeleton while festivals are being fetched on boot
   // — same component the router uses for the chunk-load fallback so the

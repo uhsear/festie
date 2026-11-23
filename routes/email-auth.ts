@@ -255,17 +255,18 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
     return userId && (await getUserById(userId)) ? userId : null;
   }
 
-  const sendUnsubscribePage = (res: any, status: number, title: string, message: string, form?: UnsubscribeForm) => {
+  const sendUnsubscribePage = (res: any, status: number, title: string, message: string, form?: UnsubscribeForm, action = OPEN_FESTIE) => {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(status).send(_verifyEmailPage(status, title, message, OPEN_FESTIE, 'Unsubscribe', { retryHint: false, form }));
+    return res.status(status).send(_verifyEmailPage(status, title, message, action, 'Unsubscribe', { retryHint: false, form }));
   };
   const INVALID_LINK = 'This unsubscribe link is not valid. You can turn these emails off in your Festie notification settings.';
+  const sendInvalidLinkPage = (res: any) => sendUnsubscribePage(res, 400, 'Link not valid', INVALID_LINK, undefined, NOTIFICATION_SETTINGS);
 
   router.get('/unsubscribe', rateLimit(120, 'email-unsubscribe'), async (req: any, res: any) => {
     try {
       const token = typeof req.query.token === 'string' ? req.query.token : '';
-      if (!(await unsubscribeUserId(token))) return sendUnsubscribePage(res, 400, 'Link not valid', INVALID_LINK);
+      if (!(await unsubscribeUserId(token))) return sendInvalidLinkPage(res);
       return sendUnsubscribePage(
         res,
         200,
@@ -285,7 +286,7 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
     try {
       const userId = await unsubscribeUserId(req.query.token);
       if (!userId) {
-        return fromPage ? sendUnsubscribePage(res, 400, 'Link not valid', INVALID_LINK) : sendError(res, 400, 'Invalid unsubscribe link', ErrorCodes.INVALID_INPUT);
+        return fromPage ? sendInvalidLinkPage(res) : sendError(res, 400, 'Invalid unsubscribe link', ErrorCodes.INVALID_INPUT);
       }
       const prefs = await stores.notificationPrefs.get(userId);
       await stores.notificationPrefs.upsert({ ...prefs, lineupDrops: 0, crewReformed: 0, wrapReady: 0 });
@@ -357,8 +358,10 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
   // TOKEN_EXPIRED lets clients tell a dead link from a weak password without matching text.
   const RESET_LINK_EXPIRED = 'This reset link has expired or was already used';
 
+  const hashResetToken = (token: string) => crypto.createHash('sha256').update(token).digest('hex');
+
   async function resolveResetToken(token: string) {
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    const tokenHash = hashResetToken(token);
 
     const consumed = await stores.emailTokens.consumeResetToken(tokenHash);
     if (consumed) return { userId: consumed.user_id };
@@ -378,7 +381,12 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
         if (newPassword !== confirmPassword) {
           return sendError(res, 400, 'Passwords do not match', ErrorCodes.INVALID_INPUT);
         }
-        const pwError = checkPasswordPolicy(newPassword);
+        // Look the account up without consuming the link, so the policy can reject a password that
+        // contains the username or email and the user can still retry with the same link.
+        const live = await stores.emailTokens.findResetToken(hashResetToken(token));
+        if (!live) return sendError(res, 400, RESET_LINK_EXPIRED, ErrorCodes.TOKEN_EXPIRED);
+        const owner = await getUserById(live.user_id);
+        const pwError = checkPasswordPolicy(newPassword, { username: owner?.username, email: owner?.email });
         if (pwError) {
           return sendError(res, 400, pwError, ErrorCodes.INVALID_INPUT);
         }
@@ -431,6 +439,7 @@ export default function createEmailAuthRoutes(deps: RouteDeps): Router {
 // ── Email verification result page ──────────────────────────────────────
 type VerifyAction = { label: string; href: string };
 const OPEN_FESTIE: VerifyAction = { label: 'Open Festie', href: '/' };
+const NOTIFICATION_SETTINGS: VerifyAction = { label: 'Open notification settings', href: '/account' };
 // A POST form in place of the link button. `action` is a same-origin path built by the route.
 type UnsubscribeForm = { action: string; label: string };
 
@@ -446,8 +455,9 @@ function _verifyEmailPage(
   { retryHint: showRetryHint = true, form }: { retryHint?: boolean; form?: UnsubscribeForm } = {},
 ) {
   const success = status < 400;
-  const icon = success ? '&#10003;' : '&#10007;';
-  const color = success ? '#22c55e' : '#ef4444';
+  // A page with a form asks a question, so it gets a neutral icon instead of a success check.
+  const icon = form ? '?' : success ? '&#10003;' : '&#10007;';
+  const color = form ? 'var(--text-2)' : success ? '#22c55e' : '#ef4444';
   // A 500 is not the link's fault, so it gets no "send another" advice; nor does a page that is not about a sign-in link.
   const retryHint =
     showRetryHint && !success && status !== 500

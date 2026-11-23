@@ -267,7 +267,7 @@ function SetCard({
         className={cn(
           'card-artist',
           'relative z-[2] pointer-events-none',
-          'type-title font-bold leading-[1.15] mb-1',
+          'type-title font-bold leading-[1.15] mb-1 break-words',
           dimmed ? 'text-text-secondary' : 'text-text-primary',
         )}
       >

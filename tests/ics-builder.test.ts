@@ -28,6 +28,17 @@ function makeFestival(overrides: any = {}) {
   };
 }
 
+describe('buildVCalendar line folding', () => {
+  test('folds by UTF-8 octets on code-point boundaries and unfolds back to the original', () => {
+    const summary = '\u{1F389}'.repeat(30) + '\u65E5\u672C\u8A9E'.repeat(10);
+    const ics = buildVCalendar([{ uid: 'u', summary, dtstart: '20260605T100000', dtend: '20260605T110000' }] as any, { calendarName: 'Cal' });
+    const lines = ics.split('\r\n');
+    for (const line of lines) assert.ok(Buffer.byteLength(line) <= 75, `${Buffer.byteLength(line)} octets: ${line}`);
+    const unfolded = ics.replace(/\r\n /g, '');
+    assert.ok(unfolded.includes(`SUMMARY:${summary}`), 'no character is split or lost');
+  });
+});
+
 describe('buildIcsEventsFromPicks description separator', () => {
   test('joins priority and note with a real newline, not a pre-escaped literal backslash-n', () => {
     const festival = makeFestival();

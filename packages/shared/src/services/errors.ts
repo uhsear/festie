@@ -38,7 +38,9 @@ export function parseRetryAfterMs(retryAfter: number | string | null | undefined
  * rate-limited / server / client failures. A VALIDATION_ERROR drops the
  * server's leading `field.path: ` so users see plain words. Non-ApiClientErrors fall back to
  * their `.message` (or the provided fallback), so plain-Error call sites and
- * existing message assertions are unaffected.
+ * existing message assertions are unaffected. The exception is a raw browser or
+ * push-service failure (AbortError, "Registration failed - push service error"):
+ * those strings mean nothing to a user, so the fallback is used instead.
  */
 export function mapErrorToUserMessage(err: unknown, fallback = 'Something went wrong. Try again.'): string {
   if (isApiClientError(err)) {
@@ -62,6 +64,9 @@ export function mapErrorToUserMessage(err: unknown, fallback = 'Something went w
     if (err.status >= 500) return 'Something went wrong on our side. Try again in a minute.';
     if (err.code === 'VALIDATION_ERROR') return err.message.replace(/^[\w.[\]]+: /, '') || fallback;
     return err.message || fallback;
+  }
+  if (err instanceof Error && (err.name === 'AbortError' || /registration failed|push service/i.test(err.message))) {
+    return fallback;
   }
   return err instanceof Error ? err.message : fallback;
 }

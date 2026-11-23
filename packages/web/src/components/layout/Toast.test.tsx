@@ -56,6 +56,14 @@ describe('Toast', () => {
     },
   );
 
+  it('keeps the card interactive so hover can pause it, and lifts the stack above a sticky action bar', () => {
+    setupMockToast([{ id: '1', message: 'Saved', type: 'success' }]);
+    render(<Toast />);
+    const card = screen.getByText('Saved').closest('.toast-enter')!;
+    expect(card).toHaveClass('pointer-events-auto');
+    expect(card.parentElement!.className).toContain('var(--sticky-bar-h,0px)');
+  });
+
   it('renders multiple toasts', () => {
     setupMockToast([
       { id: '1', message: 'First', type: 'success' },

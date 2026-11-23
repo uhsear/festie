@@ -3,7 +3,8 @@ import { festivalPhase } from './festivalTime';
 import { formatTime } from './format';
 import { coverLineup, entryDayIndex, lineupNameKey, type LineupCover } from './lineupCover';
 import { byStartTime, formatDayChip } from './scheduleFormat';
-import { foldSearch } from './setSearch';
+import { dayHasTimedSets } from './scheduleFilters';
+import { joinedArtistNames, searchMatcher } from './setSearch';
 
 // Everything the attendee lineup (web today, mobile from phase A5) decides: the badge on a row, the
 // header counts, search, which rows show on which day, and how they group. Web and mobile render
@@ -124,12 +125,13 @@ export function announcedActsLine(lineup: readonly Pick<LineupEntry, 'status'>[]
   return `${count} announced ${count === 1 ? 'act' : 'acts'}. Edit them on the web.`;
 }
 
-/** Case- and accent-insensitive substring match on the poster name and on every artist name. */
+/** Case-, accent- and punctuation- and space-insensitive substring match on the poster name and on every artist name. */
 export function lineupEntryMatchesSearch(entry: LineupEntry, query: string): boolean {
-  const q = foldSearch(query.trim());
-  if (!q) return true;
-  if (entry.displayName && foldSearch(entry.displayName).includes(q)) return true;
-  return entry.artists.some((artist) => foldSearch(artist.name).includes(q));
+  const matches = searchMatcher(query);
+  if (!matches) return true;
+  if (entry.displayName && matches(entry.displayName)) return true;
+  if (entry.artists.some((artist) => matches(artist.name))) return true;
+  return matches(joinedArtistNames(entry.artists));
 }
 
 /** Announced acts that match a search, across every day, for the "Announced acts" group under set results. */
@@ -279,17 +281,29 @@ export function lineupReplacesEmptyState(model: AnnouncedLineupModel, searchQuer
   );
 }
 
+/** Whether the grid says "Set times aren't out yet" for a day: no set on it has a time and the festival is not over. */
+export function dayTimesNotOut(
+  festival: Festival | null | undefined,
+  days: readonly FestivalDay[] | null | undefined,
+  daySets: readonly FestivalSet[],
+  now: number = Date.now(),
+): boolean {
+  return !dayHasTimedSets(daySets) && festivalPhase(festival, days, new Date(now)) !== 'post';
+}
+
 /**
- * What the follow banner says for the festival on screen. Null when a set has a time (or the festival
- * is a draft): there is nothing left to wait for. 'days' when no act has a day yet, so the banner
+ * What the follow banner says for the festival on screen. Null when a set has a time, the festival
+ * is a draft, or the festival is over: there is nothing left to wait for. 'days' when no act has a day yet, so the banner
  * names days as well as set times. 'times' otherwise.
  */
 export function setTimesBannerKind(
   festival: Festival | null | undefined,
   days: readonly FestivalDay[] | null | undefined,
   sets: readonly FestivalSet[] | null | undefined,
+  now: number = Date.now(),
 ): 'days' | 'times' | null {
   if (!festival || festival.publishedAt === null) return null;
+  if (festivalPhase(festival, days, new Date(now)) === 'post') return null;
   const allSets = sets ?? [];
   if (allSets.some((set) => !!set.startTime)) return null;
   if (allSets.length > 0) return 'times';

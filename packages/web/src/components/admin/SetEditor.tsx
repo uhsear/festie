@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { createArtist, matchArtists } from '@festie/shared/services';
+import { MAX_ARTISTS_PER_SET } from '@festie/shared/constants';
 import { useCanMatchArtists } from './festivalModeContext';
 import type { ArtistCandidate } from '@festie/shared/services';
 import {
@@ -14,7 +15,6 @@ import type { Artist } from '@festie/shared/types';
 import ArtistSlotMatch from './ArtistSlotMatch';
 import type { SlotMatch } from './ArtistSlotMatch';
 
-const MAX_ARTISTS_PER_SET = 4;
 
 export interface SetRow {
   id: string;
@@ -50,11 +50,13 @@ export interface SetEditorProps {
   /** Fields (target.field) the issues name, so the matching input gets aria-invalid. */
   issueFields?: string[];
   status?: 'new' | 'changed' | null;
+  /** An organizer has no Artists tab, so the links hint says to ask Festie. */
+  organizer?: boolean;
 }
 
 /**
  * Edits one set row (artists, stage, startTime, endTime) inside a day.
- * A B2B set holds up to 4 artists; each keeps its own id, links and photo by index.
+ * A B2B set holds up to 8 artists; each keeps its own id, links and photo by index.
  * On blur the server matches the typed name: one artist links at once ("Not this one" undoes it),
  * two or more open the picker, none leaves the name free (the save creates the artist).
  * Links are read only here: they are edited once, on the Artists tab.
@@ -77,6 +79,7 @@ export default function SetEditor({
   issues = [],
   issueFields = [],
   status = null,
+  organizer = false,
 }: SetEditorProps) {
   const invalid = (field: string) => (issueFields.includes(field) ? true : undefined);
   const [drafts, setDrafts] = useState<string[]>(() => artistNamesOf(s));
@@ -206,7 +209,7 @@ export default function SetEditor({
                 )}
                 {readOnlyLinks.length > 0 && !match && (
                   <p className="text-xs text-text-muted">
-                    {readOnlyLinks.map(platformLabel).join(', ')}. Edit links on the Artists tab.
+                    {readOnlyLinks.map(platformLabel).join(', ')}. {organizer ? 'Ask Festie to change links.' : 'Edit links on the Artists tab.'}
                   </p>
                 )}
               </div>

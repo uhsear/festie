@@ -57,6 +57,8 @@ export interface FestivalCreatedPayload extends VersionedPayload {
 // ── Presence events ──────────────────────────────────────────────────────────
 
 export interface PresenceUpdatePayload extends VersionedPayload {
+  /** The festival this list belongs to; a user's own devices may sit in different festivals. */
+  festivalId?: string;
   online: PresenceUser[];
 }
 

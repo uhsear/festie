@@ -15,8 +15,8 @@ import {
   ACCOUNT_SECTIONS,
   COPY,
   INTRO_REPLAY_COPY,
+  GUEST_LEGAL_COPY,
   SUPPORT_EMAIL,
-  SUPPORT_URL_TERMS,
   THEME_MODE_OPTIONS,
 } from '@festie/shared/constants';
 import type { AccountSectionId } from '@festie/shared/constants';
@@ -24,6 +24,7 @@ import { listIdentities } from '@festie/shared/services';
 import type { IdentitySummary } from '@festie/shared/types';
 import { themeModeOf, useAuthStore, useNotificationPrefsStore, useUIStore } from '@festie/shared/stores';
 import ScreenHeader from '../../components/ScreenHeader';
+import { openPage } from '../../components/GuestLegalFooter';
 import { CONCEPT_IONICON } from '../../lib/conceptIcons';
 import AppPressable from '../../components/AppPressable';
 import SectionLabel from '../../components/SectionLabel';
@@ -46,6 +47,8 @@ import AccountDataSection from '../../components/AccountDataSection';
 import AccountDangerSection from '../../components/AccountDangerSection';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 import { useHaptics } from '../../hooks/useHaptics';
+
+const WEB_MANAGE_URL = 'https://festie.us/manage';
 
 /**
  * Account screen — mirrors packages/web/src/routes/account.tsx.
@@ -295,6 +298,19 @@ export default function AccountScreen() {
             onPress={() => go('/wrap')}
             accessibilityLabel="Open your Festival Wrap"
           />
+          {/* Organizers build and review festivals on the web; mobile only points there. */}
+          {user?.organizations?.length ? (
+            <LinkRow
+              icon="business-outline"
+              title={ACCOUNT_COPY.manageTitle}
+              hint={`${ACCOUNT_COPY.manageHint}. Open festie.us/manage in a browser.`}
+              onPress={() => {
+                haptics.tap();
+                void Linking.openURL(WEB_MANAGE_URL);
+              }}
+              accessibilityLabel="Open festie.us/manage in your browser"
+            />
+          ) : null}
         </View>
         {/* History — cross-festival year-over-year (M3) */}
         <AccountHistorySection refreshSignal={historyReload} />
@@ -324,7 +340,7 @@ export default function AccountScreen() {
           title={ACCOUNT_COPY.terms}
           onPress={() => {
             haptics.tap();
-            void Linking.openURL(SUPPORT_URL_TERMS);
+            void openPage(GUEST_LEGAL_COPY.termsPath);
           }}
           accessibilityLabel={ACCOUNT_COPY.terms}
         />
@@ -395,6 +411,9 @@ export default function AccountScreen() {
       />
     ),
   };
+
+  // A signed-out visitor is redirected to sign-in by AuthGate; draw nothing so the settings rows never flash.
+  if (!user) return null;
 
   return (
     // KAV is dropped: behavior='padding' is a no-op on Android, and on iOS it

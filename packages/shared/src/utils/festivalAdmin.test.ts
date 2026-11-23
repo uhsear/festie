@@ -8,6 +8,7 @@ import {
   describeVersionDifferences,
   festivalStatusLine,
   describeDeleteImpact,
+  describeHeldChange,
   groupIssues,
   type EditableSet,
   describeShiftResult,
@@ -130,6 +131,30 @@ describe('describeDeleteImpact', () => {
       'Nobody has joined this festival yet. You can restore it later from Archived.',
     );
     expect(describeDeleteImpact(null)).toBe('People who joined this festival lose access until you restore it from Archived.');
+  });
+
+  it('tells an organizer that only Festie can restore, never pointing at Archived', () => {
+    const texts = [
+      describeDeleteImpact(null, 'manage'),
+      describeDeleteImpact({ profiles: 0, crews: 0, picks: 0 }, 'manage'),
+      describeDeleteImpact({ profiles: 2, crews: 1, picks: 0 }, 'manage'),
+    ];
+    for (const t of texts) {
+      expect(t).toContain('Festie can restore it if you ask. Contact support.');
+      expect(t).not.toContain('Archived');
+    }
+  });
+});
+
+describe('describeHeldChange', () => {
+  const slot = (startTime: string | null) => ({ dayLabel: 'Saturday', startTime, stageName: 'Main' });
+  it('names a move, a removal and a cancelled act', () => {
+    expect(describeHeldChange({ kind: 'moved', artist: 'Kai', before: slot('20:00'), after: slot('21:30') })).toBe(
+      'Kai: Saturday, 8:00 PM, Main to Saturday, 9:30 PM, Main',
+    );
+    expect(describeHeldChange({ kind: 'moved', artist: 'Kai', before: slot(null), after: slot('21:30') })).toContain('Time TBA');
+    expect(describeHeldChange({ kind: 'removed', artist: 'Dim', before: null, after: null })).toBe('Dim: removed');
+    expect(describeHeldChange({ kind: 'entry_cancelled', artist: 'Zed', before: null, after: null })).toBe('Zed: cancelled');
   });
 });
 

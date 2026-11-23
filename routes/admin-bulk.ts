@@ -319,6 +319,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: AdminMountAr
         const [crew, targetUser] = await Promise.all([stores.crews.getById(crewId), getUserById(targetUserId)]);
 
         await stores.crews.removeMember(crewId, targetUserId);
+        if (crew) deps.emitPresence?.(crew.festivalId, io);
 
         if (emitter) {
           emitter.toCrew(crewId, 'crew:member-kicked', {
@@ -368,6 +369,7 @@ export default function mountAdminBulkRoutes({ router, deps, ctx }: AdminMountAr
         await evictAllFromCrewRoom(crewId, crew.festivalId);
 
         await stores.crews.delete(crewId);
+        deps.emitPresence?.(crew.festivalId, io);
 
         await writeAdminAudit(req, res, {
           action: AUDIT_ACTIONS.CREW_DELETED,

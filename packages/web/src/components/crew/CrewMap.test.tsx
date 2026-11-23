@@ -503,8 +503,8 @@ describe('CrewMap place card and Nearest', () => {
     extractMeetingPointPins.mockReturnValue([]);
     extractAmenityPins.mockReturnValue([amenity('a1', 'atm', 'ATM'), amenity('a2', 'info', 'Info')]);
     render(<CrewMap meetingPoints={[]} festival={FESTIVAL} />);
-    expect(screen.getByRole('button', { name: 'Hide ATM' })).toHaveTextContent('ATM');
-    expect(screen.getByRole('button', { name: 'Hide Info' })).toHaveTextContent('Info');
+    expect(screen.getByRole('button', { name: 'ATM', pressed: true })).toHaveTextContent('ATM');
+    expect(screen.getByRole('button', { name: 'Info', pressed: true })).toHaveTextContent('Info');
     expect(screen.queryByText(/pursu/i)).toBeNull();
     expect(document.body.innerHTML).not.toMatch(/pursu/i);
   });

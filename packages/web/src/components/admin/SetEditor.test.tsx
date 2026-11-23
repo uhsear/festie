@@ -71,8 +71,8 @@ describe('SetEditor B2B artists', () => {
     expect(last[2].links).toEqual({});
   });
 
-  it('hides the add button at 4 artists', () => {
-    renderSet({ artists: ['A', 'B', 'C', 'D'].map((name) => ({ name, links: {} })) });
+  it('hides the add button at the artist limit', () => {
+    renderSet({ artists: ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].map((name) => ({ name, links: {} })) });
     expect(screen.queryByText('+ B2B artist')).toBeNull();
   });
 });
@@ -209,5 +209,19 @@ describe('SetEditor artist matching', () => {
   it('shows the links of a linked artist read only', () => {
     renderSet({ artist: 'Kai', artists: [{ id: 'art-1', name: 'Kai', links: { spotify: 'https://s/kai', apple_music: 'https://a/kai' } }] });
     expect(screen.getByText('Spotify, Apple Music. Edit links on the Artists tab.')).toBeTruthy();
+  });
+
+  it('tells an organizer to ask Festie, since there is no Artists tab', () => {
+    render(
+      <SetEditor
+        set={{ id: 's1', artist: 'Kai', artists: [{ id: 'art-1', name: 'Kai', links: { spotify: 'https://s/kai' } }] }}
+        stages={[]}
+        organizer
+        onSetArtists={vi.fn()}
+        onField={vi.fn()}
+        onRemove={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Spotify. Ask Festie to change links.')).toBeTruthy();
   });
 });

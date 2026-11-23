@@ -35,7 +35,7 @@ loadState === 'error' ? (
   <EmptyState
     icon="calendar-outline"
     title={COPY.festivalLoad.noneTitle}
-    message="Choose a festival from the Schedule tab to start saving picks."
+    message="Choose a festival from the Lineup tab to start saving picks."
   />
 )
   );
