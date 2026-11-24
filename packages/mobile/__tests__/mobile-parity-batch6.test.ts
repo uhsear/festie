@@ -108,7 +108,8 @@ describe('stale comments', () => {
 
   it('the privacy screen header names the same effective date as EFFECTIVE_DATE', () => {
     const privacy = read('app/privacy.tsx');
-    expect(privacy).toContain("const EFFECTIVE_DATE = 'November 18, 2026';");
-    expect(privacy).toContain('(effective November 18, 2026)');
+    const date = /const EFFECTIVE_DATE = '([^']+)';/.exec(privacy)?.[1];
+    expect(date).toBeTruthy();
+    expect(privacy).toContain(`(effective ${date})`);
   });
 });

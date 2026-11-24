@@ -215,7 +215,7 @@
     <header>
         <h1>Security Whitepaper</h1>
         <p class="document-meta">
-            <span><strong>Version:</strong> 1.1</span>
+            <span><strong>Version:</strong> 1.2</span>
             <span><strong>Last Updated:</strong> November 2026</span>
         </p>
     </header>
@@ -290,7 +290,7 @@
             <ul>
                 <li><strong>Token Format:</strong> Cryptographically random tokens (minimum 256 bits entropy)</li>
                 <li><strong>Storage:</strong> Tokens are hashed using SHA-256 before database storage; raw tokens never stored on disk</li>
-                <li><strong>Cookie Configuration:</strong> HTTP-only flag prevents JavaScript access, Secure flag enforced on HTTPS connections, SameSite=Strict prevents CSRF</li>
+                <li><strong>Cookie Configuration:</strong> HTTP-only flag prevents JavaScript access, Secure flag enforced on HTTPS connections, SameSite=Lax. Cross-site request forgery is also blocked by an Origin check on state-changing requests from browsers, and by a required custom request header when a cookie-authenticated request has no Origin</li>
                 <li><strong>Session Duration:</strong> 24-hour absolute timeout, sliding window renewal on activity</li>
             </ul>
 
@@ -404,13 +404,13 @@
 
             <h3>CSRF Protection</h3>
             <div class="security-feature">
-                <strong>Origin Enforcement:</strong> State-changing requests (POST, PUT, DELETE) require valid Origin and Referer headers matching the application domain
+                <strong>Origin Enforcement:</strong> State-changing requests (POST, PUT, DELETE) from browsers are checked against the application's Origin. A cookie-authenticated request with no Origin must carry a required custom request header
             </div>
             <div class="security-feature">
                 <strong>Token-Based Protection:</strong> Optional CSRF tokens for additional protection on sensitive operations
             </div>
             <div class="security-feature">
-                <strong>SameSite Cookies:</strong> Session cookies enforced with SameSite=Strict preventing cross-site cookie transmission
+                <strong>SameSite Cookies:</strong> Session cookies use SameSite=Lax, limiting cross-site cookie transmission
             </div>
 
             <h3>Other Injection Attacks</h3>
@@ -521,7 +521,7 @@
             <ul>
                 <li><strong>Passwords:</strong> Hashed with Scrypt (memory-hard KDF); hashes cannot be reversed to plaintext</li>
                 <li><strong>Tokens:</strong> Hashed with SHA-256 before storage; tokens not recoverable from database</li>
-                <li><strong>Session Data:</strong> Stored in Redis (encrypted if TLS is used) or encrypted at rest in PostgreSQL</li>
+                <li><strong>Session Data:</strong> Session tokens are stored only as SHA-256 hashes</li>
             </ul>
 
             <h3>Data Retention Policy</h3>
@@ -542,12 +542,12 @@
                     </tr>
                     <tr>
                         <td>Backups</td>
-                        <td>Dumps every 6 hours kept 30 days, plus weekly snapshots</td>
+                        <td>Dumps every 6 hours; deleted within 13 weeks</td>
                         <td>Automatic purge after retention period</td>
                     </tr>
                     <tr>
                         <td>Audit Logs</td>
-                        <td>1 year</td>
+                        <td>Up to one year</td>
                         <td>Automatic deletion</td>
                     </tr>
                     <tr>
@@ -581,11 +581,10 @@
             </ul>
 
             <h3>Terms of Service & Consent Versioning</h3>
-            <p>Account creation requires acceptance of current Terms of Service and Privacy Policy. Versions are tracked:</p>
+            <p>Account creation requires acceptance of the current Terms of Service and Privacy Policy. The accepted Terms version is tracked:</p>
             <ul>
-                <li>Each user record stores accepted ToS/Privacy version and acceptance timestamp</li>
-                <li>Material changes require explicit re-acceptance before continued service use</li>
-                <li>30-day notice period for material policy changes with continued-use-as-acceptance</li>
+                <li>Each user record stores the Terms version and the acceptance time</li>
+                <li>Material changes are announced at least 30 days ahead</li>
             </ul>
         </section>
 
@@ -628,8 +627,8 @@
 
             <h3>Log Storage & Access</h3>
             <ul>
-                <li><strong>Storage:</strong> PostgreSQL with tamper-evident checksums</li>
-                <li><strong>Retention:</strong> 1-year retention policy with automatic deletion</li>
+                <li><strong>Storage:</strong> PostgreSQL</li>
+                <li><strong>Retention:</strong> Kept up to one year, then deleted automatically</li>
                 <li><strong>Access Control:</strong> Restricted to administrators; all log access logged</li>
                 <li><strong>Query Interface:</strong> Admin panel with filtering by user, action, date range, result status</li>
                 <li><strong>Export:</strong> Bulk export capabilities for security investigations and audits</li>
@@ -657,7 +656,7 @@
                 <strong>Compression:</strong> Gzip compression reduces backup size by 70-80%
             </div>
             <div class="security-feature">
-                <strong>Retention:</strong> Dumps every 6 hours kept for 30 days, plus weekly snapshots taken on Sundays
+                <strong>Retention:</strong> Dumps every 6 hours; deleted within 13 weeks
             </div>
 
             <h3>Retention Policy</h3>
@@ -681,8 +680,8 @@
                     <tr>
                         <td>Weekly Snapshots</td>
                         <td>Sunday dumps</td>
-                        <td>Several recent weeks</td>
-                        <td>Rolling window</td>
+                        <td>12 most recent</td>
+                        <td>12 weeks</td>
                     </tr>
                 </tbody>
             </table>
@@ -690,10 +689,10 @@
 
             <h3>Backup Integrity</h3>
             <ul>
-                <li><strong>Checksums:</strong> SHA-256 checksums computed on all backups for integrity verification</li>
-                <li><strong>Test Restores:</strong> Monthly restoration tests validate backup integrity and recovery procedures</li>
-                <li><strong>Encryption:</strong> Backups encrypted at rest using AES-256 encryption</li>
-                <li><strong>Offsite Replication:</strong> Backups replicated to geographically distributed storage for disaster recovery</li>
+                <li><strong>Verification:</strong> Each dump is checked with <code>pg_restore --list</code> before it is kept; a dump that fails is set aside as bad</li>
+                <li><strong>Test Restores:</strong> A weekly restore drill validates backup integrity and recovery procedures</li>
+                <li><strong>Encryption:</strong> Off-site copies are encrypted with AES-256 before upload</li>
+                <li><strong>Offsite Copy:</strong> An encrypted copy is kept off site in a private GitHub repository</li>
             </ul>
 
             <h3>Recovery Procedures</h3>
@@ -701,16 +700,7 @@
             <ul>
                 <li><strong>RTO (Recovery Time Objective):</strong> 1-2 hours maximum downtime for full restoration</li>
                 <li><strong>RPO (Recovery Point Objective):</strong> 6 hours maximum data loss in worst-case scenario</li>
-                <li><strong>Partial Recovery:</strong> Point-in-time recovery to specific timestamps for ransomware or data corruption scenarios</li>
                 <li><strong>Verification:</strong> Post-recovery integrity checks confirm data consistency before serving</li>
-            </ul>
-
-            <h3>Transaction Logging</h3>
-            <p>PostgreSQL Write-Ahead Logging (WAL) enables point-in-time recovery beyond backup snapshots:</p>
-            <ul>
-                <li>WAL files retained for 7 days enabling recovery to any point within the window</li>
-                <li>Continuous archival of WAL files to separate storage for extended recovery window</li>
-                <li>Prevents data loss from the last backup snapshot to the point of failure</li>
             </ul>
         </section>
 
@@ -873,7 +863,7 @@
         <section class="section">
             <h2>Conclusion</h2>
             <p>Festie implements a comprehensive, defense-in-depth security architecture addressing authentication, data protection, injection prevention, rate limiting, audit logging, and incident response. The application is designed to be resilient against common web application attacks while maintaining usability and performance.</p>
-            <p>This whitepaper documents existing security practices as of March 2026. Security is an ongoing process requiring continuous improvement, monitoring, and adaptation to emerging threats. For vendor security assessments or specific security questions, contact <a href="mailto:security@festie.us">security@festie.us</a>.</p>
+            <p>This whitepaper documents existing security practices as of November 2026. Security is an ongoing process requiring continuous improvement, monitoring, and adaptation to emerging threats. For vendor security assessments or specific security questions, contact <a href="mailto:security@festie.us">security@festie.us</a>.</p>
         </section>
 
         <section class="section">
@@ -889,7 +879,7 @@
     </main>
 
     <footer>
-        <p>Festie Security Whitepaper | Version 1.1 | Last Updated November 2026</p>
+        <p>Festie Security Whitepaper | Version 1.2 | Last Updated November 2026</p>
     </footer>
 </body>
 </html>

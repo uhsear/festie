@@ -107,6 +107,7 @@ export default defineConfig({
           /^\/privacy/,
           /^\/delete-account/,
           /^\/terms/,
+          /^\/dmca/,
           /^\/security-whitepaper/,
           /\.html$/,
           /^\/third-party-notices\.txt$/,
