@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
 import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import type { SetStatusResult } from '@festie/shared/utils';
@@ -211,6 +211,32 @@ describe('SetCard', () => {
       />,
     );
     expect(screen.getByText('TBA')).toBeInTheDocument();
+  });
+
+  it('transitions the translate property the hover lift writes, with no will-change', () => {
+    render(<SetCard {...defaultProps} />);
+    const cls = screen.getByTestId('set-card').className;
+    expect(cls).toContain('transition-[background-color,box-shadow,translate]');
+    expect(cls).not.toContain('will-change');
+    expect(cls.match(/(^|\s)transition-/g)).toHaveLength(1);
+  });
+
+  it('moves the spotlight without a React render, only for a fine hover pointer', () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
+    vi.stubGlobal('cancelAnimationFrame', () => {});
+    const matchMedia = vi.fn((q: string) => ({ matches: true, media: q }) as MediaQueryList);
+    vi.stubGlobal('matchMedia', matchMedia);
+    try {
+      render(<SetCard {...defaultProps} />);
+      const card = screen.getByTestId('set-card');
+      fireEvent.mouseMove(card, { clientX: 10, clientY: 20 });
+      expect(matchMedia).toHaveBeenCalledWith('(hover: hover) and (pointer: fine)');
+      frames.at(-1)!(0);
+      expect(card.style.getPropertyValue('--mx')).toBe('10px');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it('has data-testid="set-card"', () => {
