@@ -123,7 +123,7 @@ describe('AdminArtistBackfill', () => {
     confirmRun();
     const line = await screen.findByText(/Second dry run still has changes/);
     expect(line.textContent).toMatch(/Sets and lineup entries to update 3/);
-    expect(line.className).toMatch(/coral/);
+    expect(line.className).toMatch(/text-danger/);
   });
 
   it('asks for the password on REAUTH_REQUIRED and retries the run once with the same planHash', async () => {

@@ -52,7 +52,7 @@ export default function FestivalDayBanner() {
       </span>
       <Link
         to="/festival-mode"
-        className="shrink-0 flex items-center bg-accent-aqua text-bg-primary border-none rounded-xl py-2 px-3.5 text-[length:var(--font-size-14)] font-semibold cursor-pointer min-h-11 hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:active:transform-none transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        className="shrink-0 flex items-center bg-accent-aqua text-[var(--text-on-light-accent)] border-none rounded-xl py-2 px-3.5 text-[length:var(--font-size-14)] font-semibold cursor-pointer min-h-11 hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:active:transform-none transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
         onClick={enter}
         data-testid="festival-day-banner-enter"
       >

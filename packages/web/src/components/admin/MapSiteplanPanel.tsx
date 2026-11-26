@@ -94,7 +94,7 @@ export default function MapSiteplanPanel({
           type="button"
           onClick={onApplyCorners}
           disabled={draftCorners.length !== SITEPLAN_CORNER_COUNT || !isHttpsUrl(siteplanUrl)}
-          className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua text-bg-primary disabled:opacity-50"
+          className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua text-[var(--text-on-light-accent)] disabled:opacity-50"
         >
           Apply corners
         </button>

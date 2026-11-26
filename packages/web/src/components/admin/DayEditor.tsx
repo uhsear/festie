@@ -124,7 +124,7 @@ export default function DayEditor({
       {issues.length > 0 && (
         <div className="px-3 pb-2 space-y-0.5">
           {issues.map((m, i) => (
-            <p key={i} className="text-xs text-accent-coral">
+            <p key={i} className="text-xs text-text-danger">
               {m}
             </p>
           ))}

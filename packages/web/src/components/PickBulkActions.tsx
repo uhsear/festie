@@ -75,7 +75,7 @@ export default function PickBulkActions() {
                     : 'border-border text-text-secondary hover:bg-bg-card-hover'
                 }`}
               >
-                <PriorityIcon priority={p.value} className="w-3 h-3" filled={priority === p.value} />
+                <PriorityIcon priority={p.value} className="w-4 h-4" filled={priority === p.value} />
                 {p.short}
               </button>
             ))}
@@ -84,7 +84,7 @@ export default function PickBulkActions() {
           {stageGroups.length > 0 && (
             <div className="mb-3">
               <div className="flex items-center gap-1.5 mb-1.5 text-xs font-medium text-text-secondary">
-                <Layers className="w-3.5 h-3.5" aria-hidden="true" />
+                <Layers className="w-4 h-4" aria-hidden="true" />
                 By stage
               </div>
               <div className="flex flex-wrap gap-2">
@@ -110,7 +110,7 @@ export default function PickBulkActions() {
           {genreGroups.length > 0 && (
             <div>
               <div className="flex items-center gap-1.5 mb-1.5 text-xs font-medium text-text-secondary">
-                <Sparkles className="w-3.5 h-3.5" aria-hidden="true" />
+                <Sparkles className="w-4 h-4" aria-hidden="true" />
                 By genre
               </div>
               <div className="flex flex-wrap gap-2">

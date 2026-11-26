@@ -25,7 +25,7 @@ export default memo(function CompareCell({ priority, onAdd, label }: CompareCell
           className="inline-flex items-center gap-1 text-[length:var(--font-size-12)] font-semibold px-2 py-1 rounded"
           style={{ background: PRIORITY_STYLE[priority].bg, color: PRIORITY_STYLE[priority].fg }}
         >
-          <PriorityIcon priority={priority} className="w-3 h-3" filled />
+          <PriorityIcon priority={priority} className="w-4 h-4" filled />
           {PRIORITY_SYMBOLS[priority].short}
         </span>
       ) : onAdd ? (

@@ -14,6 +14,7 @@ import {
   suggestSeriesId,
   timeZoneChoices,
 } from '@festie/shared/utils';
+import { colors } from '@festie/shared/tokens';
 import type { FestivalIssue, SeriesFestival } from '@festie/shared/utils';
 import type { Artist } from '@festie/shared/types';
 import type { LineupDraft } from '@festie/shared/utils';
@@ -229,7 +230,7 @@ export default function FestivalEditForm({
   const handleAddStage = () => {
     setFormData({
       ...formData,
-      stages: [...(formData.stages || []), { id: `stage-${Date.now()}`, name: '', color: organizer ? defaultStageColor(formData.stages?.length ?? 0) : '#6a6a88' }],
+      stages: [...(formData.stages || []), { id: `stage-${Date.now()}`, name: '', color: organizer ? defaultStageColor(formData.stages?.length ?? 0) : colors.stage.fallback }],
     });
   };
 
@@ -426,7 +427,7 @@ export default function FestivalEditForm({
             className={`w-full px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${nameIssues.length ? ERROR_RING : ''}`}
           />
           {nameIssues.map((m, i) => (
-            <p key={i} className="mt-1 text-xs text-accent-coral">
+            <p key={i} className="mt-1 text-xs text-text-danger">
               {m}
             </p>
           ))}
@@ -584,7 +585,7 @@ export default function FestivalEditForm({
                   </button>
                 </div>
                 {stageIssues.map((m, k) => (
-                  <p key={k} className="mt-1 text-xs text-accent-coral">
+                  <p key={k} className="mt-1 text-xs text-text-danger">
                     {m}
                   </p>
                 ))}
@@ -713,7 +714,7 @@ export default function FestivalEditForm({
 
       {issues.length > 0 && (
         <div role="alert" className="rounded-xl border border-accent-coral p-3 space-y-1">
-          <p className="text-sm font-medium text-accent-coral">Fix these before saving</p>
+          <p className="text-sm font-medium text-text-danger">Fix these before saving</p>
           {issues.map((issue, i) => (
             <button
               key={i}
@@ -779,7 +780,7 @@ export default function FestivalEditForm({
         <button
           onClick={onSave}
           disabled={saving || (!!editingId && total === 0)}
-          className="px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? 'Saving…' : editingId ? (total > 0 ? `Save ${plural(total, 'change')}` : 'Save') : 'Create festival'}
         </button>

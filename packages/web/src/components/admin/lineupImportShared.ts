@@ -1,7 +1,7 @@
 import { saveBlob } from '../../lib/downloadExport';
 
 export const primaryButton =
-  'px-4 py-2 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 disabled:opacity-50 transition-opacity text-sm font-medium';
+  'px-4 py-2 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] hover:opacity-80 disabled:opacity-50 transition-opacity text-sm font-medium';
 export const secondaryButton =
   'px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 disabled:opacity-50 transition-colors text-sm font-medium';
 export const inputClass =

@@ -105,7 +105,7 @@ export default function SettleUpCard({
                   disabled={settlePending}
                   className="!py-1 !px-3 text-xs min-h-11"
                 >
-                  <HandCoins className="w-3.5 h-3.5" aria-hidden="true" /> I've paid {s.toName}
+                  <HandCoins className="w-4 h-4" aria-hidden="true" /> I've paid {s.toName}
                 </Button>
               </div>
             );

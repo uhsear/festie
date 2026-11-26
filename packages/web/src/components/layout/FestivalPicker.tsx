@@ -121,7 +121,7 @@ export default function FestivalPicker() {
           {f.scheduleProgress && (
             <span
               data-testid={`festival-progress-${f.id}`}
-              className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-[11px] font-medium text-text-secondary"
+              className="mt-1 inline-block rounded-full border border-border px-2 py-0.5 text-xs font-medium text-text-secondary"
             >
               {DISCOVER_COPY.scheduleProgress[f.scheduleProgress]}
             </span>

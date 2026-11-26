@@ -176,7 +176,7 @@ export default function CrewSelector({
                     )}
                   >
                     {crew.name}
-                    <Users className="ml-2 w-3.5 h-3.5 text-text-muted" aria-hidden="true" />
+                    <Users className="ml-2 w-4 h-4 text-text-muted" aria-hidden="true" />
                   </button>
                 ));
                 if (!group.label) return <React.Fragment key="unknown">{options}</React.Fragment>;
@@ -187,7 +187,7 @@ export default function CrewSelector({
                     aria-label={group.label}
                     className={cn(group.status === 'past' && 'opacity-60')}
                   >
-                    <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                    <div className="px-4 pt-2 pb-1 type-caption font-semibold uppercase tracking-wide text-text-muted">
                       {group.label}
                     </div>
                     {options}

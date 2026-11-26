@@ -154,7 +154,7 @@ export default function LiveLocationSharing() {
         <p className="text-sm font-semibold text-text-primary">
           {paused ? LIVE_SHARE_COPY.pausedTitle : LIVE_SHARE_COPY.sharingTitle}
         </p>
-        <p className="text-xs text-text-muted">
+        <p className="text-xs tabular-nums text-text-muted">
           {paused ? LIVE_SHARE_COPY.pausedSub(countdown, clock) : LIVE_SHARE_COPY.sharingSub(countdown, clock)}
         </p>
       </div>

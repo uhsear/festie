@@ -33,7 +33,7 @@ export default function TimelineSkeleton() {
             'border-b-2 border-b-[var(--color-border)]',
             'font-bold uppercase tracking-[1.5px]',
             // Mobile: smaller text, tight padding, allow wrapping
-            'text-[0.6rem] leading-[1.2] px-0.5 py-1 whitespace-normal break-words overflow-hidden',
+            'text-[length:var(--font-size-10)] leading-[1.2] px-0.5 py-1 whitespace-normal break-words overflow-hidden',
             // Desktop: restore full sizing
             'md:text-[length:var(--font-size-12)] md:leading-normal md:px-2 md:py-2.5',
           )}
@@ -49,7 +49,7 @@ export default function TimelineSkeleton() {
               'border-b-2 border-b-[var(--color-border)]',
               'font-bold uppercase tracking-[1.5px]',
               // Mobile: smaller text, tight padding, allow wrapping
-              'text-[0.6rem] leading-[1.2] px-0.5 py-1 whitespace-normal break-words overflow-hidden',
+              'text-[length:var(--font-size-10)] leading-[1.2] px-0.5 py-1 whitespace-normal break-words overflow-hidden',
               // Desktop: restore full sizing
               'md:text-[length:var(--font-size-12)] md:leading-normal md:px-2 md:py-2.5',
             )}

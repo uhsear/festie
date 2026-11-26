@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { api } from '@festie/shared/services/api';
+import { colors } from '@festie/shared/tokens';
 import { uploadSiteplanImage } from '@festie/shared/services';
 import {
   amenityCount,
@@ -81,7 +82,7 @@ interface StageEdit {
   longitude: number | null;
 }
 
-const DEFAULT_STAGE_COLOR = '#6a6a88';
+const DEFAULT_STAGE_COLOR = colors.stage.fallback;
 const MAX_SITEPLAN_BYTES = 10 * 1024 * 1024;
 
 export interface FestivalMapEditorProps {
@@ -469,7 +470,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
         <p className="text-sm text-text-secondary">Couldn’t load this festival.</p>
         <button
           onClick={() => void load()}
-          className="px-4 py-2 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium"
+          className="px-4 py-2 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] hover:opacity-80 transition-opacity text-sm font-medium"
         >
           Try again
         </button>
@@ -502,7 +503,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
         </Suspense>
         {armed && (
           <div
-            className="absolute top-2 left-1/2 -translate-x-1/2 z-[1] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent-aqua text-bg-primary text-xs font-medium shadow-lg pointer-events-none"
+            className="absolute top-2 left-1/2 -translate-x-1/2 z-[1] flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-accent-aqua text-[var(--text-on-light-accent)] text-xs font-medium shadow-lg pointer-events-none"
             role="status"
           >
             {armed.kind === 'venue'
@@ -609,7 +610,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
                     className={cn(
                       'px-3 py-1.5 min-h-11 rounded-md text-xs font-medium transition-colors border',
                       isArmed
-                        ? 'bg-accent-aqua text-bg-primary border-accent-aqua'
+                        ? 'bg-accent-aqua text-[var(--text-on-light-accent)] border-accent-aqua'
                         : 'bg-accent-aqua/20 text-accent-aqua border-transparent hover:bg-accent-aqua/30',
                     )}
                   >
@@ -688,7 +689,7 @@ export default function FestivalMapEditor({ festivalId, onClose, onEditFestival,
         <button
           onClick={() => void handleSave()}
           disabled={saving || basemapInvalid}
-          className="px-4 py-2 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium disabled:opacity-60"
+          className="px-4 py-2 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] hover:opacity-80 transition-opacity text-sm font-medium disabled:opacity-60"
         >
           {saving ? 'Saving…' : 'Save map'}
         </button>

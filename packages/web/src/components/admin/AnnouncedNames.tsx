@@ -116,7 +116,7 @@ function EditableText({
         onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
         className={`${FIELD} w-full`}
       />
-      {error && <p role="alert" className="mt-1 text-xs text-accent-coral">{error}</p>}
+      {error && <p role="alert" className="mt-1 text-xs text-text-danger">{error}</p>}
     </div>
   );
 }
@@ -596,7 +596,7 @@ export default function AnnouncedNames<D extends FormDay>({
                     <p role="status" className="md:col-span-6 text-xs text-accent-amber">{cancelNotes[rowKey(entry, index)]}</p>
                   )}
                   {duplicates.has(index) && (
-                    <p className="md:col-span-6 text-xs text-accent-coral">This act is listed twice. Remove one line before you save.</p>
+                    <p className="md:col-span-6 text-xs text-text-danger">This act is listed twice. Remove one line before you save.</p>
                   )}
                 </div>
               );
@@ -651,16 +651,16 @@ export default function AnnouncedNames<D extends FormDay>({
             </>
           )}
 
-          {parsed?.error && <p role="alert" className="text-xs text-accent-coral">{parsed.error}</p>}
+          {parsed?.error && <p role="alert" className="text-xs text-text-danger">{parsed.error}</p>}
           {parsed && !parsed.error && (
             <div className="text-xs space-y-1" aria-live="polite">
               <p className="text-text-primary">{describeParse(parsed)}</p>
               {parsed.skipped > 0 && <p className="text-text-muted">{parsed.skipped} empty {parsed.skipped === 1 ? 'line' : 'lines'} skipped.</p>}
               {merge && lineup.length > 0 && <p className="text-text-primary">{describeMerge(merge.summary, mode)}</p>}
               {parsed.flags.map((f, i) => (
-                <p key={i} className={f.blocking ? 'text-accent-coral' : 'text-accent-amber'}>{f.message}</p>
+                <p key={i} className={f.blocking ? 'text-text-danger' : 'text-accent-amber'}>{f.message}</p>
               ))}
-              {tooMany && <p className="text-accent-coral">A lineup holds at most {MAX_LINEUP_LINES} names.</p>}
+              {tooMany && <p className="text-text-danger">A lineup holds at most {MAX_LINEUP_LINES} names.</p>}
               {nearMatches.length > 0 && (
                 <div className="space-y-1">
                   <p className="text-text-muted">New entries that look like an existing one:</p>
@@ -689,7 +689,7 @@ export default function AnnouncedNames<D extends FormDay>({
             </div>
           )}
           {confirmRemoval && merge && (
-            <p role="alert" className="text-xs text-accent-coral">
+            <p role="alert" className="text-xs text-text-danger">
               {merge.summary.removed} {merge.summary.removed === 1 ? 'entry is' : 'entries are'} not in this paste.{marksPhrase(droppedByMerge)} Click again to remove {merge.summary.removed === 1 ? 'it' : 'them'}.
             </p>
           )}

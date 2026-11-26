@@ -18,9 +18,9 @@
     color: var(--color-text-primary);
   }
 }
-.admin-mobile-only button.bg-accent-aqua.text-bg-primary,
-.admin-desktop-sidebar button.bg-accent-aqua.text-bg-primary {
-  color: var(--color-bg-primary);
+.admin-mobile-only button.bg-accent-aqua,
+.admin-desktop-sidebar button.bg-accent-aqua {
+  color: var(--text-on-light-accent);
 }
 
 /* ── #main-content ───────────────────────────────────────────────────── */
@@ -153,7 +153,7 @@
     width: 24px;
     pointer-events: none;
     z-index: 20;
-    background: linear-gradient(to right, transparent, var(--color-bg-primary, #0d0d1a));
+    background: linear-gradient(to right, transparent, var(--color-bg-primary));
   }
   /* Crew is a normal scrolling page — keep the shell's `px-6 py-4` inset so the
      crew selector/name sits below the chrome with the same top/side breathing

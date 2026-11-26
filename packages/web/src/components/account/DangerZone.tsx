@@ -169,7 +169,7 @@ export default function DangerZone() {
             />
             )}
             {providerOnly && deleteError && (
-              <p role="alert" className="text-sm text-accent-coral">{deleteError}</p>
+              <p role="alert" className="text-sm text-text-danger">{deleteError}</p>
             )}
 
             <Button

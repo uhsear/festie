@@ -44,7 +44,7 @@ function StepRow({
         {isDone ? (
           <Check className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
         ) : isError ? (
-          <AlertCircle className="w-4 h-4 text-accent-coral" aria-hidden="true" />
+          <AlertCircle className="w-4 h-4 text-text-danger" aria-hidden="true" />
         ) : isActive ? (
           <span
             className="block w-2 h-2 rounded-full motion-reduce:opacity-60"
@@ -63,7 +63,7 @@ function StepRow({
           isDone && 'text-text-primary',
           isActive && 'text-text-secondary',
           isPending && 'text-text-muted',
-          isError && 'text-accent-coral',
+          isError && 'text-text-danger',
         )}
       >
         {label}
@@ -89,20 +89,20 @@ function StepRow({
           <button
             type="button"
             onClick={onRetry}
-            className="inline-flex items-center gap-1 text-accent-coral hover:text-text-primary transition-colors focus-visible:outline-1 focus-visible:outline-accent-coral rounded"
+            className="inline-flex items-center gap-1 text-text-danger hover:text-text-primary transition-colors focus-visible:outline-1 focus-visible:outline-accent-coral rounded"
             aria-label={`Retry ${label}`}
           >
-            <RefreshCw className="w-3 h-3" aria-hidden="true" />
+            <RefreshCw className="w-4 h-4" aria-hidden="true" />
             Retry
           </button>
         )}
         {isError && !onRetry && (
-          <span className="text-accent-coral">
+          <span className="text-text-danger">
             {section.syncedAt != null ? `failed · ${timeAgo(section.syncedAt)}` : 'failed'}
           </span>
         )}
       </span>
-      {detail && <p className="basis-full pl-8 pt-1 text-xs text-accent-coral">{detail}</p>}
+      {detail && <p className="basis-full pl-8 pt-1 text-xs text-text-danger">{detail}</p>}
     </li>
   );
 }
@@ -168,7 +168,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
           {summary.overall === 'ready' ? (
             <Check className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
           ) : summary.overall === 'partial' && summary.hasError ? (
-            <AlertCircle className="w-4 h-4 text-accent-coral" aria-hidden="true" />
+            <AlertCircle className="w-4 h-4 text-text-danger" aria-hidden="true" />
           ) : summary.overall === 'syncing' ? (
             <span
               className="block w-2 h-2 rounded-full motion-reduce:opacity-60"
@@ -191,7 +191,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
           className={cn(
             'inline-flex flex-shrink-0 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold min-h-11',
             'transition-[background-color,transform] duration-[var(--duration-med)] ease-[var(--ease-out)]',
-            'bg-accent-aqua text-bg-primary hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:transform-none',
+            'bg-accent-aqua text-[var(--text-on-light-accent)] hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:transform-none',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
             'disabled:opacity-50 disabled:cursor-not-allowed',
           )}
@@ -210,7 +210,7 @@ export default function OfflineReadinessCard({ festivalId, className }: Props) {
       </div>
 
       {mapMessage && (
-        <p role="alert" className="pb-2 text-xs text-accent-coral">
+        <p role="alert" className="pb-2 text-xs text-text-danger">
           {mapMessage}
         </p>
       )}

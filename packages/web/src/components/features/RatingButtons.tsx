@@ -150,7 +150,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
               <span
                 aria-hidden="true"
                 className={cn(
-                  'text-[10px] font-semibold',
+                  'text-[length:var(--font-size-10)] font-semibold',
                   active ? 'text-accent-amber' : 'text-text-secondary',
                 )}
               >
@@ -187,7 +187,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
                   type="button"
                   disabled={busy}
                   onClick={saveMemory}
-                  className="min-h-11 px-3 rounded-full bg-accent-aqua text-bg-primary text-xs font-semibold cursor-pointer"
+                  className="min-h-11 px-3 rounded-full bg-accent-aqua text-[var(--text-on-light-accent)] text-xs font-semibold cursor-pointer"
                 >
                   Save
                 </button>

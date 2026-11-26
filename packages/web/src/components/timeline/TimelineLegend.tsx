@@ -10,7 +10,7 @@ export default function TimelineLegend() {
   return (
     <details
       className={cn(
-        'text-xs text-[var(--color-text-secondary,#94a3b8)]',
+        'text-xs text-[var(--color-text-secondary)]',
         'mx-3 my-[2px_12px_4px] mt-0.5 mb-1',
         'timeline-legend',
       )}
@@ -40,15 +40,15 @@ export default function TimelineLegend() {
         )}
       >
         <li className="flex items-center gap-2 text-xs leading-tight">
-          <PriorityIcon priority="must" filled className="w-3 h-3 shrink-0 text-[var(--color-accent-coral)]" />
+          <PriorityIcon priority="must" filled className="w-4 h-4 shrink-0 text-[var(--color-accent-coral)]" />
           Must See (your pick)
         </li>
         <li className="flex items-center gap-2 text-xs leading-tight">
-          <PriorityIcon priority="want-to-see" filled className="w-3 h-3 shrink-0 text-[var(--color-accent-aqua)]" />
+          <PriorityIcon priority="want-to-see" filled className="w-4 h-4 shrink-0 text-[var(--color-accent-aqua)]" />
           Want to See (your pick)
         </li>
         <li className="flex items-center gap-2 text-xs leading-tight">
-          <PriorityIcon priority="maybe" filled className="w-3 h-3 shrink-0 text-[var(--color-accent-amber)]" />
+          <PriorityIcon priority="maybe" filled className="w-4 h-4 shrink-0 text-[var(--color-accent-amber)]" />
           Maybe (your pick)
         </li>
         <li className="flex items-center gap-2 text-xs leading-tight">
@@ -63,11 +63,11 @@ export default function TimelineLegend() {
             className="w-3.5 h-3.5 shrink-0 border border-[var(--color-clash)] [background:repeating-linear-gradient(135deg,var(--color-clash)_0_2px,transparent_2px_5px)]"
             aria-hidden="true"
           />
-          <TriangleAlert className="w-3.5 h-3.5 text-[var(--color-clash)]" aria-hidden="true" />
+          <TriangleAlert className="w-4 h-4 text-[var(--color-clash)]" aria-hidden="true" />
           {COPY.clash.gridHint}
         </li>
         <li className="flex items-center gap-2 text-xs leading-tight">
-          <span className="w-[18px] h-0.5 shrink-0 bg-[var(--color-accent-coral)]" aria-hidden="true" />
+          <span className="w-[18px] h-0.5 shrink-0 bg-[var(--color-live-fill)]" aria-hidden="true" />
           Current time
         </li>
       </ul>

@@ -25,7 +25,7 @@ export default function LowPowerIndicator({ className }: Props) {
         className,
       )}
     >
-      <BatteryLow className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
+      <BatteryLow className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
       Low power
     </span>
   );

@@ -51,7 +51,7 @@ export default function FreshnessChip({ surface, className }: FreshnessChipProps
   const label = formatFreshnessLabel(cachedAt, offlineMode);
 
   return (
-    <div className={cn('flex items-center gap-2 text-xs', className)} role="status" aria-live="polite">
+    <div className={cn('flex items-center gap-2 text-xs tabular-nums', className)} role="status" aria-live="polite">
       <span
         className={cn(
           'inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium',

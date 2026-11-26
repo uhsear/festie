@@ -116,3 +116,17 @@ describe('Avatar', () => {
     expect(container.firstElementChild?.className).toContain('my-class');
   });
 });
+
+describe('Avatar image outline and presence dot', () => {
+  it('outlines the photo with the image-outline token class', () => {
+    render(<Avatar name="Jane Doe" image="https://example.invalid/x.png" />);
+    expect(screen.getByRole('img')).toHaveClass('img-outline');
+  });
+
+  it('positions the presence dot absolutely, never relative', () => {
+    const { container } = render(<Avatar name="Jane Doe" showOnline isOnline />);
+    const dot = container.querySelector('.border-bg-primary');
+    expect(dot).toHaveClass('absolute');
+    expect(dot).not.toHaveClass('relative');
+  });
+});

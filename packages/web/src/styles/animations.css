@@ -176,10 +176,10 @@
 @keyframes timeline-now-pulse {
   0%,
   100% {
-    box-shadow: 0 0 0 0 rgba(var(--accent-coral-rgb), 0.55);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-live-fill) 55%, transparent);
   }
   50% {
-    box-shadow: 0 0 0 6px rgba(var(--accent-coral-rgb), 0);
+    box-shadow: 0 0 0 6px color-mix(in srgb, var(--color-live-fill) 0%, transparent);
   }
 }
 
@@ -214,13 +214,13 @@
    (emergency context). Ring radiates from the FAB/button at 1.5s. */
 @keyframes sos-fab-pulse {
   0% {
-    box-shadow: 0 0 0 0 rgba(255, 51, 102, 0.7);
+    box-shadow: 0 0 0 0 rgba(var(--accent-coral-rgb), 0.7);
   }
   70% {
-    box-shadow: 0 0 0 16px rgba(255, 51, 102, 0);
+    box-shadow: 0 0 0 16px rgba(var(--accent-coral-rgb), 0);
   }
   100% {
-    box-shadow: 0 0 0 0 rgba(255, 51, 102, 0);
+    box-shadow: 0 0 0 0 rgba(var(--accent-coral-rgb), 0);
   }
 }
 
@@ -262,7 +262,7 @@
   width: 2px;
   height: 0;
   background: var(--color-accent-aqua);
-  box-shadow: 0 0 8px rgba(0, 232, 208, 0.55);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--color-accent-aqua) 55%, transparent);
   border-radius: 1px;
   pointer-events: none;
   z-index: 6;
@@ -309,7 +309,7 @@
   padding-bottom: 6px !important;
 }
 .app-header.shrunk .app-header-brand {
-  font-size: 13px;
+  font-size: var(--font-size-14);
 }
 .app-header-brand {
   transition: font-size 200ms var(--ease-out);

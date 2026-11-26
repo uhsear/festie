@@ -42,16 +42,16 @@ describe('NowHero walk time', () => {
     expect(screen.getByRole('button', { name: /, 6 minute walk\. Open details$/ })).toBeInTheDocument();
   });
 
-  it('turns the countdown coral when the walk is late', () => {
+  it('turns the countdown amber when the walk is late', () => {
     renderHero({ minutes: 120, late: true, label: '120 min walk' });
-    expect(screen.getByText('in 1h 30m')).toHaveClass('text-accent-coral');
+    expect(screen.getByText('in 1h 30m')).toHaveClass('text-accent-amber');
     expect(screen.getByRole('button', { name: /, leave now\. Open details$/ })).toBeInTheDocument();
   });
 
   it('keeps the plain stage line without a walk', () => {
     renderHero();
     expect(screen.getByText('Head to Main')).toBeInTheDocument();
-    expect(screen.getByText('in 1h 30m')).not.toHaveClass('text-accent-coral');
+    expect(screen.getByText('in 1h 30m')).not.toHaveClass('text-accent-amber');
   });
 });
 

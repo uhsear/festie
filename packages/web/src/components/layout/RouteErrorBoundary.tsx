@@ -70,14 +70,14 @@ function presentationFor(kind: ErrorKind, error: Error): ErrorPresentation {
   switch (kind) {
     case 'network':
       return {
-        icon: <WifiOff className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
+        icon: <WifiOff className="size-8 text-[var(--color-accent-amber)]" aria-hidden="true" />,
         heading: 'You appear to be offline',
         description: 'Check your connection and try again. Your data is safe; we’ll sync it when you reconnect.',
         showBack: false,
       };
     case 'update':
       return {
-        icon: <RefreshCw className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
+        icon: <RefreshCw className="size-8 text-[var(--color-accent-amber)]" aria-hidden="true" />,
         heading: 'Festie was updated',
         description: 'A new version is available. Reload to continue.',
         showBack: false,
@@ -158,7 +158,7 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
             variant="primary"
             size="sm"
             type="button"
-            icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
+            icon={<RefreshCw className="size-4" aria-hidden="true" />}
             onClick={() => window.location.reload()}
           >
             Reload
@@ -169,7 +169,7 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
             variant="primary"
             size="sm"
             type="button"
-            icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
+            icon={<RefreshCw className="size-4" aria-hidden="true" />}
             onClick={reset}
           >
             Retry
@@ -180,7 +180,7 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
             variant="primary"
             size="sm"
             type="button"
-            icon={<ArrowLeft className="size-3.5" aria-hidden="true" />}
+            icon={<ArrowLeft className="size-4" aria-hidden="true" />}
             onClick={() => navigate({ to: '/' })}
           >
             Go home

@@ -31,9 +31,9 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
 
   if (summary.overall === 'ready') {
     return (
-      <div className={cn('flex items-center text-xs', className)}>
+      <div className={cn('flex items-center text-xs tabular-nums', className)}>
         <span role="status" className={cn(PILL, 'min-h-8')}>
-          <Check className="w-3.5 h-3.5 text-accent-aqua" aria-hidden="true" />
+          <Check className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
           {offlineStatusLabel(summary)}
         </span>
       </div>
@@ -59,7 +59,7 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
   const showReminder = remindAt !== null && Date.now() >= remindAt;
 
   return (
-    <div className={cn('flex flex-wrap items-center gap-2 text-xs', className)}>
+    <div className={cn('flex flex-wrap items-center gap-2 text-xs tabular-nums', className)}>
       {showReminder ? (
         <p className="basis-full rounded-lg border border-accent-amber/30 bg-accent-amber/10 px-3 py-2 text-sm text-accent-amber">
           {offlineReminderText(hasMap)}
@@ -76,7 +76,7 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
         )}
       >
-        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+        <Download className="w-4 h-4" aria-hidden="true" />
         {label}
       </button>
     </div>

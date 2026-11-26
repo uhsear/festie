@@ -247,7 +247,7 @@ export default function FestivalStatusPanel({
                 type="button"
                 disabled={blocked || dirty || (!!organizer && !orgActive)}
                 onClick={() => setConfirming(true)}
-                className="px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-bg-primary text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
+                className="px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {actionLabel}
               </button>

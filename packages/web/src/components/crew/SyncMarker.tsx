@@ -14,12 +14,12 @@ export default function SyncMarker({ item }: { item: { id: string; _optimistic?:
   if (!state) return null;
   return state === 'failed' ? (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-accent-amber">
-      <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+      <AlertTriangle className="w-4 h-4" aria-hidden="true" />
       {FAILED_ROW_LABEL}
     </span>
   ) : (
     <span className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary">
-      <CloudOff className="w-3 h-3" aria-hidden="true" />
+      <CloudOff className="w-4 h-4" aria-hidden="true" />
       {PENDING_ROW_LABEL}
     </span>
   );

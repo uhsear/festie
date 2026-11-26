@@ -160,7 +160,7 @@ export default function TBASection({
                           onSavePick(s.id, active ? null : p);
                         }}
                       >
-                        <PriorityIcon priority={p} className="w-3 h-3" filled={active} />
+                        <PriorityIcon priority={p} className="w-4 h-4" filled={active} />
                       </button>
                     );
                   })}

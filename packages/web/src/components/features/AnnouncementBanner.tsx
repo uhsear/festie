@@ -88,7 +88,7 @@ export default function AnnouncementBanner() {
           to={announcementWebPath(a.screen)}
           onClick={() => dismiss(a.id)}
           data-testid="announcement-banner-open"
-          className="shrink-0 flex items-center bg-accent-aqua text-bg-primary rounded-xl py-2 px-3.5 font-semibold min-h-11 hover:bg-[var(--color-accent-aqua-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+          className="shrink-0 flex items-center bg-accent-aqua text-[var(--text-on-light-accent)] rounded-xl py-2 px-3.5 font-semibold min-h-11 hover:bg-[var(--color-accent-aqua-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
         >
           {COPY.banner.open}
         </Link>

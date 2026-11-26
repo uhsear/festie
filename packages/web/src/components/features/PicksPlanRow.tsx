@@ -88,26 +88,26 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
             <div className="mt-0.5 flex items-center gap-2 text-xs text-text-muted">
               {hasNote && (
                 <span className="inline-flex items-center">
-                  <FileText className="w-3.5 h-3.5" aria-hidden="true" />
+                  <FileText className="w-4 h-4" aria-hidden="true" />
                   <span className="sr-only">Has note</span>
                 </span>
               )}
               {hasReminder && (
                 <span className="inline-flex items-center gap-0.5 tabular-nums">
-                  <Bell className="w-3.5 h-3.5" aria-hidden="true" />
+                  <Bell className="w-4 h-4" aria-hidden="true" />
                   {reminderLeadLabel(reminder)}
                   <span className="sr-only">Reminder {reminderLeadA11y(reminder)} before</span>
                 </span>
               )}
               {hasClash && (
                 <span className="inline-flex items-center gap-0.5 font-semibold text-[var(--color-text-danger)]">
-                  <TriangleAlert className="w-3.5 h-3.5" aria-hidden="true" />
+                  <TriangleAlert className="w-4 h-4" aria-hidden="true" />
                   {COPY.clash.badge}
                 </span>
               )}
               {move && (
                 <span data-testid="set-moved-chip" aria-hidden="true" className="inline-flex items-center gap-0.5 font-semibold">
-                  <ArrowRightLeft className="w-3.5 h-3.5" aria-hidden="true" />
+                  <ArrowRightLeft className="w-4 h-4" aria-hidden="true" />
                   {move.chip}
                 </span>
               )}

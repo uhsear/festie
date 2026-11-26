@@ -26,7 +26,7 @@ interface Props {
 const CHIP_CLASS = {
   draft: 'bg-accent-amber/20 text-accent-amber',
   review: 'bg-accent-amber/20 text-accent-amber',
-  changes: 'bg-accent-coral/20 text-accent-coral',
+  changes: 'bg-accent-amber/20 text-accent-amber',
   live: 'bg-accent-aqua/20 text-accent-aqua',
 } as const;
 
@@ -163,7 +163,7 @@ export default function ManageFestivalList({ query, organizations, onOpen, onNew
           <button
             type="button"
             onClick={onNew}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap"
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap"
           >
             <Plus className="w-4 h-4" aria-hidden="true" />
             New festival

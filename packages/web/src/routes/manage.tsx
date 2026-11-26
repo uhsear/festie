@@ -137,7 +137,7 @@ function ManagePageInner() {
             type="button"
             disabled={resending}
             onClick={() => void resend()}
-            className="min-h-11 rounded-xl bg-accent-aqua px-4 py-2 text-sm font-medium text-bg-primary disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-accent-aqua px-4 py-2 text-sm font-medium text-[var(--text-on-light-accent)] disabled:opacity-50"
           >
             Resend email
           </button>

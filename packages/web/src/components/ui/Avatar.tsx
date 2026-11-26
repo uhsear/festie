@@ -13,7 +13,7 @@ interface AvatarProps {
 }
 
 const sizeMap = {
-  xxs: 'w-4 h-4 text-[8px]',
+  xxs: 'w-4 h-4 text-[length:var(--font-size-10)]',
   xs: 'w-6 h-6 text-xs',
   sm: 'w-8 h-8 text-sm',
   md: 'w-10 h-10 text-base',
@@ -88,7 +88,7 @@ export default function Avatar({
           loading="lazy"
           decoding="async"
           onError={() => setFailedImage(image)}
-          className={cn('rounded-full object-cover', sizeMap[size])}
+          className={cn('rounded-full object-cover img-outline', sizeMap[size])}
         />
       ) : (
         <div
@@ -103,7 +103,7 @@ export default function Avatar({
         <div
           ref={dotRef}
           className={cn(
-            'absolute bottom-0 right-0 rounded-full border-2 border-bg-primary relative overflow-visible',
+            'absolute bottom-0 right-0 rounded-full border-2 border-bg-primary overflow-visible',
             dotSizeMap[size],
             // R6: ONLINE -> aqua dot (#00e8d0); OFFLINE -> muted neutral.
             // No greens -- accent rule: aqua = primary/positive, green retired.

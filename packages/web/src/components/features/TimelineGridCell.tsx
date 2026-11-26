@@ -260,7 +260,7 @@ function TimelineGridCell({
                   onSavePick(set.id, active ? null : p);
                 }}
               >
-                <PriorityIcon priority={p} className="w-3 h-3" filled={active} />
+                <PriorityIcon priority={p} className="w-4 h-4" filled={active} />
               </button>
             );
           })}
@@ -270,7 +270,7 @@ function TimelineGridCell({
       {/* Compact cells have no pick buttons: show the pick as an icon (picking happens in the set sheet) */}
       {compact && myPick && (
         <span className={cn('absolute top-[3px] pointer-events-none', clash ? 'right-[20px]' : 'right-[5px]')} aria-hidden="true">
-          <PriorityIcon priority={myPick} filled className={cn('w-3 h-3', PICK_ICON_COLOR[myPick])} />
+          <PriorityIcon priority={myPick} filled className={cn('w-4 h-4', PICK_ICON_COLOR[myPick])} />
         </span>
       )}
 
@@ -280,7 +280,7 @@ function TimelineGridCell({
           className="absolute bottom-[3px] right-[5px] flex items-center gap-[2px] rounded-full bg-[color-mix(in_srgb,var(--color-accent-aqua)_18%,transparent)] px-1 py-px text-[length:var(--font-size-10)] font-bold leading-none text-accent-aqua pointer-events-none tabular-nums"
           aria-hidden="true"
         >
-          <Users className="w-3 h-3" aria-hidden="true" />
+          <Users className="w-4 h-4" aria-hidden="true" />
           {crew.total}
         </span>
       )}

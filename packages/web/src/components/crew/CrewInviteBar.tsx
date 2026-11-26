@@ -106,7 +106,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
   return (
     <div className="py-1.5 px-2 rounded-lg bg-bg-card border border-border space-y-1.5">
     <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-      <Copy className="w-3.5 h-3.5 text-text-muted flex-shrink-0" aria-hidden="true" />
+      <Copy className="w-4 h-4 text-text-muted flex-shrink-0" aria-hidden="true" />
       <span className="text-xs text-text-secondary shrink-0">
         Invite: <span className="text-text-primary font-mono">{inviteCode}</span>
       </span>
@@ -120,7 +120,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
             aria-label="Regenerate invite code"
             className="!py-1 !px-2.5 min-w-11 text-xs"
           >
-            <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" />
+            <RefreshCw className="w-4 h-4" aria-hidden="true" />
           </Button>
         )}
         {canNativeShare && (
@@ -130,7 +130,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
             aria-label="Share invite link"
             className="!py-1 !px-2.5 min-w-11 text-xs"
           >
-            <Share2 className="w-3.5 h-3.5" aria-hidden="true" />
+            <Share2 className="w-4 h-4" aria-hidden="true" />
           </Button>
         )}
         <Button
@@ -139,7 +139,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
           aria-label="Show QR code"
           className="!py-1 !px-2.5 min-w-11 text-xs"
         >
-          <QrCode className="w-3.5 h-3.5" aria-hidden="true" />
+          <QrCode className="w-4 h-4" aria-hidden="true" />
         </Button>
         <Button
           variant={copiedCode ? 'primary' : 'secondary'}
@@ -171,7 +171,7 @@ export default function CrewInviteBar({ inviteCode, crewId, crewName, isOwner, e
       <div role="status">
         {inviteLocked && (
           <p className="text-xs text-text-secondary inline-flex items-center gap-1">
-            <Lock className="w-3 h-3" aria-hidden="true" />
+            <Lock className="w-4 h-4" aria-hidden="true" />
             {COPY.crewLock.lockedLine}
           </p>
         )}

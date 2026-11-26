@@ -38,7 +38,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
       <div key={item.key}>
         {walkFromPrev && (
           <p className="flex items-center gap-1.5 px-1 py-1 text-xs text-text-muted">
-            <Footprints className="w-3.5 h-3.5" aria-hidden="true" />
+            <Footprints className="w-4 h-4" aria-hidden="true" />
             {COPY.myDay.walk(walkFromPrev.minutes, getStageName(walkFromPrev.fromStageId) || '')}
           </p>
         )}
@@ -57,7 +57,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
           <PriorityIcon priority={item.priority} className="w-4 h-4" />
           <StageBadge variant="pick" stageName={stageName} stageColor={stageColor(set.stageId)} />
           {clashLabel && (
-            <span className="max-w-full truncate rounded-full bg-accent-coral/20 px-2 py-0.5 text-xs font-semibold text-accent-coral">
+            <span className="max-w-full truncate rounded-full bg-[var(--color-clash-tint)] px-2 py-0.5 text-xs font-semibold text-[var(--color-clash)]">
               {clashLabel}
             </span>
           )}
