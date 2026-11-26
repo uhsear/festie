@@ -103,6 +103,13 @@ describe('map document theme', () => {
   });
 });
 
+describe('map document attribution', () => {
+  it.each(VARIANTS)('starts the compact credit collapsed behind the (i) button (%s)', (_name, html) => {
+    expect(html).toContain('attributionControl: { compact: true }');
+    expect(html).toContain("classList.remove('maplibregl-compact-show')");
+  });
+});
+
 describe('map document place taps and camera padding', () => {
   const html = VARIANTS[0]![1];
   const body = (name: string) => {

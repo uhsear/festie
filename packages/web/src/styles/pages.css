@@ -34,6 +34,12 @@
 #main-content:has(.map-page) {
   min-height: 0;
 }
+/* Phones: the map runs edge to edge. The shell's px-6 comes off here, and the map box cancels the page's px-4. */
+@media (max-width: 639px) {
+  #main-content:has(.map-page) {
+    padding-inline: 0;
+  }
+}
 .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
 }
