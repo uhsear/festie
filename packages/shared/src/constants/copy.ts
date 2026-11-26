@@ -90,6 +90,8 @@ export const COPY = {
     before: 'Before',
     after: 'After',
     overlapHeading: 'Playing at the same time',
+    overlapSeeAll: (total: number) => `See all ${total}`,
+    overlapSeeAllA11y: (total: number) => `See all ${total} sets playing at the same time`,
     openA11y: (artist: string, stage: string, time: string) => `${artist}, ${stage}, ${time}. Open this set.`,
   },
   festivalLoad: {

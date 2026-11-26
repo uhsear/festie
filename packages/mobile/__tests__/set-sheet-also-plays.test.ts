@@ -47,3 +47,20 @@ describe('ClashCards catch instead (source-level guards)', () => {
     expect(clash).toContain('COPY.alsoPlays.catchInstead');
   });
 });
+
+describe('set sheet order and same-time cap (DP-36)', () => {
+  it('puts the pick control before time, map actions and context', () => {
+    const pick = sheet.indexOf('PRIORITY_BUTTONS.map');
+    expect(pick).toBeGreaterThan(sheet.indexOf('accessibilityRole="header"'));
+    for (const later of ['styles.time}', 'styles.stageActions', '<AlsoPlaysSection', '<SetContextSection']) {
+      expect(sheet.indexOf(later)).toBeGreaterThan(pick);
+    }
+  });
+
+  it('caps the same-time list at three rows with a See all row', () => {
+    const ctx = read('components/SetContextSection.tsx');
+    expect(ctx).toContain('OVERLAP_PREVIEW_LIMIT = 3');
+    expect(ctx).toContain('overlaps.slice(0, OVERLAP_PREVIEW_LIMIT)');
+    expect(ctx).toContain('COPY.setContext.overlapSeeAll(');
+  });
+});
