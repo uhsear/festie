@@ -537,8 +537,8 @@ export default function PicksScreen() {
 
   const scrollToTop = useCallback(() => {
     haptics.tap();
-    listRef.current?.scrollToOffset({ offset: 0, animated: true });
-  }, [haptics]);
+    listRef.current?.scrollToOffset({ offset: 0, animated: !reduceMotion });
+  }, [haptics, reduceMotion]);
 
 
   // Nothing to export / share with zero picks — disable so the action can't

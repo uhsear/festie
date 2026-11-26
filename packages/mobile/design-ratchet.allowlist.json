@@ -31,18 +31,6 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "app/(tabs)/picks.tsx",
-      "rule": "animated-true",
-      "max": 1,
-      "reason": "Offender today. DP-49 honours reduced motion, then the entry is deleted."
-    },
-    {
-      "file": "app/picks-image.tsx",
-      "rule": "animated-true",
-      "max": 1,
-      "reason": "Offender today. DP-49 honours reduced motion, then the entry is deleted."
-    },
-    {
       "file": "app/picks-image.tsx",
       "rule": "hex",
       "max": 2,
@@ -179,12 +167,6 @@
       "rule": "hex",
       "max": 1,
       "reason": "Comment only: it quotes a token value."
-    },
-    {
-      "file": "components/ScheduleDayChips.tsx",
-      "rule": "animated-true",
-      "max": 1,
-      "reason": "Offender today. DP-49 honours reduced motion, then the entry is deleted."
     },
     {
       "file": "components/ScheduleDayChips.tsx",

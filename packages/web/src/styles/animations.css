@@ -1,6 +1,6 @@
 /* Card animations */
 .card-enter {
-  animation: card-in var(--duration-slow) var(--ease-out);
+  animation: card-in var(--duration-slow) var(--ease-out) both;
 }
 
 @keyframes card-in {
@@ -300,6 +300,8 @@
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+    /* Staggered entrances hold at opacity 0 until their delay passes; skip the wait. */
+    animation-delay: 0s !important;
     /* Reduced motion removes movement, not feedback: transforms and layout snap,
        but colour and opacity changes still fade so state changes stay visible. */
     transition-property: color, background-color, border-color, outline-color, opacity, box-shadow, fill, stroke !important;
