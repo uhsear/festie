@@ -18,6 +18,7 @@ import IOSInstallDrawer from '../features/IOSInstallDrawer';
 import NowNextStrip from '../features/NowNextStrip';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
+import SosDock from './SosDock';
 import AnnouncementBanner from '../features/AnnouncementBanner';
 import LiveLocationSharing from '../crew/LiveLocationSharing';
 import Onboarding from '../features/Onboarding';
@@ -209,6 +210,7 @@ export default function AppShell() {
         </div>
 
         <BottomNav />
+        <SosDock />
         <ArtistSheetHost />
 
         {detailSet && (

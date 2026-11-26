@@ -42,24 +42,6 @@ export const useStyles = makeStyles((t) => ({
     flexWrap: 'wrap',
     gap: t.spacing[2],
   },
-  // Compact always-visible SOS entry, right-aligned in the header meta row.
-  // coralStrong bg + white text mirrors the Button danger pattern; jumps to the
-  // Logistics tab where the full CrewSos panel renders.
-  sosChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[1],
-    marginLeft: 'auto',
-    paddingHorizontal: t.spacing[3],
-    minHeight: 44,
-    justifyContent: 'center',
-    borderRadius: t.radii.default,
-    backgroundColor: t.colors.accent.coralStrong,
-  },
-  sosChipText: {
-    ...typeStyle('label', 700),
-    color: t.colors.text.onAccent,
-  },
   // Crew totem chip shown in the header (emoji + name rally marker).
   totemChip: {
     flexDirection: 'row',

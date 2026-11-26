@@ -1,22 +1,18 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { View, Text, TouchableOpacity, Platform, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Animated, { useSharedValue, useAnimatedStyle, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { useAuthStore, useCrewStore, useLiveLocationStore, useFestivalDataStore } from '@festie/shared/stores';
 import { COPY, FIND_FRIEND_COPY, LIVE_LOCATION } from '@festie/shared/constants';
 import { festivalLoadState, isPeerStale, mapCrewHintCopy } from '@festie/shared/utils';
 import { useMapCrew } from '@festie/shared/hooks';
 import type { CrewMeetingPoint } from '@festie/shared/types';
-import { elevation } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
-import { useReduceMotion } from '../../hooks/useReduceMotion';
-import { useHaptics } from '../../hooks/useHaptics';
 import { useNow } from '../../hooks/useNow';
-import { useSosRaise } from '../../hooks/useSosRaise';
-import { CREW_MEET_HREF, SCHEDULE_HREF, meetingPointPrefillHref } from '../../lib/dayOfRoutes';
+import { SCHEDULE_HREF, meetingPointPrefillHref } from '../../lib/dayOfRoutes';
 import OfflineMap from '../../components/OfflineMap';
+import SosControl from '../../components/SosControl';
 import FreshnessChip from '../../components/FreshnessChip';
 import OfflineStatusChip from '../../components/OfflineStatusChip';
 import EmptyState from '../../components/EmptyState';
@@ -55,7 +51,6 @@ export default function MapScreen() {
   const t = useTokens();
   const styles = useStyles();
   const insets = useSafeAreaInsets();
-  const haptics = useHaptics();
   const { focusStage } = useLocalSearchParams<{ focusStage?: string }>();
 
   const user = useAuthStore((s) => s.user);
@@ -88,35 +83,10 @@ export default function MapScreen() {
   const sweepStale = useLiveLocationStore((s) => s.sweepStale);
   const setActiveCrew = useLiveLocationStore((s) => s.setActiveCrew);
   const peers = useMemo(() => Object.values(peersRecord), [peersRecord]);
-
-  // R24: pulsing coral ring on SOS FAB while an active SOS exists for this crew.
-  // Continuous animation justified (emergency context). Reduce-motion: static ring.
   const crewSosList = useMemo(
     () => activeSosList.filter((e) => e.crewId === activeCrew?.id),
     [activeSosList, activeCrew?.id],
   );
-  const { confirmRaise, raising } = useSosRaise(activeCrew?.id ?? null);
-  const reduceMotion = useReduceMotion();
-  const sosFabGlow = useSharedValue(0);
-  const sosActive = crewSosList.length > 0;
-  const mySosActive = crewSosList.some((e) => e.userId === user?.id);
-  useEffect(() => {
-    if (!sosActive || reduceMotion) {
-      sosFabGlow.value = 0;
-      return;
-    }
-    sosFabGlow.value = withRepeat(withTiming(1, { duration: 750, easing: Easing.out(Easing.cubic) }), -1, true);
-  }, [sosActive, reduceMotion, sosFabGlow]);
-  // Cross-platform pulse: an actual coral ring View whose opacity/scale animate
-  // (works on Android, unlike shadow* which is iOS-only). Reduce-motion: static
-  // ring at a fixed mid value, no animation.
-  const sosRingStyle = useAnimatedStyle(() => {
-    const v = reduceMotion ? 0.5 : sosFabGlow.value;
-    return {
-      opacity: 0.15 + v * 0.35,
-      transform: [{ scale: 1 + v * 0.18 }],
-    };
-  });
 
   // Scope the live store to this crew on mount/crew change.
   useEffect(() => {
@@ -209,50 +179,11 @@ export default function MapScreen() {
         bottomInset={Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT : 0}
       />
 
-      {/* DC2 + R24: raise-SOS shortcut on the map. The FAB lives in an outer
-          absolutely-positioned wrapper so its placement never depends on the
-          parent's flex flow — an absolute child of a relative-flow parent
-          collapses to 0x0 on Android New Arch. Pulsing coral RING (a real View,
-          not shadow*) while an active SOS exists for this crew; reduce-motion
-          shows a static ring. */}
-      {crewLayers ? (
-        <View
-          style={[
-            styles.sosFabWrap,
-            { bottom: (Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT + insets.bottom : 0) + t.spacing[5] },
-          ]}
-          pointerEvents="box-none"
-        >
-          {sosActive ? <Animated.View pointerEvents="none" style={[styles.sosRing, sosRingStyle]} /> : null}
-          <TouchableOpacity
-            testID="map-sos-fab"
-            style={styles.sosFab}
-            onPress={() => {
-              haptics.tap();
-              // Own SOS already up: open the crew tab so they can tap "I'm safe".
-              if (mySosActive) router.push(CREW_MEET_HREF);
-              else confirmRaise();
-            }}
-            disabled={raising}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel={mySosActive ? 'Your SOS is active. Open crew to mark yourself safe' : 'Send an SOS to your crew'}
-            accessibilityHint={mySosActive ? undefined : 'Asks for confirmation before sending'}
-            accessibilityState={{ disabled: raising, busy: raising }}
-          >
-            {raising ? (
-              <ActivityIndicator color={t.colors.text.onAccent} />
-            ) : (
-              <>
-                <Ionicons name="alert-circle" size={t.iconSize.md} color={t.colors.text.onAccent} />
-                <Text style={styles.sosFabText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                  {mySosActive ? 'SOS active' : 'SOS'}
-                </Text>
-              </>
-            )}
-          </TouchableOpacity>
-        </View>
-      ) : null}
+      {/* The one SOS control: hold to send, or double-tap with a screen reader. */}
+      <SosControl
+        crewId={crewLayers ? activeCrew?.id : null}
+        bottomInset={Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT + insets.bottom : 0}
+      />
     </View>
   );
 }
@@ -281,38 +212,5 @@ const useStyles = makeStyles((t) => ({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  // Outer wrapper is the only absolutely-positioned node — pins the FAB to the
-  // bottom-right regardless of parent flow so it reliably renders on Android.
-  sosFabWrap: {
-    position: 'absolute',
-    right: t.spacing[4],
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  // Coral pulse ring behind the FAB. Centered absolutely on the wrapper and
-  // sized to overhang the pill; animated opacity/scale carry the pulse.
-  sosRing: {
-    position: 'absolute',
-    top: -8,
-    bottom: -8,
-    left: -8,
-    right: -8,
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.accent.coralStrong,
-  },
-  sosFab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[2],
-    minHeight: 52,
-    paddingHorizontal: t.spacing[4],
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.accent.coralStrong,
-    ...elevation.low,
-  },
-  sosFabText: {
-    ...typeStyle('label', 700),
-    color: t.colors.text.onAccent,
   },
 }));

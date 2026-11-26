@@ -80,9 +80,6 @@ vi.mock('../components/crew/CrewMap', () => ({
 vi.mock('../components/features/FreshnessChip', () => ({ default: () => <span>freshness-chip</span> }));
 vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => <span>offline-chip</span> }));
 
-vi.mock('../components/crew/SosRaiseButton', () => ({
-  default: () => <button type="button">SOS</button>,
-}));
 
 import MapView from './map';
 
@@ -187,17 +184,12 @@ describe('MapView', () => {
     expect(h.crewMapProps.mock.calls[0]![0].focusPinId).toBeNull();
   });
 
-  it('offers SOS to a crew member, and hides it while their own SOS is active', async () => {
+  it('has no in-page SOS control: the app shell owns the one SOS control', async () => {
     h.user = { id: 'u1' };
     h.crew = { id: 'c1' };
-    const { unmount } = render(<MapView />);
-    await screen.findByTestId('crew-map');
-    expect(screen.getByRole('button', { name: 'SOS' })).toBeInTheDocument();
-    unmount();
-    h.sosList = [{ crewId: 'c1', userId: 'u1' }];
     render(<MapView />);
     await screen.findByTestId('crew-map');
-    expect(screen.queryByRole('button', { name: 'SOS' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /SOS/ })).not.toBeInTheDocument();
   });
 
   it('links a crew member to the Crew tab, where meeting points are added', async () => {
@@ -216,7 +208,6 @@ describe('MapView', () => {
     render(<MapView />);
     await screen.findByTestId('crew-map');
     expect(h.crewMapProps.mock.calls[0]![0].meetingPoints).toHaveLength(0);
-    expect(screen.queryByRole('button', { name: 'SOS' })).not.toBeInTheDocument();
     expect(h.useQuery).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }));
     expect(screen.getByText(/Your crew is for Wasteland/)).toBeInTheDocument();
     expect(screen.queryByText('freshness-chip')).not.toBeInTheDocument();
@@ -228,7 +219,6 @@ describe('MapView', () => {
     render(<MapView />);
     await screen.findByTestId('crew-map');
     expect(h.crewMapProps.mock.calls[0]![0].meetingPoints).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'SOS' })).toBeInTheDocument();
   });
 
   it('shows the freshness chip for a crew member and the offline chip for any signed-in user', async () => {
@@ -244,11 +234,5 @@ describe('MapView', () => {
     await screen.findByTestId('crew-map');
     expect(screen.queryByText('freshness-chip')).not.toBeInTheDocument();
     expect(screen.queryByText('offline-chip')).not.toBeInTheDocument();
-  });
-
-  it('shows no SOS for a guest', async () => {
-    render(<MapView />);
-    await screen.findByTestId('crew-map');
-    expect(screen.queryByRole('button', { name: 'SOS' })).not.toBeInTheDocument();
   });
 });

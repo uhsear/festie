@@ -1,11 +1,12 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
-import { useState } from 'react';
+import { useEffect, useId, useRef, useState, type MouseEvent, type PointerEvent } from 'react';
 import * as RadixDialog from '@radix-ui/react-dialog';
 import { AlertCircle } from 'lucide-react';
 import { raiseSos, sosErrorMessage, isApiClientError } from '@festie/shared';
 import { toSosPosition } from '@festie/shared/services';
+import { SOS_CONTROL } from '@festie/shared/constants';
 import type { SosPosition } from '@festie/shared/services';
 import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
@@ -15,11 +16,13 @@ import { inputBase } from '../../lib/styles';
 
 interface Props {
   crewId: string;
-  /** Small "SOS" button for headers. The default is the full-width button. */
-  compact?: boolean;
   /** Pulse ring while a crew SOS is active (a static ring under reduced motion). */
   alerting?: boolean;
 }
+
+const HINT_MS = 2500;
+const RING_R = 29;
+const RING_LENGTH = 2 * Math.PI * RING_R;
 
 // Best-effort one-shot fix to attach to the SOS so the crew can actually find
 // the person. Never blocks the raise: a cached fix returns at once and the whole
@@ -45,11 +48,13 @@ function oneShotPosition(): Promise<SosPosition | undefined> {
 }
 
 /**
- * The one SOS raise control: button + confirm dialog + optional message.
+ * The one SOS raise control: a round press-and-hold button + confirm dialog + optional message.
+ * A pointer press fills the ring and opens the dialog after SOS_CONTROL.holdMs. A click that
+ * the keyboard or a screen reader makes (detail 0) opens the same dialog at once.
  * SOS is HTTP and online-only (never queued), so a failed raise tells the user
  * to reach their crew another way instead of silently queueing a stale rescue.
  */
-export default function SosRaiseButton({ crewId, compact = false, alerting = false }: Props) {
+export default function SosRaiseButton({ crewId, alerting = false }: Props) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState('');
@@ -57,6 +62,42 @@ export default function SosRaiseButton({ crewId, compact = false, alerting = fal
   // Reactively track prefers-reduced-motion so the ring class stays in sync
   // even if the OS setting changes while the button is mounted.
   const reducedMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
+  const [holding, setHolding] = useState(false);
+  const [hint, setHint] = useState(false);
+  const holdTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const opened = useRef(false);
+  const describedBy = useId();
+
+  useEffect(() => () => clearTimeout(holdTimer.current), []);
+  useEffect(() => {
+    if (!hint) return;
+    const id = setTimeout(() => setHint(false), HINT_MS);
+    return () => clearTimeout(id);
+  }, [hint]);
+
+  function startHold(e: PointerEvent<HTMLButtonElement>) {
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    opened.current = false;
+    setHolding(true);
+    holdTimer.current = setTimeout(() => {
+      opened.current = true;
+      setHolding(false);
+      setOpen(true);
+    }, SOS_CONTROL.holdMs);
+  }
+
+  function cancelHold() {
+    clearTimeout(holdTimer.current);
+    setHolding(false);
+  }
+
+  function onTriggerClick(e: MouseEvent<HTMLButtonElement>) {
+    // Keyboard and screen-reader activation click with detail 0: no hold needed.
+    if (e.detail === 0) return setOpen(true);
+    // A pointer press that was released early only explains the hold.
+    if (!opened.current) setHint(true);
+    opened.current = false;
+  }
 
   async function send() {
     if (busy) return;
@@ -83,26 +124,51 @@ export default function SosRaiseButton({ crewId, compact = false, alerting = fal
 
   return (
     <>
-      {compact ? (
-        <Button
-          variant="danger"
-          size="sm"
-          onClick={() => setOpen(true)}
-          className={`min-h-11${ring}`}
-          aria-label="Send an SOS to your crew"
+      <span className="relative inline-flex flex-col items-end gap-2">
+        {hint && (
+          <span
+            role="status"
+            className="absolute bottom-full right-0 mb-2 whitespace-nowrap rounded-lg bg-bg-elevated px-3 py-1.5 type-caption text-text-primary shadow-lg"
+          >
+            {SOS_CONTROL.tapHint}
+          </span>
+        )}
+        <button
+          type="button"
+          data-testid="sos-control"
+          aria-label={SOS_CONTROL.name}
+          aria-describedby={describedBy}
+          onPointerDown={startHold}
+          onPointerUp={cancelHold}
+          onPointerCancel={cancelHold}
+          onPointerLeave={cancelHold}
+          onContextMenu={(e) => e.preventDefault()}
+          onClick={onTriggerClick}
+          className={`relative flex h-16 w-16 select-none touch-none flex-col items-center justify-center rounded-full bg-accent-coral-strong text-text-on-accent shadow-lg hover:bg-[var(--color-accent-coral-strong-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-text-primary${ring}`}
         >
-          <AlertCircle className="w-4 h-4" aria-hidden="true" /> SOS
-        </Button>
-      ) : (
-        <Button
-          variant="danger"
-          onClick={() => setOpen(true)}
-          className={`w-full min-h-11${ring}`}
-          aria-label="Send SOS to your crew"
-        >
-          <AlertCircle className="w-4 h-4" aria-hidden="true" /> Send SOS
-        </Button>
-      )}
+          <svg className="pointer-events-none absolute inset-0 -rotate-90" viewBox="0 0 64 64" aria-hidden="true">
+            <circle
+              cx="32"
+              cy="32"
+              r={RING_R}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="3"
+              strokeLinecap="round"
+              strokeDasharray={RING_LENGTH}
+              strokeDashoffset={holding ? 0 : RING_LENGTH}
+              style={{ transition: holding && !reducedMotion ? `stroke-dashoffset ${SOS_CONTROL.holdMs}ms linear` : 'none' }}
+            />
+          </svg>
+          <AlertCircle className="h-5 w-5" aria-hidden="true" />
+          <span className="type-label font-bold leading-none" aria-hidden="true">
+            SOS
+          </span>
+        </button>
+        <span id={describedBy} className="sr-only">
+          {SOS_CONTROL.hint}
+        </span>
+      </span>
 
       <Dialog
         open={open}
