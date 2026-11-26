@@ -71,32 +71,6 @@
   outline-offset: -3px;
   border-radius: 12px;
 }
-@keyframes card-priority-pop {
-  0% {
-    transform: scale(1);
-  }
-  40% {
-    transform: scale(1.18);
-  }
-  70% {
-    transform: scale(0.94);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-.card-grid .card-priority-btn[aria-pressed='true'] {
-  animation: card-priority-pop 260ms var(--ease-out);
-}
-@media (hover: hover) and (pointer: fine) {
-  .card-grid .card-priority-btn:hover {
-    transform: translateY(-1px) scale(1.08);
-  }
-}
-.card-grid .card-priority-btn:active {
-  transform: scale(0.92);
-  transition: transform 60ms var(--ease-standard);
-}
 @keyframes card-crew-in {
   from {
     opacity: 0;
@@ -393,12 +367,9 @@
     transform: none !important;
     transition: none !important;
   }
-  .card-grid .card-priority-btn[aria-pressed='true'],
   .card-grid .card-overlap {
     animation: none;
   }
-  .card-grid .card-priority-btn:hover,
-  .card-grid .card-priority-btn:active,
   .card-grid .set-card:has(.set-card-click-target:active) {
     transform: none;
   }
