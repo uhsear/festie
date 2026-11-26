@@ -309,7 +309,7 @@ export default function AdminCrews() {
                                   height={24}
                                   loading="lazy"
                                   decoding="async"
-                                  className="w-6 h-6 rounded-full object-cover bg-bg-primary"
+                                  className="w-6 h-6 rounded-full object-cover img-outline bg-bg-primary"
                                 />
                               ) : (
                                 <div

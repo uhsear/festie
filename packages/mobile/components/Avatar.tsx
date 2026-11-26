@@ -162,6 +162,8 @@ const useStyles = makeStyles((t) => ({
     height: '100%',
     borderRadius: 9999,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: t.colors.outline.image,
   },
   initials: {
     // Use the weighted family (SpaceGrotesk_700Bold) rather than a raw

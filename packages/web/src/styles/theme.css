@@ -58,6 +58,12 @@
    continuous presence animation). Avatar.tsx manages the class toggle via a
    ref + animationend listener. Reduce-motion: the global block collapses the
    animation to 0.01ms, so no ring is visible. */
+/* 1 px neutral edge on raster images (avatars, artist photos). Inset so it adds no layout. */
+@utility img-outline {
+  outline: 1px solid var(--color-outline-image);
+  outline-offset: -1px;
+}
+
 @utility status-dot-flipped {
   &::after {
     content: '';

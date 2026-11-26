@@ -21,7 +21,7 @@ export default function DetailArtistHeader({ artistName, subtitle, primaryArtist
           <img
             src={primaryArtist.photo}
             alt={primaryArtist.name || setArtist || ''}
-            className="w-14 h-14 rounded-full object-cover border-2 border-[var(--color-overlay-5)] block"
+            className="w-14 h-14 rounded-full object-cover img-outline block"
             width={300}
             height={300}
             loading="lazy"

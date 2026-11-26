@@ -242,7 +242,7 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
                     return (
                       <li key={candidate.spotifyId} className="flex items-center gap-3">
                         {candidate.imageUrl && isSafeExternalUrl(candidate.imageUrl) ? (
-                          <img src={candidate.imageUrl} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+                          <img src={candidate.imageUrl} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-full object-cover img-outline" />
                         ) : (
                           <span className="h-10 w-10 shrink-0 rounded-full bg-bg-primary" aria-hidden="true" />
                         )}

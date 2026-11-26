@@ -88,7 +88,7 @@ export default function Avatar({
           loading="lazy"
           decoding="async"
           onError={() => setFailedImage(image)}
-          className={cn('rounded-full object-cover', sizeMap[size])}
+          className={cn('rounded-full object-cover img-outline', sizeMap[size])}
         />
       ) : (
         <div
@@ -103,7 +103,7 @@ export default function Avatar({
         <div
           ref={dotRef}
           className={cn(
-            'absolute bottom-0 right-0 rounded-full border-2 border-bg-primary relative overflow-visible',
+            'absolute bottom-0 right-0 rounded-full border-2 border-bg-primary overflow-visible',
             dotSizeMap[size],
             // R6: ONLINE -> aqua dot (#00e8d0); OFFLINE -> muted neutral.
             // No greens -- accent rule: aqua = primary/positive, green retired.

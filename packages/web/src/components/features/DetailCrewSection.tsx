@@ -57,7 +57,7 @@ export default function DetailCrewSection({ title, others, crewNotes, canViewAs,
                   height={28}
                   loading="lazy"
                   decoding="async"
-                  className="h-7 w-7 shrink-0 rounded-full object-cover"
+                  className="h-7 w-7 shrink-0 rounded-full object-cover img-outline"
                   title={o.name + ' (' + o.priority + ')'}
                 />
               ) : (
