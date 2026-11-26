@@ -19,8 +19,10 @@ import sharp from 'sharp';
 import type { Request, Response } from 'express';
 import type { RouteDeps } from '../lib/types';
 
+import { colors } from '../packages/shared/src/tokens/colors';
+import { colorsDaylight } from '../packages/shared/src/tokens/colorsDaylight';
+import { designCss, festieLockupHtml, headSnippet } from '../lib/design-css.js';
 import { dayHeadingDate } from '../lib/festival-page.js';
-import { festivalTint } from '../lib/festival-tint.js';
 import { escapeHtml } from '../lib/helpers/sanitize.js';
 import {
   buildEventJsonLd,
@@ -49,8 +51,8 @@ export default function createShareRoutes(deps: RouteDeps) {
   function sendShareError(res: Response, status: any, title: any, message: any) {
     res.status(status);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'");
-    return res.send(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><style>*{margin:0;padding:0;box-sizing:border-box}body{background:#0a0a0f;color:#e0e0e0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;min-height:100vh;display:flex;align-items:center;justify-content:center}.error-box{text-align:center;padding:40px 24px;max-width:400px}.error-icon{font-size:48px;margin-bottom:16px;opacity:.5}.error-title{font-size:20px;font-weight:700;margin-bottom:8px}.error-msg{font-size:14px;color:#888;margin-bottom:24px}.error-btn{display:inline-block;background:#ff3366;color:#fff;text-decoration:none;padding:10px 20px;border-radius:8px;font-weight:600;font-size:14px}.error-btn:hover{background:#e62e5c}</style></head><body><div class="error-box"><div class="error-icon">🎵</div><div class="error-title">${escapeHtml(title)}</div><div class="error-msg">${escapeHtml(message)}</div><a class="error-btn" href="${escapeHtml(config.PUBLIC_ORIGIN || '/')}">Go to Festie</a></div></body></html>`);
+    res.setHeader('Content-Security-Policy', SHARE_CSP);
+    return res.send(renderShareErrorPage(title, message, config.PUBLIC_ORIGIN || '/'));
   }
 
   // Express already URL-decodes the param. Accepts what validateUsername accepts
@@ -122,15 +124,15 @@ export default function createShareRoutes(deps: RouteDeps) {
     try {
       const username = vanityUsername(req.params.username);
       if (!username) {
-        return sendShareError(res, 400, 'Invalid Link', 'This share link is not valid.');
+        return sendShareError(res, 400, 'We cannot open that link', 'This share link is not valid.');
       }
 
       const found = await findVanityProfile(username);
       if (found.missing === 'no-user') {
-        return sendShareError(res, 404, 'User Not Found', 'No account with this username exists.');
+        return sendShareError(res, 404, 'We cannot find that user', 'No account with this username exists.');
       }
       if (!found.profileId) {
-        return sendShareError(res, 404, 'No Schedule Yet', 'This user hasn\'t joined a festival yet.');
+        return sendShareError(res, 404, 'No schedule yet', 'This user hasn\'t joined a festival yet.');
       }
       return await renderProfileShare(req, res, found.profileId, `u/${username}`);
     } catch (error) {
@@ -192,10 +194,10 @@ export default function createShareRoutes(deps: RouteDeps) {
   async function renderProfileShare(req: Request, res: Response, profileId: string, shareRef: string) {
     const { profile, festival } = await loadShare(profileId);
     if (!profile) {
-      return sendShareError(res, 404, 'Schedule Not Found', SCHEDULE_NOT_FOUND);
+      return sendShareError(res, 404, 'We cannot find that schedule', SCHEDULE_NOT_FOUND);
     }
     if (!festival) {
-      return sendShareError(res, 404, 'Festival Not Found', 'The festival for this schedule no longer exists.');
+      return sendShareError(res, 404, 'We cannot find that festival', 'The festival for this schedule no longer exists.');
     }
 
     const user = await getUserById(profile.userId);
@@ -212,12 +214,11 @@ export default function createShareRoutes(deps: RouteDeps) {
     res.setHeader('Cache-Control', 'private, no-cache');
     // Shared links keep working, but must never be indexed by search engines.
     res.setHeader('X-Robots-Tag', 'noindex');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https:; frame-ancestors 'none'");
+    res.setHeader('Content-Security-Policy', SHARE_CSP);
     return res.send(renderSharePage({
       username: escapeHtml(username),
       avatarUrl: escapeHtml(buildAvatarUrl(user) || ''),
       festivalName: escapeHtml(festival.name),
-      tint: festivalTint(festival.name),
       festivalLocation: escapeHtml(festival.location || ''),
       days: buildShareDays(festival, picks),
       ...stats,
@@ -288,12 +289,12 @@ export default function createShareRoutes(deps: RouteDeps) {
     try {
       const shareId = String(req.params.profileId || '').trim();
       if (!isValidShareId(shareId)) {
-        return sendShareError(res, 400, 'Invalid Link', 'This share link is not valid.');
+        return sendShareError(res, 400, 'We cannot open that link', 'This share link is not valid.');
       }
 
       const profileId = await stores.shareLinks.findProfileId(shareId);
       if (!profileId) {
-        return sendShareError(res, 404, 'Schedule Not Found', SCHEDULE_NOT_FOUND);
+        return sendShareError(res, 404, 'We cannot find that schedule', SCHEDULE_NOT_FOUND);
       }
       return await renderProfileShare(req, res, profileId, shareId);
     } catch (error) {
@@ -334,14 +335,82 @@ function priorityLabel(priority: any) {
   return ({ must: 'Must See', 'want-to-see': 'Want to See', maybe: 'Maybe' } as any)[priority] || priority;
 }
 
+const PRIORITY_KEYS = { must: 'must', 'want-to-see': 'want', maybe: 'maybe' } as const;
+
+/** The colour of a pick priority, as a CSS custom property that follows the page theme. */
 function priorityColor(priority: any) {
-  return ({ must: '#ff3366', 'want-to-see': '#ffaa00', maybe: '#888' } as any)[priority] || '#888';
+  return `var(--pr-${PRIORITY_KEYS[priority as keyof typeof PRIORITY_KEYS] ?? 'maybe'})`;
 }
 
-function renderSharePage({ username, avatarUrl, festivalName, tint, festivalLocation, days, totalPicks, mustCount, wantCount, maybeCount, origin, shareUrl, ogUrl, ogAlt, jsonLd, compareUrl, addUrl, appUrl }: any) {
+const priorityVars = (p: Record<'must' | 'want' | 'maybe', string>) => `--pr-must: ${p.must}; --pr-want: ${p.want}; --pr-maybe: ${p.maybe};`;
+
+/** Priority colours straight from the tokens, so Want is aqua and Maybe is amber here as in the app. */
+export const sharePriorityCss = `:root { ${priorityVars(colors.priority)} }
+@media (prefers-color-scheme: light) { :root { ${priorityVars(colorsDaylight.priority)} } }`;
+
+const SHARE_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src 'self' https:; font-src 'self'; frame-ancestors 'none'";
+
+const HEAD_SNIPPET = headSnippet.split('\n').join('\n  ');
+
+const SHARE_STYLE = `
+.share-container { max-width: 37.5rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+.share-header { padding: 1.5rem 0; border-bottom: 1px solid var(--ds-border); margin-bottom: 1.25rem; }
+.share-container > .ds-lockup { margin-bottom: 0.5rem; }
+.share-avatar { width: 4rem; height: 4rem; border-radius: 50%; margin-bottom: 0.75rem; overflow: hidden; background: var(--ds-border); }
+.share-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; outline: 1px solid var(--ds-border); outline-offset: -1px; }
+h1.share-username { margin: 0 0 0.25rem; font-size: 2rem; line-height: 1.1; overflow-wrap: anywhere; }
+.share-festival { font-size: 1rem; font-weight: 600; }
+.share-location { font-size: 0.875rem; color: var(--ds-text-secondary); }
+.share-stats { display: flex; flex-wrap: wrap; gap: 1rem; margin-top: 1rem; font-size: 0.875rem; }
+.share-stat { display: flex; align-items: center; gap: 0.375rem; }
+.share-stat-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; display: inline-block; }
+.share-day { margin-bottom: 1.5rem; }
+.share-day h2 { margin: 0 0 0.5rem; padding: 0.5rem 0; font-size: 1.125rem; border-bottom: 1px solid var(--ds-border); }
+.share-date { font-weight: 400; color: var(--ds-text-secondary); font-size: 0.875rem; }
+.share-sets { display: flex; flex-direction: column; gap: 0.375rem; }
+.share-set { background: var(--ds-card); border: 1px solid var(--ds-border); border-radius: 0.5rem; padding: 0.625rem 0.75rem; }
+.share-set-time { font-size: 0.8125rem; color: var(--ds-text-secondary); font-weight: 500; font-variant-numeric: tabular-nums; }
+.share-set-artist { font-size: 1rem; font-weight: 600; margin: 0.125rem 0; overflow-wrap: anywhere; }
+.share-set-meta { display: flex; justify-content: space-between; gap: 0.5rem; font-size: 0.8125rem; }
+.share-stage { color: var(--ds-text-secondary); }
+.share-priority { font-weight: 600; text-transform: uppercase; font-size: 0.75rem; letter-spacing: 0.04em; }
+.share-cta { display: flex; flex-direction: column; align-items: stretch; gap: 0.5rem; padding: 1.5rem 0; margin-top: 1rem; border-top: 1px solid var(--ds-border); text-align: center; }
+.share-cta .ds-cta-outline { background: transparent; color: var(--ds-text); border: 1px solid var(--ds-border); }
+.share-cta p { margin: 0; font-size: 0.875rem; color: var(--ds-text-secondary); }
+.share-link { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--ds-text); font-weight: 600; text-decoration: underline; text-underline-offset: 0.25em; }
+.share-empty { padding: 2.5rem 0; color: var(--ds-text-secondary); }
+.error-box { max-width: 26rem; margin: 0 auto; padding: 3rem 1.5rem; min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; gap: 1rem; }
+.error-box h1 { margin: 0; font-size: 2rem; line-height: 1.1; }
+.error-msg { margin: 0; color: var(--ds-text-secondary); }`;
+
+export function renderShareErrorPage(title: string, message: string, origin: string) {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${escapeHtml(title)}</title>
+  <meta name="robots" content="noindex">
+  ${HEAD_SNIPPET}
+  <style>${designCss}
+${SHARE_STYLE}
+  </style>
+</head>
+<body>
+  <main class="error-box">
+    ${festieLockupHtml(origin)}
+    <h1>${escapeHtml(title)}</h1>
+    <p class="error-msg">${escapeHtml(message)}</p>
+    <a class="ds-cta error-btn" href="${escapeHtml(origin)}">Open Festie</a>
+  </main>
+</body>
+</html>`;
+}
+
+export function renderSharePage({ username, avatarUrl, festivalName, festivalLocation, days, totalPicks, mustCount, wantCount, maybeCount, origin, shareUrl, ogUrl, ogAlt, jsonLd, compareUrl, addUrl, appUrl }: any) {
   const dayHtml = days.map((day: any) => `
-    <div class="share-day">
-      <h3>${day.label}${day.date ? ` <span class="share-date">${day.date}</span>` : ''}</h3>
+    <section class="share-day">
+      <h2>${day.label}${day.date ? ` <span class="share-date">${day.date}</span>` : ''}</h2>
       <div class="share-sets">
         ${day.sets.map((set: any) => `
           <div class="share-set" style="border-left: 3px solid ${set.stageColor}">
@@ -354,7 +423,7 @@ function renderSharePage({ username, avatarUrl, festivalName, tint, festivalLoca
           </div>
         `).join('')}
       </div>
-    </div>
+    </section>
   `).join('');
 
   return `<!DOCTYPE html>
@@ -368,7 +437,7 @@ function renderSharePage({ username, avatarUrl, festivalName, tint, festivalLoca
   <meta property="og:description" content="${shareDescription({ mustCount, wantCount, maybeCount, totalPicks })}">
   <meta property="og:url" content="${shareUrl}">
   <meta property="og:type" content="website">
-  <meta name="theme-color" content="#0a0a0a">
+  ${HEAD_SNIPPET}
   <meta property="og:site_name" content="Festie">
   <meta property="og:image" content="${ogUrl}">
   <meta property="og:image:width" content="1200">
@@ -377,184 +446,25 @@ function renderSharePage({ username, avatarUrl, festivalName, tint, festivalLoca
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:image" content="${ogUrl}">
   <script type="application/ld+json">${jsonLd}</script>
-  <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: ${tint.bg};
-      color: #e0e0e0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.5;
-      min-height: 100vh;
-    }
-    .share-container {
-      max-width: 600px;
-      margin: 0 auto;
-      padding: 20px 16px;
-    }
-    .share-header {
-      text-align: center;
-      padding: 24px 0;
-      border-top: 4px solid ${tint.active};
-      border-bottom: 1px solid rgba(255,255,255,0.1);
-      margin-bottom: 20px;
-    }
-    .share-avatar {
-      width: 64px;
-      height: 64px;
-      border-radius: 50%;
-      margin: 0 auto 12px;
-      overflow: hidden;
-      background: #333;
-    }
-    .share-avatar img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-    }
-    .share-username {
-      font-size: 20px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    .share-festival {
-      font-size: 14px;
-      color: #ff3366;
-      font-weight: 600;
-    }
-    .share-location {
-      font-size: 13px;
-      color: #888;
-    }
-    .share-stats {
-      display: flex;
-      justify-content: center;
-      gap: 16px;
-      margin-top: 16px;
-      font-size: 13px;
-    }
-    .share-stat {
-      display: flex;
-      align-items: center;
-      gap: 4px;
-    }
-    .share-stat-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      display: inline-block;
-    }
-    .share-day {
-      margin-bottom: 24px;
-    }
-    .share-day h3 {
-      font-size: 16px;
-      font-weight: 700;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
-      margin-bottom: 8px;
-    }
-    .share-date {
-      font-weight: 400;
-      color: #888;
-      font-size: 13px;
-    }
-    .share-sets {
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-    }
-    .share-set {
-      background: ${tint.pale};
-      border: 1px solid ${tint.faint};
-      border-radius: 8px;
-      padding: 10px 12px;
-    }
-    .share-set-time {
-      font-size: 12px;
-      color: #888;
-      font-weight: 500;
-    }
-    .share-set-artist {
-      font-size: 15px;
-      font-weight: 600;
-      margin: 2px 0;
-    }
-    .share-set-meta {
-      display: flex;
-      justify-content: space-between;
-      font-size: 12px;
-    }
-    .share-stage {
-      color: #aaa;
-    }
-    .share-priority {
-      font-weight: 600;
-      text-transform: uppercase;
-      font-size: 11px;
-      letter-spacing: 0.5px;
-    }
-    .share-cta {
-      text-align: center;
-      padding: 24px 0;
-      margin-top: 16px;
-      border-top: 1px solid rgba(255,255,255,0.1);
-    }
-    .share-cta a {
-      display: inline-block;
-      background: #ff3366;
-      color: #fff;
-      text-decoration: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 14px;
-    }
-    .share-cta a:hover {
-      background: #e62e5c;
-    }
-    .share-cta a.share-cta-outline {
-      background: transparent;
-      color: #ff3366;
-      border: 1px solid #ff3366;
-      margin: 8px 0 0 8px;
-    }
-    .share-cta a.share-cta-outline:hover {
-      background: rgba(255,51,102,0.1);
-    }
-    .share-cta p a,
-    .share-cta p a:hover {
-      display: inline;
-      background: none;
-      color: #ff3366;
-      padding: 0;
-      font-size: inherit;
-      text-decoration: underline;
-    }
-    .share-cta p {
-      font-size: 13px;
-      color: #888;
-      margin-top: 8px;
-    }
-    .share-empty {
-      text-align: center;
-      padding: 40px 0;
-      color: #888;
-    }
+  <style>${designCss}
+${sharePriorityCss}
+${SHARE_STYLE}
   </style>
 </head>
 <body>
-  <div class="share-container">
-    <div class="share-header">
+  <main class="share-container">
+    ${festieLockupHtml(origin)}
+    <header class="share-header">
       ${avatarUrl ? `<div class="share-avatar"><img src="${avatarUrl}" alt="" loading="lazy"></div>` : ''}
-      <div class="share-username">${username}</div>
+      <h1 class="share-username">${username}</h1>
       <div class="share-festival">${festivalName}</div>
       ${festivalLocation ? `<div class="share-location">${festivalLocation}</div>` : ''}
       <div class="share-stats">
-        <span class="share-stat"><span class="share-stat-dot" style="background:#ff3366"></span> ${mustCount} must</span>
-        <span class="share-stat"><span class="share-stat-dot" style="background:#ffaa00"></span> ${wantCount} want</span>
-        <span class="share-stat"><span class="share-stat-dot" style="background:#888"></span> ${maybeCount} maybe</span>
+        <span class="share-stat"><span class="share-stat-dot" style="background:${priorityColor('must')}"></span> ${mustCount} must</span>
+        <span class="share-stat"><span class="share-stat-dot" style="background:${priorityColor('want-to-see')}"></span> ${wantCount} want</span>
+        <span class="share-stat"><span class="share-stat-dot" style="background:${priorityColor('maybe')}"></span> ${maybeCount} maybe</span>
       </div>
-    </div>
+    </header>
 
     ${totalPicks === 0
       ? '<div class="share-empty"><p>No picks saved yet.</p></div>'
@@ -562,12 +472,12 @@ function renderSharePage({ username, avatarUrl, festivalName, tint, festivalLoca
     }
 
     <div class="share-cta">
-      <a href="${compareUrl}">Compare with my picks</a>
-      <a class="share-cta-outline" href="${addUrl}">Add their picks to my plan</a>
-      <p>Have the Festie app? <a href="${appUrl}">Open in the app</a></p>
-      <p><a href="${origin}/?ref=share-picks">New to Festie? Plan your own schedule</a></p>
+      <a class="ds-cta" href="${compareUrl}">Compare with my picks</a>
+      <a class="ds-cta ds-cta-outline" href="${addUrl}">Add their picks to my plan</a>
+      <p>Have the Festie app? <a class="share-link" href="${appUrl}">Open in the app</a></p>
+      <p><a class="share-link" href="${origin}/?ref=share-picks">New to Festie? Plan your own schedule</a></p>
     </div>
-  </div>
+  </main>
 </body>
 </html>`;
 }

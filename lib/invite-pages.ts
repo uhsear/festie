@@ -6,10 +6,11 @@
 // chat apps show a rich preview, and one Join button into the app. Every value
 // is escaped here, inside the renderer, so no caller can forget.
 
-import { festivalTint } from './festival-tint.js';
+import { fontFamily } from '../packages/shared/src/tokens/typography';
+import { baseCss, ctaCss, daylightCss, designCss, fontFaceCss, festieLockupHtml, headSnippet, stageRootCss } from './design-css.js';
 import { addDaysCompact, buildVCalendar } from './helpers/ics-builder.js';
 import { escapeHtml } from './helpers/sanitize.js';
-import { formatInviteDateRange, type InvitePreview } from './invite-preview.js';
+import { formatInviteDateRange, inviteCountdown, type InvitePreview } from './invite-preview.js';
 
 export const INVITE_ERROR_MESSAGES = {
   expired: 'This invite has expired. Ask someone in the crew for a new link.',
@@ -18,67 +19,33 @@ export const INVITE_ERROR_MESSAGES = {
   locked: "This crew isn't taking new members.",
 } as const;
 
-const PAGE_STYLE = `
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0a0a0a;
-      color: #e0e0e0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.5;
-      min-height: 100vh;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-    }
-    .invite-container { max-width: 400px; width: 100%; text-align: center; }
-    .invite-card {
-      background: rgba(255, 255, 255, 0.05);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      border-radius: 12px;
-      padding: 40px 24px;
-    }
-    .invite-eyebrow {
-      font-size: 12px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: #ff5c85;
-      margin-bottom: 8px;
-    }
-    h1 { font-size: 24px; font-weight: 700; margin-bottom: 8px; overflow-wrap: anywhere; }
-    .invite-line { font-size: 14px; color: #aaa; margin-bottom: 4px; }
-    .invite-button {
-      display: inline-block;
-      margin-top: 24px;
-      background: #d6154f;
-      color: #fff;
-      text-decoration: none;
-      padding: 14px 32px;
-      border-radius: 8px;
-      font-weight: 600;
-      font-size: 15px;
-    }
-    .invite-button:hover { background: #c01d3a; }
-    .invite-footer { font-size: 12px; color: #999; margin-top: 24px; }
-    .invite-error-title { font-size: 20px; font-weight: 700; margin-bottom: 12px; }
-    .invite-error-message { font-size: 14px; color: #aaa; margin-bottom: 32px; line-height: 1.6; }
-    .invite-link { color: #ff5c85; text-decoration: none; font-weight: 600; font-size: 14px; }
-    .invite-link:hover { text-decoration: underline; }
-    .invite-save { display: inline-block; margin-top: 16px; padding: 12px 8px; }`;
+// Lean on purpose: this page opens from a link on weak signal and may weigh at most 10 percent more
+// than the page it replaced. It takes the tokens, the CTA and the base rules from lib/design-css.ts,
+// loads only the Clash Display face (the body falls back to system-ui) and carries the browser-bar
+// colours without the icon links. The error page is small and takes the whole module.
+const CLASH_FACE = fontFaceCss.split('\n').filter((face) => face.includes('Clash Display'));
+const THEME_COLOR_META = headSnippet
+  .split('\n')
+  .filter((line) => line.startsWith('<meta name="theme-color"'))
+  .join('\n  ');
 
-// Values copied by hand from the Daylight palette (packages/shared/src/tokens/colorsDaylight.ts). The backend can import the shared tokens by relative path, as lib/design-css.ts does; the pages move onto that module in DP-14.
-// Must follow the festival tint rules so it wins at equal specificity.
-const LIGHT_STYLE = `
-    @media (prefers-color-scheme: light) {
-      body { background: #f4f4f7; color: #0b0b12; }
-      .invite-card { background: #ffffff; border-color: rgba(0, 0, 0, 0.12); }
-      .invite-eyebrow, .invite-link { color: #a8002a; }
-      .invite-line, .invite-error-message { color: #2e2e44; }
-      .invite-footer { color: #45455c; }
-      .invite-button { background: #a8002a; color: #ffffff; }
-      .invite-button:hover { background: #a3001f; }
-    }`;
+const SHARED_CSS = [stageRootCss, daylightCss, ...CLASH_FACE, baseCss, ctaCss].join('\n');
+
+const PAGE_STYLE = `
+main { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 1rem; }
+.iv { width: 100%; max-width: 26rem; padding: 2rem 1.5rem; border: 1px solid var(--ds-border); border-radius: 0.75rem; background: var(--ds-card); }
+.iv .ds-lockup { margin-bottom: 1.5rem; }
+.iv-crew { display: flex; align-items: center; margin-bottom: 0.75rem; font-size: 0.875rem; color: var(--ds-text-secondary); }
+.iv-face { display: inline-flex; width: 2.5rem; height: 2.5rem; margin-right: -0.5rem; align-items: center; justify-content: center; border: 2px solid var(--ds-card); border-radius: 50%; background: var(--ds-border); color: var(--ds-text); font-weight: 600; }
+.iv-faces { display: flex; flex: none; }
+.iv-state { margin-left: 1rem; }
+h1 { margin: 0 0 0.5rem; font-size: 2rem; line-height: 1.1; overflow-wrap: anywhere; }
+.iv-when { margin: 0 0 0.5rem; font: 700 1.5rem ${fontFamily.displayWeb}; }
+.iv p { margin: 0 0 0.25rem; color: var(--ds-text-secondary); }
+.iv p.iv-when { color: var(--ds-text); }
+.iv .ds-cta { width: 100%; margin-top: 1.5rem; }
+.iv-link { display: flex; align-items: center; min-height: 2.75rem; color: var(--ds-text); font-weight: 600; }
+.iv .iv-small { margin-top: 0.5rem; font-size: 0.8125rem; }`;
 
 /** "Crew of 6 · 2 spots left", or "Crew of 30 · full". */
 function inviteStateLine(memberCount: number, spotsLeft: number): string {
@@ -89,7 +56,7 @@ function inviteStateLine(memberCount: number, spotsLeft: number): string {
 type InviteJoinPageArgs = Pick<
   InvitePreview,
   'crewName' | 'ownerName' | 'memberCount' | 'spotsLeft' | 'festivalName' | 'startDate' | 'endDate'
-> & { inviteCode: string; origin: string };
+> & { inviteCode: string; origin: string; memberInitials?: string[]; now?: Date };
 
 export function renderInviteJoinPage({
   crewName,
@@ -101,29 +68,35 @@ export function renderInviteJoinPage({
   endDate,
   inviteCode,
   origin,
+  memberInitials = [],
+  now,
 }: InviteJoinPageArgs) {
   const dates = formatInviteDateRange(startDate, endDate);
   const stateLine = inviteStateLine(memberCount, spotsLeft);
-  const festivalLine = [festivalName, dates].filter(Boolean).join(' · ');
+  const countdown = inviteCountdown(startDate, endDate, now);
   const description = `${[festivalName, dates, stateLine].filter(Boolean).join(' · ')}. Plan your sets together on Festie.`;
   const title = escapeHtml(`Join ${crewName} on Festie`);
   const code = encodeURIComponent(inviteCode);
   const pageUrl = escapeHtml(`${origin}/join/${code}`);
   const joinUrl = escapeHtml(`${origin}/?joinCrew=${code}&ref=crew-invite`);
   const saveLink = dates
-    ? `      <a href="${escapeHtml(`${origin}/join/${code}/save.ics`)}" class="invite-link invite-save" download>Save for later</a>
-      <p class="invite-footer">Adds the festival dates and this invite to your calendar.</p>
+    ? `      <a href="${escapeHtml(`${origin}/join/${code}/save.ics`)}" class="iv-link" download>Save for later</a>
+      <p class="iv-small">Adds the festival dates and this invite to your calendar.</p>
 `
     : '';
   const imageUrl = escapeHtml(`${origin}/og-image.png`);
-  const tint = festivalTint(festivalName);
-  // Hex values come from a fixed function, so they need no escaping.
-  const tintStyle = `
-    body { background: ${tint.bg}; }
-    .invite-card { background: ${tint.pale}; border-color: ${tint.faint}; border-top: 4px solid ${tint.active}; }`;
-  // LIGHT_STYLE resets every border side, so restore the tinted top edge after it.
-  const tintLightStyle = `
-    @media (prefers-color-scheme: light) { .invite-card { border-top-color: ${tint.active}; } }`;
+  const faces = memberInitials.length
+    ? `<span class="iv-faces" aria-hidden="true">${memberInitials.map((initial) => `<span class="iv-face">${escapeHtml(initial)}</span>`).join('')}</span>`
+    : '';
+  const lines = [
+    countdown && `<p class="iv-when">${escapeHtml(countdown)}</p>`,
+    dates && `<p>${escapeHtml(dates)}</p>`,
+    festivalName && `<p>${escapeHtml(crewName)}</p>`,
+    ownerName && `<p>Led by ${escapeHtml(ownerName)}</p>`,
+  ]
+    .filter(Boolean)
+    .map((line) => `      ${line}\n`)
+    .join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -133,7 +106,7 @@ export function renderInviteJoinPage({
   <title>${title}</title>
   <meta name="description" content="${escapeHtml(description)}">
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#0a0a0a">
+  ${THEME_COLOR_META}
   <meta property="og:title" content="${title}">
   <meta property="og:description" content="${escapeHtml(description)}">
   <meta property="og:url" content="${pageUrl}">
@@ -142,17 +115,16 @@ export function renderInviteJoinPage({
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
   <meta name="twitter:card" content="summary_large_image">
-  <style>${PAGE_STYLE}${tintStyle}${LIGHT_STYLE}${tintLightStyle}
+  <style>${SHARED_CSS}${PAGE_STYLE}
   </style>
 </head>
 <body>
-  <main class="invite-container">
-    <div class="invite-card">
-      <div class="invite-eyebrow">Crew invite</div>
-      <h1>${escapeHtml(crewName)}</h1>
-      <p class="invite-line">${escapeHtml(stateLine)}</p>
-${festivalLine ? `      <p class="invite-line">${escapeHtml(festivalLine)}</p>\n` : ''}${ownerName ? `      <p class="invite-line">Led by ${escapeHtml(ownerName)}</p>\n` : ''}      <a href="${joinUrl}" class="invite-button">Join ${escapeHtml(crewName)}</a>
-${saveLink}      <p class="invite-footer">New to Festie? You can create an account after you tap Join.</p>
+  <main>
+    <div class="iv">
+      <div class="iv-crew">${faces}<span class="iv-state">${escapeHtml(stateLine)}</span></div>
+      <h1>${escapeHtml(festivalName || crewName)}</h1>
+${lines}      <a href="${joinUrl}" class="ds-cta">Join ${escapeHtml(crewName)}</a>
+${saveLink}      <p class="iv-small">New to Festie? You can create an account after you tap Join.</p>
     </div>
   </main>
 </body>
@@ -193,16 +165,17 @@ export function renderInviteErrorPage(origin: string, message: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>This invite doesn't work</title>
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#0a0a0a">
-  <style>${PAGE_STYLE}${LIGHT_STYLE}
+  ${headSnippet}
+  <style>${designCss}${PAGE_STYLE}
   </style>
 </head>
 <body>
-  <main class="invite-container">
-    <div class="invite-card">
-      <h1 class="invite-error-title">This invite doesn't work</h1>
-      <p class="invite-error-message">${escapeHtml(message)}</p>
-      <a href="${escapeHtml(`${origin}/`)}" class="invite-link">Open Festie</a>
+  <main>
+    <div class="iv">
+      ${festieLockupHtml(`${origin}/`)}
+      <h1>This invite doesn't work</h1>
+      <p>${escapeHtml(message)}</p>
+      <a href="${escapeHtml(`${origin}/`)}" class="ds-cta">Open Festie</a>
     </div>
   </main>
 </body>

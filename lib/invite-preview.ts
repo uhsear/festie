@@ -18,10 +18,20 @@ export interface InvitePreview {
 }
 
 export type InvitePreviewResult =
-  | { status: 'ok'; preview: InvitePreview }
+  | { status: 'ok'; preview: InvitePreview; memberInitials: string[] }
   | { status: 'expired' }
   | { status: 'invalid' }
   | { status: 'locked' };
+
+const MAX_INITIALS = 5;
+
+/** One upper-case letter per member for the invite page faces, in join order. No names leave this function. */
+function initialsOf(members: any[]): string[] {
+  return members
+    .map((m) => Array.from(String(m.name || m.username || '').trim())[0]?.toUpperCase())
+    .filter((initial): initial is string => Boolean(initial))
+    .slice(0, MAX_INITIALS);
+}
 
 const INVITE_CODE_PATTERN = /^[A-Z0-9]{4,12}$/;
 
@@ -57,6 +67,7 @@ export async function loadInvitePreview(
 
   return {
     status: 'ok',
+    memberInitials: initialsOf(members),
     preview: {
       crewName: crew.name,
       ownerName: owner?.name || owner?.username || null,
@@ -84,4 +95,25 @@ export function formatInviteDateRange(startDate: string | null, endDate: string 
   if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
   const opts: Intl.DateTimeFormatOptions = { month: 'short', day: 'numeric', timeZone: 'UTC' };
   return `${start.toLocaleDateString('en-US', opts)} – ${end.toLocaleDateString('en-US', { ...opts, year: 'numeric' })}`;
+}
+
+const MS_PER_DAY = 86_400_000;
+
+/**
+ * "Fri in 9 days", "Fri tomorrow", "Starts today" or "On now"; null once the festival is over or
+ * without dates. Compared as UTC calendar days: the preview carries no festival time zone, so
+ * the line can be a day early or late near midnight (upgrade when the preview carries the zone).
+ */
+export function inviteCountdown(startDate: string | null, endDate: string | null, now: Date = new Date()): string | null {
+  if (!startDate || !endDate) return null;
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return null;
+  const today = Date.parse(`${now.toISOString().slice(0, 10)}T00:00:00Z`);
+  if (today > end.getTime()) return null;
+  if (today > start.getTime()) return 'On now';
+  const days = Math.round((start.getTime() - today) / MS_PER_DAY);
+  if (days === 0) return 'Starts today';
+  const weekday = start.toLocaleDateString('en-US', { weekday: 'short', timeZone: 'UTC' });
+  return days === 1 ? `${weekday} tomorrow` : `${weekday} in ${days} days`;
 }

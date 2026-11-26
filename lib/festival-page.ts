@@ -8,7 +8,7 @@
 // is escaped here, inside the renderer, so no caller can forget.
 
 import { shownSetName } from './artist-key.js';
-import { festivalTint } from './festival-tint.js';
+import { designCss, festieLockupHtml, headSnippet } from './design-css.js';
 import {
   buildEventJsonLd,
   getStageColorById,
@@ -125,46 +125,57 @@ export function festivalTimeZoneLine(festival: any): string {
   }
 }
 
+// Page-specific rules only: colours, fonts, the CTA and the lockup come from lib/design-css.ts.
 const PAGE_STYLE = `
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      color: #e0e0e0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-      line-height: 1.5;
-      min-height: 100vh;
-    }
-    .fp-container { max-width: 600px; margin: 0 auto; padding: 1.25rem 16px; }
-    .fp-header { text-align: center; padding: 1.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.1); margin-bottom: 1.25rem; }
-    .fp-eyebrow { font-size: 0.75rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: #ff3366; margin-bottom: 0.5rem; }
-    h1 { font-size: 1.5rem; font-weight: 700; overflow-wrap: anywhere; }
-    .fp-line { font-size: 0.875rem; color: #aaa; margin-top: 0.25rem; }
-    .fp-cta {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-height: 2.75rem; margin-top: 1.25rem; padding: 0.75rem 1.5rem;
-      background: #d6154f; color: #fff; text-decoration: none; border-radius: 0.5rem; font-weight: 600; font-size: 0.9375rem;
-    }
-    .fp-cta:hover { background: #c01d3a; }
-    .fp-hint { font-size: 0.8125rem; color: #888; margin-top: 0.5rem; }
+    h1, h2, p, ul { margin: 0; }
+    ul { padding: 0; }
+    body { min-height: 100vh; }
+    .fp-container { max-width: 75rem; margin: 0 auto; padding: 1.25rem 1rem 2rem; }
+    .fp-header { max-width: 40rem; padding: 1rem 0 1.5rem; }
+    .fp-header .ds-lockup { margin-bottom: 1.5rem; }
+    h1 { font-size: clamp(2rem, 7vw, 3rem); line-height: 1.05; overflow-wrap: anywhere; }
+    .fp-line { font-size: 1rem; color: var(--ds-text-secondary); margin-top: 0.5rem; }
+    .fp-header .ds-cta { margin-top: 1.25rem; }
+    .fp-hint { font-size: 0.875rem; color: var(--ds-text-secondary); margin-top: 0.5rem; }
     .fp-section { margin-bottom: 1.5rem; }
-    h2 { font-size: 1rem; font-weight: 700; padding: 0.5rem 0; border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 0.5rem; }
-    .fp-date { font-weight: 400; color: #888; font-size: 0.8125rem; }
-    .fp-stages { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; font-size: 0.875rem; }
-    .fp-dot { display: inline-block; width: 0.5rem; height: 0.5rem; border-radius: 50%; margin-right: 0.375rem; }
-    .fp-sets { list-style: none; display: flex; flex-direction: column; gap: 0.375rem; }
-    .fp-set { border-radius: 0.5rem; padding: 0.625rem 0.75rem; }
-    .fp-set-time { font-size: 0.75rem; color: #999; font-weight: 500; }
-    .fp-set-artist { font-size: 0.9375rem; font-weight: 600; margin: 0.125rem 0; overflow-wrap: anywhere; }
-    .fp-set-stage { font-size: 0.75rem; color: #aaa; }
-    .fp-empty { color: #888; font-size: 0.875rem; padding: 0.5rem 0; }
-    .fp-note { color: #aaa; font-size: 0.8125rem; margin: 0.5rem 0 0.25rem; }
-    .fp-acts { list-style: none; display: flex; flex-direction: column; gap: 0.25rem; font-size: 0.9375rem; font-weight: 600; }
+    h2 { font-size: 1.125rem; line-height: 1.3; margin-bottom: 0.75rem; }
+    .fp-date { font-weight: 500; color: var(--ds-text-secondary); font-size: 0.875rem; margin-left: 0.5rem; }
+    .fp-stages { list-style: none; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+    .fp-stages li { display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.375rem 0.75rem; border: 1px solid var(--ds-border); border-radius: 999px; background: var(--ds-card); font-size: 0.875rem; }
+    .fp-dot { width: 0.625rem; height: 0.625rem; border-radius: 50%; flex: none; }
+    .fp-full > summary { display: flex; align-items: center; justify-content: space-between; min-height: 2.75rem; padding: 0 1rem; margin-bottom: 1rem; border: 1px solid var(--ds-border); border-radius: 0.75rem; background: var(--ds-card); font-weight: 600; cursor: pointer; list-style: none; }
+    .fp-full > summary::-webkit-details-marker { display: none; }
+    .fp-full > summary::after { content: "+"; content: "+" / ""; }
+    .fp-full[open] > summary::after { content: "\\2212"; content: "\\2212" / ""; }
+    .fp-days { display: grid; gap: 1rem; }
+    .fp-day { margin: 0; padding: 1rem; border: 1px solid var(--ds-border); border-radius: 0.75rem; background: var(--ds-card); }
+    .fp-sets { list-style: none; }
+    .fp-set { display: grid; grid-template-columns: 5.5rem 1fr; gap: 0.75rem; padding: 0.625rem 0; border-top: 1px solid var(--ds-border); }
+    .fp-set:first-child { border-top: 0; }
+    .fp-set-time { font-size: 0.8125rem; color: var(--ds-text-secondary); font-weight: 500; padding-top: 0.125rem; }
+    .fp-set-artist { font-size: 1rem; font-weight: 600; overflow-wrap: anywhere; }
+    .fp-set-stage { display: flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; color: var(--ds-text-secondary); }
+    .fp-empty { color: var(--ds-text-secondary); font-size: 0.875rem; }
+    .fp-note { color: var(--ds-text-secondary); font-size: 0.875rem; margin: 0.5rem 0 0.25rem; }
+    .fp-acts { list-style: none; display: flex; flex-direction: column; gap: 0.25rem; font-size: 1rem; font-weight: 600; }
     .fp-acts li { overflow-wrap: anywhere; }
-    .fp-cancelled li { color: #888; font-weight: 400; text-decoration: line-through; }
-    .fp-footer { font-size: 0.75rem; color: #888; padding: 1.5rem 0; border-top: 1px solid rgba(255,255,255,0.1); text-align: center; }
-    .fp-link { color: #ff3366; text-decoration: none; font-weight: 600; font-size: 0.875rem; }
-    .fp-link:hover { text-decoration: underline; }
-    .fp-error { text-align: center; padding: 3rem 0; }
-    .fp-error p { font-size: 0.875rem; color: #aaa; margin: 0.75rem 0 2rem; }`;
+    .fp-cancelled li { color: var(--ds-text-secondary); font-weight: 400; text-decoration: line-through; }
+    .fp-footer { max-width: 40rem; font-size: 0.8125rem; color: var(--ds-text-secondary); padding: 1.5rem 0; border-top: 1px solid var(--ds-border); }
+    .fp-link { display: inline-flex; align-items: center; min-height: 2.75rem; color: var(--ds-text); font-weight: 600; font-size: 0.875rem; text-decoration: underline; text-underline-offset: 0.25em; }
+    .fp-error { padding: 3rem 0; max-width: 40rem; }
+    .fp-error p { font-size: 0.875rem; color: var(--ds-text-secondary); margin: 0.75rem 0 1.5rem; }
+    @media (min-width: 900px) {
+      .fp-container { padding: 2rem 2rem 3rem; }
+      .fp-days { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); align-items: start; }
+      .fp-days .fp-section { margin-bottom: 0; }
+    }
+    /* Phones fold the lineup under "Full lineup". Wide screens show it open where the browser supports this; others keep the toggle. */
+    @media (min-width: 900px) {
+      @supports selector(::details-content) {
+        .fp-full > summary { display: none; }
+        .fp-full::details-content { content-visibility: visible; display: block; }
+      }
+    }`;
 
 function renderActs(names: string[], className = 'fp-acts') {
   return `<ul class="${className}">
@@ -176,15 +187,15 @@ function renderDay(day: ReturnType<typeof buildFestivalPageDays>[number], acts: 
   const heading = `<h2>${day.label}${day.date ? ` <span class="fp-date">${day.date}</span>` : ''}</h2>`;
   const actsHtml = acts.length > 0 ? `<p class="fp-note">Stages and times to come.</p>\n      ${renderActs(acts)}` : '';
   if (day.sets.length === 0) {
-    return `<section class="fp-section">${heading}${actsHtml || '<p class="fp-empty">Set times to come.</p>'}</section>`;
+    return `<section class="fp-section fp-day">${heading}${actsHtml || '<p class="fp-empty">Set times to come.</p>'}</section>`;
   }
   const rows = day.sets
     .map(
       (set: any) =>
-        `<li class="fp-set" style="border-left: 3px solid ${set.stageColor}"><div class="fp-set-time">${set.timeText}</div><div class="fp-set-artist">${set.artist}</div><div class="fp-set-stage">${set.stage}</div></li>`,
+        `<li class="fp-set"><time class="fp-set-time">${set.timeText}</time><div><div class="fp-set-artist">${set.artist}</div><div class="fp-set-stage"><span class="fp-dot" style="background: ${set.stageColor}" aria-hidden="true"></span>${set.stage}</div></div></li>`,
     )
     .join('\n        ');
-  return `<section class="fp-section">${heading}
+  return `<section class="fp-section fp-day">${heading}
       <ul class="fp-sets">
         ${rows}
       </ul>${actsHtml ? `\n      ${actsHtml}` : ''}
@@ -222,14 +233,8 @@ export function renderFestivalPage({
   const hasSets = (festival.days || []).some((day: any) => (day?.sets || []).length > 0);
   const description = `${hasSets ? 'Lineup and set times' : 'Lineup'} for ${name}${dateRange ? ` · ${dateRange}` : ''}${location ? ` · ${location}` : ''}. Plan your days with Festie.`;
   const placeLine = [dateRange, location].filter(Boolean).join(' · ');
-  const tint = festivalTint(name);
   const days = buildFestivalPageDays(festival);
   const stages = (festival.stages || []) as any[];
-  // Hex values come from a fixed function or sanitizeColor, so they need no escaping.
-  const tintStyle = `
-    body { background: ${tint.bg}; }
-    .fp-header { border-top: 4px solid ${tint.active}; }
-    .fp-set { background: ${tint.pale}; border: 1px solid ${tint.faint}; }`;
   const stagesHtml = stages.length
     ? `<section class="fp-section">
       <h2>Stages</h2>
@@ -240,22 +245,25 @@ export function renderFestivalPage({
     : '';
   const lineup = buildFestivalPageLineup(festival);
   const announcedHtml = lineup.undated.length
-    ? `<section class="fp-section">
+    ? `<section class="fp-section fp-day">
       <h2>Announced lineup</h2>
       <p class="fp-note">Days and times to come.</p>
       ${renderActs(lineup.undated)}
     </section>`
     : '';
   const cancelledHtml = lineup.cancelled.length
-    ? `<section class="fp-section">
+    ? `<section class="fp-section fp-day">
       <h2>Cancelled</h2>
       ${renderActs(lineup.cancelled, 'fp-acts fp-cancelled')}
     </section>`
     : '';
-  const daysHtml =
-    [...days.map((day: any, index: number) => renderDay(day, lineup.perDay[index] ?? [])), announcedHtml, cancelledHtml]
-      .filter(Boolean)
-      .join('\n    ') || `<section class="fp-section"><p class="fp-empty">The lineup isn't out yet.</p></section>`;
+  const dayCards = [...days.map((day: any, index: number) => renderDay(day, lineup.perDay[index] ?? [])), announcedHtml, cancelledHtml].filter(Boolean);
+  // Phones fold the days under "Full lineup"; from 900 px they sit open in columns (see PAGE_STYLE).
+  const daysHtml = dayCards.length
+    ? `<details class="fp-full"><summary>Full lineup</summary><div class="fp-days">
+    ${dayCards.join('\n    ')}
+    </div></details>`
+    : `<section class="fp-section"><p class="fp-empty">The lineup isn't out yet.</p></section>`;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -265,7 +273,7 @@ export function renderFestivalPage({
   <title>${escapeHtml(`${name} lineup and set times · Festie`)}</title>
   <meta name="description" content="${escapeHtml(description)}">
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#0a0a0a">
+  ${headSnippet}
   <meta property="og:site_name" content="Festie">
   <meta property="og:title" content="${escapeHtml(`${name} lineup and set times`)}">
   <meta property="og:description" content="${escapeHtml(description)}">
@@ -279,15 +287,16 @@ export function renderFestivalPage({
   <meta name="twitter:image" content="${escapeHtml(ogUrl)}">
   <link rel="canonical" href="${escapeHtml(pageUrl)}">
   <script type="application/ld+json">${buildEventJsonLd(festival, { shareUrl: pageUrl, ogUrl, description })}</script>
-  <style>${PAGE_STYLE}${tintStyle}
+  <style>${designCss}
+${PAGE_STYLE}
   </style>
 </head>
 <body>
   <main class="fp-container">
     <header class="fp-header">
-      <p class="fp-eyebrow">Festival lineup</p>
+      ${festieLockupHtml(`${origin}/`)}
       <h1>${escapeHtml(name)}</h1>
-${placeLine ? `      <p class="fp-line">${escapeHtml(placeLine)}</p>\n` : ''}      <a class="fp-cta" href="${escapeHtml(appUrl)}">Plan your days in Festie</a>
+${placeLine ? `      <p class="fp-line">${escapeHtml(placeLine)}</p>\n` : ''}      <a class="ds-cta" href="${escapeHtml(appUrl)}">Plan your days in Festie</a>
       <p class="fp-hint">Pick sets, see clashes and plan with your crew. You can start without an account.</p>
       <p class="fp-hint"><a class="fp-link" href="${escapeHtml(followUrl)}">Get alerts (free account)</a></p>
       <p class="fp-hint">${escapeHtml(festivalTimeZoneLine(festival))}</p>
@@ -309,13 +318,14 @@ export function renderFestivalNotFoundPage(origin: string) {
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Festival not found</title>
   <meta name="robots" content="noindex">
-  <meta name="theme-color" content="#0a0a0a">
-  <style>${PAGE_STYLE}
-    body { background: #0a0a0a; }
+  ${headSnippet}
+  <style>${designCss}
+${PAGE_STYLE}
   </style>
 </head>
 <body>
   <main class="fp-container fp-error">
+    ${festieLockupHtml(`${origin}/`)}
     <h1>Festival not found</h1>
     <p>We couldn't find this festival. It may not be published yet, or the link may be wrong.</p>
     <a class="fp-link" href="${escapeHtml(`${origin}/`)}">Open Festie</a>
