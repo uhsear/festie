@@ -34,7 +34,7 @@ describe('seed-demo-festival database guard', () => {
       assert.equal(r.status, 1, url);
       assert.match(r.stderr, /must end in _staging/, url);
     }
-    assert.doesNotThrow(() => assertStagingDatabase('postgresql://u:p@127.0.0.1:1/festival_planner_staging'));
+    assert.doesNotThrow(() => assertStagingDatabase('postgresql://u:p@127.0.0.1:1/example_staging'));
   });
 
   test('refuses to run without SEED_DATABASE_URL, even when DATABASE_URL is set', () => {
