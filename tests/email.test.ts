@@ -809,14 +809,14 @@ describe('email: brand shell', () => {
     return sent();
   };
 
-  it('puts every template on solid token colours, the mark and the pill button', async () => {
+  it('puts every template on solid token colours, the lockup and the pill button', async () => {
     const messages = await sendAll();
     assert.equal(messages.length, 6);
     for (const { html } of messages) {
       assert.ok(html.includes(`bgcolor="${emailColors.ground}"`), 'bgcolor attribute for clients that drop CSS');
       assert.ok(html.includes('<meta name="color-scheme" content="dark">'));
       assert.ok(html.includes('<meta name="supported-color-schemes" content="dark">'));
-      assert.ok(/<img src="https:\/\/festie\.us\/icons\/email-mark\.png" width="40" height="40" alt="Festie"/.test(html));
+      assert.ok(/<img src="https:\/\/festie\.us\/icons\/email-lockup\.png" width="110" height="32" alt="Festie"/.test(html));
       if (html.includes('<a href')) assert.ok(html.includes('border-radius:999px'), 'pill button');
       assert.ok(!/0a0a0f|e4e4e7|d4d4d8|a1a1aa|rgba\(/i.test(html), 'no legacy hex or rgba');
       assert.ok(!html.includes('text-align:center'), 'left-aligned');
@@ -828,9 +828,9 @@ describe('email: brand shell', () => {
     for (const label of ['Reset password', 'Verify email', 'Confirm new email', "This wasn't me"]) assert.ok(html.includes(`>${label}</a>`), label);
   });
 
-  it('ships the hosted mark at 2x', async () => {
+  it('ships the hosted lockup at 2x', async () => {
     const { default: sharp } = await import('sharp');
-    const meta = await sharp(fileURLToPath(new URL('../public/icons/email-mark.png', import.meta.url))).metadata();
-    assert.deepEqual([meta.width, meta.height], [80, 80]);
+    const meta = await sharp(fileURLToPath(new URL('../public/icons/email-lockup.png', import.meta.url))).metadata();
+    assert.deepEqual([meta.width, meta.height], [220, 64]);
   });
 });
