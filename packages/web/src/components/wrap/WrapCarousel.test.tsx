@@ -40,4 +40,22 @@ describe('WrapCarousel', () => {
     expect(index).toBe(1);
     expect((node as HTMLElement).textContent).toContain('Artist One');
   });
+
+  it('centres a 480 px active poster between two side cards on desktop', () => {
+    const original = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1440 });
+    try {
+      const { container } = render(
+        <WrapCarousel cards={cards} festivalName="Coachella" byline={null} sharing={false} onShare={vi.fn()} />,
+      );
+      const slides = container.querySelectorAll<HTMLElement>('[aria-roledescription="slide"]');
+      expect(slides).toHaveLength(3);
+      expect(slides[0]!.style.width).toBe('480px');
+      expect(slides[0]!.style.transform).toBe('');
+      expect(slides[1]!.style.transform).toBe('scale(0.8)');
+      expect(slides[1]!.style.opacity).toBe('0.6');
+    } finally {
+      Object.defineProperty(window, 'innerWidth', { configurable: true, value: original });
+    }
+  });
 });
