@@ -192,6 +192,7 @@ function PicksViewInner() {
   // Share, Calendar and Save image fold behind one overflow button. The panel stays mounted (hidden) so each
   // dialog keeps its state and its focus-return target while it is open.
   const actionsPanel = actionButtons ? (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape bubbles up from the child buttons
     <div
       id="picks-actions"
       hidden={!actionsOpen}
