@@ -41,13 +41,13 @@ export default function createPageRoutes(deps: RouteDeps) {
     const origin = requestOrigin(req);
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=60');
-    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
+    res.setHeader('Content-Security-Policy', "default-src 'none'; img-src 'self'; font-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'");
     // The URL carries a join code, so keep invite pages out of search results.
     res.setHeader('X-Robots-Tag', 'noindex');
     try {
       const result = await loadInvitePreview({ stores, getFestivalById }, code);
       if (result.status === 'ok') {
-        return res.status(200).send(renderInviteJoinPage({ ...result.preview, inviteCode: code, origin }));
+        return res.status(200).send(renderInviteJoinPage({ ...result.preview, memberInitials: result.memberInitials, inviteCode: code, origin }));
       }
       return res
         .status(INVITE_ERROR_STATUS[result.status])
