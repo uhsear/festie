@@ -27,6 +27,7 @@ import CrewMyDays from '../CrewMyDays';
 import CrewLockRow from '../CrewLockRow';
 import MemberDayChips from '../MemberDayChips';
 import type { Dispatch, ReactElement, ReactNode, SetStateAction } from 'react';
+import CrewFacesRow from './CrewFacesRow';
 import { useStyles } from './styles';
 
 interface CrewMembersTabProps {
@@ -188,6 +189,7 @@ export default function CrewMembersTab({
       }}
       ListHeaderComponent={
         <View style={styles.membersHeader}>
+          <CrewFacesRow />
           {inviteCard ? <View style={styles.inviteCardSpacer}>{inviteCard}</View> : null}
           {crew.inviteCode ? (
             <View style={styles.inviteBar}>

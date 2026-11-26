@@ -95,7 +95,7 @@ export default function PublicScheduleSection() {
   const festivalName = status?.publicFestival?.name;
 
   return (
-    <Card className="space-y-3">
+    <Card variant="section" className="space-y-3">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">

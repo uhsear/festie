@@ -30,7 +30,6 @@ vi.mock('@festie/shared/hooks', () => ({
   useCrewDayOf: () => crewDayOf,
 }));
 
-vi.mock('../components/features/LowPowerToggle', () => ({ default: () => <div data-testid="low-power-toggle" /> }));
 vi.mock('../components/festival-mode/WeatherStrip', () => ({ default: () => <div data-testid="weather-strip" /> }));
 vi.mock('../components/festival-mode/CaughtNowCard', () => ({ default: () => <div data-testid="caught-now" /> }));
 vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => <div data-testid="offline-chip" /> }));

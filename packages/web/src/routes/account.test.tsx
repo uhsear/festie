@@ -163,6 +163,17 @@ describe('AccountPage', () => {
     }
   });
 
+  it('offers a rail of the six sections, each linking to a section on the page', async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    render(<AccountPage />);
+    const rail = screen.getByRole('navigation', { name: 'Account sections' });
+    const links = Array.from(rail.querySelectorAll('a'));
+    expect(links.map((l) => l.textContent)).toEqual(['Profile', 'Sign-in', 'Notifications', 'Privacy', 'Data', 'Danger']);
+    for (const l of links) expect(document.getElementById(l.getAttribute('href')!.slice(1))).not.toBeNull();
+    await userEvent.click(screen.getByRole('link', { name: 'Privacy' }));
+    expect(document.getElementById('privacy')).toHaveFocus();
+  });
+
   it('does not scroll without the #danger hash', () => {
     const scrollIntoView = vi.fn();
     Element.prototype.scrollIntoView = scrollIntoView;

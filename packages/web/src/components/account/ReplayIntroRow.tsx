@@ -16,7 +16,7 @@ export default function ReplayIntroRow() {
   };
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-border bg-bg-card p-3">
+    <div className="flex items-center gap-3 border-b border-border-light py-3">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-text-primary">{INTRO_REPLAY_COPY.title}</p>
         <p className="text-xs text-text-muted">{INTRO_REPLAY_COPY.hint}</p>

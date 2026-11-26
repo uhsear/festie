@@ -29,7 +29,7 @@ import FreshnessChip from '../components/FreshnessChip';
 import OfflineStatusChip from '../components/OfflineStatusChip';
 import WeatherStrip from '../components/WeatherStrip';
 import CaughtNowCard from '../components/CaughtNowCard';
-import { DaylightToggle, LowPowerToggle, LowPowerIndicator } from '../components/LowPowerControls';
+import { DaylightToggle, LowPowerIndicator } from '../components/LowPowerControls';
 import { CrewNow, CrewPrompt, CrewWrapUp, MeetNow, NowHero, UpNext } from '../components/NowSurface';
 import { CREW_MEET_HREF, SCHEDULE_HREF, meetHref } from '../lib/dayOfRoutes';
 
@@ -231,7 +231,6 @@ export default function FestivalModeScreen() {
 
           {/* Settings sit below the content: NOW comes first on this screen. */}
           <View style={styles.settings}>
-            <LowPowerToggle />
             <DaylightToggle />
           </View>
         </ScrollView>

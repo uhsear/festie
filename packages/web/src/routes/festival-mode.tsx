@@ -15,7 +15,6 @@ import {
   stageCoord,
   walkToStage,
 } from '@festie/shared/utils';
-import LowPowerToggle from '../components/features/LowPowerToggle';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
@@ -210,9 +209,6 @@ function FestivalModeViewInner() {
               <MeetNowCard meet={meet} nowMs={nowMs} timeZone={timeZone} onOpenMeet={goCrew} />
             </div>
           )}
-          <div className="order-5">
-            <LowPowerToggle />
-          </div>
         </div>
       </div>
     </div>

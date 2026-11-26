@@ -41,6 +41,7 @@ export * from './invite';
 export * from './crewWrites';
 export * from './mutationLabel';
 export * from './dayOf';
+export * from './crewFaces';
 export * from './crewStatus';
 export * from './meetingPoints';
 export * from './haptics';
