@@ -35,6 +35,20 @@ export const duration = {
   fast: 120,
   med: 200,
   slow: 320,
+  /** Half-period of the breathing loops (presence dot, live pulse). */
+  pulse: 750,
+} as const;
+
+/** One press value for both platforms: a pressed control scales to this. */
+export const pressScale = 0.96;
+
+/**
+ * List entrance stagger: each item waits `stepMs` more than the one before,
+ * and items past `maxItems` enter together with the last staggered one.
+ */
+export const stagger = {
+  stepMs: 30,
+  maxItems: 8,
 } as const;
 
 /**
@@ -120,3 +134,4 @@ export type Duration = typeof duration;
 export type DurationEffects = typeof durationEffects;
 export type DurationSpatial = typeof durationSpatial;
 export type Spring = typeof spring;
+export type Stagger = typeof stagger;

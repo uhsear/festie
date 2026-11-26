@@ -58,7 +58,7 @@ function AnalyticsDashboard() {
           id="analytics-festival"
           value={festival ?? ''}
           onChange={(e) => selectFestival(e.target.value || undefined)}
-          className="w-full sm:w-auto min-h-11 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          className="w-full sm:w-auto min-h-11 px-3 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
         >
           <option value="">All festivals</option>
           {data.festivalStats.map((f) => (
@@ -72,7 +72,7 @@ function AnalyticsDashboard() {
 
       <ul className="list-none p-0 grid grid-cols-1 md:grid-cols-2 gap-4">
         {analyticsQuestions(data).map((q) => (
-          <li key={q.id} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
+          <li key={q.id} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4">
             <div className="type-label text-text-muted mb-1">{q.question}</div>
             <div className="text-text-primary">{q.answer}</div>
           </li>
@@ -85,7 +85,7 @@ function AnalyticsDashboard() {
           Each step counts people. A step can be larger than the one before it, for example when someone joins a crew
           before picking.
         </p>
-        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-4">
+        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 space-y-4">
           {funnelSteps(data).map((step) => (
             <div key={step.label}>
               <div className="flex justify-between text-sm text-text-primary mb-1">
@@ -130,7 +130,7 @@ function AnalyticsDashboard() {
             role="region"
             tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: keeps this overflow-x-auto table keyboard-scrollable; rule only exempts role=tabpanel
             aria-label="Recently active people table"
-            className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-x-auto focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl overflow-x-auto focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           >
             <table className="w-full text-sm">
               <caption className="sr-only">Most recently active people</caption>
@@ -165,7 +165,7 @@ function AnalyticsDashboard() {
             role="region"
             tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: keeps this overflow-x-auto table keyboard-scrollable; rule only exempts role=tabpanel
             aria-label="Crews table"
-            className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-x-auto focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl overflow-x-auto focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           >
             <table className="w-full text-sm">
               <caption className="sr-only">Largest crews</caption>

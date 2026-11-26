@@ -111,7 +111,7 @@ export default function FestivalPicker() {
         aria-current={isCurrent ? 'true' : undefined}
         onClick={() => void handleChoose(f.id)}
         className={cn(
-          'flex w-full min-w-0 flex-1 items-center gap-3 rounded-xl px-3 py-2 min-h-[52px] text-left cursor-pointer',
+          'flex w-full min-w-0 flex-1 items-center gap-3 rounded-lg px-3 py-2 min-h-[52px] text-left cursor-pointer',
           'hover:bg-bg-input focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
         )}
       >
@@ -197,7 +197,7 @@ export default function FestivalPicker() {
           isLoading ? (
             <div className="space-y-2" aria-hidden="true">
               {[0, 1, 2].map((i) => (
-                <div key={i} className="skeleton-shimmer h-[52px] rounded-xl" />
+                <div key={i} className="skeleton-shimmer h-[52px] rounded-lg" />
               ))}
             </div>
           ) : loadError ? (

@@ -71,7 +71,7 @@ export default function CrewTotemCard({ crewId, totemName, totemEmoji, isOwner, 
 
   if (editing) {
     return (
-      <div className="p-3 rounded-lg bg-bg-card border border-accent-aqua/40 space-y-3">
+      <div className="p-3 rounded-xl bg-bg-card border border-accent-aqua/40 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-text-primary flex items-center gap-2">
             <Flag className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
@@ -124,7 +124,7 @@ export default function CrewTotemCard({ crewId, totemName, totemEmoji, isOwner, 
         hasTotem ? `Crew totem: ${totemName ?? totemEmoji}${isOwner ? ', tap to edit' : ''}` : 'Set a crew totem'
       }
       data-testid="crew-totem-card"
-      className={`w-full py-2 px-3 min-h-11 rounded-lg bg-bg-card border text-left transition-colors ${
+      className={`w-full py-2 px-3 min-h-11 rounded-xl bg-bg-card border text-left transition-colors ${
         hasTotem ? 'border-accent-aqua/40' : 'border-dashed border-border hover:border-border-light'
       } ${isOwner ? 'cursor-pointer' : 'cursor-default'}`}
     >

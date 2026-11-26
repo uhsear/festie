@@ -66,7 +66,7 @@ export default function AdminFestivalPreview({ festivalId, scope = 'admin' }: { 
       </div>
 
       {preview.warnings.length > 0 && (
-        <ul className="rounded-lg border border-accent-amber/40 bg-[var(--color-amber-a08)] p-3 text-sm text-accent-amber list-disc list-inside">
+        <ul className="rounded-xl border border-accent-amber/40 bg-[var(--color-amber-a08)] p-3 text-sm text-accent-amber list-disc list-inside">
           {preview.warnings.map((w) => (
             <li key={w}>{w}</li>
           ))}
@@ -81,7 +81,7 @@ export default function AdminFestivalPreview({ festivalId, scope = 'admin' }: { 
             role="tab"
             aria-selected={i === dayIndex}
             onClick={() => setDayIndex(i)}
-            className={`px-4 py-2 min-h-11 rounded-lg text-sm font-medium ${
+            className={`px-4 py-2 min-h-11 rounded-xl text-sm font-medium ${
               i === dayIndex ? 'bg-accent-aqua/20 text-accent-aqua' : 'bg-bg-card text-text-muted'
             }`}
           >
@@ -91,7 +91,7 @@ export default function AdminFestivalPreview({ festivalId, scope = 'admin' }: { 
       </div>
 
       {day && (
-        <ul className="divide-y divide-glass-border rounded-lg border border-glass-border bg-bg-card/60">
+        <ul className="divide-y divide-glass-border rounded-xl border border-glass-border bg-bg-card/60">
           {day.sets.map((set) => (
             <li key={set.id} className="flex items-center gap-3 px-4 py-3 text-sm">
               <span
@@ -110,7 +110,7 @@ export default function AdminFestivalPreview({ festivalId, scope = 'admin' }: { 
       {preview.lineup.length > 0 && (
         <div>
           <h2 className="type-label text-text-primary mb-2">Announced acts ({preview.lineup.length})</h2>
-          <ul className="divide-y divide-glass-border rounded-lg border border-glass-border bg-bg-card/60">
+          <ul className="divide-y divide-glass-border rounded-xl border border-glass-border bg-bg-card/60">
             {preview.lineup.map((entry) => (
               <li key={entry.id} className="flex items-center gap-3 px-4 py-2 text-sm">
                 <span className="flex-1 text-text-primary">{entry.name}</span>

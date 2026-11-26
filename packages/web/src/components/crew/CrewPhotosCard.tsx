@@ -63,7 +63,7 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
 
   if (editing) {
     return (
-      <div className="p-3 rounded-lg bg-bg-card border border-accent-aqua/40 space-y-3">
+      <div className="p-3 rounded-xl bg-bg-card border border-accent-aqua/40 space-y-3">
         <div className="flex items-center justify-between">
           <h3 className="font-semibold text-text-primary flex items-center gap-2">
             <Images className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
@@ -125,7 +125,7 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
       <button
         type="button"
         onClick={() => setEditing(true)}
-        className="w-full py-1.5 px-2 min-h-11 rounded-lg bg-bg-card border border-dashed border-border hover:border-border-light text-left transition-colors cursor-pointer"
+        className="w-full py-1.5 px-2 min-h-11 rounded-xl bg-bg-card border border-dashed border-border hover:border-border-light text-left transition-colors cursor-pointer"
       >
         <div className="flex items-center gap-2">
           <Images className="w-4 h-4 flex-shrink-0 text-text-muted" aria-hidden="true" />
@@ -136,7 +136,7 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
   }
 
   return (
-    <div className="w-full py-1.5 px-2 rounded-lg bg-bg-card border border-accent-aqua/40">
+    <div className="w-full py-1.5 px-2 rounded-xl bg-bg-card border border-accent-aqua/40">
       <div className="flex items-center gap-2">
         <Images className="w-4 h-4 flex-shrink-0 text-accent-aqua" aria-hidden="true" />
         <span className="flex-1 min-w-0 text-xs font-semibold text-text-primary truncate">Crew photos</span>

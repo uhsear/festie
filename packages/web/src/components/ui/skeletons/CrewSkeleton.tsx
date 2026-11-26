@@ -12,12 +12,12 @@ export default function CrewSkeleton() {
       <span className="sr-only">Loading crew…</span>
       {/* crew selector */}
       <div className="px-4">
-        <div className="skeleton-shimmer h-10 w-full rounded-lg" />
+        <div className="skeleton-shimmer h-10 w-full rounded-xl" />
       </div>
 
       <div className="space-y-4 px-4">
         {/* home-base card */}
-        <div className="skeleton-shimmer h-24 w-full rounded-xl opacity-70" />
+        <div className="skeleton-shimmer h-24 w-full rounded-lg opacity-70" />
 
         {/* tab row */}
         <div className="flex gap-1.5 overflow-hidden">
@@ -27,8 +27,8 @@ export default function CrewSkeleton() {
         </div>
 
         {/* Meet panel: status card + live-location card */}
-        <div className="skeleton-shimmer h-32 w-full rounded-xl opacity-70" />
-        <div className="skeleton-shimmer h-40 w-full rounded-xl opacity-70" />
+        <div className="skeleton-shimmer h-32 w-full rounded-lg opacity-70" />
+        <div className="skeleton-shimmer h-40 w-full rounded-lg opacity-70" />
       </div>
     </div>
   );

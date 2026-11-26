@@ -59,21 +59,21 @@ export default function UpdatePrompt() {
   return (
     <div
       role="status"
-      className="fixed inset-x-3 bottom-[calc(var(--bottom-nav-h,0px)+12px)] z-50 flex items-center justify-between gap-3 rounded-xl border border-border bg-bg-elevated px-4 py-2 text-sm text-text-primary shadow-lg"
+      className="fixed inset-x-3 bottom-[calc(var(--bottom-nav-h,0px)+12px)] z-50 flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-elevated px-4 py-2 text-sm text-text-primary shadow-lg"
     >
       <span>A new version of Festie is ready.</span>
       <div className="flex shrink-0 gap-2">
         <button
           type="button"
           onClick={() => setDismissed(true)}
-          className="min-h-[44px] min-w-[44px] rounded-lg px-3 text-text-secondary"
+          className="min-h-[44px] min-w-[44px] rounded-xl px-3 text-text-secondary"
         >
           Later
         </button>
         <button
           type="button"
           onClick={() => window.location.reload()}
-          className="min-h-[44px] min-w-[44px] rounded-lg bg-accent-aqua px-3 font-semibold text-text-on-accent"
+          className="min-h-[44px] min-w-[44px] rounded-xl bg-accent-aqua px-3 font-semibold text-text-on-accent"
         >
           Reload
         </button>

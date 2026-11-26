@@ -23,7 +23,7 @@ export default function SetContextSection({ set }: { set: FestivalSet }) {
     const pick = getMyPick(e.set.id);
     return (
       <li key={e.set.id}>
-        <div className="relative flex min-h-[44px] w-full items-center gap-2 rounded-xl px-3 py-2 text-left hover:bg-bg-input">
+        <div className="relative flex min-h-[44px] w-full items-center gap-2 rounded-lg px-3 py-2 text-left hover:bg-bg-input">
           <RowOpenButton label={COPY.setContext.openA11y(artist, stage, e.time)} onClick={() => setDetailSet(e.set)} />
           <span className="min-w-0 flex-1">
             <span className="block text-sm font-semibold text-text-primary">

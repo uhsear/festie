@@ -51,7 +51,7 @@ function FindingList({ title, items, tone }: { title: string; items: BackfillFin
   if (items.length === 0) return null;
   const color = tone === 'stop' ? 'text-accent-coral border-accent-coral' : 'text-text-primary border-glass-border';
   return (
-    <section aria-label={title} className={`rounded-lg border p-3 space-y-2 ${color}`}>
+    <section aria-label={title} className={`rounded-xl border p-3 space-y-2 ${color}`}>
       <h3 className="text-sm font-semibold">
         {title} ({items.length})
       </h3>
@@ -83,7 +83,7 @@ function ReportLists({ report, stopKinds, reviewKinds }: { report: BackfillRepor
   return (
     <div className="space-y-2">
       {lists.map(([key, entries]) => (
-        <details key={key} className="rounded-lg border border-glass-border p-2">
+        <details key={key} className="rounded-xl border border-glass-border p-2">
           <summary className="cursor-pointer min-h-11 flex items-center text-sm text-text-primary">
             {backfillLabel(key)} ({entries.length})
             {stopKinds.has(key) && <span className="ml-2 text-accent-coral">Check first</span>}
@@ -249,7 +249,7 @@ export default function AdminArtistBackfill() {
       )}
 
       {verify && (
-        <section aria-label="Verify result" className="rounded-lg border border-glass-border p-3 space-y-1 text-sm">
+        <section aria-label="Verify result" className="rounded-xl border border-glass-border p-3 space-y-1 text-sm">
           <h3 className="text-xs uppercase tracking-wide text-text-muted">Verify result</h3>
           <p className={verify.ok ? 'text-accent-aqua' : 'text-accent-coral'}>{verify.ok ? 'Verify passed' : 'Verify failed'}</p>
           <ul className="list-none p-0 break-words">
@@ -300,7 +300,7 @@ export default function AdminArtistBackfill() {
       )}
 
       {outcome && (
-        <section aria-label="Run result" className="rounded-lg border border-glass-border p-3 space-y-2 text-sm">
+        <section aria-label="Run result" className="rounded-xl border border-glass-border p-3 space-y-2 text-sm">
           <h3 className="text-text-primary">Backfill finished</h3>
           <p className="break-all">Run id: {outcome.run.runId}</p>
           <p>Festivals written: {countOf(outcome.run.festivalsWritten)}</p>

@@ -131,7 +131,7 @@ function Message({ text, onRetry }: { text: string; onRetry?: () => void }) {
 
 function Banner({ text, children }: { text: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl border border-border-subtle p-3 flex flex-col gap-2">
+    <div className="rounded-lg border border-border-subtle p-3 flex flex-col gap-2">
       <p className="text-sm">{text}</p>
       <div className="flex gap-2 flex-wrap">{children}</div>
     </div>

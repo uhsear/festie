@@ -75,7 +75,7 @@ export default function AnnouncementBanner() {
       role={urgent ? 'alert' : 'status'}
       aria-label={COPY.banner.label(kicker, a.title, a.body)}
       data-testid="announcement-banner"
-      className={`flex items-center gap-2.5 bg-bg-card border rounded-xl py-2.5 px-4 mx-3 my-2 text-sm text-text-primary ${urgent ? 'border-text-danger' : 'border-accent-aqua'}`}
+      className={`flex items-center gap-2.5 bg-bg-card border rounded-lg py-2.5 px-4 mx-3 my-2 text-sm text-text-primary ${urgent ? 'border-text-danger' : 'border-accent-aqua'}`}
     >
       {urgent && <AlertTriangle className="w-5 h-5 shrink-0 text-text-danger" aria-hidden="true" />}
       <div className="min-w-0 flex-1">
@@ -88,7 +88,7 @@ export default function AnnouncementBanner() {
           to={announcementWebPath(a.screen)}
           onClick={() => dismiss(a.id)}
           data-testid="announcement-banner-open"
-          className="shrink-0 flex items-center bg-accent-aqua text-bg-primary rounded-lg py-2 px-3.5 font-semibold min-h-11 hover:bg-[var(--color-accent-aqua-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+          className="shrink-0 flex items-center bg-accent-aqua text-bg-primary rounded-xl py-2 px-3.5 font-semibold min-h-11 hover:bg-[var(--color-accent-aqua-hover)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
         >
           {COPY.banner.open}
         </Link>

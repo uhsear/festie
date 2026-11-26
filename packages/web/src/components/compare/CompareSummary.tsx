@@ -29,7 +29,7 @@ export default function CompareSummary({ columns, freeTogether, split, together,
       .join(', ');
 
   return (
-    <section className="mb-3 rounded-xl border border-glass-border bg-bg-card p-3 space-y-3">
+    <section className="mb-3 rounded-lg border border-glass-border bg-bg-card p-3 space-y-3">
       <ul aria-label="Crew colour key" className="flex flex-wrap gap-x-4 gap-y-1">
         {columns.map((c) => (
           <li key={c.profileId} className="flex items-center gap-1.5 text-xs text-text-secondary">

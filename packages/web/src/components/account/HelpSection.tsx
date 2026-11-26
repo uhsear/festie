@@ -5,7 +5,7 @@ import ReplayIntroRow from './ReplayIntroRow';
 import InstallAppRow from './InstallAppRow';
 
 const rowClass =
-  'flex min-h-11 items-center gap-3 rounded-lg border border-border bg-bg-card p-3 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
+  'flex min-h-11 items-center gap-3 rounded-xl border border-border bg-bg-card p-3 hover:bg-surface-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
 function LinkRow({ href, title, hint, external }: { href: string; title: string; hint?: string; external?: boolean }) {
   return (

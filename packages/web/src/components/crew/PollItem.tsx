@@ -64,7 +64,7 @@ export default function PollItem({
 
   return (
     <div
-      className="stagger-item rounded-lg bg-bg-card border border-border p-3 space-y-2"
+      className="stagger-item rounded-xl bg-bg-card border border-border p-3 space-y-2"
       style={{ '--i': Math.min(index, 6) } as React.CSSProperties}
     >
       <div className="flex items-start justify-between gap-2">

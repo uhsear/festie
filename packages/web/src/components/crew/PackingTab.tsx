@@ -160,7 +160,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
           <Plus className="w-4 h-4" aria-hidden="true" /> Add packing item
         </Button>
       ) : (
-        <form onSubmit={submit} className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+        <form onSubmit={submit} className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="font-semibold text-text-primary">New item</h3>
             <IconButton label="Cancel" icon={<X className="w-5 h-5" />} onClick={reset} />
@@ -228,7 +228,7 @@ export default function PackingTab({ crewId, currentUserId, isOwner }: Props) {
             const claimerId = claim.state === 'mine' ? currentUserId : claim.state === 'theirs' ? claim.userId : null;
             const packed = claim.state !== 'open' && claim.packed;
             return (
-              <li key={item.id} className="flex items-center gap-2 p-2.5 rounded-lg bg-bg-card border border-border">
+              <li key={item.id} className="flex items-center gap-2 p-2.5 rounded-xl bg-bg-card border border-border">
                 <div className="min-w-0 flex-1 space-y-1">
                   {editingId === item.id ? (
                     <form

@@ -62,12 +62,12 @@ function ResetPasswordPageInner() {
         <AuthBrand subtitle={AUTH_COPY.newPasswordTitle} />
 
         {!token || expired ? (
-          <div className="bg-bg-card border border-border rounded-lg p-6 text-center space-y-4" role="status">
+          <div className="bg-bg-card border border-border rounded-xl p-6 text-center space-y-4" role="status">
             <h2 className="text-lg font-semibold text-text-primary">{AUTH_COPY.expiredTitle}</h2>
             <p className="text-text-muted text-sm">{AUTH_COPY.expiredBody}</p>
             <Link
               to="/forgot-password"
-              className="inline-flex w-full min-h-11 items-center justify-center rounded-lg bg-accent-aqua px-4 py-2 font-semibold text-[var(--text-on-light-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+              className="inline-flex w-full min-h-11 items-center justify-center rounded-xl bg-accent-aqua px-4 py-2 font-semibold text-[var(--text-on-light-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
             >
               {AUTH_COPY.sendNewLink}
             </Link>
@@ -76,7 +76,7 @@ function ResetPasswordPageInner() {
           <form
             onSubmit={handleSubmit}
             noValidate
-            className="bg-bg-card border border-border rounded-lg p-6 space-y-4 text-left"
+            className="bg-bg-card border border-border rounded-xl p-6 space-y-4 text-left"
           >
             <Input
               id="reset-new-password"

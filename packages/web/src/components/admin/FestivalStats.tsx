@@ -23,7 +23,7 @@ export default function FestivalStats({ stats, onSelect }: FestivalStatsProps) {
         role="region"
         tabIndex={0} // eslint-disable-line jsx-a11y/no-noninteractive-tabindex -- intentional: keeps this overflow-x-auto table keyboard-scrollable; rule only exempts role=tabpanel
         aria-label="Festival stats table"
-        className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-x-auto focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+        className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl overflow-x-auto focus:outline-none focus:ring-2 focus:ring-accent-aqua"
       >
         <table className="w-full text-sm">
           <caption className="sr-only">Festival statistics</caption>

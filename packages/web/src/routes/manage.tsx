@@ -89,7 +89,7 @@ function ManagePageInner() {
                     // The next organization may not offer the open tab (Activity is owner-only).
                     setSection('festivals');
                   }}
-                  className="min-h-11 rounded-lg border border-glass-border bg-bg-card px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+                  className="min-h-11 rounded-xl border border-glass-border bg-bg-card px-3 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
                 >
                   {organizations.map((o) => (
                     <option key={o.id} value={o.id}>
@@ -108,7 +108,7 @@ function ManagePageInner() {
                   type="button"
                   aria-pressed={active === id}
                   onClick={() => setSection(id)}
-                  className={`min-h-11 rounded-lg border px-4 text-sm font-medium ${active === id ? 'border-accent-aqua bg-accent-aqua/20 text-accent-aqua' : 'border-glass-border text-text-primary'}`}
+                  className={`min-h-11 rounded-xl border px-4 text-sm font-medium ${active === id ? 'border-accent-aqua bg-accent-aqua/20 text-accent-aqua' : 'border-glass-border text-text-primary'}`}
                 >
                   {id === 'festivals' ? 'Festivals' : id === 'team' ? 'Team' : 'Activity'}
                 </button>
@@ -131,13 +131,13 @@ function ManagePageInner() {
     <div className="mx-auto w-full max-w-3xl space-y-4 px-4 py-6">
       <h1 className="type-heading text-text-primary">Manage your festivals</h1>
       {me.data && !me.data.emailConfirmed && (
-        <div role="status" className="flex flex-col gap-2 rounded-lg border border-accent-amber p-3 text-sm text-text-primary sm:flex-row sm:items-center sm:justify-between">
+        <div role="status" className="flex flex-col gap-2 rounded-xl border border-accent-amber p-3 text-sm text-text-primary sm:flex-row sm:items-center sm:justify-between">
           <p>Confirm your email to see and edit your organization&apos;s festivals.</p>
           <button
             type="button"
             disabled={resending}
             onClick={() => void resend()}
-            className="min-h-11 rounded-lg bg-accent-aqua px-4 py-2 text-sm font-medium text-bg-primary disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-accent-aqua px-4 py-2 text-sm font-medium text-bg-primary disabled:opacity-50"
           >
             Resend email
           </button>

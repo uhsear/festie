@@ -221,7 +221,7 @@ export default function AdminCrews() {
         placeholder="Search by crew name, creator or invite code…"
         value={searchQuery}
         onChange={(e) => setSearchQuery(e.target.value)}
-        className="w-full px-4 py-2 rounded-lg bg-bg-card border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+        className="w-full px-4 py-2 rounded-xl bg-bg-card border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
       />
 
       {filteredCrews.length === 0 ? (
@@ -237,7 +237,7 @@ export default function AdminCrews() {
             const members = membersByCrew[crew.id];
             const isLoadingMembers = !!membersLoading[crew.id];
             return (
-              <div key={crew.id} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4">
+              <div key={crew.id} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <h2 className="text-base font-semibold text-text-primary">{crew.name}</h2>

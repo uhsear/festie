@@ -17,7 +17,7 @@ import { adminKeys, useArtistSuggestions } from './adminQueries';
 type Action = { kind: 'accept' | 'reject'; suggestion: ArtistSuggestion } | null;
 
 const smallButton =
-  'inline-flex items-center justify-center min-h-11 px-3 rounded-lg border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
+  'inline-flex items-center justify-center min-h-11 px-3 rounded-xl border border-glass-border text-sm text-text-primary hover:bg-bg-card transition-colors disabled:opacity-50';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -96,7 +96,7 @@ export default function AdminArtistSuggestions() {
             {list.map((s) => {
               const merged = !!s.artist.mergedInto;
               return (
-                <li key={s.id} className="space-y-2 rounded-lg border border-glass-border bg-bg-card/60 p-4">
+                <li key={s.id} className="space-y-2 rounded-xl border border-glass-border bg-bg-card/60 p-4">
                   <p className="text-base font-semibold text-text-primary">{artistTitle(s.artist)}</p>
                   <p className="text-xs text-text-muted">
                     {s.organization?.name ?? 'An organization'}

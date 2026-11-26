@@ -142,7 +142,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
         return (
           <article
             key={`${group.recommendedKeepId}-${gi}`}
-            className="rounded-xl border border-priority-must/40 bg-bg-card p-3"
+            className="rounded-lg border border-priority-must/40 bg-bg-card p-3"
           >
             <div className="mb-2 flex items-center gap-2">
               <TriangleAlert className="h-4 w-4 shrink-0 text-priority-must" aria-hidden="true" />
@@ -174,7 +174,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                   <li
                     key={pick.set.id}
                     className={cn(
-                      'rounded-lg border px-3 py-2',
+                      'rounded-xl border px-3 py-2',
                       // Recommended keep uses the aqua accent (NOT coral — coral is
                       // danger/SOS only). A faint aqua wash + ring marks it.
                       isKeep ? 'border-accent-aqua/60 bg-accent-aqua/5' : 'border-border bg-bg-card',

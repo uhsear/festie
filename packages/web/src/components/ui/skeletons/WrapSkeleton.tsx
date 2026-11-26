@@ -9,8 +9,8 @@ export default function WrapSkeleton() {
       <span className="sr-only">Loading wrap…</span>
       {/* tab bar */}
       <div className="flex gap-2">
-        <div className="skeleton-shimmer h-10 flex-1 rounded-lg" />
-        <div className="skeleton-shimmer h-10 flex-1 rounded-lg" />
+        <div className="skeleton-shimmer h-10 flex-1 rounded-xl" />
+        <div className="skeleton-shimmer h-10 flex-1 rounded-xl" />
       </div>
 
       {/* title */}
@@ -20,7 +20,7 @@ export default function WrapSkeleton() {
 
       {/* poster */}
       <div className="flex justify-center">
-        <div className="skeleton-shimmer h-[480px] w-[270px] rounded-xl" data-testid="wrap-poster" />
+        <div className="skeleton-shimmer h-[480px] w-[270px] rounded-lg" data-testid="wrap-poster" />
       </div>
     </div>
   );

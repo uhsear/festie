@@ -39,7 +39,7 @@ export default function DetailSpotifySection({ status, preview, spotifyUrl, visi
       )}
       {status === 'offline' && <p className="text-sm text-text-secondary">Listening needs signal.</p>}
       {open && preview?.embedUrl && (
-        <div className="my-2.5 rounded-xl overflow-hidden">
+        <div className="my-2.5 rounded-lg overflow-hidden">
           <iframe
             src={preview.embedUrl}
             width="100%"
@@ -48,7 +48,7 @@ export default function DetailSpotifySection({ status, preview, spotifyUrl, visi
             allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
             loading="lazy"
             title={`Spotify: ${preview.label || preview.trackName || preview.artistName || 'player'}`}
-            className="block w-full rounded-xl"
+            className="block w-full rounded-lg"
           />
         </div>
       )}

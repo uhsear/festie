@@ -42,7 +42,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
             {COPY.myDay.walk(walkFromPrev.minutes, getStageName(walkFromPrev.fromStageId) || '')}
           </p>
         )}
-        <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 hover:bg-bg-card-hover">
+        <div className="relative flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-lg mb-2 hover:bg-bg-card-hover">
           <RowOpenButton
             label={`${name}, ${formatTime(set.startTime)}${stageName ? `, ${stageName}` : ''}`}
             onClick={() => onOpenSet(set)}
@@ -72,7 +72,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
       return (
         <p
           key={item.key}
-          className="mb-2 rounded-xl border border-dashed border-border px-4 py-2 text-xs text-text-muted"
+          className="mb-2 rounded-lg border border-dashed border-border px-4 py-2 text-xs text-text-muted"
         >
           {COPY.myDay.free(fmtDurationMinutes(item.minutes))}
         </p>
@@ -81,7 +81,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
     return (
       <div
         key={item.key}
-        className="mb-2 flex items-center gap-x-3 rounded-xl border border-border px-4 py-3 text-sm"
+        className="mb-2 flex items-center gap-x-3 rounded-lg border border-border px-4 py-3 text-sm"
       >
         <MapPin className="w-4 h-4 shrink-0 text-accent-aqua" aria-hidden="true" />
         <span className="flex-1 min-w-0">
@@ -113,7 +113,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
           {myDay.unscheduled.map((set) => (
             <div
               key={set.id}
-              className="relative flex items-center gap-x-3 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-xl mb-2 hover:bg-bg-card-hover"
+              className="relative flex items-center gap-x-3 px-4 py-3 w-full min-h-[44px] text-left bg-bg-card border border-border rounded-lg mb-2 hover:bg-bg-card-hover"
             >
               <RowOpenButton label={artistDisplayName(set, b2bSeparator)} onClick={() => onOpenSet(set)} />
               <span className="flex-1 text-sm font-bold min-w-0 break-words [overflow-wrap:anywhere] line-clamp-2">

@@ -74,7 +74,7 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
 
   return (
     <section
-      className="mb-3 rounded-xl border border-glass-border bg-bg-card p-3"
+      className="mb-3 rounded-lg border border-glass-border bg-bg-card p-3"
       aria-label="Crew suggestions"
     >
       <h2 className="mb-2 text-sm font-bold text-text-primary">{title}</h2>
@@ -94,7 +94,7 @@ export default function CrewSuggestionStrip({ title = 'Your crew is seeing these
           }));
 
           return (
-            <li key={set.id} className="flex items-center gap-3 rounded-lg border border-border bg-bg-card px-3 py-2">
+            <li key={set.id} className="flex items-center gap-3 rounded-xl border border-border bg-bg-card px-3 py-2">
               <div className="min-w-0 flex-1">
                 <div className="break-words text-sm font-bold text-text-primary">
                   <ArtistName set={set} separator={b2bSeparator} />

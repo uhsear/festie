@@ -123,7 +123,7 @@ export default function AdminAudit() {
   return (
     <div className="space-y-6" aria-busy={isFetching}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label="Audit log scope" className="inline-flex rounded-lg border border-glass-border overflow-hidden">
+        <div role="group" aria-label="Audit log scope" className="inline-flex rounded-xl border border-glass-border overflow-hidden">
           {SCOPE_OPTIONS.map((option) => (
             <button
               key={option.value}
@@ -145,7 +145,7 @@ export default function AdminAudit() {
             type="button"
             onClick={runExport}
             disabled={exporting}
-            className="px-4 py-2 min-h-11 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
+            className="px-4 py-2 min-h-11 rounded-xl bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
           >
             {exporting ? 'Exporting…' : 'Export CSV'}
           </button>
@@ -154,7 +154,7 @@ export default function AdminAudit() {
       </div>
 
       {/* Search */}
-      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-4 space-y-3">
+      <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-4 space-y-3">
         <label htmlFor="audit-search" className="type-label text-text-primary block">
           Search the audit log
         </label>
@@ -167,7 +167,7 @@ export default function AdminAudit() {
           onKeyDown={(e) => {
             if (e.key === 'Enter') commitQuery(text);
           }}
-          className="w-full px-3 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          className="w-full px-3 py-2 min-h-11 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
         />
         {parsed.errors.length > 0 && (
           <div role="alert" className="text-sm text-accent-coral space-y-1">
@@ -239,7 +239,7 @@ export default function AdminAudit() {
           }
         />
       ) : (
-        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg overflow-hidden">
+        <div className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl overflow-hidden">
           <div className="divide-y divide-glass-border">
             {entries.map((entry) => {
               const changes = describeAuditChanges(entry.details);
@@ -304,7 +304,7 @@ export default function AdminAudit() {
                       {entry.details && (
                         <details>
                           <summary className="text-xs text-text-muted cursor-pointer">Raw details</summary>
-                          <pre className="bg-bg-primary/30 p-3 rounded-lg text-xs text-text-secondary overflow-x-auto mt-2">
+                          <pre className="bg-bg-primary/30 p-3 rounded-xl text-xs text-text-secondary overflow-x-auto mt-2">
                             {JSON.stringify(entry.details, null, 2)}
                           </pre>
                         </details>
@@ -324,7 +324,7 @@ export default function AdminAudit() {
           <button
             onClick={goPrev}
             disabled={stack.length === 0}
-            className="px-4 py-2 min-h-11 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
+            className="px-4 py-2 min-h-11 rounded-xl bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
           >
             Previous
           </button>
@@ -332,7 +332,7 @@ export default function AdminAudit() {
           <button
             onClick={goNext}
             disabled={!data?.nextCursor}
-            className="px-4 py-2 min-h-11 rounded-lg bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
+            className="px-4 py-2 min-h-11 rounded-xl bg-bg-card border border-glass-border text-text-primary hover:bg-bg-card/80 disabled:opacity-50 transition-colors text-sm font-medium"
           >
             Next
           </button>

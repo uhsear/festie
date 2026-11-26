@@ -313,7 +313,7 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
     <div className="space-y-3 px-4">
       <StaleNote show={isError} onRetry={() => void refetch()} />
       {/* Currency label. A label only: changing it never converts amounts. */}
-      <div className="p-3 rounded-lg bg-bg-card border border-border space-y-1">
+      <div className="p-3 rounded-xl bg-bg-card border border-border space-y-1">
         {isOwner && currency !== 'USD' ? (
           <>
             <label htmlFor="expense-currency" className="block text-xs text-text-muted uppercase tracking-wide">
@@ -342,18 +342,18 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
       {/* Summary */}
       {expenses.length > 0 && (
         <div className="crew-stats-grid grid grid-cols-2 gap-2">
-          <div className="p-3 rounded-lg bg-bg-card border border-border">
+          <div className="p-3 rounded-xl bg-bg-card border border-border">
             <div className="text-xs text-text-muted uppercase tracking-wide">Total spent</div>
             <div className="text-lg font-bold text-text-primary tabular-nums">{formatAmount(animatedTotalSpent, currency)}</div>
           </div>
-          <div className="p-3 rounded-lg bg-bg-card border border-border">
+          <div className="p-3 rounded-xl bg-bg-card border border-border">
             <div className="text-xs text-text-muted uppercase tracking-wide">Your balance</div>
             <div className={cn('text-lg font-bold tabular-nums', balanceColor(myBalance))}>
               {formatBalance(myBalance, currency)}
             </div>
           </div>
           {totalPlanned > 0 && (
-            <div className="p-3 rounded-lg bg-bg-card border border-border col-span-2">
+            <div className="p-3 rounded-xl bg-bg-card border border-border col-span-2">
               <div className="text-xs text-text-muted uppercase tracking-wide">Planned (budget)</div>
               <div className="text-lg font-bold text-accent-aqua tabular-nums">{formatAmount(totalPlanned, currency)}</div>
             </div>
@@ -370,14 +370,14 @@ export default function ExpensesTab({ crewId, members, currentUserId }: Props) {
           options={EXPENSE_VIEWS}
           value={view}
           onChange={setView}
-          className="flex gap-1 rounded-lg bg-bg-card"
+          className="flex gap-1 rounded-xl bg-bg-card"
           tabClassName="flex-1 rounded-md capitalize"
         />
       )}
 
       {/* Payments the current user was paid, waiting on "Got it" / "Not received". */}
       {toConfirm.length > 0 && (
-        <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+        <div className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
           <div className="text-xs text-text-muted uppercase tracking-wide">Payments to confirm</div>
           {toConfirm.map((p) => {
             const payer = nameOf(p.paid_by) ?? p.paid_by_name ?? 'A crewmate';

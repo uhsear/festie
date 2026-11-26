@@ -65,7 +65,7 @@ export default function CheckInCard({ crewId }: Props) {
   const dueMs = checkin ? Date.parse(checkin.dueAt) : 0;
 
   return (
-    <div className="rounded-lg border border-border bg-bg-card p-3 space-y-2" data-testid="checkin-card">
+    <div className="rounded-xl border border-border bg-bg-card p-3 space-y-2" data-testid="checkin-card">
       {checkin ? (
         <>
           <p className="font-bold text-text-primary">{CHECKIN_COPY.activeTitle(fmtZonedClock(dueMs))}</p>

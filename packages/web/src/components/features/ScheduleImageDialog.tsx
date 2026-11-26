@@ -177,7 +177,7 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
                 <select
                   value={dayIndex}
                   onChange={(e) => setDayChoice(Number(e.target.value))}
-                  className="min-h-11 rounded-lg border border-border-input bg-bg-card pl-2 pr-8 text-sm text-text-primary"
+                  className="min-h-11 rounded-xl border border-border-input bg-bg-card pl-2 pr-8 text-sm text-text-primary"
                 >
                   {Array.from({ length: dayCount }, (_, i) => (
                     <option key={i} value={i} disabled={!timedDays.has(i)}>
@@ -189,7 +189,7 @@ export default function ScheduleImageDialog({ initialMode }: { initialMode?: Loc
               </label>
               <div
                 aria-hidden="true"
-                className="mx-auto overflow-hidden rounded-xl border border-border pointer-events-none"
+                className="mx-auto overflow-hidden rounded-lg border border-border pointer-events-none"
                 style={{ width: PREVIEW_WIDTH, height: layout.height * scale }}
               >
                 <div

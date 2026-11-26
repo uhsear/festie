@@ -43,7 +43,7 @@ export default function FestivalDayBanner() {
 
   return (
     <div
-      className="flex items-center justify-between gap-2.5 bg-[linear-gradient(90deg,var(--color-aqua-a15),var(--color-aqua-a06))] border border-[var(--color-aqua-a3)] rounded-xl py-2.5 px-4 mx-3 my-2 text-sm text-text-primary animate-[fm-day-banner-slide_0.3s_ease-out]"
+      className="flex items-center justify-between gap-2.5 bg-[linear-gradient(90deg,var(--color-aqua-a15),var(--color-aqua-a06))] border border-[var(--color-aqua-a3)] rounded-lg py-2.5 px-4 mx-3 my-2 text-sm text-text-primary animate-[fm-day-banner-slide_0.3s_ease-out]"
       role="status"
       data-testid="festival-day-banner"
     >
@@ -52,7 +52,7 @@ export default function FestivalDayBanner() {
       </span>
       <Link
         to="/festival-mode"
-        className="shrink-0 flex items-center bg-accent-aqua text-bg-primary border-none rounded-lg py-2 px-3.5 text-[length:var(--font-size-14)] font-semibold cursor-pointer min-h-11 hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:active:transform-none transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        className="shrink-0 flex items-center bg-accent-aqua text-bg-primary border-none rounded-xl py-2 px-3.5 text-[length:var(--font-size-14)] font-semibold cursor-pointer min-h-11 hover:bg-[var(--color-accent-aqua-hover)] active:scale-[0.97] motion-reduce:active:transform-none transition-[transform,background-color,border-color,color,opacity] duration-[var(--duration-fast)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
         onClick={enter}
         data-testid="festival-day-banner-enter"
       >

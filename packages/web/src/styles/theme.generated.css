@@ -5,7 +5,7 @@
  *
  * These are the design tokens shared with React Native (colors/type/spacing/
  * motion/radii/z-index/breakpoints). CSS-only tokens (11px/13px font sizes,
- * focus rings, glass blur, accent hover tones, timeline NOW, bg-chrome, the
+ * focus rings, glass blur, timeline NOW, the
  * rgb-channel + var()-referencing one-offs) stay hand-authored in theme.css.
  */
 @theme {
@@ -47,6 +47,8 @@
   --duration-fast: 120ms;
   --duration-med: 200ms;
   --duration-slow: 320ms;
+  --duration-pulse: 750ms;
+  --press-scale: 0.96;
   --duration-effects-fast: 120ms;
   --duration-effects-med: 200ms;
   --duration-effects-slow: 320ms;
@@ -86,7 +88,8 @@
   --radius-sm: 8px;
   --radius-md: 10px;
   --radius-DEFAULT: 12px;
-  --radius-lg: 20px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
   --radius-pill: 999px;
   --z-base: 0;
   --z-sticky: 10;
@@ -112,7 +115,7 @@
   --color-status-verified-bg: rgba(34, 197, 94, 0.15);
   --color-status-unverified-bg: rgba(251, 191, 36, 0.15);
   --color-status-warning: #f0a030;
-  --color-status-error: #ff6b6b;
+  --color-status-error: #f87171;
   --color-clash: #f0a030;
   --color-clash-tint: rgba(240, 160, 48, 0.16);
   --color-spotify: #1DB954;
@@ -151,6 +154,26 @@
   --color-stage-fallback: #8787a8;
   --color-bg-sticky: #161616;
   --color-day-tab-active: #00e8d0;
+  --text-on-light-accent: #0a0a0a;
+  --color-bg-chrome: rgba(10, 10, 10, 0.82);
+  --color-bg-disabled: rgba(255, 255, 255, 0.04);
+  --shadow-sticky: 0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.35);
+  --color-accent-aqua-hover: #00cfba;
+  --color-accent-coral-hover: #e62e5c;
+  --color-accent-coral-strong-hover: #ac1a34;
+  --color-coral-tint-text: #ff7a8c;
+  --color-coral-tint-text-hover: #ff8fa0;
+  --detail-glass-bg: #1d1d1d;
+  --menu-panel-bg: rgba(18, 18, 18, 0.96);
+  --glass-hover-border: rgba(255, 255, 255, 0.12);
+  --skeleton-base: #1a1a1a;
+  --skeleton-hi: #2a2a2a;
+  --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+  --color-live-fill: #39ff14;
+  --color-live-text: #39ff14;
+  --color-live-ring: rgba(57, 255, 20, 0.15);
+  --color-map-self: #00e8d0;
+  --color-outline-image: rgba(255, 255, 255, 0.1);
   --color-confidence-live: #39ff14;
   --color-confidence-aging: #ffb020;
   --color-confidence-stale: #8787a8;
@@ -241,6 +264,26 @@
   --color-stage-fallback: #45455c;
   --color-bg-sticky: #ececf1;
   --color-day-tab-active: #00594f;
+  --text-on-light-accent: #ffffff;
+  --color-bg-chrome: rgba(244, 244, 247, 0.88);
+  --color-bg-disabled: rgba(0, 0, 0, 0.04);
+  --shadow-sticky: 0 1px 0 rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.12);
+  --color-accent-aqua-hover: #004a41;
+  --color-accent-coral-hover: #8f0023;
+  --color-accent-coral-strong-hover: #8a0019;
+  --color-coral-tint-text: #a8002a;
+  --color-coral-tint-text-hover: #8f0023;
+  --detail-glass-bg: #ffffff;
+  --menu-panel-bg: rgba(255, 255, 255, 0.98);
+  --glass-hover-border: rgba(0, 0, 0, 0.12);
+  --skeleton-base: #e8e8ee;
+  --skeleton-hi: #f4f4f7;
+  --scrollbar-thumb-hover: rgba(0, 0, 0, 0.3);
+  --color-live-fill: #175800;
+  --color-live-text: #175800;
+  --color-live-ring: rgba(23, 88, 0, 0.2);
+  --color-map-self: #00594f;
+  --color-outline-image: rgba(0, 0, 0, 0.1);
   --color-confidence-live: #175800;
   --color-confidence-aging: #6b4100;
   --color-confidence-stale: #45455c;

@@ -396,14 +396,14 @@ export default function FestivalEditForm({
         aria-label="B2B separator"
         value={formData.b2bSeparator || ''}
         onChange={(e) => handleSeparator(e.target.value)}
-        className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+        className="px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
       />
       <span>Joins B2B artist names, for example b2b, vs or &amp;.</span>
     </label>
   );
 
   return (
-    <div ref={rootRef} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-lg p-6 space-y-6">
+    <div ref={rootRef} className="bg-bg-card/60 backdrop-blur-xl border border-glass-border rounded-xl p-6 space-y-6">
       <fieldset
         disabled={readOnly}
         className="m-0 min-w-0 space-y-6 border-0 p-0 [&_:is(input,select,textarea,button):disabled]:cursor-not-allowed [&_:is(input,select,textarea,button):disabled]:opacity-60"
@@ -423,7 +423,7 @@ export default function FestivalEditForm({
             disabled={identityLocked}
             aria-describedby={identityLocked ? 'festival-identity-locked' : undefined}
             aria-invalid={nameIssues.length ? true : undefined}
-            className={`w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${nameIssues.length ? ERROR_RING : ''}`}
+            className={`w-full px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${nameIssues.length ? ERROR_RING : ''}`}
           />
           {nameIssues.map((m, i) => (
             <p key={i} className="mt-1 text-xs text-accent-coral">
@@ -443,7 +443,7 @@ export default function FestivalEditForm({
             onChange={(e) => setFormData({ ...formData, location: e.target.value })}
             disabled={identityLocked}
             aria-describedby={identityLocked ? 'festival-identity-locked' : undefined}
-            className="w-full px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            className="w-full px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           />
           {venueGuessed && (
             <p role="status" className="mt-1 text-xs text-accent-amber">
@@ -465,7 +465,7 @@ export default function FestivalEditForm({
             aria-label="Festival time zone"
             value={formData.timeZone || ''}
             onChange={(e) => setFormData({ ...formData, timeZone: e.target.value || null })}
-            className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+            className="px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
           >
             <option value="" disabled>
               Choose a time zone…
@@ -514,7 +514,7 @@ export default function FestivalEditForm({
               id="festival-series"
               value={newSeries ? NEW_SERIES : formData.seriesId || ''}
               onChange={(e) => handleSeriesSelect(e.target.value)}
-              className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+              className="px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
             >
               <option value="">No series</option>
               {seriesOptions.map((id) => (
@@ -532,7 +532,7 @@ export default function FestivalEditForm({
               aria-label="New series id"
               value={formData.seriesId || ''}
               onChange={(e) => setFormData({ ...formData, seriesId: slugifySeriesInput(e.target.value) || null })}
-              className="px-4 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+              className="px-4 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-aqua"
             />
           )}
           {siblings.length > 0 && <span>Also in this series: {siblings.map((s) => s.name).join(', ')}</span>}
@@ -566,19 +566,19 @@ export default function FestivalEditForm({
                     aria-invalid={stageIssues.length ? true : undefined}
                     value={stage.name}
                     onChange={(e) => handleStageName(i, e.target.value)}
-                    className={`flex-1 min-w-0 px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${stageIssues.length ? ERROR_RING : ''}`}
+                    className={`flex-1 min-w-0 px-3 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua ${stageIssues.length ? ERROR_RING : ''}`}
                   />
                   <input
                     type="color"
                     aria-label={`Stage color for ${stage.name || 'new stage'}`}
                     value={stage.color}
                     onChange={(e) => handleStageColor(i, e.target.value)}
-                    className="w-12 min-w-10 h-10 shrink-0 rounded-lg cursor-pointer"
+                    className="w-12 min-w-10 h-10 shrink-0 rounded-xl cursor-pointer"
                   />
                   <button
                     onClick={() => handleRemoveStage(stage.id)}
                     aria-label={`Remove stage ${stage.name || 'new stage'}`}
-                    className="px-2 py-2 min-h-11 shrink-0 rounded-lg bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
+                    className="px-2 py-2 min-h-11 shrink-0 rounded-xl bg-accent-coral/20 text-accent-coral hover:bg-accent-coral/30 transition-colors text-sm"
                   >
                     Remove
                   </button>
@@ -594,7 +594,7 @@ export default function FestivalEditForm({
         </div>
         <button
           onClick={handleAddStage}
-          className="mt-3 px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+          className="mt-3 px-3 py-1.5 min-h-11 rounded-xl bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
         >
           + Add Stage
         </button>
@@ -624,10 +624,10 @@ export default function FestivalEditForm({
           aria-label="Filter by artist or stage"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="mb-3 w-full px-3 py-2 rounded-lg bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
+          className="mb-3 w-full px-3 py-2 rounded-xl bg-bg-primary border border-glass-border text-sm text-text-primary placeholder-text-muted focus:outline-none focus:ring-2 focus:ring-accent-aqua"
         />
         {selected.size > 0 && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg bg-bg-primary/60 border border-glass-border p-2 text-sm text-text-primary">
+          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl bg-bg-primary/60 border border-glass-border p-2 text-sm text-text-primary">
             <span>{selected.size} selected</span>
             <input
               type="number"
@@ -642,14 +642,14 @@ export default function FestivalEditForm({
             <button
               type="button"
               onClick={handleShift}
-              className="px-3 py-1.5 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+              className="px-3 py-1.5 rounded-xl bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
             >
               Shift times
             </button>
             <button
               type="button"
               onClick={() => setSelected(new Set())}
-              className="px-3 py-1.5 rounded-lg bg-bg-primary border border-glass-border text-sm"
+              className="px-3 py-1.5 rounded-xl bg-bg-primary border border-glass-border text-sm"
             >
               Clear
             </button>
@@ -699,7 +699,7 @@ export default function FestivalEditForm({
         </div>
         <button
           onClick={handleAddDay}
-          className="mt-3 px-3 py-1.5 min-h-11 rounded-lg bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
+          className="mt-3 px-3 py-1.5 min-h-11 rounded-xl bg-accent-aqua/20 text-accent-aqua hover:bg-accent-aqua/30 transition-colors text-sm font-medium"
         >
           + Add Day
         </button>
@@ -712,7 +712,7 @@ export default function FestivalEditForm({
       )}
 
       {issues.length > 0 && (
-        <div role="alert" className="rounded-lg border border-accent-coral p-3 space-y-1">
+        <div role="alert" className="rounded-xl border border-accent-coral p-3 space-y-1">
           <p className="text-sm font-medium text-accent-coral">Fix these before saving</p>
           {issues.map((issue, i) => (
             <button
@@ -763,14 +763,14 @@ export default function FestivalEditForm({
         )}
         <button
           onClick={onCancel}
-          className="px-4 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
+          className="px-4 py-2 min-h-11 rounded-xl bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
         >
           {readOnly ? 'Close' : 'Cancel'}
         </button>
         {!readOnly && editingId && total > 0 && (
           <button
             onClick={onDiscard}
-            className="px-4 py-2 min-h-11 rounded-lg bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
+            className="px-4 py-2 min-h-11 rounded-xl bg-bg-primary border border-glass-border text-text-primary hover:bg-bg-primary/80 transition-colors text-sm font-medium"
           >
             Discard
           </button>
@@ -779,7 +779,7 @@ export default function FestivalEditForm({
         <button
           onClick={onSave}
           disabled={saving || (!!editingId && total === 0)}
-          className="px-4 py-2 min-h-11 rounded-lg bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2 min-h-11 rounded-xl bg-accent-aqua text-bg-primary hover:opacity-80 transition-opacity text-sm font-medium whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {saving ? 'Saving…' : editingId ? (total > 0 ? `Save ${plural(total, 'change')}` : 'Save') : 'Create festival'}
         </button>

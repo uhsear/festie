@@ -41,8 +41,9 @@ describe('daylight overrides for hand-authored colour tokens', () => {
   const colours = [...night].filter(([name, value]) => isColour(name, value));
 
   it('finds the colour tokens it is meant to guard', () => {
-    expect(colours.length).toBeGreaterThan(10);
-    expect(daylight.size).toBeGreaterThan(10);
+    // Most colour tokens are generated now (DP-04), so only a few stay hand-authored.
+    expect(colours.length).toBeGreaterThan(0);
+    expect(daylight.size).toBeGreaterThan(0);
   });
 
   it('overrides every colour token in the daylight block, or exempts it with a reason', () => {

@@ -162,8 +162,8 @@ function WrapPageInner() {
         value={tab}
         onChange={setTab}
         tone="solid"
-        className="grid grid-cols-2 gap-1 rounded-xl bg-bg-card"
-        tabClassName="min-h-[40px] rounded-lg text-sm transition-colors"
+        className="grid grid-cols-2 gap-1 rounded-lg bg-bg-card"
+        tabClassName="min-h-[40px] rounded-xl text-sm transition-colors"
       />
     </div>
   );
@@ -230,7 +230,7 @@ function WrapPageInner() {
       {tabBar}
       <div id="wrap-tab-panel" className="max-w-lg mx-auto flex flex-col gap-6 pt-4 pb-6">
         {user.username && (
-          <div className="flex items-center gap-3 rounded-lg border border-border bg-bg-card p-3">
+          <div className="flex items-center gap-3 rounded-xl border border-border bg-bg-card p-3">
             <p id="wrap-handle-title" className="min-w-0 flex-1 text-sm text-text-primary">
               Show @{user.username} on cards
             </p>
@@ -239,7 +239,7 @@ function WrapPageInner() {
         )}
 
         {toRate.length > 0 && (
-          <div className="flex items-center gap-3 rounded-xl border border-accent-aqua/40 bg-accent-aqua/10 p-4">
+          <div className="flex items-center gap-3 rounded-lg border border-accent-aqua/40 bg-accent-aqua/10 p-4">
             <p className="flex-1 text-sm font-medium text-text-primary">
               {toRate.length} {toRate.length === 1 ? 'set' : 'sets'} still to rate
             </p>
@@ -281,7 +281,7 @@ function WrapPageInner() {
             <h2 className="text-xs uppercase tracking-[var(--letter-spacing-caps)] text-text-secondary mb-3">
               Everything you rated
             </h2>
-            <div className="rounded-xl bg-bg-card border border-border p-4">
+            <div className="rounded-lg bg-bg-card border border-border p-4">
               {allSorted.map((s) => (
                 <div
                   key={s.setId}
@@ -463,7 +463,7 @@ function CrewWrapTab({
             <span className="w-2 h-2 rounded-full bg-accent-aqua" aria-hidden="true" />
             Sets you saw together
           </h2>
-          <div className="rounded-xl bg-bg-card border border-border p-4 space-y-2">
+          <div className="rounded-lg bg-bg-card border border-border p-4 space-y-2">
             {wrap.setsSeenTogether.slice(0, 10).map((s) => (
               <div key={s.setId} className="flex items-center gap-3">
                 <span className="flex-1 min-w-0 text-sm text-text-primary break-words [overflow-wrap:anywhere] line-clamp-2"><ArtistNameButton name={artistOf(s)} /></span>
@@ -483,7 +483,7 @@ function CrewWrapTab({
           </h2>
           <div className="space-y-3">
             {wrap.perMember.map((m) => (
-              <div key={m.userId} className="rounded-xl bg-bg-card border border-border p-4">
+              <div key={m.userId} className="rounded-lg bg-bg-card border border-border p-4">
                 <div className="text-sm font-semibold text-text-primary mb-1">{m.name}</div>
                 {m.topSets.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
@@ -543,7 +543,7 @@ function CrewWrapTab({
 
 function Superlative({ label, value, sub }: { label: string; value: string; sub?: string }) {
   return (
-    <div className="rounded-xl bg-bg-card border border-border p-4">
+    <div className="rounded-lg bg-bg-card border border-border p-4">
       <div className="text-xs uppercase tracking-[var(--letter-spacing-caps)] text-text-muted">{label}</div>
       <div className="text-base font-bold text-text-primary mt-1">{value}</div>
       {sub && <div className="text-xs text-text-secondary mt-0.5">{sub}</div>}

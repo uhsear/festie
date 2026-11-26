@@ -96,7 +96,7 @@ export function BeaconButton() {
   return (
     <Dialog.Root open={open} onOpenChange={setOpen}>
       <Dialog.Trigger asChild>
-        <Button variant="secondary" fullWidth className="!h-auto flex-col !items-start !rounded-lg !px-3 text-left py-2">
+        <Button variant="secondary" fullWidth className="!h-auto flex-col !items-start !rounded-xl !px-3 text-left py-2">
           <span className="font-semibold">{BEACON_COPY.button}</span>
           <span className="text-xs text-text-muted font-normal whitespace-normal">{BEACON_COPY.buttonHint}</span>
         </Button>

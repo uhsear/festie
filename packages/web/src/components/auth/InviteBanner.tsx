@@ -17,7 +17,7 @@ export default function InviteBanner() {
 
   if (!code || status === 'loading') return null;
 
-  const box = 'w-full max-w-[360px] mb-6 rounded-xl border border-border-light bg-bg-card p-4 text-left relative z-[1]';
+  const box = 'w-full max-w-[360px] mb-6 rounded-lg border border-border-light bg-bg-card p-4 text-left relative z-[1]';
   if (status !== 'ready' || !preview) {
     return (
       <div className={box} role="status">

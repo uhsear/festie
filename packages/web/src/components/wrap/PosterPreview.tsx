@@ -15,7 +15,7 @@ const PosterPreview = forwardRef<HTMLDivElement, { children: ReactNode }>(functi
     <figure className="m-0">
       <div
         aria-hidden="true"
-        className="mx-auto overflow-hidden rounded-xl border border-border pointer-events-none"
+        className="mx-auto overflow-hidden rounded-lg border border-border pointer-events-none"
         style={{ width: 1080 * SCALE, height: 1920 * SCALE }}
       >
         <div style={{ width: 1080, height: 1920, transform: `scale(${SCALE})`, transformOrigin: 'top left' }}>

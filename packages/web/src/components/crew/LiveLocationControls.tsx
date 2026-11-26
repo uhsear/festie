@@ -155,7 +155,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
             role="alert"
             aria-atomic="true"
             data-testid="sos-banner"
-            className="rounded-lg border-2 border-accent-coral bg-accent-coral/15 p-3 space-y-2 animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none"
+            className="rounded-xl border-2 border-accent-coral bg-accent-coral/15 p-3 space-y-2 animate-[card-in_220ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none"
           >
             <div className="flex items-start gap-2">
               <AlertCircle className="w-5 h-5 text-accent-coral shrink-0 mt-0.5" aria-hidden="true" />
@@ -195,7 +195,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
       })}
 
       {/* ── Share toggle ──────────────────────────────────────── */}
-      <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg-card p-3">
+      <div className="flex flex-col gap-2 rounded-xl border border-border bg-bg-card p-3">
         <div className="flex items-center gap-3">
           <MapPin className="w-5 h-5 text-text-secondary shrink-0" aria-hidden="true" />
           <div className="min-w-0 flex-1">

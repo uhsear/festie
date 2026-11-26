@@ -13,7 +13,7 @@ export default function PastMeetingPointCard({ point: p, onDirections }: PastMee
   const meta = meetingPointKind(p.type);
   const KindIcon = CONCEPT_ICON[meta.icon];
   return (
-  <div className="p-3 rounded-lg bg-bg-card border border-border opacity-60">
+  <div className="p-3 rounded-xl bg-bg-card border border-border opacity-60">
     <div className="flex items-start gap-3">
       <KindIcon className="w-5 h-5 shrink-0 mt-0.5 text-text-secondary" aria-hidden="true" />
       <div className="flex-1 min-w-0">

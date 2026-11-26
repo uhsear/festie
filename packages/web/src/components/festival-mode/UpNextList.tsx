@@ -21,7 +21,7 @@ export default function UpNextList({ items, nowMs, timeZone, b2bSeparator, getSt
         <SkipForward className="w-3.5 h-3.5" aria-hidden="true" />
         Up next
       </h2>
-      <ul className="list-none m-0 p-0 rounded-xl border border-border bg-bg-card divide-y divide-border">
+      <ul className="list-none m-0 p-0 rounded-lg border border-border bg-bg-card divide-y divide-border">
         {items.map(({ set, start }) => {
           const name = artistDisplayName(set, b2bSeparator);
           const stage = getStageName(set.stageId) || '';

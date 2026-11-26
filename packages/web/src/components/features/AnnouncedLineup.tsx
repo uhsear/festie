@@ -248,7 +248,7 @@ export default function AnnouncedLineup({ model, className }: { model: Announced
     <section
       aria-labelledby="announced-lineup-heading"
       className={cn(
-        'w-full mx-auto max-w-[1440px] mb-[var(--space-4)] rounded-xl border border-border bg-bg-card px-4 py-3',
+        'w-full mx-auto max-w-[1440px] mb-[var(--space-4)] rounded-lg border border-border bg-bg-card px-4 py-3',
         className,
       )}
     >

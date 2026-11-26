@@ -17,7 +17,7 @@ export default function SelectionBar({ count, actionLabel, onAction, onClear, bu
     <div
       role="region"
       aria-label="Selection"
-      className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-lg border border-glass-border bg-bg-card/95 px-4 py-2 backdrop-blur-xl"
+      className="sticky bottom-0 z-10 flex flex-wrap items-center gap-3 rounded-xl border border-glass-border bg-bg-card/95 px-4 py-2 backdrop-blur-xl"
     >
       <div className="flex-1">
         <div className="text-sm text-text-primary">{count} selected</div>

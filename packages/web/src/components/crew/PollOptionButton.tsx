@@ -35,7 +35,7 @@ export default function PollOptionButton({
       aria-pressed={isMine ? 'true' : 'false'}
       aria-busy={isPending ? 'true' : 'false'}
       className={cn(
-        'w-full min-h-11 relative rounded-lg transition-colors text-left overflow-hidden',
+        'w-full min-h-11 relative rounded-xl transition-colors text-left overflow-hidden',
         isMine
           ? 'border-2 border-accent-aqua'
           : isWinning

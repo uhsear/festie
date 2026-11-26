@@ -50,7 +50,7 @@ export default function SettleUpCard({
   onRemind,
 }: SettleUpCardProps) {
   return (
-  <div className="p-3 rounded-lg bg-bg-card border border-border space-y-3">
+  <div className="p-3 rounded-xl bg-bg-card border border-border space-y-3">
     <div className="flex items-center justify-between gap-2">
       <div className="text-xs text-text-muted uppercase tracking-wide">Settle up</div>
       <SegmentedTablist
@@ -59,7 +59,7 @@ export default function SettleUpCard({
         options={SETTLE_VIEWS}
         value={settleView}
         onChange={onSettleViewChange}
-        className="flex gap-1 rounded-lg bg-bg-secondary"
+        className="flex gap-1 rounded-xl bg-bg-secondary"
         tabClassName="px-2.5 py-1 rounded-md"
       />
     </div>
