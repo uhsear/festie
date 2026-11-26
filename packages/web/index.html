@@ -3,7 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="theme-color" content="#0a0a0a" />
+    <meta name="theme-color" content="#0a0a0a" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f4f4f7" media="(prefers-color-scheme: light)" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -120,12 +121,12 @@
         justify-content: center;
         gap: 16px;
         background: #0a0a0a;
-        color: #a1a1aa;
+        color: #9999bb;
         font-size: 14px;
       }
       :root[data-theme='daylight'] .boot-shell {
         background: #f4f4f7;
-        color: #52525b;
+        color: #2e2e44;
       }
       .boot-shell img {
         width: 64px;
@@ -140,11 +141,15 @@
         padding: 0 24px;
         border: 0;
         border-radius: 8px;
-        background: #ff3366;
+        background: #00e8d0;
         color: #0a0a0a;
         font: inherit;
         font-weight: 600;
         cursor: pointer;
+      }
+      :root[data-theme='daylight'] .boot-shell button {
+        background: #00594f;
+        color: #ffffff;
       }
       .boot-shell a {
         color: inherit;
@@ -152,7 +157,7 @@
       .boot-noscript {
         padding: 24px;
         text-align: center;
-        color: #a1a1aa;
+        color: #8787a8;
       }
     </style>
     <!-- Persisted theme, applied before first paint (see /theme-init.js). -->

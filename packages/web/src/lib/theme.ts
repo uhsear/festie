@@ -14,7 +14,7 @@ export function applyTheme(theme: ThemePreference): void {
   else delete root.dataset.theme;
   root.style.colorScheme = theme === 'daylight' ? 'light' : 'dark';
   const ground = theme === 'daylight' ? colorsDaylight.bg.primary : colors.bg.primary;
-  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', ground);
+  document.querySelectorAll('meta[name="theme-color"]').forEach((meta) => meta.setAttribute('content', ground));
 }
 
 /** Keep the document in step with the persisted theme preference, and with the OS scheme in Match system mode. */

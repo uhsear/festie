@@ -23,6 +23,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:fast": "tsgo --noEmit",
     "check:docs": "node scripts/ci/check-docs.mjs",
+    "check:ground": "node scripts/check-ground.mjs",
     "check:legal": "node scripts/ci/check-legal-placeholders.mjs",
     "check:migrations": "node scripts/ci/check-migrations.mjs",
     "gen:api-types": "node scripts/gen-api-types.mjs",

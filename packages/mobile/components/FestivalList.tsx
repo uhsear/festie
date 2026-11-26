@@ -17,7 +17,7 @@ import GuestLegalFooter from './GuestLegalFooter';
 // Status pill styling. The list endpoint now provides startDate/endDate, so a
 // festival classifies as upcoming/ongoing/past. Returns null when undetermined.
 function statusBadge(status: FestivalStatus | null): { label: string; bg: string; fg: string } | null {
-  // F6: Live badge fg must be onLightAccent (#080810) not onAccent (white).
+  // F6: Live badge fg must be onLightAccent (#0a0a0a) not onAccent (white).
   // White (#fff) on aqua (#00e8d0) is only ~1.45:1 — fails WCAG AA.
   // onLightAccent is the token-documented AA-safe pair for aqua fills.
   switch (status) {
