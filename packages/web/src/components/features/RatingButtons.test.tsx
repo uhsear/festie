@@ -24,11 +24,37 @@ function renderButtons(props: Partial<ComponentProps<typeof RatingButtons>> = {}
 }
 
 describe('RatingButtons', () => {
-  it('shows the five rating words', () => {
+  it('names all five steps, lowest first, and prints a label only on the active one', async () => {
     renderButtons();
-    for (const word of ['Fire', 'Good', 'Okay', 'Meh', 'Nope']) {
-      expect(screen.getByText(word)).toBeInTheDocument();
-    }
+    const steps = screen.getAllByRole('button', { name: /\(\d of 5\)/ });
+    expect(steps.map((s) => s.getAttribute('aria-label'))).toEqual([
+      'Nope (1 of 5)',
+      'Meh (2 of 5)',
+      'Okay (3 of 5)',
+      'Good (4 of 5)',
+      'Fire (5 of 5)',
+    ]);
+    await screen.findByRole('button', { name: 'Fire (5 of 5)', pressed: true });
+    expect(screen.getAllByText('Fire')).toHaveLength(1);
+    expect(screen.queryByText('Nope')).toBeNull();
+  });
+
+  it('fills every step up to the selected one in aqua, with the same fill for Fire and Nope', async () => {
+    renderButtons();
+    const fire = await screen.findByRole('button', { name: 'Fire (5 of 5)', pressed: true });
+    expect(fire).toHaveAttribute('data-step-state', 'active');
+    expect(fire).toHaveClass('bg-accent-aqua');
+    const nope = screen.getByRole('button', { name: 'Nope (1 of 5)' });
+    expect(nope).toHaveAttribute('data-step-state', 'filled');
+    expect(nope.className).toContain('bg-accent-aqua/20');
+    expect(fire.className).not.toMatch(/amber|coral|danger/);
+    expect(nope.className).not.toMatch(/amber|coral|danger/);
+  });
+
+  it('leaves the caption out when showCaption is false', async () => {
+    renderButtons({ showCaption: false });
+    await screen.findByRole('button', { name: 'Fire (5 of 5)', pressed: true });
+    expect(screen.queryByText(/You rated this|Tap to rate/)).toBeNull();
   });
 
   it('marks the saved rating and captions it', async () => {

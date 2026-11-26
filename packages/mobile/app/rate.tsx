@@ -4,6 +4,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
 import { WRAP_STATE_COPY } from '@festie/shared/constants';
+import { useFestival } from '@festie/shared/hooks';
 import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import { formatTime, isWrapUnlocked, isWrapUpcoming, selectSetsToRate } from '@festie/shared/utils';
 import type { WrapFestival, WrapPlannedSet } from '@festie/shared/types';
@@ -14,6 +15,7 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTo
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useHaptics } from '../hooks/useHaptics';
 import { ArtistNameInline } from '../components/ArtistName';
+import { safeStageColor } from '../lib/stageColor';
 
 type Loaded = { festival: WrapFestival; sets: WrapPlannedSet[] };
 
@@ -34,6 +36,7 @@ export default function RateScreen() {
   const reduceMotion = useReduceMotion();
   const haptics = useHaptics();
   const insets = useSafeAreaInsets();
+  const { getStageColor } = useFestival();
   const { festival: festivalParam } = useLocalSearchParams<{ festival?: string }>();
   const currentFestivalId = useFestivalDataStore((s) => s.currentFestival?.id);
   const festivalId = festivalParam || currentFestivalId;
@@ -224,6 +227,23 @@ export default function RateScreen() {
       <Text style={styles.progress} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {`${index + 1} of ${data.sets.length}`}
       </Text>
+      <View
+        style={styles.rail}
+        accessible
+        accessibilityRole="progressbar"
+        accessibilityLabel="Sets rated"
+        accessibilityValue={{ min: 1, max: data.sets.length, now: index + 1 }}
+      >
+        <View
+          style={[
+            styles.railFill,
+            {
+              width: `${((index + 1) / data.sets.length) * 100}%`,
+              backgroundColor: safeStageColor(set.stageId ? getStageColor(set.stageId) : undefined, t.colors.text.muted),
+            },
+          ]}
+        />
+      </View>
       <Text style={styles.artist} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityRole="header">
         <ArtistNameInline name={set.artist || 'Unknown artist'}>{set.artist || 'Unknown artist'}</ArtistNameInline>
       </Text>
@@ -253,19 +273,21 @@ export default function RateScreen() {
           style={styles.caughtButton}
         />
       </View>
-      <View style={styles.rating}>
-        <RatingButtons
-          key={set.setId}
-          setId={set.setId}
-          festivalId={festivalId}
-          showMemory={false}
-          onRated={() => {
-            setAnyRated(true);
-            mark(set.setId, true);
-            next();
-          }}
-        />
-      </View>
+      {seenId === set.setId ? (
+        <View style={styles.rating}>
+          <RatingButtons
+            key={set.setId}
+            setId={set.setId}
+            festivalId={festivalId}
+            showMemory={false}
+            onRated={() => {
+              setAnyRated(true);
+              mark(set.setId, true);
+              next();
+            }}
+          />
+        </View>
+      ) : null}
       <Button label="Next" variant="ghost" onPress={advance} />
     </ScrollView>
   );
@@ -290,7 +312,7 @@ const useStyles = makeStyles((t) => ({
     textAlign: 'center',
   },
   artist: {
-    ...typeStyle('title'),
+    ...typeStyle('display-lg'),
     color: t.colors.text.primary,
     textAlign: 'center',
   },
@@ -316,6 +338,16 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('label'),
     color: t.colors.accent.aqua,
     textDecorationLine: 'underline',
+  },
+  rail: {
+    height: 4,
+    borderRadius: t.radii.pill,
+    backgroundColor: t.colors.border.default,
+    overflow: 'hidden',
+  },
+  railFill: {
+    height: '100%',
+    borderRadius: t.radii.pill,
   },
   rating: {
     marginVertical: t.spacing[3],

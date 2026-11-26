@@ -1,9 +1,9 @@
 import { useMemo, useState, useCallback } from 'react';
 import { FestivalDay, FestivalSet, Priority, Stage } from '@festie/shared/types';
 import { formatTime, artistDisplayName, festivalStartMinutes, buildLeaveAtPlan, leaveAtLine } from '@festie/shared/utils';
-import { AlertTriangle, TriangleAlert } from 'lucide-react';
 import { clashPromptCopy, clashesWith } from '@festie/shared/constants';
 import Button from '../ui/Button';
+import ClashHatch from '../ui/ClashHatch';
 import ArtistName from './ArtistName';
 
 interface Props {
@@ -117,10 +117,10 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
           <div
             key={c.id}
             role="alert"
-            className="rounded-DEFAULT border border-[var(--color-clash)] bg-[var(--color-clash-tint)] p-4"
+            className="rounded-DEFAULT bg-[var(--color-clash-tint)] p-4"
           >
             <div className="flex items-center gap-1.5 text-sm font-bold text-[var(--color-text-danger)]">
-              <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              <ClashHatch className="h-4 w-1.5" />
               <span>{title}</span>
             </div>
             <div className="mt-1 text-[length:var(--font-size-14)] text-text-secondary">{body}</div>
@@ -172,7 +172,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
       })}
       {quietNames.length > 0 && (
         <div className="flex items-center gap-1.5 text-xs text-text-muted">
-          <TriangleAlert className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+          <ClashHatch className="h-4 w-1.5" />
           <span>{clashesWith(quietNames)}</span>
         </div>
       )}

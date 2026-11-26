@@ -1,11 +1,11 @@
 import { memo, useCallback } from 'react';
-import { Bell, FileText, TriangleAlert, ArrowRightLeft } from 'lucide-react';
+import { Bell, FileText, ArrowRightLeft } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useMyPick, useMyNote, useMyReminder, usePickActions, usePickClear, useSetMove } from '@festie/shared/hooks';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import type { FestivalSet, Priority } from '@festie/shared/types';
-import { COPY, PRIORITY_OPTIONS } from '@festie/shared/constants';
+import { COPY, PRIORITY_OPTIONS, clashMinutes } from '@festie/shared/constants';
 import {
   formatSetTimeRange,
   artistDisplayName,
@@ -15,6 +15,7 @@ import {
 } from '@festie/shared/utils';
 import StageBadge from '../ui/StageBadge';
 import PriorityIcon from '../ui/PriorityIcon';
+import ClashHatch from '../ui/ClashHatch';
 import { useToast } from '../../lib/toastContext';
 import { useUndoNotifier } from '../../hooks/useUndoNotifier';
 import { cn } from '@/lib/utils';
@@ -23,6 +24,8 @@ import ArtistName, { RowOpenButton } from './ArtistName';
 interface PicksPlanRowProps {
   set: FestivalSet;
   hasClash: boolean;
+  /** Whole minutes this set overlaps another pick; absent for a tight change with no overlap. */
+  clashMin?: number;
 }
 
 /**
@@ -31,7 +34,7 @@ interface PicksPlanRowProps {
  * it as a sibling (never a nested button). Tapping the active priority clears the
  * pick with an Undo toast.
  */
-function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
+function PicksPlanRow({ set, hasClash, clashMin }: PicksPlanRowProps) {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
   const current = useMyPick(set.id);
@@ -100,9 +103,10 @@ function PicksPlanRow({ set, hasClash }: PicksPlanRowProps) {
                 </span>
               )}
               {hasClash && (
-                <span className="inline-flex items-center gap-0.5 font-semibold text-[var(--color-text-danger)]">
-                  <TriangleAlert className="w-4 h-4" aria-hidden="true" />
+                <span className="inline-flex items-center gap-1 font-semibold text-[var(--color-clash)]">
+                  <ClashHatch className="h-4 w-1.5" />
                   {COPY.clash.badge}
+                  {clashMin ? <span data-clash-minutes className="tabular-nums">{clashMinutes(clashMin)}</span> : null}
                 </span>
               )}
               {move && (

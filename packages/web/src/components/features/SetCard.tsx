@@ -12,6 +12,7 @@ import LiveBadge from './LiveBadge';
 import SetPickControl from './SetPickControl';
 import ArtistName from './ArtistName';
 import CrewOverlapAvatars from './CrewOverlapAvatars';
+import ClashHatch from '../ui/ClashHatch';
 
 interface SetCardProps {
   set: FestivalSet;
@@ -320,11 +321,10 @@ function SetCard({
                 'inline-flex items-center gap-1 max-w-full',
                 'text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight',
                 'bg-[var(--color-clash-tint)] text-text-primary',
-                'border border-[var(--color-clash)]',
               )}
               title={clashLabel}
             >
-              <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
+              <ClashHatch className="h-4 w-1.5" />
               <span className="max-w-full truncate">{clashLabel}</span>
             </span>
           )}

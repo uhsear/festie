@@ -178,24 +178,24 @@ export function expenseCategoryFor(id: string): (typeof EXPENSE_CATEGORIES)[numb
  * 5-tier set-rating scale data. Icon refs are intentionally absent —
  * web uses Lucide (Flame, Smile, ThumbsUp, Meh, ThumbsDown) and mobile uses
  * Ionicons (flame, happy, thumbs-up, remove, thumbs-down); keep those per-
- * platform. `order` is highest-first so [0] is the best rating.
+ * platform. `order` is lowest-first so the row reads as a level meter that fills left to right.
  *
  * Single source for web ratingIcon + mobile RatingButtons.
  */
 export const RATING_SCALE_DATA: readonly {
   value: number;
   label: string;
-  /** Display order, 0-indexed highest-first (value 5 → order 0). */
+  /** Display order, 0-indexed lowest-first (value 1 is order 0). */
   order: number;
 }[] = [
-  { value: 5, label: 'Fire', order: 0 },
-  { value: 4, label: 'Good', order: 1 },
+  { value: 1, label: 'Nope', order: 0 },
+  { value: 2, label: 'Meh', order: 1 },
   { value: 3, label: 'Okay', order: 2 },
-  { value: 2, label: 'Meh', order: 3 },
-  { value: 1, label: 'Nope', order: 4 },
+  { value: 4, label: 'Good', order: 3 },
+  { value: 5, label: 'Fire', order: 4 },
 ] as const;
 
-/** High → low numeric rating values, for rendering order. */
+/** Low to high numeric rating values, for rendering order. */
 export const RATING_SCALE = RATING_SCALE_DATA.map((r) => r.value) as readonly number[];
 
 /** Quick label lookup by numeric rating value. */

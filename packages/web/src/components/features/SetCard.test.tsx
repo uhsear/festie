@@ -404,6 +404,8 @@ describe('SetCard', () => {
       render(<SetCard {...defaultProps} clashLabel="Clashes with Chris Lake (30 min)" />);
       expect(screen.getByTestId('set-card').className).toContain('has-conflict');
       expect(screen.getByText('Clashes with Chris Lake (30 min)')).toBeInTheDocument();
+      expect(screen.getByTestId('set-card').querySelectorAll('[data-clash-hatch]')).toHaveLength(1);
+      expect(screen.getByTestId('set-card').querySelector('svg.lucide-triangle-alert')).toBeNull();
     });
 
     it('renders no badge when clashLabel is empty', () => {

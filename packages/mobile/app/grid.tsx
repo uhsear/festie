@@ -17,7 +17,7 @@ import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { selectMyPicks, useFestivalDataStore, useFestivalStore, useCrewStore } from '@festie/shared/stores';
 import { usePicks, useCanPick, useFestival, useDayClashes, useViewAs, useCrew } from '@festie/shared/hooks';
-import { COPY, DISCOVER_COPY } from '@festie/shared/constants';
+import { COPY, DISCOVER_COPY, clashMinutes } from '@festie/shared/constants';
 import {
   festivalLoadState,
   GRID_ZOOM_LEVELS,
@@ -543,8 +543,8 @@ export default function GridScreen() {
             top,
             height,
             backgroundColor: pickColor ? withAlpha(t, pickColor, 0.28) : withAlpha(t, stageColor, 0.14),
-            borderColor: mark ? t.colors.clash.mark : cellColor,
-            borderWidth: mark ? 2 : 1,
+            borderColor: cellColor,
+            borderWidth: 1,
           };
 
           // The off-screen export poster is captured by react-native-view-shot;
@@ -555,7 +555,11 @@ export default function GridScreen() {
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
               {mark || pick ? (
                 <View style={styles.iconRow}>
-                  {mark ? <Ionicons name="warning-outline" size={t.iconSize.xs} color={t.colors.clash.mark} aria-hidden /> : null}
+                  {mark ? (
+                    <Text style={styles.clashMinutes} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {clashMinutes(mark.overlapMin)}
+                    </Text>
+                  ) : null}
                   {pick ? <Ionicons name={priorityIconName(pick)} size={t.iconSize.xs} color={cellColor} aria-hidden /> : null}
                 </View>
               ) : null}
@@ -1017,6 +1021,10 @@ const useStyles = makeStyles((t: Tokens) => ({
     paddingHorizontal: 7,
     overflow: 'hidden',
     gap: 2,
+  },
+  clashMinutes: {
+    ...typeStyle('micro', 700),
+    color: t.colors.clash.mark,
   },
   iconRow: {
     position: 'absolute',

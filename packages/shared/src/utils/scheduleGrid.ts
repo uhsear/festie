@@ -27,6 +27,7 @@ export interface ClashSegment { from: number; to: number } // fractions 0..1 of 
 export interface ClashMark {
   segments: ClashSegment[]; // sorted, merged, from < to
   withIds: string[];        // ids of the picks this set overlaps (pairwise, not the whole group)
+  overlapMin: number;       // whole minutes of this set covered by the merged segments, at least 1
   text: string;             // clashesWith(labels), e.g. "Clashes with Fisher · Main Stage"
 }
 
@@ -58,8 +59,10 @@ export function buildClashMarks(
         if (last && seg.from <= last.to) last.to = Math.max(last.to, seg.to);
         else segments.push({ ...seg });
       }
+      const covered = segments.reduce((sum, seg) => sum + (seg.to - seg.from) * length, 0);
       marks.set(p.set.id, {
         segments,
+        overlapMin: Math.max(1, Math.round(covered / 60000)),
         withIds: partners.map((q) => q.set.id),
         text: clashesWith(partners.map((q) => label(q.set))),
       });

@@ -8,9 +8,10 @@ import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useActiveCrew, usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
-import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, filterPickMap, filterPlanListItems, isSetScheduled, resolveFestivalTimeZone } from '@festie/shared/utils';
+import { festivalLoadState, buildClashMarks, buildPickConflicts, buildMyDay, buildPlanList, filterPickMap, filterPlanListItems, isSetScheduled, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { MyDay, PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
+import ClashHatch from '../components/ui/ClashHatch';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
@@ -32,7 +33,7 @@ import MarkedNoSet from '../components/features/MarkedNoSet';
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
 const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
 const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
-import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X, Share2, Ellipsis } from 'lucide-react';
+import { CalendarX, UserPlus, ChevronDown, Search, X, Share2, Ellipsis } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useToast } from '../lib/toastContext';
 import { cn } from '@/lib/utils';
@@ -121,6 +122,7 @@ function PicksViewInner() {
 
   // True when the profile has any pick at all, which gates the calendar export
   // independently of the active filters.
+  const clashMarks = useMemo(() => buildClashMarks(conflictGroups, () => ''), [conflictGroups]);
   const pickedSets = useMemo(() => sets.filter((s) => myPicks?.[s.id]), [sets, myPicks]);
   const hasAnyPicks = pickedSets.length > 0;
 
@@ -320,7 +322,7 @@ function PicksViewInner() {
               <PriorityIcon priority={c.priority} className="w-4 h-4" filled />
             </span>
           )}
-          {c.clash && <TriangleAlert className="w-4 h-4 text-[var(--color-clash)]" aria-hidden="true" />}
+          {c.clash && <ClashHatch className="h-4 w-1.5" />}
           {c.label}
           <Badge variant={c.priority ? PRIORITY_STYLE[c.priority].badge : 'count'}>{c.count}</Badge>
         </button>
@@ -529,7 +531,7 @@ function PicksViewInner() {
 
         {rows.map((row) => {
           if (row.kind === 'set') {
-            return <PicksPlanRow key={row.key} set={row.set} hasClash={clashIds.has(row.set.id)} />;
+            return <PicksPlanRow key={row.key} set={row.set} hasClash={clashIds.has(row.set.id)} clashMin={clashMarks.get(row.set.id)?.overlapMin} />;
           }
           const dot = row.priority && (
             <span style={{ color: PRIORITY_STYLE[row.priority].accent }} className="inline-flex">

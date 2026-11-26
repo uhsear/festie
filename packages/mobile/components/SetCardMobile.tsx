@@ -31,6 +31,7 @@ import { useSetStatus } from '../hooks/useSetStatus';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import AppPressable from './AppPressable';
+import { ClashSwatch } from './ClashHatch';
 import { priorityColor } from '../lib/priorityColor';
 import { COPY } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS } from '../lib/prioritySymbol';
@@ -402,7 +403,7 @@ function SetCardMobileImpl({
           ) : null}
           {hasConflict ? (
             <View style={styles.conflictBadge}>
-              <Ionicons name="warning" size={t.iconSize.xs} color={t.colors.clash.mark} />
+              <ClashSwatch color={t.colors.clash.mark} height={12} />
               <Text style={styles.conflictText} numberOfLines={1}>
                 {clashLabel ?? COPY.clash.badge}
               </Text>
@@ -704,8 +705,6 @@ const useStyles = makeStyles((t) => ({
     paddingVertical: t.spacing[1],
     borderRadius: t.radii.default,
     backgroundColor: t.colors.clash.tint,
-    borderWidth: 1,
-    borderColor: t.colors.clash.mark,
   },
   conflictText: {
     ...typeStyle('micro'),

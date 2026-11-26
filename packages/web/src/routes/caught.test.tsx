@@ -43,8 +43,8 @@ vi.mock('@festie/shared/stores', () => {
   return { useFestivalStore: hook, useAuthStore: hook };
 });
 vi.mock('../components/features/RatingButtons', () => ({
-  default: ({ onRated }: { onRated?: (n: number) => void }) => (
-    <button type="button" onClick={() => onRated?.(5)}>
+  default: ({ onRated, showCaption }: { onRated?: (n: number) => void; showCaption?: boolean }) => (
+    <button type="button" data-show-caption={String(showCaption)} onClick={() => onRated?.(5)}>
       rate-five
     </button>
   ),
@@ -136,9 +136,27 @@ describe('CaughtPage', () => {
     expect(screen.queryByText("Couldn't load your sets")).toBeNull();
   });
 
-  it('marks a rated set as seen', async () => {
+  it('shows the rating scale only after Saw it, and prints the caption once for the page', async () => {
     renderPage();
-    fireEvent.click((await screen.findAllByText('rate-five'))[0]!);
+    await screen.findByRole('button', { name: 'Saw it, Artist A' });
+    // Artist B is already marked seen, Artist A is not.
+    expect(screen.getAllByText('rate-five')).toHaveLength(1);
+    expect(screen.getAllByText('Tap to rate this set')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Saw it, Artist A' }));
+    const scales = screen.getAllByText('rate-five');
+    expect(scales).toHaveLength(2);
+    for (const scale of scales) expect(scale).toHaveAttribute('data-show-caption', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Missed it Artist A' }));
+    expect(screen.getAllByText('rate-five')).toHaveLength(1);
+  });
+
+  it('marks a set as seen when it is rated', async () => {
+    mocks.wrap = { festival, planned: [planned({ caught: false })], caughtExtra: [] };
+    renderPage();
+    await screen.findByRole('button', { name: 'Saw it, Artist A' });
+    expect(screen.queryByText('rate-five')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Saw it, Artist A' }));
+    fireEvent.click(screen.getByText('rate-five'));
     expect(mocks.markCaught).toHaveBeenCalledWith('a', true, 'u1');
   });
 
