@@ -48,6 +48,7 @@ import { useListBottomInset } from '../../hooks/useListBottomInset';
 import Button from '../../components/Button';
 import ScreenHeader from '../../components/ScreenHeader';
 import CrewSwitcherSheet from '../../components/CrewSwitcherSheet';
+import SosControl, { SOS_CONTROL_SIZE } from '../../components/SosControl';
 import FestivalChoiceSheet from '../../components/FestivalChoiceSheet';
 import HandOverSheet from '../../components/HandOverSheet';
 import CrewTabBar, { type CrewTabKey } from '../../components/CrewTabBar';
@@ -98,7 +99,9 @@ export default function CrewScreen() {
     [styles.flex1, insets.bottom],
   );
   const listBottomPad = useListBottomInset({ includeSafeArea: false });
-  const memberBottomPad = useListBottomInset({ base: t.spacing[4], includeSafeArea: false });
+  // The SOS control floats over every crew tab, so the lists end clear of it.
+  const memberBottomPad = useListBottomInset({ base: t.spacing[4], includeSafeArea: false }) + SOS_CONTROL_SIZE;
+  const tabBottomPad = listBottomPad + SOS_CONTROL_SIZE;
   const memberListStyle = useMemo(
     () => [styles.memberList, tabletInset, { paddingBottom: memberBottomPad }],
     [styles.memberList, tabletInset, memberBottomPad],
@@ -109,8 +112,8 @@ export default function CrewScreen() {
   );
   // Per-tab scroll padding for the non-Members tabs (Plan / Logistics / Money).
   const tabScrollStyle = useMemo(
-    () => [styles.tabScroll, tabletInset, { paddingBottom: listBottomPad }],
-    [styles.tabScroll, tabletInset, listBottomPad],
+    () => [styles.tabScroll, tabletInset, { paddingBottom: tabBottomPad }],
+    [styles.tabScroll, tabletInset, tabBottomPad],
   );
 
   const user = useAuthStore((s) => s.user);
@@ -816,7 +819,7 @@ export default function CrewScreen() {
         />
       ) : null}
 
-      {/* Persistent crew chrome — one status row (totem, freshness, SOS) and
+      {/* Persistent crew chrome — one status row (totem, freshness) and
           the crew switcher. The invite card is setup, so it scrolls inside each
           tab body; the code strip lives in the Members header. */}
       <View style={[styles.crewChrome, tabletInset]}>
@@ -843,23 +846,6 @@ export default function CrewScreen() {
           ) : null}
           <FreshnessChip surface="crew" />
           <LowPowerIndicator />
-          {/* Always-visible SOS entry: the full SOS panel lives in the Logistics
-              tab, so this chip jumps there rather than duplicating the raise
-              flow — safety must be reachable from every crew tab. */}
-          {/* Hidden on Logistics: the Find tab already shows Send SOS. */}
-          {crewTab !== 'find' ? (
-            <TouchableOpacity
-              testID="crew-action-sos"
-              style={styles.sosChip}
-              onPress={() => setCrewTab('find')}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Open crew safety to send an SOS"
-            >
-              <Ionicons name="alert-circle" size={t.iconSize.compact} color={t.colors.text.onAccent} />
-              <Text style={styles.sosChipText} maxFontSizeMultiplier={MAX_FONT_SCALE}>SOS</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
 
         {notice ? (
@@ -978,6 +964,10 @@ export default function CrewScreen() {
           user={user}
         />
       )}
+      <SosControl
+        crewId={crew.id}
+        bottomInset={Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT + insets.bottom : 0}
+      />
     </View>
   );
 }

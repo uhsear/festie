@@ -5,12 +5,12 @@ import BrandWordmark from '../brand/BrandWordmark';
 
 /**
  * One brand block for login, register, forgot-password and reset-password:
- * the mark (a link home), the FESTIE wordmark and a one-line subtitle.
+ * the mark (a link home), left-aligned with the form column, the FESTIE wordmark and a one-line subtitle.
  */
 export default function AuthBrand({ subtitle }: { subtitle?: string }) {
   const theme = useUIStore((s) => s.theme);
   return (
-    <div className="flex flex-col items-center text-center mb-8 relative z-[1]">
+    <div className="flex w-full max-w-[360px] flex-col items-start text-left mb-8 relative z-[1]">
       <Link
         to="/"
         aria-label="Festie home"

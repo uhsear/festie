@@ -2,8 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
-import { formatFreshnessLabel } from '@festie/shared/utils';
+import { formatFreshnessLabel, signalStateFor } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
+import SignalDot from './SignalDot';
 
 type Surface = 'crew' | 'schedule';
 
@@ -27,6 +28,9 @@ interface FreshnessChipProps {
  * store. The "N ago" value advances from the device clock — even on a cold
  * offline launch — via a 30s tick that re-reads the label against `Date.now()`.
  *
+ * The dot carries the signal state by shape (`SignalDot`): glow while live, dimmed when
+ * aging, no glow once stale or offline.
+ *
  * Renders nothing until the surface has been cached at least once (no
  * timestamp → no honest claim to make).
  */
@@ -49,6 +53,7 @@ export default function FreshnessChip({ surface, className }: FreshnessChipProps
   if (cachedAt == null) return null;
 
   const label = formatFreshnessLabel(cachedAt, offlineMode);
+  const signal = signalStateFor(cachedAt, offlineMode);
 
   return (
     <div className={cn('flex items-center gap-2 text-xs tabular-nums', className)} role="status" aria-live="polite">
@@ -60,10 +65,7 @@ export default function FreshnessChip({ surface, className }: FreshnessChipProps
             : 'bg-text-secondary/10 text-text-secondary',
         )}
       >
-        <span
-          className={cn('w-1.5 h-1.5 rounded-full flex-shrink-0', offlineMode ? 'bg-accent-amber' : 'bg-accent-aqua')}
-          aria-hidden="true"
-        />
+        <SignalDot state={signal} />
         {label}
       </span>
 

@@ -6,7 +6,7 @@ import Button from '../ui/Button';
 
 type Preview = Awaited<ReturnType<typeof fetchFestivalPreview>>;
 
-const colorFor = (color: string | undefined) => resolveStageColor(color, 'var(--text-muted)');
+const colorFor = (color: string | undefined) => resolveStageColor(color, 'var(--color-text-muted)');
 
 /** Read-only view of what attendees see. Never touches the admin's own festival selection. */
 export default function AdminFestivalPreview({ festivalId, scope = 'admin' }: { festivalId: string; scope?: 'admin' | 'manage' }) {

@@ -113,6 +113,15 @@ describe('DetailPriorityPicker', () => {
     expect(btn.className).toContain('border-priority-want');
   });
 
+  it('draws an active Must as a coral outline with a coral glyph, not a coral fill', () => {
+    render(<DetailPriorityPicker {...defaultProps} myPick="must" />);
+    const btn = screen.getByLabelText('Must See');
+    expect(btn.className).toContain('border-priority-must');
+    expect(btn.className).not.toContain('bg-accent-coral');
+    expect(btn.className).not.toContain('text-text-on-accent');
+    expect(btn.querySelector('svg')?.getAttribute('class')).toContain('text-priority-must');
+  });
+
   it('does not add active styling when priority is not selected', () => {
     render(<DetailPriorityPicker {...defaultProps} myPick="must" />);
     const btn = screen.getByLabelText('Maybe');

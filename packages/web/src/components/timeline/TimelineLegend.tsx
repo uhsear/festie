@@ -1,7 +1,7 @@
-import { TriangleAlert } from 'lucide-react';
 import { COPY } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
 import PriorityIcon from '../ui/PriorityIcon';
+import ClashHatch from '../ui/ClashHatch';
 
 /**
  * Collapsible legend explaining timeline colour-coding and symbols.
@@ -59,11 +59,7 @@ export default function TimelineLegend() {
           Crew pick — a friend in your crew also picked this set
         </li>
         <li className="flex items-center gap-2 text-xs leading-tight">
-          <span
-            className="w-3.5 h-3.5 shrink-0 border border-[var(--color-clash)] [background:repeating-linear-gradient(135deg,var(--color-clash)_0_2px,transparent_2px_5px)]"
-            aria-hidden="true"
-          />
-          <TriangleAlert className="w-4 h-4 text-[var(--color-clash)]" aria-hidden="true" />
+          <ClashHatch className="w-3.5 h-3.5 border border-[var(--color-clash)]" />
           {COPY.clash.gridHint}
         </li>
         <li className="flex items-center gap-2 text-xs leading-tight">

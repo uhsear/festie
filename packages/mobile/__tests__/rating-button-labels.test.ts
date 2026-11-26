@@ -9,3 +9,16 @@ describe('t11 rating buttons source guard', () => {
     expect(src).toContain('styles.optionLabel');
   });
 });
+
+describe('dp-40 rating meter source guard', () => {
+  const src = readFileSync(join(__dirname, '..', 'components/RatingButtons.tsx'), 'utf8');
+  it('selects with the aqua token, never amber or hex concatenation', () => {
+    expect(src).not.toContain('accent.amber');
+    expect(src).not.toContain("+ '40'");
+    expect(src).toContain('aquaAlpha[20]');
+  });
+  it('prints a label only on the active step and lets a list hide the caption', () => {
+    expect(src).toContain("{active ? r.label : ''}");
+    expect(src).toContain('showCaption');
+  });
+});

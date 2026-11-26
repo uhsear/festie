@@ -99,8 +99,8 @@ export default function DangerZone() {
       {/* Delete account section */}
       <section
         className={cn(
-          'p-4 rounded-xl border space-y-3',
-          'bg-accent-coral/5 border-accent-coral/30',
+          'py-4 border-b space-y-3',
+          'border-accent-coral/30',
         )}
       >
         <h3 className="text-sm font-semibold text-accent-coral flex items-center gap-2">

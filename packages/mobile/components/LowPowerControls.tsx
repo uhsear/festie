@@ -13,8 +13,8 @@ import { useTokens, makeStyles, typeStyle, iconSize } from '../hooks/useTokens';
  * polling) while keeping essentials (set reminders, meeting pins).
  *
  * Two exports:
- *  - `LowPowerToggle` — the labelled Switch row (lives on the Now & Next /
- *    festival-mode screen, the festival-behavior surface). Copy comes from
+ *  - `LowPowerToggle` — the labelled Switch row (lives on the Account screen's
+ *    Offline and data section). Copy comes from
  *    the shared LOW_POWER_COPY so web and mobile use one name.
  *  - `LowPowerIndicator` — a compact "Low power" chip rendered wherever a gated
  *    feature would otherwise run, so the user knows WHY it's quiet.

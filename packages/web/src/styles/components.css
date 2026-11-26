@@ -52,11 +52,6 @@
     font-size: var(--font-size-14);
     letter-spacing: -0.2px;
   }
-  .set-card .card-stage {
-    font-size: 10px;
-    padding: 2px 8px;
-    margin-bottom: 6px;
-  }
   .set-card .card-footer {
     flex-wrap: wrap;
     gap: 8px;
@@ -186,6 +181,29 @@ a:focus-visible,
 .card-priority-btn {
   min-width: 44px;
   min-height: 44px;
+}
+.card-pick-hint {
+  display: none;
+}
+/* The set card's pick control is compact at rest: it shows the chosen state, and the full trio
+   appears on hover or focus. The buttons stay in the DOM, so a keyboard reaches each one in a Tab step. */
+@media (hover: hover) and (pointer: fine) {
+  .set-card:not(:hover):not(:focus-within) .card-priority > .card-priority-btn[aria-pressed='false'] {
+    display: none;
+  }
+  .set-card:not(:hover):not(:focus-within) .card-priority[data-has-pick='false'] > .card-pick-hint {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--color-border-light);
+    border-radius: 9999px;
+    background: var(--color-overlay-3);
+    color: var(--color-text-secondary);
+    font-size: var(--font-size-12);
+    font-weight: 600;
+  }
 }
 @media (forced-colors: active) {
   /* Tailwind's reset drops a button's border and fill, so a filled button reads as plain text.

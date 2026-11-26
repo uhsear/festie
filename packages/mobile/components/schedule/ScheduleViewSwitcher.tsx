@@ -1,21 +1,18 @@
-import { View, TouchableOpacity } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { SCHEDULE_VIEWS, type ScheduleView } from '@festie/shared/utils';
-import { useTokens } from '../../hooks/useTokens';
+import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import SegmentedControl from '../SegmentedControl';
 import type { Dispatch, SetStateAction } from 'react';
 import { useStyles } from './styles';
 
-// Mobile schedule views, in the shared order: Cards, Timeline, then Grid. Grid
-// is a pushed route, not a view the Schedule tab can show or remember (T18 makes
-// it in-place). It rides in the switcher (instead of a header icon) so Find your
-// crew keeps its header slot on 360dp phones.
-const VIEW_OPTIONS_WITH_GRID: readonly { value: ScheduleView; label: string }[] = SCHEDULE_VIEWS.map((v) => ({
-  value: v.key,
-  label: v.label,
-}));
-const VIEW_OPTIONS = VIEW_OPTIONS_WITH_GRID.filter((v) => v.value !== 'grid');
+// In-place views only: Cards and Timeline swap under the tab header. Grid is a pushed
+// route with its own chrome, so it is a separate "Full grid" push action, not a segment.
+// Web keeps Grid in its segmented control because it renders Grid inside the lineup shell.
+const VIEW_OPTIONS: readonly { value: ScheduleView; label: string }[] = SCHEDULE_VIEWS.filter(
+  (v) => v.key !== 'grid',
+).map((v) => ({ value: v.key, label: v.label }));
 
 interface ScheduleViewSwitcherProps {
   festivalHasTimedSets: boolean;
@@ -54,12 +51,27 @@ export default function ScheduleViewSwitcher({
         NowNextStrip above (shown only when a pick is actually live). */}
     <View style={styles.switcherFlex}>
       <SegmentedControl
-        options={festivalHasTimedSets ? VIEW_OPTIONS_WITH_GRID : VIEW_OPTIONS}
+        options={VIEW_OPTIONS}
         value={viewMode}
-        onChange={(next: ScheduleView) => (next === 'grid' ? router.push('/grid') : setScheduleView(next))}
+        onChange={setScheduleView}
         accessibilityLabel="Schedule view"
       />
     </View>
+    {festivalHasTimedSets ? (
+      <TouchableOpacity
+        testID="full-grid-action"
+        style={styles.fullGridButton}
+        onPress={() => router.push('/grid')}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Full grid"
+      >
+        <Text style={styles.fullGridText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          Full grid
+        </Text>
+        <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.secondary} />
+      </TouchableOpacity>
+    ) : null}
     <TouchableOpacity
       style={[styles.toggleButton, searchOpen && styles.toggleButtonActive]}
       // searchOpen stays true while a query is present (searchOpen = showSearch

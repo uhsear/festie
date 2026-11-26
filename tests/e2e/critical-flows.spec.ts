@@ -102,7 +102,8 @@ test.describe('critical flows', () => {
 
     await page.goto(`${app.baseUrl}/crew?tab=find`);
     const panel = page.getByRole('tabpanel');
-    await panel.getByRole('button', { name: 'Send SOS to your crew' }).click();
+    // The one persistent control: Enter opens the confirm dialog, no press-and-hold needed.
+    await page.getByRole('button', { name: 'Send SOS', exact: true }).press('Enter');
     await page.getByRole('dialog').getByRole('button', { name: 'Send SOS', exact: true }).click();
 
     await expect(panel.getByText('You raised an SOS')).toBeVisible();
@@ -129,18 +130,29 @@ test.describe('critical flows', () => {
       await watcherPage.getByRole('button', { name: 'Join crew', exact: true }).click();
       await expect(watcherPage).toHaveURL(/\/crew\?tab=members/);
       await watcherPage.goto(`${app.baseUrl}/crew?tab=find`);
+      const mainBefore = await watcherPage.locator('#main-content').boundingBox();
 
       await page.goto(`${app.baseUrl}/crew?tab=find`);
-      await page.getByRole('tabpanel').getByRole('button', { name: 'Send SOS to your crew' }).click();
+      await page.getByRole('button', { name: 'Send SOS', exact: true }).press('Enter');
       await page.getByRole('dialog').getByRole('button', { name: 'Send SOS', exact: true }).click();
       await expect(page.getByRole('tabpanel').getByText('You raised an SOS')).toBeVisible();
 
       const alert = watcherPage.getByTestId('sos-banner').filter({ hasText: `${raiser} raised an SOS` });
       await expect(alert).toBeVisible({ timeout: 30_000 });
+      // The banner floats over the page, so its arrival moves nothing below it.
+      expect(await watcherPage.locator('#main-content').boundingBox()).toEqual(mainBefore);
+
+      // The banner may cover the page only while it flashes: once it shrinks to a pill,
+      // the festival picker under it must take a click for as long as the SOS lasts.
+      await watcherPage.getByRole('link', { name: 'Lineup' }).first().click();
+      await expect(watcherPage.getByTestId('festival-select')).toBeVisible();
+      const banner = watcherPage.getByTestId('sos-banner');
+      await expect(banner.getByRole('button')).toBeVisible();
+      await watcherPage.getByTestId('festival-select').click({ trial: true });
 
       await page.getByRole('tabpanel').getByRole('button', { name: "I'm safe — clear SOS" }).click();
       await page.getByRole('dialog').getByRole('button', { name: "I'm safe", exact: true }).click();
-      await expect(alert).toHaveCount(0, { timeout: 30_000 });
+      await expect(banner).toHaveCount(0, { timeout: 30_000 });
     } finally {
       await watcherContext.close();
     }

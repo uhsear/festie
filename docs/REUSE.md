@@ -178,7 +178,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | `festivalStatus / isFestivalOver / festivalPhase / hasSetStarted` | `packages/shared/src/utils/festivalTime.ts:86` | Festival-level upcoming/ongoing/past state and whether a given set has started. | `packages/web/src/components/layout/SubHeader.tsx:154` |
 | `useNow` | `packages/mobile/hooks/useNow.ts` | One shared interval clock that snaps to real time on app foreground. Use it instead of per-component setInterval. | `packages/mobile/hooks/useSetStatus.ts:15` |
 | `useNowNext` | `packages/mobile/hooks/useNowNext.ts` | Current and upcoming picked sets, using shared getSetTimeBounds (rollover-safe). | `packages/mobile/components/NowNextStrip.tsx:43` |
-| `freshnessFor / FreshnessChip` | `packages/mobile/lib/freshness.ts` | Maps cache age to live, aging or stale (5 and 60 minute thresholds). | `packages/mobile/components/FreshnessChip.tsx:54` |
+| `signalStateFor / signalAgeNumeral / FreshnessChip` | `packages/shared/src/utils/signalState.ts` | Maps cache age and offline mode to the signal state (live, aging, stale, offline; 5 and 60 minute thresholds) and the age numeral. Web draws it with `SignalDot`. | `packages/mobile/components/FreshnessChip.tsx:54` |
 | `shared time and set maths` | `packages/shared/src/utils/festivalTime.ts` | getSetTimeBounds, getSetStatus, resolveFestivalTimeZone, timeAgo and related helpers. The one place for time rules. | `packages/mobile/components/CrewPolls.tsx:171` |
 
 ## Pick a set or detect clashes

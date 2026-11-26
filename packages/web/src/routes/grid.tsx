@@ -82,7 +82,7 @@ function GridViewInner() {
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
-    (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)'),
+    (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-text-muted)'),
     [getStageColorRaw],
   );
 
@@ -393,8 +393,8 @@ function GridViewInner() {
               type="button"
               className={cn(
                 'fixed right-4',
-                'bottom-[calc(var(--bottom-nav-h,88px)+8px+env(safe-area-inset-bottom,0px))]',
-                'lg:bottom-6',
+                'bottom-[calc(var(--bottom-nav-h,88px)+var(--sos-dock-h,0px)+8px+env(safe-area-inset-bottom,0px))]',
+                'lg:bottom-[calc(24px+var(--sos-dock-h,0px))]',
                 'inline-flex items-center gap-1.5',
                 'px-3.5 py-2.5 rounded-full',
                 'bg-accent-aqua',

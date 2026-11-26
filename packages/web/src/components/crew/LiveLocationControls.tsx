@@ -17,7 +17,6 @@ import { useToast } from '../../lib/toastContext';
 import Button from '../ui/Button';
 import Dialog from '../ui/Dialog';
 import Switch from '../ui/Switch';
-import SosRaiseButton from './SosRaiseButton';
 import CheckInCard from './CheckInCard';
 import { BeaconButton } from './BeaconOverlay';
 
@@ -112,9 +111,7 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
     }
   }
 
-  const showSos = sosList.length > 0;
   const clearMine = clearTarget?.userId === currentUserId;
-  const ownSosActive = sosList.some((e) => e.userId === currentUserId);
   const showChooser = chooserOpen && !isSharingThisCrew && !lowPowerMode;
   // Duration buttons in ascending order; the default is marked, not moved.
   const durationChoices = showChooser
@@ -131,12 +128,6 @@ export default function LiveLocationControls({ crewId, currentUserId }: Props) {
 
   return (
     <div className="space-y-2">
-      {/* ── Send SOS: top of the Meet tab. Hidden while your own SOS is active
-          (the banner below carries "I'm safe"), as on mobile. ─────────────── */}
-      {!ownSosActive && <SosRaiseButton crewId={crewId} alerting={showSos} />}
-      {!ownSosActive && (
-        <p className="text-xs text-text-muted">For emergencies — alerts your whole crew. Needs signal to send.</p>
-      )}
       <CheckInCard crewId={crewId} />
 
       {/* ── Active SOS banners (crew-wide, prominent) ──────────────────────────

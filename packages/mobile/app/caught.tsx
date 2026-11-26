@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AccessibilityInfo, ActivityIndicator, SectionList, Text, TextInput, View } from 'react-native';
 import { Stack, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { api, fetchWrap, isApiClientError, markCaught, mapErrorToUserMessage } from '@festie/shared/services';
-import { WRAP_STATE_COPY } from '@festie/shared/constants';
+import { WRAP_STATE_COPY, ratingCaption } from '@festie/shared/constants';
 import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
 import {
   applyCaughtMark,
@@ -280,17 +280,20 @@ export default function CaughtScreen() {
                 </>
               )}
             </View>
-            <RatingButtons
-              key={item.setId}
-              setId={item.setId}
-              festivalId={festivalId}
-              initial={{ rating: item.rating, note: null }}
-              compact
-              showMemory={false}
-              onRated={() => {
-                if (item.caught !== true) mark(item.setId, true, 'Marked as seen');
-              }}
-            />
+            {item.caught === true || item.added ? (
+              <RatingButtons
+                key={item.setId}
+                setId={item.setId}
+                festivalId={festivalId}
+                initial={{ rating: item.rating, note: null }}
+                compact
+                showMemory={false}
+                showCaption={false}
+                onRated={() => {
+                  if (item.caught !== true) mark(item.setId, true, 'Marked as seen');
+                }}
+              />
+            ) : null}
           </>
         ) : null}
       </View>
@@ -400,6 +403,9 @@ export default function CaughtScreen() {
                 {countLine}
               </Text>
             ) : null}
+            <Text style={styles.meta} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {ratingCaption(null)}
+            </Text>
             {checklist.days.length === 0 ? (
               <EmptyState
                 icon="musical-notes-outline"

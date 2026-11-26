@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { ClashSwatch } from './ClashHatch';
 import type { FestivalDay, FestivalSet, Priority, Stage } from '@festie/shared/types';
 import { formatTime, artistDisplayName, festivalStartMinutes, buildLeaveAtPlan, leaveAtLine } from '@festie/shared/utils';
 import { clashPromptCopy, clashesWith } from '@festie/shared/constants';
@@ -120,7 +121,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
     <View style={styles.wrap}>
       {active.length > 1 ? (
         <View style={styles.summary} accessibilityRole="header">
-          <Ionicons name="warning" size={t.iconSize.sm} color={t.colors.clash.mark} />
+          <ClashSwatch color={t.colors.clash.mark} />
           <Text style={styles.summaryText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {`${active.length} clashes with ${currentName}`}
           </Text>
@@ -142,7 +143,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
         const card = (
           <View style={styles.card} accessibilityRole="alert">
             <View style={styles.header}>
-              <Ionicons name="alert-circle" size={t.iconSize.sm} color={t.colors.clash.mark} />
+              <ClashSwatch color={t.colors.clash.mark} />
               <Text style={styles.title} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {title}
               </Text>
@@ -199,7 +200,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
       })}
       {quiet.length > 0 ? (
         <View style={styles.quiet}>
-          <Ionicons name="warning" size={t.iconSize.compact} color={t.colors.text.muted} />
+          <ClashSwatch color={t.colors.clash.mark} height={12} />
           <Text style={styles.quietText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {clashesWith(quiet.map((c) => artistDisplayName(c, b2bSeparator)))}
           </Text>

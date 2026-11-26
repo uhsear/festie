@@ -86,7 +86,7 @@ function Row({
         {row.stage && (
           <StageBadge
             stageName={row.stage}
-            stageColor={resolveStageColor(row.stageColor ?? undefined, 'var(--text-muted)')}
+            stageColor={resolveStageColor(row.stageColor ?? undefined, 'var(--color-stage-fallback)')}
           />
         )}
         <span className="type-meta font-semibold ml-auto">{mark}</span>

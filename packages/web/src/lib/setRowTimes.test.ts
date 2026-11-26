@@ -40,6 +40,8 @@ vi.mock('@festie/shared/hooks', () => ({
   useMyNote: () => '',
   useMyReminder: () => undefined,
   usePickActions: () => ({ savePick: vi.fn() }),
+  useFestival: () => ({ getStageColor: () => undefined }),
+  useCrewFaces: () => [],
 }));
 vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to, params: _p, search: _s, ...rest }: { children: React.ReactNode; to: string; params?: unknown; search?: unknown }) =>

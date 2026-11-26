@@ -22,6 +22,14 @@ describe('UserMenuAccountSection', () => {
     expect(screen.queryByText('Password')).toBeNull();
   });
 
+  it('ends with a plain Support Festie link that opens in a new tab', () => {
+    render(<UserMenuAccountSection user={{}} onClose={vi.fn()} onLogout={vi.fn()} />);
+    const link = screen.getByRole('link', { name: 'Support Festie' });
+    expect(link).toHaveAttribute('href', 'https://paypal.me/uhsear');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'));
+  });
+
   it('shows Admin only for admins', () => {
     const { rerender } = render(<UserMenuAccountSection user={{}} onClose={vi.fn()} onLogout={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Admin' })).toBeNull();

@@ -669,6 +669,9 @@ export default function CrewMap({
         map.on('load', () => {
           if (cancelled) return;
           loaded = true;
+          // MapLibre opens the compact credit until the first drag, wrapping over the map. The OSMF
+          // guidelines and OpenFreeMap allow it collapsed behind the (i) button, so start collapsed.
+          map.getContainer().querySelector('.maplibregl-ctrl-attrib')?.classList.remove('maplibregl-compact-show');
           setStatus('ready');
         });
         // Authoring: report each map click's coord to the current handler (if
@@ -796,7 +799,11 @@ export default function CrewMap({
         </p>
       )}
       <div
-        className={`relative rounded-xl overflow-hidden border border-border bg-bg-secondary ${fill ? 'min-h-[320px] flex-1' : ''}`}
+        className={`relative overflow-hidden bg-bg-secondary ${
+          fill
+            ? 'min-h-[320px] flex-1 -mx-4 border-y border-border sm:mx-0 sm:rounded-xl sm:border'
+            : 'rounded-xl border border-border'
+        }`}
       >
         {/* Markers sit inside the canvas, so Tab crosses every one before the controls below it. */}
         {interactive && status === 'ready' && (
@@ -930,7 +937,7 @@ export default function CrewMap({
         {/* ── Pursue overlay: directional arrow + label "Alex · 210 m NE · ~3 min". */}
         {showPursueOverlay && (
           <div
-            className="absolute left-2 bottom-9 right-2 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-bg-elevated/95 px-3 py-2 shadow-lg"
+            className="absolute left-2 bottom-9 right-[calc(0.5rem+var(--sos-dock-w,0px))] z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-bg-elevated/95 px-3 py-2 shadow-lg"
             style={{ borderColor: pursueIsSos ? 'var(--color-accent-coral)' : 'var(--color-accent-aqua)' }}
           >
             {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (

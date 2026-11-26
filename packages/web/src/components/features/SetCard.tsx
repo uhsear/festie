@@ -1,7 +1,6 @@
 import React, { memo, useEffect, useRef, useState, useMemo } from 'react';
-import { Play, AlertTriangle, StickyNote, Clock, ArrowRightLeft } from 'lucide-react';
+import { Play, AlertTriangle, StickyNote, ArrowRightLeft } from 'lucide-react';
 import { FestivalSet, Priority } from '@festie/shared/types';
-import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { useMyPick, useMyNote, usePickActions, usePickSync, usePickClear, useSetMove } from '@festie/shared/hooks';
 import { formatTime, formatSetTimeRange, artistDisplayName, artistSubtitle, festivalPhase, isAfterMidnight, primarySpotifyArtist, PRIORITY_RANK } from '@festie/shared/utils';
 import { useFestivalStore, useCrewStore } from '@festie/shared/stores';
@@ -10,10 +9,10 @@ import { useUndoNotifier } from '@/hooks/useUndoNotifier';
 import { useHaptics } from '@/hooks/useHaptics';
 import { cn } from '@/lib/utils';
 import LiveBadge from './LiveBadge';
-import PriorityIcon from '../ui/PriorityIcon';
+import SetPickControl from './SetPickControl';
 import ArtistName from './ArtistName';
 import CrewOverlapAvatars from './CrewOverlapAvatars';
-import { ensureWhiteContrast } from '../ui/StageBadge';
+import ClashHatch from '../ui/ClashHatch';
 
 interface SetCardProps {
   set: FestivalSet;
@@ -52,7 +51,7 @@ function SetCard({
   showPicks = true,
   picksLoading = false,
   stageName = set.stageName || 'Unknown',
-  stageColor = 'var(--color-accent-coral)',
+  stageColor = 'var(--color-stage-fallback)',
   friendProfiles = [],
   clashLabel,
   b2bSeparator,
@@ -170,11 +169,10 @@ function SetCard({
       className={cn(
         // Keep CSS class names for container query selectors (Phase 4 cleanup)
         'set-card',
-        // Base styles — tonal card (DESIGN.md: glass is chrome only). Stage
-        // identity is carried by the stage pill (not a left stripe, which reads
-        // as an AI tell). Softer radius + density.
+        // Base styles: tonal card (DESIGN.md: glass is chrome only). Time leads and a 6px stage
+        // rail on the left carries the stage colour, with the stage name in text-primary.
         'relative bg-bg-card border border-glass-border rounded-lg',
-        'p-4 cursor-pointer overflow-hidden',
+        'p-4 pl-6 cursor-pointer overflow-hidden',
         // Tailwind writes -translate-y-* to `translate`, so the list names `translate`.
         'transition-[background-color,box-shadow,translate] duration-[var(--duration-med)] ease-[var(--ease-out)]',
         'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
@@ -219,14 +217,22 @@ function SetCard({
         }}
       />
 
-      {/* Listen pill — top-right corner, above click target. Opens the set with the player open. */}
+      {/* Stage rail: decorative colour. The stage name below carries the meaning in text-primary. */}
+      <span
+        data-testid="set-card-rail"
+        aria-hidden="true"
+        className="card-rail pointer-events-none absolute inset-y-0 left-0 w-1.5"
+        style={{ background: dimmed ? 'var(--color-overlay-3)' : stageColor }}
+      />
+
+      {/* Listen: an icon button in the top-right corner, above the click target. Opens the set with the player open. */}
       {primarySpotifyArtist(set) && (
         <button
           className={cn(
             'card-preview-btn',
             'absolute top-2 right-2 z-[2]',
             'border bg-[var(--color-overlay-3)] border-border-light text-text-secondary hover:text-text-primary',
-            'min-h-11 px-3 gap-1.5 rounded-full text-sm font-medium cursor-pointer',
+            'size-11 rounded-full cursor-pointer',
             'flex items-center justify-center',
             'transition-[background-color,border-color] duration-150',
           )}
@@ -239,27 +245,40 @@ function SetCard({
           }}
         >
           <Play className="w-4 h-4" fill="currentColor" aria-hidden="true" />
-          Listen
         </button>
       )}
 
-      {/* Decorative — the artist/stage/time are already announced via the
-          click-target button's aria-label, so these visible copies are
-          aria-hidden to avoid double-announcing each set to screen readers. */}
-      <span
+      {/* Decorative: the artist, stage and time are already announced by the click-target
+          button's aria-label, so these visible copies are aria-hidden to avoid double-announcing. */}
+      <div
+        className={cn(
+          'card-time',
+          'relative z-[2] pointer-events-none flex items-baseline gap-2 flex-wrap',
+          'type-title tabular-nums',
+          primarySpotifyArtist(set) && 'pr-11',
+          dimmed ? 'text-text-secondary' : 'text-text-primary',
+        )}
+        aria-hidden="true"
+      >
+        <span>{formatSetTimeRange(set) || 'TBA'}</span>
+        {isAfterMidnight(set, days) && (
+          <span className="text-[length:var(--font-size-12)] font-semibold uppercase tracking-wide text-text-muted">
+            Late
+          </span>
+        )}
+      </div>
+
+      <div
         className={cn(
           'card-stage',
-          'relative z-[2] inline-block max-w-full truncate align-top px-2 py-1 rounded-lg',
-          'type-micro font-bold uppercase tracking-[0.08em] mb-2.5',
-          dimmed
-            ? 'bg-[var(--color-overlay-3)] text-text-secondary'
-            : 'text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.35)]',
+          'relative z-[2] pointer-events-none max-w-full truncate mb-2',
+          'type-caption font-semibold',
+          dimmed ? 'text-text-secondary' : 'text-text-primary',
         )}
-        style={dimmed ? undefined : { background: ensureWhiteContrast(stageColor) }}
         aria-hidden="true"
       >
         {stageName}
-      </span>
+      </div>
 
       {/* Artist name */}
       <div
@@ -288,143 +307,56 @@ function SetCard({
         </div>
       )}
 
-      {/* Time + indicators */}
-      <div
-        className={cn(
-          'card-time',
-          'relative z-[2] pointer-events-none',
-          'flex items-center gap-2 flex-wrap',
-          'type-caption text-text-secondary tabular-nums mb-3',
-        )}
-      >
-        <span aria-hidden="true">
-          {formatSetTimeRange(set) || 'TBA'}
-        </span>
-        {isAfterMidnight(set, days) && (
-          <span className="text-[length:var(--font-size-12)] font-semibold uppercase tracking-wide text-text-muted">
-            Late
-          </span>
-        )}
-        {myNote && (
-          <span className="card-note-indicator inline-flex opacity-50" role="img" aria-label="Has note">
-            <StickyNote className="w-4 h-4" aria-hidden="true" />
-          </span>
-        )}
-        {hasConflict && (
-          <span
-            className={cn(
-              'inline-flex items-center gap-1 max-w-full',
-              'text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight',
-              'bg-[var(--color-clash-tint)] text-text-primary',
-              'border border-[var(--color-clash)]',
-            )}
-            title={clashLabel}
-          >
-            <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
-            <span className="max-w-full truncate">{clashLabel}</span>
-          </span>
-        )}
-        {move && (
-          <span
-            data-testid="set-moved-chip"
-            aria-hidden="true"
-            title={move.line}
-            className="inline-flex items-center gap-1 text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight border border-border text-text-secondary"
-          >
-            <ArrowRightLeft className="w-4 h-4 shrink-0" aria-hidden="true" />
-            {move.chip}
-          </span>
-        )}
-      </div>
+      {/* Indicators: note, clash and move. Only mounted when there is one. */}
+      {(myNote || hasConflict || move) && (
+        <div className={cn('card-indicators', 'relative z-[2] pointer-events-none', 'flex items-center gap-2 flex-wrap', 'type-caption text-text-secondary mt-1')}>
+          {myNote && (
+            <span className="card-note-indicator inline-flex opacity-50" role="img" aria-label="Has note">
+              <StickyNote className="w-4 h-4" aria-hidden="true" />
+            </span>
+          )}
+          {hasConflict && (
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 max-w-full',
+                'text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight',
+                'bg-[var(--color-clash-tint)] text-text-primary',
+              )}
+              title={clashLabel}
+            >
+              <ClashHatch className="h-4 w-1.5" />
+              <span className="max-w-full truncate">{clashLabel}</span>
+            </span>
+          )}
+          {move && (
+            <span
+              data-testid="set-moved-chip"
+              aria-hidden="true"
+              title={move.line}
+              className="inline-flex items-center gap-1 text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight border border-border text-text-secondary"
+            >
+              <ArrowRightLeft className="w-4 h-4 shrink-0" aria-hidden="true" />
+              {move.chip}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Live badge */}
       {['live', 'soon', 'upcoming'].includes(setStatus.status) && (
         <LiveBadge status={setStatus.status} label={setStatus.label} />
       )}
 
-      {/* Footer with priority buttons, crew overlap, and preview */}
+      {/* Footer with the pick control and crew overlap */}
       <div className={cn('card-footer', 'relative z-[2]', 'flex flex-wrap gap-y-2 items-center justify-between mt-3')}>
-        {/* Priority buttons */}
         {showPicks && (
-          <div className="card-priority flex gap-2" role="group" aria-label={`Priority for ${artistName}`}>
-            {(['must', 'want-to-see', 'maybe'] as const).map((p) => {
-              const active = myPick === p;
-              const priKey = PRI_MAP[p];
-              const pending = active && (pickSync?.state === 'saving' || pickSync?.state === 'queued');
-              const pendingSuffix = pending
-                ? pickSync?.state === 'queued'
-                  ? ' (saved on this device, will sync)'
-                  : ' (saving)'
-                : '';
-              return (
-                <button
-                  key={p}
-                  className={cn(
-                    'card-priority-btn',
-                    // Below 360px the single-column card is too narrow for px-3 on all three.
-                    'h-11 min-w-11 min-h-11 px-3 max-[359px]:px-2 gap-1.5 rounded-full',
-                    'flex items-center justify-center',
-                    'bg-[var(--color-overlay-3)] border border-border-light',
-                    'text-sm text-text-muted cursor-pointer',
-                    'transition-[scale,box-shadow,background,border-color,color] duration-100 ease-[var(--ease-out)]',
-                    'hover:border-text-secondary hover:bg-[var(--color-overlay-5)]',
-                    'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-[-2px]',
-                    'press-scale',
-                    // Active priority states — static glow (mobile keeps these
-                    // static for list-scroll perf; no infinite pulse animation).
-                    active &&
-                      priKey === 'must' && [
-                        'active-must',
-                        // Fill = coral-strong so white label clears WCAG AA (white on
-                        // brand coral is only 3.55:1); brand coral stays as the
-                        // rim border + glow halo for the "hot must-pick" identity.
-                        'bg-accent-coral-strong text-text-on-accent border-priority-must',
-                        'shadow-[var(--shadow-glow-coral),0_0_0_1px_var(--color-coral-a3)]',
-                      ],
-                    active &&
-                      priKey === 'want' && [
-                        'active-want',
-                        'bg-priority-want text-[var(--text-on-light-accent)] border-priority-want',
-                        'shadow-[var(--shadow-glow-aqua),0_0_0_1px_var(--color-aqua-a3)]',
-                      ],
-                    active &&
-                      priKey === 'maybe' && [
-                        'active-maybe',
-                        'bg-priority-maybe text-[var(--text-on-light-accent)] border-priority-maybe',
-                        'shadow-[var(--shadow-glow-amber),0_0_0_1px_var(--color-amber-a3)]',
-                      ],
-                  )}
-                  type="button"
-                  aria-pressed={active ? 'true' : 'false'}
-                  aria-label={`${PRIORITY_SYMBOLS[p].label}: ${artistName}${pendingSuffix}`}
-                  disabled={saving}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    handlePriorityChange(p, active);
-                  }}
-                >
-                  <span
-                    className={
-                      active
-                        ? undefined
-                        : p === 'must'
-                          ? 'text-priority-must'
-                          : p === 'want-to-see'
-                            ? 'text-priority-want'
-                            : 'text-priority-maybe'
-                    }
-                  >
-                    <PriorityIcon priority={p} filled={active} />
-                  </span>
-                  <span className={cn('text-xs font-semibold', !active && 'text-text-secondary')}>
-                    {PRIORITY_SYMBOLS[p].short}
-                  </span>
-                  {pending && <Clock className="w-4 h-4 ml-0.5" aria-hidden="true" data-testid="pick-pending-clock" />}
-                </button>
-              );
-            })}
-          </div>
+          <SetPickControl
+            artistName={artistName}
+            myPick={myPick}
+            syncState={pickSync?.state === 'saving' || pickSync?.state === 'queued' ? pickSync.state : null}
+            disabled={saving}
+            onSelect={handlePriorityChange}
+          />
         )}
 
         {!showPicks && picksLoading && (

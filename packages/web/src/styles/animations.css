@@ -292,29 +292,6 @@
   }
 }
 
-/* R13 — Shrinking sticky header. The .shrunk class is toggled by a single
-   scroll listener once scrollTop passes the threshold; transitions are
-   reduced-motion-safe via the global block below. */
-.app-header {
-  transition:
-    min-height 200ms var(--ease-out),
-    padding 200ms var(--ease-out);
-}
-.app-header.shrunk {
-  min-height: 48px;
-  /* Compress vertical padding (desktop default is 14px); keep the horizontal
-     safe-area padding so brand/util alignment is unchanged. Specificity (0,2,0)
-     beats the single-class `[padding:…]` utility. */
-  padding-top: max(6px, env(safe-area-inset-top)) !important;
-  padding-bottom: 6px !important;
-}
-.app-header.shrunk .app-header-brand {
-  font-size: var(--font-size-14);
-}
-.app-header-brand {
-  transition: font-size 200ms var(--ease-out);
-}
-
 /* Reduced motion — WCAG 2.3.3 + vestibular-safety default. Covers every
    animation + transition + scroll-behavior the React app owns. */
 @media (prefers-reduced-motion: reduce) {

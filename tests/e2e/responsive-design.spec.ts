@@ -135,6 +135,35 @@ test.describe('responsive design', () => {
     expect(headerBox!.y).toBeLessThanOrEqual(5);
   });
 
+  test('header height stays constant while the page scrolls', async ({ app, page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoSchedule(page, app);
+
+    const header = page.locator('header').first();
+    const heightAt = async (top: number) => {
+      await page.locator('#main-content').evaluate((main, y) => {
+        main.scrollTop = y;
+      }, top);
+      await page.evaluate(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+      );
+      return (await header.boundingBox())!.height;
+    };
+    const rest = await heightAt(0);
+    expect(await heightAt(120)).toBe(rest);
+    expect(await heightAt(500)).toBe(rest);
+  });
+
+  test('the first set card starts in the top 300px at 390px', async ({ app, page }) => {
+    // DP-33 acceptance: the view switcher, Filters, day rail and Group by share two chrome rows.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoSchedule(page, app);
+
+    const firstCard = await page.locator('.card-grid .set-card').first().boundingBox();
+    expect(firstCard).toBeTruthy();
+    expect(firstCard!.y).toBeLessThan(300);
+  });
+
   test('detail panel opens above schedule', async ({ app, page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoSchedule(page, app);
@@ -181,11 +210,16 @@ test.describe('responsive design', () => {
     const buttons = page.locator('.card-priority-btn');
     await expect(buttons).toHaveCount(9);
 
-    for (let i = 0; i < 6; i++) {
-      const box = await buttons.nth(i).boundingBox();
-      expect(box).toBeTruthy();
-      expect(box!.width).toBeGreaterThanOrEqual(44);
-      expect(box!.height).toBeGreaterThanOrEqual(44);
+    // A fine pointer shows the trio on hover; the rest sit collapsed behind the chosen state.
+    for (let card = 0; card < 2; card++) {
+      const set = page.getByTestId('set-card').nth(card);
+      await set.hover();
+      for (let i = 0; i < 3; i++) {
+        const box = await set.locator('.card-priority-btn').nth(i).boundingBox();
+        expect(box).toBeTruthy();
+        expect(box!.width).toBeGreaterThanOrEqual(44);
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+      }
     }
   });
 
@@ -193,8 +227,8 @@ test.describe('responsive design', () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await gotoSchedule(page, app);
 
-    // Below md the search folds behind a Search toggle.
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    // Below md the search folds behind the Filters toggle.
+    await page.getByRole('button', { name: /^Filters/ }).click();
     const searchInput = page.getByLabel('Search festival artists');
     await expect(searchInput).toBeVisible();
     const box = await searchInput.boundingBox();
@@ -228,5 +262,38 @@ test.describe('responsive design', () => {
     expect(box).not.toBeNull();
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+  });
+
+  // The e2e fixture festival has no map data, so /map shows the empty state. Needs a mapped fixture (FU-P4).
+  test.fixme('map runs edge to edge at 390 by 844', async ({ app, page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`${app.baseUrl}/map`);
+    const map = page.getByRole('region', { name: 'Crew map with meeting points and live locations' });
+    await expect(map).toBeVisible();
+    const box = await map.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBe(0);
+    expect(box!.width).toBe(390);
+  });
+});
+
+test.describe('responsive design, touch at 390 by 844', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('the first pick on /picks starts in the top 300px at 390px', async ({ app, page }) => {
+    await createJoinedUser(page, app);
+    await gotoSchedule(page, app);
+    const alpha = page.locator('[data-testid="set-card"][data-artist="Alpha"]');
+    await alpha.getByRole('button', { name: /^Set priority for Alpha/ }).tap();
+    await alpha.getByRole('button', { name: /^Must See: Alpha/ }).tap();
+    await expect(alpha.getByRole('button', { name: /^Must See: Alpha.*Change priority/ })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Picks' }).tap();
+    const firstRow = page.getByTestId('picks-plan-row').first();
+    await expect(firstRow).toBeVisible();
+    const box = await firstRow.boundingBox();
+    expect(box).toBeTruthy();
+    expect(box!.y).toBeLessThan(300);
   });
 });

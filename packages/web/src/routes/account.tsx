@@ -90,12 +90,16 @@ function AccountPageInner() {
   const body: Record<AccountSectionId, React.ReactNode> = {
     account: (
       <>
-        <ProfileSection user={user} />
-        <EmailSection />
-        <PasswordSection />
-        <SignInMethodsSection />
-        <DevicesSection />
-        <PaymentHandlesSection />
+        <div id="profile" tabIndex={-1} className="focus:outline-none">
+          <ProfileSection user={user} />
+          <EmailSection />
+          <PaymentHandlesSection />
+        </div>
+        <div id="sign-in" tabIndex={-1} className="focus:outline-none">
+          <PasswordSection />
+          <SignInMethodsSection />
+          <DevicesSection />
+        </div>
       </>
     ),
     notifications: <NotificationSection />,
@@ -123,7 +127,7 @@ function AccountPageInner() {
         {!!user.organizations?.length && (
           <Link
             to="/manage"
-            className="flex items-center gap-3 rounded-lg border border-border px-3 py-3 min-h-11 hover:bg-surface-hover"
+            className="flex items-center gap-3 border-b border-border-light py-3 min-h-11 hover:bg-surface-hover"
           >
             <Building2 className="h-5 w-5 text-accent-aqua" aria-hidden="true" />
             <span className="flex flex-col">
@@ -134,7 +138,7 @@ function AccountPageInner() {
         )}
         <Link
           to="/wrap"
-          className="flex items-center gap-3 rounded-lg border border-border px-3 py-3 hover:bg-surface-hover"
+          className="flex items-center gap-3 border-b border-border-light py-3 min-h-11 hover:bg-surface-hover"
         >
           <Sparkles className="h-5 w-5 text-accent-aqua" aria-hidden="true" />
           <span className="flex flex-col">
@@ -149,7 +153,7 @@ function AccountPageInner() {
     admin: (
       <Link
         to="/admin"
-        className="flex items-center gap-3 rounded-xl border border-border bg-bg-card p-3 min-h-11 hover:border-accent-aqua"
+        className="flex items-center gap-3 border-b border-border-light py-3 min-h-11 hover:bg-surface-hover"
       >
         <Gauge className="w-5 h-5 shrink-0 text-accent-aqua" aria-hidden="true" />
         <span className="min-w-0 flex-1">
@@ -163,7 +167,7 @@ function AccountPageInner() {
         <button
           type="button"
           onClick={() => setConfirmSignOut(true)}
-          className="flex w-full items-center gap-3 rounded-xl border border-border bg-bg-card p-3 min-h-11 text-sm font-semibold text-text-danger hover:border-accent-coral"
+          className="flex w-full items-center gap-3 border-b border-border-light py-3 min-h-11 text-sm font-semibold text-text-danger hover:bg-surface-hover"
         >
           <LogOut className="w-5 h-5 shrink-0" aria-hidden="true" />
           {COPY.auth.signOut}
@@ -184,7 +188,7 @@ function AccountPageInner() {
 
   return (
     <div className="bg-bg-primary">
-      <div className="max-w-[600px] mx-auto pb-6 space-y-4">
+      <div className="max-w-[600px] lg:max-w-4xl mx-auto pb-6 space-y-4">
         <div>
           <h1 className="text-xl font-display font-bold text-text-primary">{ACCOUNT_COPY.title}</h1>
           <p className="text-sm text-text-secondary">{ACCOUNT_COPY.subtitle}</p>
@@ -198,11 +202,16 @@ function AccountPageInner() {
           </p>
         ) : null}
 
-        {ACCOUNT_SECTIONS.filter((s) => !('adminOnly' in s) || isAdmin).map((s) => (
-          <Section key={s.id} id={s.id} label={s.label}>
-            {body[s.id]}
-          </Section>
-        ))}
+        <div className="lg:grid lg:grid-cols-[11rem_minmax(0,1fr)] lg:gap-8 lg:items-start">
+          <SectionRail />
+          <div className="space-y-4 min-w-0">
+            {ACCOUNT_SECTIONS.filter((s) => !('adminOnly' in s) || isAdmin).map((s) => (
+              <Section key={s.id} id={s.id} label={s.label}>
+                {body[s.id]}
+              </Section>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -215,15 +224,49 @@ function AccountPageInner() {
  */
 function Section({ id, label, children }: { id: string; label: string; children: React.ReactNode }) {
   return (
-    <div
-      id={id === 'danger' ? id : undefined}
-      tabIndex={id === 'danger' ? -1 : undefined}
-      className="space-y-3 focus:outline-none"
-    >
+    <div id={id} tabIndex={-1} className="space-y-3 focus:outline-none">
       {label ? (
         <h2 className="px-1 text-xs font-semibold text-text-secondary uppercase tracking-[.8px]">{label}</h2>
       ) : null}
       {children}
     </div>
+  );
+}
+
+// Desktop only: phones read the page as one column. Each entry jumps to a section id on the page.
+const RAIL_SECTIONS = [
+  { id: 'profile', label: 'Profile' },
+  { id: 'sign-in', label: 'Sign-in' },
+  { id: 'notifications', label: 'Notifications' },
+  { id: 'privacy', label: 'Privacy' },
+  { id: 'offline', label: 'Data' },
+  { id: 'danger', label: 'Danger' },
+] as const;
+
+function SectionRail() {
+  const jump = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    e.preventDefault();
+    const el = document.getElementById(id);
+    el?.scrollIntoView();
+    el?.focus({ preventScroll: true });
+  };
+  return (
+    <nav aria-label="Account sections" className="hidden lg:block sticky top-4">
+      <ul className="m-0 list-none space-y-1 p-0">
+        {RAIL_SECTIONS.map((r) => (
+          <li key={r.id}>
+            <a
+              href={`#${r.id}`}
+              onClick={(e) => jump(e, r.id)}
+              className={`flex min-h-11 items-center rounded-lg px-3 text-sm font-semibold hover:bg-surface-hover ${
+                r.id === 'danger' ? 'text-text-danger' : 'text-text-secondary hover:text-text-primary'
+              }`}
+            >
+              {r.label}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }

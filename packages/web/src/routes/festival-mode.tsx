@@ -9,12 +9,12 @@ import {
   fmtZonedClock,
   isFixRecent,
   resolveFestivalTimeZone,
+  resolveStageColor,
   selectNowNext,
   showsFestivalWeather,
   stageCoord,
   walkToStage,
 } from '@festie/shared/utils';
-import LowPowerToggle from '../components/features/LowPowerToggle';
 import LowPowerIndicator from '../components/features/LowPowerIndicator';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
@@ -25,7 +25,6 @@ import UpNextList from '../components/festival-mode/UpNextList';
 import WeatherStrip from '../components/festival-mode/WeatherStrip';
 import CaughtNowCard from '../components/festival-mode/CaughtNowCard';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
-import SosRaiseButton from '../components/crew/SosRaiseButton';
 import { CrewNowSection, CrewPrompt, CrewWrapUpCard, MeetNowCard } from '../components/festival-mode/CrewNow';
 import { CalendarX } from 'lucide-react';
 
@@ -54,7 +53,8 @@ function FestivalModeViewInner() {
   const stages = useFestivalStore((s) => s.stages);
   const picks = useFestivalStore((s) => s.currentProfile?.picks);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
-  const { getStageName } = useFestival();
+  const { getStageName, getStageColor: getStageColorRaw } = useFestival();
+  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-text-primary)');
   const navigate = useNavigate();
 
   const [nowMs, setNowMs] = useState(() => Date.now());
@@ -114,10 +114,8 @@ function FestivalModeViewInner() {
 
   return (
     <div className={PAGE} data-testid="festival-mode-view">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 mb-4 min-w-0">
-        <h1 className="type-display-lg text-text-primary min-w-0 break-words">{currentFestival.name}</h1>
+      <div className="flex flex-wrap items-baseline justify-end gap-x-3 gap-y-2 mb-4 min-w-0">
         <div className="flex items-center gap-2 shrink-0">
-          {user && crew && <SosRaiseButton crewId={crew.id} compact />}
           <LowPowerIndicator />
           <div className="flex flex-col items-end">
             <span className="type-numeral text-text-secondary" aria-label="Festival time">
@@ -142,6 +140,8 @@ function FestivalModeViewInner() {
               b2bSeparator={currentFestival.b2bSeparator}
               lineupMode={lineupMode}
               getStageName={getStageName}
+              getStageColor={getStageColor}
+              festivalName={currentFestival.name}
               onOpenSet={setDetailSet}
               onBrowse={() => navigate({ to: '/cards' })}
               onWrap={user ? () => navigate({ to: '/wrap' }) : undefined}
@@ -209,9 +209,6 @@ function FestivalModeViewInner() {
               <MeetNowCard meet={meet} nowMs={nowMs} timeZone={timeZone} onOpenMeet={goCrew} />
             </div>
           )}
-          <div className="order-5">
-            <LowPowerToggle />
-          </div>
         </div>
       </div>
     </div>

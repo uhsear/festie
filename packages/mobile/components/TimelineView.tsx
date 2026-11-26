@@ -25,7 +25,7 @@ import {
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { useDayClashes, usePicks } from '@festie/shared/hooks';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
-import { COPY, PRIORITY_SYMBOLS } from '@festie/shared/constants';
+import { COPY, PRIORITY_SYMBOLS, clashMinutes } from '@festie/shared/constants';
 import { CONCEPT_IONICON } from '../lib/conceptIcons';
 import { safeStageColor } from '../lib/stageColor';
 import { useNowIndicator, type TimeBounds } from '../hooks/useNowIndicator';
@@ -238,7 +238,6 @@ function StageColumn({
                   borderLeftWidth: myPick ? 4 : 3,
                   backgroundColor: myPick ? t.colors.bg.hover : t.colors.bg.card,
                 },
-                mark && { borderColor: t.colors.clash.mark, borderLeftColor: t.colors.clash.mark },
               ]}
               onPress={() => onSetPress(s)}
               {...holdToPick(s.id, myPick)}
@@ -265,7 +264,11 @@ function StageColumn({
               ) : null}
               {mark || myPick ? (
                 <View style={styles.iconRow}>
-                  {mark ? <Ionicons name="warning-outline" size={t.iconSize.xs} color={t.colors.clash.mark} /> : null}
+                  {mark ? (
+                    <Text style={styles.clashMinutes} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                      {clashMinutes(mark.overlapMin)}
+                    </Text>
+                  ) : null}
                   {myPick && pickColor ? (
                     <Ionicons name={priorityIconName(myPick)} size={t.iconSize.xs} color={pickColor} />
                   ) : null}
@@ -798,6 +801,10 @@ const useStyles = makeStyles((t) => ({
   clashText: {
     ...typeStyle('micro'),
     color: t.colors.text.secondary,
+  },
+  clashMinutes: {
+    ...typeStyle('micro', 700),
+    color: t.colors.clash.mark,
   },
   iconRow: {
     position: 'absolute',

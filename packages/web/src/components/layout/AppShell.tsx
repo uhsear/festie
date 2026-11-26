@@ -7,7 +7,7 @@ import { useOffline } from '@festie/shared/hooks';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import SubHeader from './SubHeader';
-import ScheduleViewSwitcher, { isSchedulePath } from './ScheduleViewSwitcher';
+import { isSchedulePath } from './ScheduleViewSwitcher';
 import PageTransition from './PageTransition';
 import RouteAnnouncer from './RouteAnnouncer';
 import GuestFooter from './GuestFooter';
@@ -18,6 +18,7 @@ import IOSInstallDrawer from '../features/IOSInstallDrawer';
 import NowNextStrip from '../features/NowNextStrip';
 import FestivalDayBanner from '../features/FestivalDayBanner';
 import SosBanner from '../features/SosBanner';
+import SosDock from './SosDock';
 import AnnouncementBanner from '../features/AnnouncementBanner';
 import LiveLocationSharing from '../crew/LiveLocationSharing';
 import Onboarding from '../features/Onboarding';
@@ -57,7 +58,7 @@ function RouteFallback() {
 // Routes where the global festival/day/stage sub-header has no purpose.
 // The first-visit walkthrough shows on the lineup only, never over a deep link (/set/:id, /join, /u/:username).
 const onboardingRoutes = ['/', '/cards'];
-const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan', '/festival-mode'];
+const noSubHeaderRoutes = ['/account', '/crew', '/crew-plan'];
 
 // Routes that keep ONLY the day toggle (Sat/Sun).
 // /picks has its own filters (T20); /grid gets the full schedule filters (T17).
@@ -187,7 +188,6 @@ export default function AppShell() {
 
         <div className="main-content flex flex-1 overflow-hidden flex-col">
           {!hideSubHeader && <SubHeader dayOnly={dayOnlySubHeader} festivalOnly={festivalOnlySubHeader} />}
-          {isSchedulePath(location.pathname) && <ScheduleViewSwitcher />}
           {isSchedulePath(location.pathname) && <NowNextStrip />}
 
           <main
@@ -209,6 +209,7 @@ export default function AppShell() {
         </div>
 
         <BottomNav />
+        <SosDock />
         <ArtistSheetHost />
 
         {detailSet && (

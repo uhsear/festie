@@ -15,7 +15,6 @@ import {
   formatSetTimeRange,
   artistDisplayName,
   artistSubtitle,
-  ensureWhiteContrast,
   PRIORITY_RANK,
   buildOverlapBreakdown,
   festivalPhase,
@@ -32,6 +31,7 @@ import { useSetStatus } from '../hooks/useSetStatus';
 import { useHaptics } from '../hooks/useHaptics';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import AppPressable from './AppPressable';
+import { ClashSwatch } from './ClashHatch';
 import { priorityColor } from '../lib/priorityColor';
 import { COPY } from '@festie/shared/constants';
 import { PRIORITY_BUTTONS } from '../lib/prioritySymbol';
@@ -41,6 +41,9 @@ import LiveBadge from './LiveBadge';
 import ArtistName from './ArtistName';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/** Width of the stage-colour rail on the card's left edge. */
+const RAIL_WIDTH = 6;
 
 /** A single crew member's pick, used to render the "who's going" avatars. */
 export interface FriendProfile {
@@ -57,7 +60,7 @@ interface SetCardMobileProps {
   set: FestivalSet;
   /** Stage label shown in the colored pill. */
   stageName: string;
-  /** Stage accent color (hex/hsl); drives the left border + pill background. */
+  /** Stage accent color (hex/hsl); drives the left rail. The stage name stays in primary text. */
   stageColor: string;
   /** Current user's pick for this set, or null/undefined if not picked. */
   myPick: Priority | null | undefined;
@@ -110,6 +113,8 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
   const [pressed, setPressed] = useState(false);
   const reduceMotion = useReduceMotion();
   const accent = priorityColor(t, option.value);
+  // A must pick is a coral outline with a filled glyph: filled coral is reserved for SOS.
+  const outline = option.value === 'must';
 
   // DC21: the pick is the product's core loop — confirm it with a scale pop +
   // color timing instead of an instant style flip. `progress` (0→1) drives the
@@ -130,7 +135,7 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
   }, [active, reduceMotion, progress]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const bg = interpolateColor(progress.value, [0, 1], [t.colors.overlay[3], accent]);
+    const bg = interpolateColor(progress.value, [0, 1], [t.colors.overlay[3], outline ? t.colors.overlay[3] : accent]);
     const border = interpolateColor(progress.value, [0, 1], [t.colors.border.light, accent]);
     return {
       backgroundColor: bg,
@@ -177,15 +182,86 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
       <Ionicons
         name={active && pending ? 'time-outline' : option.icon}
         size={t.iconSize.sm}
-        color={active ? t.colors.text.onLightAccent : accent}
+        color={active && !outline ? t.colors.text.onLightAccent : accent}
       />
       <Text
-        style={[styles.priorityLabel, { color: active ? t.colors.text.onLightAccent : t.colors.text.secondary }]}
+        style={[
+          styles.priorityLabel,
+          { color: active ? (outline ? t.colors.text.primary : t.colors.text.onLightAccent) : t.colors.text.secondary },
+        ]}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
       >
         {option.short + '\u00A0'}
       </Text>
     </AnimatedPressable>
+  );
+}
+
+interface PickControlProps {
+  artistName: string;
+  myPick: Priority | null | undefined;
+  pending: 'saving' | 'queued' | null;
+  onPick: (priority: Priority | null) => void;
+}
+
+/**
+ * One compact pick control. At rest it shows the chosen state with icon and label (or "Pick").
+ * One tap expands the Must, Want and Maybe trio in place, and the next tap picks and collapses it.
+ */
+function PickControl({ artistName, myPick, pending, onPick }: PickControlProps) {
+  const t = useTokens();
+  const styles = useStyles();
+  const haptics = useHaptics();
+  const [expanded, setExpanded] = useState(false);
+  const chosen = PRIORITY_BUTTONS.find((option) => option.value === myPick);
+
+  if (expanded) {
+    return (
+      <View style={styles.priorityGroup}>
+        {PRIORITY_BUTTONS.map((option) => (
+          <PriorityButton
+            key={option.value}
+            option={option}
+            active={myPick === option.value}
+            pending={pending}
+            onPress={(priority) => {
+              setExpanded(false);
+              onPick(priority);
+            }}
+          />
+        ))}
+      </View>
+    );
+  }
+
+  const outline = chosen?.value === 'must';
+  const ink = chosen ? (outline ? t.colors.text.primary : t.colors.text.onLightAccent) : t.colors.text.secondary;
+  return (
+    <Pressable
+      style={[
+        styles.priorityButton,
+        chosen && {
+          backgroundColor: outline ? t.colors.overlay[3] : priorityColor(t, chosen.value),
+          borderColor: priorityColor(t, chosen.value),
+        },
+      ]}
+      onPress={() => {
+        haptics.select();
+        setExpanded(true);
+      }}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: false }}
+      accessibilityLabel={
+        chosen
+          ? `${chosen.label}${pending ? (pending === 'queued' ? ', waiting to sync' : ', saving') : ''}, ${artistName}. Change priority`
+          : `Set priority for ${artistName}`
+      }
+    >
+      <Ionicons name={chosen ? (pending ? 'time-outline' : chosen.icon) : 'star-outline'} size={t.iconSize.sm} color={outline ? priorityColor(t, 'must') : ink} />
+      <Text style={[styles.priorityLabel, { color: ink }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        {(chosen ? chosen.short : 'Pick') + ' '}
+      </Text>
+    </Pressable>
   );
 }
 
@@ -243,10 +319,8 @@ function SetCardMobileImpl({
   const dimmed = setStatus.status === 'past' && festivalPhase(currentFestival, days) === 'live';
   const canListen = !!onListen && primarySpotifyArtist(set) !== null;
 
-  // The stage pill renders white (onAccent) text on the stage color, so darken
-  // the fill just enough for that text to clear WCAG AA (see shared
-  // ensureWhiteContrast). The card's left border keeps the true stage color.
-  const pillBg = useMemo(() => ensureWhiteContrast(stageColor), [stageColor]);
+  const showMeta =
+    ['live', 'soon', 'upcoming'].includes(setStatus.status) || hasNote || reminderMinutes != null || !!move || hasConflict;
 
   const handlePick = useCallback((priority: Priority | null) => onPickChange(priority), [onPickChange]);
 
@@ -259,16 +333,21 @@ function SetCardMobileImpl({
   // R19: Apply live state styling when set status is 'live'.
   return (
     <View style={[styles.card, isLive && styles.cardLive]}>
+      {/* The stage colour is a decorative rail; the stage name below stays in primary text. */}
+      <View style={[styles.rail, { backgroundColor: dimmed ? t.colors.overlay[3] : stageColor }]} pointerEvents="none" />
+
       <AppPressable style={styles.bodyTop} onPress={onPress} accessibilityRole="button" accessibilityLabel={a11yBody} testID={`set-card-${set.id}`}>
-        <View style={styles.stagePill}>
-          <View style={[styles.stagePillBg, { backgroundColor: dimmed ? t.colors.overlay[3] : pillBg }]} pointerEvents="none" />
-          <Text style={[styles.stageText, dimmed && styles.dimmedText]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {/* Trailing NBSP absorbs Fabric's single-line self-under-measure so a
-                longer stage name doesn't drop its last glyph (the bg-sibling
-                already prevents the rounded-pill clip). */}
-            {stageName + '\u00A0'}
-          </Text>
+        <View style={styles.timeRow}>
+          <Text style={[styles.time, dimmed && styles.dimmedText]}>{timeLabel}</Text>
+          {lateNight ? (
+            <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Late
+            </Text>
+          ) : null}
         </View>
+        <Text style={[styles.stageText, dimmed && styles.dimmedText]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {stageName}
+        </Text>
       </AppPressable>
 
       {/* The name is its own button between two halves of the body: the halves are siblings of it, so no
@@ -307,13 +386,8 @@ function SetCardMobileImpl({
           </Text>
         ) : null}
 
+        {showMeta ? (
         <View style={styles.metaRow}>
-          <Text style={[styles.time, dimmed && styles.dimmedText]}>{timeLabel}</Text>
-          {lateNight ? (
-            <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              Late
-            </Text>
-          ) : null}
           <LiveBadge status={setStatus.status} label={setStatus.label} />
           {hasNote ? (
             <Ionicons
@@ -341,24 +415,18 @@ function SetCardMobileImpl({
           ) : null}
           {hasConflict ? (
             <View style={styles.conflictBadge}>
-              <Ionicons name="warning" size={t.iconSize.xs} color={t.colors.clash.mark} />
+              <ClashSwatch color={t.colors.clash.mark} height={12} />
               <Text style={styles.conflictText} numberOfLines={1}>
                 {clashLabel ?? COPY.clash.badge}
               </Text>
             </View>
           ) : null}
         </View>
+        ) : null}
       </AppPressable>
 
       <View style={styles.footer}>
-        <View style={styles.priorityGroup}>
-          {PRIORITY_BUTTONS.map((option) => (
-            <PriorityButton key={option.value} option={option} active={myPick === option.value}
-              pending={pickPending}
-              onPress={handlePick}
-            />
-          ))}
-        </View>
+        <PickControl artistName={artistName} myPick={myPick} pending={pickPending} onPick={handlePick} />
 
         {canListen ? (
           <AppPressable
@@ -557,7 +625,22 @@ const useStyles = makeStyles((t) => ({
     // R2 hairline: neutral white 0.08 separator (was border.default 0.06).
     borderColor: t.colors.glass.border,
     padding: t.spacing[4],
+    // Room for the 6px stage rail on the left edge.
+    paddingLeft: t.spacing[4] + RAIL_WIDTH,
     gap: t.spacing[1],
+    overflow: 'hidden',
+  },
+  rail: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: RAIL_WIDTH,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    gap: t.spacing[2],
   },
   // R19: Live state — static 1.5px aqua border. Mobile: static border
   // (no conic-gradient in RN without deps).
@@ -587,26 +670,9 @@ const useStyles = makeStyles((t) => ({
   body: {
     gap: t.spacing[1],
   },
-  stagePill: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: t.spacing[2],
-    paddingVertical: t.spacing[1],
-    marginBottom: t.spacing[1],
-  },
-  // Dynamic (per-stage) bg color lives on this absolutely-positioned sibling —
-  // not on stagePill itself — so the Text child is never clipped to the
-  // rounded bounds on Android (see dayChipBg for the same pattern).
-  stagePillBg: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    borderRadius: t.radii.pill,
-  },
   stageText: {
-    ...typeStyle('micro'),
-    color: t.colors.text.onAccent,
+    ...typeStyle('caption', 600),
+    color: t.colors.text.primary,
   },
   artist: {
     ...typeStyle('title'),
@@ -625,8 +691,8 @@ const useStyles = makeStyles((t) => ({
     marginBottom: t.spacing[2],
   },
   time: {
-    ...typeStyle('caption', undefined, { tabular: true }),
-    color: t.colors.text.secondary,
+    ...typeStyle('title', undefined, { tabular: true }),
+    color: t.colors.text.primary,
   },
   reminderMark: {
     flexDirection: 'row',
@@ -651,8 +717,6 @@ const useStyles = makeStyles((t) => ({
     paddingVertical: t.spacing[1],
     borderRadius: t.radii.default,
     backgroundColor: t.colors.clash.tint,
-    borderWidth: 1,
-    borderColor: t.colors.clash.mark,
   },
   conflictText: {
     ...typeStyle('micro'),

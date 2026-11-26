@@ -5,6 +5,7 @@ import { clearSetRating, fetchFestivalRatings, mapErrorToUserMessage, rateSet } 
 import { RATING_SCALE_DATA, ratingCaption } from '@festie/shared/constants';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { inkOnFill } from '../lib/inkOnFill';
 import PressableScale from './PressableScale';
 import SetRatingSummary from './SetRatingSummary';
 
@@ -21,7 +22,7 @@ const ICON_FOR_RATING: Record<number, keyof typeof Ionicons.glyphMap> = {
   1: 'thumbs-down',
 };
 
-/** Merged RATING_SCALE_DATA + platform icon — rendered high→low (order ascending). */
+/** Merged RATING_SCALE_DATA + platform icon, rendered low to high so the row fills left to right. */
 const RATINGS = RATING_SCALE_DATA.map((r) => ({
   n: r.value,
   icon: ICON_FOR_RATING[r.value]!,
@@ -41,6 +42,8 @@ interface RatingButtonsProps {
   initial?: { rating: number | null; note: string | null };
   /** Hide the crowd and crew rating lines (a list row would otherwise fetch them per row). */
   compact?: boolean;
+  /** Print the caption under the meter. A list prints it once for the page and passes false. */
+  showCaption?: boolean;
 }
 
 const MEMORY_MAX = 140;
@@ -55,9 +58,11 @@ const MEMORY_MAX = 140;
  * optimistic and rolls back on error. Pass `initial` to skip the GET and
  * `compact` to hide the crowd/crew summary when rendering many rows.
  */
-export default function RatingButtons({ setId, festivalId, onRated, showMemory = true, initial, compact = false }: RatingButtonsProps) {
+export default function RatingButtons({ setId, festivalId, onRated, showMemory = true, initial, compact = false, showCaption = true }: RatingButtonsProps) {
   const styles = useStyles();
   const t = useTokens();
+  // Aqua is dark on Daylight, so the ink on the selected step flips to white there.
+  const activeInk = inkOnFill(t.colors.accent.aqua, t.colors.text.onAccent, t.colors.text.onLightAccent);
   const haptics = useHaptics();
   const [current, setCurrent] = useState<number | null>(initial?.rating ?? null);
   const [busy, setBusy] = useState(false);
@@ -190,10 +195,11 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
       >
         {RATINGS.map((r) => {
           const active = current === r.n;
+          const filled = current !== null && r.n < current;
           return (
             <View key={r.n} style={styles.option}>
               <PressableScale
-                style={[styles.button, active && styles.buttonActive]}
+                style={[styles.button, filled && styles.buttonFilled, active && styles.buttonActive]}
                 onPress={() => handlePress(r.n)}
                 disabled={busy || !loaded}
                 hitSlop={6}
@@ -203,7 +209,7 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
                 accessibilityState={{ checked: active, selected: active, disabled: busy || !loaded }}
                 accessibilityLabel={`${r.label} (${r.n} of 5)`}
               >
-                <Ionicons name={r.icon} size={t.iconSize.lg} color={active ? t.colors.accent.amber : t.colors.text.secondary} />
+                <Ionicons name={r.icon} size={t.iconSize.lg} color={active ? activeInk : filled ? t.colors.accent.aqua : t.colors.text.secondary} />
               </PressableScale>
               <Text
                 style={[styles.optionLabel, active && styles.captionActive]}
@@ -211,32 +217,34 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
                 accessibilityElementsHidden
                 importantForAccessibility="no"
               >
-                {r.label}
+                {active ? r.label : ''}
               </Text>
             </View>
           );
         })}
       </View>
-      <Text
-        style={[
-          styles.caption,
-          saveError ? styles.captionError : currentLabel ? styles.captionActive : null,
-        ]}
-        maxFontSizeMultiplier={MAX_FONT_SCALE}
-        numberOfLines={2}
-        // The rollback message is the one caption state worth announcing — keep
-        // the routine "Tap to rate" / "You rated this" hints hidden from a11y
-        // (the radiogroup's accessibilityValue already conveys the rating).
-        accessibilityElementsHidden={!saveError}
-        importantForAccessibility={saveError ? 'yes' : 'no'}
-        accessibilityLiveRegion={saveError ? 'polite' : 'none'}
-      >
-        {!loaded
-          ? 'Loading…'
-          : saveError
-            ? saveError
-            : ratingCaption(current)}
-      </Text>
+      {showCaption || saveError ? (
+        <Text
+          style={[
+            styles.caption,
+            saveError ? styles.captionError : currentLabel ? styles.captionActive : null,
+          ]}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+          numberOfLines={2}
+          // The rollback message is the one caption state worth announcing — keep
+          // the routine "Tap to rate" / "You rated this" hints hidden from a11y
+          // (the radiogroup's accessibilityValue already conveys the rating).
+          accessibilityElementsHidden={!saveError}
+          importantForAccessibility={saveError ? 'yes' : 'no'}
+          accessibilityLiveRegion={saveError ? 'polite' : 'none'}
+        >
+          {!loaded
+            ? 'Loading…'
+            : saveError
+              ? saveError
+              : ratingCaption(current)}
+        </Text>
+      ) : null}
       {showMemory && loaded && current !== null ? (
         <View style={styles.memory}>
           {editing ? (
@@ -369,7 +377,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.accent.aqua,
   },
   captionActive: {
-    color: t.colors.accent.amber,
+    color: t.colors.accent.aqua,
   },
   captionError: {
     color: t.colors.text.danger,
@@ -382,8 +390,9 @@ const useStyles = makeStyles((t) => ({
   },
   optionLabel: {
     ...typeStyle('micro'),
-    color: t.colors.text.secondary,
+    color: t.colors.text.primary,
     textAlign: 'center',
+    minHeight: 16,
   },
   button: {
     width: '100%',
@@ -395,8 +404,12 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.card,
   },
+  buttonFilled: {
+    borderColor: t.colors.aquaAlpha[40],
+    backgroundColor: t.colors.aquaAlpha[20],
+  },
   buttonActive: {
-    borderColor: t.colors.accent.amber,
-    backgroundColor: t.colors.accent.amber + '40',
+    borderColor: t.colors.accent.aqua,
+    backgroundColor: t.colors.accent.aqua,
   },
 }));

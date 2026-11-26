@@ -42,7 +42,6 @@ vi.mock('@festie/shared/stores', () => ({
   useUIStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(storeState)),
 }));
 
-vi.mock('../components/crew/SosRaiseButton', () => ({ default: () => <div data-testid="sos-raise" /> }));
 
 vi.mock('../components/features/CrewSelector', () => ({
   default: () => <div data-testid="crew-selector" />,
@@ -112,6 +111,8 @@ vi.mock('@festie/shared/hooks', () => ({
     retry: h.retry,
   }),
 }));
+
+vi.mock('../components/crew/CrewFacesRow', () => ({ default: () => <div data-testid="crew-faces" /> }));
 
 vi.mock('../components/crew/CrewInviteBar', () => ({
   default: ({ inviteCode }: { inviteCode: string }) => <div data-testid="crew-invite-bar">{inviteCode}</div>,
@@ -385,22 +386,14 @@ describe('CrewView', () => {
     expect(screen.queryByText('Crew plan')).not.toBeInTheDocument();
   });
 
-  it('shows the header SOS button off the Find tab only, and hides it once your own SOS is up', () => {
+  it('has no in-page SOS control: the app shell owns the one SOS control', () => {
     crewWithActive();
-    const { unmount } = render(<CrewView />);
-    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
-    unmount();
-
-    h.search = { tab: 'money' };
-    const second = render(<CrewView />);
-    expect(screen.getByTestId('sos-raise')).toBeInTheDocument();
-    second.unmount();
-
-    useLiveLocationStore.setState({
-      activeSosList: [{ crewId: 'c1', userId: 'u1', username: 'testuser', raisedAt: new Date().toISOString() }],
-    });
-    render(<CrewView />);
-    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
+    for (const tab of [undefined, 'money']) {
+      h.search = tab ? { tab } : {};
+      const { unmount } = render(<CrewView />);
+      expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
+      unmount();
+    }
   });
 
   it('marks open polls seen when the Plan tab shows loaded polls', () => {
@@ -584,5 +577,14 @@ describe('CrewView', () => {
     render(<CrewView />);
     expect(screen.queryByText('Invite your crew')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('crew-invite-bar')).toHaveLength(1);
+  });
+
+  it('leads a multi-member crew with the faces row, above the invite bar', () => {
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    const faces = screen.getByTestId('crew-faces');
+    const invite = screen.getByTestId('crew-invite-bar');
+    expect(faces.compareDocumentPosition(invite) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('.crew-content')!.firstElementChild).toBe(faces);
   });
 });

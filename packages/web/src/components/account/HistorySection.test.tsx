@@ -90,6 +90,20 @@ describe('HistorySection', () => {
     expect(row).toHaveAttribute('href', '/wrap?festival=f1');
   });
 
+  it('uses hairline rows, with no card chrome', async () => {
+    mocks.lifetime = {
+      totals,
+      byFestival: [
+        { festivalId: 'f1', festivalName: 'Coachella', startDate: null, endDate: null, totalRated: 3, avgRating: 4, stagesVisited: 2, daysAttended: 2, totalHours: 5 },
+      ],
+      topArtists: [{ artist: 'Daft Punk', bestRating: 'loved', timesRated: 2 }],
+      seenMost: [{ artist: 'Daft Punk', festivals: 2 }],
+    };
+    const { container } = renderSection();
+    await screen.findByRole('link', { name: 'Open your Coachella wrap' });
+    expect(container.querySelector('.bg-bg-card')).toBeNull();
+  });
+
   it('offers a rate CTA in the empty state while the current festival is live or over', async () => {
     mocks.lifetime = { totals: { ...totals, totalRated: 0 }, byFestival: [], topArtists: [] };
     renderSection();

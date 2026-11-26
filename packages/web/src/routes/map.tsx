@@ -12,7 +12,6 @@ import { festivalLoadState, mapCrewHintCopy } from '@festie/shared/utils';
 import EmptyState from '../components/ui/EmptyState';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import SosRaiseButton from '../components/crew/SosRaiseButton';
 import FreshnessChip from '../components/features/FreshnessChip';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
 
@@ -97,8 +96,6 @@ function MapViewInner() {
     );
   }
 
-  const showSosRow = hasCrew && !sosList.some((e) => e.userId === user?.id);
-
   return (
     <div className="map-page flex h-full min-h-0 flex-col gap-2 px-4 pt-2 pb-4">
       <h1 className="sr-only">Map</h1>
@@ -107,12 +104,6 @@ function MapViewInner() {
         <div className="flex flex-wrap items-center gap-2">
           {hasCrew && <FreshnessChip surface="crew" />}
           <OfflineStatusChip />
-        </div>
-      )}
-      {/* A row above the canvas, not an overlay, so it never fights the place card or pursue bar. */}
-      {showSosRow && (
-        <div className="flex justify-end">
-          <SosRaiseButton crewId={crewId} compact alerting={sosList.length > 0} />
         </div>
       )}
       <Suspense

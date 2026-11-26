@@ -36,7 +36,7 @@ export function useDetailPanelData(set: FestivalSet) {
   const { getMyPick, savePick, saveNote, getOtherPicks, getPickCount, saveReminder } = usePicks();
   const { getStageColor: getStageColorRaw, getStageName } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
-  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)');
+  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-text-muted)');
   const { getCrewScopedOtherPicks } = useCrew();
 
   const b2bSeparator = currentFestival?.b2bSeparator;

@@ -62,7 +62,7 @@ export default function PaymentHandlesSection() {
   };
 
   return (
-    <Card className="space-y-3">
+    <Card variant="section" className="space-y-3">
       <h3 className="text-sm font-semibold text-text-secondary flex items-center gap-2">
         <Wallet className="w-4 h-4" aria-hidden="true" />
         {PAYMENT_COPY.title}

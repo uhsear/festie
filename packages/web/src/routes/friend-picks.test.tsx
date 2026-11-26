@@ -87,6 +87,17 @@ describe('FriendPicksView', () => {
     expect(await screen.findByText('1 in common · 2 only alice · 0 only you')).toBeTruthy();
   });
 
+  it('draws a stage with no colour in the defined fallback token', async () => {
+    fetchSharedPicks.mockResolvedValue({
+      ...payload,
+      festival: { ...payload.festival, stages: [{ id: 'st', name: 'Main', color: null }] },
+    });
+    const { container } = renderView();
+    await screen.findByText('1 in common · 2 only alice · 0 only you');
+    expect(container.innerHTML).toContain('var(--color-stage-fallback)');
+    expect(container.innerHTML).not.toContain('var(--text-muted)');
+  });
+
   it('shows no checkboxes for a guest', async () => {
     authUser.value = null;
     renderView();

@@ -11,8 +11,10 @@ describe('T10 crew large-text guards', () => {
     expect(src).toContain('<Text style={styles.emptyText}>');
   });
 
-  it('CrewSos has the short note', () => {
-    expect(read('components/CrewSos.tsx')).toContain('Alerts your whole crew. Needs signal to send.');
+  it('CrewSos has no raise button: the one SosControl raises', () => {
+    const src = read('components/CrewSos.tsx');
+    expect(src).not.toContain('useSosRaise');
+    expect(src).not.toContain('Alerts your whole crew');
   });
 
   it('CrewTabBar hides inactive labels at large text but keeps a11y and testID', () => {

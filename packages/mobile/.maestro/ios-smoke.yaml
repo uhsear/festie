@@ -225,7 +225,7 @@ env:
       id: "map-screen"
     timeout: 30000
 - assertVisible:
-    id: "map-sos-fab"
+    id: "sos-control"
 - waitForAnimationToEnd:
     timeout: 6000
 - extendedWaitUntil:

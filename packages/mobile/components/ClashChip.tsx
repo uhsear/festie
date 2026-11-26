@@ -1,10 +1,10 @@
 import { Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
 import { clashChip, clashChipA11y, COPY } from '@festie/shared/constants';
 import { useViewAs } from '@festie/shared/hooks';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import AppPressable from './AppPressable';
+import { ClashSwatch } from './ClashHatch';
 
 interface ClashChipProps {
   count: number;
@@ -34,7 +34,7 @@ export default function ClashChip({ count, picked }: ClashChipProps) {
       accessibilityRole="button"
       accessibilityLabel={clashChipA11y(count)}
     >
-      <Ionicons name="warning-outline" size={t.iconSize.sm} color={t.colors.clash.mark} />
+      <ClashSwatch color={t.colors.clash.mark} />
       <Text style={styles.text} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {clashChip(count)}
       </Text>

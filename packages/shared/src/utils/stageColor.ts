@@ -15,10 +15,10 @@
  * Vitest unit can call it identically.
  */
 
-import { colors } from '../tokens/colors';
-
-// Stage colours for a new stage, from the brand palette. Coral is left out: it means danger.
-const DEFAULT_STAGE_COLORS = [colors.accent.aqua, colors.stage.purpleAccessible, colors.accent.amber, colors.accent.green];
+// Stage colours for a new stage. Muted hues that are none of the signal colours (aqua, live green, amber, coral,
+// the stage violet), so a new stage never reads as a state. Each keeps 3:1 against the Stage and Daylight card
+// grounds, so the card's stage rail shows on both. stageColor.test.ts holds these rules.
+export const DEFAULT_STAGE_COLORS = ['#496ea2', '#6265bc', '#788b41', '#9d4d8d'] as const;
 
 /** The colour a new stage starts with, so an organizer is not asked to pick one. Cycles through the palette. */
 export const defaultStageColor = (existingStageCount: number): string =>

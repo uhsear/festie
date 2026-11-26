@@ -28,7 +28,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
   const Heading = underDayHeading ? 'h3' : 'h2';
   const b2bSeparator = useFestivalStore((state) => state.currentFestival?.b2bSeparator);
   const { getStageName, getStageColor } = useFestival();
-  const stageColor = (stageId: string) => resolveStageColor(getStageColor(stageId), 'var(--text-muted)');
+  const stageColor = (stageId: string) => resolveStageColor(getStageColor(stageId), 'var(--color-text-muted)');
 
   const renderSet = (item: Extract<MyDayItem, { kind: 'set' }>) => {
     const { set, walkFromPrev, clashLabel } = item;

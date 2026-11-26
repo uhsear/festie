@@ -100,18 +100,20 @@ describe('OfflineBanner', () => {
     expect(screen.getByText(/Syncing 1 pending change…/)).toBeInTheDocument();
   });
 
-  it('shows dismiss button when offline', () => {
+  it('renders offline as a slim persistent row with no dismiss control', () => {
     setStoreState({ offlineMode: true });
     render(<OfflineBanner />);
-    expect(screen.getByLabelText('Dismiss offline notice')).toBeInTheDocument();
+    const row = screen.getByRole('status');
+    expect(row).toHaveClass('py-1', 'bg-bg-secondary');
+    expect(row.className).not.toMatch(/bg-accent-amber/);
+    expect(screen.queryByLabelText('Dismiss offline notice')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('hides banner after dismiss is clicked', async () => {
-    const user = userEvent.setup();
+  it('puts amber on the offline icon only', () => {
     setStoreState({ offlineMode: true });
-    render(<OfflineBanner />);
-    await user.click(screen.getByLabelText('Dismiss offline notice'));
-    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    const { container } = render(<OfflineBanner />);
+    expect(container.querySelector('svg')).toHaveClass('text-accent-amber');
   });
 
   it('shows Flush Now button during syncing state', () => {

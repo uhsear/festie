@@ -139,6 +139,8 @@ function GoogleButton({
   const host = useRef<HTMLDivElement>(null);
   // A nonce is single use, so each credential callback bumps this to fetch a fresh one and re-render the button.
   const [round, setRound] = useState(0);
+  // Collapse the 44px slot when the script fails, so no blank gap sits above the Apple button.
+  const [failed, setFailed] = useState(false);
   const reclaim = useRef(() => setRound((n) => n + 1)).current;
 
   useEffect(() => {
@@ -157,7 +159,12 @@ function GoogleButton({
         const nonce = await getNonce();
         const el = host.current;
         const gsi = window.google?.accounts.id;
-        if (cancelled || !el || !gsi || gsiOwners.at(-1) !== reclaim) return;
+        if (cancelled) return;
+        if (!gsi) {
+          setFailed(true);
+          return;
+        }
+        if (!el || gsiOwners.at(-1) !== reclaim) return;
         gsi.initialize({
           client_id: clientId,
           nonce,
@@ -175,7 +182,9 @@ function GoogleButton({
           width: Math.min(360, el.clientWidth || 360),
         });
       } catch (err) {
-        if (!cancelled) onError(mapErrorToUserMessage(err, FALLBACK_ERROR));
+        if (cancelled) return;
+        setFailed(true);
+        onError(mapErrorToUserMessage(err, FALLBACK_ERROR));
       }
     })();
     return () => {
@@ -183,7 +192,17 @@ function GoogleButton({
     };
   }, [clientId, dark, round, submitRef, onError, reclaim]);
 
-  return <div ref={host} role="group" className="flex min-h-11 justify-center" aria-label={label} />;
+  // A transparent host with color-scheme set lets the iframe drop its opaque white box in Stage.
+  return (
+    <div
+      ref={host}
+      role="group"
+      aria-label={label}
+      hidden={failed}
+      style={{ colorScheme: dark ? 'dark' : 'light' }}
+      className="flex min-h-11 justify-center bg-transparent"
+    />
+  );
 }
 
 function AppleButton({

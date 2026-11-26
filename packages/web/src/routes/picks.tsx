@@ -8,9 +8,10 @@ import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useActiveCrew, usePicksPlan } from '@festie/shared/hooks';
 import type { Priority } from '@festie/shared/types';
 import { COPY } from '@festie/shared/constants';
-import { festivalLoadState, buildPickConflicts, buildMyDay, buildPlanList, filterPickMap, filterPlanListItems, isSetScheduled, resolveFestivalTimeZone } from '@festie/shared/utils';
+import { festivalLoadState, buildClashMarks, buildPickConflicts, buildMyDay, buildPlanList, filterPickMap, filterPlanListItems, isSetScheduled, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { MyDay, PicksFilter, PicksGroupMode, PicksOrder } from '@festie/shared/utils';
 import PriorityIcon from '../components/ui/PriorityIcon';
+import ClashHatch from '../components/ui/ClashHatch';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import EmptyState from '../components/ui/EmptyState';
 import Badge from '../components/ui/Badge';
@@ -32,7 +33,7 @@ import MarkedNoSet from '../components/features/MarkedNoSet';
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
 const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
 const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
-import { CalendarX, UserPlus, TriangleAlert, ChevronDown, Search, X, Share2 } from 'lucide-react';
+import { CalendarX, UserPlus, ChevronDown, Search, X, Share2, Ellipsis, Filter } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useToast } from '../lib/toastContext';
 import { cn } from '@/lib/utils';
@@ -87,6 +88,8 @@ function PicksViewInner() {
   // The shared hook selects the first crew once and does not retry a failed select.
   useActiveCrew();
   const [view, setView] = useState<PicksViewMode>('plan');
+  const [actionsOpen, setActionsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const {
     groupMode,
     setGroupMode,
@@ -120,6 +123,7 @@ function PicksViewInner() {
 
   // True when the profile has any pick at all, which gates the calendar export
   // independently of the active filters.
+  const clashMarks = useMemo(() => buildClashMarks(conflictGroups, () => ''), [conflictGroups]);
   const pickedSets = useMemo(() => sets.filter((s) => myPicks?.[s.id]), [sets, myPicks]);
   const hasAnyPicks = pickedSets.length > 0;
 
@@ -188,6 +192,22 @@ function PicksViewInner() {
     </Suspense>
   ) : null;
 
+  // Share, Calendar and Save image fold behind one overflow button. The panel stays mounted (hidden) so each
+  // dialog keeps its state and its focus-return target while it is open.
+  const actionsPanel = actionButtons ? (
+    // eslint-disable-next-line jsx-a11y/no-static-element-interactions -- Escape bubbles up from the child buttons
+    <div
+      id="picks-actions"
+      hidden={!actionsOpen}
+      className="flex flex-wrap justify-end gap-2 mb-3 [&[hidden]]:hidden [&_button]:whitespace-nowrap"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && actionsOpen) setActionsOpen(false);
+      }}
+    >
+      {actionButtons}
+    </div>
+  ) : null;
+
   const guestBanner = user ? null : <GuestPicksBanner />;
 
   const loadState = useFestivalStore((s) => festivalLoadState(s));
@@ -225,7 +245,7 @@ function PicksViewInner() {
   ];
   const viewTabRow =
     hasAnyPicks || reminderItems.length > 0 || noteItems.length > 0 ? (
-      <RovingGroup key="picks-view-tabs" itemRole="tab" role="tablist" aria-label="Picks views" className="flex gap-2 mb-3 overflow-x-auto">
+      <RovingGroup itemRole="tab" role="tablist" aria-label="Picks views" className="flex min-w-0 flex-1 gap-2 overflow-x-auto">
         {viewTabs.map((tab) => (
           <button
             key={tab.id}
@@ -248,6 +268,54 @@ function PicksViewInner() {
       </RovingGroup>
     ) : null;
 
+  // The key stays on this row, a direct child of the page, so arrowing between tabs keeps focus across branches.
+  const filterCount = Number(effectiveFilter !== 'all') + Number(search.trim() !== '');
+  const viewToolbar = viewTabRow && (
+        <div key="picks-view-toolbar" className="flex items-start gap-2 mb-3">
+          {viewTabRow}
+          {(view === 'plan' || view === 'myday') && (
+            <button
+              type="button"
+              aria-label={filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
+              aria-expanded={filtersOpen}
+              aria-controls="picks-filters"
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={cn(
+                'relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border cursor-pointer',
+                'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                filtersOpen ? 'border-accent-aqua text-accent-aqua' : 'border-border text-text-secondary hover:bg-bg-card-hover',
+              )}
+            >
+              <Filter className="w-4 h-4" aria-hidden="true" />
+              {filterCount > 0 && (
+                <span
+                  className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-accent-aqua px-1 text-[length:var(--font-size-12)] font-bold text-[var(--text-on-light-accent)]"
+                  aria-hidden="true"
+                >
+                  {filterCount}
+                </span>
+              )}
+            </button>
+          )}
+          {actionButtons && (
+            <button
+              type="button"
+              aria-label="Share and export"
+              aria-expanded={actionsOpen}
+              aria-controls="picks-actions"
+              onClick={() => setActionsOpen((v) => !v)}
+              className={cn(
+                'inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border cursor-pointer',
+                'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                actionsOpen ? 'border-accent-aqua text-accent-aqua' : 'border-border text-text-secondary hover:bg-bg-card-hover',
+              )}
+            >
+              <Ellipsis className="w-4 h-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
+  );
+
   const chips: Array<{ value: PicksFilter; label: string; count: number; priority?: Priority; clash?: boolean }> = [
     { value: 'all', label: 'All', count: stats.total },
     ...(stats.must > 0 ? [{ value: 'must' as const, label: 'Must', count: stats.must, priority: 'must' as const }] : []),
@@ -266,7 +334,7 @@ function PicksViewInner() {
   const clashOnlyEmpty = effectiveFilter === 'clashes' && !trimmedSearch;
 
   const filterChips = (
-    <div role="group" aria-label="Filter picks" className="flex flex-wrap gap-2 mb-3">
+    <div role="group" aria-label="Filter picks" className="flex shrink-0 gap-2">
       {chips.map((c) => (
         <button
           key={c.value}
@@ -280,7 +348,7 @@ function PicksViewInner() {
               <PriorityIcon priority={c.priority} className="w-4 h-4" filled />
             </span>
           )}
-          {c.clash && <TriangleAlert className="w-4 h-4 text-[var(--color-clash)]" aria-hidden="true" />}
+          {c.clash && <ClashHatch className="h-4 w-1.5" />}
           {c.label}
           <Badge variant={c.priority ? PRIORITY_STYLE[c.priority].badge : 'count'}>{c.count}</Badge>
         </button>
@@ -324,8 +392,8 @@ function PicksViewInner() {
     return (
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
-          {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
-          {viewTabRow}
+          {viewToolbar}
+        {actionsPanel}
           <div role="tabpanel" id="picks-view-panel" aria-labelledby={`picks-tab-${view}`}>
             {listItems.length > 0 && searchRow}
             {shownItems.length === 0 && listItems.length > 0 ? (
@@ -351,8 +419,8 @@ function PicksViewInner() {
       <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
         <div role="region" aria-label="My picks" className="max-w-[600px] mx-auto w-full">
           {guestBanner}
-          {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
-          {viewTabRow}
+          {viewToolbar}
+        {actionsPanel}
           <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
           <CrewSuggestionStrip />
           <div {...(viewTabRow ? { role: 'tabpanel', id: 'picks-view-panel', 'aria-labelledby': `picks-tab-${view}` } : {})}>
@@ -380,17 +448,16 @@ function PicksViewInner() {
     <RefreshableView queryKeys={[['picks'], ['profiles']]} className="pb-5 h-full">
       <div role="region" aria-label="My picks" className="flex flex-col max-w-[600px] mx-auto w-full">
         {guestBanner}
-        {actionButtons && <div className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap">{actionButtons}</div>}
-        {viewTabRow}
+        {viewToolbar}
+        {actionsPanel}
         <CrewSuggestionStrip />
-        <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
 
         <div role="tabpanel" id="picks-view-panel" aria-labelledby={`picks-tab-${view}`}>
         {view === 'myday' && (
-          <>
-            {filterChips}
+          <div id="picks-filters" hidden={!filtersOpen} className="[&[hidden]]:hidden">
+            <div className="flex flex-nowrap gap-2 mb-3 overflow-x-auto scrollbar-hide">{filterChips}</div>
             {searchRow}
-          </>
+          </div>
         )}
         {view === 'myday' && myDayGroups && myDayGroups.length === 0 && (
           <EmptyState
@@ -412,14 +479,16 @@ function PicksViewInner() {
 
         {view === 'plan' && (
           <>
-        {filterChips}
-
-        <div className="flex flex-wrap items-center gap-2 mb-3">
+        {/* One chip row: priority filters, then Group by and Order, scrolling sideways instead of wrapping.
+            It folds with the search behind the Filters button, so the first pick starts near the top. */}
+        <div id="picks-filters" hidden={!filtersOpen} className="[&[hidden]]:hidden">
+        <div className="flex flex-nowrap items-center gap-2 mb-3 overflow-x-auto scrollbar-hide">
+          {filterChips}
           <RovingGroup
             itemRole="radio"
             role="radiogroup"
             aria-label="Group picks by"
-            className="inline-flex rounded-full border border-border p-0.5"
+            className="inline-flex shrink-0 rounded-full border border-border p-0.5"
           >
             {GROUP_MODES.map((m) => (
               <button
@@ -436,7 +505,7 @@ function PicksViewInner() {
               </button>
             ))}
           </RovingGroup>
-          <RovingGroup itemRole="radio" role="radiogroup" aria-label="Order sets" className="inline-flex rounded-full border border-border p-0.5">
+          <RovingGroup itemRole="radio" role="radiogroup" aria-label="Order sets" className="inline-flex shrink-0 rounded-full border border-border p-0.5">
             {ORDERS.map((o) => (
               <button
                 key={o.value}
@@ -452,19 +521,13 @@ function PicksViewInner() {
               </button>
             ))}
           </RovingGroup>
-          {searchBox}
+        </div>
+        {searchRow}
         </div>
 
         <MarkedNoSet />
         {!(trimmedSearch && rows.length === 0) && <PickConflicts groups={conflictGroups} />}
         <RateNightBanner />
-        <PickBulkActions />
-        <ListenList
-          sets={pickedSets}
-          days={days}
-          festivalName={currentFestival.name}
-          separator={currentFestival.b2bSeparator}
-        />
 
         {rows.length === 0 && (
           <EmptyState
@@ -489,7 +552,7 @@ function PicksViewInner() {
 
         {rows.map((row) => {
           if (row.kind === 'set') {
-            return <PicksPlanRow key={row.key} set={row.set} hasClash={clashIds.has(row.set.id)} />;
+            return <PicksPlanRow key={row.key} set={row.set} hasClash={clashIds.has(row.set.id)} clashMin={clashMarks.get(row.set.id)?.overlapMin} />;
           }
           const dot = row.priority && (
             <span style={{ color: PRIORITY_STYLE[row.priority].accent }} className="inline-flex">
@@ -503,7 +566,7 @@ function PicksViewInner() {
           );
           if (row.kind === 'subgroup') {
             return (
-              <h2 key={row.key} className="flex items-center gap-2 mt-1 mb-3 pb-2.5 border-b border-border">
+              <h2 key={row.key} className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
                 {dot}
                 <span className="text-sm font-medium text-text-secondary">{row.label}</span>
                 {badge}
@@ -517,7 +580,7 @@ function PicksViewInner() {
               aria-expanded={!row.collapsed}
               aria-label={`${row.label}, ${row.count} ${row.count === 1 ? 'pick' : 'picks'}`}
               onClick={() => toggleCollapsed(row.groupId)}
-              className="flex items-center gap-2 w-full min-h-11 mt-2 mb-2 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-xl"
+              className="flex items-center gap-2 w-full min-h-11 mb-1 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-xl"
             >
               {dot}
               <span className="text-sm font-bold text-text-primary">{row.label}</span>
@@ -529,9 +592,17 @@ function PicksViewInner() {
             </button>
           );
         })}
+        <PickBulkActions />
+        <ListenList
+          sets={pickedSets}
+          days={days}
+          festivalName={currentFestival.name}
+          separator={currentFestival.b2bSeparator}
+        />
           </>
         )}
         </div>
+        <OfflineReadinessCard festivalId={currentFestival.id} className="mt-3" />
       </div>
     </RefreshableView>
   );

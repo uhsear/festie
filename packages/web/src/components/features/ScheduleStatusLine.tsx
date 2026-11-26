@@ -3,9 +3,10 @@ import { Check, Loader2, CloudOff, AlertTriangle } from 'lucide-react';
 import { useSaveStatus } from '@festie/shared/hooks';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestivalDataStore } from '@festie/shared/stores/festivalDataStore';
-import { formatLastSynced, offlineReadyLabel } from '@festie/shared/utils';
+import { formatLastSynced, offlineReadyLabel, signalAgeNumeral, signalStateFor } from '@festie/shared/utils';
 import type { SaveStatusKind } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
+import SignalDot from './SignalDot';
 
 const ICON: Record<SaveStatusKind, React.ComponentType<{ className?: string; 'aria-hidden'?: boolean | 'true' }>> = {
   saved: Check,
@@ -19,9 +20,10 @@ const ICON: Record<SaveStatusKind, React.ComponentType<{ className?: string; 'ar
  * One status line for the Lineup and Picks header: schedule freshness ("Updated 4m ago",
  * plus "Offline-ready" when offline) and the save state (Saving, Saved, Syncing, Offline, Not saved).
  * It keeps a fixed height, so nothing below shifts when "Saved" appears or clears.
- * Amber for offline and failed; coral stays reserved for danger and SOS.
+ * The dot carries the signal state by shape (glow while live, none once stale or offline); a stale or
+ * offline age reads as a bold numeral. Amber for offline and failed saves; coral stays reserved for danger and SOS.
  */
-export default function ScheduleStatusLine({ showFreshness }: { showFreshness: boolean }) {
+export default function ScheduleStatusLine({ showFreshness, className }: { showFreshness: boolean; className?: string }) {
   const status = useSaveStatus();
   const offlineMode = useUIStore((s) => s.offlineMode);
   const cachedAt = useFestivalDataStore((s) => s._festivalCachedAt);
@@ -36,6 +38,9 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
 
   const updated = showFreshness ? formatLastSynced(cachedAt) : null;
   const offlineReady = offlineMode && offlineReadyLabel(cachedAt) === 'offline-ready';
+  const signal = cachedAt == null ? null : signalStateFor(cachedAt, offlineMode);
+  // Stale and offline lose the glow and lead with the age as a numeral.
+  const showAge = cachedAt != null && (signal === 'stale' || signal === 'offline');
   const Icon = status ? ICON[status.kind] : null;
   const spins = status?.kind === 'saving' || status?.kind === 'syncing';
   const amber = status?.kind === 'offline' || status?.kind === 'failed';
@@ -43,11 +48,21 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
   return (
     <span
       data-testid="schedule-status-line"
-      className="ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium tabular-nums text-text-muted"
+      className={cn(
+        'ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium tabular-nums text-text-muted',
+        className,
+      )}
     >
       {updated && (
-        <span data-testid="last-synced-badge" className={cn(offlineReady && 'text-accent-amber')}>
-          {updated}
+        <span data-testid="last-synced-badge" data-signal={signal} className="inline-flex items-center gap-1.5">
+          {signal && <SignalDot state={signal} />}
+          {showAge ? (
+            <span data-testid="signal-age" className="font-bold text-text-primary" aria-label={updated}>
+              {signalAgeNumeral(cachedAt)}
+            </span>
+          ) : (
+            updated
+          )}
           {offlineReady ? ' · Offline-ready' : ''}
         </span>
       )}

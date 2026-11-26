@@ -1,11 +1,9 @@
-import React, { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from 'react';
+import { CloudOff } from 'lucide-react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { cn } from '../../lib/utils';
 import { useOfflineQueueContext } from '../../hooks/useOfflineQueueBridge';
 import PendingSyncSheet from './PendingSyncSheet';
-
-const DISMISS_KEY = 'fp-offline-banner-dismissed';
 
 /**
  * Banner surfacing the offline-sync state. Three states, in priority order:
@@ -14,15 +12,14 @@ const DISMISS_KEY = 'fp-offline-banner-dismissed';
  *     couldn't sync" with a button that opens the PendingSyncSheet to retry or
  *     dismiss each one. Highest priority because dropped writes are the thing
  *     the user most needs to know about.
- *  2. OFFLINE — offlineMode: amber "You're offline. Showing your saved
- *     schedule. Changes sync when you reconnect.", plus the pending count.
+ *  2. OFFLINE — offlineMode: a slim, persistent status row (neutral ground, amber on the
+ *     icon only) "Offline, showing your saved schedule", plus the pending count. It carries
+ *     no action, so it cannot be dismissed and the state stays visible while it is true.
  *  3. SYNCING — online with pendingSync > 0: aqua "Syncing {n} change(s)…" with
  *     a Sync-now escape hatch.
  *
- * Dismissal of the OFFLINE state persists for the session (sessionStorage) so a
- * reload while offline doesn't re-nag; it's cleared on reconnect. The FAILED
- * state is intentionally NOT dismissible from the banner (the user must act on
- * it via the sheet) so a silent drop can't slip by.
+ * The banner is kept for actions: FAILED (Review) and SYNCING (Sync now) are full bars.
+ * Neither is dismissible, so a silent drop can't slip by.
  */
 export default function OfflineBanner() {
   const offlineMode = useUIStore((state) => state.offlineMode);
@@ -31,29 +28,7 @@ export default function OfflineBanner() {
   const failedCount = failedSync.length;
   const queue = useOfflineQueueContext();
 
-  const [dismissed, setDismissed] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return sessionStorage.getItem(DISMISS_KEY) === '1';
-  });
   const [sheetOpen, setSheetOpen] = useState(false);
-
-  // Clear the dismissal flag when we go back online, so the next offline
-  // episode shows the banner again.
-  useEffect(() => {
-    if (!offlineMode) {
-      if (typeof window !== 'undefined') {
-        sessionStorage.removeItem(DISMISS_KEY);
-      }
-      if (dismissed) setDismissed(false);
-    }
-  }, [offlineMode, dismissed]);
-
-  const handleDismiss = () => {
-    setDismissed(true);
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem(DISMISS_KEY, '1');
-    }
-  };
 
   const handleFlush = () => {
     queue?.processQueue().catch(() => {});
@@ -61,7 +36,7 @@ export default function OfflineBanner() {
 
   // ── State resolution (FAILED > OFFLINE > SYNCING) ─────────────────
   const showFailed = failedCount > 0;
-  const showOffline = offlineMode && !dismissed;
+  const showOffline = offlineMode;
   const showSyncing = !offlineMode && pendingSync > 0;
 
   // The failed sheet can be open even when no other banner state is active.
@@ -70,14 +45,15 @@ export default function OfflineBanner() {
   }
 
   // FAILED takes the bar; offline/syncing render only when there's no failure.
+  const isOfflineRow = showOffline && !showFailed;
   let tone: string;
   let message: string;
   if (showFailed) {
     tone = 'bg-delivery-failed border-b border-delivery-failed/60 text-[var(--text-on-light-accent)]';
     message = `${failedCount} change${failedCount === 1 ? '' : 's'} couldn't sync`;
   } else if (showOffline) {
-    tone = 'bg-accent-amber/90 border-b border-accent-amber/20 text-[var(--text-on-light-accent)]';
-    message = "You're offline. Showing your saved schedule. Changes sync when you reconnect.";
+    tone = 'bg-bg-secondary border-b border-border text-text-secondary';
+    message = 'Offline, showing your saved schedule. Changes sync when you reconnect.';
   } else {
     tone = 'bg-accent-aqua/90 border-b border-accent-aqua/20 text-[var(--text-on-light-accent)]';
     message = `Syncing ${pendingSync} pending change${pendingSync === 1 ? '' : 's'}…`;
@@ -87,18 +63,27 @@ export default function OfflineBanner() {
     <>
       <div
         className={cn(
-          'relative shrink-0 z-40 px-4 py-2 flex items-center justify-between gap-3',
+          'relative shrink-0 z-40 px-4 flex items-center justify-between gap-3',
+          isOfflineRow ? 'py-1' : 'py-2 backdrop-blur-xl',
           tone,
-          'backdrop-blur-xl',
         )}
         role="status"
         aria-live="polite"
       >
         <div className="flex items-center gap-3 min-w-0">
-          <div className="w-2 h-2 rounded-full bg-bg-primary animate-pulse flex-shrink-0" />
-          <span className="text-sm font-medium">{message}</span>
+          {isOfflineRow ? (
+            <CloudOff className="w-4 h-4 text-accent-amber flex-shrink-0" aria-hidden="true" />
+          ) : (
+            <div className="w-2 h-2 rounded-full bg-bg-primary animate-pulse flex-shrink-0" />
+          )}
+          <span className={cn('font-medium', isOfflineRow ? 'text-xs' : 'text-sm')}>{message}</span>
           {!showFailed && pendingSync > 0 && (
-            <span className="ml-1 px-2 py-0.5 rounded-full bg-bg-primary/20 text-xs font-medium flex-shrink-0">
+            <span
+              className={cn(
+                'ml-1 px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0',
+                isOfflineRow ? 'bg-text-secondary/10' : 'bg-bg-primary/20',
+              )}
+            >
               {pendingSync}
             </span>
           )}
@@ -119,15 +104,6 @@ export default function OfflineBanner() {
               className="text-xs font-bold text-inherit px-2 py-1 rounded bg-bg-primary/10 hover:bg-bg-primary/20 min-h-[44px]"
             >
               Sync now
-            </button>
-          )}
-          {!showFailed && showOffline && (
-            <button
-              onClick={handleDismiss}
-              className="text-[var(--text-on-light-accent)] hover:opacity-70 transition-opacity min-h-11 min-w-11 inline-flex items-center justify-center"
-              aria-label="Dismiss offline notice"
-            >
-              <X className="w-4 h-4" aria-hidden="true" />
             </button>
           )}
         </div>

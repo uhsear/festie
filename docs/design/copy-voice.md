@@ -33,7 +33,7 @@ Everything else uses sentence case.
 | Map, compass, live location, meeting points | Find; button "Find your crew" | Find each other | MapPin / location | `COPY.find` |
 | Crew's main meeting spot | Home Base | home base, HQ, camp | Home / home | `COPY.homeBase` |
 | Any member's meeting place | Meeting point: Meet-up, Emergency spot | Pre-show, During, Post-show, After, General | Flag, AlertTriangle / flag, warning | `MEETING_POINT_KINDS` |
-| Two picks overlap | Clash; "Clashes with X" | conflict, time conflict | TriangleAlert / warning-outline | `COPY.clash`, `clashCount` |
+| Two picks overlap | Clash; "Clashes with X" | conflict, time conflict | ClashHatch / ClashSwatch (hatch stripe) | `COPY.clash`, `clashCount` |
 | Festival running now | Happening now | Live | n/a | `FESTIVAL_STATUS_LABEL` |
 | Set on stage now | Playing (screen reader: Playing now) | LIVE | green dot, `live.*` token group | `COPY.status` |
 | Location sharing | Live (only this) | | green dot | `COPY.status.liveLocation` |

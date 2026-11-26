@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react';
-import { CalendarClock, TriangleAlert } from 'lucide-react';
+import { CalendarClock } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores';
 import { useCrewStore } from '@festie/shared/stores/crewStore';
 import { useUIStore } from '@festie/shared/stores/uiStore';
 import { useFestival, useClashResolver } from '@festie/shared/hooks';
 import { COPY, PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { Priority } from '@festie/shared/types';
+import ClashHatch from '../ui/ClashHatch';
 import {
   buildPickConflicts,
   artistDisplayName,
@@ -67,7 +68,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
   const [busy, setBusy] = useState(false);
   const { getStageName, getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
-  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--text-muted)');
+  const getStageColor = (stageId: string) => resolveStageColor(getStageColorRaw(stageId), 'var(--color-text-muted)');
 
   const b2bSeparator = currentFestival?.b2bSeparator;
   const myUserId = currentProfile?.userId;
@@ -142,10 +143,10 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
         return (
           <article
             key={`${group.recommendedKeepId}-${gi}`}
-            className="rounded-lg border border-[var(--color-clash)] bg-bg-card p-3"
+            className="rounded-lg border border-border bg-bg-card p-3"
           >
             <div className="mb-2 flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
+              <ClashHatch className="h-4 w-1.5" />
               <h2 className="text-sm font-bold text-text-primary">
                 {`${group.tight ? COPY.clash.tight : COPY.clash.one}${dayLabel ? ` · ${dayLabel}` : ''}`}
               </h2>

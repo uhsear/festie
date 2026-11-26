@@ -1,5 +1,4 @@
 import {
-  View,
   Text,
   TouchableOpacity,
   FlatList,
@@ -7,14 +6,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  SCHEDULE_GROUP_BYS,
-  type ScheduleGroupBy,
   type AnnouncedLineupModel,
   type FestivalPhase,
 } from '@festie/shared/utils';
-import type { FestivalSet } from '@festie/shared/types';
 import { useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
-import SegmentedControl from '../SegmentedControl';
 import SetTimesBanner from '../SetTimesBanner';
 import AnnouncedLineup from '../AnnouncedLineup';
 import DiscoverRow from '../DiscoverRow';
@@ -22,19 +17,12 @@ import type { ReactElement, RefObject } from 'react';
 import type { ListRow } from './listRow';
 import { useStyles } from './styles';
 
-const GROUP_BY_OPTIONS: readonly { value: ScheduleGroupBy; label: string }[] = SCHEDULE_GROUP_BYS.map((g) => ({
-  value: g.key,
-  label: g.label,
-}));
-
 interface ScheduleCardsViewProps {
   announced: AnnouncedLineupModel;
   cardsEmpty: ReactElement | undefined;
   cardsSeparator: () => ReactElement;
   controls: ReactElement;
-  filteredSets: FestivalSet[];
   genreFilterActive: boolean;
-  groupBy: ScheduleGroupBy;
   hPad: number;
   handleCardsScroll: (e: { nativeEvent: { contentOffset: { y: number; }; }; }) => void;
   keyExtractor: (item: ListRow) => string;
@@ -48,7 +36,6 @@ interface ScheduleCardsViewProps {
   scheduleViewportBottomInset: number;
   scrollCardsToTop: () => void;
   searchQuery: string;
-  setScheduleGroupBy: (groupBy: ScheduleGroupBy | null) => void;
   showScrollTop: boolean;
   stageFilterActive: boolean;
 }
@@ -58,9 +45,7 @@ export default function ScheduleCardsView({
   cardsEmpty,
   cardsSeparator,
   controls,
-  filteredSets,
   genreFilterActive,
-  groupBy,
   hPad,
   handleCardsScroll,
   keyExtractor,
@@ -74,7 +59,6 @@ export default function ScheduleCardsView({
   scheduleViewportBottomInset,
   scrollCardsToTop,
   searchQuery,
-  setScheduleGroupBy,
   showScrollTop,
   stageFilterActive,
 }: ScheduleCardsViewProps) {
@@ -98,19 +82,6 @@ export default function ScheduleCardsView({
             />
             {/* A search lists the matching announced acts under the set results instead (footer). */}
             {searchQuery.trim() ? null : <AnnouncedLineup model={announced} hPad={hPad} />}
-            {filteredSets.length > 0 ? (
-              <View style={[styles.groupByRow, { paddingHorizontal: hPad }]}>
-                <Text style={styles.groupByLabel}>Group by</Text>
-                <View style={styles.switcherFlex}>
-                  <SegmentedControl
-                    options={GROUP_BY_OPTIONS}
-                    value={groupBy}
-                    onChange={setScheduleGroupBy}
-                    accessibilityLabel="Group sets by"
-                  />
-                </View>
-              </View>
-            ) : null}
           </>
         }
         // The controls already apply hPad themselves, so cancel the container's.

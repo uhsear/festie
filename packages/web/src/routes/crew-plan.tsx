@@ -11,11 +11,11 @@ import {
   memberSummary,
   meetingTimeDisplay,
   resolveFestivalTimeZone,
-  timeAgo,
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
 import { COPY, PRIORITY_LABEL } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
+import CrewFacesRow from '../components/crew/CrewFacesRow';
 import FreshnessChip from '../components/features/FreshnessChip';
 import EmptyState from '../components/ui/EmptyState';
 import Button from '../components/ui/Button';
@@ -23,7 +23,7 @@ import PriorityIcon from '../components/ui/PriorityIcon';
 import CrewPlanSkeleton from '../components/ui/skeletons/CrewPlanSkeleton';
 import { Card } from '../components/ui/Card';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
-import { MapPin, Home, CalendarClock, Users, ArrowLeft, Trophy, Sparkles, Radio, Vote } from 'lucide-react';
+import { MapPin, Home, CalendarClock, Users, ArrowLeft, Trophy, Sparkles, Vote } from 'lucide-react';
 import ArtistName from '../components/features/ArtistName';
 
 // The plan renders from the persisted cache first (useCrewHub reads the stores),
@@ -145,7 +145,7 @@ function CrewPlanContent() {
   const stages = useFestivalStore((s) => s.stages);
   const festivalDays = useFestivalStore((s) => s.days);
   const setDetailSet = useUIStore((s) => s.setDetailSet);
-  const { crew, isOwner, ownerName, meetingPoint, isPast, upNext, howWeDid, mix, whereabouts, openPolls, myPicks } =
+  const { crew, isOwner, ownerName, meetingPoint, isPast, upNext, howWeDid, mix, openPolls, myPicks } =
     hub;
 
   if (!crew) return null;
@@ -167,6 +167,8 @@ function CrewPlanContent() {
         </div>
         <FreshnessChip surface="crew" />
       </div>
+
+      <CrewFacesRow />
 
       {/* Active meeting point */}
       <Card padding="md">
@@ -367,31 +369,6 @@ function CrewPlanContent() {
                 </li>
               ))}
             </ul>
-          </Card.Body>
-        </Card>
-      )}
-
-      {whereabouts.length > 0 && (
-        <Card padding="md">
-          <Card.Header>
-            <Radio className="w-5 h-5 text-text-secondary flex-shrink-0" aria-hidden="true" />
-            <span className="font-semibold text-text-primary">Where everyone is</span>
-          </Card.Header>
-          <Card.Body className="space-y-1">
-            <ul className="list-none m-0 p-0 space-y-1">
-              {whereabouts.map((w) => {
-                const detail = w.sos ? 'Sent an SOS' : w.live === 'live' ? 'Sharing live location' : (w.statusLabel ?? 'Location shared');
-                const at = w.liveAt ?? w.statusAt;
-                return (
-                  <li key={w.userId} className="text-sm text-text-secondary">
-                    {`${w.name} · ${detail}${at != null ? ` · ${timeAgo(at)}` : ''}`}
-                  </li>
-                );
-              })}
-            </ul>
-            <Link to="/crew" search={{ tab: 'find' }} className={EMPTY_LINK}>
-              Open crew
-            </Link>
           </Card.Body>
         </Card>
       )}

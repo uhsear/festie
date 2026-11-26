@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -13,6 +14,9 @@ import { priorityIconName } from '../lib/prioritySymbol';
 import AppPressable from './AppPressable';
 import { ArtistNameRuns, artistOpenActions } from './ArtistName';
 
+/** Rows shown under "Playing at the same time" before "See all"; keeps a B2B set from pushing the sheet's controls down. */
+export const OVERLAP_PREVIEW_LIMIT = 3;
+
 /** "On <stage> that night" neighbours and "Playing at the same time". Each part hides when empty. */
 export default function SetContextSection({ set }: { set: FestivalSet }) {
   const styles = useStyles();
@@ -22,6 +26,7 @@ export default function SetContextSection({ set }: { set: FestivalSet }) {
   const stages = useFestivalDataStore((s) => s.stages);
   const separator = useFestivalDataStore((s) => s.currentFestival?.b2bSeparator);
   const { getMyPick } = usePicks();
+  const [showAllOverlaps, setShowAllOverlaps] = useState(false);
 
   const stageName = (s: FestivalSet) => stages.find((st) => st.id === s.stageId)?.name ?? s.stageName ?? '';
 
@@ -75,7 +80,19 @@ export default function SetContextSection({ set }: { set: FestivalSet }) {
           <Text style={styles.sectionLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {COPY.setContext.overlapHeading}
           </Text>
-          {overlaps.map((e) => row(e))}
+          {(showAllOverlaps ? overlaps : overlaps.slice(0, OVERLAP_PREVIEW_LIMIT)).map((e) => row(e))}
+          {!showAllOverlaps && overlaps.length > OVERLAP_PREVIEW_LIMIT ? (
+            <AppPressable
+              style={styles.row}
+              onPress={() => setShowAllOverlaps(true)}
+              accessibilityRole="button"
+              accessibilityLabel={COPY.setContext.overlapSeeAllA11y(overlaps.length)}
+            >
+              <Text style={styles.seeAll} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                {COPY.setContext.overlapSeeAll(overlaps.length)}
+              </Text>
+            </AppPressable>
+          ) : null}
         </View>
       ) : null}
     </>
@@ -92,4 +109,5 @@ const useStyles = makeStyles((t) => ({
   meta: { ...typeStyle('caption'), color: t.colors.text.muted },
   pickChip: { flexDirection: 'row', alignItems: 'center', gap: t.spacing[1] },
   pick: { ...typeStyle('caption') },
+  seeAll: { ...typeStyle('label'), color: t.colors.text.secondary },
 }));

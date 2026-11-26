@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import { Link, useLocation } from '@tanstack/react-router';
 import { Bell } from 'lucide-react';
 import { useAuthStore, useUIStore } from '@festie/shared';
@@ -38,36 +37,8 @@ export default function Header() {
 
   // Connection status — reflects real network state (uiStore.offlineMode, driven by
   // useOffline and API failures), not the realtime socket: HTTP can work while the
-  // socket is down. Only shown when signed in.
+  // socket is down. Only shown when signed in and offline.
   const connected = !useUIStore((state) => state.offlineMode);
-
-  // R13: shrinking sticky header. A single scroll listener on the main content
-  // scroll container toggles `.shrunk` once scrollTop passes 80px; the header
-  // re-expands immediately on scroll-up (direction tracked via a ref). All the
-  // visual compression (min-height, brand font-size) is CSS-transitioned and
-  // reduced-motion-safe via the global prefers-reduced-motion block.
-  const [shrunk, setShrunk] = useState(false);
-  useEffect(() => {
-    const scroller = document.getElementById('main-content');
-    if (!scroller) return;
-    let prevTop = scroller.scrollTop;
-    let raf = 0;
-    const onScroll = () => {
-      if (raf) return;
-      raf = window.requestAnimationFrame(() => {
-        raf = 0;
-        const top = scroller.scrollTop;
-        const goingUp = top < prevTop;
-        prevTop = top;
-        setShrunk(top > 80 && !goingUp);
-      });
-    };
-    scroller.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      scroller.removeEventListener('scroll', onScroll);
-      if (raf) window.cancelAnimationFrame(raf);
-    };
-  }, []);
 
   // Availability mirrors the captured install prompt so the button hides where
   // it would no-op (Firefox/Safari, or after a successful install).
@@ -76,8 +47,6 @@ export default function Header() {
   return (
     <header
       className={cn(
-        'app-header',
-        shrunk && 'shrunk',
         'flex items-center justify-between shrink-0',
         'bg-[var(--color-bg-chrome)] backdrop-saturate-[180%] backdrop-blur-[var(--glass-blur-strong)]',
         'border-b border-border',
@@ -101,7 +70,6 @@ export default function Header() {
         <div className={cn('flex flex-col gap-2', 'max-md:gap-0', 'lg:flex-row lg:items-center lg:gap-4')}>
           <div
             className={cn(
-              'app-header-brand',
               /* dot is anchored to the brand row so it annotates FESTIE at
                  every breakpoint instead of floating between the two util rows */
               'flex items-center gap-2',
@@ -113,19 +81,14 @@ export default function Header() {
               'max-[380px]:text-[length:var(--font-size-12)]',
             )}
           >
-            {user && (
+            {user && !connected && (
               <>
                 <span
-                  className={cn(
-                    'w-2 h-2 rounded-full shrink-0',
-                    connected
-                      ? 'bg-accent-green shadow-[0_0_8px_var(--color-accent-green)]'
-                      : 'bg-accent-amber shadow-[0_0_8px_var(--color-accent-amber)] animate-blink',
-                  )}
+                  className="w-2 h-2 rounded-full shrink-0 bg-accent-amber shadow-[0_0_8px_var(--color-accent-amber)] animate-blink"
                   role="status"
-                  aria-label={connected ? 'Connected' : 'Disconnected'}
+                  aria-label="Disconnected"
                 />
-                {!connected && <span className="type-micro text-accent-amber max-[480px]:hidden">Offline</span>}
+                <span className="type-micro text-accent-amber max-[480px]:hidden">Offline</span>
               </>
             )}
             <Link to="/" aria-label="FESTIE home" className="text-[inherit] no-underline">
@@ -135,7 +98,7 @@ export default function Header() {
           <div
             className={cn(
               'flex gap-4 items-center',
-              /* hidden on mobile (<768px) — Install App + Support Me */
+              /* hidden on mobile (<768px) — Install App */
               'max-md:!hidden',
             )}
           >
@@ -172,20 +135,6 @@ export default function Header() {
               {' Install App'}
             </Button>
             )}
-
-            {/* Support link */}
-            <a
-              className="inline-flex items-center justify-center gap-2 rounded-xl font-semibold transition-[background-color,color,border-color] duration-200 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 bg-[var(--color-overlay-2)] text-text-secondary border border-border-light text-[length:var(--font-size-12)] tracking-wide hover:border-accent-coral hover:text-accent-coral hover:bg-[var(--color-overlay-4)] focus-visible:outline-accent-aqua [&_svg]:size-4 px-2.5 py-1.5 min-h-11 min-w-11 no-underline whitespace-nowrap"
-              href="https://paypal.me/uhsear"
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label="Support Me via PayPal"
-            >
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
-              </svg>
-              {' Support Me'}
-            </a>
           </div>
         </div>
 
@@ -214,7 +163,7 @@ export default function Header() {
                   {tab.label}
                   {badged &&
                     (crewBadge.label === '' ? (
-                      <span aria-hidden="true" className="inline-block ml-1 w-1.5 h-1.5 rounded-full bg-accent-coral" />
+                      <span aria-hidden="true" className="inline-block ml-1 w-1.5 h-1.5 rounded-full bg-accent-aqua" />
                     ) : (
                       <span
                         aria-hidden="true"

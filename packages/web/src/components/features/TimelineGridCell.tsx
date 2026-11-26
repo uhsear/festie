@@ -1,10 +1,12 @@
 import React from 'react';
 import { FestivalSet, Priority, Festival } from '@festie/shared/types';
 import { fmtShort, artistDisplayName, type ClashMark, type GridCrewAvatars } from '@festie/shared/utils';
-import { TriangleAlert, Users } from 'lucide-react';
+import { clashMinutes } from '@festie/shared/constants';
+import { Users } from 'lucide-react';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
 import PriorityIcon from '../ui/PriorityIcon';
+import ClashHatch from '../ui/ClashHatch';
 import Avatar from '../ui/Avatar';
 import ArtistName from './ArtistName';
 
@@ -70,7 +72,6 @@ function TimelineGridCell({
   const rowStart = Math.floor(topSlot);
   const rowEnd = Math.max(rowStart + 1, Math.ceil(topSlot + spanSlots));
   const isShort = blockPx < 44;
-  const hasConflictActive = !!clash;
   const tabIndex = tabbable ? 0 : -1;
 
   return (
@@ -101,8 +102,6 @@ function TimelineGridCell({
         myPick === 'must' && 'shadow-[inset_0_0_24px_rgba(var(--accent-coral-rgb),0.12)]',
         myPick === 'want-to-see' && 'shadow-[inset_0_0_24px_var(--color-aqua-a12)]',
         myPick === 'maybe' && 'shadow-[inset_0_0_24px_var(--color-amber-a12)]',
-        // Conflict indicator
-        hasConflictActive && 'border-2 border-[var(--color-clash)]',
       )}
       style={
         {
@@ -118,32 +117,21 @@ function TimelineGridCell({
       onFocus={() => onActivate(set.id)}
       data-short={isShort ? '1' : '0'}
     >
-      {/* Clash hatching over each overlapping part of this set */}
+      {/* One clash shape: a hatch bar over each overlapping part, plus one minutes numeral */}
       {clash?.segments.map((seg) => (
-        <span
+        <ClashHatch
           key={`${seg.from}-${seg.to}`}
-          className="absolute left-0 w-1.5 pointer-events-none z-[1] [background:repeating-linear-gradient(135deg,var(--color-clash)_0_2px,transparent_2px_5px)]"
+          className="absolute left-0 w-1.5 z-[1]"
           style={{ top: `${seg.from * 100}%`, height: `${(seg.to - seg.from) * 100}%` }}
-          aria-hidden="true"
         />
       ))}
-
-      {/* Clash badge */}
       {clash && (
         <span
-          className={cn(
-            'absolute top-0.5 right-0.5',
-            'w-3.5 h-3.5 rounded-full',
-            'inline-flex items-center justify-center',
-            'text-[length:var(--font-size-10)] leading-none',
-            'text-[var(--color-text-on-dark)]',
-            'bg-[var(--color-clash)]',
-            'shadow-[0_0_0_1.5px_var(--color-bg-primary)]',
-            'pointer-events-none z-[2]',
-          )}
+          data-clash-minutes
+          className="absolute top-0.5 right-1 z-[2] pointer-events-none text-[length:var(--font-size-10)] font-bold leading-none tabular-nums text-[var(--color-clash)]"
           aria-hidden="true"
         >
-          <TriangleAlert className="w-3 h-3" aria-hidden="true" />
+          {clashMinutes(clash.overlapMin)}
         </span>
       )}
 
@@ -162,7 +150,7 @@ function TimelineGridCell({
         }}
         onKeyDown={(e) => onNavKey(e, set.id)}
         tabIndex={tabIndex}
-        // The badge above is pointer-events-none, so hovering it lands here and shows this tooltip.
+        // The numeral above is pointer-events-none, so hovering it lands here and shows this tooltip.
         title={clash?.text}
         data-open
       >
@@ -269,7 +257,7 @@ function TimelineGridCell({
 
       {/* Compact cells have no pick buttons: show the pick as an icon (picking happens in the set sheet) */}
       {compact && myPick && (
-        <span className={cn('absolute top-[3px] pointer-events-none', clash ? 'right-[20px]' : 'right-[5px]')} aria-hidden="true">
+        <span className={cn('absolute top-[3px] pointer-events-none', clash ? 'right-[30px]' : 'right-[5px]')} aria-hidden="true">
           <PriorityIcon priority={myPick} filled className={cn('w-4 h-4', PICK_ICON_COLOR[myPick])} />
         </span>
       )}

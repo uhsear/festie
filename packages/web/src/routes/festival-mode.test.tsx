@@ -26,14 +26,10 @@ vi.mock('@festie/shared/stores/uiStore', () => ({
 
 let crewDayOf: CrewDayOf = { crew: null, whereabouts: [], meet: null };
 vi.mock('@festie/shared/hooks', () => ({
-  useFestival: () => ({ getStageName: () => 'Main Stage' }),
+  useFestival: () => ({ getStageName: () => 'Main Stage', getStageColor: () => '#112233' }),
   useCrewDayOf: () => crewDayOf,
 }));
 
-vi.mock('../components/crew/SosRaiseButton', () => ({
-  default: ({ crewId }: { crewId: string }) => <button data-testid="sos-raise">{crewId}</button>,
-}));
-vi.mock('../components/features/LowPowerToggle', () => ({ default: () => <div data-testid="low-power-toggle" /> }));
 vi.mock('../components/festival-mode/WeatherStrip', () => ({ default: () => <div data-testid="weather-strip" /> }));
 vi.mock('../components/festival-mode/CaughtNowCard', () => ({ default: () => <div data-testid="caught-now" /> }));
 vi.mock('../components/features/OfflineStatusChip', () => ({ default: () => <div data-testid="offline-chip" /> }));
@@ -170,7 +166,6 @@ describe('FestivalModeView (Now surface)', () => {
     expect(screen.getByTestId('fm-crew')).toHaveTextContent('Ana');
     expect(screen.getByTestId('fm-crew')).toHaveTextContent('Live');
     expect(screen.getByTestId('fm-meet')).toHaveTextContent('Left of Main');
-    expect(screen.getByTestId('sos-raise')).toHaveTextContent('c1');
     fireEvent.click(screen.getByTestId('fm-find-crew'));
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/crew' });
   });
@@ -203,15 +198,5 @@ describe('FestivalModeView (Now surface)', () => {
     setup({ user: true });
     render(<FestivalModeView />);
     expect(screen.getByTestId('offline-chip')).toBeInTheDocument();
-  });
-
-  it('guest or no crew: shows no SOS button', () => {
-    setup({ user: false });
-    const { unmount } = render(<FestivalModeView />);
-    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
-    unmount();
-    setup({ user: true });
-    render(<FestivalModeView />);
-    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
   });
 });

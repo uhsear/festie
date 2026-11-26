@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  COPY, FESTIVAL_STATUS_LABEL, MEETING_POINT_KINDS, clashChip, clashChipA11y, clashCount, clashPromptCopy, genreChipLabel,
+  COPY, FESTIVAL_STATUS_LABEL, MEETING_POINT_KINDS, clashChip, clashChipA11y, clashMinutes, clashCount, clashPromptCopy, genreChipLabel,
   meetingPointKind,
 } from './copy';
 
@@ -64,6 +64,13 @@ describe('grid clash copy', () => {
   });
   it('never says conflict in grid copy', () => {
     for (const v of Object.values(COPY.grid)) expect(v.toLowerCase()).not.toContain('conflict');
+  });
+});
+
+describe('clashMinutes', () => {
+  it('writes one compact numeral', () => {
+    expect(clashMinutes(25)).toBe('25m');
+    expect(clashMinutes(24.6)).toBe('25m');
   });
 });
 

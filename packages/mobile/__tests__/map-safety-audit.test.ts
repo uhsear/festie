@@ -15,12 +15,14 @@ describe('Map tab SOS FAB and empty states', () => {
   const map = read('app/(tabs)/map.tsx');
   const hook = read('hooks/useSosRaise.ts');
 
-  it('disables and spins the FAB while raising, and says SOS active for your own SOS', () => {
-    expect(map).toContain('const { confirmRaise, raising } = useSosRaise');
-    expect(map).toContain('disabled={raising}');
-    expect(map).toContain('<ActivityIndicator');
-    expect(map).toContain("{mySosActive ? 'SOS active' : 'SOS'}");
-    expect(map).toContain('Your SOS is active. Open crew to mark yourself safe');
+  it('mounts the one SosControl, which disables and spins while raising and hides for your own SOS', () => {
+    const control = read('components/SosControl.tsx');
+    expect(map).toContain('<SosControl');
+    expect(map).not.toContain('useSosRaise');
+    expect(control).toContain('const { confirmRaise, raising } = useSosRaise');
+    expect(control).toContain('disabled={raising}');
+    expect(control).toContain('<ActivityIndicator');
+    expect(control).toContain('crewSos.some((e) => e.userId === userId)');
   });
 
   it('guards a double raise with a ref and confirms a sent SOS with a toast', () => {

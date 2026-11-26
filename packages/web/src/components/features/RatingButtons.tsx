@@ -25,11 +25,13 @@ interface Props {
   onRated?: (rating: number) => void;
   /** Show the one-line memory field once a rating exists. */
   showMemory?: boolean;
+  /** Print the caption under the meter. A list prints it once for the page and passes false. */
+  showCaption?: boolean;
 }
 
 const MEMORY_MAX = 140;
 
-export default function RatingButtons({ setId, festivalId, compact = false, onRated, showMemory = true }: Props) {
+export default function RatingButtons({ setId, festivalId, compact = false, onRated, showMemory = true, showCaption = true }: Props) {
   const { toast, toastError } = useToast();
   const qc = useQueryClient();
   const { select } = useHaptics();
@@ -129,6 +131,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
       >
         {RATINGS.map((r) => {
           const active = current === r.n;
+          const filled = current !== null && r.n < current;
           return (
             <div key={r.n} className="flex flex-col items-center gap-1">
               <button
@@ -136,39 +139,39 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
                 aria-pressed={active}
                 aria-label={`${r.label} (${r.n} of 5)`}
                 aria-disabled={busy || undefined}
+                data-step-state={active ? 'active' : filled ? 'filled' : 'empty'}
                 onClick={() => handleClick(r.n)}
                 className={cn(
-                  'w-11 h-11 rounded-full flex items-center justify-center transition-[background-color,box-shadow,transform] cursor-pointer',
+                  'w-11 h-11 rounded-full flex items-center justify-center transition-[background-color,color] cursor-pointer',
                   'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
-                  active
-                    ? 'bg-accent-amber/25 scale-110 shadow-[0_0_12px_theme(colors.accent-amber/40)] ring-2 ring-accent-amber/60 text-accent-amber'
-                    : 'bg-bg-card/60 border border-border hover:border-border-light text-text-secondary',
+                  active && 'bg-accent-aqua text-[var(--text-on-light-accent)]',
+                  filled && 'bg-accent-aqua/20 border border-accent-aqua/40 text-accent-aqua',
+                  !active && !filled && 'bg-bg-card/60 border border-border hover:border-border-light text-text-secondary',
                 )}
               >
                 <r.Icon className={iconSize} aria-hidden="true" />
               </button>
               <span
                 aria-hidden="true"
-                className={cn(
-                  'text-[length:var(--font-size-10)] font-semibold',
-                  active ? 'text-accent-amber' : 'text-text-secondary',
-                )}
+                className="min-h-4 text-[length:var(--font-size-10)] font-semibold text-text-primary"
               >
-                {r.label}
+                {active ? r.label : ''}
               </span>
             </div>
           );
         })}
       </div>
-      <p
-        aria-hidden="true"
-        className={cn(
-          'mt-2 text-center text-xs',
-          current != null ? 'text-accent-amber' : 'text-text-muted',
-        )}
-      >
-        {ratingCaption(current)}
-      </p>
+      {showCaption && (
+        <p
+          aria-hidden="true"
+          className={cn(
+            'mt-2 text-center text-xs',
+            current != null ? 'text-accent-aqua' : 'text-text-muted',
+          )}
+        >
+          {ratingCaption(current)}
+        </p>
+      )}
       {showMemory && current !== null && (
         <div className="mt-2 text-center text-sm">
           {editing ? (
