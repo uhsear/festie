@@ -562,34 +562,6 @@ export default function SetDetailScreen() {
           </View>
         </View>
         {spotifyAttribution ? <SpotifyAttribution href={spotifyAttribution.href} /> : null}
-        <Text style={styles.time}>{whenLine}</Text>
-        {move ? (
-          <Text style={styles.moved} accessibilityLabel={move.a11y}>
-            {move.line}
-          </Text>
-        ) : null}
-        {coord ? (
-          <View style={styles.stageActions}>
-            <Button
-              variant="secondary"
-              size="sm"
-              icon="map-outline"
-              label={MAP_COPY.showStageOnMap}
-              onPress={() => router.navigate(stageMapHref(set.stageId))}
-            />
-            <Button
-              variant="secondary"
-              size="sm"
-              icon="compass-outline"
-              label={MAP_COPY.pointMeThere}
-              onPress={() => router.push(compassHref(stageName, coord))}
-            />
-          </View>
-        ) : null}
-
-        <AlsoPlaysSection set={set} nowMs={nowMs} />
-        <SetContextSection set={set} />
-
         {/* Priority picker: guests pick on this device */}
         {canPick ? (
           <View style={styles.section}>
@@ -647,6 +619,34 @@ export default function SetDetailScreen() {
             ) : null}
           </View>
         ) : null}
+
+        <Text style={styles.time}>{whenLine}</Text>
+        {move ? (
+          <Text style={styles.moved} accessibilityLabel={move.a11y}>
+            {move.line}
+          </Text>
+        ) : null}
+        {coord ? (
+          <View style={styles.stageActions}>
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="map-outline"
+              label={MAP_COPY.showStageOnMap}
+              onPress={() => router.navigate(stageMapHref(set.stageId))}
+            />
+            <Button
+              variant="secondary"
+              size="sm"
+              icon="compass-outline"
+              label={MAP_COPY.pointMeThere}
+              onPress={() => router.push(compassHref(stageName, coord))}
+            />
+          </View>
+        ) : null}
+
+        <AlsoPlaysSection set={set} nowMs={nowMs} />
+        <SetContextSection set={set} />
 
         {/* Reminder and note / guest sign-in prompt */}
         {user ? (
