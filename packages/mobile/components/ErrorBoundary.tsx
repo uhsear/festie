@@ -4,6 +4,7 @@ import * as Sentry from '@sentry/react-native';
 import { typeStyle, useTokens, makeStyles } from '../hooks/useTokens';
 import DisplayWords from './DisplayWords';
 import Button from './Button';
+import BrandMark from './BrandMark';
 
 /**
  * App-wide render error boundary — the mobile analog of the web
@@ -12,8 +13,10 @@ import Button from './Button';
  * Sentry.wrap() in app/_layout.tsx reports render throws but leaves a blank
  * native screen behind. This class boundary catches render-time throws from
  * any child screen, reports them to Sentry, and shows an on-brand recovery
- * fallback with a Retry button that resets the boundary so the user can keep
- * using the app instead of staring at a white screen.
+ * fallback (mark, heading, one sentence, one Retry button) so the user can keep
+ * using the app instead of staring at a white screen. Retry resets the boundary,
+ * or escapes first when the root passes onEscape (reset alone would loop on a
+ * deterministic crash).
  */
 
 interface ErrorBoundaryProps {
@@ -40,16 +43,14 @@ function ErrorFallback({ onReset, onEscape }: { onReset: () => void; onEscape?: 
       style={[styles.container, { backgroundColor: t.colors.bg.primary, padding: t.spacing[12] }]}
       accessibilityRole="alert"
     >
+      <BrandMark />
       <Text style={[styles.heading, { color: t.colors.text.primary }]}>
         <DisplayWords text="Something went wrong" fontSize={styles.heading.fontSize} />
       </Text>
       <Text style={[styles.description, { color: t.colors.text.secondary }]}>
-        An unexpected error occurred. Tap retry to reload this screen.
+        An unexpected error occurred; tap Retry to try again.
       </Text>
-      <Button label="Retry" onPress={onReset} style={{ marginTop: t.spacing[5] }} />
-      {onEscape && (
-        <Button variant="secondary" label="Go to Schedule" onPress={onEscape} style={{ marginTop: t.spacing[3] }} />
-      )}
+      <Button label="Retry" onPress={onEscape ?? onReset} style={{ marginTop: t.spacing[5] }} />
     </View>
   );
 }

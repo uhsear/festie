@@ -45,6 +45,7 @@ import {
 import type { FestivalSet, Priority } from '@festie/shared/types';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import SegmentedControl from '../components/SegmentedControl';
 import ScheduleImagePoster from '../components/ScheduleImagePoster';
 import LockscreenPoster from '../components/LockscreenPoster';
@@ -194,6 +195,7 @@ export default function PicksImageScreen() {
   const styles = useStyles();
   const haptics = useHaptics();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReduceMotion();
   const { width, height: windowH } = useWindowDimensions();
   const { mode: modeParam, day: dayParam } = useLocalSearchParams<{ mode?: string; day?: string }>();
 
@@ -498,7 +500,7 @@ export default function PicksImageScreen() {
         }
         if (page + 1 < pageCount) {
           setPreviewPage(page + 1);
-          pagerRef.current?.scrollTo({ x: (page + 1) * previewW, animated: true });
+          pagerRef.current?.scrollTo({ x: (page + 1) * previewW, animated: !reduceMotion });
         } else {
           setSavedKey(saveKey);
         }
@@ -526,6 +528,7 @@ export default function PicksImageScreen() {
     layout.height,
     recordSaved,
     showError,
+    reduceMotion,
   ]);
 
   const handlePrintable = useCallback(async () => {

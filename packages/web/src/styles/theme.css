@@ -72,7 +72,7 @@
     border-radius: 50%;
     background: var(--color-accent-aqua);
     will-change: transform, opacity;
-    animation: status-dot-pulse-once 600ms var(--ease-out, ease-out) 1 both;
+    animation: status-dot-pulse-once var(--duration-spatial-slow) var(--ease-out) 1 both;
     pointer-events: none;
   }
 }
@@ -93,7 +93,7 @@
 }
 
 @utility crew-poll-bar {
-  animation: crew-bar-fill 420ms var(--ease-out, ease-out) both;
+  animation: crew-bar-fill var(--duration-slow) var(--ease-out) both;
 }
 
 @utility crew-activity-rail {
@@ -160,7 +160,7 @@
 }
 
 @utility fm-card-enter {
-  animation: fm-card-enter 180ms var(--ease-out, ease-out) both;
+  animation: fm-card-enter var(--duration-med) var(--ease-out) both;
 }
 
 @keyframes fm-card-enter {
@@ -217,67 +217,53 @@
   }
 }
 
-/* R7 (design-inspiration-deep-2026-06-10): surface-palette shimmer — the base and
-   highlight match the 5-step neutral scale. 1.4s linear. */
+/* R7 (design-inspiration-deep-2026-06-10): surface-palette shimmer. The bar is a
+   flat base; a highlight overlay slides across it by transform only, so the loop
+   stays on the compositor and never repaints. 1.4s linear. */
 @utility skeleton-shimmer {
-  background: linear-gradient(90deg, var(--skeleton-base) 0%, var(--skeleton-hi) 40%, var(--skeleton-base) 100%);
-  background-size: 200% 100%;
-  animation: skeleton-loading 1.4s linear infinite;
+  position: relative;
+  overflow: hidden;
+  background: var(--skeleton-base);
   border-radius: 0.5rem;
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, var(--skeleton-hi) 50%, transparent 100%);
+    transform: translateX(-100%);
+    will-change: transform;
+    animation: skeleton-sweep 1.4s linear infinite;
+  }
 }
 
-/* R7: 150ms fade-out on data arrival. Add to the skeleton wrapper, then remove
-   the element after the transition ends (transitionend or 150ms setTimeout). */
+/* R7: medium-duration fade-out on data arrival. Add to the skeleton wrapper, then remove
+   the element after the transition ends (transitionend or a duration-med setTimeout). */
 @utility skeleton-dismiss {
-  transition: opacity 150ms linear;
+  transition: opacity var(--duration-med) linear;
   opacity: 0;
 }
 
-/* R19 (design-inspiration-deep-2026-06-10): Animated gradient border on
-   LIVE/featured cards. Uses CSS @property for --border-angle and conic-gradient.
-   Applied only to .set-card.live (single featured card on screen per R3).
-   Static fallback (1px aqua) when @property unsupported or prefers-reduced-motion. */
-@supports (background: conic-gradient(from 0deg, currentColor, currentColor)) {
-  @property --border-angle {
-    syntax: '<angle>';
-    initial-value: 0deg;
-    inherits: false;
-  }
-
-  @keyframes rotateBorder {
-    to {
-      --border-angle: 360deg;
-    }
-  }
-
-  .set-card.live {
-    background:
-      linear-gradient(var(--skeleton-base), var(--skeleton-base)) padding-box,
-      conic-gradient(
-          from var(--border-angle),
-          var(--color-accent-aqua),
-          transparent 30%,
-          var(--color-accent-coral) 60%,
-          transparent 80%,
-          var(--color-accent-aqua)
-        )
-        border-box;
-    border: 1.5px solid transparent;
-    animation: rotateBorder 6s linear infinite;
-  }
-
-  @media (prefers-reduced-motion) {
-    .set-card.live {
-      animation: none;
-      background: linear-gradient(var(--skeleton-base), var(--skeleton-base)) padding-box;
-      border: 1px solid var(--color-aqua-a3);
-    }
-  }
-}
-
-/* Fallback for browsers without @property support. */
+/* Live set card: a static border in the `live` token group (never aqua, which means
+   "press") plus a glow that moves only transform and opacity. The glow is a
+   ::before layer, so nothing repaints per frame. Reduced motion and low power
+   hold the glow still. */
 .set-card.live {
-  border: 1px solid var(--color-aqua-a3);
+  border-color: color-mix(in srgb, var(--color-live-fill) 60%, transparent);
+}
+.set-card.live::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: radial-gradient(120% 90% at 0% 50%, var(--color-live-ring), transparent 70%);
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: live-glow 3s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .set-card.live::before {
+    animation: none;
+  }
 }
 
 /* Empty state: one opacity fade on mount at the medium effects duration. No
@@ -320,7 +306,7 @@
    and crew cards. Radial gradient spotlight follows mousemove via CSS vars
    --mx and --my. Desktop-only via @media (hover: hover). Applied to ::after
    pseudo-element; set opacity via JavaScript state on hover. Box-shadow glow
-   is a 12px aqua glow plus a 1px aqua edge, with 200ms
+   is a 12px aqua glow plus a 1px aqua edge, with a medium-duration
    ease-out transition. */
 .set-card::after {
   background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), var(--color-aqua-a08) 0%, transparent 60%);
@@ -455,11 +441,31 @@
   --accent-coral-rgb: 168, 0, 42;
 }
 
-/* Low-power mode (festival-mode store, mirrored on <html> by AppShell): stop the
-   ambient infinite loops. The timeline NOW dot sets its animation via a Tailwind
-   arbitrary class, so it is matched by class substring. */
-:root[data-low-power] .set-card.live,
+/* Ambient loops (everything that repeats without user input, except the SOS ring):
+   `.ambient-loop` marks loops set from markup; the other selectors are the loops
+   this stylesheet and components.css define themselves. Low-power mode
+   (festival-mode store, mirrored on <html> by AppShell) stops them, and a hidden
+   tab pauses them. */
+:root[data-low-power] .ambient-loop,
+:root[data-low-power] .ambient-loop::before,
+:root[data-low-power] .ambient-loop::after,
+:root[data-low-power] .skeleton-shimmer::after,
+:root[data-low-power] .set-card.live::before,
 :root[data-low-power] .fm-live-dot::after,
-:root[data-low-power] [class*='timeline-now-pulse'] {
+:root[data-low-power] .festie-peer-marker::before,
+:root[data-low-power] .festie-live-dot,
+:root[data-low-power] .auth-screen::before {
   animation: none !important;
+}
+
+:root[data-tab-hidden] .ambient-loop,
+:root[data-tab-hidden] .ambient-loop::before,
+:root[data-tab-hidden] .ambient-loop::after,
+:root[data-tab-hidden] .skeleton-shimmer::after,
+:root[data-tab-hidden] .set-card.live::before,
+:root[data-tab-hidden] .fm-live-dot::after,
+:root[data-tab-hidden] .festie-peer-marker::before,
+:root[data-tab-hidden] .festie-live-dot,
+:root[data-tab-hidden] .auth-screen::before {
+  animation-play-state: paused !important;
 }

@@ -1,6 +1,7 @@
 export const INBOX_COPY = {
   title: 'Notifications',
-  empty: 'No notifications yet. Set reminders, crew news, schedule changes and festival announcements show up here.',
+  emptyTitle: 'No notifications yet',
+  emptyBody: 'Set reminders, crew news, schedule changes and festival announcements show up here.',
   error: "Couldn't load your notifications.",
   retry: 'Try again',
   // The "6" matches PUSH_BUDGET_PER_HOUR in lib/notifications/send.ts; change both together.

@@ -7,7 +7,7 @@ import { colorsDaylight } from './colorsDaylight';
 import { fontSize, typeRoles } from './typography';
 import { spacing } from './spacing';
 import { radii } from './radii';
-import { duration, durationEffects, durationSpatial, spring, pressScale, stagger } from './motion';
+import { duration, durationEffects, durationSpatial, spring, pressScale, stagger, staggerDelay } from './motion';
 import { elevation } from './elevation';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,6 +76,12 @@ describe('generateThemeCss — emits TS token literals', () => {
     expect(m.get('--color-outline-image')).toBe(colors.outline.image);
     expect(new Map(daylightDeclarations()).get('--color-outline-image')).toBe(colorsDaylight.outline.image);
     expect(stagger).toEqual({ stepMs: 30, maxItems: 8 });
+    expect(m.get('--stagger-step')).toBe('30ms');
+    expect(m.get('--stagger-last')).toBe('7');
+  });
+
+  it('staggerDelay steps 30 ms and stops at the eighth item', () => {
+    expect([0, 1, 7, 8, 40, -3].map(staggerDelay)).toEqual([0, 30, 210, 210, 210, 0]);
   });
 
   it('elevation tokens carry iOS shadow props and an Android elevation, high above low', () => {

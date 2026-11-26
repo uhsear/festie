@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, Alert } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { duration as motionDuration } from '@festie/shared/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { File } from 'expo-file-system';
 import { useAuth } from '@festie/shared/hooks';
@@ -180,7 +181,7 @@ export default function AccountIdentityCard() {
   const Container = reduceMotion ? View : Animated.View;
 
   return (
-    <Container entering={reduceMotion ? undefined : FadeInDown.duration(260)} style={styles.identity}>
+    <Container entering={reduceMotion ? undefined : FadeInDown.duration(motionDuration.slow)} style={styles.identity}>
       <TouchableOpacity
         onPress={() => void pickAndUpload()}
         disabled={locked}

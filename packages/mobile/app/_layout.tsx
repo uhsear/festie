@@ -38,7 +38,6 @@ import FirstRunIntro from '../components/FirstRunIntro';
 import { shouldSkipIntro } from '../lib/pendingInvite';
 import ErrorBoundary from '../components/ErrorBoundary';
 import HeaderTitle from '../components/HeaderTitle';
-import { TopBannerContext } from '../components/ScreenHeader';
 import { snoozeReminder, useLocalReminders } from '../hooks/useLocalReminders';
 import { useOngoingNotification } from '../hooks/useOngoingNotification';
 import { useOtaUpdatePrompt } from '../hooks/useOtaUpdatePrompt';
@@ -339,16 +338,13 @@ function AuthGate() {
     return () => clearTimeout(id);
   }, []);
 
-  // When the OfflineBanner renders a bar IN FLOW above the navigator, it paints
-  // behind the status bar and so already owns the top safe-area inset. Track
-  // that so ScreenHeader (via TopBannerContext) drops its own insets.top and
-  // doesn't leave a double-applied notch gap below the banner.
+  // The top banners float over the screen (see the root overlay below), so none of them moves
+  // content. Each one tracks whether it paints behind the status bar, so only the first
+  // visible bar in the stack takes the top safe-area inset.
   const [bannerActive, setBannerActive] = useState(false);
   // The app-wide SOS banner sits under the OfflineBanner and takes the inset
   // only when the OfflineBanner is not showing.
   const [sosActive, setSosActive] = useState(false);
-  // The announcement banner sits under the SOS banner and takes the inset last.
-  const [announceActive, setAnnounceActive] = useState(false);
 
   // Ensure Android notification channels exist BEFORE any notification is
   // scheduled. useLocalReminders targets channelId 'updates' which must exist
@@ -557,12 +553,8 @@ function AuthGate() {
           offline banner paints behind the status bar with ink of the opposite polarity
           (bg.primary on an accent fill), so the icons flip while it shows. */}
       <StatusBar style={(theme === 'daylight') !== bannerActive ? 'dark' : 'light'} />
-      {!loading && <OfflineBanner onActiveChange={setBannerActive} />}
-      {!loading && <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />}
       {!loading && <LiveSharePublisher />}
-      {!loading && <AnnouncementBanner padTop={!bannerActive && !sosActive} onActiveChange={setAnnounceActive} />}
-      <TopBannerContext.Provider value={bannerActive || sosActive || announceActive}>
-        <View
+      <View
           style={styles.appShell}
           // Keep TalkBack inside the overlay (splash or intro) that visually covers the app.
           importantForAccessibility={loading || introShowing ? 'no-hide-descendants' : 'auto'}
@@ -660,7 +652,13 @@ function AuthGate() {
           </Stack>
           </ErrorBoundary>
         </View>
-      </TopBannerContext.Provider>
+      {!loading && (
+        <View style={styles.topOverlay} pointerEvents="box-none">
+          <OfflineBanner onActiveChange={setBannerActive} />
+          <SosBanner padTop={!bannerActive} onActiveChange={setSosActive} />
+          <AnnouncementBanner padTop={!bannerActive && !sosActive} />
+        </View>
+      )}
       {!loading && <Toaster />}
       <ArtistSheetHost />
       {loading && (
@@ -681,6 +679,16 @@ const styles = StyleSheet.create({
   },
   appShell: {
     flex: 1,
+  },
+  // Out of flow, painted after the navigator: banners cover the top of the screen
+  // instead of pushing it down. pointerEvents box-none lets touches through the gaps.
+  topOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    zIndex: 10,
+    elevation: 10,
   },
 });
 

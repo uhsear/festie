@@ -18,6 +18,7 @@ import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import Button from '../components/Button';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import LoadingState from '../components/LoadingState';
 import { ArtistNameButton } from '../components/ArtistName';
 
@@ -175,8 +176,7 @@ export default function FriendPicksScreen() {
     return (
       <>
         {screen}
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title={error ?? BAD_LINK}
           action={
             error && retryable

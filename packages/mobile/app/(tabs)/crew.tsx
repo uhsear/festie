@@ -48,7 +48,7 @@ import { useListBottomInset } from '../../hooks/useListBottomInset';
 import Button from '../../components/Button';
 import ScreenHeader from '../../components/ScreenHeader';
 import CrewSwitcherSheet from '../../components/CrewSwitcherSheet';
-import SosControl, { SOS_CONTROL_SIZE } from '../../components/SosControl';
+import SosControl, { SOS_CONTROL_CLEARANCE } from '../../components/SosControl';
 import FestivalChoiceSheet from '../../components/FestivalChoiceSheet';
 import HandOverSheet from '../../components/HandOverSheet';
 import CrewTabBar, { type CrewTabKey } from '../../components/CrewTabBar';
@@ -100,8 +100,8 @@ export default function CrewScreen() {
   );
   const listBottomPad = useListBottomInset({ includeSafeArea: false });
   // The SOS control floats over every crew tab, so the lists end clear of it.
-  const memberBottomPad = useListBottomInset({ base: t.spacing[4], includeSafeArea: false }) + SOS_CONTROL_SIZE;
-  const tabBottomPad = listBottomPad + SOS_CONTROL_SIZE;
+  const memberBottomPad = useListBottomInset({ base: SOS_CONTROL_CLEARANCE, includeSafeArea: false });
+  const tabBottomPad = memberBottomPad;
   const memberListStyle = useMemo(
     () => [styles.memberList, tabletInset, { paddingBottom: memberBottomPad }],
     [styles.memberList, tabletInset, memberBottomPad],

@@ -20,6 +20,7 @@ import {
 import type { ChecklistRow } from '@festie/shared/utils';
 import type { FestivalDay, FestivalSet, Stage, WrapCaughtSet, WrapResponse } from '@festie/shared/types';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import Button from '../components/Button';
 import RatingButtons from '../components/RatingButtons';
 import { makeStyles, typeStyle, useLargeText, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -185,8 +186,7 @@ export default function CaughtScreen() {
     return (
       <View style={styles.screen}>
         {header}
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load your sets"
           action={{
             label: 'Try again',
@@ -325,8 +325,7 @@ export default function CaughtScreen() {
             Your picks are already in the list.
           </Text>
           {detailError ? (
-            <EmptyState
-              icon="cloud-offline-outline"
+            <LoadErrorState
               title="Couldn't load the lineup."
               action={{
                 label: 'Try again',

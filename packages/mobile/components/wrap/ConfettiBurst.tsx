@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming, type SharedValue } from 'react-native-reanimated';
-import { colors } from '@festie/shared/tokens';
+import { colors, durationCelebration } from '@festie/shared/tokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 
 const COUNT = 24;
@@ -35,7 +35,7 @@ export default function ConfettiBurst() {
   const progress = useSharedValue(0);
   useEffect(() => {
     if (reduceMotion) return;
-    progress.value = withTiming(1, { duration: 1200, easing: Easing.out(Easing.cubic) });
+    progress.value = withTiming(1, { duration: durationCelebration.confetti, easing: Easing.out(Easing.cubic) });
   }, [reduceMotion, progress]);
   if (reduceMotion) return null;
   return (
