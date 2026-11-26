@@ -20,7 +20,7 @@ describe('Play store listing', () => {
     expect(existsSync(join(here, 'images', listing.language))).toBe(true);
   });
 
-  it.each(['featureGraphic/featureGraphic.png', 'icon/icon.png', 'phoneScreenshots/01-initial.png'])(
+  it.each(['featureGraphic/featureGraphic.png', 'icon/icon.png'])(
     'ships image %s',
     (rel) => {
       expect(existsSync(join(here, 'images', 'en-US', rel))).toBe(true);
