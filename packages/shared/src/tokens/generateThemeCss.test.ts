@@ -40,6 +40,24 @@ describe('generateThemeCss — emits TS token literals', () => {
     expect(m.get('--color-clash-tint')).toBe(colors.clash.tint);
   });
 
+  it('theme-only colours map to their TS literals (moved out of theme.css)', () => {
+    expect(m.get('--text-on-light-accent')).toBe(colors.text.onLightAccent);
+    expect(m.get('--color-bg-chrome')).toBe(colors.bg.chrome);
+    expect(m.get('--color-bg-disabled')).toBe(colors.bg.disabled);
+    expect(m.get('--shadow-sticky')).toBe(colors.shadow.sticky);
+    expect(m.get('--color-accent-aqua-hover')).toBe(colors.hover.aqua);
+    expect(m.get('--color-accent-coral-strong-hover')).toBe(colors.hover.coralStrong);
+    expect(m.get('--color-coral-tint-text')).toBe(colors.tint.coralText);
+    expect(m.get('--detail-glass-bg')).toBe(colors.glass.detail);
+    expect(m.get('--menu-panel-bg')).toBe(colors.glass.panel);
+    expect(m.get('--skeleton-base')).toBe(colors.skeleton.base);
+    expect(m.get('--skeleton-hi')).toBe(colors.skeleton.hi);
+    expect(m.get('--color-live-fill')).toBe(colors.live.fill);
+    expect(m.get('--color-live-text')).toBe(colors.live.text);
+    expect(m.get('--color-live-ring')).toBe(colors.live.ring);
+    expect(m.get('--color-map-self')).toBe(colors.map.self);
+  });
+
   it('px ramps convert to the expected rem values', () => {
     // 16px base: 10/16 = 0.625rem, 48/16 = 3rem.
     expect(m.get('--font-size-10')).toBe('0.625rem');
@@ -128,6 +146,14 @@ describe('generateThemeCss — Daylight override block', () => {
     expect(day.get('--color-bg-primary')).not.toBe(colors.bg.primary);
     expect(day.get('--color-text-primary')).toBe(colorsDaylight.text.primary);
     expect(day.get('--shadow-glow-aqua')).toBe(colorsDaylight.glow.aqua);
+  });
+
+  it('emits the theme-only colours from the daylight palette', () => {
+    expect(day.get('--text-on-light-accent')).toBe(colorsDaylight.text.onLightAccent);
+    expect(day.get('--color-bg-chrome')).toBe(colorsDaylight.bg.chrome);
+    expect(day.get('--color-live-fill')).toBe(colorsDaylight.live.fill);
+    expect(day.get('--skeleton-base')).toBe(colorsDaylight.skeleton.base);
+    expect(day.get('--shadow-sticky')).toBe(colorsDaylight.shadow.sticky);
   });
 
   it('emits the clash token from the daylight palette', () => {

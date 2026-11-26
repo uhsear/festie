@@ -24,6 +24,8 @@ export const colorsDaylight = {
     hover: '#ececf2',
     elevated: '#ffffff',
     sticky: '#ececf1',
+    chrome: 'rgba(244, 244, 247, 0.88)',
+    disabled: 'rgba(0, 0, 0, 0.04)',
   },
   text: {
     primary: '#0b0b12',
@@ -52,6 +54,7 @@ export const colorsDaylight = {
   },
   control: {
     trackOff: '#767684',
+    scrollbarThumbHover: 'rgba(0, 0, 0, 0.3)',
   },
   priority: {
     must: '#a8002a',
@@ -61,6 +64,33 @@ export const colorsDaylight = {
   glass: {
     bg: 'rgba(255, 255, 255, 0.92)',
     border: 'rgba(0, 0, 0, 0.12)',
+    panel: 'rgba(255, 255, 255, 0.98)',
+    detail: '#ffffff',
+    hoverBorder: 'rgba(0, 0, 0, 0.12)',
+  },
+  hover: {
+    aqua: '#004a41',
+    coral: '#8f0023',
+    coralStrong: '#8a0019',
+  },
+  tint: {
+    coralText: '#a8002a',
+    coralTextHover: '#8f0023',
+  },
+  skeleton: {
+    base: '#e8e8ee',
+    hi: '#f4f4f7',
+  },
+  live: {
+    fill: '#175800',
+    text: '#175800',
+    ring: 'rgba(23, 88, 0, 0.2)',
+  },
+  map: {
+    self: '#00594f',
+  },
+  shadow: {
+    sticky: '0 1px 0 rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.12)',
   },
   stage: {
     purpleAccessible: '#6a2c99',

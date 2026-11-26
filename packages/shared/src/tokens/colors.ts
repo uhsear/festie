@@ -13,6 +13,10 @@ export const colors = {
     hover: 'rgba(38, 38, 38, 0.8)',
     elevated: 'rgba(32, 32, 32, 0.9)',
     sticky: '#161616',
+    /** Frosted chrome (header, sub-header, bottom nav, tab bar). Always paired with a backdrop blur. */
+    chrome: 'rgba(10, 10, 10, 0.82)',
+    /** Fill of a disabled control; pairs with text.disabled. A token, not an opacity. */
+    disabled: 'rgba(255, 255, 255, 0.04)',
   },
   text: {
     primary: '#eaeaf2',
@@ -61,6 +65,7 @@ export const colors = {
   /** Off-state track of a switch: 3:1 on bg.secondary, and the white thumb stays visible on it. */
   control: {
     trackOff: '#66666f',
+    scrollbarThumbHover: 'rgba(255, 255, 255, 0.2)',
   },
   priority: {
     must: '#ff3366',
@@ -70,6 +75,45 @@ export const colors = {
   glass: {
     bg: 'rgba(26, 26, 26, 0.65)',
     border: 'rgba(255, 255, 255, 0.08)',
+    /** Menu panel (user menu, popovers). */
+    panel: 'rgba(18, 18, 18, 0.96)',
+    /** Set-detail drawer / dialog surface. Opaque, so the tab bar cannot ghost through. */
+    detail: '#1d1d1d',
+    hoverBorder: 'rgba(255, 255, 255, 0.12)',
+  },
+  /** Solid-fill hover tones: ~10% darker than the accent, so hover reads as a state change. */
+  hover: {
+    aqua: '#00cfba',
+    coral: '#e62e5c',
+    coralStrong: '#ac1a34',
+  },
+  /** Coral as foreground text on a translucent coral chip, where raw coral fails AA on dark. */
+  tint: {
+    coralText: '#ff7a8c',
+    coralTextHover: '#ff8fa0',
+  },
+  /** Skeleton shimmer: base fill and highlight. */
+  skeleton: {
+    base: '#1a1a1a',
+    hi: '#2a2a2a',
+  },
+  /**
+   * What "live" (playing now) looks like. One name, so a later change is one value.
+   * Per OD-3 (2026-11-25) live is green, never coral: fill and text alias accent.green.
+   * Always paired with a numeral and a shape (see `confidence`).
+   */
+  live: {
+    fill: '#39ff14',
+    text: '#39ff14',
+    ring: 'rgba(57, 255, 20, 0.15)',
+  },
+  /** Map markers. `self` is the you-are-here dot: aqua, not a separate accent hue. */
+  map: {
+    self: '#00e8d0',
+  },
+  /** Raised sticky band shadow (pairs with bg.sticky). */
+  shadow: {
+    sticky: '0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.35)',
   },
   stage: {
     purpleAccessible: '#9c4dcb',
@@ -91,7 +135,8 @@ export const colors = {
     verifiedBg: 'rgba(34, 197, 94, 0.15)',
     unverifiedBg: 'rgba(251, 191, 36, 0.15)',
     warning: '#f0a030',
-    error: '#ff6b6b',
+    /** Same value as text.danger: one red carries error text. */
+    error: '#f87171',
   },
   /**
    * Clash = two of the user's picks overlap. Alias of status.warning (amber means warning; coral is danger only).
