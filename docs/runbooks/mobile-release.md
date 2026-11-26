@@ -18,11 +18,10 @@ How to ship the Expo app in `packages/mobile`: when an over-the-air (OTA) update
 
 ## 3. Ship an OTA
 
-1. Run `bash packages/mobile/ota.sh --check`. It blocks an update that would hide Apple or Google sign-in.
-2. Set `FESTIE_APPLE_SIGNIN` and `GOOGLE_IOS_URL_SCHEME` in the shell that publishes. `ota.sh` explains why they must not live in the EAS environment for an OTA.
-3. Run the `mobile-ota.yml` workflow with inputs `branch=staging` and a `message`. The workflow also accepts `crash_threshold`.
-4. Check the update on a staging-channel build (the `staging` profile in `packages/mobile/eas.json`).
-5. Promote with `eas update:republish --source-branch staging --destination-branch production`. This republishes the same bundle. The header of `mobile-ota.yml` has the full commands.
+1. Run the `mobile-ota.yml` workflow with inputs `branch=staging` and a `message`. The workflow also accepts `crash_threshold`. It takes `FESTIE_APPLE_SIGNIN` and `GOOGLE_IOS_URL_SCHEME` from the repository secrets and runs `bash ota.sh --check`. That check blocks an update that would hide Apple or Google sign-in.
+2. To publish from your own shell instead, set both variables in that shell, then run `bash packages/mobile/ota.sh --check` and `bash packages/mobile/ota.sh <branch> "<message>"`. Never set them in the EAS environment: `ota.sh` explains why.
+3. Check the update on a staging-channel build (the `staging` profile in `packages/mobile/eas.json`).
+4. Promote with `eas update:republish --source-branch staging --destination-branch production`. This republishes the same bundle. The header of `mobile-ota.yml` has the full commands.
 
 ## 4. Build Android on the free lane
 
@@ -31,7 +30,7 @@ How to ship the Expo app in `packages/mobile`: when an over-the-air (OTA) update
 - Start it by hand. Inputs are `submit` (default false) and `track` (default `internal`).
 - It signs with the upload key. Play App Signing re-signs the app for users.
 - `versionCode` is `VERSION_CODE_OFFSET` plus the run number. The offset is set in the workflow `env` block.
-- Run 45887742187 on 2026-11-26 produced `1.5.0+305`. Before a submit, compare the next value (offset plus the next run number) with the highest code in Play Console. Play rejects a code that is not higher.
+- A failed run still uses up its run number, so the code can skip values. Before a submit, compare the next value (offset plus the next run number) with the highest code in Play Console. Play rejects a code that is not higher.
 - `android-e2e.yml` runs a free emulator check every Sunday. Use it for Android smoke tests.
 
 ## 5. Build with EAS
@@ -40,7 +39,7 @@ EAS builds cost credits. The owner approves each build and each submit.
 
 - Profiles in `packages/mobile/eas.json`: `production`, `staging`, `preview`, `qa-sim`. `appVersionSource` is `remote`. The `production` profile increments the build number itself.
 - `submit.production` targets the Android `internal` track as a draft. It also holds the iOS App Store Connect app id.
-- Set `FESTIE_APPLE_SIGNIN` and `GOOGLE_IOS_URL_SCHEME` in the EAS build environment for builds. Never put a secret in `eas.json`.
+- For one build, put `FESTIE_APPLE_SIGNIN` and `GOOGLE_IOS_URL_SCHEME` in the `env` block of that build profile in `packages/mobile/eas.json`, then revert the edit. Never create them as EAS environment variables: `ota.sh` publishes with `--environment production`, so they would reach OTAs for binaries that lack the URL scheme. Do not commit a secret value.
 - iOS without a Mac: see `docs/runbooks/ios-testing.md`.
 
 ## 6. Listing and privacy sources
@@ -49,7 +48,7 @@ EAS builds cost credits. The owner approves each build and each submit.
 |------|--------|
 | Play listing text | `packages/mobile/store/play/listing.en-US.json`, checked by `listing.test.ts` |
 | Play listing upload | `packages/mobile/store/play/publish.py`. It reads the service-account key path from the `FESTIE_PLAY_SA_KEY` variable. |
-| Privacy answers (Data safety, App Privacy) | The privacy answers file that the store-prep change adds under `packages/mobile/store/`. Until it merges, use the points below. |
+| Privacy answers (Data safety, App Privacy) | The privacy answers file that the store-prep change adds under `packages/mobile/store/`. Until it merges, use `public/privacy.html` and `privacyManifests` in `packages/mobile/app.json`. |
 | Apple privacy manifest | `privacyManifests` in `packages/mobile/app.json` |
 | Public privacy policy | `public/privacy.html` |
 | App Review notes | The review notes file that the store-prep change adds under `packages/mobile/store/`. |
