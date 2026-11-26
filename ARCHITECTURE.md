@@ -68,6 +68,7 @@ server.ts ─── orchestrator
 | `spotify.ts` | Spotify API client for artist metadata |
 | `socket-setup.ts` | Socket.IO server creation + Redis adapter attachment |
 | `crypto-auth.ts` | Password hashing (scrypt) + session token hashing (SHA-256) |
+| `design-css.ts` | Design tokens as CSS for the server-rendered pages and the transactional email, read from the shared token files |
 
 Smaller modules: `pagination.ts`, `tracing.ts`, `response.ts` (also defines `ErrorCodes`), `swagger-ui-setup.ts`, `avatar-worker.ts`, `export-worker.ts`, `constants.ts`. The two worker files are separate esbuild entry points, so `dist/` holds `avatar-worker.js` and `export-worker.js` next to `server.js`.
 
@@ -96,7 +97,6 @@ Push notification subsystem (FCM for Android, APNs for iOS, Web Push for browser
 | `webpush.ts` | Web Push sender with VAPID auth (web) |
 | `crew-notify.ts` | Crew notifier: grouped queue plus immediate sends |
 | `links.ts` | Absolute web links shared by push and email |
-| `design-css.ts` | Design tokens as CSS for the server-rendered pages and the transactional email, read from the shared token files |
 | `reengagement.ts`, `reengagement-queue.ts` | After-festival re-engagement triggers and their BullMQ fan-out queue |
 
 ### Data Access: `lib/db/stores/`
