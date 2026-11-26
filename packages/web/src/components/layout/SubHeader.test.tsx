@@ -32,6 +32,10 @@ const storeState = {
   isLoading: false,
   hiddenDays: [] as number[],
   setHiddenDays: vi.fn(),
+  scheduleView: null as string | null,
+  setScheduleView: vi.fn(),
+  scheduleGroupBy: 'time',
+  setScheduleGroupBy: vi.fn(),
 };
 const authState = { user: { id: 'u1' } as { id: string } | null };
 
@@ -49,6 +53,11 @@ vi.mock('@festie/shared/hooks', () => ({
 let mockPathname = '/cards';
 vi.mock('@tanstack/react-router', () => ({
   useLocation: () => ({ pathname: mockPathname }),
+  Link: ({ to, children, ...rest }: { to: string; children: React.ReactNode }) => (
+    <a href={to} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock('../../hooks/useSwipeDays', () => ({
@@ -362,6 +371,35 @@ describe('SubHeader phone fold', () => {
     storeState.searchQuery = 'foo';
     render(<SubHeader dayOnly={false} festivalOnly={false} />);
     expect(screen.getByRole('button', { name: 'Filters (1)' })).toBeInTheDocument();
+  });
+
+  it('lists the Cards and Grid view links in the first row, not a row of their own', () => {
+    mockPathname = '/cards';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const views = screen.getByRole('navigation', { name: 'Schedule view' });
+    expect(getNav()).toContainElement(views);
+    expect(screen.getByRole('link', { name: 'Cards' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('renders no view links on /picks', () => {
+    mockPathname = '/picks';
+    render(<SubHeader dayOnly={false} festivalOnly />);
+    expect(screen.queryByRole('navigation', { name: 'Schedule view' })).not.toBeInTheDocument();
+  });
+
+  it('folds Group by into the filters on Cards, and picking Stage saves it', () => {
+    mockPathname = '/cards';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    const filters = document.getElementById('subheader-filters') as HTMLElement;
+    expect(filters).toContainElement(screen.getByRole('group', { name: 'Group by' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Stage' }));
+    expect(storeState.setScheduleGroupBy).toHaveBeenCalledWith('stage');
+  });
+
+  it('offers no Group by on Grid', () => {
+    mockPathname = '/grid';
+    render(<SubHeader dayOnly={false} festivalOnly={false} />);
+    expect(screen.queryByRole('group', { name: 'Group by' })).not.toBeInTheDocument();
   });
 
   it('renders no Filters button on /picks', () => {

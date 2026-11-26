@@ -7,7 +7,7 @@ import { useOffline } from '@festie/shared/hooks';
 import Header from './Header';
 import BottomNav from './BottomNav';
 import SubHeader from './SubHeader';
-import ScheduleViewSwitcher, { isSchedulePath } from './ScheduleViewSwitcher';
+import { isSchedulePath } from './ScheduleViewSwitcher';
 import PageTransition from './PageTransition';
 import RouteAnnouncer from './RouteAnnouncer';
 import GuestFooter from './GuestFooter';
@@ -188,7 +188,6 @@ export default function AppShell() {
 
         <div className="main-content flex flex-1 overflow-hidden flex-col">
           {!hideSubHeader && <SubHeader dayOnly={dayOnlySubHeader} festivalOnly={festivalOnlySubHeader} />}
-          {isSchedulePath(location.pathname) && <ScheduleViewSwitcher />}
           {isSchedulePath(location.pathname) && <NowNextStrip />}
 
           <main

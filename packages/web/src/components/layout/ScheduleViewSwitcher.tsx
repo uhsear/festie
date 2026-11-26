@@ -7,7 +7,7 @@ import { cn } from '../../lib/utils';
 
 /**
  * In-page switcher for the schedule views (Cards / Grid),
- * mirroring the mobile SegmentedControl. Folds what used to be three separate
+ * mirroring the mobile SegmentedControl. SubHeader renders it in its first row; below sm only the icons show. Folds what used to be three separate
  * bottom-nav/header tabs into one "Schedule" destination — the nav now carries
  * a single Schedule tab and this control swaps the view in place.
  *
@@ -28,7 +28,7 @@ export function isSchedulePath(pathname: string): boolean {
   return (SCHEDULE_PATHS as readonly string[]).includes(pathname);
 }
 
-export default function ScheduleViewSwitcher() {
+export default function ScheduleViewSwitcher({ className }: { className?: string }) {
   const location = useLocation();
 
   const scheduleView = useFestivalStore((s) => s.scheduleView);
@@ -43,15 +43,8 @@ export default function ScheduleViewSwitcher() {
   }, [location.pathname, scheduleView, setScheduleView]);
 
   return (
-    <nav
-      className={cn(
-        'flex items-center gap-1 px-[var(--space-3)] py-1 sm:px-6 sm:py-2',
-        'bg-[var(--color-bg-chrome)] border-b border-border shrink-0',
-        '[backdrop-filter:saturate(150%)_blur(12px)]',
-      )}
-      aria-label="Schedule view"
-    >
-      <div className="flex gap-1 p-1 rounded-full bg-bg-secondary">
+    <nav className={cn('ml-auto shrink-0', className)} aria-label="Schedule view">
+      <div className="flex gap-0.5 p-0.5 rounded-full bg-bg-secondary">
         {VIEWS.map(({ key, label, Icon }) => {
           const active = key === activeKey;
           return (
@@ -60,7 +53,7 @@ export default function ScheduleViewSwitcher() {
               to={key}
               aria-current={active ? 'page' : undefined}
               className={cn(
-                'inline-flex no-underline items-center gap-1.5 rounded-full px-3.5 min-h-11 text-[length:var(--font-size-14)] font-semibold',
+                'inline-flex no-underline items-center justify-center gap-1.5 rounded-full px-3.5 max-sm:px-3 min-h-11 text-[length:var(--font-size-14)] font-semibold',
                 'cursor-pointer transition-colors duration-[var(--duration-med)] ease-[var(--ease-out)]',
                 'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
                 '[&_svg]:w-4 [&_svg]:h-4',
@@ -70,7 +63,7 @@ export default function ScheduleViewSwitcher() {
               )}
             >
               <Icon aria-hidden="true" />
-              <span>{label}</span>
+              <span className="max-sm:sr-only">{label}</span>
             </Link>
           );
         })}

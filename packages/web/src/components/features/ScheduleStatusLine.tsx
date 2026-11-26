@@ -23,7 +23,7 @@ const ICON: Record<SaveStatusKind, React.ComponentType<{ className?: string; 'ar
  * The dot carries the signal state by shape (glow while live, none once stale or offline); a stale or
  * offline age reads as a bold numeral. Amber for offline and failed saves; coral stays reserved for danger and SOS.
  */
-export default function ScheduleStatusLine({ showFreshness }: { showFreshness: boolean }) {
+export default function ScheduleStatusLine({ showFreshness, className }: { showFreshness: boolean; className?: string }) {
   const status = useSaveStatus();
   const offlineMode = useUIStore((s) => s.offlineMode);
   const cachedAt = useFestivalDataStore((s) => s._festivalCachedAt);
@@ -48,7 +48,10 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
   return (
     <span
       data-testid="schedule-status-line"
-      className="ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium tabular-nums text-text-muted"
+      className={cn(
+        'ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium tabular-nums text-text-muted',
+        className,
+      )}
     >
       {updated && (
         <span data-testid="last-synced-badge" data-signal={signal} className="inline-flex items-center gap-1.5">

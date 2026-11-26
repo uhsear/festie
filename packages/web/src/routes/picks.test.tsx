@@ -139,6 +139,8 @@ function setStoreState(opts: StateOpts = {}) {
   });
 }
 
+const openFilters = () => fireEvent.click(screen.getByRole('button', { name: /^Filters/ }));
+
 describe('PicksView', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -261,12 +263,28 @@ describe('PicksView', () => {
     expect(screen.getByRole('button', { name: 'Unscheduled, 1 pick' })).toBeInTheDocument();
   });
 
+  it('folds the priority chips and the search behind one Filters button that counts what is active', () => {
+    setStoreState({
+      sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Odesza', { startTime: '16:00', endTime: '17:00' })],
+      profile: picksOf({ s1: 'must', s2: 'maybe' }),
+    });
+    render(<PicksView />);
+    const toggle = screen.getByRole('button', { name: 'Filters' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('group', { name: 'Filter picks' })).toBeNull();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(within(screen.getByRole('group', { name: 'Filter picks' })).getByRole('button', { name: /Must/ }));
+    expect(screen.getByRole('button', { name: 'Filters (1)' })).toBeInTheDocument();
+  });
+
   it('the Must chip filters rows and toggles back to all', () => {
     setStoreState({
       sets: [makeSet('s1', 'Daft Punk'), makeSet('s2', 'Odesza', { startTime: '16:00', endTime: '17:00' })],
       profile: picksOf({ s1: 'must', s2: 'maybe' }),
     });
     render(<PicksView />);
+    openFilters();
     const group = screen.getByRole('group', { name: 'Filter picks' });
     fireEvent.click(within(group).getByRole('button', { name: /Must/ }));
     expect(screen.getByText('Daft Punk')).toBeInTheDocument();
@@ -285,6 +303,7 @@ describe('PicksView', () => {
       profile: picksOf({ s1: 'must', s2: 'must' }),
     });
     render(<PicksView />);
+    openFilters();
     const names = () => screen.getAllByTestId('plan-row').map((r) => r.textContent);
     expect(names()).toEqual(['Early', 'Late']);
     const order = screen.getByRole('radiogroup', { name: 'Order sets' });
@@ -300,6 +319,7 @@ describe('PicksView', () => {
       profile: picksOf({ s1: 'must', s2: 'maybe' }),
     });
     const { unmount } = render(<PicksView />);
+    openFilters();
     expect(screen.getByRole('button', { name: /Clashes/ })).toBeInTheDocument();
     expect(screen.getByTestId('pick-conflicts')).toHaveTextContent('1');
     unmount();
@@ -309,6 +329,7 @@ describe('PicksView', () => {
       profile: picksOf({ s1: 'must', s2: 'maybe' }),
     });
     render(<PicksView />);
+    openFilters();
     expect(screen.queryByRole('button', { name: /Clashes/ })).toBeNull();
   });
 
@@ -393,6 +414,7 @@ describe('PicksView', () => {
   it('moves between the view tabs and the group radios with the arrow keys, one tab stop each', () => {
     setStoreState({ sets: [makeSet('s1', 'Daft Punk')], profile: picksOf({ s1: 'must' }) });
     render(<PicksView />);
+    openFilters();
     const allPicks = screen.getByRole('tab', { name: 'All picks' });
     expect(allPicks).toHaveAttribute('aria-controls', 'picks-view-panel');
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'picks-view-panel');
@@ -468,6 +490,7 @@ describe('PicksView', () => {
       mixed();
       render(<PicksView />);
       fireEvent.click(screen.getByRole('tab', { name: 'My day' }));
+      openFilters();
     };
 
     it('shows the priority chips and the search box on My day', () => {

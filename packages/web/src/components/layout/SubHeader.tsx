@@ -17,6 +17,7 @@ import {
   logicalDayIndexAt,
   resolveFestivalTimeZone,
   resolveStageColor,
+  SCHEDULE_GROUP_BYS,
 } from '@festie/shared/utils';
 import { getStageBadgeStyle } from '../ui/StageBadge';
 import type { FestivalDay } from '@festie/shared/types/domain';
@@ -32,7 +33,7 @@ import Input from '../ui/Input';
 import ScheduleStatusLine from '../features/ScheduleStatusLine';
 import SpotifyAttribution from '../features/SpotifyAttribution';
 import FestivalPicker from './FestivalPicker';
-import { isSchedulePath } from './ScheduleViewSwitcher';
+import ScheduleViewSwitcher, { isSchedulePath } from './ScheduleViewSwitcher';
 import ScheduleResultsRow from './ScheduleResultsRow';
 
 const FESTIVAL_MODE_PATH = '/festival-mode';
@@ -72,6 +73,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   const isLoading = useFestivalStore((s) => s.isLoading);
   const onlyMine = useFestivalStore((s) => s.onlyMine);
   const setOnlyMine = useFestivalStore((s) => s.setOnlyMine);
+  const groupBy = useFestivalStore((s) => s.scheduleGroupBy) ?? 'time';
+  const setGroupBy = useFestivalStore((s) => s.setScheduleGroupBy);
   const { getStageColor: getStageColorRaw } = useFestival();
   // Map shared's platform-neutral fallback sentinel to the web muted CSS var.
   const getStageColor = useCallback(
@@ -152,6 +155,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
   // The genre chips come from Spotify, so the filter carries the attribution (Spotify Developer Policy II.4).
   const genreAttribution = useMemo(() => spotifyAttributionFor((sets ?? []).flatMap((set) => set.artists ?? [])), [sets]);
   const showFold = showSearch || !!showStageFilter;
+  // Group by only changes the Cards view, so only that view lists it.
+  const showGroupBy = pathname === '/' || pathname === '/cards';
   // From md up the stage chips stay in view; only genres and Days I'm going fold behind Filters, so the schedule keeps the screen.
   const showDaysGoing = onSchedulePath && days.length > 1;
   const hasWideFold = showGenreFilter || showDaysGoing;
@@ -209,25 +214,38 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           </span>
         )}
 
+        {onSchedulePath && <ScheduleViewSwitcher className="md:ml-0" />}
+
+        {/* Below md the Filters button and the day rail share the second row; md:contents leaves the desktop row as it was. */}
+        <div className="flex min-w-0 items-center gap-[var(--space-3)] max-md:order-3 max-md:w-full md:contents empty:hidden">
         {showFold && (
           <>
             <button
               type="button"
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
+                'relative inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold min-h-[44px]',
                 !hasWideFold && 'md:hidden',
                 'cursor-pointer border-2 border-border text-text-secondary',
                 'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
               )}
               aria-expanded={filtersOpen}
               aria-controls="subheader-filters"
+              aria-label={filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
               onClick={() => {
                 selectHaptic();
                 setFiltersOpen((v) => !v);
               }}
             >
               <Filter className="w-4 h-4" aria-hidden="true" />
-              {filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
+              <span className="max-sm:hidden" aria-hidden="true">Filters</span>
+              {filterCount > 0 && (
+                <span
+                  className="inline-flex min-w-5 items-center justify-center rounded-full bg-accent-aqua px-1 text-[length:var(--font-size-12)] font-bold text-[var(--text-on-light-accent)]"
+                  aria-hidden="true"
+                >
+                  {filterCount}
+                </span>
+              )}
             </button>
           </>
         )}
@@ -235,7 +253,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
         {/* Day tabs */}
         {showDaySkeleton && (
           <div
-            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:order-3 max-md:w-full"
+            className="day-tabs flex gap-[var(--space-3)] overflow-x-auto scrollbar-hide min-w-0 max-md:flex-1"
             aria-hidden="true"
           >
             {Array.from({ length: 3 }).map((_, i) => (
@@ -249,8 +267,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
             className={cn(
               // The time-zone label wraps under the chips on a narrow row instead of being cut off.
               'day-tabs-scroll relative min-w-0 flex flex-wrap items-center gap-x-[var(--space-3)] gap-y-1',
-              // Below md the day rail is the second chrome row: it sits under the picker, Filters and status line.
-              'max-md:order-3 max-md:w-full',
+              // Below md the day rail shares the second chrome row with the Filters button.
+              'max-md:flex-1',
               dayCanScrollLeft && 'fade-left',
               dayCanScrollRight && 'fade-right',
             )}
@@ -337,12 +355,16 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           </div>
         )}
 
-        {(currentProfile || onSchedulePath) && <ScheduleStatusLine showFreshness={onSchedulePath} />}
+        </div>
+
+        {(currentProfile || onSchedulePath) && (
+          <ScheduleStatusLine showFreshness={onSchedulePath} className="max-md:order-3" />
+        )}
 
         {/* md:contents keeps desktop layout identical; below md the wrapper folds. */}
         <div
           id="subheader-filters"
-          className={cn('md:contents max-md:w-full max-md:min-w-0 max-md:order-4', showFold && !filtersOpen && 'max-md:hidden')}
+          className={cn('md:contents max-md:w-full max-md:min-w-0 max-md:order-4 empty:hidden', showFold && !filtersOpen && 'max-md:hidden')}
         >
         {/* Artist search. Inside the filters wrapper: below md it folds behind Filters; from md up the wrapper is `contents`, so it shares the day-tab row. */}
         {showSearch && (
@@ -381,6 +403,36 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   <X className="w-4 h-4" aria-hidden="true" />
                 </button>
               )}
+            </div>
+          </div>
+        )}
+
+        {showGroupBy && (
+          <div className="flex items-center gap-2" role="group" aria-labelledby="cards-group-by">
+            <span id="cards-group-by" className="text-[length:var(--font-size-14)] text-text-secondary">
+              Group by
+            </span>
+            <div className="flex gap-0.5 p-0.5 rounded-full bg-bg-secondary">
+              {SCHEDULE_GROUP_BYS.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  aria-pressed={groupBy === key}
+                  onClick={() => {
+                    selectHaptic();
+                    setGroupBy(key);
+                  }}
+                  className={cn(
+                    'rounded-full px-3 min-h-11 text-[length:var(--font-size-14)] font-semibold cursor-pointer',
+                    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
+                    groupBy === key
+                      ? 'bg-accent-aqua text-[var(--text-on-light-accent)]'
+                      : 'bg-transparent text-text-secondary hover:text-text-primary',
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
             </div>
           </div>
         )}

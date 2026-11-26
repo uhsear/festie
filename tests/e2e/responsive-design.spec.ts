@@ -155,8 +155,7 @@ test.describe('responsive design', () => {
   });
 
   test('the first set card starts in the top 300px at 390px', async ({ app, page }) => {
-    // DP-33 acceptance, not yet met: the Group by row and the freshness line still push the first card to about y = 393.
-    test.fail();
+    // DP-33 acceptance: the view switcher, Filters, day rail and Group by share two chrome rows.
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoSchedule(page, app);
 
@@ -275,5 +274,25 @@ test.describe('responsive design', () => {
     expect(box).not.toBeNull();
     expect(box!.x).toBe(0);
     expect(box!.width).toBe(390);
+  });
+});
+
+test.describe('responsive design, touch at 390 by 844', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('the first pick on /picks starts in the top 300px at 390px', async ({ app, page }) => {
+    await createJoinedUser(page, app);
+    await gotoSchedule(page, app);
+    const alpha = page.locator('[data-testid="set-card"][data-artist="Alpha"]');
+    await alpha.getByRole('button', { name: /^Set priority for Alpha/ }).tap();
+    await alpha.getByRole('button', { name: /^Must See: Alpha/ }).tap();
+    await expect(alpha.getByRole('button', { name: /^Must See: Alpha.*Change priority/ })).toBeVisible();
+
+    await page.getByRole('link', { name: 'Picks' }).tap();
+    const firstRow = page.getByTestId('picks-plan-row').first();
+    await expect(firstRow).toBeVisible();
+    const box = await firstRow.boundingBox();
+    expect(box).toBeTruthy();
+    expect(box!.y).toBeLessThan(300);
   });
 });

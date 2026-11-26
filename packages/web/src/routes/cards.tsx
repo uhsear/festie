@@ -14,7 +14,6 @@ import {
   resolveStageColor,
   searchOtherDays,
   lineupReplacesEmptyState,
-  SCHEDULE_GROUP_BYS,
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
 import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
@@ -68,7 +67,6 @@ function CardsViewInner() {
   const dismissedPhase = useFestivalStore((state) => state.dismissedPhase);
   const dismissPhaseBand = useFestivalStore((state) => state.dismissPhaseBand);
   const groupBy = useFestivalStore((state) => state.scheduleGroupBy) ?? 'time';
-  const setGroupBy = useFestivalStore((state) => state.setScheduleGroupBy);
 
   const setDetailSet = useUIStore((state) => state.setDetailSet);
   const setDetailAutoSpotify = useUIStore((state) => state.setDetailAutoSpotify);
@@ -179,33 +177,6 @@ function CardsViewInner() {
       <DiscoverRow />
       {/* A search lists the matching announced acts under the set results instead (below). */}
       {q ? null : <AnnouncedLineup model={announced} />}
-
-      {filteredSets.length > 0 && (
-        <div className="flex items-center gap-2 w-full mx-auto max-w-[1440px] mb-[var(--space-3)]">
-          <span id="cards-group-by" className="text-[length:var(--font-size-14)] text-text-secondary">
-            Group by
-          </span>
-          <div className="flex gap-1 p-1 rounded-full bg-bg-secondary" role="group" aria-labelledby="cards-group-by">
-            {SCHEDULE_GROUP_BYS.map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={groupBy === key}
-                onClick={() => setGroupBy(key)}
-                className={
-                  'rounded-full px-3 min-h-11 text-[length:var(--font-size-14)] font-semibold cursor-pointer ' +
-                  'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua ' +
-                  (groupBy === key
-                    ? 'bg-accent-aqua text-[var(--text-on-light-accent)]'
-                    : 'bg-transparent text-text-secondary hover:text-text-primary')
-                }
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
 
       {user ? <OfflineStatusChip className="mb-[var(--space-4)]" remind /> : null}
 

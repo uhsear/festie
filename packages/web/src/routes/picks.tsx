@@ -33,7 +33,7 @@ import MarkedNoSet from '../components/features/MarkedNoSet';
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
 const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
 const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
-import { CalendarX, UserPlus, ChevronDown, Search, X, Share2, Ellipsis } from 'lucide-react';
+import { CalendarX, UserPlus, ChevronDown, Search, X, Share2, Ellipsis, Filter } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useToast } from '../lib/toastContext';
 import { cn } from '@/lib/utils';
@@ -89,6 +89,7 @@ function PicksViewInner() {
   useActiveCrew();
   const [view, setView] = useState<PicksViewMode>('plan');
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const {
     groupMode,
     setGroupMode,
@@ -198,7 +199,7 @@ function PicksViewInner() {
     <div
       id="picks-actions"
       hidden={!actionsOpen}
-      className="flex flex-wrap justify-end gap-2 mb-3 [&_button]:whitespace-nowrap"
+      className="flex flex-wrap justify-end gap-2 mb-3 [&[hidden]]:hidden [&_button]:whitespace-nowrap"
       onKeyDown={(e) => {
         if (e.key === 'Escape' && actionsOpen) setActionsOpen(false);
       }}
@@ -268,9 +269,34 @@ function PicksViewInner() {
     ) : null;
 
   // The key stays on this row, a direct child of the page, so arrowing between tabs keeps focus across branches.
+  const filterCount = Number(effectiveFilter !== 'all') + Number(search.trim() !== '');
   const viewToolbar = viewTabRow && (
         <div key="picks-view-toolbar" className="flex items-start gap-2 mb-3">
           {viewTabRow}
+          {(view === 'plan' || view === 'myday') && (
+            <button
+              type="button"
+              aria-label={filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
+              aria-expanded={filtersOpen}
+              aria-controls="picks-filters"
+              onClick={() => setFiltersOpen((v) => !v)}
+              className={cn(
+                'relative inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-full border cursor-pointer',
+                'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
+                filtersOpen ? 'border-accent-aqua text-accent-aqua' : 'border-border text-text-secondary hover:bg-bg-card-hover',
+              )}
+            >
+              <Filter className="w-4 h-4" aria-hidden="true" />
+              {filterCount > 0 && (
+                <span
+                  className="absolute -right-1 -top-1 inline-flex min-w-5 items-center justify-center rounded-full bg-accent-aqua px-1 text-[length:var(--font-size-12)] font-bold text-[var(--text-on-light-accent)]"
+                  aria-hidden="true"
+                >
+                  {filterCount}
+                </span>
+              )}
+            </button>
+          )}
           {actionButtons && (
             <button
               type="button"
@@ -425,14 +451,13 @@ function PicksViewInner() {
         {viewToolbar}
         {actionsPanel}
         <CrewSuggestionStrip />
-        <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
 
         <div role="tabpanel" id="picks-view-panel" aria-labelledby={`picks-tab-${view}`}>
         {view === 'myday' && (
-          <>
+          <div id="picks-filters" hidden={!filtersOpen} className="[&[hidden]]:hidden">
             <div className="flex flex-nowrap gap-2 mb-3 overflow-x-auto scrollbar-hide">{filterChips}</div>
             {searchRow}
-          </>
+          </div>
         )}
         {view === 'myday' && myDayGroups && myDayGroups.length === 0 && (
           <EmptyState
@@ -454,7 +479,9 @@ function PicksViewInner() {
 
         {view === 'plan' && (
           <>
-        {/* One chip row: priority filters, then Group by and Order, scrolling sideways instead of wrapping. */}
+        {/* One chip row: priority filters, then Group by and Order, scrolling sideways instead of wrapping.
+            It folds with the search behind the Filters button, so the first pick starts near the top. */}
+        <div id="picks-filters" hidden={!filtersOpen} className="[&[hidden]]:hidden">
         <div className="flex flex-nowrap items-center gap-2 mb-3 overflow-x-auto scrollbar-hide">
           {filterChips}
           <RovingGroup
@@ -496,17 +523,11 @@ function PicksViewInner() {
           </RovingGroup>
         </div>
         {searchRow}
+        </div>
 
         <MarkedNoSet />
         {!(trimmedSearch && rows.length === 0) && <PickConflicts groups={conflictGroups} />}
         <RateNightBanner />
-        <PickBulkActions />
-        <ListenList
-          sets={pickedSets}
-          days={days}
-          festivalName={currentFestival.name}
-          separator={currentFestival.b2bSeparator}
-        />
 
         {rows.length === 0 && (
           <EmptyState
@@ -545,7 +566,7 @@ function PicksViewInner() {
           );
           if (row.kind === 'subgroup') {
             return (
-              <h2 key={row.key} className="flex items-center gap-2 mt-1 mb-3 pb-2.5 border-b border-border">
+              <h2 key={row.key} className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
                 {dot}
                 <span className="text-sm font-medium text-text-secondary">{row.label}</span>
                 {badge}
@@ -559,7 +580,7 @@ function PicksViewInner() {
               aria-expanded={!row.collapsed}
               aria-label={`${row.label}, ${row.count} ${row.count === 1 ? 'pick' : 'picks'}`}
               onClick={() => toggleCollapsed(row.groupId)}
-              className="flex items-center gap-2 w-full min-h-11 mt-2 mb-2 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-xl"
+              className="flex items-center gap-2 w-full min-h-11 mb-1 text-left cursor-pointer focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2 rounded-xl"
             >
               {dot}
               <span className="text-sm font-bold text-text-primary">{row.label}</span>
@@ -571,9 +592,17 @@ function PicksViewInner() {
             </button>
           );
         })}
+        <PickBulkActions />
+        <ListenList
+          sets={pickedSets}
+          days={days}
+          festivalName={currentFestival.name}
+          separator={currentFestival.b2bSeparator}
+        />
           </>
         )}
         </div>
+        <OfflineReadinessCard festivalId={currentFestival.id} className="mt-3" />
       </div>
     </RefreshableView>
   );

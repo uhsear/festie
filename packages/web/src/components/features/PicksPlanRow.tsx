@@ -79,7 +79,7 @@ function PicksPlanRow({ set, hasClash, clashMin }: PicksPlanRowProps) {
     (move ? `, ${move.a11y}` : '');
 
   return (
-    <div className="flex items-center gap-2 pl-4 pr-2 py-2 w-full bg-bg-card border border-border rounded-lg mb-2">
+    <div data-testid="picks-plan-row" className="flex items-center gap-2 pl-4 pr-2 py-2 w-full bg-bg-card border border-border rounded-lg mb-2">
       {/* Phone: the name gets the full line, time and stage sit under it. sm+: time | name | stage in one row. */}
       <div className="relative flex flex-1 flex-col gap-y-1 min-w-0 py-1 text-left rounded-xl sm:flex-row sm:items-center sm:gap-x-3">
         <RowOpenButton label={label} onClick={() => setDetailSet(set)} />
