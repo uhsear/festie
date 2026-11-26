@@ -48,9 +48,28 @@ describe('ScheduleStatusLine', () => {
     mockCachedAt = Date.now();
     mockOffline = true;
     render(<ScheduleStatusLine showFreshness />);
-    expect(screen.getByTestId('schedule-status-line')).toHaveTextContent('Updated just now · Offline-ready');
+    expect(screen.getByTestId('schedule-status-line')).toHaveTextContent('<1m · Offline-ready');
+    expect(screen.getByTestId('last-synced-badge')).toHaveAttribute('data-signal', 'offline');
+    expect(screen.getByTestId('signal-age')).toHaveAccessibleName('Updated just now');
     expect(screen.getByRole('status')).toHaveTextContent('Offline, will sync');
     mockOffline = false;
+  });
+
+  it('glows only while live: live is filled with the glow, stale loses it and shows the age numeral', () => {
+    mockStatus = null;
+    mockOffline = false;
+    mockCachedAt = Date.now();
+    const { unmount } = render(<ScheduleStatusLine showFreshness />);
+    expect(screen.getByTestId('last-synced-badge')).toHaveAttribute('data-signal', 'live');
+    expect(screen.getByTestId('last-synced-badge').querySelector('[data-signal]')?.className).toContain('shadow-[var(--shadow-glow-green)]');
+    expect(screen.queryByTestId('signal-age')).not.toBeInTheDocument();
+    unmount();
+
+    mockCachedAt = Date.now() - 3 * 3_600_000;
+    render(<ScheduleStatusLine showFreshness />);
+    expect(screen.getByTestId('last-synced-badge')).toHaveAttribute('data-signal', 'stale');
+    expect(screen.getByTestId('signal-age')).toHaveTextContent('3h');
+    expect(screen.getByTestId('last-synced-badge').querySelector('[data-signal]')?.className).not.toContain('shadow-[var(--shadow-glow-green)]');
   });
 
   it('hides freshness off the schedule routes', () => {
