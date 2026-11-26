@@ -286,7 +286,7 @@ export default function LoginScreen() {
             accessibilityRole="button"
             accessibilityLabel={showPw ? 'Hide password' : 'Show password'}
           >
-            <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.colors.text.secondary} />
+            <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={t.iconSize.md} color={t.colors.text.secondary} />
           </TouchableOpacity>
         </View>
 

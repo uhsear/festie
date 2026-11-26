@@ -24,7 +24,7 @@ export default function InboxBell() {
       borderless
     >
       <View>
-        <Ionicons name="notifications-outline" size={24} color={t.colors.text.secondary} />
+        <Ionicons name="notifications-outline" size={t.iconSize.lg} color={t.colors.text.secondary} />
         {label ? (
           <View
             style={styles.countBadge}

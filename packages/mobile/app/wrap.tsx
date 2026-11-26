@@ -282,7 +282,7 @@ export default function WrapScreen() {
             {sharing ? (
               <ActivityIndicator size="small" color={t.colors.text.onLightAccent} />
             ) : (
-              <Ionicons name="share-social-outline" size={16} color={t.colors.text.onLightAccent} />
+              <Ionicons name="share-social-outline" size={t.iconSize.sm} color={t.colors.text.onLightAccent} />
             )}
             <Text style={styles.shareButtonText}>{sharing ? 'Preparing…' : 'Share this card'}</Text>
           </TouchableOpacity>
@@ -754,7 +754,7 @@ function CrewWrapTab({
               {sharing ? (
                 <ActivityIndicator size="small" color={t.colors.text.onLightAccent} />
               ) : (
-                <Ionicons name="share-social-outline" size={16} color={t.colors.text.onLightAccent} />
+                <Ionicons name="share-social-outline" size={t.iconSize.sm} color={t.colors.text.onLightAccent} />
               )}
               <Text style={styles.shareButtonText}>{sharing ? 'Preparing…' : 'Share Crew Wrap'}</Text>
             </TouchableOpacity>

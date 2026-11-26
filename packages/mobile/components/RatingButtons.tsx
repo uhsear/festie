@@ -203,7 +203,7 @@ export default function RatingButtons({ setId, festivalId, onRated, showMemory =
                 accessibilityState={{ checked: active, selected: active, disabled: busy || !loaded }}
                 accessibilityLabel={`${r.label} (${r.n} of 5)`}
               >
-                <Ionicons name={r.icon} size={22} color={active ? t.colors.accent.amber : t.colors.text.secondary} />
+                <Ionicons name={r.icon} size={t.iconSize.lg} color={active ? t.colors.accent.amber : t.colors.text.secondary} />
               </PressableScale>
               <Text
                 style={[styles.optionLabel, active && styles.captionActive]}

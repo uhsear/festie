@@ -127,9 +127,9 @@ export default function CrewPlanTab({
         accessibilityRole="button"
         accessibilityLabel="View your crew's plan"
       >
-        <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="calendar-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         <Text style={styles.overlapTogglePrimaryText}>Crew plan</Text>
-        <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.accent.aqua} />
       </TouchableOpacity>
 
       {/* Schedule compare / overlap toggle. */}
@@ -142,14 +142,14 @@ export default function CrewPlanTab({
         accessibilityRole="button"
         accessibilityLabel={showOverlap ? 'Hide schedule overlap' : 'Compare crew schedules'}
       >
-        <Ionicons name="git-compare-outline" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="git-compare-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         <Text style={styles.overlapToggleText}>
           {overlapBusy ? 'Loading overlap…' : showOverlap ? 'Hide schedule overlap' : 'Compare schedules'}
         </Text>
         {overlapBusy ? (
           <ActivityIndicator size="small" color={t.colors.accent.aqua} />
         ) : (
-          <Ionicons name={showOverlap ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.accent.aqua} />
+          <Ionicons name={showOverlap ? 'chevron-up' : 'chevron-down'} size={t.iconSize.sm} color={t.colors.accent.aqua} />
         )}
       </TouchableOpacity>
 
@@ -161,7 +161,7 @@ export default function CrewPlanTab({
           accessibilityRole="button"
           accessibilityLabel="Retry loading schedule overlap"
         >
-          <Ionicons name="cloud-offline-outline" size={16} color={t.colors.text.danger} />
+          <Ionicons name="cloud-offline-outline" size={t.iconSize.sm} color={t.colors.text.danger} />
           <Text style={styles.overlapErrorText}>{overlapError}</Text>
           <Text style={styles.overlapRetryText}>Retry</Text>
         </TouchableOpacity>
@@ -188,7 +188,7 @@ export default function CrewPlanTab({
                   </View>
                   <View style={styles.overlapBadge}>
                     {/* DC25: 13 is off-grid; snap to iconSize.xs (12). */}
-                    <Ionicons name="people" size={12} color={t.colors.accent.aqua} />
+                    <Ionicons name="people" size={t.iconSize.xs} color={t.colors.accent.aqua} />
                     <Text style={styles.overlapBadgeText}>{o.memberCount}</Text>
                   </View>
                 </View>
@@ -207,9 +207,9 @@ export default function CrewPlanTab({
         accessibilityRole="button"
         accessibilityLabel="Open full compare grid"
       >
-        <Ionicons name="grid-outline" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="grid-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         <Text style={styles.overlapToggleText}>Full compare grid</Text>
-        <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.accent.aqua} />
       </TouchableOpacity>
 
       {/* P2P plan handoff — discoverable from the Plan cluster so users
@@ -222,12 +222,12 @@ export default function CrewPlanTab({
         accessibilityRole="button"
         accessibilityLabel="Share offline: QR or text, works without signal"
       >
-        <Ionicons name="qr-code-outline" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="qr-code-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         <View style={styles.overlapToggleLabelStack}>
           <Text style={styles.overlapToggleText}>{COPY.picks.shareOffline}</Text>
           <Text style={styles.overlapToggleHint}>QR or text, works without signal</Text>
         </View>
-        <Ionicons name="chevron-forward" size={16} color={t.colors.accent.aqua} />
+        <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.accent.aqua} />
       </TouchableOpacity>
 
       <View style={styles.sectionLabelRow} onLayout={(e) => { planSectionY.current.polls = e.nativeEvent.layout.y; }}>
@@ -247,7 +247,7 @@ export default function CrewPlanTab({
         <SectionLabel>Packing</SectionLabel>
         {packingDone ? (
           <View style={styles.donePill} accessibilityLabel="All packing items claimed">
-            <Ionicons name="checkmark" size={12} color={t.colors.accent.aqua} />
+            <Ionicons name="checkmark" size={t.iconSize.xs} color={t.colors.accent.aqua} />
             <Text style={styles.donePillText} maxFontSizeMultiplier={MAX_FONT_SCALE}>All packed</Text>
           </View>
         ) : packingLeft > 0 ? (

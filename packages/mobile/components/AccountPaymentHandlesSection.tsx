@@ -127,7 +127,7 @@ export default function AccountPaymentHandlesSection() {
         accessibilityState={{ expanded: open }}
       >
         <View style={styles.rowIcon}>
-          <Ionicons name="wallet-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="wallet-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>{PAYMENT_COPY.title}</Text>
@@ -140,7 +140,7 @@ export default function AccountPaymentHandlesSection() {
             <Text style={styles.countText}>{count}</Text>
           </View>
         ) : null}
-        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={t.iconSize.action} color={t.colors.text.placeholder} />
       </TouchableOpacity>
 
       {open ? (
@@ -169,7 +169,7 @@ export default function AccountPaymentHandlesSection() {
 
           {saved ? (
             <View style={styles.savedRow} accessibilityLiveRegion="polite">
-              <Ionicons name="checkmark-circle" size={14} color={t.colors.status.verified} style={styles.savedIcon} />
+              <Ionicons name="checkmark-circle" size={t.iconSize.compact} color={t.colors.status.verified} style={styles.savedIcon} />
               <Text style={styles.savedText}>Saved</Text>
             </View>
           ) : null}
@@ -238,7 +238,7 @@ function PrefixField({
             accessibilityLabel={`Clear ${label}`}
             style={styles.clear}
           >
-            <Ionicons name="close-circle" size={16} color={t.colors.text.placeholder} />
+            <Ionicons name="close-circle" size={t.iconSize.sm} color={t.colors.text.placeholder} />
           </TouchableOpacity>
         ) : null}
       </View>

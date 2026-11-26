@@ -369,7 +369,7 @@ export default function CrewMeetingPoints({
           ) : null}
           {timeDisplay.label ? (
             <View style={styles.pointTimeRow}>
-              <Ionicons name="time-outline" size={12} color={t.colors.accent.aqua} />
+              <Ionicons name="time-outline" size={t.iconSize.xs} color={t.colors.accent.aqua} />
               <Text style={styles.pointTime} numberOfLines={1}>
                 {timeDisplay.label}
               </Text>
@@ -616,7 +616,7 @@ export default function CrewMeetingPoints({
             />
             {coords ? (
               <View style={styles.coordChip} accessibilityLabel="Captured location">
-                <Ionicons name="checkmark" size={12} color={t.colors.accent.aqua} />
+                <Ionicons name="checkmark" size={t.iconSize.xs} color={t.colors.accent.aqua} />
                 <Text style={styles.coordChipText}>
                   {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
                 </Text>
@@ -626,7 +626,7 @@ export default function CrewMeetingPoints({
                   accessibilityRole="button"
                   accessibilityLabel="Clear captured location"
                 >
-                  <Ionicons name="close" size={12} color={t.colors.accent.aqua} />
+                  <Ionicons name="close" size={t.iconSize.xs} color={t.colors.accent.aqua} />
                 </TouchableOpacity>
               </View>
             ) : null}
@@ -670,9 +670,9 @@ export default function CrewMeetingPoints({
           accessibilityRole="button"
           accessibilityLabel="Add a meeting point"
         >
-          <Ionicons name="location-outline" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="location-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.toggleText}>Add meeting point</Text>
-          <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="add" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         </TouchableOpacity>
       )}
 

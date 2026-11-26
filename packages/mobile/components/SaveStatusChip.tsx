@@ -30,7 +30,7 @@ export default function SaveStatusChip() {
       accessibilityLabel={status.label}
       accessibilityLiveRegion="polite"
     >
-      <Ionicons name={ICONS[status.kind]} size={12} color={color} />
+      <Ionicons name={ICONS[status.kind]} size={t.iconSize.xs} color={color} />
       <Text style={[styles.text, { color }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {status.label}
       </Text>

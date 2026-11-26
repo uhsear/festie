@@ -1339,7 +1339,7 @@ export default function OfflineMap({
               if (s.position) router.push(compassHref(s.username, { latitude: s.position.lat, longitude: s.position.lng }));
             }}
           >
-            <Ionicons name="warning" size={20} color={t.colors.accent.coral} />
+            <Ionicons name="warning" size={t.iconSize.md} color={t.colors.accent.coral} />
             <View style={styles.rowBody}>
               <Text style={styles.rowLabel}>{s.username} — SOS</Text>
               <Text style={styles.rowSub}>
@@ -1380,7 +1380,7 @@ export default function OfflineMap({
           <View style={styles.emptyBlock}>
             {/* One-off 32px: sits between iconSize.lg (24) and .xl (48) — neither
                 token fits this empty-state glyph without a visible size jump. */}
-            <Ionicons name="location-outline" size={32} color={t.colors.text.muted} />
+            <Ionicons name="location-outline" size={t.iconSize.lg} color={t.colors.text.muted} />
             <Text style={styles.emptyTitle}>No meeting points yet</Text>
             <Text style={styles.emptyMsg}>
               Add a meeting point with a location in the Crew tab and it'll show here.
@@ -1511,7 +1511,7 @@ export default function OfflineMap({
             >
               <Ionicons
                 name={placing ? 'close' : 'add-circle-outline'}
-                size={16}
+                size={t.iconSize.sm}
                 color={placing ? t.colors.text.onAccent : t.colors.accent.aqua}
               />
               <Text
@@ -1535,7 +1535,7 @@ export default function OfflineMap({
               {pendingRecenter && geoState === 'locating' ? (
                 <ActivityIndicator size="small" color={t.colors.accent.aqua} />
               ) : (
-                <Ionicons name="locate" size={20} color={t.colors.accent.aqua} />
+                <Ionicons name="locate" size={t.iconSize.md} color={t.colors.accent.aqua} />
               )}
             </TouchableOpacity>
           ) : null}
@@ -1622,7 +1622,7 @@ export default function OfflineMap({
                 {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (
                   <Ionicons
                     name="navigate"
-                    size={24}
+                    size={t.iconSize.lg}
                     color={pursueIsSos ? t.colors.accent.coral : t.colors.accent.aqua}
                     // The Ionicons "navigate" glyph points NE (45°) at rotation 0,
                     // so subtract 45° from the compass bearing — a due-north target
@@ -1630,7 +1630,7 @@ export default function OfflineMap({
                     style={{ transform: [{ rotate: `${pursuit.bearingDeg - NAVIGATE_GLYPH_OFFSET_DEG}deg` }] }}
                   />
                 ) : (
-                  <Ionicons name="navigate-outline" size={24} color={t.colors.text.muted} />
+                  <Ionicons name="navigate-outline" size={t.iconSize.lg} color={t.colors.text.muted} />
                 )}
                 <View style={styles.pursueBody}>
                   {selfCoord && pursuit ? (
@@ -1669,7 +1669,7 @@ export default function OfflineMap({
                   accessibilityRole="button"
                   accessibilityLabel={MAP_COPY.stopShowingWay}
                 >
-                  <Ionicons name="close" size={16} color={t.colors.text.muted} />
+                  <Ionicons name="close" size={t.iconSize.sm} color={t.colors.text.muted} />
                 </TouchableOpacity>
               </View>
             ) : showCard && place ? (
@@ -1717,7 +1717,7 @@ export default function OfflineMap({
                     accessibilityLabel="Dismiss"
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="close" size={16} color={t.colors.text.muted} />
+                    <Ionicons name="close" size={t.iconSize.sm} color={t.colors.text.muted} />
                   </TouchableOpacity>
                 </View>
                 {nearestNotice?.type === 'medical' ? (

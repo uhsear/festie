@@ -26,10 +26,10 @@ import type { ThemePreference } from '@festie/shared/stores';
  * Icon-size scale. Reach for these instead of inline literals.
  *
  * New-code rule: never write `size={N}` for an Ionicons/icon where N isn't in
- * this scale. Map to the nearest step (13→xs/12, 15→sm/16 are the historical
- * off-grid values; both are explicitly snapped here).
+ * this scale. Map to the nearest step (9/11→xs, 13→compact, 15→sm, 22/26/28/32→lg,
+ * 40→xl, 56/88/96→hero). The design-ratchet check fails on a numeric Ionicons size.
  *
- * Scale: 12/14/16/18/20/24/48. `compact` (14) and `action` (18) were promoted
+ * Scale: 12/14/16/18/20/24/48/64. `compact` (14) and `action` (18) were promoted
  * from de-facto usage in this audit — 18 alone covers 56 row-action call sites.
  *
  *   xs: 12       — inline badge / meta-row indicators
@@ -38,7 +38,8 @@ import type { ThemePreference } from '@festie/shared/stores';
  *   action: 18   — row-action icons (most-used size in the app)
  *   md: 20       — medium stand-alone controls
  *   lg: 24       — screen-level leading icons, header icons
- *   xl: 48       — empty-state / hero icons
+ *   xl: 48       — empty-state icons
+ *   hero: 64     — empty-state hero icons
  */
 export const iconSize = {
   xs: 12,
@@ -48,6 +49,7 @@ export const iconSize = {
   md: 20,
   lg: 24,
   xl: 48,
+  hero: 64,
 } as const;
 
 export const tokens = {

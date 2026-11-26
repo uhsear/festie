@@ -92,7 +92,7 @@ export default function AccountPublicScheduleSection() {
     <View style={styles.card}>
       <View style={styles.row}>
         <View style={styles.rowIcon}>
-          <Ionicons name="globe-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="globe-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Public schedule page</Text>
@@ -137,7 +137,7 @@ export default function AccountPublicScheduleSection() {
       ) : null}
       <View style={styles.row}>
         <View style={styles.rowIcon}>
-          <Ionicons name="refresh-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="refresh-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>{RESET_LABEL}</Text>

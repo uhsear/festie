@@ -243,7 +243,7 @@ export default function MapScreen() {
               <ActivityIndicator color={t.colors.text.onAccent} />
             ) : (
               <>
-                <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
+                <Ionicons name="alert-circle" size={t.iconSize.md} color={t.colors.text.onAccent} />
                 <Text style={styles.sosFabText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {mySosActive ? 'SOS active' : 'SOS'}
                 </Text>

@@ -57,11 +57,11 @@ export default function PicksBulkPanel({
     accessibilityState={{ expanded: bulkOpen }}
     accessibilityLabel="Bulk add picks for all days"
   >
-    <Ionicons name="add-circle-outline" size={16} color={t.colors.accent.aqua} />
+    <Ionicons name="add-circle-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
     <Text style={styles.bulkHeaderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{`Bulk add picks · ${BULK_SCOPE_LABEL}`}</Text>
     <Ionicons
       name={bulkOpen ? 'chevron-up' : 'chevron-down'}
-      size={16}
+      size={t.iconSize.sm}
       color={t.colors.text.muted}
       style={styles.bulkChevron}
     />

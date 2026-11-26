@@ -95,7 +95,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
               }
             >
               {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
-              <Ionicons name={TAB_ICONS[tab.key]} size={16} color={active ? t.colors.accent.aqua : t.colors.text.secondary} />
+              <Ionicons name={TAB_ICONS[tab.key]} size={t.iconSize.sm} color={active ? t.colors.accent.aqua : t.colors.text.secondary} />
               {!largeText || active ? (
                 // Trailing NBSP absorbs Fabric's single-line under-measure that clipped "Money" to "Mone" (see OfflineStatusChip).
                 <Text

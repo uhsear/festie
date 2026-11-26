@@ -546,7 +546,7 @@ function ContactCard() {
       >
         <Text style={styles.contactLabel}>Email</Text>
         <View style={styles.contactLinkRow}>
-          <Ionicons name="mail-outline" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="mail-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.contactLink}>{CONTACT_EMAIL}</Text>
         </View>
       </TouchableOpacity>
@@ -559,7 +559,7 @@ function ContactCard() {
       >
         <Text style={styles.contactLabel}>Service</Text>
         <View style={styles.contactLinkRow}>
-          <Ionicons name="globe-outline" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="globe-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.contactLink}>{SERVICE_URL}</Text>
         </View>
       </TouchableOpacity>
@@ -631,9 +631,9 @@ export default function PrivacyScreen() {
                 accessibilityRole="link"
                 accessibilityLabel="Read the Terms of Service"
               >
-                <Ionicons name="document-text-outline" size={18} color={t.colors.accent.aqua} />
+                <Ionicons name="document-text-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
                 <Text style={styles.linkText}>Terms of Service</Text>
-                <Ionicons name="open-outline" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="open-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
               </TouchableOpacity>
             ) : null}
             {section.title === 'Other documents' ? (
@@ -644,9 +644,9 @@ export default function PrivacyScreen() {
                 accessibilityRole="link"
                 accessibilityLabel="Open the account deletion page"
               >
-                <Ionicons name="trash-outline" size={18} color={t.colors.accent.aqua} />
+                <Ionicons name="trash-outline" size={t.iconSize.action} color={t.colors.accent.aqua} />
                 <Text style={styles.linkText}>Delete your account</Text>
-                <Ionicons name="open-outline" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="open-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
               </TouchableOpacity>
             ) : null}
 

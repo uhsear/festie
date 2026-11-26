@@ -78,13 +78,13 @@ export default function AccountDevicesSection() {
         accessibilityState={{ expanded: open }}
       >
         <View style={styles.rowIcon}>
-          <Ionicons name="phone-portrait-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="phone-portrait-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>{ACCOUNT_COPY.devicesTitle}</Text>
           <Text style={styles.rowHint}>{ACCOUNT_COPY.devicesHint}</Text>
         </View>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={t.iconSize.action} color={t.colors.text.placeholder} />
       </TouchableOpacity>
 
       {open ? (

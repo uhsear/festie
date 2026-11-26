@@ -27,7 +27,7 @@ export default function CrewLockRow({ crewId, isOwner }: CrewLockRowProps) {
     if (!locked) return null;
     return (
       <View style={styles.row} accessible accessibilityRole="text" accessibilityLabel={COPY.crewLock.lockedLine}>
-        <Ionicons name="lock-closed-outline" size={16} color={t.colors.text.secondary} />
+        <Ionicons name="lock-closed-outline" size={t.iconSize.sm} color={t.colors.text.secondary} />
         <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {COPY.crewLock.lockedLine}
         </Text>

@@ -309,7 +309,7 @@ export default function FriendPicksScreen() {
           >
             <Ionicons
               name={checked ? 'checkbox' : 'square-outline'}
-              size={24}
+              size={t.iconSize.lg}
               color={checked ? t.colors.accent.aqua : t.colors.text.secondary}
             />
           </TouchableOpacity>
@@ -332,9 +332,9 @@ export default function FriendPicksScreen() {
             </Text>
           </View>
           <View style={styles.meta}>
-            {row.theirs ? <Ionicons name={priorityIconName(row.theirs)} size={14} color={t.colors.text.secondary} /> : null}
+            {row.theirs ? <Ionicons name={priorityIconName(row.theirs)} size={t.iconSize.compact} color={t.colors.text.secondary} /> : null}
             {row.mine && !row.theirs ? (
-              <Ionicons name={priorityIconName(row.mine)} size={14} color={t.colors.text.secondary} />
+              <Ionicons name={priorityIconName(row.mine)} size={t.iconSize.compact} color={t.colors.text.secondary} />
             ) : null}
             <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               {marks.join(' · ')}

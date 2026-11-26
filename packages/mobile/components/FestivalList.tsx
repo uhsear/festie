@@ -230,7 +230,7 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
           <View style={styles.metaRow}>
             <Ionicons
               name="calendar-outline"
-              size={14}
+              size={t.iconSize.compact}
               color={t.colors.text.secondary}
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
@@ -242,7 +242,7 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
           <View style={styles.metaRow}>
             <Ionicons
               name="list-outline"
-              size={14}
+              size={t.iconSize.compact}
               color={t.colors.text.secondary}
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
@@ -254,7 +254,7 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
           <View style={styles.metaRow}>
             <Ionicons
               name="location-outline"
-              size={14}
+              size={t.iconSize.compact}
               color={t.colors.text.secondary}
               accessibilityElementsHidden
               importantForAccessibility="no-hide-descendants"
@@ -267,7 +267,7 @@ function FestivalCard({ festival, onPress, isSelecting }: FestivalCardProps) {
       </View>
       <Ionicons
         name="chevron-forward"
-        size={20}
+        size={t.iconSize.md}
         color={t.colors.text.muted}
         accessibilityElementsHidden
         importantForAccessibility="no-hide-descendants"
@@ -428,7 +428,7 @@ export default function FestivalList({ onSelected }: FestivalListProps = {}) {
   if (!isLoading && festivals.length === 0) {
     return (
       <ScrollView contentContainerStyle={styles.scrollCentered} refreshControl={refreshControl}>
-        <Ionicons name="musical-notes-outline" size={48} color={t.colors.text.muted} />
+        <Ionicons name="musical-notes-outline" size={t.iconSize.xl} color={t.colors.text.muted} />
         <Text style={styles.emptyTitle}>No festivals available</Text>
         <Text style={styles.emptySubtitle}>Pull down to refresh</Text>
       </ScrollView>

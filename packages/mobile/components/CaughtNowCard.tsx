@@ -113,7 +113,7 @@ export default function CaughtNowCard({ festivalId, nowMs, timeZone, getStageNam
               onPress={() => toggle(item.set.id)}
               style={[styles.button, selected && styles.buttonOn]}
             >
-              {selected ? <Ionicons name="checkmark" size={16} color={t.colors.accent.aqua} /> : null}
+              {selected ? <Ionicons name="checkmark" size={t.iconSize.sm} color={t.colors.accent.aqua} /> : null}
               <Text
                 style={[styles.buttonLabel, selected && styles.buttonLabelOn]}
                 maxFontSizeMultiplier={MAX_FONT_SCALE}

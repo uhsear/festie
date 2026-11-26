@@ -77,7 +77,7 @@ export default function MapPlaceCard({
           accessibilityRole="button"
           accessibilityLabel={MAP_COPY.close}
         >
-          <Ionicons name="close" size={20} color={t.colors.text.muted} />
+          <Ionicons name="close" size={t.iconSize.md} color={t.colors.text.muted} />
         </TouchableOpacity>
       </View>
       <View style={styles.actions}>

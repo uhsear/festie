@@ -518,7 +518,7 @@ export default function SetDetailScreen() {
           accessibilityLabel="Share set"
           hitSlop={8}
         >
-          <Ionicons name="share-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="share-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </TouchableOpacity>
         <CloseButton onPress={dismiss} />
       </View>
@@ -615,11 +615,11 @@ export default function SetDetailScreen() {
                   >
                     <Ionicons
                       name={option.icon}
-                      size={16}
+                      size={t.iconSize.sm}
                       color={active ? t.colors.text.onLightAccent : t.colors.text.muted}
                     />
                     {active && pending ? (
-                      <Ionicons name="time-outline" size={14} color={t.colors.text.onLightAccent} />
+                      <Ionicons name="time-outline" size={t.iconSize.compact} color={t.colors.text.onLightAccent} />
                     ) : null}
                     <Text
                       style={[styles.priorityText, active && { color: t.colors.text.onLightAccent }]}
@@ -660,11 +660,11 @@ export default function SetDetailScreen() {
                 accessibilityState={{ expanded: noteOpen }}
                 accessibilityLabel={`Reminder and note: ${reminderSummary}`}
               >
-                <Ionicons name="notifications-outline" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="notifications-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                 <Text style={styles.spotifyText} numberOfLines={1}>
                   {reminderSummary}
                 </Text>
-                <Ionicons name={noteOpen ? 'chevron-up' : 'chevron-down'} size={16} color={t.colors.text.secondary} />
+                <Ionicons name={noteOpen ? 'chevron-up' : 'chevron-down'} size={t.iconSize.sm} color={t.colors.text.secondary} />
               </TouchableOpacity>
               {noteOpen ? (
                 <>
@@ -806,14 +806,14 @@ export default function SetDetailScreen() {
                   spotifyOpen ? 'Hide player' : `Listen to ${preview?.artistName ?? spotifyArtist.name}`
                 }
               >
-                <Ionicons name="musical-note" size={16} color={t.colors.accent.aqua} />
+                <Ionicons name="musical-note" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                 <Text style={styles.spotifyText} numberOfLines={1}>
                   Listen
                   {preview?.trackName ? <Text style={styles.spotifyTrack}>{`  ${preview.trackName}`}</Text> : null}
                 </Text>
                 <Ionicons
                   name={spotifyOpen ? 'chevron-up' : 'chevron-down'}
-                  size={16}
+                  size={t.iconSize.sm}
                   color={t.colors.text.secondary}
                 />
               </TouchableOpacity>
@@ -949,7 +949,7 @@ export default function SetDetailScreen() {
                 <View style={styles.crewInfo} accessible accessibilityLabel={`${o.name}, ${meta.label}`}>
                   <View style={[styles.crewDot, { backgroundColor: getAvatarColor(o.name) }]} />
                   <Text style={styles.crewName}>{o.name}</Text>
-                  <Ionicons name={meta.icon} size={12} color={priorityColor(t, o.priority)} />
+                  <Ionicons name={meta.icon} size={t.iconSize.xs} color={priorityColor(t, o.priority)} />
                   <Text style={[styles.crewPriority, { color: priorityColor(t, o.priority) }]}>{meta.label}</Text>
                 </View>
                 {crewScoped && viewAs.canView(o.profileId) ? (

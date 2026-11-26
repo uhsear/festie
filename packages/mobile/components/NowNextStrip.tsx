@@ -109,7 +109,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
           <LiveDot label="NOW" />
         ) : (
           <View style={styles.nextLabelRow}>
-            <Ionicons name="play-skip-forward" size={12} color={t.colors.text.secondary} />
+            <Ionicons name="play-skip-forward" size={t.iconSize.xs} color={t.colors.text.secondary} />
             <Text style={styles.nextLabel}>UP NEXT</Text>
           </View>
         )}
@@ -125,7 +125,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
           <Text style={[styles.timing, isNow && styles.timingNow]}>{timing}</Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={t.colors.text.muted} />
+      <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.muted} />
 
       {/* Live scrubber along the strip's bottom edge. Static width (no
           animation needed — it re-renders on the hook's tick); clipped to the

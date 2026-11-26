@@ -295,7 +295,7 @@ export default function PlanQRScan() {
   if (phase === 'done' && scan) {
     return (
       <ScrollView contentContainerStyle={[styles.doneContent, { paddingBottom: bottomPad }]}>
-        <Ionicons name="checkmark-circle" size={56} color={t.colors.accent.aqua} />
+        <Ionicons name="checkmark-circle" size={t.iconSize.hero} color={t.colors.accent.aqua} />
         <Text style={styles.doneTitle}>{`${added} pick${added === 1 ? '' : 's'} added`}</Text>
         <Text style={styles.doneSub}>{scan.snapshot.festivalName}</Text>
 
@@ -350,7 +350,7 @@ function SummaryRow({ icon, label, muted }: { icon: keyof typeof Ionicons.glyphM
   const styles = useStyles();
   return (
     <View style={styles.summaryRow}>
-      <Ionicons name={icon} size={16} color={muted ? t.colors.text.muted : t.colors.accent.coral} />
+      <Ionicons name={icon} size={t.iconSize.sm} color={muted ? t.colors.text.muted : t.colors.accent.coral} />
       <Text style={[styles.summaryText, muted && styles.summaryMuted]}>{label}</Text>
     </View>
   );

@@ -199,7 +199,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
       })}
       {quiet.length > 0 ? (
         <View style={styles.quiet}>
-          <Ionicons name="warning" size={14} color={t.colors.text.muted} />
+          <Ionicons name="warning" size={t.iconSize.compact} color={t.colors.text.muted} />
           <Text style={styles.quietText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {clashesWith(quiet.map((c) => artistDisplayName(c, b2bSeparator)))}
           </Text>

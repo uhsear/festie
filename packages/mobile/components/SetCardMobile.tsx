@@ -176,7 +176,7 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
       {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
       <Ionicons
         name={active && pending ? 'time-outline' : option.icon}
-        size={16}
+        size={t.iconSize.sm}
         color={active ? t.colors.text.onLightAccent : accent}
       />
       <Text
@@ -318,14 +318,14 @@ function SetCardMobileImpl({
           {hasNote ? (
             <Ionicons
               name="document-text-outline"
-              size={12} // DC25: 13 is off-grid; snap to iconSize.xs (12).
+              size={t.iconSize.xs} // DC25: 13 is off-grid; snap to iconSize.xs (12).
               color={t.colors.text.muted}
               accessibilityLabel="Has note"
             />
           ) : null}
           {reminderMinutes != null ? (
             <View style={styles.reminderMark} accessibilityLabel={reminderA11y ?? undefined}>
-              <Ionicons name="notifications-outline" size={12} color={t.colors.text.muted} />
+              <Ionicons name="notifications-outline" size={t.iconSize.xs} color={t.colors.text.muted} />
               <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {reminderLeadLabel(reminderMinutes)}
               </Text>
@@ -333,7 +333,7 @@ function SetCardMobileImpl({
           ) : null}
           {move ? (
             <View style={styles.movedMark} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              <Ionicons name="swap-horizontal" size={12} color={t.colors.text.muted} />
+              <Ionicons name="swap-horizontal" size={t.iconSize.xs} color={t.colors.text.muted} />
               <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {move.chip}
               </Text>
@@ -341,7 +341,7 @@ function SetCardMobileImpl({
           ) : null}
           {hasConflict ? (
             <View style={styles.conflictBadge}>
-              <Ionicons name="warning" size={12} color={t.colors.clash.mark} />
+              <Ionicons name="warning" size={t.iconSize.xs} color={t.colors.clash.mark} />
               <Text style={styles.conflictText} numberOfLines={1}>
                 {clashLabel ?? COPY.clash.badge}
               </Text>
@@ -367,7 +367,7 @@ function SetCardMobileImpl({
             accessibilityRole="button"
             accessibilityLabel={`Listen to ${artistName}`}
           >
-            <Ionicons name="musical-notes" size={18} color={t.colors.text.secondary} />
+            <Ionicons name="musical-notes" size={t.iconSize.action} color={t.colors.text.secondary} />
           </AppPressable>
         ) : null}
 
@@ -376,7 +376,7 @@ function SetCardMobileImpl({
 
       {sync?.state === 'failed' ? (
         <View style={styles.failedRow} accessibilityLiveRegion="polite">
-          <Ionicons name="alert-circle" size={16} color={t.colors.accent.amber} />
+          <Ionicons name="alert-circle" size={t.iconSize.sm} color={t.colors.accent.amber} />
           <Text style={styles.failedText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             Pick not saved.
           </Text>

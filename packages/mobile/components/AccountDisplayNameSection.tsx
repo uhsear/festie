@@ -113,7 +113,7 @@ export default function AccountDisplayNameSection() {
         accessibilityState={{ expanded: open }}
       >
         <View style={styles.rowIcon}>
-          <Ionicons name="person-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="person-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>Display name</Text>
@@ -121,7 +121,7 @@ export default function AccountDisplayNameSection() {
             {currentName || (username ? `@${username}` : 'Set a display name')}
           </Text>
         </View>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={18} color={t.colors.text.placeholder} />
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={t.iconSize.action} color={t.colors.text.placeholder} />
       </TouchableOpacity>
 
       {open ? (
@@ -154,7 +154,7 @@ export default function AccountDisplayNameSection() {
                 accessibilityLabel="Clear display name"
                 style={styles.clear}
               >
-                <Ionicons name="close-circle" size={18} color={t.colors.text.placeholder} />
+                <Ionicons name="close-circle" size={t.iconSize.action} color={t.colors.text.placeholder} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -183,7 +183,7 @@ export default function AccountDisplayNameSection() {
 
           {saved ? (
             <View style={styles.savedRow} accessibilityLiveRegion="polite">
-              <Ionicons name="checkmark-circle" size={14} color={t.colors.status.verified} style={styles.savedIcon} />
+              <Ionicons name="checkmark-circle" size={t.iconSize.compact} color={t.colors.status.verified} style={styles.savedIcon} />
               <Text style={styles.savedText}>Saved</Text>
             </View>
           ) : null}

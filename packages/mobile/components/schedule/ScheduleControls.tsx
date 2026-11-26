@@ -176,7 +176,7 @@ export default function ScheduleControls({
         {isLoading ? (
           <ActivityIndicator size="small" color={t.colors.accent.aqua} />
         ) : (
-          <Ionicons name="refresh" size={18} color={t.colors.accent.aqua} />
+          <Ionicons name="refresh" size={t.iconSize.action} color={t.colors.accent.aqua} />
         )}
       </TouchableOpacity>
     ) : null}
@@ -194,7 +194,7 @@ export default function ScheduleControls({
       state), so on small phones the timeline keeps ~70% of the viewport. */}
   {searchOpen ? (
     <View style={[styles.searchRow, { marginHorizontal: hPad }]}>
-      <Ionicons name="search" size={16} color={t.colors.text.placeholder} style={styles.searchIcon} />
+      <Ionicons name="search" size={t.iconSize.sm} color={t.colors.text.placeholder} style={styles.searchIcon} />
       <TextInput
         style={styles.searchInput}
         value={searchQuery}
@@ -214,7 +214,7 @@ export default function ScheduleControls({
           accessibilityLabel="Clear search"
           hitSlop={13}
         >
-          <Ionicons name="close-circle" size={18} color={t.colors.text.muted} />
+          <Ionicons name="close-circle" size={t.iconSize.action} color={t.colors.text.muted} />
         </TouchableOpacity>
       ) : null}
     </View>
@@ -261,7 +261,7 @@ export default function ScheduleControls({
             >
               <Ionicons
                 name={CONCEPT_IONICON.picks}
-                size={12}
+                size={t.iconSize.xs}
                 color={mineActive ? t.colors.accent.aqua : t.colors.text.muted}
               />
               <Text

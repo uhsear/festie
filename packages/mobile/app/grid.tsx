@@ -555,8 +555,8 @@ export default function GridScreen() {
               {mark ? <ClashHatch segments={mark.segments} height={height} color={t.colors.clash.mark} /> : null}
               {mark || pick ? (
                 <View style={styles.iconRow}>
-                  {mark ? <Ionicons name="warning-outline" size={11} color={t.colors.clash.mark} aria-hidden /> : null}
-                  {pick ? <Ionicons name={priorityIconName(pick)} size={11} color={cellColor} aria-hidden /> : null}
+                  {mark ? <Ionicons name="warning-outline" size={t.iconSize.xs} color={t.colors.clash.mark} aria-hidden /> : null}
+                  {pick ? <Ionicons name={priorityIconName(pick)} size={t.iconSize.xs} color={cellColor} aria-hidden /> : null}
                 </View>
               ) : null}
               <Text style={styles.cellArtist} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
@@ -585,7 +585,7 @@ export default function GridScreen() {
                 <View style={styles.overlapBadge}>
                   {/* Sub-scale badge exception: iconSize.xs (12) overwhelms this
                       tiny in-cell overlap pill (micro text, 1px vertical pad). */}
-                  <Ionicons name="people" size={9} color={t.colors.accent.aqua} />
+                  <Ionicons name="people" size={t.iconSize.xs} color={t.colors.accent.aqua} />
                   <Text style={styles.overlapCount}>{crew.total}</Text>
                 </View>
               ) : null}
@@ -641,7 +641,7 @@ export default function GridScreen() {
               {sharing ? (
                 <ActivityIndicator size="small" color={t.colors.accent.aqua} />
               ) : (
-                <Ionicons name="share-outline" size={20} color={t.colors.accent.aqua} />
+                <Ionicons name="share-outline" size={t.iconSize.md} color={t.colors.accent.aqua} />
               )}
             </TouchableOpacity>
           ),
@@ -789,7 +789,7 @@ export default function GridScreen() {
             accessibilityRole="button"
             accessibilityLabel={COPY.jumpToNow.a11y}
           >
-            <Ionicons name={CONCEPT_IONICON.jumpToNow} size={16} color={t.colors.text.onLightAccent} />
+            <Ionicons name={CONCEPT_IONICON.jumpToNow} size={t.iconSize.sm} color={t.colors.text.onLightAccent} />
             <Text style={styles.fabText}>{COPY.jumpToNow.label}</Text>
           </TouchableOpacity>
         ) : null}

@@ -251,7 +251,7 @@ export default function CompleteSignupScreen() {
           accessibilityHint={errors.dateOfBirth ?? 'Opens a date picker. You must be 18 or older.'}
         >
           <Text style={dobLabel ? styles.dobText : styles.dobPlaceholder}>{dobLabel ?? 'Date of birth'}</Text>
-          <Ionicons name="calendar-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="calendar-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </Pressable>
         {errors.dateOfBirth ? (
           <Text style={styles.fieldError} accessibilityRole="alert" accessibilityLiveRegion="assertive">
@@ -274,7 +274,7 @@ export default function CompleteSignupScreen() {
           >
             <Ionicons
               name={tosAccepted ? 'checkbox' : 'square-outline'}
-              size={20}
+              size={t.iconSize.md}
               color={tosAccepted ? t.colors.accent.aqua : t.colors.text.secondary}
             />
           </TouchableOpacity>

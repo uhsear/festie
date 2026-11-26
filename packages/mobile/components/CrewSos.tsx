@@ -212,7 +212,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
               accessibilityRole="button"
               accessibilityLabel={`Get directions to ${sos.username}`}
             >
-              <Ionicons name="navigate" size={16} color={t.colors.text.onAccent} />
+              <Ionicons name="navigate" size={t.iconSize.sm} color={t.colors.text.onAccent} />
               <Text style={styles.bannerButtonPrimaryText}>Get directions</Text>
             </TouchableOpacity>
           ) : null}
@@ -263,7 +263,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
             <ActivityIndicator color={t.colors.text.onAccent} />
           ) : (
             <>
-              <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
+              <Ionicons name="alert-circle" size={t.iconSize.md} color={t.colors.text.onAccent} />
               <Text style={styles.sosButtonText}>Send SOS</Text>
             </>
           )}
@@ -291,7 +291,7 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
               accessibilityRole="button"
               accessibilityLabel="Close directions"
             >
-              <Ionicons name="close" size={24} color={t.colors.text.primary} />
+              <Ionicons name="close" size={t.iconSize.lg} color={t.colors.text.primary} />
             </TouchableOpacity>
           </View>
           {navTarget && navEntry ? (

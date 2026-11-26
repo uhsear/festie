@@ -247,7 +247,7 @@ export default function ForgotPasswordScreen() {
           </>
         ) : (
           <View style={styles.successBox} accessibilityLiveRegion="polite">
-            <Ionicons name="checkmark-circle" size={48} color={t.colors.accent.aqua} />
+            <Ionicons name="checkmark-circle" size={t.iconSize.xl} color={t.colors.accent.aqua} />
             <Text style={styles.successTitle}>Check your email</Text>
             <Text style={styles.successBody}>{AUTH_COPY.forgotSent(email.trim())}</Text>
             <Text style={styles.successHint}>{AUTH_COPY.forgotSentHint}</Text>

@@ -87,7 +87,7 @@ function FestivalTopicsRows() {
         {subs === null ? (
           error ? (
             <View style={styles.errorRow} accessibilityLiveRegion="polite">
-              <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
+              <Ionicons name="alert-circle-outline" size={t.iconSize.compact} color={t.colors.text.danger} style={styles.errorIcon} />
               <Text style={styles.errorText}>Couldn’t load festival settings.</Text>
             </View>
           ) : (
@@ -106,7 +106,7 @@ function FestivalTopicsRows() {
             return (
               <View key={r.key} style={styles.row}>
                 <View style={styles.rowIcon}>
-                  <Ionicons name={r.icon} size={18} color={t.colors.text.secondary} />
+                  <Ionicons name={r.icon} size={t.iconSize.action} color={t.colors.text.secondary} />
                 </View>
                 <View style={styles.rowBody}>
                   <Text style={styles.rowTitle}>{r.title}</Text>
@@ -206,7 +206,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
     return (
       <View key={r.key} style={styles.row}>
         <View style={styles.rowIcon}>
-          <Ionicons name={ROW_ICONS[r.key]} size={18} color={value ? t.colors.accent.aqua : t.colors.text.secondary} />
+          <Ionicons name={ROW_ICONS[r.key]} size={t.iconSize.action} color={value ? t.colors.accent.aqua : t.colors.text.secondary} />
         </View>
         <View style={styles.rowBody}>
           <Text style={styles.rowTitle}>{r.label}</Text>
@@ -247,7 +247,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
         <SectionLabel>Notification types</SectionLabel>
         <View style={styles.card}>
           <View style={styles.errorRow} accessibilityLiveRegion="polite">
-            <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
+            <Ionicons name="alert-circle-outline" size={t.iconSize.compact} color={t.colors.text.danger} style={styles.errorIcon} />
             <Text style={styles.errorText}>{storeError}</Text>
           </View>
           <Button label="Try again" variant="ghost" onPress={() => loadPrefs().catch(() => {})} />
@@ -283,7 +283,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
         {rows.filter((r) => !r.onDevice).map(renderRow)}
         <View style={styles.row} accessible accessibilityLabel="SOS from your crew: always on">
           <View style={styles.rowIcon}>
-            <Ionicons name="alert-circle" size={18} color={t.colors.accent.coral} />
+            <Ionicons name="alert-circle" size={t.iconSize.action} color={t.colors.accent.coral} />
           </View>
           <Text style={styles.rowTitle}>SOS from your crew</Text>
           <Text style={styles.alwaysOn}>Always on</Text>
@@ -291,7 +291,7 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
 
         <View style={styles.row}>
           <View style={styles.rowIcon}>
-            <Ionicons name="moon-outline" size={18} color={quietOn ? t.colors.accent.aqua : t.colors.text.secondary} />
+            <Ionicons name="moon-outline" size={t.iconSize.action} color={quietOn ? t.colors.accent.aqua : t.colors.text.secondary} />
           </View>
           <View style={styles.rowBody}>
             <Text style={styles.rowTitle}>Quiet hours</Text>
@@ -359,16 +359,16 @@ export default function AccountNotificationPrefsSection({ pushOn = true }: { pus
             accessibilityLabel="Manage in Android settings"
           >
             <View style={styles.rowIcon}>
-              <Ionicons name="settings-outline" size={18} color={t.colors.text.secondary} />
+              <Ionicons name="settings-outline" size={t.iconSize.action} color={t.colors.text.secondary} />
             </View>
             <Text style={styles.rowTitle}>Manage in Android settings</Text>
-            <Ionicons name="chevron-forward" size={16} color={t.colors.text.secondary} />
+            <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.secondary} />
           </AppPressable>
         ) : null}
 
         {storeError ? (
           <View style={styles.errorRow} accessibilityLiveRegion="polite">
-            <Ionicons name="alert-circle-outline" size={14} color={t.colors.text.danger} style={styles.errorIcon} />
+            <Ionicons name="alert-circle-outline" size={t.iconSize.compact} color={t.colors.text.danger} style={styles.errorIcon} />
             <Text style={styles.errorText}>{storeError}</Text>
           </View>
         ) : null}

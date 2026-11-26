@@ -35,7 +35,7 @@ export default function NotFoundScreen() {
   const insets = useSafeAreaInsets();
   return (
     <View style={[styles.container, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
-      <Ionicons name="compass-outline" size={48} color={t.colors.text.muted} />
+      <Ionicons name="compass-outline" size={t.iconSize.xl} color={t.colors.text.muted} />
       <Text style={styles.title} accessibilityRole="header">Page not found</Text>
       <Text style={styles.body}>
         That link does not match anything in Festie. It may have moved, or the address has a typo.

@@ -16,7 +16,7 @@ export default function PicksSearchField({
   const t = useTokens();
   return (
 <View style={styles.searchRow}>
-  <Ionicons name="search" size={16} color={t.colors.text.placeholder} />
+  <Ionicons name="search" size={t.iconSize.sm} color={t.colors.text.placeholder} />
   <TextInput
     style={styles.searchInput}
     value={search}
@@ -36,7 +36,7 @@ export default function PicksSearchField({
       accessibilityRole="button"
       accessibilityLabel="Clear search"
     >
-      <Ionicons name="close-circle" size={18} color={t.colors.text.muted} />
+      <Ionicons name="close-circle" size={t.iconSize.action} color={t.colors.text.muted} />
     </TouchableOpacity>
   ) : null}
 </View>

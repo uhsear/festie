@@ -95,7 +95,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
     return (
       <View style={styles.editBox}>
         <View style={styles.editHeader}>
-          <Ionicons name={CONCEPT_IONICON.homeBase} size={16} color={t.colors.accent.aqua} />
+          <Ionicons name={CONCEPT_IONICON.homeBase} size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.editTitle}>{COPY.homeBase.set}</Text>
           <TouchableOpacity
             onPress={() => setEditing(false)}
@@ -104,7 +104,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
             accessibilityRole="button"
             accessibilityLabel="Cancel editing Home Base"
           >
-            <Ionicons name="close" size={18} color={t.colors.text.secondary} />
+            <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.secondary} />
           </TouchableOpacity>
         </View>
         <Text style={styles.hint}>{COPY.homeBase.hint}</Text>
@@ -170,7 +170,7 @@ export default function CrewHomeBase({ crewId, location, time, isOwner }: CrewHo
 
   const body = (
     <>
-      <Ionicons name="location" size={16} color={hasHomeBase ? t.colors.accent.aqua : t.colors.text.muted} />
+      <Ionicons name="location" size={t.iconSize.sm} color={hasHomeBase ? t.colors.accent.aqua : t.colors.text.muted} />
       <View style={styles.cardInfo}>
         {hasHomeBase ? (
           <View style={styles.cardRow}>
