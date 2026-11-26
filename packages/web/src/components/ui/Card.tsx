@@ -6,11 +6,11 @@ import { cn } from '@/lib/utils';
  * -------------------------------------------------------------------------*/
 
 const variantStyles = {
-  default: 'bg-bg-card border border-border rounded-lg transition-[translate,box-shadow] duration-200',
-  elevated: 'bg-bg-card border border-border rounded-lg shadow-lg transition-[translate,box-shadow] duration-200',
+  default: 'bg-bg-card border border-border rounded-lg transition-[translate,box-shadow] duration-(--duration-med)',
+  elevated: 'bg-bg-card border border-border rounded-lg shadow-lg transition-[translate,box-shadow] duration-(--duration-med)',
   interactive:
-    'bg-bg-card border border-border rounded-lg cursor-pointer transition-[translate,scale,background-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-bg-card-hover press-scale motion-reduce:transition-none motion-reduce:hover:translate-y-0',
-  flush: 'bg-bg-card border border-border rounded-lg transition-[translate,box-shadow] duration-200',
+    'bg-bg-card border border-border rounded-lg cursor-pointer transition-[translate,scale,background-color,box-shadow] duration-(--duration-med) ease-out hover:-translate-y-0.5 hover:bg-bg-card-hover press-scale motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+  flush: 'bg-bg-card border border-border rounded-lg transition-[translate,box-shadow] duration-(--duration-med)',
   // A hairline-ruled block on the page ground: no fill, no frame, no radius (Account).
   section: 'border-b border-border-light py-4 first:pt-0',
 } as const;

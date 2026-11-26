@@ -33,7 +33,7 @@ const activeStyles: Record<Priority, string> = {
 };
 
 const baseButtonClass =
-  'flex-1 py-3 min-h-[44px] rounded-DEFAULT text-center bg-bg-card border-2 border-border cursor-pointer transition-[background-color,border-color,scale,box-shadow,color] duration-200 ease-[var(--ease-standard)] text-text-primary touch-manipulation appearance-none overflow-hidden hover:border-text-muted hover:bg-bg-card-hover press-scale focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2';
+  'flex-1 py-3 min-h-[44px] rounded-DEFAULT text-center bg-bg-card border-2 border-border cursor-pointer transition-[background-color,border-color,scale,box-shadow,color] duration-(--duration-med) ease-(--ease-(--ease-standard)) text-text-primary touch-manipulation appearance-none overflow-hidden hover:border-text-muted hover:bg-bg-card-hover press-scale focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2';
 
 export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPriorityClick }: Props) {
   const { sync, retry } = usePickSync(setId);

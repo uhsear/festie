@@ -261,7 +261,7 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
               key={k}
               aria-hidden="true"
               className={cn(
-                'h-1.5 rounded-full transition-[width,background-color] duration-300',
+                'h-1.5 rounded-full transition-[width,background-color] duration-(--duration-slow)',
                 k === stepKey ? 'w-6 bg-accent-aqua' : 'w-1.5 bg-text-muted/30',
               )}
             />

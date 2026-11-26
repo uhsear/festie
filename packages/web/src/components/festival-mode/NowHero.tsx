@@ -75,7 +75,7 @@ function WrapThumb({ festivalName }: { festivalName?: string }) {
 }
 
 const card =
-  'fm-card-enter motion-reduce:animate-none relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,scale] duration-[var(--duration-med)] ease-[var(--ease-out)] hover:bg-bg-card-hover press-scale motion-reduce:transition-none';
+  'fm-card-enter motion-reduce:animate-none relative block w-full text-left rounded-lg border bg-bg-card p-4 transition-[background-color,scale] duration-(--duration-med) ease-(--ease-out) hover:bg-bg-card-hover press-scale motion-reduce:transition-none';
 
 function Quiet({ icon, title, body, action, lead }: { icon: ReactNode; title: string; body?: string; action?: ReactNode; lead?: string }) {
   return (

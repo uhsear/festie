@@ -43,12 +43,12 @@ export default function PollOptionButton({
             : 'border border-glass-border hover:border-aqua-a12',
       )}
     >
-      {/* R26: 400ms ease-out on scaleX change (compositor only). prefers-reduced-motion collapses
+      {/* R26: slow-duration ease-out on scaleX change (compositor only). prefers-reduced-motion collapses
            CSS transitions globally via animations.css — no JS gate needed. */}
       <div
         className={cn(
           'crew-poll-bar absolute inset-y-0 left-0 w-full origin-left',
-          'transition-[transform,background-color] duration-[400ms] ease-out',
+          'transition-[transform,background-color] duration-(--duration-slow) ease-out',
           isMine ? 'bg-accent-aqua/30' : isWinning ? 'bg-accent-aqua/15' : 'bg-text-muted/10',
         )}
         style={{ transform: `scaleX(${pct / 100})` }}

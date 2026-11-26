@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { duration as motionDuration, staggerDelay } from '@festie/shared/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import { useCrewStore, useFestivalModeStore, useFestivalStore } from '@festie/shared/stores';
 import { useActiveSos } from '@festie/shared/hooks';
@@ -139,9 +140,9 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
         const { verb, detail, action } = describeCrewActivity(it, timeZone, { members, activeSosUserIds });
         const visual = ACTIVITY_VISUAL[it.type] ?? FALLBACK_VISUAL;
         const color = tintColor[visual.tint];
-        // R22 staggered reveal — cap the stagger so a full page never feels slow;
+        // R22 staggered reveal — staggerDelay caps the step so a full page never feels slow;
         // gated on reduce-motion (a plain View = instant).
-        const entering = reduceMotion ? undefined : FadeInDown.delay(Math.min(idx, 9) * 30).duration(220);
+        const entering = reduceMotion ? undefined : FadeInDown.delay(staggerDelay(idx)).duration(motionDuration.med);
         return (
           <Animated.View key={it.id} entering={entering} style={styles.row}>
             <View style={[styles.iconBadge, { borderColor: color }]}>

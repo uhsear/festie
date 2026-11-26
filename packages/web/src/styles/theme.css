@@ -72,7 +72,7 @@
     border-radius: 50%;
     background: var(--color-accent-aqua);
     will-change: transform, opacity;
-    animation: status-dot-pulse-once 600ms var(--ease-out, ease-out) 1 both;
+    animation: status-dot-pulse-once var(--duration-spatial-slow) var(--ease-out) 1 both;
     pointer-events: none;
   }
 }
@@ -93,7 +93,7 @@
 }
 
 @utility crew-poll-bar {
-  animation: crew-bar-fill 420ms var(--ease-out, ease-out) both;
+  animation: crew-bar-fill var(--duration-slow) var(--ease-out) both;
 }
 
 @utility crew-activity-rail {
@@ -160,7 +160,7 @@
 }
 
 @utility fm-card-enter {
-  animation: fm-card-enter 180ms var(--ease-out, ease-out) both;
+  animation: fm-card-enter var(--duration-med) var(--ease-out) both;
 }
 
 @keyframes fm-card-enter {
@@ -236,10 +236,10 @@
   }
 }
 
-/* R7: 150ms fade-out on data arrival. Add to the skeleton wrapper, then remove
-   the element after the transition ends (transitionend or 150ms setTimeout). */
+/* R7: medium-duration fade-out on data arrival. Add to the skeleton wrapper, then remove
+   the element after the transition ends (transitionend or a duration-med setTimeout). */
 @utility skeleton-dismiss {
-  transition: opacity 150ms linear;
+  transition: opacity var(--duration-med) linear;
   opacity: 0;
 }
 
@@ -306,7 +306,7 @@
    and crew cards. Radial gradient spotlight follows mousemove via CSS vars
    --mx and --my. Desktop-only via @media (hover: hover). Applied to ::after
    pseudo-element; set opacity via JavaScript state on hover. Box-shadow glow
-   is a 12px aqua glow plus a 1px aqua edge, with 200ms
+   is a 12px aqua glow plus a 1px aqua edge, with a medium-duration
    ease-out transition. */
 .set-card::after {
   background: radial-gradient(circle at var(--mx, 50%) var(--my, 50%), var(--color-aqua-a08) 0%, transparent 60%);

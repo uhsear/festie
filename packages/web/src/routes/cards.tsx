@@ -1,6 +1,7 @@
 import React, { Fragment, useCallback, useMemo, useState } from 'react';
 import { useFestivalStore, useAuthStore, useCrewStore, selectMyPicks } from '@festie/shared/stores';
 import { useUIStore } from '@festie/shared/stores/uiStore';
+import { staggerDelay } from '@festie/shared/tokens';
 import { usePicks, useFestival, useCanPick, useFestivalReady } from '@festie/shared/hooks';
 import {
   getHomeActions,
@@ -268,7 +269,7 @@ function CardsViewInner() {
                         ? undefined
                         : ({
                             animation: 'stagger-fade-in var(--duration-med) var(--ease-out) both',
-                            animationDelay: `calc(${Math.min(idx, 20)} * 24ms)`,
+                            animationDelay: `${staggerDelay(idx)}ms`,
                           } as React.CSSProperties)
                     }
                   >
