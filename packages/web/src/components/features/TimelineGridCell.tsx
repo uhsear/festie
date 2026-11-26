@@ -2,6 +2,7 @@ import React from 'react';
 import { FestivalSet, Priority, Festival } from '@festie/shared/types';
 import { fmtShort, artistDisplayName, type ClashMark, type GridCrewAvatars } from '@festie/shared/utils';
 import { clashMinutes } from '@festie/shared/constants';
+import { staggerDelay } from '@festie/shared/tokens';
 import { Users } from 'lucide-react';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { cn } from '../../lib/utils';
@@ -86,7 +87,7 @@ function TimelineGridCell({
         'flex flex-col justify-center',
         'z-[2] opacity-[0.88]',
         // Press & hover feedback
-        'transition-[scale,box-shadow] duration-150',
+        'transition-[scale,box-shadow] duration-(--duration-med)',
         'ease-out',
         'press-scale',
         'hover:opacity-100 hover:shadow-[0_2px_10px_rgba(0,0,0,0.28)]',
@@ -95,7 +96,7 @@ function TimelineGridCell({
         // content-visibility skips style/layout/paint for blocks scrolled out of
         // view; the grid area, not the content, sizes the block.
         '[content-visibility:auto]',
-        'animate-[timeline-set-enter_260ms_cubic-bezier(0.16,1,0.3,1)_both]',
+        'animate-[timeline-set-enter_var(--duration-slow)_var(--ease-out)_both]',
         '[animation-delay:var(--tl-stagger,0ms)]',
         'motion-reduce:!animate-none motion-reduce:!transition-none',
         // Priority variants
@@ -110,7 +111,7 @@ function TimelineGridCell({
           height: `${Math.max(1, blockPx - 2)}px`,
           gridColumn: columnIndex + 2,
           background: `color-mix(in srgb, ${stageColor} 12%, transparent)`,
-          '--tl-stagger': `${Math.min(columnIndex, 5) * 40}ms`,
+          '--tl-stagger': `${staggerDelay(columnIndex)}ms`,
         } as React.CSSProperties
       }
       data-set-id={set.id}
@@ -217,7 +218,7 @@ function TimelineGridCell({
                   'rounded-xs',
                   'text-[var(--color-text-secondary)] cursor-pointer',
                   'text-[length:var(--font-size-12)] px-1.5 py-[3px] leading-none',
-                  'transition-[color,border-color,background-color] duration-[250ms] ease-[var(--ease-standard)]',
+                  'transition-[color,border-color,background-color] duration-(--duration-slow) ease-(--ease-(--ease-standard))',
                   'hover:text-[var(--color-text-primary)] hover:border-[var(--color-accent-aqua)] hover:bg-[var(--color-overlay-4)]',
                   'focus-visible:outline-2 focus-visible:outline-[var(--color-accent-aqua)] focus-visible:outline-offset-1',
                   // Hit-slop pseudo-element for 44x44 tap target

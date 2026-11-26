@@ -123,7 +123,7 @@
 }
 
 .value-flash {
-  animation: value-flash 200ms var(--ease-out) both;
+  animation: value-flash var(--duration-med) var(--ease-out) both;
 }
 
 /* Live set card glow: opacity only, on a ::before layer. */
@@ -150,10 +150,10 @@
   }
 }
 
-/* R22: 70ms per step, capped at index 6 (420ms max). Set --i via inline style. */
+/* R22: one shared step and cap (stagger tokens). Set --i via inline style. */
 .stagger-item {
   animation: stagger-fade-in var(--duration-slow) var(--ease-out) both;
-  animation-delay: calc(min(var(--i, 0), 6) * 70ms);
+  animation-delay: calc(min(var(--i, 0), var(--stagger-last)) * var(--stagger-step));
 }
 
 /* Crew keyframes */

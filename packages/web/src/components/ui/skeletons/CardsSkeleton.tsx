@@ -1,3 +1,5 @@
+import { staggerDelay } from '@festie/shared/tokens';
+
 /**
  * Layout-matched skeleton for /cards. Renders 8 placeholder tiles inside the
  * same `.card-grid` container used by CardsView so the page doesn't jolt when
@@ -24,7 +26,7 @@ export default function CardsSkeleton() {
     >
       <span className="sr-only">Loading sets…</span>
       {Array.from({ length: 8 }).map((_, i) => (
-        <div key={i} className="card-enter" style={{ animationDelay: `${Math.min(i * 30, 240)}ms` }}>
+        <div key={i} className="card-enter" style={{ animationDelay: `${staggerDelay(i)}ms` }}>
           <div className="flex h-[190px] flex-col gap-2.5 rounded-lg border border-[var(--color-aqua-a08)] bg-[var(--color-bg-card)] p-[18px]">
             {/* Stage pill */}
             <div className="skeleton-shimmer h-[18px] w-[72px] rounded-md" />

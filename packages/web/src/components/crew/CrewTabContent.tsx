@@ -51,7 +51,7 @@ export default function CrewTabContent({
 }: CrewTabContentProps) {
   return (
     <div
-      className="crew-tab-panel animate-[card-in_200ms_var(--ease-out,ease-out)_both] motion-reduce:!animate-none"
+      className="crew-tab-panel animate-[card-in_var(--duration-med)_var(--ease-out)_both] motion-reduce:!animate-none"
       key={tab}
       role="tabpanel"
       id="crew-tab-panel"
@@ -91,7 +91,7 @@ export default function CrewTabContent({
           <Link
             to="/crew-plan"
             aria-label="View your crew's plan"
-            className="flex items-center gap-2 py-2 px-4 min-h-11 rounded-full bg-accent-aqua text-[var(--text-on-light-accent)] hover:bg-[var(--color-accent-aqua-hover)] transition-colors duration-[var(--duration-med)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+            className="flex items-center gap-2 py-2 px-4 min-h-11 rounded-full bg-accent-aqua text-[var(--text-on-light-accent)] hover:bg-[var(--color-accent-aqua-hover)] transition-colors duration-(--duration-med) ease-(--ease-out) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
           >
             <CalendarClock className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             <span className="text-sm font-semibold">Crew plan</span>
@@ -100,7 +100,7 @@ export default function CrewTabContent({
           <Link
             to="/compare"
             aria-label="Compare crew schedules"
-            className="flex items-center gap-2 py-2 px-4 min-h-11 rounded-full bg-transparent border border-accent-aqua/50 text-accent-aqua hover:bg-[var(--color-aqua-a08)] transition-colors duration-[var(--duration-med)] ease-[var(--ease-out)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+            className="flex items-center gap-2 py-2 px-4 min-h-11 rounded-full bg-transparent border border-accent-aqua/50 text-accent-aqua hover:bg-[var(--color-aqua-a08)] transition-colors duration-(--duration-med) ease-(--ease-out) focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
           >
             <Columns3 className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
             <span className="text-sm font-semibold">Compare schedules</span>

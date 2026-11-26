@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
+import { duration as motionDuration } from '@festie/shared/tokens';
 import { fetchLifetime, mapErrorToUserMessage } from '@festie/shared/services';
 import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
 import type { LifetimeResponse } from '@festie/shared/types';
@@ -173,7 +174,7 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
   const avg = totals.avgRating != null ? totals.avgRating.toFixed(1) : '—';
 
   return (
-    <Wrapper entering={reduceMotion ? undefined : FadeIn.duration(220)} style={styles.wrap}>
+    <Wrapper entering={reduceMotion ? undefined : FadeIn.duration(motionDuration.med)} style={styles.wrap}>
       {/* Lifetime totals */}
       <View style={styles.statGrid}>
         <Stat icon="musical-notes-outline" label="Festivals" value={String(totals.festivalsAttended)} />

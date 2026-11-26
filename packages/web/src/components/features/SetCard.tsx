@@ -174,7 +174,7 @@ function SetCard({
         'relative bg-bg-card border border-glass-border rounded-lg',
         'p-4 pl-6 cursor-pointer overflow-hidden',
         // Tailwind writes -translate-y-* to `translate`, so the list names `translate`.
-        'transition-[background-color,box-shadow,translate] duration-[var(--duration-med)] ease-[var(--ease-out)]',
+        'transition-[background-color,box-shadow,translate] duration-(--duration-med) ease-(--ease-out)',
         'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         // Hover — gentle lift + surface shift + light glow (no heavy drop shadow).
         // R12: Aqua spotlight effect with 200ms ease-out transition.
@@ -182,7 +182,7 @@ function SetCard({
         'hover:shadow-[0_0_12px_var(--color-aqua-a25),0_0_1px_var(--color-aqua-a4)]',
         // R12: Radial spotlight gradient via ::after pseudo-element.
         'after:content-[""] after:absolute after:inset-0 after:rounded-[inherit]',
-        'after:opacity-0 after:transition-opacity after:duration-[var(--duration-med)] after:pointer-events-none',
+        'after:opacity-0 after:transition-opacity after:duration-(--duration-med) after:pointer-events-none',
         'after:pointer-events-none',
         'hover:after:opacity-100',
         // R19: Animated gradient border when set is live (single featured card on screen).
@@ -234,7 +234,7 @@ function SetCard({
             'border bg-[var(--color-overlay-3)] border-border-light text-text-secondary hover:text-text-primary',
             'size-11 rounded-full cursor-pointer',
             'flex items-center justify-center',
-            'transition-[background-color,border-color] duration-150',
+            'transition-[background-color,border-color] duration-(--duration-med)',
           )}
           type="button"
           aria-label={`Listen to ${artistName}`}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withRepeat, withTiming } from 'react-native-reanimated';
+import { duration as motionDuration } from '@festie/shared/tokens';
 import { Ionicons } from '@expo/vector-icons';
 import type { SectionReadiness } from '@festie/shared/stores';
 import { timeAgo, offlineStatusLabel, offlineActionLabel } from '@festie/shared/utils';
@@ -29,7 +30,7 @@ function ActiveDot() {
       opacity.value = 0.7;
       return;
     }
-    opacity.value = withRepeat(withTiming(0.45, { duration: 450, easing: Easing.inOut(Easing.ease) }), -1, true);
+    opacity.value = withRepeat(withTiming(0.45, { duration: motionDuration.pulse, easing: Easing.inOut(Easing.ease) }), -1, true);
   }, [pulsing, opacity]);
 
   const animStyle = useAnimatedStyle(() => ({ opacity: opacity.value }));
