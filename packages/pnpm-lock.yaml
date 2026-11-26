@@ -63,9 +63,6 @@ importers:
       '@expo-google-fonts/space-grotesk':
         specifier: ^0.4.1
         version: 0.4.1
-      '@expo-google-fonts/syncopate':
-        specifier: ^0.4.1
-        version: 0.4.1
       '@expo/metro-runtime':
         specifier: ~58.0.15
         version: 58.0.15(@expo/log-box@58.0.13)(expo@58.0.20)(react-dom@19.3.0(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)
@@ -1473,9 +1470,6 @@ packages:
 
   '@expo-google-fonts/space-grotesk@0.4.1':
     resolution: {integrity: sha512-ZVQYw4Ok/pgcSJiufP8oRZE3AVxS9xtmKEUfsurbHkHNdMc/GA1gDXP9G4Cr7KL4KqSc0haexR2TuMigotCn4Q==}
-
-  '@expo-google-fonts/syncopate@0.4.1':
-    resolution: {integrity: sha512-9C7W+sgij6xIlc7dE/O3eIcxT4zx6Y5jxDzhCM2ofc0Mb3NOqJrBwG3uLhD5KS2oeC51ohKNjbDPXdzQmvnIsQ==}
 
   '@expo/cli@58.1.16':
     resolution: {integrity: sha512-ULO+zBuF/6OEE4j5Dbi+Mv9YXkEIGj63QHdKy1deC09kU/C3GZCGXwlIESPSifqK2CUePsY0aYrsby0eE6362w==}
@@ -10943,8 +10937,6 @@ snapshots:
   '@expo-google-fonts/material-symbols@0.4.50': {}
 
   '@expo-google-fonts/space-grotesk@0.4.1': {}
-
-  '@expo-google-fonts/syncopate@0.4.1': {}
 
   '@expo/cli@58.1.16(@expo/dom-webview@56.0.5)(@expo/metro-runtime@58.0.15)(expo-constants@58.0.13)(expo-font@58.0.10)(expo-router@58.0.27)(expo@58.0.20)(react-dom@19.3.0(react@19.3.0))(react-native@0.88.0(@babel/core@7.29.7)(@react-native/metro-config@0.88.0(@babel/core@7.29.7))(@types/react@19.3.0)(react@19.3.0))(react@19.3.0)(typescript@6.0.3)':
     dependencies:
