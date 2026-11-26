@@ -61,30 +61,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-/* Ambient gradient overlay */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 60% 40% at 20% 80%, rgba(var(--accent-coral-rgb), 0.04) 0%, transparent 70%),
-    radial-gradient(ellipse 50% 50% at 80% 20%, rgba(0, 232, 208, 0.03) 0%, transparent 70%);
-}
-
-/* Noise texture overlay */
-body::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  background-size: 128px 128px;
-}
-
 /* Link reset */
 a {
   color: var(--color-accent-aqua);
@@ -94,10 +70,12 @@ a {
 /* Form element base styles — visual styling now lives in components
      (lib/styles.ts `inputBase`) or component-specific CSS rules.
      Only reset font inheritance and appearance here. */
+button,
 input,
 select,
 textarea {
   font: inherit;
+  letter-spacing: inherit;
   -webkit-appearance: none;
   appearance: none;
 }
@@ -165,7 +143,8 @@ select:focus {
   overflow-x: hidden;
 }
 
-/* Heading hierarchy — display font + tight leading + caps tracking.
+/* Heading hierarchy. Clash Display carries only the 24px-and-up roles (type-display-xl, type-display-lg,
+     type-heading), which set it themselves, plus h1. h2 to h6 take the Space Grotesk 600 title role.
      Individual pages override font-size via Tailwind utilities. */
 h1,
 h2,
@@ -173,11 +152,18 @@ h3,
 h4,
 h5,
 h6 {
+  font-family: var(--font-family-body);
+  font-weight: 600;
+  line-height: var(--line-height-snug);
+  letter-spacing: var(--letter-spacing-body);
+  text-wrap: balance;
+}
+h1 {
   font-family: var(--font-family-display);
+  font-weight: 700;
   line-height: var(--line-height-tight);
   letter-spacing: var(--letter-spacing-display);
   word-spacing: var(--word-spacing-display);
-  text-wrap: balance;
 }
 
 /* Prevent orphaned words on the last line of prose elements. */
@@ -244,7 +230,6 @@ input[type='reset'] {
    bare buttons don't bleed contrast-failing gray into the design. */
 button {
   background-color: transparent;
-  font-family: var(--font-family-body);
   cursor: pointer;
   border: none;
   outline: none;
@@ -271,6 +256,6 @@ button {
 .skip-link:focus,
 .skip-link:focus-visible {
   transform: translateY(0);
-  outline: 2px solid var(--color-accent-coral);
-  outline-offset: 2px;
+  outline: var(--focus-ring-width) solid var(--focus-ring-color);
+  outline-offset: var(--focus-ring-offset);
 }
