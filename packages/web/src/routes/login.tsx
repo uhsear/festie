@@ -9,7 +9,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import AuthTabs from '../components/ui/AuthTabs';
-import AuthBrand from '../components/auth/AuthBrand';
+import AuthLayout from '../components/auth/AuthLayout';
 import ProviderButtons from '../components/auth/ProviderButtons';
 import InviteBanner from '../components/auth/InviteBanner';
 import { cn } from '../lib/utils';
@@ -66,9 +66,7 @@ function LoginPageInner() {
   };
 
   return (
-    <>
-      <AuthBrand />
-
+    <AuthLayout phoneSample>
       <InviteBanner />
 
       <AuthTabs active="login" variant="pill" />
@@ -90,7 +88,7 @@ function LoginPageInner() {
       >
         {formError && (
           <div
-            className="text-[var(--color-text-danger)] text-[length:var(--font-size-14)] mb-3 text-center"
+            className="text-[var(--color-text-danger)] text-[length:var(--font-size-14)] mb-3"
             role="alert"
             aria-live="assertive"
           >
@@ -139,6 +137,6 @@ function LoginPageInner() {
           </Link>
         </div>
       </form>
-    </>
+    </AuthLayout>
   );
 }

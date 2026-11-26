@@ -44,8 +44,8 @@ describe('reduce motion and reanimated entering animations', () => {
   );
 
   it('finds the screens that use entering animations', () => {
-    expect(users).toContain('app/(auth)/register.tsx');
-    expect(users).toContain('app/(auth)/login.tsx');
+    expect(users).toContain('components/BrandWordmark.tsx');
+    expect(users).not.toContain('app/(auth)/login.tsx');
   });
 
   it.each(users)('%s branches on useReduceMotion before attaching motion props', (rel) => {

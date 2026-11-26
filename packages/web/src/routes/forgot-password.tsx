@@ -3,7 +3,7 @@ import { Link, useSearch } from '@tanstack/react-router';
 import { useAuth } from '@festie/shared';
 import { mapErrorToUserMessage } from '@festie/shared/services/api';
 import { AUTH_COPY } from '@festie/shared/constants';
-import AuthBrand from '../components/auth/AuthBrand';
+import AuthLayout from '../components/auth/AuthLayout';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -59,9 +59,8 @@ function ForgotPasswordPageInner() {
   };
 
   return (
-    <div className="flex flex-col items-center px-4 py-12">
+    <AuthLayout subtitle={AUTH_COPY.resetTitle}>
       <div className="w-full max-w-sm">
-        <AuthBrand subtitle={AUTH_COPY.resetTitle} />
 
         {expired && !submitted && (
           <div
@@ -144,6 +143,6 @@ function ForgotPasswordPageInner() {
           </Link>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

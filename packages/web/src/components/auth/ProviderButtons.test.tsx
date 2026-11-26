@@ -73,6 +73,22 @@ describe('ProviderButtons', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('sets color-scheme on the Google slot', async () => {
+    mockGetProviders.mockResolvedValue({ google, apple });
+    renderButtons();
+    const slot = await screen.findByRole('group', { name: /google/i });
+    expect(slot.style.colorScheme).toBe('dark');
+    expect(slot).not.toHaveAttribute('hidden');
+  });
+
+  it('collapses the Google slot when the script never defines google', async () => {
+    delete win.google;
+    mockGetProviders.mockResolvedValue({ google, apple });
+    renderButtons();
+    const slot = await screen.findByRole('group', { name: /google/i, hidden: true });
+    await waitFor(() => expect(slot).toHaveAttribute('hidden'));
+  });
+
   it('posts the Google credential with its nonce', async () => {
     mockGetProviders.mockResolvedValue({ google, apple: null });
     signInWithProvider.mockResolvedValue({ status: 'signed-in', reactivated: false });
