@@ -937,7 +937,7 @@ export default function CrewMap({
         {/* ── Pursue overlay: directional arrow + label "Alex · 210 m NE · ~3 min". */}
         {showPursueOverlay && (
           <div
-            className="absolute left-2 bottom-9 right-2 z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-bg-elevated/95 px-3 py-2 shadow-lg"
+            className="absolute left-2 bottom-9 right-[calc(0.5rem+var(--sos-dock-w,0px))] z-10 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border bg-bg-elevated/95 px-3 py-2 shadow-lg"
             style={{ borderColor: pursueIsSos ? 'var(--color-accent-coral)' : 'var(--color-accent-aqua)' }}
           >
             {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (

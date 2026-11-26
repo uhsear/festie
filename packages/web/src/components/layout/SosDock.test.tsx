@@ -58,4 +58,12 @@ describe('SosDock', () => {
     render(<SosDock />);
     expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
   });
+
+  it('publishes the corner it occupies while shown and clears it after', () => {
+    const { unmount } = render(<SosDock />);
+    expect(document.documentElement.style.getPropertyValue('--sos-dock-h')).toBe('72px');
+    expect(document.documentElement.style.getPropertyValue('--sos-dock-w')).toBe('88px');
+    unmount();
+    expect(document.documentElement.style.getPropertyValue('--sos-dock-h')).toBe('');
+  });
 });

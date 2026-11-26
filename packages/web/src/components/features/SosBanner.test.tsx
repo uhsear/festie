@@ -94,6 +94,16 @@ describe('SosBanner', () => {
       expect(screen.getByRole('button').parentElement).toHaveClass('absolute');
     });
 
+    it('shrinks to a corner pill once the arrival flash is over, so the rows under it stay tappable', () => {
+      arrive();
+      render(<SosBanner />);
+      const wrap = screen.getByRole('button').parentElement!;
+      expect(wrap).toHaveClass('inset-x-0');
+      act(() => void vi.advanceTimersByTime(10_000));
+      expect(wrap).not.toHaveClass('inset-x-0');
+      expect(wrap).toHaveClass('right-2', 'max-w-[40vw]');
+    });
+
     it('flashes twice on arrival, once per new raiser, not on the minute tick', () => {
       arrive();
       render(<SosBanner />);
