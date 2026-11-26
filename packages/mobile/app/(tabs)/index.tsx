@@ -323,9 +323,11 @@ export default function TimelineScreen() {
 
   // The person's remembered view for this festival wins; otherwise Timeline on a
   // live day with timed sets, Cards. A stored 'grid' never reaches here because
-  // Grid is a pushed route that is not remembered.
-  const viewMode: 'cards' | 'timeline' =
-    scheduleView === 'cards' || scheduleView === 'timeline'
+  // Grid is a pushed route that is not remembered. While the lineup flyer shows
+  // (no set has a time) only Cards can render it, whatever view was remembered.
+  const viewMode: 'cards' | 'timeline' = flyer
+    ? 'cards'
+    : scheduleView === 'cards' || scheduleView === 'timeline'
       ? scheduleView
       : defaultScheduleView({ hasTimedSets: festivalHasTimedSets, phase });
   const picks = myPicks ?? undefined;
