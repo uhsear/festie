@@ -9,8 +9,10 @@ describe('ios round 2 crew-safety source guards', () => {
   it('CrewLiveLocation chooser is not an accessible container', () => {
     expect(read('components/CrewLiveLocation.tsx')).not.toContain('styles.chooser} accessible');
   });
-  it('crew.tsx hides the SOS chip on the Find tab', () => {
-    expect(read('app/(tabs)/crew.tsx')).toContain("crewTab !== 'find'");
+  it('crew.tsx has no in-page SOS chip: the one SosControl is mounted instead', () => {
+    const src = read('app/(tabs)/crew.tsx');
+    expect(src).not.toContain('crew-action-sos');
+    expect(src).toContain('<SosControl');
   });
   it('CrewStatus header wraps', () => {
     expect(read('components/CrewStatus.tsx')).toMatch(/header: \{[^}]*flexWrap/);

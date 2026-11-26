@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import type { SosEntry } from '@festie/shared/types';
 
 const mockNavigate = vi.fn();
@@ -70,5 +70,50 @@ describe('SosBanner', () => {
     entries = [{ crewId: 'c1', userId: 'dani', username: 'Dani', raisedAt: '2026-06-12T21:00:00Z' }];
     render(<SosBanner />);
     expect(screen.queryByText(/Seen by|Not seen yet/)).toBeNull();
+  });
+
+  describe('arrival', () => {
+    const animate = vi.fn();
+    const arrive = () => {
+      entries = [{ crewId: 'c1', userId: 'dani', username: 'Dani', raisedAt: '2026-06-12T21:00:00Z' }];
+    };
+    beforeEach(() => {
+      animate.mockClear();
+      Object.defineProperty(HTMLElement.prototype, 'animate', { configurable: true, value: animate });
+    });
+    afterEach(() => {
+      Reflect.deleteProperty(HTMLElement.prototype, 'animate');
+      Reflect.deleteProperty(window, 'matchMedia');
+    });
+
+    it('floats from a zero-height slot, so it never moves the content below it', () => {
+      arrive();
+      render(<SosBanner />);
+      const slot = screen.getByTestId('sos-banner');
+      expect(slot).toHaveClass('h-0');
+      expect(screen.getByRole('button').parentElement).toHaveClass('absolute');
+    });
+
+    it('flashes twice on arrival, once per new raiser, not on the minute tick', () => {
+      arrive();
+      render(<SosBanner />);
+      expect(animate).toHaveBeenCalledTimes(1);
+      expect(animate.mock.calls[0]![1]).toMatchObject({ iterations: 2 });
+      act(() => void vi.advanceTimersByTime(60_000));
+      expect(animate).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not flash under reduced motion', () => {
+      window.matchMedia = ((q: string) => ({
+        matches: q.includes('reduce'),
+        media: q,
+        addEventListener: () => {},
+        removeEventListener: () => {},
+      })) as unknown as typeof window.matchMedia;
+      arrive();
+      render(<SosBanner />);
+      expect(screen.getByRole('button')).toBeInTheDocument();
+      expect(animate).not.toHaveBeenCalled();
+    });
   });
 });

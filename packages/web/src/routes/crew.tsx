@@ -4,14 +4,12 @@ import { useQuery } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
 import { useCrewStore } from '@festie/shared/stores';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
-import { useLiveLocationStore } from '@festie/shared/stores/liveLocationStore';
 import { useFestivalStore } from '@festie/shared/stores';
 import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
 import CrewHeader from '../components/crew/CrewHeader';
 import CrewSkeleton from '../components/ui/skeletons/CrewSkeleton';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
-import SosRaiseButton from '../components/crew/SosRaiseButton';
 import EmptyState from '../components/ui/EmptyState';
 import { Card } from '../components/ui/Card';
 import HomeBaseCard from '../components/crew/HomeBaseCard';
@@ -120,11 +118,6 @@ function CrewViewInner() {
   // (no extra backend calls beyond what the crew detail view already makes).
   // Declared before the early return below to keep hook order stable.
   const activeCrewId = activeCrew?.id;
-  // The Find tab carries its own full-width SOS button, so the header one shows on the other tabs
-  // and hides once your own SOS is up (a second raise would 429).
-  const ownSosActive = useLiveLocationStore((s) =>
-    s.activeSosList.some((e) => e.crewId === activeCrewId && e.userId === userId),
-  );
   const { data: openPollCount = 0 } = useQuery({
     ...pollsQueryOptions(activeCrewId),
     select: countOpenPolls,
@@ -357,7 +350,6 @@ function CrewViewInner() {
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <FreshnessChip surface="crew" />
             <OfflineStatusChip />
-            {tab !== 'find' && !ownSosActive && <SosRaiseButton crewId={activeCrew.id} compact />}
           </div>
 
           {members.length <= 1 && activeCrew.inviteCode && (

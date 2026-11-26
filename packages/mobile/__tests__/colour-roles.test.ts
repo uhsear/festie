@@ -43,7 +43,7 @@ describe('colour roles (DP-29)', () => {
 
   it('floating controls spread the elevation tokens instead of copying shadow props', () => {
     for (const file of [
-      'app/(tabs)/map.tsx',
+      'components/SosControl.tsx',
       'components/MapPlaceCard.tsx',
       'components/OfflineMap.tsx',
       'components/picks/styles.ts',

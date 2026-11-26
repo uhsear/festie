@@ -53,6 +53,7 @@ vi.mock('../features/IOSInstallDrawer', () => ({ default: () => null }));
 vi.mock('../../hooks/useIOSInstall', () => ({ useIOSInstall: () => ({ shouldShow: false, dismiss: vi.fn() }) }));
 vi.mock('../features/FestivalDayBanner', () => ({ default: () => null }));
 vi.mock('../features/SosBanner', () => ({ default: () => null }));
+vi.mock('./SosDock', () => ({ default: () => null }));
 vi.mock('../features/Onboarding', () => ({ default: () => <div data-testid="onboarding" /> }));
 vi.mock('../crew/LiveLocationSharing', () => ({ default: () => null }));
 vi.mock('../../hooks/useRealtimeSync', () => ({ useRealtimeSync: vi.fn() }));

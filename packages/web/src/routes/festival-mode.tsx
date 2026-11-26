@@ -25,7 +25,6 @@ import UpNextList from '../components/festival-mode/UpNextList';
 import WeatherStrip from '../components/festival-mode/WeatherStrip';
 import CaughtNowCard from '../components/festival-mode/CaughtNowCard';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
-import SosRaiseButton from '../components/crew/SosRaiseButton';
 import { CrewNowSection, CrewPrompt, CrewWrapUpCard, MeetNowCard } from '../components/festival-mode/CrewNow';
 import { CalendarX } from 'lucide-react';
 
@@ -117,7 +116,6 @@ function FestivalModeViewInner() {
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-2 mb-4 min-w-0">
         <h1 className="type-display-lg text-text-primary min-w-0 break-words">{currentFestival.name}</h1>
         <div className="flex items-center gap-2 shrink-0">
-          {user && crew && <SosRaiseButton crewId={crew.id} compact />}
           <LowPowerIndicator />
           <div className="flex flex-col items-end">
             <span className="type-numeral text-text-secondary" aria-label="Festival time">

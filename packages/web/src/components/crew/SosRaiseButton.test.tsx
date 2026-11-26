@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 vi.mock('lucide-react', () => {
@@ -21,6 +21,7 @@ vi.mock('@festie/shared', () => ({
 const { toastSpy } = vi.hoisted(() => ({ toastSpy: vi.fn() }));
 vi.mock('../../lib/toastContext', () => ({ useToast: () => ({ toast: toastSpy }) }));
 
+import { SOS_CONTROL } from '@festie/shared/constants';
 import SosRaiseButton from './SosRaiseButton';
 
 beforeEach(() => {
@@ -42,11 +43,66 @@ beforeEach(() => {
   });
 });
 
+// Pointer clicks only explain the hold, so tests open the dialog the way a keyboard user does.
+async function openWithKeyboard(user: ReturnType<typeof userEvent.setup>) {
+  screen.getByRole('button', { name: 'Send SOS' }).focus();
+  await user.keyboard('{Enter}');
+}
+
 describe('SosRaiseButton', () => {
+  it('opens the confirm dialog from the keyboard with Enter and with Space', async () => {
+    const user = userEvent.setup();
+    render(<SosRaiseButton crewId="c1" />);
+    const control = screen.getByRole('button', { name: 'Send SOS' });
+    expect(control).toHaveAccessibleDescription(SOS_CONTROL.hint);
+
+    await user.tab();
+    expect(control).toHaveFocus();
+    await user.keyboard('{Enter}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(raiseSosSpy).not.toHaveBeenCalled();
+
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await user.keyboard(' ');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+
+  it('opens the dialog only after a one second pointer hold', () => {
+    vi.useFakeTimers();
+    try {
+      render(<SosRaiseButton crewId="c1" />);
+      const control = screen.getByRole('button', { name: 'Send SOS' });
+
+      fireEvent.pointerDown(control, { button: 0, pointerType: 'touch' });
+      act(() => void vi.advanceTimersByTime(SOS_CONTROL.holdMs - 100));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      fireEvent.pointerUp(control);
+      act(() => void vi.advanceTimersByTime(500));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+      fireEvent.pointerDown(control, { button: 0, pointerType: 'touch' });
+      act(() => void vi.advanceTimersByTime(SOS_CONTROL.holdMs));
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('explains the hold after a short tap and does not open the dialog', () => {
+    render(<SosRaiseButton crewId="c1" />);
+    const control = screen.getByRole('button', { name: 'Send SOS' });
+    fireEvent.pointerDown(control, { button: 0, pointerType: 'touch' });
+    fireEvent.pointerUp(control);
+    fireEvent.click(control, { detail: 1 });
+    expect(screen.getByRole('status')).toHaveTextContent('Hold to send SOS');
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
   it('does not promise a compass: the web has none', async () => {
     const user = userEvent.setup();
     render(<SosRaiseButton crewId="c1" />);
-    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
+    await openWithKeyboard(user);
     expect(screen.getByRole('dialog').textContent).not.toMatch(/compass/i);
   });
 
@@ -55,7 +111,7 @@ describe('SosRaiseButton', () => {
     raiseSosSpy.mockResolvedValueOnce({});
     render(<SosRaiseButton crewId="c1" />);
 
-    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
+    await openWithKeyboard(user);
     expect(screen.getByText('Send an SOS to your crew?')).toBeInTheDocument();
     expect(raiseSosSpy).not.toHaveBeenCalled();
 
@@ -78,7 +134,7 @@ describe('SosRaiseButton', () => {
     raiseSosSpy.mockResolvedValueOnce({});
     const user = userEvent.setup();
     render(<SosRaiseButton crewId="c1" />);
-    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
+    await openWithKeyboard(user);
     await user.click(screen.getByRole('button', { name: 'Send SOS' }));
     await waitFor(() => expect(toastSpy).toHaveBeenCalledWith('SOS sent to your crew', 'success'));
   });
@@ -91,7 +147,7 @@ describe('SosRaiseButton', () => {
     raiseSosSpy.mockResolvedValueOnce({});
     const user = userEvent.setup();
     render(<SosRaiseButton crewId="c1" />);
-    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
+    await openWithKeyboard(user);
     await user.click(screen.getByRole('button', { name: 'Send SOS' }));
     expect(raiseSosSpy).not.toHaveBeenCalled();
     await waitFor(() => expect(raiseSosSpy).toHaveBeenCalledWith('c1', {}), { timeout: 6_000 });
@@ -102,7 +158,7 @@ describe('SosRaiseButton', () => {
     raiseSosSpy.mockRejectedValueOnce({ status: 429 });
     render(<SosRaiseButton crewId="c1" />);
 
-    await user.click(screen.getByRole('button', { name: 'Send SOS to your crew' }));
+    await openWithKeyboard(user);
     await user.click(screen.getByRole('button', { name: 'Send SOS' }));
 
     expect(toastSpy).toHaveBeenCalledWith('Your SOS is already active. Your crew can see it.', 'error');
@@ -112,10 +168,9 @@ describe('SosRaiseButton', () => {
   it('on a network error shows the no-signal line and keeps the dialog open', async () => {
     const user = userEvent.setup();
     raiseSosSpy.mockRejectedValueOnce({ status: 0 });
-    render(<SosRaiseButton crewId="c1" compact />);
+    render(<SosRaiseButton crewId="c1" />);
 
-    expect(screen.getByRole('button', { name: 'Send an SOS to your crew' })).toHaveTextContent('SOS');
-    await user.click(screen.getByRole('button', { name: 'Send an SOS to your crew' }));
+    await openWithKeyboard(user);
     await user.click(screen.getByRole('button', { name: 'Send SOS' }));
 
     expect(toastSpy).toHaveBeenCalledWith(expect.stringMatching(/^No signal/), 'error');
@@ -125,8 +180,9 @@ describe('SosRaiseButton', () => {
   it('returns focus to the opener on Escape', async () => {
     const user = userEvent.setup();
     render(<SosRaiseButton crewId="c1" />);
-    const opener = screen.getByRole('button', { name: 'Send SOS to your crew' });
-    await user.click(opener);
+    const opener = screen.getByRole('button', { name: 'Send SOS' });
+    opener.focus();
+    await user.keyboard('{Enter}');
     expect(screen.getByRole('dialog')).toBeInTheDocument();
     await user.keyboard('{Escape}');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

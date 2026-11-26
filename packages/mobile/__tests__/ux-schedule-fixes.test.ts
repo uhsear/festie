@@ -69,10 +69,9 @@ describe('Now & Next screen', () => {
   });
 
   it('has a confirm-gated SOS button for a crew member before the festival ends', () => {
-    expect(src).toContain('useSosRaise(');
-    expect(src).toMatch(/user && crew && !after/);
-    expect(src).toContain('onPress={confirmRaise}');
-    expect(src).toContain('disabled={raising}');
+    expect(src).toContain('<SosControl');
+    expect(src).not.toContain('useSosRaise(');
+    expect(src).toMatch(/currentFestival && !after/);
   });
 
   it('uses the same wording as web for the lineup button', () => {

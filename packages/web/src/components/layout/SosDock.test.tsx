@@ -1,0 +1,61 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen } from '@testing-library/react';
+import type { SosEntry } from '@festie/shared/types';
+
+let user: { id: string } | null = { id: 'me' };
+let crew: { id: string } | null = { id: 'c1' };
+let entries: SosEntry[] = [];
+vi.mock('@festie/shared/stores', () => ({
+  useAuthStore: (selector: (s: { user: typeof user }) => unknown) => selector({ user }),
+  useCrewStore: (selector: (s: { activeCrew: typeof crew }) => unknown) => selector({ activeCrew: crew }),
+}));
+vi.mock('@festie/shared/hooks', () => ({ useActiveSos: () => entries }));
+vi.mock('../crew/SosRaiseButton', () => ({
+  default: ({ crewId, alerting }: { crewId: string; alerting?: boolean }) => (
+    <button data-testid="sos-raise" data-alerting={String(!!alerting)}>
+      {crewId}
+    </button>
+  ),
+}));
+
+import SosDock from './SosDock';
+
+const sos = (userId: string): SosEntry => ({ crewId: 'c1', userId, username: userId, raisedAt: '2026-06-12T21:00:00Z' });
+
+describe('SosDock', () => {
+  beforeEach(() => {
+    user = { id: 'me' };
+    crew = { id: 'c1' };
+    entries = [];
+  });
+
+  it('mounts one SOS control for a signed-in crew member', () => {
+    render(<SosDock />);
+    expect(screen.getAllByTestId('sos-raise')).toHaveLength(1);
+    expect(screen.getByTestId('sos-raise')).toHaveTextContent('c1');
+    expect(screen.getByTestId('sos-raise')).toHaveAttribute('data-alerting', 'false');
+  });
+
+  it('rings while a crewmate has an SOS up', () => {
+    entries = [sos('dani')];
+    render(<SosDock />);
+    expect(screen.getByTestId('sos-raise')).toHaveAttribute('data-alerting', 'true');
+  });
+
+  it('hides while your own SOS is active (a second raise would 429)', () => {
+    entries = [sos('me')];
+    render(<SosDock />);
+    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
+  });
+
+  it('hides for a guest and for a user with no open crew', () => {
+    user = null;
+    const { unmount } = render(<SosDock />);
+    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
+    unmount();
+    user = { id: 'me' };
+    crew = null;
+    render(<SosDock />);
+    expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
+  });
+});

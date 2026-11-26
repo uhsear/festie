@@ -14,6 +14,7 @@ import {
   ratingCaption,
   LIVE_SHARE_DURATIONS,
   FIND_FRIEND_COPY,
+  SOS_CONTROL,
 } from './config';
 import { PRIORITY_WEIGHT } from '../utils/crewNudges';
 
@@ -112,6 +113,15 @@ describe('FIND_FRIEND_COPY', () => {
       const text = typeof v === 'function' ? (v as (a: string | number) => string)('X') : v;
       expect(text).not.toMatch(/log in|\bping|\bpoke|\btrack|\bfollow|\bpursue/i);
     }
+  });
+});
+
+describe('SOS_CONTROL', () => {
+  it('names the control "Send SOS" and holds long enough to avoid a pocket press', () => {
+    expect(SOS_CONTROL.name).toBe('Send SOS');
+    expect(SOS_CONTROL.holdMs).toBeGreaterThanOrEqual(800);
+    expect(SOS_CONTROL.holdMs).toBeLessThanOrEqual(1500);
+    expect(SOS_CONTROL.hint).toMatch(/hold/i);
   });
 });
 

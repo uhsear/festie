@@ -4,17 +4,9 @@
 /**
  * CrewSos — safety-critical SOS surface for the active crew.
  *
- * Two responsibilities:
- *  1. RAISE — a large, reachable SOS button (guarded by a confirm dialog to
- *     prevent accidental triggers). On confirm it attaches a location fix and
- *     POSTs /crews/:crewId/sos. The fix is bounded: we seed from the cached
- *     last-known position (instant) and race a fresh reading against a 4s
- *     timeout, so the POST fires within ~4s at worst with the freshest coords
- *     available — a slow/denied GPS never delays the alert. SOS is online-only
- *     by design (excluded from the offline write-queue): a queued
- *     rescue replayed hours later is dangerous, so an offline raise surfaces an
- *     explicit "No signal — SOS not sent" message instead of silently queuing.
- *  2. RECEIVE — when `sos:raised` broadcasts land in the liveLocationStore, a
+ * Raising lives in the one app-wide SosControl (components/SosControl.tsx), not here, so the
+ * SOS control never moves between screens. This surface only receives:
+ *  RECEIVE — when `sos:raised` broadcasts land in the liveLocationStore, a
  *     prominent banner names the raiser (with a warning haptic), lets any crew
  *     member open the MeetingPointCompass pointed at the SOS coordinate to walk
  *     toward them, and lets the raiser (or anyone) clear it ("I'm safe").
@@ -43,7 +35,6 @@ import { useLiveLocationStore } from '@festie/shared/stores';
 import { useTokens, makeStyles, typeStyle } from '../hooks/useTokens';
 import { useHaptics } from '../hooks/useHaptics';
 import { useNow } from '../hooks/useNow';
-import { useSosRaise } from '../hooks/useSosRaise';
 import { sosSeenLabel, sosWhen } from '@festie/shared/utils';
 import { FIND_FRIEND_COPY } from '@festie/shared/constants';
 import MeetingPointCompass, { type MeetingPointTarget } from './MeetingPointCompass';
@@ -75,7 +66,6 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
     [activeSosList, crewId],
   );
 
-  const { confirmRaise, raising } = useSosRaise(crewId);
   // Which raiser's clear is currently in flight (per-SOS, so one clear's spinner
   // doesn't disable every banner's button).
   const [clearingId, setClearingId] = useState<string | null>(null);
@@ -91,8 +81,6 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- closes the compass when its SOS target ends
     if (navUserId && !navTarget) setNavUserId(null);
   }, [navUserId, navTarget]);
-
-  const myActiveSos = sosList.some((s) => s.userId === currentUserId);
 
   // Warning haptic + screen-reader announcement on each NEW incoming SOS from
   // someone else. Keyed on `userId|raisedAt` so re-renders don't re-buzz and a
@@ -248,30 +236,6 @@ export default function CrewSos({ crewId, currentUserId }: CrewSosProps) {
       {/* Active SOS banner(s) — whole-crew, newest first. */}
       {sosList.map(renderBanner)}
 
-      {/* Raise SOS button — hidden while my own SOS is already active. */}
-      {!myActiveSos ? (
-        <TouchableOpacity
-          style={styles.sosButton}
-          onPress={confirmRaise}
-          disabled={raising}
-          activeOpacity={0.85}
-          accessibilityRole="button"
-          accessibilityLabel="Send an SOS to your crew"
-          accessibilityHint="Asks for confirmation before sending"
-        >
-          {raising ? (
-            <ActivityIndicator color={t.colors.text.onAccent} />
-          ) : (
-            <>
-              <Ionicons name="alert-circle" size={t.iconSize.md} color={t.colors.text.onAccent} />
-              <Text style={styles.sosButtonText}>Send SOS</Text>
-            </>
-          )}
-        </TouchableOpacity>
-      ) : null}
-
-      <Text style={styles.note}>Alerts your whole crew. Needs signal to send.</Text>
-
       {/* Navigate-to-SOS compass modal (reuses the on-device meeting-point compass). */}
       <Modal
         visible={!!navTarget}
@@ -373,27 +337,6 @@ const useStyles = makeStyles((t) => ({
   bannerButtonOutlineText: {
     ...typeStyle('label'),
     color: t.colors.accent.aqua,
-  },
-  sosButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: t.spacing[2],
-    minHeight: 52,
-    paddingVertical: t.spacing[3],
-    borderRadius: t.radii.default,
-    // Safety-critical: deepened coral (coralStrong, ~6.04:1 vs the white label)
-    // passes WCAG AA. Plain coral (#ff3366) only reaches ~3.55:1 and fails AA.
-    backgroundColor: t.colors.accent.coralStrong,
-  },
-  sosButtonText: {
-    ...typeStyle('label', 700),
-    color: t.colors.text.onAccent,
-  },
-  note: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-    textAlign: 'center',
   },
   modal: {
     flex: 1,

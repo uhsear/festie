@@ -384,6 +384,17 @@ export const BEACON_COPY = {
   a11y: 'Beacon is on. Your screen is flashing so friends can spot you. Tap Done to stop.',
 } as const;
 
+/**
+ * The one SOS control, on web and mobile. A pointer press must last `holdMs` before the confirm
+ * opens. Keyboard and screen-reader activation skip the hold and open the same confirm at once.
+ */
+export const SOS_CONTROL = {
+  holdMs: 1000,
+  name: 'Send SOS',
+  hint: 'Opens a confirmation first. Press and hold for one second, or activate it with a screen reader or keyboard.',
+  tapHint: 'Hold to send SOS',
+} as const;
+
 /** T52 find-your-friends copy: the compass "Point to" row, "Looking for you", near-stage and the battery line. */
 export const FIND_FRIEND_COPY = {
   pointTo: 'Point to',

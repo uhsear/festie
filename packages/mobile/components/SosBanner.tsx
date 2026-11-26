@@ -1,13 +1,24 @@
 import { useEffect } from 'react';
-import { AccessibilityInfo, Text, View } from 'react-native';
+import { AccessibilityInfo, StyleSheet, Text, View } from 'react-native';
+import Animated, {
+  FadeInDown,
+  cancelAnimation,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { useAuthStore } from '@festie/shared/stores';
 import { useActiveSos, useLiveLocationCrewSync } from '@festie/shared/hooks';
 import { sosHeadline, sosSeenLabel, sosWhen } from '@festie/shared/utils';
+import { durationEffects, durationSpatial } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, iconSize } from '../hooks/useTokens';
 import { useNow } from '../hooks/useNow';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { sosBannerHref } from '../lib/dayOfRoutes';
 import AppPressable from './AppPressable';
 
@@ -24,7 +35,8 @@ interface SosBannerProps {
  * (coralStrong behind white, the AA-safe fill), names who and when, and opens
  * the on-device compass at a lone raiser, else the crew logistics tab, in one tap. It has no
  * dismiss control: it clears when the SOS does. Screen readers hear it once
- * per change in who raised an SOS, not on every minute tick.
+ * per change in who raised an SOS, not on every minute tick. It slides in at the medium spatial
+ * duration and flashes coral twice for each new raiser; Reduce Motion shows it with neither.
  */
 export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   const t = useTokens();
@@ -34,6 +46,8 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   const entries = useActiveSos();
   const selfId = useAuthStore((st) => st.user?.id);
   useNow(60_000); // keeps "SOS 4m ago" current
+  const reduceMotion = useReduceMotion();
+  const flash = useSharedValue(0);
 
   const active = entries.length > 0;
   const headline = sosHeadline(entries, selfId);
@@ -47,8 +61,17 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
     if (headline) AccessibilityInfo.announceForAccessibility(headline);
   }, [headline]);
 
-  if (!active) return null;
   const newest = entries[0];
+  const arrivalKey = newest ? `${newest.userId}|${newest.raisedAt}` : null;
+  useEffect(() => {
+    if (!arrivalKey || reduceMotion) return;
+    const half = durationEffects.fast;
+    flash.value = withRepeat(withSequence(withTiming(0.6, { duration: half }), withTiming(0, { duration: half })), 2);
+    return () => cancelAnimation(flash);
+  }, [arrivalKey, reduceMotion, flash]);
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
+
+  if (!active) return null;
   if (!newest) return null;
   const own = newest.userId === selfId;
   const href = sosBannerHref(entries, selfId);
@@ -56,21 +79,24 @@ export default function SosBanner({ padTop, onActiveChange }: SosBannerProps) {
   const when = sosWhen(entries) + (own ? ` · ${sosSeenLabel(newest)}` : '');
 
   return (
-    <AppPressable
-      style={[s.banner, { paddingTop: (padTop ? insets.top : 0) + t.spacing[2] }]}
-      onPress={() => router.push(href)}
-      accessibilityRole="button"
-      accessibilityLabel={`${headline}, ${when}. ${toCompass ? 'Open the compass to find them' : 'Open crew to find them'}`}
-      rippleColor={t.colors.shade[9]}
-    >
-      <Ionicons name="alert-circle" size={iconSize.md} color={t.colors.text.onAccent} />
-      <View style={s.body}>
-        <Text style={s.headline}>{headline}</Text>
-        <Text style={s.when}>{when}</Text>
-      </View>
-      <Text style={s.cta}>Find</Text>
-      <Ionicons name="chevron-forward" size={iconSize.sm} color={t.colors.text.onAccent} />
-    </AppPressable>
+    <Animated.View entering={reduceMotion ? undefined : FadeInDown.duration(durationSpatial.med)}>
+      <AppPressable
+        style={[s.banner, { paddingTop: (padTop ? insets.top : 0) + t.spacing[2] }]}
+        onPress={() => router.push(href)}
+        accessibilityRole="button"
+        accessibilityLabel={`${headline}, ${when}. ${toCompass ? 'Open the compass to find them' : 'Open crew to find them'}`}
+        rippleColor={t.colors.shade[9]}
+      >
+        <Ionicons name="alert-circle" size={iconSize.md} color={t.colors.text.onAccent} />
+        <View style={s.body}>
+          <Text style={s.headline}>{headline}</Text>
+          <Text style={s.when}>{when}</Text>
+        </View>
+        <Text style={s.cta}>Find</Text>
+        <Ionicons name="chevron-forward" size={iconSize.sm} color={t.colors.text.onAccent} />
+        <Animated.View pointerEvents="none" style={[s.flash, flashStyle]} />
+      </AppPressable>
+    </Animated.View>
   );
 }
 
@@ -83,6 +109,10 @@ const useStyles = makeStyles((t) => ({
     paddingBottom: t.spacing[2],
     minHeight: 48,
     backgroundColor: t.colors.accent.coralStrong,
+  },
+  flash: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: t.colors.accent.coral,
   },
   body: {
     flex: 1,

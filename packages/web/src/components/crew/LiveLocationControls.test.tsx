@@ -19,15 +19,6 @@ vi.mock('@festie/shared', () => ({
   sosErrorMessage: (_e: unknown, action: string) => `err:${action}`,
 }));
 
-// The raise button has its own test file; stub it here.
-vi.mock('./SosRaiseButton', () => ({
-  default: ({ crewId, alerting }: { crewId: string; alerting?: boolean }) => (
-    <button data-testid="sos-raise" data-alerting={String(!!alerting)}>
-      Send SOS {crewId}
-    </button>
-  ),
-}));
-
 // The check-in card and Beacon have their own test files; stub them here.
 vi.mock('./CheckInCard', () => ({ default: () => <div data-testid="checkin-card" /> }));
 vi.mock('./BeaconOverlay', () => ({ BeaconButton: () => <div data-testid="beacon-button" /> }));
@@ -210,8 +201,6 @@ describe('LiveLocationControls — share toggle', () => {
     const sw = screen.getByTestId('live-share-toggle');
     expect(sw).toBeDisabled();
     expect(screen.getByText(LOW_POWER_COPY.livePaused)).toBeInTheDocument();
-    // SOS — an essential — stays available even in low-power mode.
-    expect(screen.getByTestId('sos-raise')).toBeInTheDocument();
     expect(screen.getByTestId('beacon-button')).toBeInTheDocument();
     await user.click(sw);
     expect(useLiveLocationStore.getState().shareIntent).toBeNull();
@@ -228,25 +217,10 @@ describe('LiveLocationControls — share toggle', () => {
 });
 
 describe('LiveLocationControls — Send SOS', () => {
-  it('puts the Send SOS button first, with the emergency line under it', () => {
+  it('renders no raise control: the app shell owns the one SOS control', () => {
     const { container } = render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
-    expect(container.firstElementChild!.firstElementChild).toBe(screen.getByTestId('sos-raise'));
-    expect(screen.getByTestId('sos-raise')).toHaveTextContent(CREW_ID);
-    expect(screen.getByText(/for emergencies — alerts your whole crew/i)).toBeInTheDocument();
-  });
-
-  it('pulses while a crew SOS is active', () => {
-    setSos([
-      { crewId: CREW_ID, userId: 'user-other', username: 'Dana', raisedAt: new Date().toISOString() },
-    ]);
-    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
-    expect(screen.getByTestId('sos-raise')).toHaveAttribute('data-alerting', 'true');
-  });
-
-  it('hides the button while your own SOS is active', () => {
-    setSos([{ crewId: CREW_ID, userId: ME, username: 'Me', raisedAt: new Date().toISOString() }]);
-    render(<LiveLocationControls crewId={CREW_ID} currentUserId={ME} />);
     expect(screen.queryByTestId('sos-raise')).not.toBeInTheDocument();
+    expect(container).not.toHaveTextContent(/for emergencies — alerts your whole crew/i);
   });
 });
 

@@ -48,6 +48,7 @@ import { useListBottomInset } from '../../hooks/useListBottomInset';
 import Button from '../../components/Button';
 import ScreenHeader from '../../components/ScreenHeader';
 import CrewSwitcherSheet from '../../components/CrewSwitcherSheet';
+import SosControl from '../../components/SosControl';
 import FestivalChoiceSheet from '../../components/FestivalChoiceSheet';
 import HandOverSheet from '../../components/HandOverSheet';
 import CrewTabBar, { type CrewTabKey } from '../../components/CrewTabBar';
@@ -816,7 +817,7 @@ export default function CrewScreen() {
         />
       ) : null}
 
-      {/* Persistent crew chrome — one status row (totem, freshness, SOS) and
+      {/* Persistent crew chrome — one status row (totem, freshness) and
           the crew switcher. The invite card is setup, so it scrolls inside each
           tab body; the code strip lives in the Members header. */}
       <View style={[styles.crewChrome, tabletInset]}>
@@ -843,23 +844,6 @@ export default function CrewScreen() {
           ) : null}
           <FreshnessChip surface="crew" />
           <LowPowerIndicator />
-          {/* Always-visible SOS entry: the full SOS panel lives in the Logistics
-              tab, so this chip jumps there rather than duplicating the raise
-              flow — safety must be reachable from every crew tab. */}
-          {/* Hidden on Logistics: the Find tab already shows Send SOS. */}
-          {crewTab !== 'find' ? (
-            <TouchableOpacity
-              testID="crew-action-sos"
-              style={styles.sosChip}
-              onPress={() => setCrewTab('find')}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Open crew safety to send an SOS"
-            >
-              <Ionicons name="alert-circle" size={t.iconSize.compact} color={t.colors.text.onAccent} />
-              <Text style={styles.sosChipText} maxFontSizeMultiplier={MAX_FONT_SCALE}>SOS</Text>
-            </TouchableOpacity>
-          ) : null}
         </View>
 
         {notice ? (
@@ -978,6 +962,10 @@ export default function CrewScreen() {
           user={user}
         />
       )}
+      <SosControl
+        crewId={crew.id}
+        bottomInset={Platform.OS === 'ios' ? IOS_NATIVE_TAB_BAR_HEIGHT + insets.bottom : 0}
+      />
     </View>
   );
 }

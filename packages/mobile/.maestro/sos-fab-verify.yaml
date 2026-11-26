@@ -1,6 +1,6 @@
 # SOS-FAB regression guard (Android New-Architecture 0x0-collapse bug).
 #
-# The raise-SOS FAB on the Map tab (map-sos-fab) is an
+# The raise-SOS FAB on the Map tab (sos-control) is an
 # absolutely-positioned child pinned bottom-right. Under RN 0.85 New Arch an
 # absolute child of a relative-flow parent collapsed to 0x0 and the FAB went
 # invisible on Android (fine on iOS via shadow*). Fix: outer absolute wrapper +
@@ -89,10 +89,10 @@ env:
       - openLink: festie:///map
       - extendedWaitUntil:
           visible:
-            id: "map-sos-fab"
+            id: "sos-control"
           timeout: 25000
       - waitForAnimationToEnd:
           timeout: 2000
       - takeScreenshot: sosfab-02-map
       - assertVisible:
-          id: "map-sos-fab"
+          id: "sos-control"
