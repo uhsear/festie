@@ -35,10 +35,10 @@ Everything else uses sentence case.
 | Any member's meeting place | Meeting point: Meet-up, Emergency spot | Pre-show, During, Post-show, After, General | Flag, AlertTriangle / flag, warning | `MEETING_POINT_KINDS` |
 | Two picks overlap | Clash; "Clashes with X" | conflict, time conflict | TriangleAlert / warning-outline | `COPY.clash`, `clashCount` |
 | Festival running now | Happening now | Live | n/a | `FESTIVAL_STATUS_LABEL` |
-| Set on stage now | Playing (screen reader: Playing now) | LIVE | coral dot | `COPY.status` |
-| Location sharing | Live (only this) | | coral or green dot | `COPY.status.liveLocation` |
+| Set on stage now | Playing (screen reader: Playing now) | LIVE | green dot, `live.*` token group | `COPY.status` |
+| Location sharing | Live (only this) | | green dot | `COPY.status.liveLocation` |
 | Account | Sign in, Create account, Sign out; "Sign in to ..." | Log in, Logout, Sign up, Sign Up Free, Create Account, Sign Out | n/a | `COPY.auth`, `signInTo` |
-| Live colour | Coral for anything playing now (dot, rail, pill) | Aqua for a NOW dot | n/a | `accent.coral` token |
+| Live colour | Green, `live.*` token group, for anything playing now (dot, rail, pill), with a word or numeral | Any other colour for a NOW dot | n/a | `live.*` tokens |
 
 Code names do not change: `Conflict`, `FestivalMode`, `festival-mode` and the meeting-point type enum stay as they are.
 
