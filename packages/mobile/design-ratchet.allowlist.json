@@ -25,12 +25,6 @@
       "reason": "Comments only: they quote the token values they explain."
     },
     {
-      "file": "app/(tabs)/_layout.web.tsx",
-      "rule": "fontSize",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
       "file": "app/(tabs)/map.tsx",
       "rule": "duration-ms",
       "max": 1,
@@ -79,12 +73,6 @@
       "reason": "Placeholder text that shows the hex format. It is not a colour value."
     },
     {
-      "file": "components/admin/festival-map/styles.ts",
-      "rule": "fontSize",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
       "file": "components/Avatar.tsx",
       "rule": "duration-ms",
       "max": 2,
@@ -94,13 +82,13 @@
       "file": "components/Avatar.tsx",
       "rule": "fontFamily",
       "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+      "reason": "Takes the face from typeStyle(); the style sets only the family because the size is computed per avatar."
     },
     {
       "file": "components/Avatar.tsx",
       "rule": "fontSize",
       "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+      "reason": "Initials size follows the avatar size (a third of it), so it cannot sit on the type ramp."
     },
     {
       "file": "components/CrewActivity.tsx",
@@ -148,7 +136,7 @@
       "file": "components/InviteQRSheet.tsx",
       "rule": "fontFamily",
       "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+      "reason": "Monospace face for the invite code, so every character has the same width."
     },
     {
       "file": "components/InviteQRSheet.tsx",
@@ -160,7 +148,7 @@
       "file": "components/LockscreenOverlay.tsx",
       "rule": "fontSize",
       "max": 2,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+      "reason": "Sketch of a phone lock screen drawn at the preview size; text scales with the preview and ignores system font scale."
     },
     {
       "file": "components/OfflineReadinessCard.tsx",
@@ -196,7 +184,7 @@
       "file": "components/ScheduleDayChips.tsx",
       "rule": "fontFamily",
       "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+      "reason": "Android drops the custom face on the date line to avoid trailing-glyph clipping; other platforms keep the typeStyle() face."
     },
     {
       "file": "components/wrap/ConfettiBurst.tsx",

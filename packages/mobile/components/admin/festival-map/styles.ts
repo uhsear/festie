@@ -127,8 +127,7 @@ export const useStyles = makeStyles((t) => ({
     borderColor: t.colors.text.onAccent,
   },
   paletteGlyphText: {
-    fontSize: 13,
-    lineHeight: 16,
+    ...typeStyle('caption'),
   },
   paletteLabel: {
     ...typeStyle('caption'),

@@ -1,12 +1,12 @@
 import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { fontSize, spacing } from '@festie/shared/tokens';
+import { spacing } from '@festie/shared/tokens';
 import { APP_SECTIONS, type AppSectionKey } from '@festie/shared/utils';
 import { useAuthStore } from '@festie/shared/stores';
 import { GUEST_PROMPT_COPY } from '@festie/shared/constants';
 import { useRealtimeSync } from '../../hooks/useRealtimeSync';
-import { useTokens } from '../../hooks/useTokens';
+import { typeStyle, useTokens } from '../../hooks/useTokens';
 
 /**
  * Web fallback for the tab bar — NativeTabs (_layout.tsx) is native-only, but
@@ -43,7 +43,7 @@ export default function TabLayoutWeb() {
         },
         tabBarActiveTintColor: colors.accent.aqua,
         tabBarInactiveTintColor: colors.text.muted,
-        tabBarLabelStyle: { fontSize: fontSize[10], fontWeight: '600' },
+        tabBarLabelStyle: typeStyle('caption', 600),
       }}
     >
       {APP_SECTIONS.map(({ key, label }) => {
