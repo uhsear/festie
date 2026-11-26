@@ -3,6 +3,11 @@ import { Eye, EyeOff, Search } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { inputBase } from '../../lib/styles';
 
+// Both eye icons stay mounted and cross-fade (scale/opacity/blur) so the reveal toggle animates.
+const EYE_ICON =
+  'absolute inset-0 w-5 h-5 transition-[opacity,filter,scale] duration-300 ease-[cubic-bezier(0.2,0,0,1)] motion-reduce:transition-none';
+const EYE_HIDDEN = 'opacity-0 scale-[0.25] blur-[4px] motion-reduce:scale-100 motion-reduce:blur-none';
+
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
@@ -80,11 +85,10 @@ export default function Input({
             aria-label={showPassword ? 'Hide password' : 'Show password'}
             aria-pressed={showPassword}
           >
-            {showPassword ? (
-              <EyeOff className="w-5 h-5" aria-hidden="true" />
-            ) : (
-              <Eye className="w-5 h-5" aria-hidden="true" />
-            )}
+            <span className="relative block w-5 h-5">
+              <EyeOff className={cn(EYE_ICON, showPassword ? 'opacity-100' : EYE_HIDDEN)} aria-hidden="true" />
+              <Eye className={cn(EYE_ICON, showPassword ? EYE_HIDDEN : 'opacity-100')} aria-hidden="true" />
+            </span>
           </button>
         )}
       </div>

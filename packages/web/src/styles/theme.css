@@ -107,9 +107,15 @@
   }
 }
 
+/* Tailwind 4 writes scale-* to the `scale` property, so transition lists must name `scale`, not `transform`. */
 @utility press-scale {
   &:active {
-    transform: scale(0.97);
+    scale: var(--press-scale);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    &:active {
+      scale: 1;
+    }
   }
 }
 
