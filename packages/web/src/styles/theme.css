@@ -427,9 +427,8 @@
    ./theme.generated.css — they are no longer hand-maintained here so web and
    React Native can never drift. Regenerate: `pnpm --filter @festie/shared
    gen:theme`. The block below holds ONLY the CSS-only tokens that have no
-   shared-TS source (the frosted-chrome surface, focus
-   ring widths, glass blur radii, solid-fill hover tones, timeline NOW markers,
-   and the disabled surface).
+   shared-TS source (focus ring widths, glass blur radii and timeline NOW
+   markers).
    ─────────────────────────────────────────────────────────────────────────── */
 @theme {
   /* ── Focus ring tokens (2026-06-04) ─────────────────────────────────────
