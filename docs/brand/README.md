@@ -50,6 +50,9 @@ Below those sizes the pin gap closes. Use the mark alone when the space is narro
    "FESTIE" sits beside it in Clash Display 700 caps, in House Light (`text.primary`).
 2. **Mixed-case "Festie" lockup** (`festie-lockup.svg` or `.png`) on OG images, email and server
    pages, such as the festival, invite and share pages. The email header uses `public/icons/email-lockup.png`.
+   `lib/helpers/share-og-image.ts` bakes the lockup paths for the per-festival and per-plan
+   previews. If you change `festie-lockup.svg`, copy the new paths there and re-export
+   `packages/web/public/og-image.png`.
 3. **Tracked caps "FESTIE"** only in the header of the Wrap poster.
 
 A stacked lockup is planned and is not approved yet.

@@ -391,7 +391,7 @@ describe('festival page: GET /f/:slug/og.png', () => {
     const svg = buildFestivalOgSvg({ festivalName: '<x>', dateRange: null, location: '', setCount: 1, stageCount: 1 });
     assert.ok(svg.includes('>1 set · 1 stage<'));
     assert.ok(svg.includes('&lt;x&gt;'));
-    assert.equal((svg.match(/<text /g) || []).length, 3);
+    assert.equal((svg.match(/<text /g) || []).length, 2);
     const full = buildFestivalOgSvg({
       festivalName: 'N'.repeat(40),
       dateRange: 'Nov 6 – Nov 8, 2026',
@@ -402,7 +402,7 @@ describe('festival page: GET /f/:slug/og.png', () => {
     assert.ok(full.includes(`>${'N'.repeat(32)}…<`));
     assert.ok(full.includes('>Nov 6 – Nov 8, 2026<'));
     assert.ok(full.includes('>12 sets · 3 stages<'));
-    assert.ok(full.includes('text-anchor="end"'));
+    assert.ok(full.includes('>Tinker Field<'));
   });
 });
 
