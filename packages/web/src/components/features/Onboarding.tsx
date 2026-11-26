@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { X, Users, Bell, Check, ChevronRight } from 'lucide-react';
 import { ONBOARDING_SLIDES_SHARED } from '@festie/shared';
 import { ONBOARDING_COPY, PRIORITY_LABELS, PRIORITY_OPTIONS } from '@festie/shared/constants';
-import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
+import { useAuthStore, useFestivalStore, useUIStore } from '@festie/shared/stores';
 import {
   formatFestivalDateRange,
   getIntroSteps,
@@ -76,6 +76,7 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
   const currentFestival = useFestivalStore((s) => s.currentFestival);
   const selectFestival = useFestivalStore((s) => s.selectFestival);
   const user = useAuthStore((s) => s.user);
+  const theme = useUIStore((s) => s.theme);
   const navigate = useNavigate();
   const { toastError } = useToast();
   const steps = getIntroSteps(festivals.length);
@@ -168,7 +169,7 @@ export default function Onboarding({ suspended = false }: OnboardingProps) {
         {/* Step icon */}
         {stepKey === 'plan' ? (
           // Brand mark on the first step; decorative, the title names the app.
-          <img src="/favicon.svg" width={80} height={80} alt="" className="mt-2 mb-4" />
+          <img src={theme === 'daylight' ? '/favicon-daylight.svg' : '/favicon.svg'} width={80} height={80} alt="" className="mt-2 mb-4" />
         ) : stepKey === 'crew' || stepKey === 'reminders' ? (
           <div className="mt-2 mb-4 flex items-center justify-center w-20 h-20 rounded-full bg-bg-card border border-border">
             {SLIDE_ICON[stepKey]}
