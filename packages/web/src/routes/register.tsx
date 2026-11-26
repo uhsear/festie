@@ -16,7 +16,7 @@ import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import AuthTabs from '../components/ui/AuthTabs';
-import AuthBrand from '../components/auth/AuthBrand';
+import AuthLayout from '../components/auth/AuthLayout';
 import ProviderButtons from '../components/auth/ProviderButtons';
 import InviteBanner from '../components/auth/InviteBanner';
 import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
@@ -110,9 +110,7 @@ function RegisterPageInner() {
     'text-accent-aqua underline underline-offset-2 hover:text-[var(--color-accent-aqua-hover)] rounded-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
   return (
-    <>
-      <AuthBrand />
-
+    <AuthLayout phoneSample>
       <InviteBanner />
 
       <AuthTabs active="register" variant="split" />
@@ -266,6 +264,6 @@ function RegisterPageInner() {
           </Link>
         </div>
       </form>
-    </>
+    </AuthLayout>
   );
 }

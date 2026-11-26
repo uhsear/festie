@@ -1,5 +1,6 @@
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
 import { AUTH_COPY } from '@festie/shared/constants';
+import { duration as motionDuration } from '@festie/shared/tokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { makeStyles, typeScaleCap, typeStyle } from '../hooks/useTokens';
 
@@ -13,17 +14,16 @@ const useStyles = makeStyles((t) => ({
   },
 }));
 
-/** The FESTIE wordmark on the sign-in screens. The BrandMark above it is the mark. `revealDelay` (ms) fades it in unless reduce motion is on. */
-export default function BrandWordmark({ revealDelay }: { revealDelay?: number }) {
+/** The FESTIE wordmark on the sign-in screens. The BrandMark above it is the mark. `reveal` fades it in at the medium duration, with no delay, unless reduce motion is on. */
+export default function BrandWordmark({ reveal }: { reveal?: boolean }) {
   const styles = useStyles();
   const reduceMotion = useReduceMotion();
-  const reveal = revealDelay === undefined ? undefined : FadeInDown.delay(revealDelay).duration(350);
   return (
     <Animated.Text
       style={styles.wordmark}
       maxFontSizeMultiplier={typeScaleCap('display-lg')}
       accessibilityRole="header"
-      entering={reduceMotion ? undefined : reveal}
+      entering={reduceMotion ? undefined : reveal ? FadeIn.duration(motionDuration.med) : undefined}
     >
       {AUTH_COPY.wordmark}
     </Animated.Text>

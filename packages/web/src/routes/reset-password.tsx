@@ -5,7 +5,7 @@ import { isResetLinkExpired, mapErrorToUserMessage } from '@festie/shared/servic
 import { AUTH_COPY } from '@festie/shared/constants';
 import { validateNewPassword } from '@festie/shared/utils';
 import PasswordStrengthMeter from '../components/auth/PasswordStrengthMeter';
-import AuthBrand from '../components/auth/AuthBrand';
+import AuthLayout from '../components/auth/AuthLayout';
 import Button from '../components/ui/Button';
 import Input from '../components/ui/Input';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
@@ -57,9 +57,8 @@ function ResetPasswordPageInner() {
   };
 
   return (
-    <div className="flex flex-col items-center px-4 py-12">
+    <AuthLayout subtitle={AUTH_COPY.newPasswordTitle}>
       <div className="w-full max-w-sm">
-        <AuthBrand subtitle={AUTH_COPY.newPasswordTitle} />
 
         {!token || expired ? (
           <div className="bg-bg-card border border-border rounded-xl p-6 text-center space-y-4" role="status">
@@ -118,6 +117,6 @@ function ResetPasswordPageInner() {
           </Link>
         </div>
       </div>
-    </div>
+    </AuthLayout>
   );
 }

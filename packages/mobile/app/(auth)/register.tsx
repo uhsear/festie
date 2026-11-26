@@ -15,7 +15,6 @@ import {
   AccessibilityInfo,
   findNodeHandle,
 } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Link, useFocusEffect, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,7 +39,6 @@ import ProviderButtons from '../../components/ProviderButtons';
 import PasswordStrengthMeter from '../../components/PasswordStrengthMeter';
 import { getPendingInvite } from '../../lib/pendingInvite';
 import { setReturnTo } from '../../lib/returnTo';
-import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 
 // Screen order; the first invalid field in this order takes focus.
@@ -260,8 +258,6 @@ export default function RegisterScreen() {
   const [showPw, setShowPw] = useState(false);
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  // R25: gate hero reveal on reduce-motion preference
-  const reduceMotion = useReduceMotion();
   const register = useAuthStore((s) => s.register);
   const isLoading = useAuthStore((s) => s.isLoading);
   const error = useAuthStore((s) => s.error);
@@ -396,23 +392,15 @@ export default function RegisterScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* R25: hero staggered reveal — brand word then subtitle, gated on reduceMotion */}
+        {/* Only the wordmark fades in (medium duration, no delay); BrandWordmark gates it on Reduce Motion. */}
         <BrandMark />
-        <BrandWordmark revealDelay={300} />
-        <Animated.Text
-          style={styles.subtitle}
-          maxFontSizeMultiplier={MAX_FONT_SCALE}
-          entering={reduceMotion ? undefined : FadeInDown.delay(360).duration(350)}
-        >
+        <BrandWordmark reveal />
+        <Text style={styles.subtitle} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {AUTH_COPY.tagline}
-        </Animated.Text>
-        <Animated.Text
-          style={styles.screenLine}
-          maxFontSizeMultiplier={MAX_FONT_SCALE}
-          entering={reduceMotion ? undefined : FadeInDown.delay(360).duration(350)}
-        >
+        </Text>
+        <Text style={styles.screenLine} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           Create your account
-        </Animated.Text>
+        </Text>
 
         <InviteCard code={getPendingInvite()} />
 
