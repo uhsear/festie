@@ -42,6 +42,7 @@ import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, Amenity
 import EmptyState from '../ui/EmptyState';
 import { basemapCacheInfo, basemapSupported } from '../../lib/basemapCache';
 import { relAge, type MapLibre, type PursueTarget } from './crew-map/mapDom';
+import { cameraDuration, unwrapAngle } from './crew-map/mapMotion';
 import { useGeolocationWatch } from './crew-map/useGeolocationWatch';
 import { useSelfMarker } from './crew-map/useSelfMarker';
 import PlaceCard from './crew-map/PlaceCard';
@@ -418,6 +419,12 @@ export default function CrewMap({
     [selfCoord, liveTarget],
   );
 
+  // Unwrapped bearing so the arrow crosses north by the short turn instead of spinning back.
+  const arrowAngleRef = useRef(0);
+  const arrowAngle = pursuit && Number.isFinite(pursuit.bearingDeg)
+    ? (arrowAngleRef.current = unwrapAngle(arrowAngleRef.current, pursuit.bearingDeg))
+    : arrowAngleRef.current;
+
   // "Show my location": fly to the fix now, or ask for one and fly when it lands.
   const flyToSelfRef = useRef(false);
   // True from the tap until a fix lands, so a blocked or failed location shows a message.
@@ -469,7 +476,7 @@ export default function CrewMap({
       setPlace(null);
       setNearestNotice(null);
       setPendingNearest(null);
-      mapRef.current?.flyTo({ center: [step.pin.longitude, step.pin.latitude], zoom: 16, duration: 600 });
+      mapRef.current?.flyTo({ center: [step.pin.longitude, step.pin.latitude], zoom: 16, duration: cameraDuration() });
     },
     [selfCoord, locate, cancelSelfFly],
   );
@@ -493,7 +500,7 @@ export default function CrewMap({
     return accuracyM !== null && accuracyM > distanceM ? null : distanceM;
   }, [accuracyM]);
   const flyToSelf = useCallback((fix: Coord) => {
-    mapRef.current?.flyTo({ center: [fix.longitude, fix.latitude], zoom: 16, duration: 600 });
+    mapRef.current?.flyTo({ center: [fix.longitude, fix.latitude], zoom: 16, duration: cameraDuration() });
     setFarNoticeM(farDistanceM(fix));
   }, [farDistanceM]);
   // A more accurate fix can move the user back in range: refresh or clear the shown notice.
@@ -504,8 +511,8 @@ export default function CrewMap({
   const showFestival = useCallback(() => {
     setFarNoticeM(null);
     const { bounds, center: venue } = cameraRef.current;
-    if (bounds) mapRef.current?.fitBounds(bounds, { padding: 56, maxZoom: 17, duration: 600 });
-    else if (venue) mapRef.current?.flyTo({ center: [venue.longitude, venue.latitude], zoom: 15, duration: 600 });
+    if (bounds) mapRef.current?.fitBounds(bounds, { padding: 56, maxZoom: 17, duration: cameraDuration() });
+    else if (venue) mapRef.current?.flyTo({ center: [venue.longitude, venue.latitude], zoom: 15, duration: cameraDuration() });
   }, []);
   const showMyLocation = useCallback(() => {
     if (selfCoord) {
@@ -747,7 +754,7 @@ export default function CrewMap({
     const pin = findMapPin('stage', focusPinId, stagePinsRef.current);
     if (!pin) return;
     focusedRef.current = focusPinId;
-    mapRef.current?.flyTo({ center: [pin.longitude, pin.latitude], zoom: 17, duration: 600 });
+    mapRef.current?.flyTo({ center: [pin.longitude, pin.latitude], zoom: 17, duration: cameraDuration() });
     selectPlace(pin);
     onFocusHandledRef.current?.();
   }, [status, focusPinId, stagesKey, interactive, selectPlace]);
@@ -948,8 +955,8 @@ export default function CrewMap({
                   color: pursueIsSos ? 'var(--color-accent-coral)' : 'var(--color-accent-aqua)',
                   // lucide's Navigation glyph points NE (45°) at rotation 0, so
                   // subtract 45° so a due-north target points straight up.
-                  transform: `rotate(${pursuit.bearingDeg - 45}deg)`,
-                  transition: 'transform 300ms ease-out',
+                  transform: `rotate(${arrowAngle - 45}deg)`,
+                  transition: 'transform var(--duration-med) var(--ease-out)',
                 }}
               />
             ) : (

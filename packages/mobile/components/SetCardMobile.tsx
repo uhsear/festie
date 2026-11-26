@@ -474,7 +474,7 @@ function SetCardMobileImpl({
 }
 
 /**
- * Thin live-progress bar for a currently-playing set. The fill width glides to
+ * Thin live-progress bar for a currently-playing set. The fill scales (scaleX from the left edge, no relayout)  to
  * the new fraction on each status tick (Reduce Motion jumps instantly). Coral
  * is the deliberate "now" exception already used by the live badge + NOW line.
  */
@@ -492,7 +492,7 @@ function LiveProgressBar({ progress }: { progress: number }) {
       : withTiming(pct, { duration: duration.slow, easing: Easing.bezier(...easing.standard.bezier) });
   }, [pct, reduceMotion, w]);
 
-  const fillStyle = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
+  const fillStyle = useAnimatedStyle(() => ({ transform: [{ scaleX: w.value }] }));
 
   return (
     <View
@@ -659,6 +659,8 @@ const useStyles = makeStyles((t) => ({
   },
   progressFill: {
     height: '100%',
+    width: '100%',
+    transformOrigin: 'left',
     borderRadius: t.radii.pill,
     backgroundColor: t.colors.accent.coral,
   },

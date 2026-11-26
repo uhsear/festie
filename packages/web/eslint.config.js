@@ -56,6 +56,7 @@ const RATCHET_ALLOWLIST = JSON.parse(readFileSync(new URL('./design-ratchet.allo
 
 const SWITCH_FILES = ['src/components/ui/Switch.tsx', 'src/components/crew/MeetingPointsTab.tsx', 'src/components/crew/MeetingPointForm.tsx'];
 const POSTER_FILES = ['src/components/features/ScheduleImagePoster.tsx'];
+const SWITCH_ALLOWLISTED = SWITCH_FILES.filter((f) => RATCHET_ALLOWLIST.includes(f));
 
 const SWITCH_RESTRICTED = {
   selector: "JSXAttribute[name.name='role'][value.value='switch']",
@@ -139,10 +140,10 @@ export default tseslint.config(
     ignores: [...SWITCH_FILES, ...POSTER_FILES],
     rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED, SWITCH_RESTRICTED] },
   },
-  {
-    // Only the allowlisted switch files lose the ratchet; the others keep the block above.
-    files: SWITCH_FILES.filter((f) => RATCHET_ALLOWLIST.includes(f)),
-    rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED] },
-  },
+  // Only the allowlisted switch files lose the ratchet; the others keep the block above.
+  // ESLint rejects a block with an empty `files` array, so it exists only while one is allowlisted.
+  ...(SWITCH_ALLOWLISTED.length > 0
+    ? [{ files: SWITCH_ALLOWLISTED, rules: { 'no-restricted-syntax': ['error', ...BASE_RESTRICTED, ...RAW_COLOUR_RESTRICTED] } }]
+    : []),
   storybook.configs['flat/recommended'],
 );

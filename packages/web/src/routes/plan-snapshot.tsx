@@ -16,6 +16,7 @@ import {
 } from '@festie/shared/utils';
 import { useToast } from '../lib/toastContext';
 import { ArtistNameButton } from '../components/features/ArtistName';
+import EmptyState from '../components/ui/EmptyState';
 
 /** Shape returned by GET /festivals/:id (after envelope unwrap). */
 interface FestivalDetailResponse extends Festival {
@@ -249,9 +250,14 @@ function PlanSnapshotView({ hash }: { hash: string }) {
 
   if (!snapshot) {
     return (
-      <div className="flex flex-col items-center gap-4 px-6 py-12 text-center" data-testid="plan-snapshot-error">
-        <h1 className="type-heading text-text-primary">This plan code can&apos;t be read</h1>
-        <p className="text-[length:var(--font-size-14)] text-text-secondary">Ask your friend to show the QR again.</p>
+      <div data-testid="plan-snapshot-error">
+        <EmptyState
+          illustration="emptyList"
+          headingLevel={1}
+          title="This plan code can't be read"
+          description="Ask your friend to show the QR again."
+          className="py-12"
+        />
       </div>
     );
   }

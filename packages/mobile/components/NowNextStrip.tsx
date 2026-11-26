@@ -16,6 +16,7 @@ import { useNowNext } from '../hooks/useNowNext';
 import LiveDot from './LiveDot';
 import AppPressable from './AppPressable';
 import ArtistName, { artistOpenActions } from './ArtistName';
+import SetChangeEnter from './SetChangeEnter';
 
 interface NowNextStripProps {
   /** Opens the full Now & Next surface (festival-mode screen). */
@@ -95,6 +96,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
     : `Up next: ${name}${stage ? ` at ${stage}` : ''}, ${timing}. Open Now & Next.`;
 
   return (
+    <SetChangeEnter key={focus.set.id}>
     <AppPressable
       testID="now-next-strip"
       style={[styles.strip, isNow && styles.stripNow]}
@@ -136,6 +138,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
         </View>
       ) : null}
     </AppPressable>
+    </SetChangeEnter>
   );
 }
 

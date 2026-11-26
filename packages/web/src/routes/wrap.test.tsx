@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithQueryClient } from '../test-utils';
+import { COPY } from '@festie/shared/constants';
 
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
@@ -82,7 +83,7 @@ describe('WrapPage', () => {
 
   it('requests the wrap of the festival in the search param', async () => {
     renderPage();
-    await screen.findByText('Nothing to wrap yet');
+    await screen.findByText(COPY.wrap.empty.title);
     expect(mocks.get).toHaveBeenCalledWith('past1', null);
   });
 

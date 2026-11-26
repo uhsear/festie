@@ -87,8 +87,8 @@ describe('announced lineup wiring (source guards)', () => {
     expect(home).toContain('const lineupStandsIn = lineupReplacesEmptyState(announced, searchQuery);');
     expect(home).toContain('lineupStandsIn ? undefined');
     expect(home).toContain('lineupStandsIn ? null');
-    expect(home).toContain('{searchQuery.trim() ? null : <AnnouncedLineup model={announced} hPad={hPad} />}');
-    expect(home).toContain('{searchQuery.trim() ? <AnnouncedLineup model={announced} /> : null}');
+    expect(home).toContain('{searchQuery.trim() || flyer ? null : <AnnouncedLineup model={announced} hPad={hPad} />}');
+    expect(home).toContain('{searchQuery.trim() && !flyer ? <AnnouncedLineup model={announced} /> : null}');
     expect(home).toContain('<AnnouncedLineup model={announced} hPad={hPad} />');
   });
 

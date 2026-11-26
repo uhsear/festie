@@ -17,6 +17,14 @@ export const COPY = {
     tab: 'Wrap', name: 'Festival Wrap', crewName: 'Crew Wrap', open: 'See your Festival Wrap',
     hint: 'Your stats & top sets after the festival',
     ready: 'Festival Wrap ready', readyHint: 'Your Festival Wrap is ready to view', icon: 'wrap',
+    pending: {
+      title: 'Festival Wrap coming soon',
+      description: "We'll put together your highlights the day after the festival ends.",
+    },
+    empty: {
+      title: 'Nothing to wrap yet',
+      description: 'Wraps are built from the sets you pick and rate. Rate any set you saw from its detail page.',
+    },
   },
   find: { name: 'Find', action: 'Find your crew', icon: 'find' },
   homeBase: {
@@ -199,6 +207,10 @@ export const DISCOVER_COPY = {
     daysTitle: 'Days and set times are not out yet',
     joined: "We'll tell you when they are.",
     guest: 'Follow to hear when they are.',
+  },
+  /** The lineup flyer shown while no set has a time. The sentence is for signed-out visitors only. */
+  flyer: {
+    guestLine: 'Festie lets you plan your sets and sync with your crew.',
   },
   /** The festival picker badge: how far the schedule has come. A festival with no acts has none. */
   scheduleProgress: {

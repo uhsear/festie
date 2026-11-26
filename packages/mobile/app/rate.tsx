@@ -9,6 +9,7 @@ import { useAuthStore, useFestivalDataStore, useUIStore } from '@festie/shared/s
 import { formatTime, isWrapUnlocked, isWrapUpcoming, selectSetsToRate } from '@festie/shared/utils';
 import type { WrapFestival, WrapPlannedSet } from '@festie/shared/types';
 import EmptyState from '../components/EmptyState';
+import LoadErrorState from '../components/LoadErrorState';
 import Button from '../components/Button';
 import RatingButtons from '../components/RatingButtons';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
@@ -145,8 +146,7 @@ export default function RateScreen() {
     return (
       <View style={styles.screen}>
         {header}
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load your sets"
           action={{
             label: 'Try again',

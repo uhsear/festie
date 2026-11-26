@@ -402,7 +402,7 @@ function GridViewInner() {
                 'border-none text-[length:var(--font-size-14)] font-bold tracking-[var(--letter-spacing-caps)]',
                 'cursor-pointer z-30 min-h-11',
                 'shadow-[var(--shadow-glow-aqua),0_1px_3px_rgba(0,0,0,0.25)]',
-                'transition-[scale,box-shadow] duration-150',
+                'transition-[scale,box-shadow] duration-(--duration-med)',
                 'ease-out',
                 'hover:shadow-[0_8px_24px_var(--color-aqua-a4),0_1px_4px_rgba(0,0,0,0.3)]',
                 'press-scale',

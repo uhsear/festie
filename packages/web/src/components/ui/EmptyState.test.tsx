@@ -118,3 +118,21 @@ describe('EmptyState', () => {
     expect(container.querySelector('.empty-state-fallback-icon svg')).not.toBeNull();
   });
 });
+
+describe('EmptyState ghost row', () => {
+  it.each([
+    ['picks', ['Artist name', 'Must', 'Want', 'Maybe']],
+    ['crew', ['Your friend', 'Member']],
+    ['inbox', ['Notifications']],
+  ] as const)('draws the %s ghost row with product labels and no illustration', (kind, labels) => {
+    const { container } = render(<EmptyState title="Empty" ghostRow={kind} illustration="noPicks" />);
+    const row = screen.getByTestId('ghost-row');
+    for (const label of labels) expect(row).toHaveTextContent(label);
+    expect(container.querySelector('.empty-state-illustration')).not.toBeInTheDocument();
+  });
+
+  it('has no structural a11y violations', async () => {
+    const { container } = render(<EmptyState title="No picks yet" description="Browse." ghostRow="picks" />);
+    await expect(container).toBeAccessible();
+  });
+});
