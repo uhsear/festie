@@ -15,6 +15,7 @@
     "./hooks": "./src/hooks/index.ts",
     "./utils": "./src/utils/index.ts",
     "./constants": "./src/constants/index.ts",
+    "./brand": "./src/brand/index.ts",
     "./tokens": "./src/tokens/index.ts",
     "./platform": "./src/platform/index.ts",
     "./pwa": "./src/pwa/runtimeCaching.ts",
