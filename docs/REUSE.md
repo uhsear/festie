@@ -240,7 +240,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | `authReady` | `packages/web/src/routes/auth-guard.ts:16` | Awaits auth hydration before a guarded route renders. | `packages/web/src/router.tsx:193` |
 | `useFestivalLoader` | `packages/web/src/hooks/useFestivalLoader.ts:56` | App-shell loader: session check, festival load, ?joinCrew= and ?ref= capture, profile refetch on login. Not a per-route loader. | `packages/web/src/components/layout/AppShell.tsx:99` |
 | `festivalLoadState` | `packages/shared/src/utils/festivalTime.ts` | Derives loading/error/empty state from the festival store for skeleton/error/empty branching. | `packages/web/src/routes/picks.tsx:167` |
-| `EmptyState` | `packages/web/src/components/ui/EmptyState.tsx` | Title/description/CTA with themed illustration. | `packages/web/src/components/crew/PollsTab.tsx:390` |
+| `EmptyState` | `packages/web/src/components/ui/EmptyState.tsx` | Title/description/CTA with themed illustration, or a `ghostRow` (picks, crew, inbox) from `GHOST_ROWS` in shared. | `packages/web/src/components/crew/PollsTab.tsx:390` |
 | `FestivalLoadError` | `packages/web/src/components/features/FestivalLoadError.tsx` | Retryable festival-load failure panel. | `packages/web/src/routes/picks.tsx:171` |
 | `Skeleton and route skeletons` | `packages/web/src/components/ui/Skeleton.tsx, packages/web/src/components/ui/skeletons/` | Shimmer primitive with role=status plus per-screen skeletons. | `packages/web/src/routes/crew.tsx:297` |
 | `Card (Header/Body)` | `packages/web/src/components/ui/Card.tsx` | Surface with default/elevated/interactive/flush variants and padding scale. | `packages/web/src/routes/crew-plan.tsx:172` |
@@ -292,7 +292,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 | Name | Path | What it does | Example caller |
 |---|---|---|---|
 | `ScreenHeader` | `packages/mobile/components/ScreenHeader.tsx` | Standard title, subtitle and icon header. It owns the top safe-area inset and reads TopBannerContext so it does not add the inset twice under OfflineBanner. | `packages/mobile/app/(tabs)/account.tsx:405` |
-| `EmptyState` | `packages/mobile/components/EmptyState.tsx` | Centred icon or shared illustration, title, message and up to two Button actions. Set the insets prop when the screen has no native header. | `packages/mobile/app/(tabs)/crew.tsx:662` |
+| `EmptyState` | `packages/mobile/components/EmptyState.tsx` | Centred icon, shared illustration or `ghostRow`, title, message and up to two Button actions. Set the insets prop when the screen has no native header. | `packages/mobile/app/(tabs)/crew.tsx:662` |
 | `Skeleton / LoadingState` | `packages/mobile/components/Skeleton.tsx` | Placeholder blocks and a standard loading view for first load. | `packages/mobile/app/(tabs)/crew.tsx:698` |
 | `ErrorBoundary` | `packages/mobile/components/ErrorBoundary.tsx` | Render-error fallback wrapper for screens and routes. | `packages/mobile/app/_layout.tsx:408` |
 | `useListBottomInset` | `packages/mobile/hooks/useListBottomInset.ts` | Bottom padding that clears the tab bar and safe area, for list contentContainerStyle. | `packages/mobile/app/set/[setId].tsx:136` |

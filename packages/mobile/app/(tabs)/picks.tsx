@@ -688,7 +688,7 @@ export default function PicksScreen() {
       />
     ) : stats.total === 0 ? (
       <EmptyState
-        illustration="noPicks"
+        ghostRow="picks"
         title="No picks yet"
         message="Browse the lineup and tap the sets you want to see."
         action={{ label: 'Browse the lineup', onPress: () => router.navigate('/(tabs)') }}

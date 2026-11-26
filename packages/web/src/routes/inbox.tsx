@@ -1,6 +1,5 @@
 import React, { useEffect, useRef } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { Bell } from 'lucide-react';
 import { useFestivalStore } from '@festie/shared/stores/festivalStore';
 import { useInboxStore, isInboxItemUnread, type InboxItem } from '@festie/shared/stores/inboxStore';
 import { INBOX_COPY, inboxRowLabel } from '@festie/shared/constants/inboxCopy';
@@ -75,8 +74,7 @@ export default function InboxView() {
 
       {loaded && items.length === 0 && !error && (
         <EmptyState
-          illustration="emptyList"
-          icon={<Bell aria-hidden="true" />}
+          ghostRow="inbox"
           title={INBOX_COPY.emptyTitle}
           description={INBOX_COPY.emptyBody}
         />
