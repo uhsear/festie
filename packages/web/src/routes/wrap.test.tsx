@@ -137,4 +137,17 @@ describe('WrapPage', () => {
     const tabs = screen.getByRole('tablist', { name: 'Wrap view' });
     expect(carousel.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
+
+  it('keeps the same tablist element, outside its panel, when switching between You and Crew', async () => {
+    mocks.cards = [{ kind: 'plan', kicker: 'YOUR PLAN', headline: '2 sets planned' }];
+    renderPage();
+    const tabs = await screen.findByRole('tablist', { name: 'Wrap view' });
+    expect(document.getElementById('wrap-tab-panel')!.contains(tabs)).toBe(false);
+    fireEvent.click(screen.getAllByRole('tab')[1]!);
+    await waitFor(() => expect(screen.queryByText('carousel')).toBeNull());
+    expect(screen.getByRole('tablist', { name: 'Wrap view' })).toBe(tabs);
+    fireEvent.click(screen.getAllByRole('tab')[0]!);
+    expect(await screen.findByText('carousel')).toBeTruthy();
+    expect(screen.getByRole('tablist', { name: 'Wrap view' })).toBe(tabs);
+  });
 });

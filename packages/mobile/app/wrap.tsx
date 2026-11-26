@@ -140,10 +140,9 @@ export default function WrapScreen() {
     }
   };
 
-  // DP-43: with cards, the poster leads and the You/Crew switch sits under the share button.
-  const tabsBelow = unlocked && tab === 'me' && cards.length > 0;
+  // One fixed position above both views, so a switch keeps the tab (and screen-reader focus) where it is.
   const tabBarEl = (
-    <View style={[styles.tabBar, tabsBelow && styles.tabBarInline]}>
+    <View style={styles.tabBar}>
       <TouchableOpacity
         style={[styles.tab, tab === 'me' && styles.tabActive]}
         onPress={() => setTab('me')}
@@ -288,8 +287,6 @@ export default function WrapScreen() {
           </TouchableOpacity>
         </View>
 
-        {tabBarEl}
-
         <View style={styles.handleRow}>
           <Text style={styles.handleLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {handleText}
@@ -350,7 +347,7 @@ export default function WrapScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Festival Wrap', headerShown: true }} />
-      {showTabs && !tabsBelow ? tabBarEl : null}
+      {showTabs ? tabBarEl : null}
 
       {showTabs && tab === 'crew' ? (
         <CrewWrapTab
@@ -1021,7 +1018,6 @@ const useStyles = makeStyles((t) => ({
     textAlign: 'center',
     paddingTop: t.spacing[2],
   },
-  tabBarInline: { margin: 0 },
   posterBlock: {
     gap: t.spacing[3],
     marginHorizontal: -t.spacing[4],
