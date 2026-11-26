@@ -86,7 +86,7 @@ function ReportLists({ report, stopKinds, reviewKinds }: { report: BackfillRepor
         <details key={key} className="rounded-xl border border-glass-border p-2">
           <summary className="cursor-pointer min-h-11 flex items-center text-sm text-text-primary">
             {backfillLabel(key)} ({entries.length})
-            {stopKinds.has(key) && <span className="ml-2 text-accent-coral">Check first</span>}
+            {stopKinds.has(key) && <span className="ml-2 text-text-danger">Check first</span>}
             {!stopKinds.has(key) && reviewKinds.has(key) && <span className="ml-2 text-text-muted">Look over</span>}
           </summary>
           <ul className="list-none p-0 max-h-64 overflow-auto space-y-1 text-xs break-words text-text-secondary">
@@ -243,7 +243,7 @@ export default function AdminArtistBackfill() {
       </div>
 
       {error && (
-        <p role="alert" className="text-sm text-accent-coral">
+        <p role="alert" className="text-sm text-text-danger">
           {error}
         </p>
       )}
@@ -251,10 +251,10 @@ export default function AdminArtistBackfill() {
       {verify && (
         <section aria-label="Verify result" className="rounded-xl border border-glass-border p-3 space-y-1 text-sm">
           <h3 className="text-xs uppercase tracking-wide text-text-muted">Verify result</h3>
-          <p className={verify.ok ? 'text-accent-aqua' : 'text-accent-coral'}>{verify.ok ? 'Verify passed' : 'Verify failed'}</p>
+          <p className={verify.ok ? 'text-accent-aqua' : 'text-text-danger'}>{verify.ok ? 'Verify passed' : 'Verify failed'}</p>
           <ul className="list-none p-0 break-words">
             {verify.checks.map((c) => (
-              <li key={c.name} className={c.ok ? 'text-text-secondary' : 'text-accent-coral'}>
+              <li key={c.name} className={c.ok ? 'text-text-secondary' : 'text-text-danger'}>
                 {c.ok ? 'Passed' : 'Failed'}: {backfillLabel(c.name)}
                 {!c.ok && c.details != null && (
                   <ul className="list-disc pl-5 text-xs">
@@ -274,7 +274,7 @@ export default function AdminArtistBackfill() {
         <div className="space-y-3">
           <p className="text-xs text-text-muted">
             Dry run at {new Date(dry.at).toLocaleTimeString()}.{' '}
-            {stale && <span className="text-accent-coral">It is older than 15 minutes. Run it again before you run the backfill.</span>}
+            {stale && <span className="text-text-danger">It is older than 15 minutes. Run it again before you run the backfill.</span>}
           </p>
           {counts && <Counts counts={counts} />}
           <FindingList title="Check before you run" items={review.stop} tone="stop" />
@@ -306,9 +306,9 @@ export default function AdminArtistBackfill() {
           <p>Festivals written: {countOf(outcome.run.festivalsWritten)}</p>
           <p>Festivals skipped: {countOf(outcome.run.festivalsSkipped)}</p>
           <p>Artists created: {outcome.run.artistsCreated}</p>
-          {countOf(outcome.run.conflicts) > 0 && <p className="text-accent-coral">Conflicts: {countOf(outcome.run.conflicts)}</p>}
+          {countOf(outcome.run.conflicts) > 0 && <p className="text-text-danger">Conflicts: {countOf(outcome.run.conflicts)}</p>}
           {outcome.verify && (
-            <p className={outcome.verify.ok ? 'text-accent-aqua' : 'text-accent-coral'}>
+            <p className={outcome.verify.ok ? 'text-accent-aqua' : 'text-text-danger'}>
               {outcome.verify.ok ? 'Verify passed.' : `Verify failed: ${outcome.verify.checks.filter((c) => !c.ok).map((c) => backfillLabel(c.name)).join(', ')}`}
             </p>
           )}
@@ -316,13 +316,13 @@ export default function AdminArtistBackfill() {
             (isIdempotentPlan(outcome.second) ? (
               <p className="text-accent-aqua">Second dry run: zero changes</p>
             ) : (
-              <p className="text-accent-coral">
+              <p className="text-text-danger">
                 Second dry run still has changes:{' '}
                 {['artistsToCreate', 'festivalsToWrite', 'ownersToWrite'].map((k) => `${backfillLabel(k)} ${outcome.second?.counts?.[k] ?? 0}`).join(', ')}
               </p>
             ))}
           {outcome.followUpError && (
-            <p className="text-accent-coral">Verify and the second dry run did not finish: {outcome.followUpError} Press Verify and Dry run.</p>
+            <p className="text-text-danger">Verify and the second dry run did not finish: {outcome.followUpError} Press Verify and Dry run.</p>
           )}
         </section>
       )}

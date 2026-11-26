@@ -3,12 +3,12 @@ import { render, screen } from '@testing-library/react';
 import LiveBadge from './LiveBadge';
 
 describe('LiveBadge', () => {
-  it('renders LIVE status with coralStrong styling', () => {
+  it('renders LIVE status with live token styling', () => {
     render(<LiveBadge status="live" label="LIVE" />);
     expect(screen.getByText('LIVE')).toBeInTheDocument();
     const wrapper = screen.getByLabelText('Playing now');
-    // R6: live uses the coralStrong fill token (not plain coral)
-    expect(wrapper.className).toContain('bg-accent-coral-strong');
+    // OD-3: live reads the live token group, never coral
+    expect(wrapper.className).toContain('bg-live-fill');
   });
 
   it('renders soon status with aqua fill (R6 NOW PLAYING)', () => {
@@ -60,8 +60,8 @@ describe('LiveBadge', () => {
     const { container } = render(<LiveBadge status="live" label="LIVE" />);
     const dot = container.querySelector('[aria-hidden="true"]');
     expect(dot).toBeInTheDocument();
-    // coralStrong fill pairs with white text + white dot (text-on-accent, AA-safe).
-    expect(dot!.className).toContain('bg-text-on-accent');
+    // the live fill pairs with the on-accent ink for both the label and the dot
+    expect(dot!.className).toContain('bg-[var(--text-on-light-accent)]');
   });
 
   it('has a dot for soon status (R6 NOW PLAYING)', () => {

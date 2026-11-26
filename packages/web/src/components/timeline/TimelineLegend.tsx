@@ -10,7 +10,7 @@ export default function TimelineLegend() {
   return (
     <details
       className={cn(
-        'text-xs text-[var(--color-text-secondary,#94a3b8)]',
+        'text-xs text-[var(--color-text-secondary)]',
         'mx-3 my-[2px_12px_4px] mt-0.5 mb-1',
         'timeline-legend',
       )}
@@ -67,7 +67,7 @@ export default function TimelineLegend() {
           {COPY.clash.gridHint}
         </li>
         <li className="flex items-center gap-2 text-xs leading-tight">
-          <span className="w-[18px] h-0.5 shrink-0 bg-[var(--color-accent-coral)]" aria-hidden="true" />
+          <span className="w-[18px] h-0.5 shrink-0 bg-[var(--color-live-fill)]" aria-hidden="true" />
           Current time
         </li>
       </ul>

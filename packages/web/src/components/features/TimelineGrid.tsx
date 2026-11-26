@@ -320,8 +320,8 @@ export default function TimelineGrid({
             className={cn(
               'timeline-now-label',
               'absolute left-0 right-0 h-[3px]',
-              'bg-[var(--color-accent-coral)]',
-              'shadow-[0_0_12px_rgba(var(--accent-coral-rgb),0.75)]',
+              'bg-[var(--color-live-fill)]',
+              'shadow-[0_0_12px_var(--color-live-ring)]',
             )}
             style={{ top: `${nowIndicator}%` }}
           >
@@ -329,9 +329,9 @@ export default function TimelineGrid({
               className={cn(
                 'absolute -left-[5px] -top-[3.5px]',
                 'w-2.5 h-2.5 rounded-full',
-                'bg-[var(--color-accent-coral)]',
+                'bg-[var(--color-live-fill)]',
                 'ring-2 ring-[var(--color-bg-primary)]',
-                'shadow-[0_0_10px_var(--color-accent-coral)]',
+                'shadow-[0_0_10px_var(--color-live-fill)]',
                 'animate-[timeline-now-pulse_1800ms_ease-out_infinite]',
                 'motion-reduce:!animate-none',
               )}

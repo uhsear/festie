@@ -270,10 +270,10 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
       ))}
       {r.errors.map((e) =>
         e.code === 'needs_choice' ? (
-          <p key={`${e.field}-${e.message}`} className="text-accent-coral">{e.message}</p>
+          <p key={`${e.field}-${e.message}`} className="text-text-danger">{e.message}</p>
         ) : (
           <div key={`${e.field}-${e.message}`} className="space-y-1">
-            <p className="text-accent-coral">{e.message}</p>
+            <p className="text-text-danger">{e.message}</p>
             {e.field !== 'row' && source && (
               <input
                 className={inputClass}
@@ -321,7 +321,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
         ) : null,
       )}
       {r.status === 'error' && (
-        <button type="button" className="text-xs text-accent-coral underline" onClick={() => removeRow(r.row)}>
+        <button type="button" className="text-xs text-text-danger underline" onClick={() => removeRow(r.row)}>
           Remove row
         </button>
       )}
@@ -416,7 +416,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
         </div>
         {p.problems.length > 0 && (
           <div role="alert" className="bg-accent-coral/20 border border-accent-coral/30 rounded-xl p-4">
-            <ul className="space-y-1 text-sm text-accent-coral">
+            <ul className="space-y-1 text-sm text-text-danger">
               {p.problems.map((m) => (
                 <li key={m}>{m}</li>
               ))}
@@ -512,7 +512,7 @@ export default function LineupImport({ festivalId, festivalName, onDone, scope =
             Approve
           </button>
           {blocked && p.counts.error > 0 && (
-            <span className="text-sm text-accent-coral">
+            <span className="text-sm text-text-danger">
               Fix or remove the {p.counts.error} {p.counts.error === 1 ? 'row' : 'rows'} with errors to continue.
             </span>
           )}

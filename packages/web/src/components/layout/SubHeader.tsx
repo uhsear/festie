@@ -189,8 +189,8 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
           <span
             className={cn(
               'type-micro inline-block shrink-0 rounded-full px-2 py-1',
-              // Live = the coral live-exception; coral-strong fill clears AA behind light text.
-              currentStatus === 'ongoing' && 'bg-accent-coral-strong text-text-on-accent',
+              // Live reads the `live` token group (OD-3).
+              currentStatus === 'ongoing' && 'bg-live-fill text-[var(--text-on-light-accent)]',
               currentStatus === 'upcoming' && 'border border-[var(--color-aqua-a4)] text-accent-aqua',
               currentStatus === 'past' && 'bg-[var(--color-bg-input)] text-text-muted',
             )}

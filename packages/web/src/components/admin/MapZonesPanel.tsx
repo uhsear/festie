@@ -106,7 +106,7 @@ export default function MapZonesPanel({
           type="button"
           onClick={onFinishZone}
           disabled={draftVertices.length < 3}
-          className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua text-bg-primary disabled:opacity-50"
+          className="px-3 py-1.5 rounded-md text-xs font-medium bg-accent-aqua text-[var(--text-on-light-accent)] disabled:opacity-50"
         >
           Finish zone
         </button>

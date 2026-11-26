@@ -8,8 +8,12 @@ import { POSTER } from '@festie/shared/tokens';
  * Literal hex only: the poster is captured to a PNG by html-to-image, where CSS custom
  * properties do not resolve reliably (same reason as WrapPoster).
  */
-const COLORS = { bg: POSTER.colors.ground, text: '#eaeaf2', muted: '#9999bb' } as const;
-const PRIORITY_COLOR: Record<Priority, string> = { must: '#ff3366', 'want-to-see': '#ffaa00', maybe: '#9999bb' };
+const COLORS = { bg: POSTER.colors.ground, text: POSTER.colors.text, muted: POSTER.colors.secondary } as const;
+const PRIORITY_COLOR: Record<Priority, string> = {
+  must: POSTER.colors.priority.must,
+  'want-to-see': POSTER.colors.priority.want,
+  maybe: POSTER.colors.priority.maybe,
+};
 const GLOW = 0.3;
 const BG_IMAGE =
   `radial-gradient(60% 45% at 50% 0%, rgba(255, 51, 102, ${GLOW}), transparent 60%), ` +

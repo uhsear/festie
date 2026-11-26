@@ -280,7 +280,7 @@ function PicksViewInner() {
               <PriorityIcon priority={c.priority} className="w-4 h-4" filled />
             </span>
           )}
-          {c.clash && <TriangleAlert className="w-4 h-4 text-accent-coral" aria-hidden="true" />}
+          {c.clash && <TriangleAlert className="w-4 h-4 text-[var(--color-clash)]" aria-hidden="true" />}
           {c.label}
           <Badge variant={c.priority ? PRIORITY_STYLE[c.priority].badge : 'count'}>{c.count}</Badge>
         </button>

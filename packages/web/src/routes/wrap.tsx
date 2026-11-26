@@ -246,7 +246,7 @@ function WrapPageInner() {
             <Link
               to="/rate"
               search={{ festival: festivalId }}
-              className="inline-flex min-h-11 items-center rounded-full bg-accent-aqua px-5 text-sm font-semibold text-bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+              className="inline-flex min-h-11 items-center rounded-full bg-accent-aqua px-5 text-sm font-semibold text-[var(--text-on-light-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
             >
               Rate your night
             </Link>

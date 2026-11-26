@@ -277,7 +277,7 @@ export default function SetEditor({
       {issues.length > 0 && (
         <div className="col-span-full space-y-0.5">
           {issues.map((m, i) => (
-            <p key={i} className="text-xs text-accent-coral">
+            <p key={i} className="text-xs text-text-danger">
               {m}
             </p>
           ))}

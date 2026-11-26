@@ -45,7 +45,7 @@ const STATUS_CHIP: Record<string, string> = {
 };
 
 const buttonClass =
-  'inline-flex items-center justify-center min-h-11 px-4 rounded-xl bg-accent-aqua text-bg-primary text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-50';
+  'inline-flex items-center justify-center min-h-11 px-4 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] text-sm font-medium hover:opacity-80 transition-opacity disabled:opacity-50';
 
 /**
  * The Organizations tab: create organizations, add members by email, verify and suspend, and decide the

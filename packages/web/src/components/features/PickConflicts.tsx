@@ -142,10 +142,10 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
         return (
           <article
             key={`${group.recommendedKeepId}-${gi}`}
-            className="rounded-lg border border-priority-must/40 bg-bg-card p-3"
+            className="rounded-lg border border-[var(--color-clash)] bg-bg-card p-3"
           >
             <div className="mb-2 flex items-center gap-2">
-              <TriangleAlert className="h-4 w-4 shrink-0 text-priority-must" aria-hidden="true" />
+              <TriangleAlert className="h-4 w-4 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
               <h2 className="text-sm font-bold text-text-primary">
                 {`${group.tight ? COPY.clash.tight : COPY.clash.one}${dayLabel ? ` · ${dayLabel}` : ''}`}
               </h2>

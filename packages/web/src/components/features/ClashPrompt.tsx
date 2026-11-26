@@ -117,7 +117,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
           <div
             key={c.id}
             role="alert"
-            className="rounded-DEFAULT border border-accent-coral/40 bg-accent-coral/[0.1] p-4"
+            className="rounded-DEFAULT border border-[var(--color-clash)] bg-[var(--color-clash-tint)] p-4"
           >
             <div className="flex items-center gap-1.5 text-sm font-bold text-[var(--color-text-danger)]">
               <AlertTriangle className="w-4 h-4 flex-shrink-0" aria-hidden="true" />

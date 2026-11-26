@@ -227,7 +227,7 @@ function AdminUsersList() {
 
       {error && users.length === 0 ? (
         <div role="alert" className="text-center py-8 space-y-3">
-          <p className="text-accent-coral">{error}</p>
+          <p className="text-text-danger">{error}</p>
           <Button variant="secondary" size="md" onClick={refresh}>
             Retry
           </Button>
@@ -325,7 +325,7 @@ function AdminUsersList() {
                       </td>
                       <td data-label="Admin" className={`${cellBase} lg:text-center`}>
                         {isAdminUser ? (
-                          <span className="text-xs font-bold text-accent-coral">ADMIN</span>
+                          <span className="text-xs font-bold text-accent-aqua">ADMIN</span>
                         ) : (
                           <span className="text-xs text-text-muted lg:hidden">—</span>
                         )}

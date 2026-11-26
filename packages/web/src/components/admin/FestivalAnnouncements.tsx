@@ -239,7 +239,7 @@ export default function FestivalAnnouncements({ festivalId, festivalName, scope 
               >
                 <div className="text-sm min-w-0">
                   <p className="text-text-primary break-words">
-                    {a.severity === 'urgent' && <span className="text-accent-coral">{COPY.urgentTag} · </span>}
+                    {a.severity === 'urgent' && <span className="text-text-danger">{COPY.urgentTag} · </span>}
                     {a.title}
                   </p>
                   <p className="text-text-muted break-words">{a.body}</p>

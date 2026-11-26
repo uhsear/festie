@@ -192,7 +192,7 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
               : `${shownRows.length} ${shownRows.length === 1 ? 'artist has' : 'artists have'} no Spotify link. Pick the right Spotify artist for each, or choose None of these.`}
           </p>
           {searchFailed > 0 && (
-            <p role="status" className="text-sm text-accent-coral">
+            <p role="status" className="text-sm text-text-danger">
               Spotify did not answer for {searchFailed} {searchFailed === 1 ? 'artist' : 'artists'}. Search again to try them.
             </p>
           )}
@@ -258,7 +258,7 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
                             {candidate.exact && <span className="ml-2 text-xs text-text-muted">Exact name</span>}
                           </div>
                           <div>{[followers, candidate.genres.slice(0, 3).join(', ')].filter(Boolean).join(' · ')}</div>
-                          {candidate.linkedTo && <div className="text-accent-coral">Already linked to {candidate.linkedTo}. Possible duplicate.</div>}
+                          {candidate.linkedTo && <div className="text-text-danger">Already linked to {candidate.linkedTo}. Possible duplicate.</div>}
                         </div>
                         <Button
                           size="sm"
@@ -273,7 +273,7 @@ export default function SpotifyCandidates({ festivalId, onApplied, onClose }: Sp
                   })}
                 </ul>
                 {messages[row.artist.id] && (
-                  <p role="alert" className="text-xs text-accent-coral">
+                  <p role="alert" className="text-xs text-text-danger">
                     {messages[row.artist.id]}
                   </p>
                 )}

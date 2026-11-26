@@ -58,7 +58,7 @@ export default function IOSInstallDrawer({
         <button
           type="button"
           onClick={() => onClose('got-it')}
-          className="flex-1 min-h-11 px-4 rounded-xl bg-accent-aqua text-bg-primary text-sm font-bold hover:bg-accent-aqua/90"
+          className="flex-1 min-h-11 px-4 rounded-xl bg-accent-aqua text-[var(--text-on-light-accent)] text-sm font-bold hover:bg-accent-aqua/90"
         >
           Got it
         </button>

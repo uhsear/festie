@@ -70,14 +70,14 @@ function presentationFor(kind: ErrorKind, error: Error): ErrorPresentation {
   switch (kind) {
     case 'network':
       return {
-        icon: <WifiOff className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
+        icon: <WifiOff className="size-8 text-[var(--color-accent-amber)]" aria-hidden="true" />,
         heading: 'You appear to be offline',
         description: 'Check your connection and try again. Your data is safe; we’ll sync it when you reconnect.',
         showBack: false,
       };
     case 'update':
       return {
-        icon: <RefreshCw className="size-8 text-[var(--color-accent-coral)]" aria-hidden="true" />,
+        icon: <RefreshCw className="size-8 text-[var(--color-accent-amber)]" aria-hidden="true" />,
         heading: 'Festie was updated',
         description: 'A new version is available. Reload to continue.',
         showBack: false,

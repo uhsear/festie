@@ -99,7 +99,7 @@ export default function PasswordSection() {
           {PASSWORD_RULES}
         </p>
         {newPassword.length > 0 && newPassword.length < 8 && (
-          <p id="pw-hint" className="text-xs text-accent-coral">
+          <p id="pw-hint" className="text-xs text-text-danger">
             {8 - newPassword.length} more character{8 - newPassword.length === 1 ? '' : 's'} needed
           </p>
         )}

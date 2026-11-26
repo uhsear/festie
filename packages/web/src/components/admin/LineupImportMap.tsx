@@ -76,7 +76,7 @@ export default function LineupImportMap({
         ))}
       </div>
       {problems.length > 0 && (
-        <ul className="text-sm text-accent-coral list-disc list-inside">
+        <ul className="text-sm text-text-danger list-disc list-inside">
           {problems.map((p) => (
             <li key={p}>{p}</li>
           ))}

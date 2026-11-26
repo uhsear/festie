@@ -34,7 +34,7 @@ export default function RateNightBanner() {
       <Link
         to="/rate"
         search={{ festival: festivalId }}
-        className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-accent-aqua px-4 text-sm font-semibold text-bg-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
+        className="inline-flex min-h-11 shrink-0 items-center rounded-full bg-accent-aqua px-4 text-sm font-semibold text-[var(--text-on-light-accent)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua"
       >
         Rate now
       </Link>

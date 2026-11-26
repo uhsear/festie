@@ -55,7 +55,7 @@ export default function UserMenuProfileCard({ user }: UserMenuProfileCardProps) 
           </div>
           {user.isAdmin && (
             <div className="flex flex-wrap gap-[var(--space-3)]">
-              <span className="inline-flex items-center gap-[var(--space-2)] px-2 py-[3px] rounded-full bg-[rgba(var(--accent-coral-rgb),.12)] border border-[rgba(var(--accent-coral-rgb),.25)] text-[length:var(--font-size-12)] font-bold tracking-[.4px] uppercase text-accent-coral">
+              <span className="inline-flex items-center gap-[var(--space-2)] px-2 py-[3px] rounded-full bg-[var(--color-aqua-a12)] border border-[var(--color-aqua-a25)] text-[length:var(--font-size-12)] font-bold tracking-[.4px] uppercase text-accent-aqua">
                 Admin
               </span>
             </div>

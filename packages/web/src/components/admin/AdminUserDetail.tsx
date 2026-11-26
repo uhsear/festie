@@ -52,7 +52,7 @@ export default function AdminUserDetail({ userId }: { userId: string }) {
     return (
       <div className="space-y-4">
         {backButton}
-        <div role="alert" className="text-accent-coral">
+        <div role="alert" className="text-text-danger">
           {error.message}
         </div>
         <Button type="button" onClick={() => setAttempt((a) => a + 1)} className="min-h-11">

@@ -298,7 +298,7 @@ export default function AdminArtistReview() {
         aria-describedby={importError ? 'review-import-error' : undefined}
       />
       {importError && (
-        <p id="review-import-error" role="alert" className="text-sm text-accent-coral">
+        <p id="review-import-error" role="alert" className="text-sm text-text-danger">
           {importError}
         </p>
       )}

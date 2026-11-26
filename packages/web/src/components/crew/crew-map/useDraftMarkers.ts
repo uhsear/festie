@@ -2,6 +2,7 @@
 // All Rights Reserved. See the LICENSE file.
 
 import { useEffect, useRef, type MutableRefObject } from 'react';
+import { colors } from '@festie/shared/tokens';
 import type { GlMarker, GlRefObject, MapRefObject, MapStatus } from './mapDom';
 
 type DraftPoint = { latitude: number; longitude: number };
@@ -37,9 +38,9 @@ export function useDraftMarkers(
         'width:12px',
         'height:12px',
         'border-radius:50%',
-        'background:#19e3d3',
+        `background:${colors.accent.aqua}`,
         'border:2px solid #fff',
-        'box-shadow:0 0 6px rgba(25,227,211,0.85)',
+        `box-shadow:0 0 6px ${colors.accent.aqua}`,
         'pointer-events:none',
       ].join(';');
       el.setAttribute('aria-hidden', 'true');

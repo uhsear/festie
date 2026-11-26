@@ -58,7 +58,7 @@ export default function CrewTabBar({ activeTab, onTabChange, badges }: CrewTabBa
             }
             if (badge === true) {
               return (
-                <span className="ml-0.5 w-1.5 h-1.5 shrink-0 rounded-full bg-accent-coral" aria-label="Unsettled balance" />
+                <span className="ml-0.5 w-1.5 h-1.5 shrink-0 rounded-full bg-accent-aqua" aria-label="Unsettled balance" />
               );
             }
             return null;
