@@ -289,7 +289,7 @@ function StageColumn({
               {
                 left: gutterW,
                 top: (nowIndicator / 100) * totalHeight,
-                backgroundColor: t.colors.accent.coral,
+                backgroundColor: t.colors.live.fill,
               },
             ]}
             pointerEvents="none"
@@ -298,7 +298,7 @@ function StageColumn({
               style={[
                 styles.nowDot,
                 {
-                  backgroundColor: t.colors.accent.coral,
+                  backgroundColor: t.colors.live.fill,
                   borderColor: t.colors.bg.primary,
                 },
               ]}
@@ -633,8 +633,8 @@ export default function TimelineView({
                     style={[
                       styles.dot,
                       active && styles.dotActive,
-                      live && { backgroundColor: t.colors.accent.coral },
-                      active && live && { backgroundColor: t.colors.accent.coral },
+                      live && { backgroundColor: t.colors.live.fill },
+                      active && live && { backgroundColor: t.colors.live.fill },
                     ]}
                   />
                 </TouchableOpacity>

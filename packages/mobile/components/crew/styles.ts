@@ -434,7 +434,7 @@ export const useStyles = makeStyles((t) => ({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: t.colors.accent.coral,
+    backgroundColor: t.colors.accent.aqua,
     marginBottom: t.spacing[1],
   },
   memberRow: {

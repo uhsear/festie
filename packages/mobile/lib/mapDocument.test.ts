@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { colorsDaylight } from '@festie/shared/tokens';
+import { colors, colorsDaylight } from '@festie/shared/tokens';
 import { buildMapHtml } from './mapDocument';
 import {
   MAPLIBRE_CSS_SRC,
@@ -84,10 +84,22 @@ describe('map document theme', () => {
     const day = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'daylight');
     expect(buildMapHtml(CENTER, RASTER_STYLE, null, false, null)).toBe(stage);
     expect(stage).toContain('background: #0a0a0a; }');
-    expect(stage).toContain('rgba(8,8,16,0.9)');
+    expect(stage).toContain('rgba(10,10,10,0.9)');
     expect(day).toContain(`background: ${colorsDaylight.bg.primary}; }`);
     expect(day).toContain('rgba(244,244,247,0.9)');
     expect(day).not.toContain('rgba(8,8,16,0.82)');
+  });
+
+  it('injects the brand colours from the theme tokens as CSS variables, with no off-token hex', () => {
+    const stage = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'stage');
+    const day = buildMapHtml(CENTER, RASTER_STYLE, null, false, null, 'daylight');
+    expect(stage).toContain(`--festie-aqua: ${colors.accent.aqua};`);
+    expect(stage).toContain(`--festie-self: ${colors.map.self};`);
+    expect(day).toContain(`--festie-aqua: ${colorsDaylight.accent.aqua};`);
+    expect(day).toContain(`--festie-self: ${colorsDaylight.map.self};`);
+    for (const html of [stage, day]) {
+      expect(html).not.toMatch(/#19e3d3|#2f80ff/i);
+    }
   });
 });
 

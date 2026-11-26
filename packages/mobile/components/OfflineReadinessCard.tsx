@@ -396,7 +396,7 @@ const useRowStyles = makeStyles((t) => ({
     color: t.colors.text.muted,
   },
   labelError: {
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
   timeLabel: {
     ...typeStyle('micro', undefined, { tabular: true }),
@@ -404,7 +404,7 @@ const useRowStyles = makeStyles((t) => ({
     flexShrink: 0,
   },
   timeLabelError: {
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
   retryButton: {
     minWidth: 44,

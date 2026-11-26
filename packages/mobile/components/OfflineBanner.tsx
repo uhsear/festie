@@ -231,7 +231,7 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.accent.amber,
   },
   bannerFailed: {
-    backgroundColor: t.colors.accent.coral,
+    backgroundColor: t.colors.delivery.failed,
   },
   bannerSyncing: {
     backgroundColor: t.colors.accent.aqua,
@@ -307,7 +307,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.secondary,
   },
   failedError: {
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
   retryBtn: {
     paddingHorizontal: t.spacing[3],

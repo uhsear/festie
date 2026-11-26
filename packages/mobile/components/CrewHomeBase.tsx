@@ -252,7 +252,7 @@ const useStyles = makeStyles((t) => ({
   },
   errorText: {
     ...typeStyle('caption'),
-    color: t.colors.status.error,
+    color: t.colors.text.danger,
   },
   hint: {
     ...typeStyle('caption'),

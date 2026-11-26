@@ -4,7 +4,7 @@
       "file": "app/_layout.tsx",
       "rule": "hex",
       "max": 3,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Comments only: they quote the token values they explain."
     },
     {
       "file": "app/(auth)/login.tsx",
@@ -22,7 +22,7 @@
       "file": "app/(tabs)/_layout.tsx",
       "rule": "hex",
       "max": 2,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Comments only: they quote the token values they explain."
     },
     {
       "file": "app/(tabs)/_layout.web.tsx",
@@ -37,28 +37,10 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "app/(tabs)/map.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
-    },
-    {
       "file": "app/(tabs)/picks.tsx",
       "rule": "animated-true",
       "max": 1,
       "reason": "Offender today. DP-49 honours reduced motion, then the entry is deleted."
-    },
-    {
-      "file": "app/admin/festival-edit.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "app/admin/festival-map.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
     },
     {
       "file": "app/picks-image.tsx",
@@ -70,7 +52,7 @@
       "file": "app/picks-image.tsx",
       "rule": "hex",
       "max": 2,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Full-screen image viewer: pure black ground and white close label sit over a photo, in both themes."
     },
     {
       "file": "components/AccountHistorySection.tsx",
@@ -82,7 +64,7 @@
       "file": "components/AccountHistorySection.tsx",
       "rule": "hex",
       "max": 3,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Gold, silver and bronze medal tints have no colour role in the token set. Fixed artwork in both themes."
     },
     {
       "file": "components/AccountIdentityCard.tsx",
@@ -93,20 +75,14 @@
     {
       "file": "components/admin/AdminFields.tsx",
       "rule": "hex",
-      "max": 13,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "max": 1,
+      "reason": "Placeholder text that shows the hex format. It is not a colour value."
     },
     {
       "file": "components/admin/festival-map/styles.ts",
       "rule": "fontSize",
       "max": 1,
       "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
-      "file": "components/admin/festival-map/styles.ts",
-      "rule": "hex",
-      "max": 3,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
     },
     {
       "file": "components/Avatar.tsx",
@@ -154,19 +130,19 @@
       "file": "components/CrewSos.tsx",
       "rule": "hex",
       "max": 1,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Comment only: it quotes a token value and its contrast ratio."
     },
     {
       "file": "components/FestivalList.tsx",
       "rule": "hex",
       "max": 3,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Comments only: they quote token values and contrast ratios."
     },
     {
       "file": "components/FirstRunIntro.tsx",
       "rule": "hex",
       "max": 2,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Comments only: they quote token values."
     },
     {
       "file": "components/InviteQRSheet.tsx",
@@ -178,7 +154,7 @@
       "file": "components/InviteQRSheet.tsx",
       "rule": "hex",
       "max": 2,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "QR codes need a white quiet zone to scan, in both themes."
     },
     {
       "file": "components/LockscreenOverlay.tsx",
@@ -187,46 +163,28 @@
       "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
     },
     {
-      "file": "components/MapPlaceCard.tsx",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "components/OfflineMap.tsx",
-      "rule": "hex",
-      "max": 5,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
-    },
-    {
       "file": "components/OfflineReadinessCard.tsx",
       "rule": "duration-ms",
       "max": 1,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "components/picks/styles.ts",
-      "rule": "hex",
-      "max": 1,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
-    },
-    {
       "file": "components/PlanQRScan.tsx",
       "rule": "hex",
       "max": 1,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Comment only: it quotes a token value."
     },
     {
       "file": "components/PlanQRShare.tsx",
       "rule": "hex",
       "max": 2,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "QR codes need a white quiet zone to scan, in both themes."
     },
     {
       "file": "components/schedule/styles.ts",
       "rule": "hex",
-      "max": 2,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "max": 1,
+      "reason": "Comment only: it quotes a token value."
     },
     {
       "file": "components/ScheduleDayChips.tsx",
@@ -256,7 +214,7 @@
       "file": "lib/backgroundShare.ts",
       "rule": "hex",
       "max": 1,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "Android notification accent: native config outside the React theme. Same value as accent.aqua."
     },
     {
       "file": "lib/mapDocument.ts",
@@ -267,14 +225,14 @@
     {
       "file": "lib/mapDocument.ts",
       "rule": "hex",
-      "max": 21,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "max": 3,
+      "reason": "Stale-peer dot grey and ink inside the WebView document. They stay neutral and carry no brand role."
     },
     {
       "file": "widgets/NowNextActivity.ios.tsx",
       "rule": "hex",
       "max": 2,
-      "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
+      "reason": "iOS Live Activity widget runs in its own bundle and cannot read the app theme. Same value as accent.aqua."
     }
   ]
 }

@@ -60,7 +60,7 @@ const useStyles = makeStyles((t) => ({
   },
   selectError: {
     ...typeStyle('label'),
-    color: t.colors.status.error,
+    color: t.colors.text.danger,
     textAlign: 'center',
     marginTop: t.spacing[3],
   },

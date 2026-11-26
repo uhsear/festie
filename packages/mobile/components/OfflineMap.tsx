@@ -55,6 +55,7 @@ import {
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
 import { FIND_FRIEND_COPY, LIVE_SHARE_COPY } from '@festie/shared/constants';
+import { colors, elevation } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import AppPressable from './AppPressable';
@@ -329,7 +330,7 @@ export default function OfflineMap({
         label: s.label,
         latitude: s.latitude,
         longitude: s.longitude,
-        color: s.color || '#19e3d3',
+        color: s.color || colors.accent.aqua,
       });
     }
     for (const a of amenityPins) {
@@ -1822,11 +1823,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.secondary,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 6,
+    ...elevation.low,
   },
   // ── Top slot under the chip bar: pursue bar, place card, Nearest notice or hint ──
   topSlot: {
@@ -1842,11 +1839,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.accent.aqua,
     backgroundColor: t.colors.bg.elevated,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 8,
+    ...elevation.high,
   },
   noticeText: {
     ...typeStyle('caption', 600),
@@ -1863,11 +1856,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.accent.aqua,
     backgroundColor: t.colors.bg.elevated,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 8,
+    ...elevation.high,
   },
   pursueBarSos: {
     borderColor: t.colors.accent.coral,
@@ -1996,11 +1985,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.secondary,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 6,
+    ...elevation.low,
   },
   dropPinButtonActive: {
     borderColor: t.colors.accent.coral,

@@ -164,12 +164,12 @@ const useStyles = makeStyles((t) => ({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: t.colors.accent.coral,
+    backgroundColor: t.colors.live.fill,
   },
-  // Currently-playing: coral accent rail (matches festival-mode's nowCard).
+  // Currently-playing: live accent rail (matches festival-mode's nowCard).
   stripNow: {
-    borderColor: t.colors.accent.coral,
-    backgroundColor: t.colors.ring.coral,
+    borderColor: t.colors.live.fill,
+    backgroundColor: t.colors.live.ring,
   },
   labelCol: {
     minWidth: 64,
@@ -211,6 +211,6 @@ const useStyles = makeStyles((t) => ({
     // Re-spread at 700 so the Bold cut loads (bare fontWeight fake-bolds on
     // Android over the weighted base family).
     ...typeStyle('caption', 700),
-    color: t.colors.accent.coral,
+    color: t.colors.live.text,
   },
 }));

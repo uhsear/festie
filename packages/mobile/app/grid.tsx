@@ -1069,13 +1069,13 @@ const useStyles = makeStyles((t: Tokens) => ({
   },
   nowLabel: {
     ...typeStyle('micro'),
-    color: t.colors.accent.coral,
+    color: t.colors.live.text,
     paddingHorizontal: 4,
   },
   nowRule: {
     flex: 1,
     height: 2,
-    backgroundColor: t.colors.accent.coral,
+    backgroundColor: t.colors.live.fill,
     opacity: 0.8,
   },
   poster: {

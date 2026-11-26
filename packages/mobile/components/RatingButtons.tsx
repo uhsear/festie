@@ -372,7 +372,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.accent.amber,
   },
   captionError: {
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
   option: {
     flex: 1,

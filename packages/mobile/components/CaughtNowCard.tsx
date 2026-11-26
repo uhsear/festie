@@ -190,6 +190,6 @@ const useStyles = makeStyles((t) => ({
   },
   error: {
     ...typeStyle('caption'),
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
 }));
