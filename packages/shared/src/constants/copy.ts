@@ -17,6 +17,14 @@ export const COPY = {
     tab: 'Wrap', name: 'Festival Wrap', crewName: 'Crew Wrap', open: 'See your Festival Wrap',
     hint: 'Your stats & top sets after the festival',
     ready: 'Festival Wrap ready', readyHint: 'Your Festival Wrap is ready to view', icon: 'wrap',
+    pending: {
+      title: 'Festival Wrap coming soon',
+      description: "We'll put together your highlights the day after the festival ends.",
+    },
+    empty: {
+      title: 'Nothing to wrap yet',
+      description: 'Wraps are built from the sets you pick and rate. Rate any set you saw from its detail page.',
+    },
   },
   find: { name: 'Find', action: 'Find your crew', icon: 'find' },
   homeBase: {

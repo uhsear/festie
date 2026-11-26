@@ -34,7 +34,10 @@ import SegmentedTablist from '../components/ui/SegmentedTablist';
 import { RATING_META } from '../lib/ratingIcon';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { Sparkles, Trophy, Share2, Users } from 'lucide-react';
+import { CONCEPT_ICON } from '../lib/conceptIcons';
 import { ArtistNameButton } from '../components/features/ArtistName';
+
+const WrapIcon = CONCEPT_ICON.wrap;
 
 export default function WrapPage() {
   return (
@@ -142,9 +145,9 @@ function WrapPageInner() {
       <div className="max-w-lg mx-auto min-h-[calc(100dvh-200px)] flex items-center justify-center">
         <Card padding="lg">
           <EmptyState
-            icon={<Sparkles className="w-12 h-12 text-accent-aqua" aria-hidden="true" />}
-            title={`${COPY.wrap.name} coming soon`}
-            description="We'll put together your highlights the day after the festival ends."
+            icon={<WrapIcon className="w-16! h-16! text-accent-aqua" aria-hidden="true" />}
+            title={COPY.wrap.pending.title}
+            description={COPY.wrap.pending.description}
           />
         </Card>
       </div>
@@ -213,9 +216,9 @@ function WrapPageInner() {
       <div id="wrap-tab-panel" className="max-w-lg mx-auto pt-4">
         <Card padding="lg">
           <EmptyState
-            icon={<Trophy className="w-12 h-12" aria-hidden="true" />}
-            title="Nothing to wrap yet"
-            description="Wraps are built from the sets you pick and rate. Rate any set you saw from its detail page."
+            icon={<WrapIcon className="w-16! h-16! text-accent-aqua" aria-hidden="true" />}
+            title={COPY.wrap.empty.title}
+            description={COPY.wrap.empty.description}
             cta={{ label: 'Open the lineup', onClick: () => navigate({ to: '/' }) }}
           />
         </Card>
