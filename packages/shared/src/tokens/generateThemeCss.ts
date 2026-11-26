@@ -29,7 +29,7 @@ import { fontFamily, fontSize, lineHeight, letterSpacing, wordSpacing } from './
 import { spacing, measureProse } from './spacing.js';
 import { radii } from './radii.js';
 import { zIndex } from './z-index.js';
-import { easing, duration, durationEffects, durationSpatial } from './motion.js';
+import { easing, duration, durationEffects, durationSpatial, pressScale } from './motion.js';
 
 /** px → rem string (16px base), trimming trailing zeros (16 → "1rem"). */
 function rem(px: number): string {
@@ -180,6 +180,7 @@ function paletteGroups(c: Palette) {
   rest.push(['--color-live-text', c.live.text]);
   rest.push(['--color-live-ring', c.live.ring]);
   rest.push(['--color-map-self', c.map.self]);
+  rest.push(['--color-outline-image', c.outline.image]);
 
   // ── Confidence (fact age) and delivery (did it leave the phone) ────────────
   // Aliases of existing hues; see the rule in c.ts — never used alone,
@@ -229,6 +230,8 @@ export function themeDeclarations(): Decl[] {
   d.push(['--duration-fast', `${duration.fast}ms`]);
   d.push(['--duration-med', `${duration.med}ms`]);
   d.push(['--duration-slow', `${duration.slow}ms`]);
+  d.push(['--duration-pulse', `${duration.pulse}ms`]);
+  d.push(['--press-scale', String(pressScale)]);
   // Axis-named duration groups. `--duration-fast|med|slow` above is unchanged
   // and stays the general scale; these name what is moving. `spring` is NOT
   // emitted — CSS has no spring primitive, so it stays a React Native token.

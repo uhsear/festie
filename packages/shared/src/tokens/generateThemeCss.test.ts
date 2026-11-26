@@ -7,7 +7,8 @@ import { colorsDaylight } from './colorsDaylight';
 import { fontSize, typeRoles } from './typography';
 import { spacing } from './spacing';
 import { radii } from './radii';
-import { duration, durationEffects, durationSpatial, spring } from './motion';
+import { duration, durationEffects, durationSpatial, spring, pressScale, stagger } from './motion';
+import { elevation } from './elevation';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Token-sync guard (replaces the old token-sync.test that read the now-deleted
@@ -66,6 +67,24 @@ describe('generateThemeCss — emits TS token literals', () => {
     expect(m.get('--space-1')).toBe('0.25rem');
     expect(m.get('--space-4')).toBe(`${spacing[4] / 16}rem`);
     expect(m.get('--space-20')).toBe('5rem');
+  });
+
+  it('press scale, pulse duration and image outline come from the tokens', () => {
+    expect(pressScale).toBe(0.96);
+    expect(m.get('--press-scale')).toBe(String(pressScale));
+    expect(m.get('--duration-pulse')).toBe(`${duration.pulse}ms`);
+    expect(m.get('--color-outline-image')).toBe(colors.outline.image);
+    expect(new Map(daylightDeclarations()).get('--color-outline-image')).toBe(colorsDaylight.outline.image);
+    expect(stagger).toEqual({ stepMs: 30, maxItems: 8 });
+  });
+
+  it('elevation tokens carry iOS shadow props and an Android elevation, high above low', () => {
+    for (const e of [elevation.low, elevation.high]) {
+      expect(e.shadowColor).toBe('#000');
+      expect(e.elevation).toBeGreaterThan(0);
+    }
+    expect(elevation.high.elevation).toBeGreaterThan(elevation.low.elevation);
+    expect(elevation.high.shadowRadius).toBeGreaterThan(elevation.low.shadowRadius);
   });
 
   it('radii emit px with the uppercase DEFAULT key', () => {

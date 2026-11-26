@@ -89,6 +89,9 @@ export const colorsDaylight = {
   map: {
     self: '#00594f',
   },
+  outline: {
+    image: 'rgba(0, 0, 0, 0.1)',
+  },
   shadow: {
     sticky: '0 1px 0 rgba(0, 0, 0, 0.06), 0 4px 12px rgba(0, 0, 0, 0.12)',
   },

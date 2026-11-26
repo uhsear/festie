@@ -111,6 +111,10 @@ export const colors = {
   map: {
     self: '#00e8d0',
   },
+  /** 1 px neutral edge on raster images (avatars, artist photos): white on Stage, black on Daylight. */
+  outline: {
+    image: 'rgba(255, 255, 255, 0.1)',
+  },
   /** Raised sticky band shadow (pairs with bg.sticky). */
   shadow: {
     sticky: '0 1px 0 rgba(255, 255, 255, 0.04), 0 4px 12px rgba(0, 0, 0, 0.35)',

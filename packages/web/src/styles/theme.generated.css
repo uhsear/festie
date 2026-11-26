@@ -47,6 +47,8 @@
   --duration-fast: 120ms;
   --duration-med: 200ms;
   --duration-slow: 320ms;
+  --duration-pulse: 750ms;
+  --press-scale: 0.96;
   --duration-effects-fast: 120ms;
   --duration-effects-med: 200ms;
   --duration-effects-slow: 320ms;
@@ -170,6 +172,7 @@
   --color-live-text: #39ff14;
   --color-live-ring: rgba(57, 255, 20, 0.15);
   --color-map-self: #00e8d0;
+  --color-outline-image: rgba(255, 255, 255, 0.1);
   --color-confidence-live: #39ff14;
   --color-confidence-aging: #ffb020;
   --color-confidence-stale: #8787a8;
@@ -279,6 +282,7 @@
   --color-live-text: #175800;
   --color-live-ring: rgba(23, 88, 0, 0.2);
   --color-map-self: #00594f;
+  --color-outline-image: rgba(0, 0, 0, 0.1);
   --color-confidence-live: #175800;
   --color-confidence-aging: #6b4100;
   --color-confidence-stale: #45455c;

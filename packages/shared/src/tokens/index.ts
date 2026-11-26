@@ -26,8 +26,11 @@ export type { Spacing, SpacingNamed } from './spacing.js';
 export { fontFamily, fontSize, lineHeight, letterSpacing, wordSpacing, typeRoles } from './typography.js';
 export type { FontFamily, FontSize, LineHeight, LetterSpacing, TypeRoles, TypeRoleName } from './typography.js';
 
-export { easing, duration, durationEffects, durationSpatial, spring } from './motion.js';
-export type { Easing, Duration, DurationEffects, DurationSpatial, Spring } from './motion.js';
+export { easing, duration, durationEffects, durationSpatial, spring, pressScale, stagger } from './motion.js';
+export type { Easing, Duration, DurationEffects, DurationSpatial, Spring, Stagger } from './motion.js';
+
+export { elevation } from './elevation.js';
+export type { Elevation } from './elevation.js';
 
 export { radii } from './radii.js';
 export type { Radii } from './radii.js';
