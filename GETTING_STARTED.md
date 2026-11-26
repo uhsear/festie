@@ -344,13 +344,13 @@ All workflows in `.github/workflows/`:
 | `e2e-web.yml` | nightly 07:30 UTC and manual | Playwright chromium E2E against a real Postgres+Redis stack |
 | `uptime.yml` | every 10 minutes and manual | Off-host reachability check; auto-opens/closes GitHub issue on failure. Liveness and auto-restart live in `scripts/health-check.sh`; error rate, memory, disk and `/api/ready` in `scripts/error-rate-alert.cjs` |
 | `web-load-smoke.yml` | every 30 minutes and manual | Light load smoke test against the web app |
-| `license-check.yml` | pull requests and pushes to `main` that touch `package.json`, lockfiles, `packages/**/package.json` or `scripts/ci/check-licenses.mjs` | Dependency license check |
+| `license-check.yml` | pull requests and pushes to `main` that touch `package.json`, lockfiles, `packages/**/package.json`, `scripts/ci/check-licenses.mjs` or the workflow file itself, and manual | Dependency license check |
 | `mobile-ota.yml` | manual dispatch | EAS OTA update (`eas update`) to a channel; crash-rate gate |
 | `mobile-release-gate.yml` | manual dispatch | Pre-build gate: expo-doctor, fingerprint diff, typecheck, lint |
 | `android-release.yml` | manual dispatch | Gradle AAB build + optional Play Store internal-track submit |
 | `android-e2e.yml` | weekly, Sunday 03:00 UTC, and manual | Android emulator + Maestro smoke tests (~25 min) |
 | `ios-e2e.yml` | weekly, Sunday 04:00 UTC, and manual | iOS simulator + Maestro smoke tests, macOS 15 runner (~20 min) |
-| `ios-sim-session.yml` | manual dispatch | iOS simulator session |
+| `ios-sim-session.yml` | manual dispatch, or a `/ios-sim` PR comment from the owner | iOS simulator session |
 
 **CI coverage gate** (`ci.yml` `test` job): `--lines 87 --branches 80 --functions 89 --statements 87`. The `c8` config is in `config/c8rc.json`.
 
