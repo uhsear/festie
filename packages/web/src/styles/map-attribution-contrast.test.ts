@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const css = readFileSync(resolve(process.cwd(), 'src/styles/theme.generated.css'), 'utf8');
 const components = readFileSync(resolve(process.cwd(), 'src/styles/components.css'), 'utf8');
+const pages = readFileSync(resolve(process.cwd(), 'src/styles/pages.css'), 'utf8');
+const crewMap = readFileSync(resolve(process.cwd(), 'src/components/crew/CrewMap.tsx'), 'utf8');
 
 function token(block: string, name: string): string {
   return new RegExp(`${name}: *(#[0-9a-f]{6})`, 'i').exec(block)![1]!;
@@ -26,6 +28,24 @@ describe('map attribution contrast', () => {
 
   it('paints an opaque background, so the map cannot lower the contrast', () => {
     expect(components).toMatch(/\.maplibregl-ctrl-attrib \{\s*background: var\(--color-bg-primary\);/);
+  });
+
+  it('starts the credit collapsed behind the (i) button', () => {
+    expect(crewMap).toContain("attributionControl: { compact: true }");
+    expect(crewMap).toContain("classList.remove('maplibregl-compact-show')");
+  });
+
+  // 390 by 844 is measured in tests/e2e/responsive-design.spec.ts; jsdom has no layout.
+  describe('full-bleed layout below 640px', () => {
+    it('drops the shell padding for the map page', () => {
+      expect(pages).toMatch(
+        /@media \(max-width: 639px\) \{\s*#main-content:has\(\.map-page\) \{\s*padding-inline: 0;/,
+      );
+    });
+
+    it('cancels the page padding and the frame on the map box, and restores them from sm up', () => {
+      expect(crewMap).toContain('-mx-4 border-y border-border sm:mx-0 sm:rounded-xl sm:border');
+    });
   });
 
   for (const [name, block] of Object.entries(themes)) {

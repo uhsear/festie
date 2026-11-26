@@ -26,6 +26,8 @@ vi.mock('maplibre-gl', () => {
     fitBounds = vi.fn();
     flyTo = vi.fn();
     getZoom = () => 15;
+    container = document.createElement('div');
+    getContainer = () => this.container;
     off = vi.fn();
     constructor() {
       mapInstances.push(this as unknown as (typeof mapInstances)[number]);
@@ -227,6 +229,7 @@ describe('CrewMap', () => {
     expect(canvas).toHaveClass('h-full');
     expect(canvas).not.toHaveClass('h-72');
     expect(canvas.parentElement).toHaveClass('flex-1');
+    expect(canvas.parentElement).toHaveClass('-mx-4', 'sm:mx-0');
   });
 
   it('derives pins from the provided meeting points via the shared util', () => {
@@ -462,6 +465,23 @@ async function renderReadyMap(props: Partial<React.ComponentProps<typeof CrewMap
   act(() => load());
   return view;
 }
+
+describe('CrewMap attribution', () => {
+  it('collapses the compact credit once the map has loaded', async () => {
+    await act(async () => {});
+    mapInstances.length = 0;
+    extractMeetingPointPins.mockReturnValue([
+      { id: 'mp1', kind: 'meeting-point', label: 'Main Gate', sublabel: '', latitude: 41.88, longitude: -87.62 },
+    ]);
+    render(<CrewMap meetingPoints={[]} festival={FESTIVAL} />);
+    await waitFor(() => expect(mapInstances).toHaveLength(1));
+    const map = mapInstances[0] as unknown as { container: HTMLElement; on: ReturnType<typeof vi.fn> };
+    map.container.innerHTML = '<details class="maplibregl-ctrl-attrib maplibregl-compact maplibregl-compact-show"></details>';
+    const load = map.on.mock.calls.find((c) => c[0] === 'load')![1] as () => void;
+    act(() => load());
+    expect(map.container.querySelector('.maplibregl-ctrl-attrib')).not.toHaveClass('maplibregl-compact-show');
+  });
+});
 
 describe('CrewMap offline basemap notice', () => {
   const withBasemap = {

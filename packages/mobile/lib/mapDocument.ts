@@ -677,6 +677,10 @@ export function buildMapHtml(
         try { map.touchZoomRotate && map.touchZoomRotate.disableRotation(); } catch (e) {}
         try { map.keyboard && map.keyboard.disableRotation && map.keyboard.disableRotation(); } catch (e) {}
         map.on('load', function () {
+          // MapLibre opens the compact credit until the first drag, wrapping over the map. The OSMF
+          // guidelines and OpenFreeMap allow it collapsed behind the (i) button, so start collapsed.
+          var attrib = document.querySelector('.maplibregl-ctrl-attrib');
+          if (attrib) attrib.classList.remove('maplibregl-compact-show');
           renderPins(map, PINS);
           post({ type: 'ready', pins: PINS.length });
         });

@@ -234,4 +234,16 @@ test.describe('responsive design', () => {
     expect(box!.y).toBeGreaterThanOrEqual(0);
     expect(box!.y + box!.height).toBeLessThanOrEqual(844);
   });
+
+  test('map runs edge to edge at 390 by 844', async ({ app, page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`${app.baseUrl}/map`);
+    const map = page.getByRole('region', { name: 'Crew map with meeting points and live locations' });
+    await expect(map).toBeVisible();
+    const box = await map.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.x).toBe(0);
+    expect(box!.width).toBe(390);
+  });
 });
