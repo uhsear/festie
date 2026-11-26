@@ -225,7 +225,7 @@ export function createReengagementTriggers({ stores, config, log, notificationSe
     const deepLink = `${appOrigin(config)}/wrap?festival=${encodeURIComponent(festivalId)}`;
     const pushSent = await pushFanout(fresh, () => ({
       type: 'wrap_ready',
-      title: `${festivalName}: your wrap is ready`,
+      title: `${festivalName}: your Festival Wrap is ready`,
       body: 'Relive your top sets and crew superlatives.',
       data: { festivalId, eventKey, deepLink },
     }));
