@@ -1,6 +1,14 @@
 // Copyright (c) 2026 Asir Khan. All rights reserved.
 // All Rights Reserved. See the LICENSE file.
 
+import { colors } from '../../packages/shared/src/tokens/colors';
+import { colorsDaylight } from '../../packages/shared/src/tokens/colorsDaylight';
+import { designCss, headSnippet } from '../design-css.js';
+
+// design-css has no status variables, so the page maps ok and warning to the status tokens itself.
+const statusVarsCss = `:root { --ds-ok: ${colors.status.verified}; --ds-warn: ${colors.status.warning}; }
+@media (prefers-color-scheme: light) { :root { --ds-ok: ${colorsDaylight.status.verified}; --ds-warn: ${colorsDaylight.status.warning}; } }`;
+
 /**
  * Renders the admin status HTML dashboard page.
  * Extracted from routes/admin-status.js to keep route handlers lean.
@@ -17,30 +25,29 @@ export function renderStatusPage(data: any) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Festie - Admin Status</title>
+  ${headSnippet}
   <style${nonceAttr}>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      background: #0f0f0f;
-      color: #e0e0e0;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      line-height: 1.6;
-    }
+    ${designCss}
+    ${statusVarsCss}
+    * { margin: 0; padding: 0; }
+    body { line-height: 1.6; }
     .container {
       max-width: 1200px;
       margin: 0 auto;
       padding: 20px;
     }
     header {
-      border-bottom: 1px solid #333;
+      border-bottom: 1px solid var(--ds-border);
       padding-bottom: 20px;
       margin-bottom: 30px;
     }
     h1 {
       font-size: 28px;
+      line-height: 1.15;
       margin-bottom: 8px;
     }
     .timestamp {
-      color: #999;
+      color: var(--ds-text-secondary);
       font-size: 14px;
     }
     .grid {
@@ -50,8 +57,8 @@ export function renderStatusPage(data: any) {
       margin-bottom: 30px;
     }
     .card {
-      background: #1a1a1a;
-      border: 1px solid #333;
+      background: var(--ds-card);
+      border: 1px solid var(--ds-border);
       border-radius: 8px;
       padding: 20px;
     }
@@ -59,9 +66,9 @@ export function renderStatusPage(data: any) {
       font-size: 14px;
       text-transform: uppercase;
       letter-spacing: 0.5px;
-      color: #999;
+      color: var(--ds-text-secondary);
       margin-bottom: 12px;
-      border-bottom: 1px solid #333;
+      border-bottom: 1px solid var(--ds-border);
       padding-bottom: 8px;
     }
     .stat {
@@ -69,29 +76,29 @@ export function renderStatusPage(data: any) {
       justify-content: space-between;
       align-items: center;
       padding: 8px 0;
-      border-bottom: 1px solid #222;
+      border-bottom: 1px solid var(--ds-border);
     }
     .stat:last-child {
       border-bottom: none;
     }
     .stat-label {
-      color: #999;
+      color: var(--ds-text-secondary);
       font-size: 13px;
     }
     .stat-value {
       font-weight: 600;
       font-size: 16px;
-      color: #fff;
-      font-family: "Courier New", monospace;
+      color: var(--ds-text);
+      font-variant-numeric: tabular-nums;
     }
-    .status-ok { color: #4ade80; }
-    .status-warning { color: #facc15; }
-    .status-critical { color: #ef4444; }
+    .status-ok { color: var(--ds-ok); }
+    .status-warning { color: var(--ds-warn); }
+    .status-critical { color: var(--ds-danger); }
     footer {
       text-align: center;
       padding-top: 20px;
-      border-top: 1px solid #333;
-      color: #666;
+      border-top: 1px solid var(--ds-border);
+      color: var(--ds-text-muted);
       font-size: 12px;
     }
   </style>
