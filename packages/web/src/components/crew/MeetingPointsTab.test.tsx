@@ -5,6 +5,10 @@ import userEvent from '@testing-library/user-event';
 // --- Mocks ---
 
 vi.mock('lucide-react', () => ({
+  Heart: () => <span />,
+  Inbox: () => <span />,
+  Users: () => <span />,
+  WifiOff: () => <span />,
   MapPin: () => <span data-testid="map-pin-icon" />,
   Plus: () => <span data-testid="plus-icon" />,
   Trash2: () => <span data-testid="trash-icon" />,

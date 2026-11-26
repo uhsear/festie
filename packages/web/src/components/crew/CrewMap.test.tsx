@@ -112,6 +112,10 @@ vi.mock('@festie/shared/utils', async (importOriginal) => ({
 }));
 
 vi.mock('lucide-react', () => ({
+  Heart: () => <span />,
+  Inbox: () => <span />,
+  Users: () => <span />,
+  WifiOff: () => <span />,
   MapPin: () => <span data-testid="map-pin-icon" />,
   AlertTriangle: () => <span data-testid="alert-icon" />,
   Navigation: () => <span />,
