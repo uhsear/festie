@@ -24,6 +24,7 @@ import {
   SELECTION_LIMIT_MESSAGE,
 } from '@festie/shared/utils';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import Button from '../../components/Button';
 import { ConfirmDialog, LabeledTextInput, SelectionBar, useReauthPrompt } from '../../components/admin';
@@ -314,8 +315,7 @@ export default function AdminUsersScreen() {
       {loading && users.length === 0 && search === '' ? (
         <LoadingState label="Loading users" />
       ) : error && users.length === 0 ? (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load users"
           message={error}
           action={{ label: 'Try again', onPress: refresh }}

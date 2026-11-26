@@ -23,7 +23,7 @@ export default function TimelineLegend() {
           'bg-[var(--color-glass)]',
           'font-semibold tracking-[0.04em] uppercase type-caption',
           'select-none',
-          'transition-colors duration-[120ms] ease-out',
+          'transition-colors duration-(--duration-fast) ease-out',
           'hover:bg-[var(--color-bg-elevated)]',
         )}
       >

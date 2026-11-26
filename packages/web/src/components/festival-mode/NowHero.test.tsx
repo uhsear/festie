@@ -118,6 +118,35 @@ describe('NowHero before the festival', () => {
   });
 });
 
+describe('NowHero live handoff', () => {
+  const live = (id: string, artist: string) =>
+    ({
+      phase: 'during',
+      current: [{ set: { id, artist, stageId: 'main', startTime: '17:00', endTime: '18:00' }, start: NOW - 30 * 60_000, end: NOW + 30 * 60_000 }],
+      upcoming: [],
+      todayCount: 1,
+      startsAt: null,
+    }) as unknown as NowNextSelection;
+  const props = { nowMs: NOW, timeZone: 'UTC', lineupMode: true, getStageName: () => 'Main', onOpenSet: vi.fn(), onBrowse: vi.fn() };
+
+  it('enters with fm-card-enter and drops the animation under reduced motion', () => {
+    render(<NowHero {...props} selection={live('s1', 'Ann')} />);
+    expect(screen.getByTestId('fm-now-card')).toHaveClass('fm-card-enter', 'motion-reduce:animate-none');
+  });
+
+  it('remounts the card when the live set changes, so the entrance replays', () => {
+    const { rerender } = render(<NowHero {...props} selection={live('s1', 'Ann')} />);
+    const first = screen.getByTestId('fm-now-card');
+    rerender(<NowHero {...props} selection={live('s2', 'Bob')} />);
+    expect(screen.getByTestId('fm-now-card')).not.toBe(first);
+  });
+
+  it('enters the next card too', () => {
+    renderHero();
+    expect(screen.getByTestId('fm-next-hero')).toHaveClass('fm-card-enter');
+  });
+});
+
 describe('NowHero lead object', () => {
   const props = {
     nowMs: NOW,

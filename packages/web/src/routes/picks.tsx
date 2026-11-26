@@ -33,7 +33,7 @@ import MarkedNoSet from '../components/features/MarkedNoSet';
 const SharePicksDialog = lazy(() => import('../components/features/SharePicksDialog'));
 const CalendarDialog = lazy(() => import('../components/features/CalendarDialog'));
 const ScheduleImageDialog = lazy(() => import('../components/features/ScheduleImageDialog'));
-import { CalendarX, UserPlus, ChevronDown, Search, X, Share2, Ellipsis, Filter } from 'lucide-react';
+import { CalendarX, ChevronDown, Search, X, Share2, Ellipsis, Filter } from 'lucide-react';
 import Button from '../components/ui/Button';
 import { useToast } from '../lib/toastContext';
 import { cn } from '@/lib/utils';
@@ -228,7 +228,7 @@ function PicksViewInner() {
       <div className="pb-5 max-w-[600px] mx-auto w-full" role="region" aria-label="My picks">
         <OfflineReadinessCard festivalId={currentFestival.id} className="mb-3" />
         <EmptyState
-          icon={<UserPlus className="w-9 h-9" aria-hidden="true" />}
+          ghostRow="picks"
           title="No picks yet"
           description="Tap Must See, Want to See or Maybe on any set to start your plan. Your first pick joins the festival."
           cta={{ label: 'Browse the lineup', onClick: () => navigate({ to: '/cards' }) }}
@@ -433,7 +433,7 @@ function PicksViewInner() {
           />
           <MarkedNoSet />
           <EmptyState
-            illustration="noPicks"
+            ghostRow="picks"
             title="No picks yet"
             description="Browse the lineup and tap the sets you want to see."
             cta={{ label: 'Browse the lineup', onClick: () => navigate({ to: '/cards' }) }}

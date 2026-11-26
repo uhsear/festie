@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore, useFestivalDataStore } from '@festie/shared/stores';
-import { ONBOARDING_COPY, ONBOARDING_SLIDES_SHARED, PRIORITY_LABELS } from '@festie/shared/constants';
+import { ONBOARDING_COPY, ONBOARDING_SLIDES_SHARED } from '@festie/shared/constants';
 import {
   formatFestivalDateRange,
   getIntroSteps,
@@ -27,6 +27,7 @@ import {
 import Button from './Button';
 import AppPressable from './AppPressable';
 import DisplayWords from './DisplayWords';
+import IntroLineup from './IntroLineup';
 import { makeStyles, typeStyle, useTokens, useLargeText, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { setReturnTo } from '../lib/returnTo';
 import { useReduceMotion } from '../hooks/useReduceMotion';
@@ -49,36 +50,6 @@ const SLIDE_ICON: Record<'crew' | 'reminders', keyof typeof Ionicons.glyphMap> =
   crew: 'people-outline',
   reminders: 'notifications-outline',
 };
-
-/** A miniature of the picks surface — a "Friday" day card with priority-tiered
- *  set rows. Pure decoration (hidden from the a11y tree) that signals the
- *  product instead of a generic centered icon. */
-function ProductVisual() {
-  const t = useTokens();
-  const styles = useStyles();
-  const rows = [
-    { color: t.colors.priority.must, label: PRIORITY_LABELS.must, time: '8:30' },
-    { color: t.colors.priority.want, label: PRIORITY_LABELS['want-to-see'], time: '9:45' },
-    { color: t.colors.priority.maybe, label: PRIORITY_LABELS.maybe, time: '11:00' },
-  ];
-  return (
-    <View style={styles.visualCard} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-      <View style={styles.visualHeader}>
-        <Text style={styles.visualDay}>Friday</Text>
-        <View style={styles.visualPill}>
-          <Text style={styles.visualPillText}>3 picks</Text>
-        </View>
-      </View>
-      {rows.map((r, i) => (
-        <View key={i} style={styles.visualRow}>
-          <View style={[styles.visualDot, { backgroundColor: r.color }]} />
-          <Text style={styles.visualLabel}>{r.label}</Text>
-          <Text style={styles.visualTime}>{r.time}</Text>
-        </View>
-      ))}
-    </View>
-  );
-}
 
 /**
  * DC16: Real horizontal paging pager. Pages are laid out in a horizontal
@@ -244,7 +215,7 @@ export default function FirstRunIntro({ onDone }: { onDone: () => void }) {
         {!largeText && (
           <View style={[styles.hero, slideKey !== 'plan' && styles.heroCentered]}>
             {slideKey === 'plan' ? (
-              <ProductVisual />
+              <IntroLineup />
             ) : (
               <View
                 style={styles.iconCircle}
@@ -537,60 +508,6 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.aquaAlpha[20],
   },
   // ── Product visual (slide 1) ───────────────────────────────────────────────
-  visualCard: {
-    width: '100%',
-    maxWidth: 320,
-    padding: t.spacing[4],
-    gap: t.spacing[3],
-    borderRadius: t.radii.lg,
-    borderWidth: 1,
-    borderColor: t.colors.border.light,
-    backgroundColor: t.colors.bg.secondary,
-  },
-  visualHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  visualDay: {
-    ...typeStyle('title'),
-    color: t.colors.text.primary,
-  },
-  visualPill: {
-    paddingHorizontal: t.spacing[3],
-    paddingVertical: t.spacing[1],
-    borderRadius: t.radii.pill,
-    backgroundColor: t.colors.aquaAlpha[20],
-    borderWidth: 1,
-    borderColor: t.colors.aquaAlpha[30],
-  },
-  visualPillText: {
-    ...typeStyle('caption'),
-    color: t.colors.accent.aqua,
-  },
-  visualRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: t.spacing[3],
-    paddingVertical: t.spacing[2],
-    paddingHorizontal: t.spacing[3],
-    borderRadius: t.radii.default,
-    backgroundColor: t.colors.bg.card,
-  },
-  visualDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  visualLabel: {
-    ...typeStyle('label'),
-    flex: 1,
-    color: t.colors.text.primary,
-  },
-  visualTime: {
-    ...typeStyle('caption'),
-    color: t.colors.text.muted,
-  },
   // ───────────────────────────────────────────────────────────────────────────
   title: {
     ...typeStyle('heading'),

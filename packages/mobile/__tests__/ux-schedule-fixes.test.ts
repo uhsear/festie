@@ -91,6 +91,6 @@ describe('Festival picker', () => {
     expect(read('app/(tabs)/index.tsx')).toContain('title="Choose a festival"');
     const list = read('components/FestivalList.tsx');
     expect(list).toContain('COPY.festivalLoad.errorTitle');
-    expect(list).toContain('cloud-offline-outline');
+    expect(list).toContain('<LoadErrorState');
   });
 });

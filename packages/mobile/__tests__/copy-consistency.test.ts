@@ -21,6 +21,18 @@ describe('T60 consistency', () => {
   it('crew-plan uses the shared Wrap label', () => {
     expect(code('app/crew-plan.tsx')).toContain('COPY.wrap.open');
   });
+  it('Wrap pending states use the shared copy and the 64px hero icon on both platforms', () => {
+    const mobile = code('app/wrap.tsx');
+    const web = readFileSync(join(root, '../web/src/routes/wrap.tsx'), 'utf8');
+    for (const key of ['pending', 'empty']) {
+      expect(mobile).toContain(`COPY.wrap.${key}.title`);
+      expect(web).toContain(`COPY.wrap.${key}.title`);
+    }
+    expect(mobile).not.toMatch(/coming soon|Nothing to wrap yet/);
+    expect(web).not.toMatch(/coming soon|Nothing to wrap yet/);
+    expect(mobile).toContain('t.iconSize.hero');
+    expect(web).toContain('w-16! h-16!');
+  });
   it('grid starts a festival load when a deep link lands before the catalogue', () => {
     expect(code('app/grid.tsx')).toMatch(/\bif \(!currentFestival && festivals\.length === 0 && !isLoading && !error\)\s*\{\s*loadFestivals\(\)/);
   });

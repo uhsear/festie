@@ -142,8 +142,8 @@ textarea:focus {
     0 0 0 3px var(--color-aqua-a12),
     0 0 16px var(--color-aqua-a06);
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.25s var(--ease-out);
+    border-color var(--duration-med) var(--ease-standard),
+    box-shadow var(--duration-slow) var(--ease-out);
 }
 input:focus-visible,
 select:focus-visible,

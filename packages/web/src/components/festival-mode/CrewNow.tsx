@@ -141,7 +141,7 @@ export function MeetNowCard({ meet, nowMs, timeZone, onOpenMeet }: MeetProps) {
         onClick={onOpenMeet}
         className={cn(
           'flex items-center gap-3 w-full text-left rounded-lg border border-border bg-bg-card p-4 min-h-[64px]',
-          'transition-colors duration-[var(--duration-med)] hover:bg-bg-card-hover motion-reduce:transition-none',
+          'transition-colors duration-(--duration-med) hover:bg-bg-card-hover motion-reduce:transition-none',
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
         )}
       >

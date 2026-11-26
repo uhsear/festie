@@ -34,6 +34,7 @@ import {
 } from '@festie/shared/utils';
 import SectionLabel from '../../components/SectionLabel';
 import EmptyState from '../../components/EmptyState';
+import LoadErrorState from '../../components/LoadErrorState';
 import LoadingState from '../../components/LoadingState';
 import { ConfirmDialog, LabeledTextInput, SelectionBar, useReauthPrompt } from '../../components/admin';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
@@ -302,8 +303,7 @@ export default function AdminScreen() {
       {loading ? (
         <LoadingState label="Loading admin data" />
       ) : error ? (
-        <EmptyState
-          icon="cloud-offline-outline"
+        <LoadErrorState
           title="Couldn't load admin data"
           message="Something went wrong reaching the server."
           action={{ label: 'Try again', onPress: () => void onRefresh() }}
