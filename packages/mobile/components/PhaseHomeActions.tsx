@@ -21,10 +21,14 @@ const TARGETS: Record<Exclude<HomeActionKey, 'first-pick'>, ActionTarget> = {
   settle: { icon: 'wallet-outline', href: '/(tabs)/crew' },
 };
 
+const COMPACT_HIT_SLOP = { top: 6, bottom: 6, left: 6, right: 6 };
+
 interface PhaseHomeActionsProps {
   actions: HomeAction[];
   /** When set, a close button hides the band for this festival and phase. */
   onDismiss?: () => void;
+  /** Slim variant for the schedule status line: no band margin, small chips with hit slop. */
+  compact?: boolean;
 }
 
 /**
@@ -34,18 +38,18 @@ interface PhaseHomeActionsProps {
  * not empty. Tab destinations are not repeated here: the tab bar already
  * carries them. A `hint` renders as a plain chip, not a button.
  */
-export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeActionsProps) {
+export default function PhaseHomeActions({ actions, onDismiss, compact }: PhaseHomeActionsProps) {
   const t = useTokens();
   const styles = useStyles();
   const router = useRouter();
 
   return (
-    <View style={styles.wrap}>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.row}>
+    <View style={compact ? styles.wrapCompact : styles.wrap}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={compact ? styles.rowCompact : styles.row}>
         {actions.map((a) => {
           if (a.kind === 'hint' || a.key === 'first-pick') {
             return (
-              <View key={a.key} testID={`phase-action-${a.key}`} style={styles.chip} accessibilityLabel={a.a11y}>
+              <View key={a.key} testID={`phase-action-${a.key}`} style={compact ? styles.chipCompact : styles.chip} accessibilityLabel={a.a11y}>
                 <Ionicons name="star-outline" size={t.iconSize.sm} color={t.colors.text.secondary} />
                 <Text style={styles.chipText} numberOfLines={1}>
                   {a.label}
@@ -59,7 +63,8 @@ export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeAction
             <TouchableOpacity
               key={a.key}
               testID={`phase-action-${a.key}`}
-              style={styles.chip}
+              style={compact ? styles.chipCompact : styles.chip}
+              hitSlop={compact ? COMPACT_HIT_SLOP : undefined}
               // Tab destinations switch tabs (navigate dedupes to the existing
               // tab instance); the root-level pushed routes (Wrap) must
               // PUSH so Back pops cleanly to the schedule with the festival
@@ -79,7 +84,8 @@ export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeAction
         })}
         {onDismiss ? (
           <TouchableOpacity
-            style={styles.dismissButton}
+            style={compact ? styles.dismissButtonCompact : styles.dismissButton}
+            hitSlop={compact ? COMPACT_HIT_SLOP : undefined}
             onPress={onDismiss}
             activeOpacity={0.7}
             accessibilityRole="button"
@@ -99,6 +105,34 @@ const useStyles = makeStyles((t) => ({
     // Separate the band from the controls above it.
     marginTop: t.spacing[3],
     paddingBottom: t.spacing[2],
+  },
+  // Status-line slot: it takes the width the status chips leave. The compact chips are
+  // 32 pt tall; hitSlop restores the 44 pt target.
+  rowCompact: {
+    gap: t.spacing[2],
+    alignItems: 'center',
+    paddingVertical: t.spacing[2],
+  },
+  wrapCompact: {
+    flex: 1,
+    minWidth: 0,
+  },
+  chipCompact: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[1],
+    paddingHorizontal: t.spacing[2],
+    minHeight: 32,
+    borderRadius: t.radii.pill,
+    borderWidth: 1,
+    borderColor: t.colors.border.default,
+    backgroundColor: t.colors.bg.secondary,
+  },
+  dismissButtonCompact: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 32,
+    minHeight: 32,
   },
   dismissButton: {
     alignItems: 'center',

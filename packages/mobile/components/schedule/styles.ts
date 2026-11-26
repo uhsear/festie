@@ -71,6 +71,19 @@ export const useStyles = makeStyles((t) => ({
     minHeight: 44,
     borderRadius: t.radii.default,
   },
+  // Push action to the Grid route: label plus chevron so it reads as navigation, not a view.
+  fullGridButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexShrink: 0,
+    minHeight: 44,
+    paddingLeft: t.spacing[2],
+    gap: t.spacing[1],
+  },
+  fullGridText: {
+    ...typeStyle('label'),
+    color: t.colors.text.secondary,
+  },
   toggleButtonActive: {
     backgroundColor: t.colors.aquaAlpha[12],
   },
@@ -109,7 +122,12 @@ export const useStyles = makeStyles((t) => ({
     color: t.colors.text.primary,
     padding: 0,
   },
+  // One slim status line: freshness and save chips, then the phase shortcuts, then the
+  // Timeline refresh button. The shortcuts scroll sideways inside their own slot.
   freshnessRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
     paddingTop: t.spacing[2],
   },
   compactRefreshButton: {
