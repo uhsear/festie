@@ -3,23 +3,21 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useSearch } from '@tanstack/react-router';
 import { useReducedMotion } from 'motion/react';
 import { fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
+import { useFestival } from '@festie/shared/hooks';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { WrapPlannedSet, WrapResponse } from '@festie/shared/types';
 import { WRAP_STATE_COPY } from '@festie/shared/constants';
-import { formatTime, isWrapUnlocked, isWrapUpcoming, selectSetsToRate } from '@festie/shared/utils';
+import { formatTime, isWrapUnlocked, isWrapUpcoming, resolveStageColor, selectSetsToRate } from '@festie/shared/utils';
 import { CheckCircle2, Music } from 'lucide-react';
 import EmptyState from '../components/ui/EmptyState';
 import Skeleton from '../components/ui/Skeleton';
 import RatingButtons from '../components/features/RatingButtons';
-import { cn } from '../lib/utils';
+import SeenToggle from '../components/features/SeenToggle';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useToast } from '../lib/toastContext';
 import { ArtistNameButton } from '../components/features/ArtistName';
 
 const ADVANCE_DELAY_MS = 300;
-
-const chipClass =
-  'min-h-11 px-4 rounded-full border border-border text-sm font-semibold text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
 
 const listLinkClass =
   'inline-flex min-h-11 items-center text-sm font-semibold text-accent-aqua underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
@@ -62,6 +60,7 @@ function RateFlow({ festivalId }: { festivalId: string }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const userId = useAuthStore((s) => s.user?.id);
   const { toastError } = useToast();
+  const { getStageColor } = useFestival();
 
   const { data, error, isLoading, isError, refetch } = useQuery<WrapResponse>({
     queryKey: ['wrap', festivalId],
@@ -195,47 +194,53 @@ function RateFlow({ festivalId }: { festivalId: string }) {
       <p className="text-xs text-text-secondary mt-1" aria-live="polite">
         {index + 1} of {queue.length}
       </p>
+      <div
+        role="progressbar"
+        aria-label="Sets rated"
+        aria-valuemin={1}
+        aria-valuemax={queue.length}
+        aria-valuenow={index + 1}
+        className="mt-2 h-1 w-full overflow-hidden rounded-full bg-border"
+      >
+        <div
+          data-testid="rate-progress-fill"
+          className="h-full rounded-full"
+          style={{
+            width: `${((index + 1) / queue.length) * 100}%`,
+            backgroundColor: resolveStageColor(set.stageId ? getStageColor(set.stageId) : null, 'var(--text-muted)'),
+          }}
+        />
+      </div>
       <div className="mt-4 rounded-lg border border-border bg-bg-card p-5 text-center">
-        <div className="text-2xl font-bold text-text-primary">
+        <div className="type-display-lg text-text-primary break-words">
           <ArtistNameButton name={set.artist || 'Unknown artist'} />
         </div>
         {meta && <div className="mt-1 text-sm text-text-secondary">{meta}</div>}
-        <div className="mt-5 flex justify-center gap-2">
-          <button
-            type="button"
-            aria-pressed={seenId === set.setId}
-            onClick={() => {
-              mark(set.setId, true);
-              setSeenId(set.setId);
-            }}
-            className={cn(chipClass, seenId === set.setId && 'border-accent-aqua text-accent-aqua')}
-          >
-            Saw it
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              mark(set.setId, false);
-              advance();
-            }}
-            className={chipClass}
-          >
-            Missed it
-          </button>
-        </div>
-        <div className="mt-4">
-          <RatingButtons
-            key={set.setId}
-            setId={set.setId}
-            festivalId={festivalId}
-            showMemory={false}
-            onRated={() => {
-              setAnyRated(true);
-              mark(set.setId, true);
-              next();
+        <div className="mt-5 flex justify-center">
+          <SeenToggle
+            value={seenId === set.setId ? true : null}
+            onChange={(saw) => {
+              mark(set.setId, saw);
+              if (saw) setSeenId(set.setId);
+              else advance();
             }}
           />
         </div>
+        {seenId === set.setId && (
+          <div className="mt-4">
+            <RatingButtons
+              key={set.setId}
+              setId={set.setId}
+              festivalId={festivalId}
+              showMemory={false}
+              onRated={() => {
+                setAnyRated(true);
+                mark(set.setId, true);
+                next();
+              }}
+            />
+          </div>
+        )}
       </div>
       <div className="mt-4 flex justify-center">
         <button

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearch } from '@tanstack/react-router';
 import { api, fetchWrap, isApiClientError, markCaught } from '@festie/shared/services';
-import { WRAP_STATE_COPY } from '@festie/shared/constants';
+import { WRAP_STATE_COPY, ratingCaption } from '@festie/shared/constants';
 import { useAuthStore, useFestivalStore } from '@festie/shared/stores';
 import type { FestivalDay, FestivalSet, Stage } from '@festie/shared/types';
 import type { WrapResponse } from '@festie/shared/types';
@@ -22,6 +22,7 @@ import { Music } from 'lucide-react';
 import EmptyState from '../components/ui/EmptyState';
 import Skeleton from '../components/ui/Skeleton';
 import RatingButtons from '../components/features/RatingButtons';
+import SeenToggle from '../components/features/SeenToggle';
 import { cn } from '../lib/utils';
 import { RenderErrorBoundary } from '../components/layout/RouteErrorBoundary';
 import { useToast } from '../lib/toastContext';
@@ -29,7 +30,6 @@ import { ArtistNameButton } from '../components/features/ArtistName';
 
 const chipClass =
   'min-h-11 px-4 rounded-full border border-border text-sm font-semibold text-text-secondary cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua';
-const pressedClass = 'border-accent-aqua text-accent-aqua';
 
 interface FestivalDetail {
   b2bSeparator?: string;
@@ -145,6 +145,7 @@ function CaughtList({ festivalId }: { festivalId: string }) {
       <p className="text-xs text-text-secondary mt-1" aria-live="polite">
         {countLine}
       </p>
+      <p className="text-xs text-text-secondary mt-1">{ratingCaption(null)}</p>
       <span className="sr-only" aria-live="polite">
         {announcement}
       </span>
@@ -192,43 +193,25 @@ function CaughtList({ festivalId }: { festivalId: string }) {
                       </button>
                     )}
                     {row.started && !row.added && (
-                      <div role="group" aria-label={name} className="flex gap-2">
-                        <button
-                          type="button"
-                          aria-label={`Saw it, ${name}`}
-                          aria-pressed={row.caught === true}
-                          onClick={() =>
-                            row.caught === true
-                              ? apply(row.setId, null, 'Mark removed')
-                              : apply(row.setId, true, 'Marked as seen')
-                          }
-                          className={cn(chipClass, row.caught === true && pressedClass)}
-                        >
-                          Saw it
-                        </button>
-                        <button
-                          type="button"
-                          aria-label={`Missed it ${name}`}
-                          aria-pressed={row.caught === false}
-                          onClick={() =>
-                            row.caught === false
-                              ? apply(row.setId, null, 'Mark removed')
-                              : apply(row.setId, false, 'Marked as missed')
-                          }
-                          className={cn(chipClass, row.caught === false && pressedClass)}
-                        >
-                          Missed it
-                        </button>
-                      </div>
+                      <SeenToggle
+                        name={name}
+                        value={row.caught}
+                        onChange={(next) =>
+                          row.caught === next
+                            ? apply(row.setId, null, 'Mark removed')
+                            : apply(row.setId, next, next ? 'Marked as seen' : 'Marked as missed')
+                        }
+                      />
                     )}
                   </div>
-                  {row.started && (
+                  {row.started && (row.caught === true || row.added) && (
                     <div className="mt-2">
                       <RatingButtons
                         setId={row.setId}
                         festivalId={festivalId}
                         compact
                         showMemory={false}
+                        showCaption={false}
                         onRated={() => {
                           if (row.caught !== true) apply(row.setId, true, 'Marked as seen');
                         }}

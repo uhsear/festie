@@ -162,16 +162,16 @@ describe('RATING_SCALE_DATA', () => {
     expect(values).toContain(5);
   });
 
-  it('order is highest-first (value 5 is order 0)', () => {
+  it('order is lowest-first (value 1 is order 0)', () => {
     const fire = RATING_SCALE_DATA.find((r) => r.value === 5)!;
     const skip = RATING_SCALE_DATA.find((r) => r.value === 1)!;
-    expect(fire.order).toBeLessThan(skip.order);
+    expect(skip.order).toBeLessThan(fire.order);
   });
 });
 
 describe('RATING_SCALE', () => {
-  it('is [5, 4, 3, 2, 1]', () => {
-    expect(RATING_SCALE).toEqual([5, 4, 3, 2, 1]);
+  it('is [1, 2, 3, 4, 5]', () => {
+    expect(RATING_SCALE).toEqual([1, 2, 3, 4, 5]);
   });
 });
 

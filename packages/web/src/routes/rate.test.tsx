@@ -48,6 +48,10 @@ vi.mock('@festie/shared/utils', () => ({
   isWrapUnlocked: () => mocks.unlocked,
   isWrapUpcoming: () => mocks.upcoming,
   formatTime: (t: string) => t,
+  resolveStageColor: (c: string | null | undefined, fallback: string) => (!c || c === 'fallback' ? fallback : c),
+}));
+vi.mock('@festie/shared/hooks', () => ({
+  useFestival: () => ({ getStageColor: (id: string) => (id === 's-main' ? '#496ea2' : 'fallback') }),
 }));
 vi.mock('../components/features/RatingButtons', () => ({
   default: ({ onRated }: { onRated?: (n: number) => void }) => (
@@ -69,7 +73,7 @@ vi.mock('../components/layout/RouteErrorBoundary', () => ({
 }));
 
 const sets = [
-  { setId: 'a', artist: 'Artist A', stageName: 'Main', dayIndex: 0, startTime: '21:00' },
+  { setId: 'a', artist: 'Artist A', stageId: 's-main', stageName: 'Main', dayIndex: 0, startTime: '21:00' },
   { setId: 'b', artist: 'Artist B', stageName: 'Tent', dayIndex: 0, startTime: '22:00' },
 ];
 
@@ -95,8 +99,10 @@ describe('RatePage', () => {
 
   it('advances after a rating and finishes with the wrap link', async () => {
     renderPage();
-    fireEvent.click(await screen.findByText('rate-five'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Saw it' }));
+    fireEvent.click(screen.getByText('rate-five'));
     expect(await screen.findByText('Artist B')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Saw it' }));
     fireEvent.click(screen.getByText('rate-five'));
     expect(await screen.findByText('All rated')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'See your wrap' })).toHaveAttribute('href', '/wrap?festival=f1');
@@ -116,9 +122,25 @@ describe('RatePage', () => {
     expect(await screen.findByRole('link', { name: 'See the full list' })).toHaveAttribute('href', '/caught?festival=f1');
   });
 
+  it('hides the rating scale until Saw it is chosen', async () => {
+    renderPage();
+    await screen.findByText('Artist A');
+    expect(screen.queryByText('rate-five')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Saw it' }));
+    expect(screen.getByText('rate-five')).toBeInTheDocument();
+  });
+
+  it('leads with the artist at display-lg and fills the progress rail in the stage colour', async () => {
+    renderPage();
+    const name = (await screen.findByText('Artist A')).closest('.type-display-lg');
+    expect(name).not.toBeNull();
+    expect(screen.getByTestId('rate-progress-fill')).toHaveStyle({ width: '50%', backgroundColor: '#496ea2' });
+  });
+
   it('marks a rated set as seen', async () => {
     renderPage();
-    fireEvent.click(await screen.findByText('rate-five'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Saw it' }));
+    fireEvent.click(screen.getByText('rate-five'));
     expect(mocks.markCaught).toHaveBeenCalledWith('a', true, 'u1');
   });
 
@@ -137,7 +159,8 @@ describe('RatePage', () => {
 
   it('Next right after a rating cancels the pending auto-advance instead of skipping a second set', async () => {
     renderPage();
-    fireEvent.click(await screen.findByText('rate-five'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Saw it' }));
+    fireEvent.click(screen.getByText('rate-five'));
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
     await new Promise((r) => setTimeout(r, 50));
     expect(screen.getByText('Artist B')).toBeInTheDocument();
