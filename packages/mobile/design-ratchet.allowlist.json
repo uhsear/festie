@@ -9,13 +9,13 @@
     {
       "file": "app/(auth)/login.tsx",
       "rule": "duration-ms",
-      "max": 6,
+      "max": 4,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
       "file": "app/(auth)/register.tsx",
       "rule": "duration-ms",
-      "max": 6,
+      "max": 4,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
@@ -89,6 +89,12 @@
       "rule": "fontSize",
       "max": 1,
       "reason": "Initials size follows the avatar size (a third of it), so it cannot sit on the type ramp."
+    },
+    {
+      "file": "components/BrandWordmark.tsx",
+      "rule": "duration-ms",
+      "max": 1,
+      "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
       "file": "components/CrewActivity.tsx",

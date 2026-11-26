@@ -200,7 +200,7 @@ export default function LoginScreen() {
         {/* R25: hero staggered reveal — brand word (300ms) then subtitle (360ms).
             FadeInDown gives translateY+fade per spec. Gated on reduceMotion. */}
         <BrandMark />
-        <BrandWordmark entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)} />
+        <BrandWordmark revealDelay={300} />
         <Animated.Text
           style={styles.subtitle}
           maxFontSizeMultiplier={MAX_FONT_SCALE}

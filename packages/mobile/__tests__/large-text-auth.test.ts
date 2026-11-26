@@ -5,8 +5,12 @@ import { read } from './read-source';
 describe('T10 large text: intro and auth (source-level guards)', () => {
   it.each(['login', 'register', 'forgot-password'])('%s caps the wordmark and subtitle', (name) => {
     const src = read(`app/(auth)/${name}.tsx`);
-    expect(src).toContain("typeScaleCap('display-lg')");
+    expect(src).toContain('<BrandWordmark');
     expect(src).toContain('maxFontSizeMultiplier={MAX_FONT_SCALE}');
+  });
+
+  it('BrandWordmark caps its Dynamic Type growth', () => {
+    expect(read('components/BrandWordmark.tsx')).toContain("typeScaleCap('display-lg')");
   });
 
   it('BrandMark hides at large text', () => {

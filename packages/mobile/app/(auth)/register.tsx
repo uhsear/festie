@@ -398,7 +398,7 @@ export default function RegisterScreen() {
       >
         {/* R25: hero staggered reveal — brand word then subtitle, gated on reduceMotion */}
         <BrandMark />
-        <BrandWordmark entering={reduceMotion ? undefined : FadeInDown.delay(300).duration(350)} />
+        <BrandWordmark revealDelay={300} />
         <Animated.Text
           style={styles.subtitle}
           maxFontSizeMultiplier={MAX_FONT_SCALE}
