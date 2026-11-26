@@ -55,6 +55,7 @@ export * from './polls';
 export * from './lineupImport';
 export * from './timeReleases';
 export * from './lineup';
+export * from './lineupFlyer';
 export * from './lineupCover';
 export * from './lineupInterest';
 export * from './lineupPaste';

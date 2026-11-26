@@ -24,3 +24,16 @@ describe('schedule view primitives (T18 MB0)', () => {
     expect(read('ClashHatch.tsx')).toContain("from 'react-native-svg'");
   });
 });
+
+describe('lineup flyer (DP-54)', () => {
+  it('the cards header shows the flyer and withholds the cards and the TBA banner while it is set', () => {
+    const src = read('schedule/ScheduleCardsView.tsx');
+    expect(src).toContain('<LineupFlyer model={flyer}');
+    expect(src).toContain('data={flyer ? [] : rows}');
+  });
+  it('the flyer has no pick controls', () => {
+    const src = read('LineupFlyer.tsx');
+    expect(src).not.toMatch(/SetCardMobile|PriorityButtons|onSavePick/);
+    expect(src).toContain('<FollowButton');
+  });
+});

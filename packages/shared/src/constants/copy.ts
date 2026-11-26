@@ -200,6 +200,10 @@ export const DISCOVER_COPY = {
     joined: "We'll tell you when they are.",
     guest: 'Follow to hear when they are.',
   },
+  /** The lineup flyer shown while no set has a time. The sentence is for signed-out visitors only. */
+  flyer: {
+    guestLine: 'Festie lets you plan your sets and sync with your crew.',
+  },
   /** The festival picker badge: how far the schedule has come. A festival with no acts has none. */
   scheduleProgress: {
     times: 'Set times',
