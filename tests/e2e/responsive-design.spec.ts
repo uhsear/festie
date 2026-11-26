@@ -193,8 +193,8 @@ test.describe('responsive design', () => {
     await page.setViewportSize({ width: 320, height: 568 });
     await gotoSchedule(page, app);
 
-    // Below md the search folds behind a Search toggle.
-    await page.getByRole('button', { name: 'Search', exact: true }).click();
+    // Below md the search folds behind the Filters toggle.
+    await page.getByRole('button', { name: /^Filters/ }).click();
     const searchInput = page.getByLabel('Search festival artists');
     await expect(searchInput).toBeVisible();
     const box = await searchInput.boundingBox();
