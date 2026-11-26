@@ -71,3 +71,33 @@ test.describe('prefers-reduced-motion', () => {
     expect(durationSeconds).toBeGreaterThan(0.02);
   });
 });
+
+// Entrance delays and fill modes must not hide content under reduced motion
+// (staggered lists and the /cards skeleton held opacity 0 for up to 420 ms).
+for (const route of ['/cards', '/crew', '/festival-mode']) {
+  test(`reduced motion on ${route}: nothing hides at opacity 0 and no loop runs`, async ({ app, page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`${app.baseUrl}${route}`);
+    await expect(page.locator('#app')).toBeVisible();
+    await page.waitForTimeout(50);
+
+    const { hidden, loops } = await page.evaluate(() => {
+      const animated = Array.from(document.querySelectorAll<HTMLElement>('body *')).filter(
+        (el) => getComputedStyle(el).animationName !== 'none',
+      );
+      const hiddenNames = animated
+        .filter((el) => getComputedStyle(el).opacity === '0')
+        .map((el) => el.className.toString());
+      const loopNames = document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().iterations === Infinity)
+        .map((a) => ((a.effect as KeyframeEffect).target as HTMLElement | null)?.className.toString() ?? '')
+        .filter((name) => !/sos/i.test(name));
+      return { hidden: hiddenNames, loops: loopNames };
+    });
+
+    expect(hidden).toEqual([]);
+    expect(loops).toEqual([]);
+  });
+}
+

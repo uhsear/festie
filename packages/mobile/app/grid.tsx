@@ -52,6 +52,7 @@ import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE, type Tokens } from '.
 import { safeStageColor } from '../lib/stageColor';
 import { priorityIconName } from '../lib/prioritySymbol';
 import { useNow } from '../hooks/useNow';
+import { useReduceMotion } from '../hooks/useReduceMotion';
 import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
 import { useQuickPick } from '../hooks/useQuickPick';
 import EmptyState from '../components/EmptyState';
@@ -112,6 +113,7 @@ export default function GridScreen() {
   const t = useTokens();
   const styles = useStyles();
   const router = useRouter();
+  const reduceMotion = useReduceMotion();
   const { width: windowW } = useWindowDimensions(); // re-render on rotation so the body re-measures.
   const colW = twoUpColumnWidth(windowW, GUTTER_W);
   const [zoom, setZoom] = useState(() => defaultZoomIndex(windowW));
@@ -788,7 +790,7 @@ export default function GridScreen() {
         {nowPx != null ? (
           <TouchableOpacity
             style={[styles.fab, { backgroundColor: t.colors.accent.aqua }]}
-            onPress={() => bodyScrollRef.current?.scrollTo({ y: Math.max(0, nowPx - bodyH / 2) })}
+            onPress={() => bodyScrollRef.current?.scrollTo({ y: Math.max(0, nowPx - bodyH / 2), animated: !reduceMotion })}
             activeOpacity={0.8}
             accessibilityRole="button"
             accessibilityLabel={COPY.jumpToNow.a11y}

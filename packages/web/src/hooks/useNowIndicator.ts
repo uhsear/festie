@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useReducedMotion } from 'motion/react';
 import { useFestivalStore, useFestivalDataStore } from '@festie/shared/stores/festivalStore';
 import { nowPositionPercent, resolveFestivalTimeZone } from '@festie/shared/utils';
 import type { TimeBounds } from './useTimelineFilters';
@@ -6,7 +7,8 @@ import type { TimeBounds } from './useTimelineFilters';
 /**
  * Provides a live "now" position (0-100 %) within the visible time range, a
  * ref to attach to the grid container, and a `scrollToNow` helper that
- * smoothly brings the now-line into view.
+ * brings the now-line into view (smoothly, unless the user prefers reduced
+ * motion). The automatic day-switch scroll always jumps.
  *
  * The internal tick fires every 30 s so the indicator creeps forward without
  * forcing the parent to rerender.
@@ -36,22 +38,32 @@ export function useNowIndicator(timeBounds: TimeBounds | null, selectedDay: numb
   // Auto-scroll-to-now once per day switch.
   const gridRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollToNow = useCallback(() => {
-    const el = gridRef.current;
-    if (!el || nowIndicator === null) return;
-    const target = el.querySelector<HTMLElement>('.timeline-now-label');
-    if (!target) return;
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  }, [nowIndicator]);
+  const reducedMotion = useReducedMotion();
+
+  const scrollToNowWith = useCallback(
+    (behavior: ScrollBehavior) => {
+      const el = gridRef.current;
+      if (!el || nowIndicator === null) return;
+      const target = el.querySelector<HTMLElement>('.timeline-now-label');
+      if (!target) return;
+      target.scrollIntoView({ behavior, block: 'center' });
+    },
+    [nowIndicator],
+  );
+
+  const scrollToNow = useCallback(
+    () => scrollToNowWith(reducedMotion ? 'auto' : 'smooth'),
+    [scrollToNowWith, reducedMotion],
+  );
 
   // Read through a ref so the 30 s tick does not re-scroll; only a day switch does.
-  const scrollToNowRef = useRef(scrollToNow);
+  const scrollToNowRef = useRef(scrollToNowWith);
   useEffect(() => {
-    scrollToNowRef.current = scrollToNow;
-  }, [scrollToNow]);
+    scrollToNowRef.current = scrollToNowWith;
+  }, [scrollToNowWith]);
 
   useEffect(() => {
-    const id = window.requestAnimationFrame(() => scrollToNowRef.current());
+    const id = window.requestAnimationFrame(() => scrollToNowRef.current('auto'));
     return () => window.cancelAnimationFrame(id);
   }, [selectedDay]);
 
