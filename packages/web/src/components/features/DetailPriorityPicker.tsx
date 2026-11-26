@@ -22,10 +22,10 @@ const priorityOptions: Array<{ value: Priority; Icon: LucideIcon; label: string;
   { value: 'maybe', Icon: priorityLucide('maybe'), label: PRIORITY_SYMBOLS.maybe.label, short: PRIORITY_SYMBOLS.maybe.short },
 ];
 
-// Selected fill mirrors SetCard's active priority buttons (solid fill + glow,
-// not a border/tint) so the same concept reads identically in both places.
+// Selected state mirrors SetPickControl so the same concept reads identically in both places.
+// Filled coral is reserved for SOS: a must pick is a coral outline with a filled coral glyph.
 const activeStyles: Record<Priority, string> = {
-  must: 'border-priority-must bg-accent-coral-strong text-text-on-accent shadow-[var(--shadow-glow-coral),0_0_0_1px_var(--color-coral-a3)]',
+  must: 'border-priority-must text-text-primary shadow-[0_0_0_1px_var(--color-coral-a3)]',
   'want-to-see':
     'border-priority-want bg-priority-want text-[var(--text-on-light-accent)] shadow-[var(--shadow-glow-aqua),0_0_0_1px_var(--color-aqua-a3)]',
   maybe:
@@ -64,7 +64,7 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
           >
             {/* Fill the glyph when active, as SetCard's active priority buttons do. */}
             <Icon
-              className="w-5 h-5 mx-auto"
+              className={cn('w-5 h-5 mx-auto', active && p === 'must' && 'text-priority-must')}
               fill={active ? 'currentColor' : 'none'}
               aria-hidden="true"
             />

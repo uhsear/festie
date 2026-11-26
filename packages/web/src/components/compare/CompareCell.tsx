@@ -3,8 +3,9 @@ import type { Priority } from '@festie/shared/types';
 import { PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import PriorityIcon from '../ui/PriorityIcon';
 
-const PRIORITY_STYLE: Record<Priority, { bg: string; fg: string }> = {
-  must: { bg: 'var(--color-accent-coral-strong)', fg: 'var(--color-text-on-accent)' },
+// Filled coral is reserved for SOS, so Must is a coral outline with a filled coral glyph.
+const PRIORITY_STYLE: Record<Priority, { bg: string; fg: string; ring?: string }> = {
+  must: { bg: 'transparent', fg: 'var(--color-text-primary)', ring: 'var(--color-priority-must)' },
   'want-to-see': { bg: 'var(--color-priority-want)', fg: 'var(--color-bg-primary)' },
   maybe: { bg: 'var(--color-priority-maybe)', fg: 'var(--color-bg-primary)' },
 };
@@ -23,9 +24,15 @@ export default memo(function CompareCell({ priority, onAdd, label }: CompareCell
       {priority ? (
         <span
           className="inline-flex items-center gap-1 text-[length:var(--font-size-12)] font-semibold px-2 py-1 rounded"
-          style={{ background: PRIORITY_STYLE[priority].bg, color: PRIORITY_STYLE[priority].fg }}
+          style={{
+            background: PRIORITY_STYLE[priority].bg,
+            color: PRIORITY_STYLE[priority].fg,
+            boxShadow: PRIORITY_STYLE[priority].ring ? `inset 0 0 0 1px ${PRIORITY_STYLE[priority].ring}` : undefined,
+          }}
         >
-          <PriorityIcon priority={priority} className="w-4 h-4" filled />
+          <span className={priority === 'must' ? 'inline-flex text-priority-must' : 'inline-flex'}>
+            <PriorityIcon priority={priority} className="w-4 h-4" filled />
+          </span>
           {PRIORITY_SYMBOLS[priority].short}
         </span>
       ) : onAdd ? (

@@ -19,9 +19,12 @@ describe('CompareCell', () => {
     expect(screen.getByText('Must')).toBeInTheDocument();
   });
 
-  it('uses on-accent ink for the Must pill', () => {
+  it('draws the Must pill as a coral outline, never a coral fill', () => {
     renderInTable(<CompareCell priority="must" />);
-    expect(screen.getByText('Must').style.color).toBe('var(--color-text-on-accent)');
+    const pill = screen.getByText('Must');
+    expect(pill.style.background).not.toContain('coral');
+    expect(pill.style.color).toBe('var(--color-text-primary)');
+    expect(pill.style.boxShadow).toContain('var(--color-priority-must)');
   });
 
   it('renders "Want" label for want-to-see priority', () => {
