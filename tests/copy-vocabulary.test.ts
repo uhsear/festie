@@ -4,7 +4,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 
 const root = join(import.meta.dirname, '..');
-const dirs = ['packages/web/src', 'packages/mobile/app', 'packages/mobile/components', 'packages/mobile/lib', 'packages/shared/src'];
+const dirs = ['lib/notifications', 'packages/web/src', 'packages/mobile/app', 'packages/mobile/components', 'packages/mobile/lib', 'packages/shared/src'];
 const skipDir = new Set(['node_modules', 'dist', '__tests__']);
 const banned = [
   'Logout', 'Sign Up Free', 'Create Account', 'Sign Out', 'Log in to', 'Time conflict',
