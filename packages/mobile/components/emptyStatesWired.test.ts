@@ -54,4 +54,10 @@ describe('load errors have one source', () => {
       .map((f) => f.slice(root.length + 1));
     expect(offenders).toEqual([]);
   });
+
+  it('the account history error block renders through LoadErrorState, not an inline offline icon', () => {
+    const src = readFileSync(join(root, 'components/AccountHistorySection.tsx'), 'utf8');
+    expect(src).toContain('<LoadErrorState');
+    expect(src).not.toContain('cloud-offline-outline');
+  });
 });

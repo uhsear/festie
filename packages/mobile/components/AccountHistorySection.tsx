@@ -10,6 +10,7 @@ import type { LifetimeResponse } from '@festie/shared/types';
 import { festivalPhase, formatDateSpan } from '@festie/shared/utils';
 import { Skeleton } from './Skeleton';
 import Button from './Button';
+import LoadErrorState from './LoadErrorState';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useReduceMotion } from '../hooks/useReduceMotion';
 import { ArtistNameButton } from './ArtistName';
@@ -100,21 +101,11 @@ export default function AccountHistorySection({ refreshSignal = 0 }: AccountHist
   // history visible rather than swapping it for an error panel.
   if (error && !data) {
     return (
-      <View style={[styles.card, styles.centered]}>
-        <Ionicons name="cloud-offline-outline" size={t.iconSize.lg} color={t.colors.text.secondary} />
-        <Text style={styles.emptyText}>{error}</Text>
-        <TouchableOpacity
-          onPress={() => setReload((n) => n + 1)}
-          accessibilityRole="button"
-          accessibilityLabel="Retry loading history"
-          activeOpacity={0.8}
-          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={styles.retry}
-        >
-          <Ionicons name="refresh" size={t.iconSize.compact} color={t.colors.accent.aqua} style={styles.retryIcon} />
-          <Text style={styles.retryText}>Retry</Text>
-        </TouchableOpacity>
-      </View>
+      <LoadErrorState
+        title="Couldn’t load your history"
+        message={error}
+        action={{ label: 'Try again', onPress: () => setReload((n) => n + 1) }}
+      />
     );
   }
 
@@ -453,22 +444,5 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption'),
     color: t.colors.text.secondary,
     textAlign: 'center',
-  },
-  retry: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: t.spacing[4],
-    paddingVertical: t.spacing[2],
-    borderRadius: t.radii.pill,
-    borderWidth: 1,
-    borderColor: t.colors.aquaAlpha[40],
-    marginTop: t.spacing[1],
-  },
-  retryIcon: {
-    marginRight: t.spacing[1],
-  },
-  retryText: {
-    ...typeStyle('label'),
-    color: t.colors.accent.aqua,
   },
 }));
