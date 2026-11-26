@@ -2,8 +2,7 @@
 /**
  * export-brand-rasters.mjs: regenerates the icon rasters from the master SVGs in docs/brand so they sit on
  * the token ground (bg.primary). Run it after changing a master or the ground, then run
- * `node scripts/measure-brand-rasters.mjs --check`. The splash icons, the notification icon and the OG image
- * are not touched here.
+ * `node scripts/measure-brand-rasters.mjs --check`. The splash icons and the OG image are not touched here.
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -25,6 +24,7 @@ function mark(size, widthPct, { bg = null, mono = null } = {}) {
 }
 
 // The email lockup is 64 px tall, 2x of its 32 px display height. Foreground and monochrome marks sit at 43.6% so the farthest tent corner stays inside the 66 of 108 dp safe circle.
+// The notification icon is the mark in white on transparent: Android tints it by alpha, and the gap between pin and tent is part of the mark's tent path.
 const jobs = [
   [mark(180, 0.7, { bg: ground }), 'packages/web/public/apple-touch-icon.png'],
   [mark(192, 0.7, { bg: ground }), 'packages/web/public/icons/icon-192.png'],
@@ -34,6 +34,7 @@ const jobs = [
   [mark(1024, 0.436), 'packages/mobile/assets/android-icon-foreground.png'],
   [mark(1024, 0.436, { mono: '#ffffff' }), 'packages/mobile/assets/android-icon-monochrome.png'],
   [Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024"><rect width="1024" height="1024" fill="${ground}"/></svg>`), 'packages/mobile/assets/android-icon-background.png'],
+  [mark(96, 0.8, { mono: '#ffffff' }), 'packages/mobile/assets/notification-icon.png'],
   [readFileSync(root('docs/brand/festie-favicon.svg')), 'packages/mobile/assets/favicon.png', 48],
   [readFileSync(root('docs/brand/festie-lockup.svg')), 'public/icons/email-lockup.png', null, 64 / 199],
 ];

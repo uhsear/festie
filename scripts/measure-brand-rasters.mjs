@@ -36,6 +36,7 @@ const FILES = [
   { rel: 'packages/mobile/assets/android-icon-background.png', kind: 'ground' },
   { rel: 'packages/mobile/assets/android-icon-foreground.png', kind: 'layer', safe: SAFE_ADAPTIVE },
   { rel: 'packages/mobile/assets/android-icon-monochrome.png', kind: 'layer', safe: SAFE_ADAPTIVE },
+  { rel: 'packages/mobile/assets/notification-icon.png', kind: 'layer' },
   { rel: 'packages/mobile/assets/splash-icon.png', kind: 'layer', safe: SAFE_SPLASH, advisory: true },
   { rel: 'packages/mobile/assets/splash-icon-daylight.png', kind: 'layer', safe: SAFE_SPLASH, advisory: true },
 ];
@@ -76,6 +77,23 @@ async function faviconGapAt16(rel) {
   return (Math.sqrt(min) * 16) / 256;
 }
 
+// The notification icon is tinted by alpha, so the pin must stay apart from the tent: with the mark centred at
+// 80% of the canvas, a pixel in the gap under the pin is clear while the pin body and a tent leg are solid.
+async function notificationIconProblems(rel) {
+  const { data, info } = await sharp(root(rel)).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+  const alphaAt = (u, v) => {
+    const s = (info.width * 0.8) / 248;
+    const x = Math.round(info.width / 2 + (u - 256) * s);
+    const y = Math.round(info.height / 2 + (v - 252) * s);
+    return data[(y * info.width + x) * 4 + 3];
+  };
+  const problems = [];
+  if (alphaAt(256, 291) > 16) problems.push(`${rel}: the pin touches the tent (no gap under the pin)`);
+  if (alphaAt(256, 215) < 240) problems.push(`${rel}: the pin body is not solid`);
+  if (alphaAt(170, 350) < 240) problems.push(`${rel}: the tent leg is not solid`);
+  return problems;
+}
+
 const check = process.argv.includes('--check');
 const errors = [];
 for (const file of FILES) {
@@ -93,6 +111,7 @@ for (const file of FILES) {
   }
   if (m.safe && m.farthestPct > 100 * m.safe) (m.advisory ? console.warn : errors.push.bind(errors))(`${m.rel}: ${m.advisory ? 'WARN (advisory until the Android 12 emulator check) ' : ''}mark reaches ${m.farthestPct.toFixed(1)}% of the canvas diameter, limit ${(100 * m.safe).toFixed(1)}%`);
 }
+if (check) errors.push(...(await notificationIconProblems('packages/mobile/assets/notification-icon.png')));
 for (const rel of ['docs/brand/festie-favicon.svg', 'docs/brand/festie-favicon-daylight.svg', 'packages/web/public/favicon.svg', 'packages/web/public/favicon-daylight.svg']) {
   const gap = await faviconGapAt16(rel);
   console.log(`${rel}
