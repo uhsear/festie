@@ -7,6 +7,7 @@ import type { CrewWrapData, CrewWrapSeenTogether } from '../types/crewWrap';
 import { formatAmount } from './money';
 
 export interface CrewPosterContent {
+  dominant: { value: string; label: string };
   spotlight: { label: string; value: string; sub?: string };
   stats: { label: string; value: string }[];
   seenTogether: CrewWrapSeenTogether[];
@@ -18,9 +19,12 @@ export function crewPosterContent(wrap: CrewWrapData, { showMoney }: { showMoney
     { label: 'Seen together', value: String(wrap.setsSeenTogether.length) },
   ];
   const currency = wrap.currency ?? 'USD';
+  const count = wrap.setsSeenTogether.length;
+  const dominant = { value: String(count), label: count === 1 ? 'set loved together' : 'sets loved together' };
   if (showMoney) {
     const spender = wrap.biggestSpender;
     return {
+      dominant,
       spotlight: {
         label: 'Biggest spender',
         value: spender ? spender.name : 'No expenses yet',
@@ -32,6 +36,7 @@ export function crewPosterContent(wrap: CrewWrapData, { showMoney }: { showMoney
   }
   const favourite = wrap.setsSeenTogether[0];
   return {
+    dominant,
     spotlight: favourite
       ? {
           label: 'Crew favourite',

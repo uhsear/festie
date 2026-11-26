@@ -26,6 +26,7 @@ describe('crewPosterContent', () => {
     expect(c.spotlight).toEqual({ label: 'Biggest spender', value: 'Sam', sub: 'fronted €99.50' });
     expect(c.stats.find((s) => s.label === 'Split')?.value).toBe('€123.45');
     expect(c.seenTogether).toHaveLength(5);
+    expect(c.dominant).toEqual({ value: '8', label: 'sets loved together' });
     expect(crewPosterContent(wrap({ biggestSpender: null }), { showMoney: true }).spotlight.value).toBe(
       'No expenses yet',
     );

@@ -1,10 +1,12 @@
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { colors, POSTER as POSTER_TOKENS } from '@festie/shared/tokens';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
-import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M } from '@festie/shared/utils';
+import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M, posterBand } from '@festie/shared/utils';
+import { posterFont } from '../hooks/useTokens';
 import type { ScheduleImageFormat, ScheduleImageModel } from '@festie/shared/utils';
 
 const SHARED = POSTER_TOKENS.colors;
+const MARK = require('../assets/splash-icon.png');
 const POSTER = {
   bg: SHARED.ground,
   text: SHARED.text,
@@ -20,7 +22,7 @@ interface Props {
 /**
  * Fixed-size picks poster (story, lock screen or A4 print), rendered off-screen and
  * captured to a PNG with react-native-view-shot. The native twin of the web
- * ScheduleImagePoster: both read SCHEDULE_POSTER_METRICS, flat background instead of radial glows.
+ * ScheduleImagePoster: both read SCHEDULE_POSTER_METRICS, one festival-hue band instead of radial glows.
  * Fixed-pixel image: text ignores the OS font size (documented exception to the typeStyle() rule).
  */
 export default function ScheduleImagePoster({ model, format }: Props) {
@@ -39,6 +41,7 @@ export default function ScheduleImagePoster({ model, format }: Props) {
         },
       ]}
     >
+      <View style={[s.band, { width: layout.width, backgroundColor: posterBand(model.festivalName).colour }]} />
       <Text allowFontScaling={false} style={s.festival} numberOfLines={1}>
         {model.festivalName}
       </Text>
@@ -89,9 +92,13 @@ export default function ScheduleImagePoster({ model, format }: Props) {
           </View>
         ))}
       </View>
-      <Text allowFontScaling={false} style={s.footer} numberOfLines={1}>
-        {model.footer}
-      </Text>
+      <View style={s.footerRow}>
+        <Text allowFontScaling={false} style={s.footer} numberOfLines={1}>
+          {model.footer}
+        </Text>
+        <Image source={MARK} style={s.footerMark} accessible={false} />
+        <Text allowFontScaling={false} style={s.footerLockup}>FESTIE</Text>
+      </View>
     </View>
   );
 }
@@ -101,7 +108,8 @@ const s = StyleSheet.create({
     backgroundColor: POSTER.bg,
     paddingHorizontal: M.padX,
   },
-  festival: { color: POSTER.text, fontSize: M.titleSize, lineHeight: M.titleLine, fontWeight: '700' },
+  band: { position: 'absolute', top: 0, left: 0, height: POSTER_TOKENS.band.height },
+  festival: { ...posterFont(POSTER_TOKENS.weight, true), color: POSTER.text, fontSize: M.titleSize, lineHeight: M.titleLine },
   day: {
     color: POSTER.muted,
     fontSize: M.daySize,
@@ -116,5 +124,8 @@ const s = StyleSheet.create({
   artist: { color: POSTER.text, fontWeight: '700' },
   stage: { color: POSTER.muted },
   priority: { fontWeight: '700' },
-  footer: { color: POSTER.muted, fontSize: M.footerSize, lineHeight: M.footerLine, marginTop: M.footerGapTop },
+  footerRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: M.footerGapTop },
+  footer: { flex: 1, color: POSTER.muted, fontSize: M.footerSize, lineHeight: M.footerLine },
+  footerMark: { width: M.footerLine, height: M.footerLine },
+  footerLockup: { ...posterFont(POSTER_TOKENS.weight, true), color: POSTER.text, fontSize: M.footerSize, letterSpacing: 3 },
 });

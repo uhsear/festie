@@ -29,4 +29,17 @@ describe('WrapCardPoster', () => {
     const withOpacity = Array.from(container.querySelectorAll<HTMLElement>('*')).filter((el) => el.style.opacity !== '');
     expect(withOpacity).toEqual([]);
   });
+
+  it('draws one band, one 360 px dominant object and at most five rows in Clash 700', () => {
+    const six = { ...card, dominant: { value: '6', label: 'sets planned' }, rows: Array.from({ length: 6 }, (_, i) => ({ primary: `Act ${i}`, time: '8:00 PM' })) };
+    const { container } = render(<WrapCardPoster card={six} festivalName="Coachella" />);
+    expect(container.querySelectorAll('[data-poster="band"]').length).toBe(1);
+    const dominant = container.querySelector<HTMLElement>('[data-poster="dominant"]')!;
+    expect(dominant.textContent).toBe('6');
+    expect(parseInt(dominant.style.fontSize, 10)).toBeGreaterThanOrEqual(360);
+    expect(dominant.style.fontWeight).toBe('700');
+    expect(dominant.style.fontFamily).toContain('Clash Display');
+    expect(container.querySelectorAll('[data-poster="row"]').length).toBe(5);
+    expect(container.innerHTML).not.toMatch(/radial-gradient|font-weight: ?[89]00/);
+  });
 });
