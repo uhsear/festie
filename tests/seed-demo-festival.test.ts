@@ -100,6 +100,30 @@ describe('seed-demo-festival on the test database', { skip }, () => {
     assert.equal(await count("SELECT count(*) AS n FROM users WHERE id LIKE 'demo-user-%'"), 3);
   });
 
+  test('removal succeeds after a demo user signed in and created rows', async () => {
+    await seedDemo(pool, new Date('2026-06-10T16:00:00Z'));
+    await pool.query("INSERT INTO user_sessions (token, user_id) VALUES ('demo-test-token', 'demo-user-ava')");
+    await removeDemo(pool);
+    assert.equal(await count("SELECT count(*) AS n FROM users WHERE id LIKE 'demo-user-%'"), 0);
+    assert.equal(await count("SELECT count(*) AS n FROM user_sessions WHERE token = 'demo-test-token'"), 0);
+  });
+
+  test('a failed rebuild rolls back the delete and keeps the demo rows', async () => {
+    const noon = new Date('2026-06-10T16:00:00Z');
+    await seedDemo(pool, noon);
+    const failing = {
+      connect: async () => {
+        const client = await pool.connect();
+        const query = client.query.bind(client) as (...args: unknown[]) => Promise<unknown>;
+        (client as any).query = (sql: unknown, ...rest: unknown[]) =>
+          typeof sql === 'string' && /INSERT INTO\s+festival_sets/.test(sql) ? Promise.reject(new Error('insert failed')) : query(sql, ...rest);
+        return client;
+      },
+    } as unknown as Pool;
+    await assert.rejects(seedDemo(failing, noon), /insert failed/);
+    assert.equal(await count("SELECT count(*) AS n FROM festival_sets WHERE festival_id = 'demo-moonlit-orchard'"), 18);
+  });
+
   test('removal deletes every demo row and no other user', async () => {
     const others = await count("SELECT count(*) AS n FROM users WHERE id NOT LIKE 'demo-user-%'");
     await removeDemo(pool);

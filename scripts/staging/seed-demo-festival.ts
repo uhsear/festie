@@ -23,7 +23,7 @@
  * connection opens.
  */
 
-import { Client, Pool } from 'pg';
+import { Client, Pool, type PoolClient } from 'pg';
 
 const PRODUCTION_DATABASE = 'festival_planner'; // secret-scan: allow names the guarded production database on purpose
 const TIME_ZONE = 'America/New_York';
@@ -128,16 +128,43 @@ export function todaySchedule(minuteOfDay: number): [string, string, string, str
 
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-export async function removeDemo(pool: Pool): Promise<void> {
+// Rows a demo user can create after someone signs in as them. Their user foreign keys are RESTRICT,
+// so the users delete fails while any remain. Mirrors the tables lib/db/stores/users.ts clears.
+const DEMO_USER_ROWS: [table: string, column: string][] = [
+  ['crew_poll_votes', 'user_id'], ['crew_polls', 'created_by'], ['crew_meeting_points', 'created_by'], ['crew_expenses', 'paid_by'],
+  ['crew_activity', 'user_id'], ['crew_members', 'user_id'], ['set_ratings', 'user_id'], ['calendar_tokens', 'user_id'],
+  ['device_tokens', 'user_id'], ['notification_preferences', 'user_id'], ['notification_log', 'user_id'], ['notification_counts', 'user_id'],
+  ['notification_topic_subs', 'user_id'], ['refresh_tokens', 'user_id'], ['user_sessions', 'user_id'], ['login_failures', 'user_id'],
+  ['password_reset_tokens', 'user_id'], ['email_verification_tokens', 'user_id'], ['user_roles', 'user_id'],
+  ['festival_profiles', 'user_id'], ['crews', 'created_by'],
+];
+
+async function deleteDemoRows(db: Pick<PoolClient, 'query'>): Promise<void> {
   const crews = `SELECT id FROM crews WHERE festival_id = ANY($1)`;
-  const del = (sql: string) => pool.query(sql, [FESTIVALS]);
+  const del = (sql: string) => db.query(sql, [FESTIVALS]);
   await del(`DELETE FROM crew_poll_votes WHERE poll_id IN (SELECT id FROM crew_polls WHERE crew_id IN (${crews}))`);
   for (const table of ['crew_polls', 'crew_expenses', 'crew_members']) await del(`DELETE FROM ${table} WHERE crew_id IN (${crews})`);
   await del('DELETE FROM crews WHERE festival_id = ANY($1)');
   await del('DELETE FROM festival_profiles WHERE festival_id = ANY($1)'); // cascades picks and notes
   for (const table of ['festival_sets', 'festival_days', 'festival_stages']) await del(`DELETE FROM ${table} WHERE festival_id = ANY($1)`);
   await del('DELETE FROM festivals WHERE id = ANY($1)');
-  await pool.query('DELETE FROM users WHERE id LIKE $1', [`${USER_PREFIX}%`]);
+  for (const [table, column] of DEMO_USER_ROWS) await db.query(`DELETE FROM ${table} WHERE ${column} LIKE $1`, [`${USER_PREFIX}%`]);
+  await db.query('DELETE FROM users WHERE id LIKE $1', [`${USER_PREFIX}%`]);
+}
+
+/** Deletes every demo row in one transaction, so a failure leaves the demo as it was. */
+export async function removeDemo(pool: Pool): Promise<void> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await deleteDemoRows(client);
+    await client.query('COMMIT');
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 async function insertFestival(
@@ -252,10 +279,10 @@ async function seedCrew(client: any, setIds: Record<string, string>) {
 export async function seedDemo(pool: Pool, now = new Date()) {
   const { date, minute } = localNow(now);
   const today = todaySchedule(minute);
-  await removeDemo(pool);
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    await deleteDemoRows(client);
     await insertFestival(client, MAIN, 'Moonlit Orchard Fest', STAGES, [
       { label: 'Today', date },
       { label: 'Tomorrow', date: addDays(date, 1) },
