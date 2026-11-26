@@ -274,64 +274,38 @@
   border: 1px solid var(--color-aqua-a3);
 }
 
-/* R21 (design-inspiration-deep-2026-06-10): Empty state dot-grid background
-   and fade-up animation on mount. Centered flex column with icon, headline,
-   subtext, and CTA button. */
-.empty-state {
-  position: relative;
-  overflow: hidden;
-}
-
-.empty-state::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: radial-gradient(circle, var(--color-aqua-a08) 1px, transparent 1px);
-  background-size: 24px 24px;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.empty-state-content {
-  position: relative;
-  z-index: 1;
-}
-
-@keyframes fadeUp {
+/* Empty state: one opacity fade on mount at the medium effects duration. No
+   overflow clip, so the CTA and its focus ring are never cut off. When the
+   viewport is short the illustration yields to the 48px icon. */
+@keyframes emptyStateFade {
   from {
     opacity: 0;
-    transform: translateY(12px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
   }
 }
 
-.empty-state-icon {
-  animation: fadeUp 400ms ease-out both;
+.empty-state {
+  animation: emptyStateFade var(--duration-effects-med) ease-out both;
 }
 
-.empty-state-title {
-  animation: fadeUp 400ms ease-out both;
-  animation-delay: 80ms;
+.empty-state-fallback-icon {
+  display: none;
 }
 
-.empty-state-description {
-  animation: fadeUp 400ms ease-out both;
-  animation-delay: 160ms;
-}
+@media (max-height: 700px) {
+  .empty-state-illustration {
+    display: none;
+  }
 
-.empty-state-cta {
-  animation: fadeUp 400ms ease-out both;
-  animation-delay: 240ms;
+  .empty-state-fallback-icon {
+    display: flex;
+  }
 }
 
 @media (prefers-reduced-motion) {
-  .empty-state-icon,
-  .empty-state-title,
-  .empty-state-description,
-  .empty-state-cta {
+  .empty-state {
     animation: none;
   }
 }

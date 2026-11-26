@@ -3,8 +3,16 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Button from './Button';
 import { SvgXml } from 'react-native-svg';
-import { illustrationSvg, type IllustrationName } from '@festie/shared/illustrations';
-import { makeStyles, typeStyle, useTokens } from '../hooks/useTokens';
+import { illustrationSvg, illustrationSlot, type IllustrationName } from '@festie/shared/illustrations';
+import { makeStyles, typeStyle, useLargeText, useTokens } from '../hooks/useTokens';
+
+// Drawn at the 48px icon size instead of the illustration at large text.
+const FALLBACK_ICON: Record<IllustrationName, keyof typeof Ionicons.glyphMap> = {
+  noPicks: 'heart-outline',
+  noCrew: 'people-outline',
+  emptyList: 'file-tray-outline',
+  offline: 'cloud-offline-outline',
+};
 
 interface EmptyStateProps {
   /** Ionicons name for the centered glyph. Optional when `illustration` is given. */
@@ -40,17 +48,19 @@ export default function EmptyState({ icon, title, message, action, secondaryActi
   const styles = useStyles();
   const t = useTokens();
   const insets = useSafeAreaInsets();
+  const largeText = useLargeText();
+  const glyph = icon ?? (illustration && largeText ? FALLBACK_ICON[illustration] : undefined);
   const insetStyle = headerless ? { paddingTop: insets.top, paddingBottom: insets.bottom } : null;
   return (
     <View style={[styles.container, insetStyle]}>
       {/* R21: Icon 48px in secondary text colour (same token as web), or the shared illustration. */}
-      {illustration ? (
+      {illustration && !largeText ? (
         <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <SvgXml xml={illustrationSvg(illustration, t.colors.text.secondary)} width={160} height={112} />
+          <SvgXml xml={illustrationSvg(illustration, t.colors.text.secondary)} width={illustrationSlot.width} height={illustrationSlot.height} />
         </View>
-      ) : icon ? (
+      ) : glyph ? (
         <Ionicons
-          name={icon}
+          name={glyph}
           size={t.iconSize.xl}
           style={styles.icon}
           accessibilityElementsHidden

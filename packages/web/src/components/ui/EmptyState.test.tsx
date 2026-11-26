@@ -102,13 +102,19 @@ describe('EmptyState', () => {
     expect(onClick).toHaveBeenCalledOnce();
   });
 
-  it('renders an illustration image with empty alt instead of the icon', () => {
+  it('draws the illustration in the shared 160 by 112 slot and keeps an icon fallback', () => {
     const { container } = render(
       <EmptyState title="Empty" illustration="noPicks" icon={<span data-testid="empty-icon" />} />,
     );
     const img = container.querySelector('img');
     expect(img).toHaveAttribute('alt', '');
     expect(img?.getAttribute('src')).toMatch(/^data:image\/svg\+xml/);
-    expect(screen.queryByTestId('empty-icon')).not.toBeInTheDocument();
+    expect(img).toHaveStyle({ width: '160px', height: '112px' });
+    expect(container.querySelector('.empty-state-fallback-icon')).toContainElement(screen.getByTestId('empty-icon'));
+  });
+
+  it('falls back to a default icon when an illustration has no icon prop', () => {
+    const { container } = render(<EmptyState title="Empty" illustration="noCrew" />);
+    expect(container.querySelector('.empty-state-fallback-icon svg')).not.toBeNull();
   });
 });
