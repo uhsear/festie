@@ -30,6 +30,7 @@
     "typecheck": "tsc --noEmit",
     "typecheck:fast": "tsgo --noEmit",
     "gen:theme": "tsx scripts/gen-theme-css.ts",
+    "gen:design": "tsx scripts/gen-design-md.ts",
     "lint": "eslint src/ --ext .ts,.tsx"
   },
   "dependencies": {
