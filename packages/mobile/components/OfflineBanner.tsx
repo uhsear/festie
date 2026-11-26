@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { StatusBar } from 'expo-status-bar';
 import * as Sentry from '@sentry/react-native';
 import { useUIStore } from '@festie/shared/stores';
 import type { FailedSyncItem } from '@festie/shared/stores';
@@ -29,7 +30,8 @@ function dismissFailed(clientId: string): void {
  *
  *  1. FAILED  — failedSync.length > 0: a coral bar "{n} couldn't sync" that
  *     opens a modal listing each item with Retry / Dismiss.
- *  2. OFFLINE — offlineMode: amber "you're offline" + pending count.
+ *  2. OFFLINE — offlineMode: a slim persistent status row (neutral ground, amber on the
+ *     icon only) "Offline, N changes waiting". It carries no action, so it has no dismiss.
  *  3. SYNCING — online with pendingSync > 0: "Syncing {n}…".
  *
  * Mounted once at the app root so it overlays every screen.
@@ -49,25 +51,19 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
   const insets = useSafeAreaInsets();
 
   const offlineMode = useUIStore((s) => s.offlineMode);
+  const theme = useUIStore((s) => s.theme);
   const pendingSync = useUIStore((s) => s.pendingSync);
   const failedSync = useUIStore((s) => s.failedSync);
   const clearFailedSync = useUIStore((s) => s.clearFailedSync);
-  const [dismissed, setDismissed] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
 
   const failedCount = failedSync.length;
   // Close the review sheet once the last failure is dismissed or retried away (render-time reset, no effect).
   if (sheetOpen && failedCount === 0) setSheetOpen(false);
 
-  // Re-arm the offline banner for the next offline episode once back online.
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- event-driven re-arm: once connectivity returns, clear the user's manual dismissal so the banner can show again on the next offline episode. Not derivable — `dismissed` is user intent that must persist within an episode.
-    if (!offlineMode && dismissed) setDismissed(false);
-  }, [offlineMode, dismissed]);
-
   // ── State resolution (FAILED > OFFLINE > SYNCING) ─────────────────
   const showFailed = failedCount > 0;
-  const showOffline = offlineMode && !dismissed;
+  const showOffline = offlineMode;
   const showSyncing = !offlineMode && pendingSync > 0;
   const active = showFailed || showOffline || showSyncing;
 
@@ -99,24 +95,19 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
     if (showOffline) {
       return (
         <View
-          style={[styles.banner, { paddingTop: insets.top + t.spacing[2] }]}
+          style={[styles.statusRow, { paddingTop: insets.top + t.spacing[1] }]}
           accessibilityRole="alert"
           accessibilityLiveRegion="polite"
         >
-          <View style={styles.dot} />
-          <Text style={styles.text} numberOfLines={2}>
+          {/* The root status bar flips its icons for the coloured bars; this row is neutral ground, so
+              the later-mounted bar restores the theme's icon colour while the row shows. */}
+          <StatusBar style={theme === 'daylight' ? 'dark' : 'light'} />
+          <Ionicons name="cloud-offline" size={t.iconSize.sm} color={t.colors.accent.amber} />
+          <Text style={styles.statusText} numberOfLines={2}>
             {pendingSync > 0
-              ? `You're offline — showing your saved schedule · ${pendingSync} change${pendingSync === 1 ? '' : 's'} will sync when you reconnect`
-              : "You're offline — showing your saved schedule"}
+              ? `Offline, ${pendingSync} change${pendingSync === 1 ? '' : 's'} waiting`
+              : 'Offline, showing your saved schedule'}
           </Text>
-          <TouchableOpacity
-            onPress={() => setDismissed(true)}
-            style={styles.dismiss}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss offline notice"
-          >
-            <Ionicons name="close" size={t.iconSize.action} color={t.colors.bg.primary} />
-          </TouchableOpacity>
         </View>
       );
     }
@@ -228,7 +219,21 @@ const useStyles = makeStyles((t) => ({
     gap: t.spacing[2],
     paddingHorizontal: t.spacing[4],
     paddingBottom: t.spacing[2],
-    backgroundColor: t.colors.accent.amber,
+  },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: t.spacing[2],
+    paddingHorizontal: t.spacing[4],
+    paddingBottom: t.spacing[1],
+    backgroundColor: t.colors.bg.secondary,
+    borderBottomWidth: 1,
+    borderBottomColor: t.colors.border.default,
+  },
+  statusText: {
+    ...typeStyle('caption', 600),
+    color: t.colors.text.secondary,
+    flex: 1,
   },
   bannerFailed: {
     backgroundColor: t.colors.delivery.failed,

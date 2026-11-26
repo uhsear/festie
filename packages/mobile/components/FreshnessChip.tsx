@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import { View, Text } from 'react-native';
 import { useCrewStore, useFestivalDataStore, useUIStore } from '@festie/shared/stores';
-import { formatFreshnessLabel } from '@festie/shared/utils';
+import { formatFreshnessLabel, signalGlows, signalStateFor } from '@festie/shared/utils';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
-import { freshnessFor } from '../lib/freshness';
 
 type Surface = 'crew' | 'schedule';
 
@@ -49,29 +48,34 @@ export default function FreshnessChip({ surface }: FreshnessChipProps) {
   const label = formatFreshnessLabel(cachedAt, offlineMode);
   if (!label || cachedAt == null) return null;
 
-  // Colour is never alone (tokens/colors.ts): the age numeral is in the label,
-  // the shape is filled (live) / hollow ring (aging) / dashed ring (stale).
-  const freshness = freshnessFor(cachedAt);
-  const confidenceColor = t.colors.confidence[freshness];
-  const dotShape =
-    freshness === 'live'
-      ? { backgroundColor: confidenceColor }
-      : {
-          borderWidth: 1.5,
-          borderColor: confidenceColor,
-          borderStyle: freshness === 'stale' ? ('dashed' as const) : ('solid' as const),
-        };
+  // Colour is never alone (tokens/colors.ts): the age numeral is in the label, and the dot is a
+  // shape: filled with a glow (live), dimmed hollow ring (aging), dashed ring (stale), dotted ring
+  // (offline). Stale and offline lose the glow.
+  const signal = signalStateFor(cachedAt, offlineMode);
+  const confidenceColor = t.colors.confidence[signal === 'offline' ? 'stale' : signal];
+  const dotShape = signalGlows(signal)
+    ? { backgroundColor: confidenceColor }
+    : {
+        borderWidth: 1.5,
+        borderColor: confidenceColor,
+        borderStyle: signal === 'offline' ? ('dotted' as const) : signal === 'stale' ? ('dashed' as const) : ('solid' as const),
+        opacity: signal === 'aging' ? 0.7 : 1,
+      };
 
-  const a11yBase = freshness === 'stale' ? `${label}, may be out of date` : label;
+  const a11yBase = signal === 'stale' ? `${label}, may be out of date` : label;
   const a11yLabel =
     pendingSync > 0 ? `${a11yBase}, ${pendingSync} change${pendingSync === 1 ? '' : 's'} queued` : a11yBase;
 
   return (
     <View style={styles.row} accessibilityRole="text" accessibilityLabel={a11yLabel}>
       <View style={styles.chip}>
-        <View style={[styles.chipBg, offlineMode ? styles.chipBgOffline : styles.chipBgOnline]} pointerEvents="none" />
-        <View style={[styles.dot, dotShape]} accessible={false} />
-        <Text style={[styles.chipText, offlineMode && styles.chipTextOffline]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        <View style={styles.chipBg} pointerEvents="none" />
+        <View style={styles.dotSlot} accessible={false}>
+          {/* The glow: a soft halo behind the dot, live only. A shadow would need elevation on Android. */}
+          {signalGlows(signal) ? <View style={[styles.halo, { backgroundColor: confidenceColor }]} /> : null}
+          <View style={[styles.dot, dotShape]} />
+        </View>
+        <Text style={styles.chipText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {/* Trailing NBSP absorbs Fabric's single-line self-under-measure (the
               bg-sibling already prevents the rounded-pill clip) so "…just now"
               doesn't drop its last glyph. */}
@@ -113,14 +117,22 @@ const useStyles = makeStyles((t) => ({
     bottom: 0,
     left: 0,
     borderRadius: t.radii.pill,
-  },
-  chipBgOnline: {
     backgroundColor: t.colors.bg.secondary,
   },
-  chipBgOffline: {
-    backgroundColor: t.colors.amberAlpha[12],
-    borderWidth: 1,
-    borderColor: t.colors.accent.amber,
+  dotSlot: {
+    width: 14,
+    height: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  halo: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    borderRadius: 7,
+    opacity: 0.3,
   },
   dot: {
     width: 8,
@@ -131,9 +143,6 @@ const useStyles = makeStyles((t) => ({
     ...typeStyle('caption', undefined, { tabular: true }),
     color: t.colors.text.muted,
     flexShrink: 1,
-  },
-  chipTextOffline: {
-    color: t.colors.accent.amber,
   },
   queuedBadge: {
     paddingHorizontal: t.spacing[2],

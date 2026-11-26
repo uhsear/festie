@@ -79,4 +79,18 @@ describe('FreshnessChip', () => {
     render(<FreshnessChip surface="schedule" />);
     expect(screen.getByText(/Updated 1h ago/)).toBeInTheDocument();
   });
+
+  it.each([
+    [0, false, 'live', true],
+    [20 * 60_000, false, 'aging', false],
+    [3 * 3_600_000, false, 'stale', false],
+    [0, true, 'offline', false],
+  ])('age %i ms offline=%s is %s and glows=%s', (age, offline, state, glows) => {
+    setUI({ offlineMode: offline });
+    setCrewCachedAt(Date.now() - age);
+    const { container } = render(<FreshnessChip surface="crew" />);
+    const dot = container.querySelector(`[data-signal="${state}"]`);
+    expect(dot).not.toBeNull();
+    expect(dot?.className.includes('shadow-[var(--shadow-glow-green)]')).toBe(glows);
+  });
 });
