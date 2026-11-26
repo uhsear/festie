@@ -47,6 +47,10 @@ const CLAIMS: Claim[] = [
     { file: 'packages/mobile/app/plan-share.tsx', contains: 'export' },
     { file: 'packages/mobile/components/PlanQRScan.tsx', contains: 'export' },
   ] },
+  { name: 'offline use', phrase: /offline/i, proofs: [
+    { file: 'packages/mobile/app/plan-share.tsx', contains: 'export' },
+    { file: 'packages/mobile/components/PlanQRScan.tsx', contains: 'export' },
+  ] },
   { name: 'offline map (narrow)', phrase: /offline maps?/i, proofs: [
     { file: 'packages/mobile/lib/basemapCache.ts', contains: 'MAX_INLINE_BYTES' },
   ] },
@@ -54,8 +58,8 @@ const CLAIMS: Claim[] = [
 
 // SR-83 (OD-S17 = C): offline maps exist only for festivals that provide an archive.
 const OVERCLAIMS = [
-  /offline maps?\b[^.\n]*\b(every|all|any) festivals?/i,
-  /\b(every|all|any) festivals?\b[^.\n]*offline maps?/i,
+  /\boffline\b[^.\n]*\b(every|all|any)\b[^.\n]{0,20}festivals?/i,
+  /\b(every|all|any)\b[^.\n]{0,20}festivals?\b[^.\n]*\boffline\b/i,
   /\b(full|complete)\b[^.\n]*offline maps?/i,
 ];
 
@@ -112,6 +116,9 @@ describe('store claims', () => {
     expect('Full offline map for every festival').toMatch(OVERCLAIMS[0]!);
     expect('Download any festival for an offline map').toMatch(OVERCLAIMS[1]!);
     expect('A complete offline map').toMatch(OVERCLAIMS[2]!);
+    for (const bad of ['Offline maps for all your festivals', 'Use the map offline at any festival', 'Works offline at every festival']) {
+      expect(OVERCLAIMS.some((re) => re.test(bad)), bad).toBe(true);
+    }
     for (const ok of ['Offline maps open where the festival provides one; a pin list otherwise.']) {
       for (const bad of OVERCLAIMS) expect(ok).not.toMatch(bad);
     }
