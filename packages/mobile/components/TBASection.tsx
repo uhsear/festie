@@ -104,7 +104,7 @@ function TBACard({
               >
                 <Ionicons
                   name={option.icon}
-                  size={12} // DC25: 13 is off-grid; snap to iconSize.xs (12).
+                  size={t.iconSize.xs} // DC25: 13 is off-grid; snap to iconSize.xs (12).
                   color={active ? t.colors.text.onLightAccent : t.colors.text.muted}
                 />
               </TouchableOpacity>
@@ -185,7 +185,7 @@ export default function TBASection({
         <Text style={styles.headerText} numberOfLines={2}>
           TBA — Times Not Yet Announced ({sets.length} {sets.length === 1 ? 'set' : 'sets'})
         </Text>
-        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={t.colors.text.muted} />
+        <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={t.iconSize.action} color={t.colors.text.muted} />
       </Pressable>
 
       {expanded ? (

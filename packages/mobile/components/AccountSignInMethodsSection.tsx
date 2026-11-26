@@ -99,7 +99,7 @@ export default function AccountSignInMethodsSection({ identities: state, onChang
       </Text>
       <View style={styles.row}>
         <View style={styles.rowIcon}>
-          <Ionicons name="key-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="key-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </View>
         <Text style={styles.rowTitle}>{PROVIDER_COPY.password}</Text>
         <Text style={styles.rowHint}>{state.hasPassword ? 'Set' : PROVIDER_COPY.passwordNotSet}</Text>

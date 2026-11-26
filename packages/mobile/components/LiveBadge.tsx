@@ -16,7 +16,7 @@ interface LiveBadgeProps {
  *
  * R6: 9999px radius, 3px/10px padding, 11px Space Grotesk 500, 0.04em tracking.
  * Color assignments:
- *   live     → coralStrong fill + white ink (AA ~6.04:1, sole coral exception)
+ *   live     → live.fill + onLightAccent ink (OD-3: live is green, never coral)
  *   soon     → aqua fill + onLightAccent dark ink (R6 NOW PLAYING, AA)
  *   upcoming → transparent + 1px aqua/40% border + aqua text (R6 UP NEXT)
  */
@@ -78,20 +78,19 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: 10,
     paddingVertical: 3,
   },
-  // Live: coralStrong fill + white text — AA ~6.04:1.
-  // Deliberate danger-accent exception; not a CTA.
+  // Live: live.fill with onLightAccent ink (the same pairing passes AA in both themes).
   livePill: {
-    backgroundColor: t.colors.accent.coralStrong,
+    backgroundColor: t.colors.live.fill,
   },
   liveDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
-    backgroundColor: t.colors.text.onAccent,
+    backgroundColor: t.colors.text.onLightAccent,
   },
   liveText: {
     ...PILL_TEXT_BASE,
-    color: t.colors.text.onAccent,
+    color: t.colors.text.onLightAccent,
   },
   // R6 NOW PLAYING (soon): aqua fill + onLightAccent dark ink. AA.
   soonPill: {

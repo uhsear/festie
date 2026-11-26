@@ -72,7 +72,7 @@ export default function FestivalReadyCard({ ready }: Props) {
             <>
               <Ionicons
                 name={item.done ? 'checkmark-circle' : 'ellipse-outline'}
-                size={20}
+                size={t.iconSize.md}
                 color={item.done ? t.colors.accent.aqua : t.colors.text.muted}
               />
               <View style={styles.rowText}>
@@ -88,7 +88,7 @@ export default function FestivalReadyCard({ ready }: Props) {
                   </Text>
                 )}
               </View>
-              {destination ? <Ionicons name="chevron-forward" size={16} color={t.colors.text.muted} /> : null}
+              {destination ? <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.muted} /> : null}
             </>
           );
           return destination ? (

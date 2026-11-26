@@ -544,7 +544,7 @@ export default function RegisterScreen() {
             accessibilityRole="button"
             accessibilityLabel={showPw ? 'Hide password' : 'Show password'}
           >
-            <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={20} color={t.colors.text.secondary} />
+            <Ionicons name={showPw ? 'eye-off-outline' : 'eye-outline'} size={t.iconSize.md} color={t.colors.text.secondary} />
           </TouchableOpacity>
         </View>
         {errors.password ? (
@@ -610,7 +610,7 @@ export default function RegisterScreen() {
           <Text style={dobLabel ? styles.dobText : styles.dobPlaceholder}>
             {dobLabel ?? 'Date of birth'}
           </Text>
-          <Ionicons name="calendar-outline" size={20} color={t.colors.text.secondary} />
+          <Ionicons name="calendar-outline" size={t.iconSize.md} color={t.colors.text.secondary} />
         </Pressable>
         {errors.dateOfBirth ? (
           <Text style={styles.fieldError} accessibilityRole="alert" accessibilityLiveRegion="assertive">
@@ -634,7 +634,7 @@ export default function RegisterScreen() {
           >
             <Ionicons
               name={tosAccepted ? 'checkbox' : 'square-outline'}
-              size={20}
+              size={t.iconSize.md}
               color={tosAccepted ? t.colors.accent.aqua : t.colors.text.secondary}
             />
           </TouchableOpacity>

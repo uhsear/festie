@@ -71,7 +71,7 @@ export default function PlanShareScreen() {
             >
               <Ionicons
                 name={item.icon}
-                size={16}
+                size={t.iconSize.sm}
                 color={active ? t.colors.text.onLightAccent : t.colors.text.secondary}
               />
               <Text

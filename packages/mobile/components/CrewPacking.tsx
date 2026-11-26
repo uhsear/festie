@@ -154,7 +154,7 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
               accessibilityRole="button"
               accessibilityLabel="Cancel new packing item"
             >
-              <Ionicons name="close" size={18} color={t.colors.text.secondary} />
+              <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.secondary} />
             </TouchableOpacity>
           </View>
           <TextInput
@@ -185,9 +185,9 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
           accessibilityRole="button"
           accessibilityLabel="Add a packing item"
         >
-          <Ionicons name="bag-add-outline" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="bag-add-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.toggleText}>Add packing item</Text>
-          <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="add" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         </TouchableOpacity>
       )}
 
@@ -320,7 +320,7 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
                         accessibilityLabel={`Packed: ${item.label}`}
                       >
                         <View style={[styles.checkbox, claim.packed && styles.checkboxOn]}>
-                          {claim.packed ? <Ionicons name="checkmark" size={16} color={t.colors.accent.aqua} /> : null}
+                          {claim.packed ? <Ionicons name="checkmark" size={t.iconSize.sm} color={t.colors.accent.aqua} /> : null}
                         </View>
                         <Text style={styles.actionText}>Packed</Text>
                       </TouchableOpacity>
@@ -360,7 +360,7 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
                   accessibilityRole="button"
                   accessibilityLabel={`Remove ${item.label}`}
                 >
-                  <Ionicons name="trash-outline" size={16} color={t.colors.accent.coral} />
+                  <Ionicons name="trash-outline" size={t.iconSize.sm} color={t.colors.accent.coral} />
                 </TouchableOpacity>
               ) : null}
             </RowContainer>

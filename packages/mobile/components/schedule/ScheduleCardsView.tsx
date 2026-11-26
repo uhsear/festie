@@ -146,7 +146,7 @@ export default function ScheduleCardsView({
           accessibilityRole="button"
           accessibilityLabel="Scroll to top of the lineup"
         >
-          <Ionicons name="chevron-up" size={18} color={t.colors.text.onLightAccent} />
+          <Ionicons name="chevron-up" size={t.iconSize.action} color={t.colors.text.onLightAccent} />
           <Text style={styles.scrollTopText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             Top
           </Text>

@@ -206,7 +206,7 @@ export default function AccountIdentityCard() {
         )}
         {/* Camera affordance badge so it reads as tappable. */}
         <View style={styles.camBadge}>
-          <Ionicons name="camera" size={12} color={t.colors.text.onLightAccent} />
+          <Ionicons name="camera" size={t.iconSize.xs} color={t.colors.text.onLightAccent} />
         </View>
       </TouchableOpacity>
 
@@ -244,7 +244,7 @@ export default function AccountIdentityCard() {
             >
               <Ionicons
                 name={emailVerified ? 'checkmark-circle' : 'alert-circle'}
-                size={12}
+                size={t.iconSize.xs}
                 color={emailVerified ? t.colors.status.verified : t.colors.accent.amber}
                 style={styles.chipIcon}
               />
@@ -259,7 +259,7 @@ export default function AccountIdentityCard() {
           ) : null}
           {isAdmin ? (
             <View style={[styles.chip, styles.chipAdmin]} accessibilityRole="text" accessibilityLabel="Administrator">
-              <Ionicons name="shield-half" size={12} color={t.colors.accent.aqua} style={styles.chipIcon} />
+              <Ionicons name="shield-half" size={t.iconSize.xs} color={t.colors.accent.aqua} style={styles.chipIcon} />
               <Text style={[styles.chipText, styles.chipTextAdmin]} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
                 Admin
               </Text>
@@ -270,7 +270,7 @@ export default function AccountIdentityCard() {
         <View style={styles.photoLine}>
           {saved ? (
             <View style={styles.savedRow} accessibilityLiveRegion="polite">
-              <Ionicons name="checkmark-circle" size={13} color={t.colors.status.verified} style={styles.savedIcon} />
+              <Ionicons name="checkmark-circle" size={t.iconSize.compact} color={t.colors.status.verified} style={styles.savedIcon} />
               <Text style={styles.savedText}>Saved</Text>
             </View>
           ) : (

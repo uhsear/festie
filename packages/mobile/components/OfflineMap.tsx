@@ -55,6 +55,7 @@ import {
 import type { CrewMeetingPoint, PeerLocation, SosEntry, Festival, Stage, AmenityType } from '@festie/shared/types';
 import { useFestivalModeStore, useUIStore } from '@festie/shared/stores';
 import { FIND_FRIEND_COPY, LIVE_SHARE_COPY } from '@festie/shared/constants';
+import { colors, elevation } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, iconSize, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useListBottomInset } from '../hooks/useListBottomInset';
 import AppPressable from './AppPressable';
@@ -329,7 +330,7 @@ export default function OfflineMap({
         label: s.label,
         latitude: s.latitude,
         longitude: s.longitude,
-        color: s.color || '#19e3d3',
+        color: s.color || colors.accent.aqua,
       });
     }
     for (const a of amenityPins) {
@@ -1339,7 +1340,7 @@ export default function OfflineMap({
               if (s.position) router.push(compassHref(s.username, { latitude: s.position.lat, longitude: s.position.lng }));
             }}
           >
-            <Ionicons name="warning" size={20} color={t.colors.accent.coral} />
+            <Ionicons name="warning" size={t.iconSize.md} color={t.colors.accent.coral} />
             <View style={styles.rowBody}>
               <Text style={styles.rowLabel}>{s.username} — SOS</Text>
               <Text style={styles.rowSub}>
@@ -1380,7 +1381,7 @@ export default function OfflineMap({
           <View style={styles.emptyBlock}>
             {/* One-off 32px: sits between iconSize.lg (24) and .xl (48) — neither
                 token fits this empty-state glyph without a visible size jump. */}
-            <Ionicons name="location-outline" size={32} color={t.colors.text.muted} />
+            <Ionicons name="location-outline" size={t.iconSize.lg} color={t.colors.text.muted} />
             <Text style={styles.emptyTitle}>No meeting points yet</Text>
             <Text style={styles.emptyMsg}>
               Add a meeting point with a location in the Crew tab and it'll show here.
@@ -1511,7 +1512,7 @@ export default function OfflineMap({
             >
               <Ionicons
                 name={placing ? 'close' : 'add-circle-outline'}
-                size={16}
+                size={t.iconSize.sm}
                 color={placing ? t.colors.text.onAccent : t.colors.accent.aqua}
               />
               <Text
@@ -1535,7 +1536,7 @@ export default function OfflineMap({
               {pendingRecenter && geoState === 'locating' ? (
                 <ActivityIndicator size="small" color={t.colors.accent.aqua} />
               ) : (
-                <Ionicons name="locate" size={20} color={t.colors.accent.aqua} />
+                <Ionicons name="locate" size={t.iconSize.md} color={t.colors.accent.aqua} />
               )}
             </TouchableOpacity>
           ) : null}
@@ -1622,7 +1623,7 @@ export default function OfflineMap({
                 {selfCoord && pursuit && Number.isFinite(pursuit.bearingDeg) ? (
                   <Ionicons
                     name="navigate"
-                    size={24}
+                    size={t.iconSize.lg}
                     color={pursueIsSos ? t.colors.accent.coral : t.colors.accent.aqua}
                     // The Ionicons "navigate" glyph points NE (45°) at rotation 0,
                     // so subtract 45° from the compass bearing — a due-north target
@@ -1630,7 +1631,7 @@ export default function OfflineMap({
                     style={{ transform: [{ rotate: `${pursuit.bearingDeg - NAVIGATE_GLYPH_OFFSET_DEG}deg` }] }}
                   />
                 ) : (
-                  <Ionicons name="navigate-outline" size={24} color={t.colors.text.muted} />
+                  <Ionicons name="navigate-outline" size={t.iconSize.lg} color={t.colors.text.muted} />
                 )}
                 <View style={styles.pursueBody}>
                   {selfCoord && pursuit ? (
@@ -1669,7 +1670,7 @@ export default function OfflineMap({
                   accessibilityRole="button"
                   accessibilityLabel={MAP_COPY.stopShowingWay}
                 >
-                  <Ionicons name="close" size={16} color={t.colors.text.muted} />
+                  <Ionicons name="close" size={t.iconSize.sm} color={t.colors.text.muted} />
                 </TouchableOpacity>
               </View>
             ) : showCard && place ? (
@@ -1717,7 +1718,7 @@ export default function OfflineMap({
                     accessibilityLabel="Dismiss"
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
-                    <Ionicons name="close" size={16} color={t.colors.text.muted} />
+                    <Ionicons name="close" size={t.iconSize.sm} color={t.colors.text.muted} />
                   </TouchableOpacity>
                 </View>
                 {nearestNotice?.type === 'medical' ? (
@@ -1822,11 +1823,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.secondary,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 6,
+    ...elevation.low,
   },
   // ── Top slot under the chip bar: pursue bar, place card, Nearest notice or hint ──
   topSlot: {
@@ -1842,11 +1839,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.accent.aqua,
     backgroundColor: t.colors.bg.elevated,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 8,
+    ...elevation.high,
   },
   noticeText: {
     ...typeStyle('caption', 600),
@@ -1863,11 +1856,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.accent.aqua,
     backgroundColor: t.colors.bg.elevated,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 8,
+    ...elevation.high,
   },
   pursueBarSos: {
     borderColor: t.colors.accent.coral,
@@ -1918,7 +1907,7 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[4],
   },
   chipGlyph: {
-    fontSize: 13,
+    ...typeStyle('caption'),
     lineHeight: 16,
   },
   chipGlyphOff: {
@@ -1996,11 +1985,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.border.default,
     backgroundColor: t.colors.bg.secondary,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 6,
+    ...elevation.low,
   },
   dropPinButtonActive: {
     borderColor: t.colors.accent.coral,

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { DateTimePickerAndroid } from '@react-native-community/datetimepicker';
+import { colors } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens } from '../../hooks/useTokens';
 import DialogShell from '../DialogShell';
 import {
@@ -220,19 +221,19 @@ export function ModalSelect({
  * available via the TextInput for anything off-palette.
  */
 export const STAGE_COLOR_PRESETS: readonly string[] = [
-  '#00e8d0', // aqua (brand)
-  '#ff3366', // coral
-  '#ffb020', // amber
-  '#39ff14', // green
-  '#9c4dcb', // stage purple (accessible)
-  '#c01d3a', // coral-strong (deepened danger coral)
-  '#f0a030', // warm orange
-  '#22c55e', // verified green
-  '#ff6b6b', // soft red
-  '#1DB954', // spotify green
-  '#eaeaf2', // light
-  '#8787a8', // muted (fallback)
-] as const;
+  colors.accent.aqua,
+  colors.accent.coral,
+  colors.accent.amber,
+  colors.accent.green,
+  colors.stage.purpleAccessible,
+  colors.accent.coralStrong,
+  colors.status.warning,
+  colors.status.verified,
+  colors.text.danger,
+  colors.spotify.brand,
+  colors.text.primary,
+  colors.stage.fallback,
+];
 
 export interface HexColorFieldProps {
   label: string;

@@ -85,7 +85,7 @@ export default function ScheduleViewSwitcher({
           so the two search icons don't appear simultaneously on screen. */}
       <Ionicons
         name={searchOpen ? 'close' : 'search'}
-        size={18}
+        size={t.iconSize.action}
         color={searchOpen ? t.colors.accent.aqua : t.colors.text.secondary}
       />
     </TouchableOpacity>
@@ -102,7 +102,7 @@ export default function ScheduleViewSwitcher({
     >
       <Ionicons
         name="options-outline"
-        size={18}
+        size={t.iconSize.action}
         color={filtersOpen ? t.colors.accent.aqua : t.colors.text.secondary}
       />
       {filtersActive ? <View style={styles.toggleDot} /> : null}

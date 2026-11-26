@@ -9,6 +9,7 @@ import { COPY, FIND_FRIEND_COPY, LIVE_LOCATION } from '@festie/shared/constants'
 import { festivalLoadState, isPeerStale, mapCrewHintCopy } from '@festie/shared/utils';
 import { useMapCrew } from '@festie/shared/hooks';
 import type { CrewMeetingPoint } from '@festie/shared/types';
+import { elevation } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../../hooks/useTokens';
 import { useReduceMotion } from '../../hooks/useReduceMotion';
 import { useHaptics } from '../../hooks/useHaptics';
@@ -243,7 +244,7 @@ export default function MapScreen() {
               <ActivityIndicator color={t.colors.text.onAccent} />
             ) : (
               <>
-                <Ionicons name="alert-circle" size={20} color={t.colors.text.onAccent} />
+                <Ionicons name="alert-circle" size={t.iconSize.md} color={t.colors.text.onAccent} />
                 <Text style={styles.sosFabText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                   {mySosActive ? 'SOS active' : 'SOS'}
                 </Text>
@@ -308,11 +309,7 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[4],
     borderRadius: t.radii.pill,
     backgroundColor: t.colors.accent.coralStrong,
-    shadowColor: '#000',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 6,
+    ...elevation.low,
   },
   sosFabText: {
     ...typeStyle('label', 700),

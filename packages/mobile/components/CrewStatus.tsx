@@ -266,7 +266,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
     <View style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTitleRow}>
-          <Ionicons name="navigate-outline" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="navigate-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.headerTitle}>Crew status</Text>
         </View>
         {!showForm && !showPresets ? (
@@ -313,7 +313,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
                   accessibilityRole="button"
                   accessibilityLabel={label}
                 >
-                  <Ionicons name={STATUS_ICON[preset.key]} size={16} color={t.colors.text.secondary} />
+                  <Ionicons name={STATUS_ICON[preset.key]} size={t.iconSize.sm} color={t.colors.text.secondary} />
                   <Text style={styles.statusChipText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{label}</Text>
                 </TouchableOpacity>
               );
@@ -364,7 +364,7 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
                   accessibilityLabel={`Heading to ${m.label}`}
                 >
                   {hasCoord ? (
-                    <Ionicons name="location" size={12} color={active ? t.colors.accent.aqua : t.colors.text.muted} />
+                    <Ionicons name="location" size={t.iconSize.xs} color={active ? t.colors.accent.aqua : t.colors.text.muted} />
                   ) : null}
                   <Text style={[styles.targetChipText, active && styles.targetChipTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{m.label}</Text>
                 </TouchableOpacity>
@@ -473,11 +473,11 @@ export default function CrewStatus({ crewId, currentUserId }: CrewStatusProps) {
                       accessibilityRole="button"
                       accessibilityLabel={`Open ${isMe ? 'your' : s.name || s.username || 'crewmate'} last seen location in maps`}
                     >
-                      <Ionicons name="location-outline" size={12} color={t.colors.accent.aqua} />
+                      <Ionicons name="location-outline" size={t.iconSize.xs} color={t.colors.accent.aqua} />
                       <Text style={styles.lastSeenText} numberOfLines={1}>
                         Last seen {formatStaleness(s.location_captured_at ?? s.updated_at).replace(/^as of /, '~')}
                       </Text>
-                      <Ionicons name="open-outline" size={12} color={t.colors.accent.aqua} />
+                      <Ionicons name="open-outline" size={t.iconSize.xs} color={t.colors.accent.aqua} />
                     </TouchableOpacity>
                   ) : null}
                 </View>

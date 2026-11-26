@@ -51,7 +51,7 @@ export default function EmptyState({ icon, title, message, action, secondaryActi
       ) : icon ? (
         <Ionicons
           name={icon}
-          size={48}
+          size={t.iconSize.xl}
           style={styles.icon}
           accessibilityElementsHidden
           importantForAccessibility="no-hide-descendants"

@@ -180,7 +180,7 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
     return (
       <View style={styles.stateCard}>
         {/* hero exception: full-screen state glyph, not a token-scale icon */}
-        <Ionicons name="navigate-outline" size={40} color={t.colors.text.muted} />
+        <Ionicons name="navigate-outline" size={t.iconSize.xl} color={t.colors.text.muted} />
         <Text style={styles.stateTitle}>No saved coordinates</Text>
         <Text style={styles.stateBody}>
           “{target.label}” is a text-only meeting point. Re-save it with a captured location to use the compass.
@@ -193,7 +193,7 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
     return (
       <View style={styles.stateCard}>
         {/* hero exception: full-screen state glyph, not a token-scale icon */}
-        <Ionicons name="location-outline" size={40} color={t.colors.accent.amber} />
+        <Ionicons name="location-outline" size={t.iconSize.xl} color={t.colors.accent.amber} />
         <Text style={styles.stateTitle}>Location permission needed</Text>
         <Text style={styles.stateBody}>
           The compass needs your location to point toward “{target.label}”. Enable location access in Settings, then
@@ -216,7 +216,7 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
     return (
       <View style={styles.stateCard}>
         {/* hero exception: full-screen state glyph, not a token-scale icon */}
-        <Ionicons name="location-outline" size={40} color={t.colors.accent.amber} />
+        <Ionicons name="location-outline" size={t.iconSize.xl} color={t.colors.accent.amber} />
         <Text style={styles.stateTitle}>Can’t get a GPS fix</Text>
         <Text style={styles.stateBody}>Move into the open and try again.</Text>
         <Button label="Try again" onPress={() => {
@@ -231,7 +231,7 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
     return (
       <View style={styles.stateCard}>
         {/* hero exception: full-screen state glyph, not a token-scale icon */}
-        <Ionicons name="compass-outline" size={40} color={t.colors.text.muted} />
+        <Ionicons name="compass-outline" size={t.iconSize.xl} color={t.colors.text.muted} />
         <Text style={styles.stateTitle}>No compass on this device</Text>
         <Text style={styles.stateBody}>
           This device has no compass, so the arrow can’t show which way you’re facing. The distance below is still
@@ -286,7 +286,7 @@ export default function MeetingPointCompass({ target, note, subNote }: MeetingPo
       <View style={styles.dial} importantForAccessibility="no-hide-descendants" accessibilityElementsHidden>
         <View style={[styles.arrow, { transform: [{ rotate: `${arrowAngle - NAVIGATE_GLYPH_OFFSET_DEG}deg` }] }]}>
           {/* hero exception: the compass dial's arrow, not a token-scale icon */}
-          <Ionicons name="navigate" size={96} color={t.colors.accent.aqua} />
+          <Ionicons name="navigate" size={t.iconSize.hero} color={t.colors.accent.aqua} />
         </View>
       </View>
 

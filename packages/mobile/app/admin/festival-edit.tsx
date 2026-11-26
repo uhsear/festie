@@ -31,6 +31,7 @@ import {
   ShiftTimesDialog,
   type SelectOption,
 } from '../../components/admin';
+import { colors } from '@festie/shared/tokens';
 import { useTokens } from '../../hooks/useTokens';
 import {
   addStage as addStageReducer,
@@ -107,7 +108,7 @@ import { useStyles } from '../../components/admin/festival-edit/styles';
  * Publish: POST /admin/festivals/:id/publish once the server checklist has no open item.
  */
 
-const DEFAULT_STAGE_COLOR = '#6a6a88';
+const DEFAULT_STAGE_COLOR: string = colors.stage.fallback;
 
 // Local editable shapes (StageRow / SetRow / DayRow / FormState) live in
 // ./festivalEditState alongside the pure tree reducers they operate on.

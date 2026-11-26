@@ -6,6 +6,7 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withSequence,
+  withSpring,
   withTiming,
 } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -25,7 +26,7 @@ import {
 } from '@festie/shared/utils';
 import { useCrewStore, useFestivalDataStore, useFestivalStore } from '@festie/shared/stores';
 import { usePickSync, useSetMove } from '@festie/shared/hooks';
-import { duration, easing } from '@festie/shared/tokens';
+import { duration, easing, spring } from '@festie/shared/tokens';
 import { makeStyles, typeStyle, useTokens, typeScaleCap, MAX_FONT_SCALE } from '../hooks/useTokens';
 import { useSetStatus } from '../hooks/useSetStatus';
 import { useHaptics } from '../hooks/useHaptics';
@@ -112,7 +113,7 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
 
   // DC21: the pick is the product's core loop — confirm it with a scale pop +
   // color timing instead of an instant style flip. `progress` (0→1) drives the
-  // fill/border interpolation; `scale` pops on each activation. Both honor
+  // fill/border interpolation; `scale` springs on each activation. Both honor
   // Reduce Motion: progress jumps instantly and the pop is skipped.
   const progress = useSharedValue(active ? 1 : 0);
   const scale = useSharedValue(1);
@@ -147,10 +148,7 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
     // is for committing to a pick. Skipped under Reduce Motion.
     if (!active && !reduceMotion) {
       // eslint-disable-next-line react-hooks/immutability -- imperative Reanimated shared-value write in the press handler; the pick-confirm scale pop has no derived-state equivalent
-      scale.value = withSequence(
-        withTiming(1.12, { duration: duration.fast, easing: Easing.bezier(...easing.out.bezier) }),
-        withTiming(1, { duration: duration.med, easing: Easing.bezier(...easing.out.bezier) }),
-      );
+      scale.value = withSequence(withSpring(1.12, spring.touch), withSpring(1, spring.touch));
     }
     onPress(active ? null : option.value);
   }, [haptics, active, reduceMotion, scale, onPress, option.value]);
@@ -178,7 +176,7 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
       {/* DC25: 15 is off-grid; snap to iconSize.sm (16). */}
       <Ionicons
         name={active && pending ? 'time-outline' : option.icon}
-        size={16}
+        size={t.iconSize.sm}
         color={active ? t.colors.text.onLightAccent : accent}
       />
       <Text
@@ -320,14 +318,14 @@ function SetCardMobileImpl({
           {hasNote ? (
             <Ionicons
               name="document-text-outline"
-              size={12} // DC25: 13 is off-grid; snap to iconSize.xs (12).
+              size={t.iconSize.xs} // DC25: 13 is off-grid; snap to iconSize.xs (12).
               color={t.colors.text.muted}
               accessibilityLabel="Has note"
             />
           ) : null}
           {reminderMinutes != null ? (
             <View style={styles.reminderMark} accessibilityLabel={reminderA11y ?? undefined}>
-              <Ionicons name="notifications-outline" size={12} color={t.colors.text.muted} />
+              <Ionicons name="notifications-outline" size={t.iconSize.xs} color={t.colors.text.muted} />
               <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {reminderLeadLabel(reminderMinutes)}
               </Text>
@@ -335,7 +333,7 @@ function SetCardMobileImpl({
           ) : null}
           {move ? (
             <View style={styles.movedMark} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-              <Ionicons name="swap-horizontal" size={12} color={t.colors.text.muted} />
+              <Ionicons name="swap-horizontal" size={t.iconSize.xs} color={t.colors.text.muted} />
               <Text style={styles.reminderText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
                 {move.chip}
               </Text>
@@ -343,7 +341,7 @@ function SetCardMobileImpl({
           ) : null}
           {hasConflict ? (
             <View style={styles.conflictBadge}>
-              <Ionicons name="warning" size={12} color={t.colors.clash.mark} />
+              <Ionicons name="warning" size={t.iconSize.xs} color={t.colors.clash.mark} />
               <Text style={styles.conflictText} numberOfLines={1}>
                 {clashLabel ?? COPY.clash.badge}
               </Text>
@@ -369,7 +367,7 @@ function SetCardMobileImpl({
             accessibilityRole="button"
             accessibilityLabel={`Listen to ${artistName}`}
           >
-            <Ionicons name="musical-notes" size={18} color={t.colors.text.secondary} />
+            <Ionicons name="musical-notes" size={t.iconSize.action} color={t.colors.text.secondary} />
           </AppPressable>
         ) : null}
 
@@ -378,7 +376,7 @@ function SetCardMobileImpl({
 
       {sync?.state === 'failed' ? (
         <View style={styles.failedRow} accessibilityLiveRegion="polite">
-          <Ionicons name="alert-circle" size={16} color={t.colors.accent.amber} />
+          <Ionicons name="alert-circle" size={t.iconSize.sm} color={t.colors.accent.amber} />
           <Text style={styles.failedText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             Pick not saved.
           </Text>
@@ -627,7 +625,7 @@ const useStyles = makeStyles((t) => ({
     marginBottom: t.spacing[2],
   },
   time: {
-    ...typeStyle('caption'),
+    ...typeStyle('caption', undefined, { tabular: true }),
     color: t.colors.text.secondary,
   },
   reminderMark: {

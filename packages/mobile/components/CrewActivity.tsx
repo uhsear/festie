@@ -117,7 +117,7 @@ export default function CrewActivity({ crewId }: CrewActivityProps) {
   if (dedupedActivity.length === 0) {
     return (
       <View style={styles.emptyBox}>
-        <Ionicons name="pulse-outline" size={20} color={t.colors.text.muted} />
+        <Ionicons name="pulse-outline" size={t.iconSize.md} color={t.colors.text.muted} />
         <Text style={styles.empty}>No activity yet — crew events will appear here as they happen.</Text>
       </View>
     );

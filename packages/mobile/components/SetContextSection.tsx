@@ -1,18 +1,22 @@
 import { Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useFestivalDataStore } from '@festie/shared/stores';
 import { usePicks, useSetContext } from '@festie/shared/hooks';
-import { COPY, PRIORITY_LABELS } from '@festie/shared/constants';
+import { COPY, PRIORITY_LABELS, PRIORITY_SYMBOLS } from '@festie/shared/constants';
 import { artistDisplayName } from '@festie/shared/utils';
 import type { SetContextEntry } from '@festie/shared/utils';
 import type { FestivalSet } from '@festie/shared/types';
-import { makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { makeStyles, typeStyle, useTokens, MAX_FONT_SCALE } from '../hooks/useTokens';
+import { priorityColor } from '../lib/priorityColor';
+import { priorityIconName } from '../lib/prioritySymbol';
 import AppPressable from './AppPressable';
 import { ArtistNameRuns, artistOpenActions } from './ArtistName';
 
 /** "On <stage> that night" neighbours and "Playing at the same time". Each part hides when empty. */
 export default function SetContextSection({ set }: { set: FestivalSet }) {
   const styles = useStyles();
+  const t = useTokens();
   const router = useRouter();
   const { before, after, overlaps } = useSetContext(set);
   const stages = useFestivalDataStore((s) => s.stages);
@@ -44,9 +48,12 @@ export default function SetContextSection({ set }: { set: FestivalSet }) {
           </Text>
         </View>
         {pick ? (
-          <Text style={styles.pick} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {PRIORITY_LABELS[pick]}
-          </Text>
+          <View style={styles.pickChip}>
+            <Ionicons name={priorityIconName(pick)} size={t.iconSize.xs} color={priorityColor(t, pick)} />
+            <Text style={[styles.pick, { color: priorityColor(t, pick) }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {PRIORITY_SYMBOLS[pick].short}
+            </Text>
+          </View>
         ) : null}
       </AppPressable>
     );
@@ -83,5 +90,6 @@ const useStyles = makeStyles((t) => ({
   artist: { ...typeStyle('body', 600), color: t.colors.text.primary },
   lead: { ...typeStyle('body'), color: t.colors.text.muted },
   meta: { ...typeStyle('caption'), color: t.colors.text.muted },
-  pick: { ...typeStyle('caption'), color: t.colors.accent.aqua },
+  pickChip: { flexDirection: 'row', alignItems: 'center', gap: t.spacing[1] },
+  pick: { ...typeStyle('caption') },
 }));

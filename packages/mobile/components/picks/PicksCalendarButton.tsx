@@ -30,7 +30,7 @@ export default function PicksCalendarButton({
   {exportBusy ? (
     <ActivityIndicator size="small" color={t.colors.accent.aqua} />
   ) : (
-    <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
+    <Ionicons name="calendar-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
   )}
   <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
     {exportBusy ? 'Exporting…' : 'Calendar'}

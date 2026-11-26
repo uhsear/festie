@@ -2,6 +2,7 @@ import { View, Text } from 'react-native';
 import type { TextStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { LOCKSCREEN_TAG_SCALE } from '@festie/shared/utils';
+import { posterFont } from '../hooks/useTokens';
 import type {
   LockscreenGridBlock,
   LockscreenGridPage,
@@ -12,12 +13,12 @@ import type {
 } from '@festie/shared/utils';
 import type { Priority } from '@festie/shared/types';
 
-const CLASH_500 = 'ClashDisplay-Medium';
-const CLASH_600 = 'ClashDisplay-Semibold';
-const CLASH_700 = 'ClashDisplay-Bold';
-const GROTESK_500 = 'SpaceGrotesk_500Medium';
-const GROTESK_600 = 'SpaceGrotesk_600SemiBold';
-const GROTESK_700 = 'SpaceGrotesk_700Bold';
+const CLASH_500 = posterFont(500, true).fontFamily as string;
+const CLASH_600 = posterFont(600, true).fontFamily as string;
+const CLASH_700 = posterFont(700, true).fontFamily as string;
+const GROTESK_500 = posterFont(500).fontFamily as string;
+const GROTESK_600 = posterFont(600).fontFamily as string;
+const GROTESK_700 = posterFont(700).fontFamily as string;
 
 const GLYPH: Record<Priority, string> = { must: '★', 'want-to-see': '●', maybe: '○' };
 

@@ -111,7 +111,7 @@ const useStyles = makeStyles((t) => ({
     width: DOT_SIZE,
     height: DOT_SIZE,
     borderRadius: DOT_SIZE / 2,
-    backgroundColor: t.colors.accent.coral,
+    backgroundColor: t.colors.live.fill,
   },
   label: {
     ...typeStyle('label'),

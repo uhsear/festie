@@ -46,7 +46,7 @@ export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeAction
           if (a.kind === 'hint' || a.key === 'first-pick') {
             return (
               <View key={a.key} testID={`phase-action-${a.key}`} style={styles.chip} accessibilityLabel={a.a11y}>
-                <Ionicons name="star-outline" size={16} color={t.colors.text.secondary} />
+                <Ionicons name="star-outline" size={t.iconSize.sm} color={t.colors.text.secondary} />
                 <Text style={styles.chipText} numberOfLines={1}>
                   {a.label}
                 </Text>
@@ -70,7 +70,7 @@ export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeAction
               accessibilityRole="button"
               accessibilityLabel={a.a11y}
             >
-              <Ionicons name={target.icon} size={16} color={iconColor} />
+              <Ionicons name={target.icon} size={t.iconSize.sm} color={iconColor} />
               <Text style={styles.chipText} numberOfLines={1}>
                 {a.label}
               </Text>
@@ -85,7 +85,7 @@ export default function PhaseHomeActions({ actions, onDismiss }: PhaseHomeAction
             accessibilityRole="button"
             accessibilityLabel="Hide these shortcuts"
           >
-            <Ionicons name="close" size={18} color={t.colors.text.muted} />
+            <Ionicons name="close" size={t.iconSize.action} color={t.colors.text.muted} />
           </TouchableOpacity>
         ) : null}
       </ScrollView>

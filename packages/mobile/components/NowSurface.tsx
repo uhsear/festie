@@ -474,8 +474,8 @@ const useStyles = makeStyles((t) => ({
   },
   // Live is the one glowing state on this screen (Glow Means State).
   liveCard: {
-    borderColor: t.colors.accent.coral,
-    backgroundColor: t.colors.ring.coral,
+    borderColor: t.colors.live.fill,
+    backgroundColor: t.colors.live.ring,
   },
   artist: { ...typeStyle('heading'), color: t.colors.text.primary },
   secondary: { ...typeStyle('label'), color: t.colors.text.secondary },

@@ -14,7 +14,7 @@ import { API_ORIGIN } from '../lib/apiOrigin';
 import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { COPY } from '@festie/shared/constants';
 import { scrubSensitiveUrl } from '@festie/shared/utils';
-import { colors as stageColors, colorsDaylight, fontSize } from '@festie/shared/tokens';
+import { colors as stageColors, colorsDaylight } from '@festie/shared/tokens';
 import { useFonts } from 'expo-font';
 import {
   SpaceGrotesk_400Regular,
@@ -43,7 +43,7 @@ import { snoozeReminder, useLocalReminders } from '../hooks/useLocalReminders';
 import { useOngoingNotification } from '../hooks/useOngoingNotification';
 import { useOtaUpdatePrompt } from '../hooks/useOtaUpdatePrompt';
 import { ensureAndroidChannels, unregisterPushOnSignOut, usePushTokenRotation } from '../hooks/useMobilePush';
-import { useTokens } from '../hooks/useTokens';
+import { headerTitleType, useTokens } from '../hooks/useTokens';
 import { onHydrated } from '../lib/hydrationGate';
 import { isGuestBlocked } from '../lib/authRoutes';
 import { setReturnTo, takeReturnTo } from '../lib/returnTo';
@@ -601,7 +601,7 @@ function AuthGate() {
               // via typeStyle and renders with adjustsFontSizeToFit for long names.
               headerTitleStyle: {
                 color: colors.text.primary,
-                fontSize: fontSize[18],
+                ...headerTitleType,
               },
               // Custom title node: sets the weighted font family correctly on
               // both platforms (Android can't inherit fontFamily from headerTitleStyle).

@@ -109,7 +109,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
           <LiveDot label="NOW" />
         ) : (
           <View style={styles.nextLabelRow}>
-            <Ionicons name="play-skip-forward" size={12} color={t.colors.text.secondary} />
+            <Ionicons name="play-skip-forward" size={t.iconSize.xs} color={t.colors.text.secondary} />
             <Text style={styles.nextLabel}>UP NEXT</Text>
           </View>
         )}
@@ -125,7 +125,7 @@ export default function NowNextStrip({ onPress }: NowNextStripProps) {
           <Text style={[styles.timing, isNow && styles.timingNow]}>{timing}</Text>
         </View>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={t.colors.text.muted} />
+      <Ionicons name="chevron-forward" size={t.iconSize.sm} color={t.colors.text.muted} />
 
       {/* Live scrubber along the strip's bottom edge. Static width (no
           animation needed — it re-renders on the hook's tick); clipped to the
@@ -164,12 +164,12 @@ const useStyles = makeStyles((t) => ({
   },
   progressFill: {
     height: '100%',
-    backgroundColor: t.colors.accent.coral,
+    backgroundColor: t.colors.live.fill,
   },
-  // Currently-playing: coral accent rail (matches festival-mode's nowCard).
+  // Currently-playing: live accent rail (matches festival-mode's nowCard).
   stripNow: {
-    borderColor: t.colors.accent.coral,
-    backgroundColor: t.colors.ring.coral,
+    borderColor: t.colors.live.fill,
+    backgroundColor: t.colors.live.ring,
   },
   labelCol: {
     minWidth: 64,
@@ -211,6 +211,6 @@ const useStyles = makeStyles((t) => ({
     // Re-spread at 700 so the Bold cut loads (bare fontWeight fake-bolds on
     // Android over the weighted base family).
     ...typeStyle('caption', 700),
-    color: t.colors.accent.coral,
+    color: t.colors.live.text,
   },
 }));

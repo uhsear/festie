@@ -88,11 +88,11 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
           accessibilityRole="button"
           accessibilityLabel={`${failedCount} change${failedCount === 1 ? '' : 's'} couldn't sync — review`}
         >
-          <Ionicons name="warning" size={16} color={t.colors.bg.primary} />
+          <Ionicons name="warning" size={t.iconSize.sm} color={t.colors.bg.primary} />
           <Text style={styles.text} numberOfLines={2}>
             {failedCount} change{failedCount === 1 ? '' : 's'} couldn&apos;t sync — tap to review
           </Text>
-          <Ionicons name="chevron-forward" size={18} color={t.colors.bg.primary} />
+          <Ionicons name="chevron-forward" size={t.iconSize.action} color={t.colors.bg.primary} />
         </TouchableOpacity>
       );
     }
@@ -115,7 +115,7 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
             accessibilityRole="button"
             accessibilityLabel="Dismiss offline notice"
           >
-            <Ionicons name="close" size={18} color={t.colors.bg.primary} />
+            <Ionicons name="close" size={t.iconSize.action} color={t.colors.bg.primary} />
           </TouchableOpacity>
         </View>
       );
@@ -158,7 +158,7 @@ export default function OfflineBanner({ onActiveChange }: OfflineBannerProps = {
                 accessibilityLabel="Close"
                 style={styles.dismiss}
               >
-                <Ionicons name="close" size={20} color={t.colors.text.secondary} />
+                <Ionicons name="close" size={t.iconSize.md} color={t.colors.text.secondary} />
               </TouchableOpacity>
             </View>
 
@@ -231,7 +231,7 @@ const useStyles = makeStyles((t) => ({
     backgroundColor: t.colors.accent.amber,
   },
   bannerFailed: {
-    backgroundColor: t.colors.accent.coral,
+    backgroundColor: t.colors.delivery.failed,
   },
   bannerSyncing: {
     backgroundColor: t.colors.accent.aqua,
@@ -307,7 +307,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.secondary,
   },
   failedError: {
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
   retryBtn: {
     paddingHorizontal: t.spacing[3],

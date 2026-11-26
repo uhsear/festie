@@ -9,6 +9,7 @@ import {
   type GeoState,
   type MapPlace,
 } from '@festie/shared/utils';
+import { elevation } from '@festie/shared/tokens';
 import { useTokens, makeStyles, typeStyle, MAX_FONT_SCALE } from '../hooks/useTokens';
 import Button from './Button';
 
@@ -77,7 +78,7 @@ export default function MapPlaceCard({
           accessibilityRole="button"
           accessibilityLabel={MAP_COPY.close}
         >
-          <Ionicons name="close" size={20} color={t.colors.text.muted} />
+          <Ionicons name="close" size={t.iconSize.md} color={t.colors.text.muted} />
         </TouchableOpacity>
       </View>
       <View style={styles.actions}>
@@ -118,11 +119,7 @@ const useStyles = makeStyles((t) => ({
     borderWidth: 1,
     borderColor: t.colors.accent.aqua,
     backgroundColor: t.colors.bg.elevated,
-    shadowColor: '#000',
-    shadowOpacity: 0.35,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 8,
+    ...elevation.high,
   },
   head: {
     flexDirection: 'row',

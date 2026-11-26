@@ -375,7 +375,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
                     accessibilityRole="button"
                     accessibilityLabel={`Timeslot ${dayLabel(slot.dayIndex)} ${formatTime(slot.startTime)}, ${slot.sets.length} sets`}
                   >
-                    <Ionicons name="time-outline" size={16} color={t.colors.accent.aqua} />
+                    <Ionicons name="time-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
                     <Text style={styles.slotText}>
                       {dayLabel(slot.dayIndex)} · {formatTime(slot.startTime)}
                     </Text>
@@ -507,7 +507,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
                   accessibilityRole="button"
                   accessibilityLabel={`Remove option ${i + 1}`}
                 >
-                  <Ionicons name="close-circle-outline" size={20} color={t.colors.text.danger} />
+                  <Ionicons name="close-circle-outline" size={t.iconSize.md} color={t.colors.text.danger} />
                 </TouchableOpacity>
               ) : null}
             </View>
@@ -521,7 +521,7 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
               accessibilityRole="button"
               accessibilityLabel="Add poll option"
             >
-              <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+              <Ionicons name="add" size={t.iconSize.sm} color={t.colors.accent.aqua} />
               <Text style={styles.addOptionText}>Add option</Text>
             </TouchableOpacity>
           ) : null}
@@ -546,9 +546,9 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
             accessibilityLabel="Create a poll"
             accessibilityState={{ disabled: pollState.atCap }}
           >
-            <Ionicons name="bar-chart-outline" size={16} color={t.colors.accent.aqua} />
+            <Ionicons name="bar-chart-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
             <Text style={styles.toggleText}>Create poll</Text>
-            <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+            <Ionicons name="add" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggle, pollState.atCap && styles.toggleDisabled]}
@@ -559,9 +559,9 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
             accessibilityLabel="Create a schedule poll"
             accessibilityState={{ disabled: pollState.atCap }}
           >
-            <Ionicons name="calendar-outline" size={16} color={t.colors.accent.aqua} />
+            <Ionicons name="calendar-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
             <Text style={styles.toggleText}>Which set? (from the lineup)</Text>
-            <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+            <Ionicons name="add" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.toggle, pollState.atCap && styles.toggleDisabled]}
@@ -572,9 +572,9 @@ export default function CrewPolls({ crewId, currentUserId, isOwner }: CrewPollsP
             accessibilityLabel="Create a meet where poll"
             accessibilityState={{ disabled: pollState.atCap }}
           >
-            <Ionicons name="location-outline" size={16} color={t.colors.accent.aqua} />
+            <Ionicons name="location-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
             <Text style={styles.toggleText}>Meet where?</Text>
-            <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+            <Ionicons name="add" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           </TouchableOpacity>
           {pollState.text ? (
             <Text style={styles.capText} accessibilityLiveRegion="polite">

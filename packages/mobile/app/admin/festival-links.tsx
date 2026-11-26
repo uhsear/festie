@@ -435,7 +435,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.primary,
   },
   noticeError: {
-    color: t.colors.accent.coral,
+    color: t.colors.text.danger,
   },
   emptyHint: {
     ...typeStyle('caption'),

@@ -593,7 +593,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
                         accessibilityState={{ disabled: settling, busy: settling }}
                         accessibilityLabel={`I've paid ${s.toName}. Record the payment`}
                       >
-                        <Ionicons name="cash-outline" size={14} color={t.colors.accent.aqua} />
+                        <Ionicons name="cash-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
                         <Text style={styles.settleButtonText}>I've paid {s.toName}</Text>
                       </TouchableOpacity>
                     </View>
@@ -618,7 +618,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
                           : `Remind ${s.fromName} to pay you`
                       }
                     >
-                      <Ionicons name="notifications-outline" size={14} color={t.colors.accent.aqua} />
+                      <Ionicons name="notifications-outline" size={t.iconSize.compact} color={t.colors.accent.aqua} />
                       <Text style={styles.settleButtonText}>
                         {remindedUserIds.has(s.fromUserId) ? 'Reminded today' : `Remind ${s.fromName}`}
                       </Text>
@@ -838,7 +838,7 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
           >
             <Ionicons
               name={planned ? 'checkbox' : 'square-outline'}
-              size={20}
+              size={t.iconSize.md}
               color={planned ? t.colors.accent.aqua : t.colors.text.secondary}
             />
             <Text style={styles.plannedToggleText}>
@@ -866,9 +866,9 @@ export default function CrewExpenses({ crewId, members, currentUserId, onFormSho
           accessibilityRole="button"
           accessibilityLabel="Add an expense"
         >
-          <Ionicons name="cash-outline" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="cash-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
           <Text style={styles.toggleText}>Add expense</Text>
-          <Ionicons name="add" size={16} color={t.colors.accent.aqua} />
+          <Ionicons name="add" size={t.iconSize.sm} color={t.colors.accent.aqua} />
         </TouchableOpacity>
       )}
 

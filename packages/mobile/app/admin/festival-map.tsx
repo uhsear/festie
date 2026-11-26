@@ -41,6 +41,7 @@ import EmptyState from '../../components/EmptyState';
 import LoadingState from '../../components/LoadingState';
 import { ConfirmDialog } from '../../components/admin';
 import type { AuthoringMode } from '../../lib/webviewBridge';
+import { colors } from '@festie/shared/tokens';
 import { useTokens } from '../../hooks/useTokens';
 import MapAuthoringPane from '../../components/admin/festival-map/MapAuthoringPane';
 import { UNFINISHED_ZONE_MESSAGE } from '../../components/admin/festival-map/zoneDrawing';
@@ -108,7 +109,7 @@ interface FestivalDetail {
 const MAX_SITEPLAN_BYTES = 10 * 1024 * 1024;
 
 
-const DEFAULT_STAGE_COLOR = '#6a6a88';
+const DEFAULT_STAGE_COLOR: string = colors.stage.fallback;
 
 export default function FestivalMapEditorScreen() {
   const t = useTokens();

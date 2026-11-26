@@ -4,6 +4,7 @@ import { POSTER } from '@festie/shared/tokens';
 import { festivalTint } from '@festie/shared/utils';
 import type { WrapCard } from '@festie/shared/types';
 import { RATING_IONICON } from '../../lib/ratingIcon';
+import { posterFont } from '../../hooks/useTokens';
 import PosterFrame from './PosterFrame';
 
 interface Props {
@@ -61,19 +62,19 @@ export default function WrapCardPoster({ card, festivalName, byline }: Props) {
 }
 
 const s = StyleSheet.create({
-  headline: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: F.headline, color: C.text, textAlign: 'left' },
-  sub: { fontFamily: 'SpaceGrotesk_400Regular', fontSize: F.secondary, color: C.secondary, marginTop: 16, textAlign: 'left' },
+  headline: { ...posterFont(700), fontSize: F.headline, color: C.text, textAlign: 'left' },
+  sub: { ...posterFont(400), fontSize: F.secondary, color: C.secondary, marginTop: 16, textAlign: 'left' },
   rows: { marginTop: 48 },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 24, borderBottomWidth: 1 },
   rowInfo: { flex: 1, paddingRight: 24 },
-  artist: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: F.artist, color: C.text },
-  secondary: { fontFamily: 'SpaceGrotesk_400Regular', fontSize: F.secondary, color: C.secondary, marginTop: 4 },
-  badge: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: F.kicker, color: C.accent },
+  artist: { ...posterFont(700), fontSize: F.artist, color: C.text },
+  secondary: { ...posterFont(400), fontSize: F.secondary, color: C.secondary, marginTop: 4 },
+  badge: { ...posterFont(700), fontSize: F.kicker, color: C.accent },
   quoteWrap: { marginTop: 48 },
-  quote: { fontFamily: 'SpaceGrotesk_400Regular', fontStyle: 'italic', fontSize: F.quote, color: C.text, textAlign: 'left' },
-  quoteBy: { fontFamily: 'SpaceGrotesk_400Regular', fontSize: F.secondary, color: C.secondary, marginTop: 24 },
+  quote: { ...posterFont(400), fontStyle: 'italic', fontSize: F.quote, color: C.text, textAlign: 'left' },
+  quoteBy: { ...posterFont(400), fontSize: F.secondary, color: C.secondary, marginTop: 24 },
   stats: { marginTop: 48, flexDirection: 'row', gap: 18 },
   statCell: { flex: 1, borderRadius: 20, borderWidth: 1, paddingVertical: 28, alignItems: 'center' },
-  statValue: { fontFamily: 'SpaceGrotesk_700Bold', fontSize: F.statValue, color: C.accent, lineHeight: 64 },
-  statLabel: { fontFamily: 'SpaceGrotesk_400Regular', fontSize: F.statLabel, color: C.secondary, marginTop: 8, letterSpacing: 2 },
+  statValue: { ...posterFont(700), fontSize: F.statValue, color: C.accent, lineHeight: 64 },
+  statLabel: { ...posterFont(400), fontSize: F.statLabel, color: C.secondary, marginTop: 8, letterSpacing: 2 },
 });

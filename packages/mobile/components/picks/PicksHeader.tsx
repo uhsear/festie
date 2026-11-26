@@ -66,7 +66,7 @@ export default function PicksHeader({
       accessibilityState={{ disabled: noPicks }}
       accessibilityLabel="Save my picks as an image"
     >
-      <Ionicons name="image-outline" size={16} color={t.colors.accent.aqua} />
+      <Ionicons name="image-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
       <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
         {COPY.picks.saveImage}
       </Text>
@@ -80,7 +80,7 @@ export default function PicksHeader({
       accessibilityState={{ disabled: !currentFestival }}
       accessibilityLabel="Share my picks"
     >
-      <Ionicons name="share-outline" size={16} color={t.colors.accent.aqua} />
+      <Ionicons name="share-outline" size={t.iconSize.sm} color={t.colors.accent.aqua} />
       <Text style={styles.calendarButtonText} maxFontSizeMultiplier={MAX_FONT_SCALE} numberOfLines={1}>
         {COPY.picks.share}
       </Text>

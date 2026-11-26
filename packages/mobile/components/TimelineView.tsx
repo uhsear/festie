@@ -273,7 +273,7 @@ function StageColumn({
               ) : null}
               {crew > 0 && height >= ROW_HEIGHT * 2 ? (
                 <View style={styles.crewBadge}>
-                  <Ionicons name="people" size={9} color={t.colors.accent.aqua} />
+                  <Ionicons name="people" size={t.iconSize.xs} color={t.colors.accent.aqua} />
                   <Text style={styles.crewCount}>{crew}</Text>
                 </View>
               ) : null}
@@ -289,7 +289,7 @@ function StageColumn({
               {
                 left: gutterW,
                 top: (nowIndicator / 100) * totalHeight,
-                backgroundColor: t.colors.accent.coral,
+                backgroundColor: t.colors.live.fill,
               },
             ]}
             pointerEvents="none"
@@ -298,7 +298,7 @@ function StageColumn({
               style={[
                 styles.nowDot,
                 {
-                  backgroundColor: t.colors.accent.coral,
+                  backgroundColor: t.colors.live.fill,
                   borderColor: t.colors.bg.primary,
                 },
               ]}
@@ -561,7 +561,7 @@ export default function TimelineView({
   return (
     <View style={styles.root}>
       <View style={styles.hintRow}>
-        <Ionicons name="swap-horizontal" size={12} color={t.colors.text.muted} />
+        <Ionicons name="swap-horizontal" size={t.iconSize.xs} color={t.colors.text.muted} />
         <Text style={styles.hintText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {visibleStages.length > 1 ? COPY.grid.swipeAndHold : COPY.grid.holdToPick}
         </Text>
@@ -577,7 +577,7 @@ export default function TimelineView({
           accessibilityRole="text"
           accessibilityLabel={`Up next in ${nextPickLabel.eta}: ${nextPickLabel.name}`}
         >
-          <Ionicons name="musical-notes" size={12} color={t.colors.accent.coral} />
+          <Ionicons name="musical-notes" size={t.iconSize.xs} color={t.colors.accent.coral} />
           <Text style={styles.countdownText} numberOfLines={1}>
             Up next in <Text style={styles.countdownEta}>{nextPickLabel.eta}</Text> ·{' '}
             <Text style={styles.countdownName}>{nextPickLabel.name}</Text>
@@ -633,8 +633,8 @@ export default function TimelineView({
                     style={[
                       styles.dot,
                       active && styles.dotActive,
-                      live && { backgroundColor: t.colors.accent.coral },
-                      active && live && { backgroundColor: t.colors.accent.coral },
+                      live && { backgroundColor: t.colors.live.fill },
+                      active && live && { backgroundColor: t.colors.live.fill },
                     ]}
                   />
                 </TouchableOpacity>
@@ -661,7 +661,7 @@ export default function TimelineView({
           accessibilityRole="button"
           accessibilityLabel={COPY.jumpToNow.a11y}
         >
-          <Ionicons name={CONCEPT_IONICON.jumpToNow} size={16} color={t.colors.text.onLightAccent} />
+          <Ionicons name={CONCEPT_IONICON.jumpToNow} size={t.iconSize.sm} color={t.colors.text.onLightAccent} />
           <Text style={styles.fabText}>{COPY.jumpToNow.label}</Text>
         </TouchableOpacity>
       ) : null}

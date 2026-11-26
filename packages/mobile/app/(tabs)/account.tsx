@@ -256,7 +256,7 @@ export default function AccountScreen() {
                   {o.hint}
                 </Text>
               </View>
-              {checked ? <Ionicons name="checkmark" size={20} color={t.colors.accent.aqua} /> : null}
+              {checked ? <Ionicons name="checkmark" size={t.iconSize.md} color={t.colors.accent.aqua} /> : null}
             </AppPressable>
           );
         })}
@@ -264,7 +264,7 @@ export default function AccountScreen() {
           <View style={styles.rowIcon}>
             <Ionicons
               name={hapticsEnabled ? 'phone-portrait' : 'phone-portrait-outline'}
-              size={20}
+              size={t.iconSize.md}
               color={hapticsEnabled ? t.colors.accent.aqua : t.colors.text.secondary}
             />
           </View>
@@ -388,7 +388,7 @@ export default function AccountScreen() {
           accessibilityState={{ disabled: loggingOut }}
         >
           <View style={styles.rowIcon}>
-            <Ionicons name="log-out-outline" size={20} color={t.colors.text.danger} />
+            <Ionicons name="log-out-outline" size={t.iconSize.md} color={t.colors.text.danger} />
           </View>
           <View style={styles.rowBody}>
             <Text style={[styles.rowTitle, styles.dangerText]}>{COPY.auth.signOut}</Text>
@@ -396,7 +396,7 @@ export default function AccountScreen() {
           {loggingOut ? (
             <ActivityIndicator size="small" color={t.colors.text.danger} />
           ) : (
-            <Ionicons name="chevron-forward" size={18} color={t.colors.text.placeholder} />
+            <Ionicons name="chevron-forward" size={t.iconSize.action} color={t.colors.text.placeholder} />
           )}
         </AppPressable>
       </View>
@@ -498,7 +498,7 @@ function LinkRow({
       accessibilityLabel={accessibilityLabel}
     >
       <View style={styles.rowIcon}>
-        <Ionicons name={icon} size={20} color={iconTint ?? t.colors.text.secondary} />
+        <Ionicons name={icon} size={t.iconSize.md} color={iconTint ?? t.colors.text.secondary} />
       </View>
       <View style={styles.rowBody}>
         <Text style={styles.rowTitle}>{title}</Text>
@@ -508,7 +508,7 @@ function LinkRow({
           </Text>
         ) : null}
       </View>
-      <Ionicons name="chevron-forward" size={18} color={t.colors.text.placeholder} />
+      <Ionicons name="chevron-forward" size={t.iconSize.action} color={t.colors.text.placeholder} />
     </AppPressable>
   );
 }
