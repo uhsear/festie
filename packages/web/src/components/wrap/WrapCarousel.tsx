@@ -20,9 +20,13 @@ interface Props {
 /** Active poster width on desktop; phones fill the row. */
 export const DESKTOP_POSTER_WIDTH = 480;
 const DESKTOP_MIN_VIEWPORT = 1024;
-/** Side posters shrink to 80% and overlap their layout box so three fit a laptop. */
-const SIDE_SCALE = 0.8;
-const SIDE_OVERLAP = 32;
+/**
+ * Side posters shrink to 80% and their boxes overlap so three fit a laptop. A side poster's drawn edge sits
+ * width * (1 - SIDE_SCALE) / 2 inside its box, and two margins of SIDE_OVERLAP join each pair, so the
+ * overlap may be at most half of that inset: more would paint the side poster over the active one.
+ */
+export const SIDE_SCALE = 0.8;
+export const SIDE_OVERLAP = 24;
 
 /** Swipeable row of Wrap cards, each a scaled preview of its 1080x1920 poster. */
 export default function WrapCarousel({ cards, festivalName, byline, sharing, onShare }: Props) {

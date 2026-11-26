@@ -7,7 +7,7 @@ vi.mock('motion/react', () => ({
   motion: { span: (p: Record<string, unknown>) => <span data-testid="confetti-piece" {...{ className: p.className as string }} /> },
 }));
 
-import WrapCarousel from './WrapCarousel';
+import WrapCarousel, { DESKTOP_POSTER_WIDTH, SIDE_OVERLAP, SIDE_SCALE } from './WrapCarousel';
 
 const cards: WrapCard[] = [
   { kind: 'plan', kicker: 'YOUR PLAN', headline: '3 sets planned' },
@@ -20,6 +20,11 @@ beforeEach(() => {
 });
 
 describe('WrapCarousel', () => {
+  it('keeps a scaled side poster from reaching into the active poster', () => {
+    const insetPerSide = (DESKTOP_POSTER_WIDTH * (1 - SIDE_SCALE)) / 2;
+    expect(2 * SIDE_OVERLAP).toBeLessThanOrEqual(insetPerSide);
+  });
+
   it('moves the current card with next and previous', () => {
     render(<WrapCarousel cards={cards} festivalName="Coachella" byline={null} sharing={false} onShare={vi.fn()} />);
     const dots = screen.getAllByRole('button', { name: /^Card \d of 3$/ });
