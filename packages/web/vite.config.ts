@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { FESTIE_RUNTIME_CACHING } from '@festie/shared/pwa';
+import { colors } from '@festie/shared/tokens/colors';
 import path from 'path';
 import { execSync } from 'node:child_process';
 
@@ -85,12 +86,18 @@ export default defineConfig({
       manifest: {
         name: 'Festie — Festival Planner',
         short_name: 'Festie',
-        description: 'Plan your festival schedule with friends',
-        theme_color: '#080810',
-        background_color: '#080810',
+        description: 'Plan your festival schedule with your crew',
+        id: '/',
+        categories: ['entertainment', 'music', 'social'],
+        theme_color: colors.bg.primary,
+        background_color: colors.bg.primary,
         display: 'standalone',
-        orientation: 'portrait',
         start_url: '/',
+        shortcuts: [
+          { name: 'Picks', url: '/picks' },
+          { name: 'Now & Next', url: '/festival-mode' },
+          { name: 'Crew', url: '/crew' },
+        ],
         icons: [
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
