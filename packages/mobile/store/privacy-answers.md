@@ -13,17 +13,18 @@ Tracking: no. `NSPrivacyTracking` is `false` and `NSPrivacyTrackingDomains` is e
 | Apple data type | `app.json` type | What we collect | Purpose | Linked to identity | Optional | Retention | Code |
 |---|---|---|---|---|---|---|---|
 | Precise Location | `NSPrivacyCollectedDataTypePreciseLocation` | Status location, meeting points, live location, SOS position, check-in position | App Functionality | Yes | Yes | Live location: about 2 minutes on the server, never in the database. SOS: until the crew or account is deleted. Check-in: 1 hour after the timer ends. Status location: until a newer status replaces it or Stop all sharing | `routes/crew-live-location.ts`, `routes/crew-sos.ts`, `routes/crew-checkin.ts`, `packages/mobile/lib/backgroundShare.ts` |
-| Email Address | `NSPrivacyCollectedDataTypeEmailAddress` | Email for verification, reset and notices; email from Sign in with Apple or Google | App Functionality | Yes | Yes | Until the account is deleted (plus 30-day grace) | `routes/auth.ts`, `routes/oauth.ts`, `routes/email-auth.ts` |
+| Email Address | `NSPrivacyCollectedDataTypeEmailAddress` | Email for verification, reset and notices; email from Sign in with Apple or Google | App Functionality | Yes | Required | Until the account is deleted (plus 30-day grace) | `routes/auth.ts`, `routes/oauth.ts`, `routes/email-auth.ts` |
 | Name | `NSPrivacyCollectedDataTypeName` | Display name (optional). The username is also shown to others | App Functionality | Yes | Yes | Until the account is deleted | `routes/account.ts` |
 | Photos or Videos | `NSPrivacyCollectedDataTypePhotosorVideos` | Profile photo upload | App Functionality | Yes | Yes | Until removed or the account is deleted | `routes/account.ts`, `packages/mobile/components/AccountIdentityCard.tsx` |
-| Other User Content | `NSPrivacyCollectedDataTypeOtherUserContent` | Picks, notes, ratings, crew posts, statuses, polls, packing items, rides, payment handles (Venmo, Cash App, PayPal) | App Functionality | Yes | Yes | Until the account is deleted; crew content until the crew is deleted | `routes/crews.ts`, `routes/crew-members.ts`, `routes/expenses.ts`, `routes/account.ts` |
+| Other User Content | `NSPrivacyCollectedDataTypeOtherUserContent` | Picks, notes, ratings, crew posts, statuses, polls, packing items, rides | App Functionality | Yes | Yes | Until the account is deleted; crew content until the crew is deleted | `routes/crews.ts`, `routes/crew-members.ts` |
+| Other Financial Info | `NSPrivacyCollectedDataTypeOtherFinancialInfo` | Venmo, Cash App and PayPal names that the user adds. Festie never moves money | App Functionality | Yes | Yes | Until the account is deleted | `routes/account.ts`, `routes/expenses.ts` |
 | User ID | `NSPrivacyCollectedDataTypeUserID` | Username, Apple and Google account IDs, sign-in sessions | App Functionality | Yes | Required (username) | Account: until deleted. Sessions: app refresh token up to 90 days. Security log: up to 1 year | `routes/auth.ts`, `routes/oauth.ts` |
 | Device ID | `NSPrivacyCollectedDataTypeDeviceID` | Push token from the device | App Functionality | Yes | Yes | 60 days without use | `routes/notifications.ts`, `packages/mobile/hooks/useMobilePush.ts` |
 | Crash Data | `NSPrivacyCollectedDataTypeCrashData` | Sentry error reports | App Functionality | No | Required | Held by Sentry; not in our database | `packages/mobile/app/_layout.tsx` |
 | Performance Data | `NSPrivacyCollectedDataTypePerformanceData` | Sentry timings of a 5% sample of screens and requests (`tracesSampleRate` 0.05, `sendDefaultPii` false) | App Functionality | No | Required | Held by Sentry; not in our database | `packages/mobile/app/_layout.tsx` |
 | Other Data Types | `NSPrivacyCollectedDataTypeOtherDataTypes` | Date of birth (age check, 18 or older) and battery level (only if the user turns on Show my battery level) | App Functionality | Yes | Date of birth required, battery optional | Date of birth: until the account is deleted. Battery: sent with live location, not stored | `routes/auth.ts`, `lib/schemas/auth.ts`, `packages/mobile/lib/backgroundShare.ts` |
 
-Not collected: contacts, health, financial data, browsing history, search history, purchases, advertising data.
+Not collected: contacts, health, payment card or bank data, browsing history, search history, purchases, advertising data.
 Product Interaction (`NSPrivacyCollectedDataTypeProductInteraction`) is declared in `app.json` but the mobile app collects no usage events. Do not declare it in App Privacy. SR-37 removes it from the manifest.
 The camera scans a plan QR code and keeps nothing (`packages/mobile/components/PlanQRScan.tsx`), so it needs no row.
 Apple has no date-of-birth type. Owner choice recorded here: declare it under Other Data Types.
@@ -35,7 +36,7 @@ Apple has no date-of-birth type. Owner choice recorded here: declare it under Ot
 | Location: Precise location | Status location, meeting points, live location, SOS position, check-in position | Yes | No | Yes | App functionality | See the Apple table, row Precise Location | `routes/crew-live-location.ts`, `routes/crew-sos.ts`, `routes/crew-checkin.ts` |
 | Personal info: Name | Display name | Yes | No | Yes | App functionality, Account management | Until the account is deleted | `routes/account.ts` |
 | Personal info: User IDs | Username, Apple and Google account IDs | Yes | No | Username required | App functionality, Account management | Until the account is deleted | `routes/auth.ts`, `routes/oauth.ts` |
-| Personal info: Email address | Email address | Yes | No | Yes | App functionality, Account management | Until the account is deleted | `routes/auth.ts`, `routes/email-auth.ts` |
+| Personal info: Email address | Email address | Yes | No | Required | App functionality, Account management | Until the account is deleted | `routes/auth.ts`, `routes/email-auth.ts` |
 | Personal info: Other info | Date of birth | Yes | No | Required | Account management | Until the account is deleted | `routes/auth.ts`, `lib/schemas/auth.ts` |
 | Financial info: Other financial info | Venmo, Cash App and PayPal names that the user adds. Festie never moves money | Yes | No | Yes | App functionality | Until the account is deleted | `routes/account.ts`, `routes/expenses.ts` |
 | Photos and videos: Photos | Profile photo | Yes | No | Yes | App functionality | Until removed or the account is deleted | `routes/account.ts` |
@@ -61,7 +62,7 @@ Backups: up to 13 weeks, encrypted. Security log (IP address with sign-ins): up 
 
 ### Service providers
 
-Sentry, Firebase Cloud Messaging, Apple Push, Resend and Cloudflare process data for Festie under policy section 5.
+Sentry, Firebase Cloud Messaging, Apple Push, Resend, Cloudflare and GitHub (encrypted backups only) process data for Festie under policy section 5.
 Recommended answer: Play treats a provider that acts only for the developer as not "sharing", so answer Shared: No.
 Mark this "confirm in console". The owner or counsel makes the final call.
 
@@ -81,6 +82,7 @@ SR-37 applies this list. SR-32 does not edit `app.json`.
 | Name | No | Yes, display name | missing from manifest: add `NSPrivacyCollectedDataTypeName`, linked, App Functionality |
 | Other Data Types (date of birth, battery) | No | Yes | missing from manifest: add `NSPrivacyCollectedDataTypeOtherDataTypes`, linked, App Functionality |
 | Performance Data | No | Yes, Sentry traces at 5% | missing from manifest: add `NSPrivacyCollectedDataTypePerformanceData`, not linked, App Functionality |
+| Other Financial Info | No | Yes, payment handles | missing from manifest: add `NSPrivacyCollectedDataTypeOtherFinancialInfo`, linked, App Functionality |
 | Product Interaction | Yes, analytics | No. The mobile app sends no usage events. Web page-speed and install-prompt counts are web only | extra in manifest: remove in SR-37 |
 
 Tracking stays `false`. The accessed-API list (UserDefaults `CA92.1`, FileTimestamp `C617.1`, DiskSpace `E174.1`) is out of scope here.
