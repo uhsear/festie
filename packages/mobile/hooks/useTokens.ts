@@ -115,6 +115,7 @@ function nativeFontFamily(family: string, weight: number): string | undefined {
  * Pass an optional `weight` to override the role's default — the correct
  * weight-specific font cut is selected automatically (800/900 clamp to 700Bold).
  * `opts.brandFace` opts a label into Space Grotesk (labels default to the system face).
+ * `opts.tabular` turns on tabular figures for ticking or aligned numbers (times, countdowns).
  * Use this instead of spreading typeStyle() and then adding a raw `fontWeight`
  * override (which is inert on native because the weighted family wins).
  *
@@ -125,7 +126,7 @@ function nativeFontFamily(family: string, weight: number): string | undefined {
  *   // Right — selects SpaceGrotesk_700Bold:
  *   typeStyle('caption', 700)
  */
-export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFace?: boolean }): TextStyle {
+export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFace?: boolean; tabular?: boolean }): TextStyle {
   const r = typeRoles[role];
   const resolvedWeight = weight ?? r.weight;
   // Clamp 800/900 to 700 — no loaded cut above Bold for either brand face.
@@ -165,9 +166,33 @@ export function typeStyle(role: TypeRoleName, weight?: number, opts?: { brandFac
   // so confidence/delivery figures keep column alignment while they tick.
   if ('numeric' in r && r.numeric) {
     style.fontVariant = [r.numeric];
+  } else if (opts?.tabular) {
+    style.fontVariant = ['tabular-nums'];
   }
   return style;
 }
+
+/**
+ * Poster size path. Posters render at a fixed artboard size (their own sizes, with
+ * allowFontScaling off), so only the face comes from the type system. Returns the
+ * fontFamily/fontWeight that typeStyle() resolves for the weight: body (Space Grotesk)
+ * by default, Clash Display when `display` is set.
+ */
+export function posterFont(weight: number, display = false): Pick<TextStyle, 'fontFamily' | 'fontWeight'> {
+  const { fontFamily, fontWeight } = typeStyle(display ? 'display-xl' : 'body', weight);
+  return { fontFamily, fontWeight };
+}
+
+/**
+ * Pushed-route header title. 18 is a deliberate step between `label` (14) and `title`
+ * (20): native headers need the room, and the brand face keeps the semibold cut.
+ * Exception to the ramp, recorded in DESIGN.md.
+ */
+export const headerTitleType: TextStyle = {
+  ...typeStyle('label', 600, { brandFace: true }),
+  fontSize: fontSize[18],
+  lineHeight: Math.round(fontSize[18] * 1.3),
+};
 
 const TYPE_SCALE_CAPS: Partial<Record<TypeRoleName, number>> = {
   'display-xl': 1.2,

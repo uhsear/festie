@@ -195,7 +195,7 @@ const useStyles = makeStyles((t) => ({
     borderColor: t.colors.accent.aqua,
   },
   emoji: {
-    fontSize: 22,
+    ...typeStyle('title'),
   },
   rowBody: {
     flex: 1,

@@ -153,9 +153,6 @@ const useStyles = makeStyles((t: Tokens) => ({
   },
   dayText: {
     ...typeStyle('label'),
-    // Android Fabric under-measures the final Space Grotesk glyph in these
-    // centered pills. The system face preserves the complete day label.
-    fontFamily: Platform.OS === 'android' ? undefined : typeStyle('label').fontFamily,
     color: t.colors.text.secondary,
   },
   dayDate: {

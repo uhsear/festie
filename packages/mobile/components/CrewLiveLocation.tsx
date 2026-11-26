@@ -450,7 +450,7 @@ const useStyles = makeStyles((t) => ({
     color: t.colors.text.primary,
   },
   bannerSub: {
-    ...typeStyle('caption'),
+    ...typeStyle('caption', undefined, { tabular: true }),
     color: t.colors.text.secondary,
   },
   notice: {

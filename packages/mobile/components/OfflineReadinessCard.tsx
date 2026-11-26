@@ -399,7 +399,7 @@ const useRowStyles = makeStyles((t) => ({
     color: t.colors.accent.coral,
   },
   timeLabel: {
-    ...typeStyle('micro'),
+    ...typeStyle('micro', undefined, { tabular: true }),
     color: t.colors.accent.aqua,
     flexShrink: 0,
   },

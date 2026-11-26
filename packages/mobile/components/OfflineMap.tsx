@@ -1918,7 +1918,7 @@ const useStyles = makeStyles((t) => ({
     paddingHorizontal: t.spacing[4],
   },
   chipGlyph: {
-    fontSize: 13,
+    ...typeStyle('caption'),
     lineHeight: 16,
   },
   chipGlyphOff: {

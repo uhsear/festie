@@ -130,7 +130,7 @@ const useStyles = makeStyles((t) => ({
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: t.spacing[2] },
   title: { ...typeStyle('label', 700), color: t.colors.text.primary, flex: 1 },
-  body: { ...typeStyle('caption'), color: t.colors.text.secondary },
+  body: { ...typeStyle('caption', undefined, { tabular: true }), color: t.colors.text.secondary },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: t.spacing[2] },
   chip: {
     paddingHorizontal: t.spacing[3],

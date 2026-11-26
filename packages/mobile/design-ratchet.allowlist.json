@@ -2,12 +2,6 @@
   "entries": [
     {
       "file": "app/_layout.tsx",
-      "rule": "fontSize",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
-      "file": "app/_layout.tsx",
       "rule": "hex",
       "max": 3,
       "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
@@ -121,12 +115,6 @@
       "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
     },
     {
-      "file": "app/crew-compare.tsx",
-      "rule": "fontFamily",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
       "file": "app/festival-mode.tsx",
       "rule": "ionicons-size",
       "max": 1,
@@ -179,18 +167,6 @@
       "rule": "ionicons-size",
       "max": 8,
       "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
-    },
-    {
-      "file": "app/wrap.tsx",
-      "rule": "fontFamily",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
-      "file": "app/wrap.tsx",
-      "rule": "fontSize",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
     },
     {
       "file": "app/wrap.tsx",
@@ -487,12 +463,6 @@
       "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
     },
     {
-      "file": "components/CrewSwitcherSheet.tsx",
-      "rule": "fontSize",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
       "file": "components/CrewSyncMarker.tsx",
       "rule": "ionicons-size",
       "max": 1,
@@ -541,18 +511,6 @@
       "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
     },
     {
-      "file": "components/HeaderTitle.tsx",
-      "rule": "fontFamily",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
-      "file": "components/HeaderTitle.tsx",
-      "rule": "fontSize",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
       "file": "components/InboxBell.tsx",
       "rule": "ionicons-size",
       "max": 1,
@@ -567,7 +525,7 @@
     {
       "file": "components/InviteQRSheet.tsx",
       "rule": "hex",
-      "max": 3,
+      "max": 2,
       "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
     },
     {
@@ -605,12 +563,6 @@
       "rule": "ionicons-size",
       "max": 4,
       "reason": "Offender today. TK-21 moves it to an icon size token, then the entry is deleted."
-    },
-    {
-      "file": "components/OfflineMap.tsx",
-      "rule": "fontSize",
-      "max": 1,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
     },
     {
       "file": "components/OfflineMap.tsx",
@@ -699,7 +651,7 @@
     {
       "file": "components/PlanQRShare.tsx",
       "rule": "hex",
-      "max": 3,
+      "max": 2,
       "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
     },
     {
@@ -759,7 +711,7 @@
     {
       "file": "components/ScheduleDayChips.tsx",
       "rule": "fontFamily",
-      "max": 2,
+      "max": 1,
       "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
     },
     {
@@ -800,15 +752,9 @@
     },
     {
       "file": "components/wrap/PosterFrame.tsx",
-      "rule": "fontFamily",
-      "max": 5,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
-    },
-    {
-      "file": "components/wrap/PosterFrame.tsx",
       "rule": "fontSize",
       "max": 5,
-      "reason": "Offender today. DP-25 moves it to typeStyle(), then the entry is deleted."
+      "reason": "Poster size path: fixed-artboard sizes from POSTER tokens; only the face comes from posterFont() in hooks/useTokens.ts."
     },
     {
       "file": "lib/backgroundShare.ts",
@@ -825,7 +771,7 @@
     {
       "file": "lib/mapDocument.ts",
       "rule": "hex",
-      "max": 23,
+      "max": 21,
       "reason": "Offender today. DP-29 tokenises it or names a reason to keep it."
     },
     {

@@ -823,8 +823,7 @@ const useStyles = makeStyles((t) => ({
     paddingVertical: t.spacing[2],
   },
   heroValue: {
-    fontFamily: 'ClashDisplay-Bold',
-    fontSize: 48,
+    ...typeStyle('display-xl'),
     lineHeight: 56,
     color: t.colors.accent.aqua,
     // No negative tracking on iOS: UIKit clips the trailing glyph.

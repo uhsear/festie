@@ -625,7 +625,7 @@ const useStyles = makeStyles((t) => ({
     marginBottom: t.spacing[2],
   },
   time: {
-    ...typeStyle('caption'),
+    ...typeStyle('caption', undefined, { tabular: true }),
     color: t.colors.text.secondary,
   },
   reminderMark: {

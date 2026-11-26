@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, RefreshControl, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
@@ -473,7 +473,6 @@ const useStyles = makeStyles((t) => ({
   },
   dayText: {
     ...typeStyle('label'),
-    fontFamily: Platform.OS === 'android' ? undefined : typeStyle('label').fontFamily,
     color: t.colors.text.secondary,
   },
   dayTextActive: {
