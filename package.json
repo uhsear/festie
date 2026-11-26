@@ -25,6 +25,7 @@
     "check:design": "node scripts/ci/design-ratchet.mjs all && node --test scripts/ci/design-ratchet.test.mjs",
     "check:docs": "node scripts/ci/check-docs.mjs",
     "check:ground": "node scripts/check-ground.mjs",
+    "build:static-pages": "node --import tsx/esm scripts/build-legal-css.ts",
     "check:legal": "node scripts/ci/check-legal-placeholders.mjs",
     "check:migrations": "node scripts/ci/check-migrations.mjs",
     "gen:api-types": "node scripts/gen-api-types.mjs",
