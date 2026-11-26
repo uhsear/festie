@@ -25,6 +25,7 @@ import type { Router } from 'express';
 import { createEmailWindowLimit, createPasswordResetRateLimit } from '../lib/rate-limiting';
 import { sendEmailChangedEmail, sendPasswordResetEmail, sendVerificationEmail, unsubscribeSecret, verifyEmailUrl, verifyUnsubscribeToken } from '../lib/email';
 import { escapeHtml } from '../lib/helpers/sanitize';
+import { designCss, festieLockupHtml, headSnippet } from '../lib/design-css';
 import { colors } from '../packages/shared/src/tokens/colors';
 import { colorsDaylight } from '../packages/shared/src/tokens/colorsDaylight';
 import type { RouteDeps } from '../lib/types';
@@ -445,8 +446,8 @@ const NOTIFICATION_SETTINGS: VerifyAction = { label: 'Open notification settings
 // A POST form in place of the link button. `action` is a same-origin path built by the route.
 type UnsubscribeForm = { action: string; label: string };
 
-// Colours: Stage from packages/shared/src/tokens/colors.ts, Daylight from
-// colorsDaylight.ts (bg.primary, text.primary, text.secondary, accent.aqua).
+// Tokens, fonts, base rules and the pill CTA come from lib/design-css.ts. The status icon takes
+// `live` (success) and danger from the shared tokens, one value per scheme.
 // `action` carries fixed strings only; `title` too. `message` is escaped.
 function _verifyEmailPage(
   status: number,
@@ -459,7 +460,7 @@ function _verifyEmailPage(
   const success = status < 400;
   // A page with a form asks a question, so it gets a neutral icon instead of a success check.
   const icon = form ? '?' : success ? '&#10003;' : '&#10007;';
-  const tone = form ? 'var(--text-2)' : success ? 'var(--ok)' : 'var(--bad)';
+  const tone = form ? 'var(--ds-text-secondary)' : success ? 'var(--ok)' : 'var(--ds-danger)';
   // A 500 is not the link's fault, so it gets no "send another" advice; nor does a page that is not about a sign-in link.
   const retryHint =
     showRetryHint && !success && status !== 500
@@ -468,32 +469,31 @@ function _verifyEmailPage(
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="color-scheme" content="dark light">
 <title>${pageTitle} - Festie</title>
+${headSnippet}
 <style>
-  :root { --bg: #0a0a0a; --text: #eaeaf2; --text-2: #9999bb; --accent: #00e8d0; --on-accent: #0a0a0a; --ok: ${colors.status.verified}; --bad: ${colors.text.danger}; --card: rgba(255,255,255,0.05); --border: rgba(255,255,255,0.1); }
-  @media (prefers-color-scheme: light) {
-    :root { --bg: #f4f4f7; --text: #0b0b12; --text-2: #2e2e44; --accent: #00594f; --on-accent: #ffffff; --ok: ${colorsDaylight.status.verified}; --bad: ${colorsDaylight.text.danger}; --card: #ffffff; --border: rgba(0,0,0,0.1); }
-  }
-  body { margin: 0; padding: 16px; background: var(--bg); color: var(--text); font-family: 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; box-sizing: border-box; }
-  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 48px 32px; text-align: center; max-width: 400px; width: 100%; box-sizing: border-box; }
-  .icon { font-size: 48px; margin-bottom: 16px; color: ${tone}; }
+${designCss}
+  :root { --ok: ${colors.live.text}; }
+  @media (prefers-color-scheme: light) { :root { --ok: ${colorsDaylight.live.text}; } }
+  body { padding: 16px; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+  .card { background: var(--ds-card); border: 1px solid var(--ds-border); border-radius: 16px; padding: 40px 32px; text-align: center; max-width: 400px; width: 100%; }
+  .icon { font-size: 48px; margin: 16px 0; color: ${tone}; }
   h1 { font-size: 22px; margin: 0 0 12px; }
-  p { color: var(--text-2); font-size: 15px; line-height: 1.6; margin: 0; }
-  .btn { display: inline-block; margin-top: 24px; padding: 12px 24px; min-height: 44px; box-sizing: border-box; border-radius: 10px; background: var(--accent); color: var(--on-accent); font-weight: 600; text-decoration: none; }
-  button.btn { border: 0; font: inherit; font-weight: 600; cursor: pointer; }
-  .btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  p { color: var(--ds-text-secondary); font-size: 15px; line-height: 1.6; margin: 0; }
+  .ds-cta { margin-top: 24px; }
+  button.ds-cta { border: 0; cursor: pointer; }
   .hint { margin-top: 16px; font-size: 13px; }
 </style></head>
 <body>
 <main class="card">
+  ${festieLockupHtml()}
   <div class="icon" aria-hidden="true">${icon}</div>
   <h1>${title}</h1>
   <p>${escapeHtml(message)}</p>
   ${
     form
-      ? `<form method="post" action="${escapeHtml(form.action)}"><button class="btn" type="submit">${form.label}</button></form>`
-      : `<a class="btn" href="${action.href}">${action.label}</a>`
+      ? `<form method="post" action="${escapeHtml(form.action)}"><button class="ds-cta" type="submit">${form.label}</button></form>`
+      : `<a class="ds-cta" href="${action.href}">${action.label}</a>`
   }
   ${retryHint}
 </main>
