@@ -76,10 +76,9 @@ test.describe('prefers-reduced-motion', () => {
     const running = await page.evaluate(() => {
       document.documentElement.setAttribute('data-low-power', '');
       const probe = document.createElement('div');
-      probe.className = 'ambient-loop';
-      probe.style.animation = 'live-glow 3s infinite';
+      probe.className = 'skeleton-shimmer';
       document.body.appendChild(probe);
-      const name = getComputedStyle(probe).animationName;
+      const name = getComputedStyle(probe, '::after').animationName;
       probe.remove();
       return name;
     });

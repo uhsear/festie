@@ -43,10 +43,12 @@ describe('ambient loops stay on the compositor', () => {
 
   it('stops every ambient loop in low-power mode and pauses it in a hidden tab', () => {
     for (const attr of ['data-low-power', 'data-tab-hidden']) {
-      const rule = theme.slice(theme.indexOf(`:root[${attr}] :is(`));
-      expect(rule).toContain('.ambient-loop');
-      expect(rule).toContain('.skeleton-shimmer::after');
-      expect(rule).toContain('.set-card.live::before');
+      // Pseudo-elements are dropped inside :is(), so each selector is written out.
+      expect(theme).not.toContain(`:root[${attr}] :is(`);
+      const rule = theme.slice(theme.indexOf(`:root[${attr}] .ambient-loop`));
+      for (const sel of ['.ambient-loop', '.skeleton-shimmer::after', '.set-card.live::before', '.fm-live-dot::after']) {
+        expect(rule).toContain(`:root[${attr}] ${sel}`);
+      }
       expect(rule).not.toContain('sos');
     }
   });

@@ -446,30 +446,26 @@
    this stylesheet and components.css define themselves. Low-power mode
    (festival-mode store, mirrored on <html> by AppShell) stops them, and a hidden
    tab pauses them. */
-:root[data-low-power] :is(
-    .ambient-loop,
-    .ambient-loop::before,
-    .ambient-loop::after,
-    .skeleton-shimmer::after,
-    .set-card.live::before,
-    .fm-live-dot::after,
-    .festie-peer-marker::before,
-    .festie-live-dot,
-    .auth-screen::before
-  ) {
+:root[data-low-power] .ambient-loop,
+:root[data-low-power] .ambient-loop::before,
+:root[data-low-power] .ambient-loop::after,
+:root[data-low-power] .skeleton-shimmer::after,
+:root[data-low-power] .set-card.live::before,
+:root[data-low-power] .fm-live-dot::after,
+:root[data-low-power] .festie-peer-marker::before,
+:root[data-low-power] .festie-live-dot,
+:root[data-low-power] .auth-screen::before {
   animation: none !important;
 }
 
-:root[data-tab-hidden] :is(
-    .ambient-loop,
-    .ambient-loop::before,
-    .ambient-loop::after,
-    .skeleton-shimmer::after,
-    .set-card.live::before,
-    .fm-live-dot::after,
-    .festie-peer-marker::before,
-    .festie-live-dot,
-    .auth-screen::before
-  ) {
+:root[data-tab-hidden] .ambient-loop,
+:root[data-tab-hidden] .ambient-loop::before,
+:root[data-tab-hidden] .ambient-loop::after,
+:root[data-tab-hidden] .skeleton-shimmer::after,
+:root[data-tab-hidden] .set-card.live::before,
+:root[data-tab-hidden] .fm-live-dot::after,
+:root[data-tab-hidden] .festie-peer-marker::before,
+:root[data-tab-hidden] .festie-live-dot,
+:root[data-tab-hidden] .auth-screen::before {
   animation-play-state: paused !important;
 }
