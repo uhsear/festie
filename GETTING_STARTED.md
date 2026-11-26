@@ -24,12 +24,12 @@
 
 | Tool | Required version | Notes |
 |------|-----------------|-------|
-| **Node.js** | `>=22.0.0` (pin to `22` via `.nvmrc`) | Engine constraint in `package.json`; Docker image uses `22.22.1-slim` |
+| **Node.js** | `>=22.0.0` (pin to `22` via `.nvmrc`) | Engine constraint in `package.json` |
 | **npm** | bundled with Node 22 | Root workspace uses npm — do **not** install pnpm at the root |
 | **pnpm** | `9.x` (E2E/mobile workflows) or `10.x` (security-audit workflow) | Only manages `packages/` workspace; CI pins version per workflow |
 | **PostgreSQL** | `16` | pg 16-alpine in CI; CI runs pg 16 |
 | **Redis** | `7` | redis:7-alpine in CI; falls back to in-memory rate limiting when `REDIS_ENABLED=false` |
-| **Docker** (optional) | any recent version | Required only for containerised runs or the test-db helper scripts |
+| **Docker** (optional) | any recent version | Required only for the test-db helper scripts |
 
 **Node version management.** The repo ships `.nvmrc` containing `22`. Run `nvm use` (or equivalent) before any install step.
 
@@ -47,7 +47,6 @@ festie/
 │   └── e2e/               # Playwright browser tests
 ├── public/                # Static assets served by Express
 ├── scripts/               # Operational and tooling scripts
-├── Dockerfile             # Multi-stage Node 22 image
 ├── package.json           # ROOT — npm project, engines: node >=22
 ├── packages/
 │   ├── web/               # @festie/web — React 19 + Vite + TanStack Router SPA
@@ -85,7 +84,7 @@ node scripts/fetch-fonts.mjs
 
 > The Clash Display font files are not in this repository. Their licence (ITF Free Font License) does not allow distribution through a public repository, so they live in the private repo `uhsear/festie-fonts`. The web build fetches them when it can and otherwise falls back to the system font. A mobile bundle fails without them.
 
-> Root `.npmrc` sets `ignore-scripts=true`. Native modules that need a post-install build step (e.g. `sharp`) are installed by the Dockerfile using `npm ci --omit=dev` inside the build image, where build tools (`make`, `g++`, `libvips42`) are available. Locally on macOS/Linux `npm ci` should work without extra tooling; on Windows you may need `windows-build-tools` or WSL2 for `sharp`.
+> Root `.npmrc` sets `ignore-scripts=true`. Native modules that need a post-install build step (e.g. `sharp`) need build tools (`make`, `g++`, `libvips`) when they compile. Locally on macOS/Linux `npm ci` should work without extra tooling; on Windows you may need `windows-build-tools` or WSL2 for `sharp`.
 
 ### Workspace aliases
 
@@ -123,8 +122,13 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 | `FIREBASE_CREDENTIALS_PATH` | — | Absolute path to the Firebase service-account JSON file. Set it to enable FCM push notifications. The server starts normally when it is unset, and push delivery stays disabled. |
 | `ALLOWED_ORIGINS` | derived from `PUBLIC_ORIGIN` | Comma-separated extra CORS origins |
 | `PORT` | `4000` | HTTP port the backend listens on |
-| `BIND_ADDRESS` | `127.0.0.1` | Interface to bind; set `0.0.0.0` in Docker |
+| `BIND_ADDRESS` | `127.0.0.1` | Interface to bind; set `0.0.0.0` to listen on all interfaces |
 | `LOG_LEVEL` | `debug` (dev) / `info` (prod) | Pino log level |
+| `METRICS_PORT` | `9400` | First port of the metrics listener. Set it to keep a second instance on the same host off the first one's port. The server reads it directly, not through `lib/config.ts` |
+| `METRICS_TOKEN` | empty | Token that guards the metrics endpoint |
+| `LIVE_LOCATION_ENABLED` / `SOS_ENABLED` | `true` | Set `false` to turn off live location or SOS |
+| `LINEUP_CANCEL_ALERTS_ENABLED` | `false` | Set `true` to send cancel alerts for marked acts |
+| `ORGANIZER_PLATFORM_ENABLED` | `true` | Set `false` to turn off the organizer platform |
 | `SENTRY_DSN` | — | Sentry error reporting (optional) |
 | `SENTRY_TRACES_RATE` | `0.05` | Fraction of backend requests Sentry traces (0 to 1). Keep it at 0.05 or lower in production. The web app reads `VITE_SENTRY_TRACES_RATE`, same default. |
 | `SENTRY_PROFILES_RATE` | `0` | Fraction of traced requests that Sentry profiles |
@@ -141,6 +145,14 @@ The backend reads all env vars through `lib/config.ts`. Create a `.env` file in 
 | `FCM_RETRY_WEBHOOK_URL` | FCM retry webhook endpoint |
 | `MOBILE_ORIGINS` | Comma-separated TWA / custom-scheme origins for mobile CORS |
 | `TILES_DIR` | Absolute path to a directory of `.pmtiles` files. The server then serves them at `/tiles/<name>.pmtiles` with Range support. File names use `a-z`, `0-9`, `_` and `-`. Unset turns the feature off, and the route answers 404. See `scripts/maps/extract-pmtiles.md`. |
+
+### Backup scripts
+
+| Variable | Purpose |
+|----------|---------|
+| `BACKUP_GPG_PASSPHRASE` | Read by `scripts/backup-*.sh` and `scripts/lib/backup-gpg.sh`, never by the server. `backup-pg.sh` refuses to run without it. Set it in `.env` on the backup host. |
+
+`lib/config.ts` holds the full list (150 variables).
 
 ### Development minimum `.env`
 
@@ -301,26 +313,6 @@ npm run build   # scripts/build.mjs writes dist/server.js and the worker entrypo
 
 Production runs `dist/server.js` with plain `node` as a single process. `dist/` is gitignored, so it is built on each target.
 
-### Docker
-
-```bash
-docker build -t festie .
-docker run -p 4000:4000 \
-  -e DATABASE_URL=postgresql://user:pass@host:5432/festie \
-  -e SESSION_SECRET=your-secret-here \
-  -e PUBLIC_ORIGIN=https://festie.us \
-  festie
-```
-
-The Dockerfile is a multi-stage build:
-1. Build stage: `node:22.22.1-slim` + `make g++` (for `sharp` native compilation)
-2. Production stage: `node:22.22.1-slim` + `libvips42` runtime; non-root user `app:app`
-3. Copies: `package.json tsconfig.json server.ts lib/ routes/ migrations/ public/ scripts/`
-4. Runs `npm ci --omit=dev` to install production deps only
-5. Exposes port `4000`, healthcheck hits `/api/ready`
-
-> The `public/uploads/avatars/` directory is created at image build time. In production, avatars are served from the filesystem — there is no CDN upload step configured in the image.
-
 ### Web frontend
 
 ```bash
@@ -347,15 +339,18 @@ All workflows in `.github/workflows/`:
 
 | Workflow | Trigger | Purpose |
 |----------|---------|---------|
-| `ci.yml` | push/PR to `main` | Lint, typecheck, backend tests (with coverage gate), frontend vitest, mobile typecheck, security audit, Lighthouse, bundle-size, Docker build |
-| `security-audit.yml` | daily 06:00 UTC | `npm audit` + `pnpm audit` at `--audit-level=high`; blocking |
-| `e2e-web.yml` | nightly 07:30 UTC | Playwright chromium E2E against a real Postgres+Redis stack |
-| `uptime.yml` | every 10 minutes | Off-host reachability check; auto-opens/closes GitHub issue on failure. Liveness and auto-restart live in `scripts/health-check.sh`; error rate, memory, disk and `/api/ready` in `scripts/error-rate-alert.cjs` |
+| `ci.yml` | push/PR to `main` | Lint, typecheck, backend tests (with coverage gate), frontend vitest, mobile typecheck, security audit, Lighthouse, bundle-size |
+| `security-audit.yml` | daily 06:00 UTC and manual | `npm audit` + `pnpm audit` at `--audit-level=high`; blocking |
+| `e2e-web.yml` | nightly 07:30 UTC and manual | Playwright chromium E2E against a real Postgres+Redis stack |
+| `uptime.yml` | every 10 minutes and manual | Off-host reachability check; auto-opens/closes GitHub issue on failure. Liveness and auto-restart live in `scripts/health-check.sh`; error rate, memory, disk and `/api/ready` in `scripts/error-rate-alert.cjs` |
+| `web-load-smoke.yml` | every 30 minutes and manual | Light load smoke test against the web app |
+| `license-check.yml` | pull requests and pushes to `main` that touch `package.json`, lockfiles, `packages/**/package.json` or `scripts/ci/check-licenses.mjs` | Dependency license check |
 | `mobile-ota.yml` | manual dispatch | EAS OTA update (`eas update`) to a channel; crash-rate gate |
 | `mobile-release-gate.yml` | manual dispatch | Pre-build gate: expo-doctor, fingerprint diff, typecheck, lint |
 | `android-release.yml` | manual dispatch | Gradle AAB build + optional Play Store internal-track submit |
-| `android-e2e.yml` | manual dispatch | Android emulator + Maestro smoke tests (~25 min) |
-| `ios-e2e.yml` | manual dispatch | iOS simulator + Maestro smoke tests, macOS 15 runner (~20 min) |
+| `android-e2e.yml` | weekly, Sunday 03:00 UTC, and manual | Android emulator + Maestro smoke tests (~25 min) |
+| `ios-e2e.yml` | weekly, Sunday 04:00 UTC, and manual | iOS simulator + Maestro smoke tests, macOS 15 runner (~20 min) |
+| `ios-sim-session.yml` | manual dispatch | iOS simulator session |
 
 **CI coverage gate** (`ci.yml` `test` job): `--lines 87 --branches 80 --functions 89 --statements 87`. The `c8` config is in `config/c8rc.json`.
 
@@ -402,7 +397,7 @@ name is rejected before a connection is opened.
 
 `scripts/test:db:migrate` in `package.json` uses a bash `for` loop. On Windows, run it inside WSL2, Git Bash, or use the Docker approach (`npm run test:db:up`).
 
-`sharp` (image processing for avatars) requires native binaries. Windows users should build inside WSL2 or Docker to avoid native-module compile issues.
+`sharp` (image processing for avatars) requires native binaries. Windows users should build inside WSL2 to avoid native-module compile issues.
 
 ### Single process, no cluster mode
 

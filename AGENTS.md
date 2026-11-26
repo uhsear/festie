@@ -30,6 +30,7 @@ Festie — a real-time festival crew-coordination app. Live at [festie.us](https
 | Web | `pnpm --filter @festie/web {dev,build,test,lint,typecheck}` |
 | Shared | `pnpm --filter @festie/shared {test,lint,typecheck}` |
 | Mobile | `pnpm --filter @festie/mobile {typecheck,lint,test}` |
+| Repo checks | `npm run check:design`, `check:docs`, `check:legal`, `check:migrations`, `check:ground`, `check:brand-rasters`, `gen:api-types:check` |
 
 ## Conventions & guardrails
 
