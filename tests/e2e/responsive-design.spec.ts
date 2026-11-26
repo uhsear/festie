@@ -216,4 +216,17 @@ test.describe('responsive design', () => {
       await expectViewportScreenshot(page, `grid-${vp.name}.png`);
     });
   }
+
+  test('guest My Picks empty-state CTA is fully inside the viewport at 390 by 844', async ({ app, page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await page.goto(`${app.baseUrl}/picks`);
+    const cta = page.getByRole('button', { name: 'Browse the lineup' });
+    await expect(cta).toBeVisible();
+    await cta.scrollIntoViewIfNeeded();
+    const box = await cta.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.y).toBeGreaterThanOrEqual(0);
+    expect(box!.y + box!.height).toBeLessThanOrEqual(844);
+  });
 });

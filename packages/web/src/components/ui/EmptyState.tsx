@@ -1,9 +1,18 @@
 import React from 'react';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { illustrationDataUri, type IllustrationName } from '@festie/shared/illustrations';
+import { illustrationDataUri, illustrationSlot, type IllustrationName } from '@festie/shared/illustrations';
+import { Heart, Inbox, Users, WifiOff, type LucideIcon } from 'lucide-react';
 import { colors, colorsDaylight } from '@festie/shared/tokens';
 import Button from './Button';
 import { cn } from '../../lib/utils';
+
+// Shown at 48px instead of the illustration when the viewport is short (theme.css).
+const FALLBACK_ICON: Record<IllustrationName, LucideIcon> = {
+  noPicks: Heart,
+  noCrew: Users,
+  emptyList: Inbox,
+  offline: WifiOff,
+};
 
 interface EmptyStateProps {
   icon?: React.ReactNode;
@@ -40,7 +49,7 @@ export default function EmptyState({
   return (
     <div
       className={cn(
-        // R21: Container with dot-grid background and flex centering.
+        // R21: Container with flex centering.
         // Vertical padding scales with viewport so the empty state stays
         // proportionate in tight panels (crew/picks) and roomy on desktop.
         // className can still override (e.g. festival-mode's compact slot).
@@ -48,38 +57,45 @@ export default function EmptyState({
         className,
       )}
     >
-      <div className="empty-state-content flex flex-col items-center gap-4 w-full">
+      <div className="flex flex-col items-center gap-4 w-full">
         {illustration ? (
-          <img
-            alt=""
-            aria-hidden="true"
-            src={illustrationDataUri(illustration, ink)}
-            className="w-40 h-28 object-contain [@media(max-width:640px)_and_(max-height:900px)]:h-14"
-          />
+          <>
+            <img
+              alt=""
+              aria-hidden="true"
+              src={illustrationDataUri(illustration, ink)}
+              style={{ width: illustrationSlot.width, height: illustrationSlot.height }}
+              className="empty-state-illustration object-contain"
+            />
+            <div className="empty-state-fallback-icon justify-center" aria-hidden="true">
+              <div className="text-text-secondary [&_svg]:w-12 [&_svg]:h-12">
+                {icon ?? React.createElement(FALLBACK_ICON[illustration])}
+              </div>
+            </div>
+          </>
         ) : (
           icon && (
-            <div className="empty-state-icon flex justify-center">
+            <div className="flex justify-center">
               <div className="text-text-secondary [&_svg]:w-12 [&_svg]:h-12">{icon}</div>
             </div>
           )
         )}
 
-        <Heading className="empty-state-title type-title font-semibold text-text-primary">{title}</Heading>
+        <Heading className="type-title font-semibold text-text-primary">{title}</Heading>
 
         {description && (
-          <p className="empty-state-description text-sm text-text-secondary max-w-[280px]">{description}</p>
+          <p className="text-sm text-text-secondary max-w-[280px]">{description}</p>
         )}
 
         {(cta || secondaryCta) && (
           <div className="flex flex-wrap items-center justify-center gap-3">
             {cta && (
-              <Button className="empty-state-cta" variant="primary" size="md" onClick={cta.onClick}>
+              <Button variant="primary" size="md" onClick={cta.onClick}>
                 {cta.label}
               </Button>
             )}
             {secondaryCta && (
               <Button
-                className="empty-state-secondary-cta"
                 variant="secondary"
                 size="md"
                 onClick={secondaryCta.onClick}
