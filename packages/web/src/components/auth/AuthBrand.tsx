@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router';
 import { AUTH_COPY } from '@festie/shared/constants';
 import { useUIStore } from '@festie/shared/stores/uiStore';
-import { cn } from '../../lib/utils';
+import BrandWordmark from '../brand/BrandWordmark';
 
 /**
  * One brand block for login, register, forgot-password and reset-password:
@@ -18,14 +18,7 @@ export default function AuthBrand({ subtitle }: { subtitle?: string }) {
       >
         <img src={theme === 'daylight' ? '/favicon-daylight.svg' : '/favicon.svg'} width={64} height={64} alt="" />
       </Link>
-      <h1
-        className={cn(
-          'font-display text-[clamp(22px,5vw,36px)] font-bold tracking-[6px] uppercase',
-          'text-accent-coral mb-3',
-        )}
-      >
-        {AUTH_COPY.wordmark}
-      </h1>
+      <BrandWordmark as="h1" className="text-[clamp(22px,5vw,36px)] mb-3" />
       <p className="text-text-secondary text-[length:var(--font-size-16)] tracking-[0.5px]">
         {subtitle ?? AUTH_COPY.tagline}
       </p>

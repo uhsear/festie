@@ -6,6 +6,7 @@ import { useInboxStore, selectInboxUnread } from '@festie/shared/stores/inboxSto
 import { APP_SECTIONS, badgeA11yLabel } from '@festie/shared/utils';
 import { COPY } from '@festie/shared/constants';
 import { INBOX_COPY, inboxBadgeLabel } from '@festie/shared/constants/inboxCopy';
+import BrandWordmark from '../brand/BrandWordmark';
 import { cn } from '@/lib/utils';
 import UserMenu from './UserMenu';
 import FestivalModeToggle from '../features/FestivalModeToggle';
@@ -104,14 +105,12 @@ export default function Header() {
               /* dot is anchored to the brand row so it annotates FESTIE at
                  every breakpoint instead of floating between the two util rows */
               'flex items-center gap-2',
-              'font-display text-base font-bold tracking-[3px] uppercase text-accent-coral whitespace-nowrap',
+              'text-base',
               /* logo link touch target */
               '[&_a]:inline-flex [&_a]:items-center [&_a]:min-h-11 [&_a]:py-1.5',
-              /* responsive type refinements */
-              'md:[letter-spacing:0.12em] md:font-medium',
-              'max-[480px]:font-normal max-[480px]:[letter-spacing:0.08em]',
-              'max-md:text-sm max-md:tracking-[2px] max-md:leading-none',
-              'max-[380px]:text-[length:var(--font-size-12)] max-[380px]:tracking-[1.5px]',
+              /* size steps only; weight is fixed in BrandWordmark */
+              'max-md:text-sm max-md:leading-none',
+              'max-[380px]:text-[length:var(--font-size-12)]',
             )}
           >
             {user && (
@@ -130,7 +129,7 @@ export default function Header() {
               </>
             )}
             <Link to="/" aria-label="FESTIE home" className="text-[inherit] no-underline">
-              FESTIE
+              <BrandWordmark markSize={24} />
             </Link>
           </div>
           <div
