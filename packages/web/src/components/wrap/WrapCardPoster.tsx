@@ -38,7 +38,7 @@ export default function WrapCardPoster({ card, festivalName, byline }: Props) {
             data-poster="row"
             style={{ display: 'flex', alignItems: 'center', gap: 24, height: layout.rowHeight, boxSizing: 'border-box', borderBottom: `1px solid ${colors.rule}` }}
           >
-            <div style={{ width: layout.railWidth, height: layout.railHeight, borderRadius: layout.railWidth / 2, background: colors.rail, flexShrink: 0 }} />
+            <div style={{ width: layout.railWidth, height: layout.railHeight, borderRadius: layout.railWidth / 2, background: row.stageColor ?? colors.rail, flexShrink: 0 }} />
             <div style={{ width: layout.timeWidth, flexShrink: 0, fontSize: font.time, fontVariantNumeric: 'tabular-nums', ...ellipsis }}>
               {row.time ?? String(i + 1).padStart(2, '0')}
             </div>

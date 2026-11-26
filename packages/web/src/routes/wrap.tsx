@@ -74,7 +74,9 @@ function WrapPageInner() {
   });
 
   // Hooks above and below must run on every render, before the early returns.
-  const cards = useMemo(() => (data ? buildWrapCards(data) : []), [data]);
+  // Stage colours come from the loaded festival; another festival's wrap gets neutral rails.
+  const stages = useFestivalStore((s) => (s.currentFestival?.id === festivalId ? s.stages : undefined));
+  const cards = useMemo(() => (data ? buildWrapCards(data, stages) : []), [data, stages]);
   const toRate = useMemo(() => (data ? selectSetsToRate(data.planned, data.festival) : []), [data]);
   const allSorted = useMemo(() => sortRatingsForWrap(data?.allRatings || []), [data?.allRatings]);
 

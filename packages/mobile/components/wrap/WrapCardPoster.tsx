@@ -28,7 +28,7 @@ export default function WrapCardPoster({ card, festivalName, byline }: Props) {
       )}
       {rows.map((row, i) => (
         <View key={`${row.primary}-${i}`} style={s.row}>
-          <View style={s.rail} />
+          <View style={[s.rail, row.stageColor ? { backgroundColor: row.stageColor } : null]} />
           <Text allowFontScaling={false} style={s.time} numberOfLines={1}>
             {row.time ?? String(i + 1).padStart(2, '0')}
           </Text>

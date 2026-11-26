@@ -79,7 +79,9 @@ export default function WrapScreen() {
     }, [festivalId, user, crewParam, reloadKey]),
   );
 
-  const cards = useMemo(() => (data ? buildWrapCards(data) : []), [data]);
+  // Stage colours come from the loaded festival; another festival's wrap gets neutral rails.
+  const stages = useFestivalDataStore((s) => (s.currentFestival?.id === festivalId ? s.stages : undefined));
+  const cards = useMemo(() => (data ? buildWrapCards(data, stages) : []), [data, stages]);
   const toRate = useMemo(() => (data ? selectSetsToRate(data.planned, data.festival).length : 0), [data]);
   const allSorted = useMemo(() => sortRatingsForWrap(data?.allRatings ?? []), [data?.allRatings]);
   const unlocked = !!data && isWrapUnlocked(data.festival);

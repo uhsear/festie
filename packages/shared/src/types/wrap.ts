@@ -82,7 +82,7 @@ export interface WrapCard {
   sub?: string;
   /** The one big typographic object on the share poster: a short value (at most 4 characters) and its label. */
   dominant?: { value: string; label: string };
-  rows?: Array<{ primary: string; secondary?: string | null; rating?: number | null; badge?: string; time?: string }>;
+  rows?: Array<{ primary: string; secondary?: string | null; rating?: number | null; badge?: string; time?: string; stageColor?: string }>;
   quote?: { text: string; by: string };
   stats?: Array<{ label: string; value: string }>;
 }

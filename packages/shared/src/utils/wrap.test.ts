@@ -106,6 +106,26 @@ describe('buildWrapCards', () => {
     for (const c of cards) expect(c.dominant!.value.length).toBeLessThanOrEqual(4);
   });
 
+  it('gives the memory card an opening quote mark as its dominant value', () => {
+    const r = rated({ setId: 'a', rating: 5, note: 'wow' });
+    const memory = buildWrapCards(wrap({ allRatings: [r], topSets: [r] })).find((c) => c.kind === 'memory')!;
+    expect(memory.dominant).toEqual({ value: '“', label: 'a moment to remember' });
+  });
+
+  it('rounds the hours value to a whole number from 100 hours', () => {
+    const r = rated({ setId: 'a', rating: 5 });
+    const hoursOf = (totalHours: number) =>
+      buildWrapCards(wrap({ topSets: [r], stats: { totalRated: 1, avgRating: 5, stagesVisited: 1, daysAttended: 1, totalHours } })).find((c) => c.kind === 'summary')!.dominant!.value;
+    expect(hoursOf(99.5)).toBe('99.5');
+    expect(hoursOf(123.5)).toBe('124');
+  });
+
+  it('puts the stage colour on a row, and leaves it off when the stage is unknown or the colour is not a hex', () => {
+    const w = wrap({ planned: [planned({ setId: 'a', priority: 'must' }), planned({ setId: 'b', priority: 'must', stageId: 'st2' }), planned({ setId: 'c', priority: 'must', stageId: 'st3' })] });
+    const rows = buildWrapCards(w, [{ id: 'st1', color: '#ff00aa' }, { id: 'st3', color: 'red; x' }]).find((c) => c.kind === 'plan')!.rows!;
+    expect(rows.map((r) => r.stageColor)).toEqual(['#ff00aa', undefined, undefined]);
+  });
+
   it('returns [] when nothing is planned or rated', () => {
     expect(buildWrapCards(wrap())).toEqual([]);
   });
