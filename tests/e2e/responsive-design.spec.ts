@@ -181,11 +181,16 @@ test.describe('responsive design', () => {
     const buttons = page.locator('.card-priority-btn');
     await expect(buttons).toHaveCount(9);
 
-    for (let i = 0; i < 6; i++) {
-      const box = await buttons.nth(i).boundingBox();
-      expect(box).toBeTruthy();
-      expect(box!.width).toBeGreaterThanOrEqual(44);
-      expect(box!.height).toBeGreaterThanOrEqual(44);
+    // A fine pointer shows the trio on hover; the rest sit collapsed behind the chosen state.
+    for (let card = 0; card < 2; card++) {
+      const set = page.getByTestId('set-card').nth(card);
+      await set.hover();
+      for (let i = 0; i < 3; i++) {
+        const box = await set.locator('.card-priority-btn').nth(i).boundingBox();
+        expect(box).toBeTruthy();
+        expect(box!.width).toBeGreaterThanOrEqual(44);
+        expect(box!.height).toBeGreaterThanOrEqual(44);
+      }
     }
   });
 

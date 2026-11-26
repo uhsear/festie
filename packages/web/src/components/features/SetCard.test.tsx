@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, type Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { makeFestivalSet } from '@festie/shared/test-fixtures/festivalSet';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -73,7 +73,6 @@ import SetCard from './SetCard';
 import { useSetStatus } from '@/hooks/useSetStatus';
 import { api } from '@festie/shared/services/api';
 import { usePicks } from '@festie/shared/hooks';
-import { ensureWhiteContrast } from '../ui/StageBadge';
 import { useArtistSheetStore } from '@festie/shared/stores/artistSheetStore';
 
 // useSetStatus is overloaded; pin the single-set overload so mockReturnValue takes one result.
@@ -225,7 +224,7 @@ describe('SetCard', () => {
     const frames: FrameRequestCallback[] = [];
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => frames.push(cb));
     vi.stubGlobal('cancelAnimationFrame', () => {});
-    const matchMedia = vi.fn((q: string) => ({ matches: true, media: q }) as MediaQueryList);
+    const matchMedia = vi.fn((q: string) => ({ matches: true, media: q, addEventListener: vi.fn(), removeEventListener: vi.fn() }) as unknown as MediaQueryList);
     vi.stubGlobal('matchMedia', matchMedia);
     try {
       render(<SetCard {...defaultProps} />);
@@ -337,6 +336,53 @@ describe('SetCard', () => {
       render(<SetCard {...defaultProps} />);
       await userEvent.click(screen.getByLabelText('Must See: Daft Punk'));
       expect(clearPickMock).toHaveBeenCalledWith('set-1', 'Daft Punk');
+    });
+  });
+
+  describe('compact pick control on a touch-first device', () => {
+    const touch = () => {
+      vi.mocked(window.matchMedia).mockImplementation(
+        (query: string) => ({ matches: query.includes('pointer: coarse'), media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() }) as unknown as MediaQueryList,
+      );
+    };
+    afterEach(() => {
+      vi.mocked(window.matchMedia).mockImplementation(
+        (query: string) => ({ matches: false, media: query, addEventListener: vi.fn(), removeEventListener: vi.fn() }) as unknown as MediaQueryList,
+      );
+    });
+
+    it('shows one control and no trio until it is tapped', () => {
+      touch();
+      render(<SetCard {...defaultProps} />);
+      expect(screen.getByRole('button', { name: 'Set priority for Daft Punk' })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.queryByLabelText('Must See: Daft Punk')).not.toBeInTheDocument();
+    });
+
+    it('sets Must in two taps and collapses to the chosen state', async () => {
+      touch();
+      const savePick = vi.fn();
+      vi.mocked(usePicks).mockReturnValue({ getMyPick: vi.fn(() => null), savePick, getMyNote: vi.fn(() => '') } as unknown as ReturnType<typeof usePicks>);
+      render(<SetCard {...defaultProps} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Set priority for Daft Punk' }));
+      await userEvent.click(screen.getByLabelText('Must See: Daft Punk'));
+      expect(savePick).toHaveBeenCalledWith('fest-1', 'set-1', 'must');
+      expect(screen.queryByLabelText('Must See: Daft Punk')).not.toBeInTheDocument();
+    });
+
+    it('names the chosen state on the collapsed control', () => {
+      touch();
+      mockPicks('want-to-see');
+      render(<SetCard {...defaultProps} />);
+      const toggle = screen.getByRole('button', { name: /^Want to See: Daft Punk\. Change priority$/ });
+      expect(toggle).toHaveTextContent('Want');
+    });
+
+    it('collapses on Escape', async () => {
+      touch();
+      render(<SetCard {...defaultProps} />);
+      await userEvent.click(screen.getByRole('button', { name: 'Set priority for Daft Punk' }));
+      await userEvent.keyboard('{Escape}');
+      expect(screen.getByRole('button', { name: 'Set priority for Daft Punk' })).toHaveFocus();
     });
   });
 
@@ -546,24 +592,24 @@ describe('SetCard', () => {
     expect(screen.queryByLabelText('Has note')).not.toBeInTheDocument();
   });
 
-  it('applies stage color as background on the stage label', () => {
-    // StageBadge darkens bright colors so white text meets WCAG AA contrast,
-    // so the rendered background is the contrast-adjusted color, not the raw input.
+  it('paints the stage colour as a rail and names the stage in primary text', () => {
     render(<SetCard {...defaultProps} stageColor="#00ff00" />);
-    const stageEl = screen.getByText('Main Stage');
+    expect(screen.getByTestId('set-card-rail').style.background).toBe('rgb(0, 255, 0)');
+    expect(screen.getByText('Main Stage')).toHaveClass('text-text-primary');
+  });
 
-    // Compute the expected value via the same helper the component uses, so this
-    // assertion stays valid if the contrast math is later tuned.
-    const adjusted = ensureWhiteContrast('#00ff00');
-    const r = parseInt(adjusted.slice(1, 3), 16);
-    const g = parseInt(adjusted.slice(3, 5), 16);
-    const b = parseInt(adjusted.slice(5, 7), 16);
+  it('leads with the time in tabular numerals, above the stage and the artist', () => {
+    render(<SetCard {...defaultProps} />);
+    const time = screen.getByText('2:00 PM - 3:00 PM').parentElement!;
+    expect(time).toHaveClass('tabular-nums');
+    const order = [time, document.querySelector('.card-stage')!, document.querySelector('.card-artist')!];
+    order.slice(1).forEach((el, i) => expect(order[i]!.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy());
+  });
 
-    expect(stageEl.style.background).toBe(`rgb(${r}, ${g}, ${b})`);
-    // Sanity: bright green is darkened (not the raw #00ff00 input).
-    expect(stageEl.style.background).not.toBe('rgb(0, 255, 0)');
-    expect(g).toBeGreaterThan(0);
-    expect(g).toBeLessThan(255);
+  it('keeps Listen an icon button with its name', () => {
+    const spotify = makeSet({ artists: [{ name: 'Daft Punk', links: { spotify: 'https://open.spotify.com/artist/abc123' } }] } as unknown as Partial<FestivalSet>);
+    render(<SetCard {...defaultProps} set={spotify} />);
+    expect(screen.getByRole('button', { name: 'Listen to Daft Punk' })).not.toHaveTextContent('Listen');
   });
 
   describe('past-set dimming', () => {
@@ -588,7 +634,7 @@ describe('SetCard', () => {
       const { artist, stage } = renderPast();
       expect(artist).toHaveClass('text-text-secondary');
       expect(stage).toHaveClass('text-text-secondary');
-      expect(stage.style.background).toBe('');
+      expect(screen.getByTestId('set-card-rail').style.background).toBe('var(--color-overlay-3)');
     });
 
     it.each([
@@ -598,7 +644,8 @@ describe('SetCard', () => {
       setPhase(start, end);
       const { artist, stage } = renderPast();
       expect(artist).toHaveClass('text-text-primary');
-      expect(stage.style.background).not.toBe('');
+      expect(stage).toHaveClass('text-text-primary');
+      expect(screen.getByTestId('set-card-rail').style.background).toBe('rgb(255, 51, 102)');
     });
   });
 
