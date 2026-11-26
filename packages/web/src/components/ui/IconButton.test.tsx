@@ -94,4 +94,12 @@ describe('IconButton', () => {
     expect(btn.className).toContain('focus-visible:outline-2');
     expect(btn.className).toContain('focus-visible:outline-accent-aqua');
   });
+
+  it('animates the press through the scale property, not transform', () => {
+    render(<IconButton icon={icon} label="Action" />);
+    const cls = screen.getByRole('button').className;
+    expect(cls).toMatch(/transition-\[[^\]]*scale[^\]]*\]/);
+    expect(cls).not.toMatch(/transition-\[[^\]]*transform/);
+    expect(cls).toContain('press-scale');
+  });
 });

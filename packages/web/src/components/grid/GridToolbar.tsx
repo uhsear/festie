@@ -88,9 +88,9 @@ export default function GridToolbar({
           className={cn(
             'inline-flex items-center justify-center w-11 h-11 rounded-md cursor-pointer',
             'text-accent-aqua',
-            'transition-[background-color,transform]',
+            'transition-[background-color,scale]',
             'hover:bg-[color-mix(in_srgb,var(--color-accent-aqua)_24%,transparent)]',
-            'active:scale-[0.93]',
+            'press-scale',
             'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
             'aria-busy:opacity-70 aria-busy:cursor-progress',
           )}

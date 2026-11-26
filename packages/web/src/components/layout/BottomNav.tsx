@@ -126,14 +126,12 @@ export default function BottomNav() {
                 'flex flex-col items-center gap-1 px-3 py-2',
                 'bg-transparent text-text-muted text-[10px] font-semibold no-underline',
                 'rounded-sm min-h-11 min-w-0 flex-1 overflow-hidden',
-                'transition-[color,transform] duration-150 ease-[ease]',
-                'active:scale-90 motion-reduce:active:!transform-none',
-                '[&_svg]:w-[22px] [&_svg]:h-[22px]',
+                'transition-[color] duration-150 ease-[var(--ease-out)] [&_svg]:transition-[fill] [&_svg]:duration-150',
+                '[&_svg]:size-5 md:[&_svg]:size-6',
                 'max-[480px]:px-[2px] max-[480px]:py-1.5 max-[480px]:text-[10px] max-[480px]:gap-1',
-                'max-[480px]:[&_svg]:w-5 max-[480px]:[&_svg]:h-5',
                 'max-[375px]:min-h-11 max-[375px]:px-1 max-[375px]:py-[5px]',
                 'max-[359px]:justify-center max-[359px]:px-0 max-[359px]:py-1.5',
-                active && ['text-accent-aqua', '[&_svg]:drop-shadow-[0_0_6px_var(--color-aqua-a4)]'],
+                active && ['text-accent-aqua', '[&_svg]:fill-current/25'],
               )}
               onPointerEnter={() => prefetchers[href]?.().catch(() => {})}
               onPointerDown={() => prefetchers[href]?.().catch(() => {})}
@@ -142,7 +140,7 @@ export default function BottomNav() {
                 <span className="relative inline-flex">
                   {SECTION_ICON[section.key]}
                   {badge.label === '' ? (
-                    <span aria-hidden="true" className="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-accent-coral" />
+                    <span aria-hidden="true" className="absolute -top-1 -right-2 w-1.5 h-1.5 rounded-full bg-accent-aqua" />
                   ) : (
                     <span
                       aria-hidden="true"

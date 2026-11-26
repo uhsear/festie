@@ -6,11 +6,11 @@ import { cn } from '@/lib/utils';
  * -------------------------------------------------------------------------*/
 
 const variantStyles = {
-  default: 'bg-bg-card border border-border rounded-lg transition-[transform,box-shadow] duration-200',
-  elevated: 'bg-bg-card border border-border rounded-lg shadow-lg transition-[transform,box-shadow] duration-200',
+  default: 'bg-bg-card border border-border rounded-lg transition-[translate,box-shadow] duration-200',
+  elevated: 'bg-bg-card border border-border rounded-lg shadow-lg transition-[translate,box-shadow] duration-200',
   interactive:
-    'bg-bg-card border border-border rounded-lg cursor-pointer transition-[transform,background-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-bg-card-hover active:scale-[0.97] motion-reduce:transition-none motion-reduce:transform-none',
-  flush: 'bg-bg-card border border-border rounded-lg transition-[transform,box-shadow] duration-200',
+    'bg-bg-card border border-border rounded-lg cursor-pointer transition-[translate,scale,background-color,box-shadow] duration-200 ease-out hover:-translate-y-0.5 hover:bg-bg-card-hover press-scale motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+  flush: 'bg-bg-card border border-border rounded-lg transition-[translate,box-shadow] duration-200',
 } as const;
 
 const paddingStyles = {
