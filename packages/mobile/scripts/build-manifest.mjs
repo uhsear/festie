@@ -84,11 +84,18 @@ for (const { file, size } of iconTargets) {
 const manifest = {
   name:             'Festie — Festival Planner',
   short_name:       'Festie',
-  description:      'Real-time festival crew coordination.',
+  description:      'Plan your festival schedule with your crew',
   id:               '/',
+  categories:       ['entertainment', 'music', 'social'],
   start_url:        '/',
+  shortcuts: [
+    { name: 'Picks',      url: '/picks' },
+    { name: 'Now & Next', url: '/festival-mode' },
+    { name: 'Crew',       url: '/crew' },
+  ],
   display:          'standalone',
-  // Same value as colors.bg.primary; scripts/check-ground.mjs fails if they drift.
+  // Same value as colors.bg.primary. This plain-node script cannot import the TS tokens on every
+  // supported Node (engines >=22.0.0), so scripts/check-ground.mjs (run in CI) fails if they drift.
   theme_color:      '#0a0a0a',
   background_color: '#0a0a0a',
   icons: [
