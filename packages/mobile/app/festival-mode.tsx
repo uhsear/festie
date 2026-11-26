@@ -21,6 +21,7 @@ import { makeStyles, typeScaleCap, typeStyle, useLargeText, useTokens } from '..
 import { useNow } from '../hooks/useNow';
 import { useLastKnownFix } from '../hooks/useLastKnownFix';
 import { setReturnTo } from '../lib/returnTo';
+import { safeStageColor } from '../lib/stageColor';
 import SosControl, { SOS_CONTROL_SIZE } from '../components/SosControl';
 import EmptyState from '../components/EmptyState';
 import LoadingState from '../components/LoadingState';
@@ -66,7 +67,7 @@ export default function FestivalModeScreen() {
   const picks = useFestivalDataStore(selectMyPicks) ?? undefined;
   const meetingPoints = useCrewStore((s) => s.meetingPoints);
   const expenseBalances = useCrewStore((s) => s.expenseBalances);
-  const { getStageName } = useFestival();
+  const { getStageName, getStageColor } = useFestival();
   const nowMs = useNow(60_000);
 
   const timeZone = resolveFestivalTimeZone(currentFestival);
@@ -162,6 +163,8 @@ export default function FestivalModeScreen() {
             b2bSeparator={currentFestival.b2bSeparator}
             lineupMode={lineupMode}
             getStageName={getStageName}
+            getStageColor={(stageId) => safeStageColor(getStageColor(stageId), t.colors.text.primary)}
+            festivalName={currentFestival.name}
             onOpenSet={openSet}
             onBrowse={() => router.navigate(SCHEDULE_HREF)}
             onWrap={user ? () => router.push('/wrap') : undefined}

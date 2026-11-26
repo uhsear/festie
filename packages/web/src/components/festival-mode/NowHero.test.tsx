@@ -117,3 +117,46 @@ describe('NowHero before the festival', () => {
     expect(screen.getByText(/^First set/)).toBeInTheDocument();
   });
 });
+
+describe('NowHero lead object', () => {
+  const props = {
+    nowMs: NOW,
+    timeZone: 'UTC',
+    lineupMode: true,
+    getStageName: () => 'Main',
+    onOpenSet: vi.fn(),
+    onBrowse: vi.fn(),
+  };
+
+  it('draws the live set name in its stage colour with a tabular display-xl countdown', () => {
+    const sel = {
+      phase: 'during',
+      current: [{ set: { id: 's1', artist: 'Ann', stageId: 'main', startTime: '17:00', endTime: '18:00' }, start: NOW - 30 * 60_000, end: NOW + 30 * 60_000 }],
+      upcoming: [],
+      todayCount: 1,
+      startsAt: null,
+    } as unknown as NowNextSelection;
+    render(<NowHero {...props} selection={sel} getStageColor={() => 'rgb(1, 2, 3)'} />);
+    expect(screen.getByText('Ann').closest('[style]')).toHaveStyle({ color: 'rgb(1, 2, 3)' });
+    expect(screen.getByTestId('fm-lead-countdown')).toHaveClass('type-display-xl', 'tabular-nums');
+  });
+
+  it('leads with a display-lg countdown before the festival', () => {
+    const sel = { phase: 'before', current: [], upcoming: [], todayCount: 0, startsAt: NOW + 3 * 3_600_000, startsAtTimed: true } as unknown as NowNextSelection;
+    render(<NowHero {...props} selection={sel} />);
+    expect(screen.getByTestId('fm-lead-countdown')).toHaveClass('type-display-lg', 'tabular-nums');
+  });
+
+  it('counts days when the festival is more than half a day away', () => {
+    const sel = { phase: 'before', current: [], upcoming: [], todayCount: 0, startsAt: NOW + 3 * 86_400_000, startsAtTimed: true } as unknown as NowNextSelection;
+    render(<NowHero {...props} selection={sel} />);
+    expect(screen.getByTestId('fm-lead-countdown')).toHaveTextContent('3 days');
+  });
+
+  it('shows a Wrap thumbnail after the festival and never prints the festival name', () => {
+    const sel = { phase: 'after', current: [], upcoming: [], todayCount: 0, startsAt: null } as unknown as NowNextSelection;
+    render(<NowHero {...props} selection={sel} festivalName="Bonnaroo 2026" />);
+    expect(screen.getByTestId('fm-wrap-thumb')).toBeInTheDocument();
+    expect(screen.queryByText(/Bonnaroo/)).not.toBeInTheDocument();
+  });
+});
