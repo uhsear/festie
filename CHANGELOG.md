@@ -47,7 +47,7 @@ This deploy carried the 11-21 to 11-24 work: the full UI sweep and pre-deploy de
 - Festival profiles are paged in SQL, and page parameters are parsed with Zod.
 - The artists-per-set limit is 8.
 - The artist sheet opens from every artist name on web and mobile. The schedule shows its real age when a cached response is served.
-- The first-run intro reads well with VoiceOver and TalkBack, content stays visible with animations off, and input contrast and touch targets are larger.
+- The first-run intro reads well with VoiceOver and TalkBack, and content stays visible with animations off.
 
 ### Fixed
 - Sweep and pre-deploy test fixes across sign-in and account, lineup, grid and artist sheet, picks, plan sharing, ratings and Wrap, crew real-time updates, crew Plan, Money and compare, map and offline, admin and organizer, inbox, public pages, accessibility and Android and iOS device issues.
@@ -370,10 +370,6 @@ Entries below this one describe the earlier JavaScript layout (`server.js`, `lib
 - Basic API endpoints
 
 ---
-
-## Upgrading
-
-Earlier upgrade recipes were removed. Run `npm ci` and restart; migrations apply at boot.
 
 ## Version Numbering
 
