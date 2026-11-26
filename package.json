@@ -95,7 +95,7 @@
     "eslint-plugin-sql": "^3.4.1",
     "globals": "^17.14.0",
     "knip": "^6.45.1",
-    "lint-staged": "^17.6.1",
+    "lint-staged": "^17.6.2",
     "openapi-typescript": "^7.13.0",
     "papaparse": "5.5.3",
     "simple-git-hooks": "^2.14.0",
