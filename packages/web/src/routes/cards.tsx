@@ -14,6 +14,7 @@ import {
   resolveStageColor,
   searchOtherDays,
   lineupReplacesEmptyState,
+  lineupFlyerModel,
 } from '@festie/shared/utils';
 import { useNow } from '../hooks/useSetStatus';
 import { useAnnouncedLineup } from '@festie/shared/hooks/useAnnouncedLineup';
@@ -26,6 +27,7 @@ import OtherDayMatches from '../components/features/OtherDayMatches';
 import ScheduleEmptyState from '../components/features/ScheduleEmptyState';
 import SetTimesBanner from '../components/features/SetTimesBanner';
 import AnnouncedLineup from '../components/features/AnnouncedLineup';
+import LineupFlyer from '../components/features/LineupFlyer';
 import DiscoverRow from '../components/features/DiscoverRow';
 import FestivalLoadError from '../components/features/FestivalLoadError';
 import { useOfflineDownload } from '../hooks/useOfflineDownload';
@@ -127,6 +129,8 @@ function CardsViewInner() {
   }, [getDays]);
   const q = searchQuery.trim();
   const announced = useAnnouncedLineup(nowMs);
+  // While no set has a time the lineup shows as a flyer, with no pick controls; the cards return when times publish.
+  const flyer = useMemo(() => lineupFlyerModel(currentFestival, days, sets, nowMs), [currentFestival, days, sets, nowMs]);
 
   // Per-set badge naming the other set it clashes with and the overlap.
   const clashBadges = useMemo(
@@ -173,15 +177,16 @@ function CardsViewInner() {
         <PhaseHomeActions actions={actions} onDismiss={() => dismissPhaseBand(phase)} />
       ) : null}
 
-      <SetTimesBanner />
+      {flyer ? null : <SetTimesBanner />}
       <DiscoverRow />
+      {flyer ? <LineupFlyer model={flyer} /> : null}
       {/* A search lists the matching announced acts under the set results instead (below). */}
-      {q ? null : <AnnouncedLineup model={announced} />}
+      {q || flyer ? null : <AnnouncedLineup model={announced} />}
 
       {user ? <OfflineStatusChip className="mb-[var(--space-4)]" remind /> : null}
 
       {/* Card grid */}
-      {filteredSets.length === 0 ? (
+      {flyer ? null : filteredSets.length === 0 ? (
         lineupStandsIn ? null : (
           <ScheduleEmptyState
             dayLabel={dayLabels[selectedDay] ?? 'this day'}
@@ -290,7 +295,7 @@ function CardsViewInner() {
           ))}
         </div>
       )}
-      {q && filteredSets.length > 0 && (
+      {q && !flyer && filteredSets.length > 0 && (
         <OtherDayMatches
           groups={otherDayGroups}
           dayLabels={dayLabels}
@@ -299,7 +304,7 @@ function CardsViewInner() {
           onSelectDay={setSelectedDay}
         />
       )}
-      {q ? <AnnouncedLineup model={announced} /> : null}
+      {q && !flyer ? <AnnouncedLineup model={announced} /> : null}
     </>
   );
 }
