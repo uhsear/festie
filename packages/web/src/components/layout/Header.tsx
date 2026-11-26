@@ -218,7 +218,7 @@ export default function Header() {
                     ) : (
                       <span
                         aria-hidden="true"
-                        className="inline-block ml-1 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[10px] font-semibold leading-none text-center"
+                        className="inline-block ml-1 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[length:var(--font-size-10)] font-semibold leading-none text-center"
                       >
                         {crewBadge.label}
                       </span>
@@ -254,7 +254,7 @@ export default function Header() {
             {unreadLabel && (
               <span
                 aria-hidden="true"
-                className="absolute top-1 right-1 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[10px] font-semibold leading-none text-center"
+                className="absolute top-1 right-1 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[length:var(--font-size-10)] font-semibold leading-none text-center"
               >
                 {unreadLabel}
               </span>

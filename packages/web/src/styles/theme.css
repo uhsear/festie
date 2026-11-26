@@ -186,7 +186,7 @@
     left: -52px;
     top: 50%;
     transform: translateY(-50%);
-    font-size: 11px;
+    font-size: var(--font-size-12);
     font-weight: 700;
     letter-spacing: 1px;
     color: var(--timeline-now-color);

@@ -391,7 +391,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
               <LocateFixed className="w-4 h-4" aria-hidden="true" /> Use my location
             </Button>
             {computedEta != null ? (
-              <span className="text-xs text-accent-aqua font-medium">ETA ~{computedEta} min</span>
+              <span className="text-xs text-accent-aqua font-medium tabular-nums">ETA ~{computedEta} min</span>
             ) : (
               <input
                 type="number"
@@ -481,14 +481,14 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
                         <span className="text-xs text-text-secondary">{crewStatusLabel(s) ?? ''}</span>
                       </div>
                       {targetLabel && (
-                        <div className="text-xs text-accent-aqua mt-0.5 flex items-center gap-1">
+                        <div className="text-xs text-accent-aqua mt-0.5 flex items-center gap-1 tabular-nums">
                           <MapPin className="w-3 h-3" aria-hidden="true" />
                           {targetLabel}
                           {typeof s.eta_minutes === 'number' ? ` · ETA ~${s.eta_minutes} min` : ''}
                         </div>
                       )}
                       {!targetLabel && typeof s.eta_minutes === 'number' && (
-                        <div className="text-xs text-accent-aqua mt-0.5">ETA ~{s.eta_minutes} min</div>
+                        <div className="text-xs text-accent-aqua mt-0.5 tabular-nums">ETA ~{s.eta_minutes} min</div>
                       )}
                       {statusNoteLine(s) && (
                         <div className="text-xs text-text-secondary mt-0.5">{statusNoteLine(s)}</div>

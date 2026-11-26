@@ -150,7 +150,7 @@ export default function RatingButtons({ setId, festivalId, compact = false, onRa
               <span
                 aria-hidden="true"
                 className={cn(
-                  'text-[10px] font-semibold',
+                  'text-[length:var(--font-size-10)] font-semibold',
                   active ? 'text-accent-amber' : 'text-text-secondary',
                 )}
               >

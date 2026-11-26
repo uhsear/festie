@@ -124,11 +124,11 @@ export default function BottomNav() {
               aria-label={`View ${badged ? badgeA11yLabel(label, badge) : label}`}
               className={cn(
                 'flex flex-col items-center gap-1 px-3 py-2',
-                'bg-transparent text-text-muted text-[10px] font-semibold no-underline',
+                'bg-transparent text-text-muted text-[length:var(--font-size-10)] font-semibold no-underline',
                 'rounded-sm min-h-11 min-w-0 flex-1 overflow-hidden',
                 'transition-[color] duration-(--duration-fast) ease-[var(--ease-out)] [&_svg]:transition-[fill] [&_svg]:duration-(--duration-fast)',
                 '[&_svg]:size-5 md:[&_svg]:size-6',
-                'max-[480px]:px-[2px] max-[480px]:py-1.5 max-[480px]:text-[10px] max-[480px]:gap-1',
+                'max-[480px]:px-[2px] max-[480px]:py-1.5 max-[480px]:text-[length:var(--font-size-10)] max-[480px]:gap-1',
                 'max-[375px]:min-h-11 max-[375px]:px-1 max-[375px]:py-[5px]',
                 'max-[359px]:justify-center max-[359px]:px-0 max-[359px]:py-1.5',
                 active && ['text-accent-aqua', '[&_svg]:fill-current/25'],
@@ -144,7 +144,7 @@ export default function BottomNav() {
                   ) : (
                     <span
                       aria-hidden="true"
-                      className="absolute -top-1 -right-2 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[10px] font-semibold leading-none text-center"
+                      className="absolute -top-1 -right-2 min-w-4 px-1 py-px rounded-full bg-accent-aqua/20 text-accent-aqua text-[length:var(--font-size-10)] font-semibold tabular-nums leading-none text-center"
                     >
                       {badge.label}
                     </span>

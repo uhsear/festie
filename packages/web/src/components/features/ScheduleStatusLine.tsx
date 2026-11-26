@@ -43,7 +43,7 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
   return (
     <span
       data-testid="schedule-status-line"
-      className="ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium text-text-muted"
+      className="ml-auto inline-flex h-6 shrink-0 items-center gap-2 whitespace-nowrap text-xs font-medium tabular-nums text-text-muted"
     >
       {updated && (
         <span data-testid="last-synced-badge" className={cn(offlineReady && 'text-accent-amber')}>

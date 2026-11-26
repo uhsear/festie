@@ -313,7 +313,7 @@ export default function AdminCrews() {
                                 />
                               ) : (
                                 <div
-                                  className="w-6 h-6 rounded-full bg-bg-primary border border-glass-border flex items-center justify-center text-[10px] text-text-muted"
+                                  className="w-6 h-6 rounded-full bg-bg-primary border border-glass-border flex items-center justify-center text-[length:var(--font-size-10)] text-text-muted"
                                   aria-hidden="true"
                                 >
                                   {(m.username || m.userId || '?').slice(0, 1).toUpperCase()}

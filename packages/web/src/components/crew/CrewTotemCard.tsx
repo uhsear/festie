@@ -135,7 +135,7 @@ export default function CrewTotemCard({ crewId, totemName, totemEmoji, isOwner, 
               {totemEmoji || <Flag className="w-6 h-6" />}
             </span>
             <div className="min-w-0 flex-1">
-              <p className="text-[10px] font-semibold uppercase tracking-[.8px] text-text-muted leading-none">
+              <p className="type-micro text-text-muted leading-none">
                 Find your crew
               </p>
               <p className="text-sm font-bold text-text-primary truncate mt-0.5">{totemName || 'Our totem'}</p>

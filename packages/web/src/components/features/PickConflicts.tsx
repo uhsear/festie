@@ -150,7 +150,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                 {`${group.tight ? COPY.clash.tight : COPY.clash.one}${dayLabel ? ` · ${dayLabel}` : ''}`}
               </h2>
               {planned && (
-                <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-accent-aqua">
+                <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 type-micro text-accent-aqua">
                   {COPY.clash.splitPlanned}
                 </span>
               )}
@@ -197,7 +197,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                       </button>
                       <span
                         className={cn(
-                          'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em]',
+                          'inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5 type-micro',
                           chip.className,
                         )}
                       >
@@ -205,7 +205,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                         {PRIORITY_SYMBOLS[pick.priority].short}
                       </span>
                       {isKeep && (
-                        <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 text-[10px] font-bold uppercase tracking-[0.08em] text-accent-aqua">
+                        <span className="shrink-0 rounded-full bg-accent-aqua/20 px-2 py-0.5 type-micro text-accent-aqua">
                           {COPY.clash.suggested}
                         </span>
                       )}

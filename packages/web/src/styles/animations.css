@@ -309,7 +309,7 @@
   padding-bottom: 6px !important;
 }
 .app-header.shrunk .app-header-brand {
-  font-size: 13px;
+  font-size: var(--font-size-14);
 }
 .app-header-brand {
   transition: font-size 200ms var(--ease-out);

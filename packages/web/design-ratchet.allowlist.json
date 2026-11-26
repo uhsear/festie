@@ -1,12 +1,6 @@
 {
   "entries": [
     {
-      "file": "src/components/admin/AdminCrews.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/admin/FestivalEditForm.tsx",
       "rule": "hex",
       "max": 1,
@@ -61,28 +55,10 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/crew/CrewTabBar.tsx",
-      "rule": "text-px",
-      "max": 2,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/crew/CrewTabContent.tsx",
       "rule": "duration",
       "max": 2,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/crew/CrewTotemCard.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/components/crew/ExpenseItem.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
     },
     {
       "file": "src/components/crew/InviteQRDialog.tsx",
@@ -95,12 +71,6 @@
       "rule": "duration",
       "max": 1,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/CrewSelector.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
     },
     {
       "file": "src/components/features/CrewSuggestionStrip.tsx",
@@ -175,18 +145,6 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/features/PickConflicts.tsx",
-      "rule": "text-px",
-      "max": 3,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/components/features/RatingButtons.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/features/ScheduleImagePoster.tsx",
       "rule": "hex",
       "max": 6,
@@ -247,28 +205,10 @@
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
     },
     {
-      "file": "src/components/layout/BottomNav.tsx",
-      "rule": "text-px",
-      "max": 3,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/FestivalPicker.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/layout/Header.tsx",
       "rule": "duration",
       "max": 3,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/components/layout/Header.tsx",
-      "rule": "text-px",
-      "max": 2,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
     },
     {
       "file": "src/components/layout/ScheduleViewSwitcher.tsx",
@@ -337,12 +277,6 @@
       "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
     },
     {
-      "file": "src/components/ui/Avatar.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
-    },
-    {
       "file": "src/components/ui/Button.tsx",
       "rule": "duration",
       "max": 1,
@@ -377,12 +311,6 @@
       "rule": "rgb",
       "max": 1,
       "reason": "Offender today. DP-28 tokenises it or names a reason to keep it."
-    },
-    {
-      "file": "src/components/ui/skeletons/TimelineSkeleton.tsx",
-      "rule": "text-px",
-      "max": 2,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
     },
     {
       "file": "src/components/ui/StageBadge.tsx",
@@ -437,12 +365,6 @@
       "rule": "duration",
       "max": 1,
       "reason": "Offender today. DP-47 moves it to a motion token, then the entry is deleted."
-    },
-    {
-      "file": "src/routes/crew-plan.tsx",
-      "rule": "text-px",
-      "max": 1,
-      "reason": "Offender today. TK-19 removes it, then the entry is deleted."
     },
     {
       "file": "src/routes/forgot-password.tsx",

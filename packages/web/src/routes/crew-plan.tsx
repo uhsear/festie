@@ -307,7 +307,7 @@ function CrewPlanContent() {
                             className="flex flex-1 min-w-0 items-start gap-2 min-h-11 text-sm hover:underline"
                           >
                             <span
-                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold flex-shrink-0 ${PRIORITY_BADGE[g.priority]}`}
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[length:var(--font-size-10)] font-bold flex-shrink-0 ${PRIORITY_BADGE[g.priority]}`}
                               aria-label={PRIORITY_LABEL[g.priority]}
                             >
                               <PriorityIcon priority={g.priority} className="w-3 h-3" filled />

@@ -187,7 +187,7 @@ export default function CrewSelector({
                     aria-label={group.label}
                     className={cn(group.status === 'past' && 'opacity-60')}
                   >
-                    <div className="px-4 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-text-muted">
+                    <div className="px-4 pt-2 pb-1 type-caption font-semibold uppercase tracking-wide text-text-muted">
                       {group.label}
                     </div>
                     {options}
