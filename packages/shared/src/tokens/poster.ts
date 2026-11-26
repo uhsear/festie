@@ -26,5 +26,5 @@ export const POSTER = {
   layout: { headerTop: 80, headerHeight: 330, bodyTop: 410, dominantHeight: 380, dominantBlock: 520, rowHeight: 150, maxRows: 5, footerHeight: 40, markSize: 72, railWidth: 10, railHeight: 88, timeWidth: 220 },
   /** Dominant typographic object: 360 px or more. */
   dominantSize: 360,
-  font: { wordmark: 56, kicker: 32, festival: 56, byline: 30, heading: 28, headline: 72, artist: 40, secondary: 30, statValue: 56, statLabel: 26, quote: 48, footer: 32, rank: 44, time: 36 },
+  font: { wordmark: 56, kicker: 32, festival: 56, byline: 30, heading: 28, headline: 72, artist: 40, secondary: 30, statValue: 56, statLabel: 26, quote: 48, footer: 32, time: 36 },
 } as const;

@@ -3,6 +3,7 @@ import type { ScheduleImageFormat, ScheduleImageModel } from '@festie/shared/uti
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
 import { POSTER } from '@festie/shared/tokens';
+import PosterMark from '../wrap/PosterMark';
 
 /**
  * Literal hex only: the poster is captured to a PNG by html-to-image, where CSS custom
@@ -128,8 +129,8 @@ export default function ScheduleImagePoster({
         <div style={{ flex: 1, minWidth: 0, fontSize: M.footerSize, lineHeight: `${M.footerLine}px`, color: COLORS.muted, ...ONE_LINE }}>
           {model.footer}
         </div>
-        <img src="/favicon.svg" alt="" width={M.footerLine} height={M.footerLine} />
-        <div style={{ fontFamily: CLASH, fontSize: M.footerSize, fontWeight: POSTER.weight, letterSpacing: 3, color: COLORS.text }}>FESTIE</div>
+        <PosterMark size={M.footerLine} />
+        <div style={{ fontFamily: CLASH, fontSize: M.footerSize, fontWeight: POSTER.weight, color: COLORS.text }}>FESTIE</div>
       </div>
     </div>
   );

@@ -127,5 +127,5 @@ const s = StyleSheet.create({
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: M.footerGapTop },
   footer: { flex: 1, color: POSTER.muted, fontSize: M.footerSize, lineHeight: M.footerLine },
   footerMark: { width: M.footerLine, height: M.footerLine },
-  footerLockup: { ...posterFont(POSTER_TOKENS.weight, true), color: POSTER.text, fontSize: M.footerSize, letterSpacing: 3 },
+  footerLockup: { ...posterFont(POSTER_TOKENS.weight, true), color: POSTER.text, fontSize: M.footerSize },
 });

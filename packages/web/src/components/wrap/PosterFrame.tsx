@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { POSTER } from '@festie/shared/tokens';
 import { posterBand } from '@festie/shared/utils';
+import PosterMark from './PosterMark';
 
 interface Props {
   festivalName: string;
@@ -38,7 +39,7 @@ export default function PosterFrame({ festivalName, kicker, byline, children }: 
       />
       <header style={{ position: 'absolute', top: layout.headerTop, left: padding, width: POSTER.width - 2 * padding, height: layout.headerHeight }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 20, height: layout.markSize }}>
-          <img src="/favicon.svg" alt="" width={layout.markSize} height={layout.markSize} />
+          <PosterMark size={layout.markSize} />
           <div
             style={{ fontFamily: CLASH, fontSize: font.wordmark, fontWeight: POSTER.weight, letterSpacing: 6, color: colors.text, lineHeight: 1 }}
           >

@@ -34,7 +34,7 @@ import { createLiveActivity, createWidget, type LiveActivityEnvironment, type Wi
  *
  * Isolated runtime: 'widget' functions cannot read module scope or the app theme, so
  * each keeps the one mirrored token value (colors.live.text) and parses the title
- * itself. widget.test.ts keeps the value in step with the token. The widget extension
+ * itself. nowNextWidget.test.ts keeps the value in step with the token. The widget extension
  * does not bundle Clash Display (expo-widgets has no font option), so the set name
  * uses the bold system face until it does.
  */

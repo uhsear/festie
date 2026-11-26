@@ -32,7 +32,7 @@ describe('web and mobile posters share one structure', () => {
   it('frames both draw the festival band, the baked mark and the layout y positions', () => {
     for (const src of [read(PAIRS[0][1]), read(PAIRS[0][2])]) {
       expect(src).toContain('posterBand(festivalName)');
-      expect(src).toMatch(/favicon\.svg|splash-icon\.png/);
+      expect(src).toMatch(/PosterMark|splash-icon\.png/);
       for (const key of ['headerTop', 'headerHeight', 'bodyTop', 'footerHeight']) expect(src).toContain(key);
     }
   });
