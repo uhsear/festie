@@ -38,7 +38,8 @@ export default function Toast() {
           <div
             key={t.id}
             className={cn(
-              'glass p-4 rounded-xl flex-between gap-3 pointer-events-auto toast-enter',
+              'glass p-4 rounded-xl flex-between gap-3 pointer-events-auto',
+              t.leaving ? 'toast-leave' : 'toast-enter',
               getColorClasses(t.type),
             )}
             // An undo toast must not outlive its pending action's own timer, which

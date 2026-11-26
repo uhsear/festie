@@ -30,6 +30,12 @@ function Harness({ dropTriggerOnOpen = false }: { dropTriggerOnOpen?: boolean })
 }
 
 describe('Dialog', () => {
+  it('carries the motion classes whose data-state rules animate enter and exit', () => {
+    renderDialog();
+    expect(screen.getByRole('dialog').className).toContain('dialog-content');
+    expect(document.querySelector('.dialog-overlay')).not.toBeNull();
+  });
+
   it('renders the title, description and children', () => {
     renderDialog();
     expect(screen.getByRole('dialog', { name: 'Rename crew' })).toBeInTheDocument();
