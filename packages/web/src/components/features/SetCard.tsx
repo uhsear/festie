@@ -185,7 +185,7 @@ function SetCard({
         'after:opacity-0 after:transition-opacity after:duration-(--duration-med) after:pointer-events-none',
         'after:pointer-events-none',
         'hover:after:opacity-100',
-        // R19: Animated gradient border when set is live (single featured card on screen).
+        // Live card: static live border plus an opacity glow (no animated gradient).
         setStatus.status === 'live' && 'live',
         // Priority variants — lighter, static glow (no infinite pulse for list perf).
         pri === 'must' && ['priority-must', 'shadow-[var(--shadow-glow-coral)]'],

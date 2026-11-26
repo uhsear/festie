@@ -291,7 +291,7 @@ If web and mobile both need a new helper, add it to `@festie/shared`.
 
 | Name | Path | What it does | Example caller |
 |---|---|---|---|
-| `ScreenHeader` | `packages/mobile/components/ScreenHeader.tsx` | Standard title, subtitle and icon header. It owns the top safe-area inset and reads TopBannerContext so it does not add the inset twice under OfflineBanner. | `packages/mobile/app/(tabs)/account.tsx:405` |
+| `ScreenHeader` | `packages/mobile/components/ScreenHeader.tsx` | Standard title, subtitle and icon header. It always adds the full top safe-area inset. | `packages/mobile/app/(tabs)/account.tsx:405` |
 | `EmptyState` | `packages/mobile/components/EmptyState.tsx` | Centred icon, shared illustration or `ghostRow`, title, message and up to two Button actions. Set the insets prop when the screen has no native header. | `packages/mobile/app/(tabs)/crew.tsx:662` |
 | `Skeleton / LoadingState` | `packages/mobile/components/Skeleton.tsx` | Placeholder blocks and a standard loading view for first load. | `packages/mobile/app/(tabs)/crew.tsx:698` |
 | `ErrorBoundary` | `packages/mobile/components/ErrorBoundary.tsx` | Render-error fallback wrapper for screens and routes. | `packages/mobile/app/_layout.tsx:408` |

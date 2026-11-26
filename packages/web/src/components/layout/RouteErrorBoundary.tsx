@@ -193,7 +193,7 @@ export class RenderErrorBoundary extends Component<{ children: ReactNode; name: 
       return (
         <ErrorState
           heading="This view failed to load"
-          description="Reload the page or switch festivals to try again."
+          description="Try again to reload this view."
           action={{ label: 'Try again', onClick: () => this.setState({ error: null }) }}
           aria-label={`${this.props.name} view error`}
         />
