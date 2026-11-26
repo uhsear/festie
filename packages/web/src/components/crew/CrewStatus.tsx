@@ -482,7 +482,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
                       </div>
                       {targetLabel && (
                         <div className="text-xs text-accent-aqua mt-0.5 flex items-center gap-1 tabular-nums">
-                          <MapPin className="w-3 h-3" aria-hidden="true" />
+                          <MapPin className="w-4 h-4" aria-hidden="true" />
                           {targetLabel}
                           {typeof s.eta_minutes === 'number' ? ` · ETA ~${s.eta_minutes} min` : ''}
                         </div>
@@ -503,7 +503,7 @@ export default function CrewStatus({ crewId, currentUserId, meetingPoints }: Pro
                           rel="noopener noreferrer"
                           className="text-[length:var(--font-size-12)] text-text-secondary hover:text-accent-aqua mt-0.5 inline-flex items-center gap-1"
                         >
-                          <MapPin className="w-3 h-3" aria-hidden="true" />
+                          <MapPin className="w-4 h-4" aria-hidden="true" />
                           last seen {formatStaleness(s.location_captured_at)}
                         </a>
                       )}

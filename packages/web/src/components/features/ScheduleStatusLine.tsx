@@ -55,7 +55,7 @@ export default function ScheduleStatusLine({ showFreshness }: { showFreshness: b
       <span role="status" aria-live="polite" className="inline-flex items-center">
         {status && Icon && (
           <span data-testid="save-status-chip" className={cn('inline-flex items-center gap-1', amber && 'text-accent-amber')}>
-            <Icon className={cn('w-3 h-3', spins && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />
+            <Icon className={cn('w-4 h-4', spins && 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />
             {status.label}
           </span>
         )}

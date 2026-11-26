@@ -146,7 +146,7 @@ export default function CrewPhotosCard({ crewId, currentUrl, onSaved }: Props) {
           rel="noopener noreferrer"
           className="flex items-center gap-1 text-xs font-semibold text-accent-aqua hover:underline min-h-11 px-1"
         >
-          <ExternalLink className="w-3.5 h-3.5" aria-hidden="true" />
+          <ExternalLink className="w-4 h-4" aria-hidden="true" />
           Open
         </a>
         <button

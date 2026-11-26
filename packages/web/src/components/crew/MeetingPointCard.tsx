@@ -61,12 +61,12 @@ export default function MeetingPointCard({
             // 055: recurring point — show the daily time-of-day badge
             // ("Daily · 3:00 PM") from the shared meetingTime helper.
             <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-accent-aqua/15 px-2 py-0.5 text-xs font-medium text-accent-aqua">
-              <Repeat className="w-3 h-3" aria-hidden="true" />
+              <Repeat className="w-4 h-4" aria-hidden="true" />
               {`Daily · ${meetingTimeDisplay(p.meet_at, true, festivalDays, new Date(), festivalTimeZone).label.replace(/^daily /, '')}`}
             </div>
           ) : (
             <div className="text-xs text-accent-aqua mt-1 inline-flex items-center gap-1">
-              <Clock className="w-3 h-3" aria-hidden="true" />
+              <Clock className="w-4 h-4" aria-hidden="true" />
               {meetingTimeDisplay(p.meet_at, false, festivalDays, new Date(), festivalTimeZone).label}
             </div>
           ))}

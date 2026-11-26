@@ -92,7 +92,7 @@ function StepRow({
             className="inline-flex items-center gap-1 text-accent-coral hover:text-text-primary transition-colors focus-visible:outline-1 focus-visible:outline-accent-coral rounded"
             aria-label={`Retry ${label}`}
           >
-            <RefreshCw className="w-3 h-3" aria-hidden="true" />
+            <RefreshCw className="w-4 h-4" aria-hidden="true" />
             Retry
           </button>
         )}

@@ -151,7 +151,7 @@ export default function HomeBaseCard({ crewId, currentLocation, currentTime, isO
               <span className="text-xs font-semibold text-text-primary truncate">{currentLocation}</span>
               {currentTime && (
                 <span className="text-xs text-accent-aqua flex-shrink-0 inline-flex items-center gap-1">
-                  <Clock className="w-3 h-3" aria-hidden="true" />
+                  <Clock className="w-4 h-4" aria-hidden="true" />
                   {formatTimeOrRaw(currentTime)}
                 </span>
               )}

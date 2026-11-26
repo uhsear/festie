@@ -38,7 +38,7 @@ export default function MyDayList({ myDay, onOpenSet, timeZone, underDayHeading 
       <div key={item.key}>
         {walkFromPrev && (
           <p className="flex items-center gap-1.5 px-1 py-1 text-xs text-text-muted">
-            <Footprints className="w-3.5 h-3.5" aria-hidden="true" />
+            <Footprints className="w-4 h-4" aria-hidden="true" />
             {COPY.myDay.walk(walkFromPrev.minutes, getStageName(walkFromPrev.fromStageId) || '')}
           </p>
         )}

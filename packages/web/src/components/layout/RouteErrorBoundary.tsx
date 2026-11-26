@@ -158,7 +158,7 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
             variant="primary"
             size="sm"
             type="button"
-            icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
+            icon={<RefreshCw className="size-4" aria-hidden="true" />}
             onClick={() => window.location.reload()}
           >
             Reload
@@ -169,7 +169,7 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
             variant="primary"
             size="sm"
             type="button"
-            icon={<RefreshCw className="size-3.5" aria-hidden="true" />}
+            icon={<RefreshCw className="size-4" aria-hidden="true" />}
             onClick={reset}
           >
             Retry
@@ -180,7 +180,7 @@ export default function RouteErrorBoundary({ error, reset, contextMessage }: Rou
             variant="primary"
             size="sm"
             type="button"
-            icon={<ArrowLeft className="size-3.5" aria-hidden="true" />}
+            icon={<ArrowLeft className="size-4" aria-hidden="true" />}
             onClick={() => navigate({ to: '/' })}
           >
             Go home

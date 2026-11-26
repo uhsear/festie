@@ -176,7 +176,7 @@ export default function CrewSelector({
                     )}
                   >
                     {crew.name}
-                    <Users className="ml-2 w-3.5 h-3.5 text-text-muted" aria-hidden="true" />
+                    <Users className="ml-2 w-4 h-4 text-text-muted" aria-hidden="true" />
                   </button>
                 ));
                 if (!group.label) return <React.Fragment key="unknown">{options}</React.Fragment>;

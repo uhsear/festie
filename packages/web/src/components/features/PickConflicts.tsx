@@ -201,7 +201,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                           chip.className,
                         )}
                       >
-                        <PriorityIcon priority={pick.priority} className="h-3 w-3" filled />
+                        <PriorityIcon priority={pick.priority} className="h-4 w-4" filled />
                         {PRIORITY_SYMBOLS[pick.priority].short}
                       </span>
                       {isKeep && (
@@ -212,7 +212,7 @@ export default function PickConflicts({ groups: groupsProp }: { groups?: Conflic
                     </div>
 
                     <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-text-muted">
-                      <CalendarClock className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                      <CalendarClock className="h-4 w-4 shrink-0" aria-hidden="true" />
                       <span className="tabular-nums whitespace-nowrap">{timeRange}</span>
                       <span aria-hidden="true">·</span>
                       <span className="tabular-nums whitespace-nowrap">{fmtDurationMinutes(pick.durationMin)}</span>

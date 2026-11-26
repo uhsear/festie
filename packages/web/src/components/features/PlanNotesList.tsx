@@ -74,7 +74,7 @@ export default function PlanNotesList({ kind, items, days, onOpenSet }: PlanNote
                 </span>
                 {kind === 'reminders' && item.reminderMinutes != null && (
                   <span className="flex items-center gap-1.5 text-xs font-semibold text-accent-aqua">
-                    <Bell className="w-3.5 h-3.5" aria-hidden="true" />
+                    <Bell className="w-4 h-4" aria-hidden="true" />
                     {reminderBeforeLabel(item.reminderMinutes)}
                   </span>
                 )}

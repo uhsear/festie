@@ -69,7 +69,7 @@ export default function DetailPriorityPicker({ setId, myPick, priorityBusy, onPr
               aria-hidden="true"
             />
             <div className="text-[length:var(--font-size-12)] font-bold mt-1 uppercase tracking-[0.5px]">{short}</div>
-            {active && pending && <Clock className="w-3 h-3 mx-auto mt-1" aria-hidden="true" />}
+            {active && pending && <Clock className="w-4 h-4 mx-auto mt-1" aria-hidden="true" />}
           </button>
         );
       })}

@@ -307,7 +307,7 @@ function SetCard({
         )}
         {myNote && (
           <span className="card-note-indicator inline-flex opacity-50" role="img" aria-label="Has note">
-            <StickyNote className="w-3.5 h-3.5" aria-hidden="true" />
+            <StickyNote className="w-4 h-4" aria-hidden="true" />
           </span>
         )}
         {hasConflict && (
@@ -320,7 +320,7 @@ function SetCard({
             )}
             title={clashLabel}
           >
-            <AlertTriangle className="w-3 h-3 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
+            <AlertTriangle className="w-4 h-4 shrink-0 text-[var(--color-clash)]" aria-hidden="true" />
             <span className="max-w-full truncate">{clashLabel}</span>
           </span>
         )}
@@ -331,7 +331,7 @@ function SetCard({
             title={move.line}
             className="inline-flex items-center gap-1 text-[length:var(--font-size-12)] font-bold py-0.5 px-1.5 rounded-sm leading-tight border border-border text-text-secondary"
           >
-            <ArrowRightLeft className="w-3 h-3 shrink-0" aria-hidden="true" />
+            <ArrowRightLeft className="w-4 h-4 shrink-0" aria-hidden="true" />
             {move.chip}
           </span>
         )}
@@ -420,7 +420,7 @@ function SetCard({
                   <span className={cn('text-xs font-semibold', !active && 'text-text-secondary')}>
                     {PRIORITY_SYMBOLS[p].short}
                   </span>
-                  {pending && <Clock className="w-3 h-3 ml-0.5" aria-hidden="true" data-testid="pick-pending-clock" />}
+                  {pending && <Clock className="w-4 h-4 ml-0.5" aria-hidden="true" data-testid="pick-pending-clock" />}
                 </button>
               );
             })}
@@ -441,7 +441,7 @@ function SetCard({
 
       {showPicks && pickSync?.state === 'failed' && (
         <div className="relative z-[2] mt-2 inline-flex items-center gap-2 text-xs font-medium text-accent-amber">
-          <AlertTriangle className="w-3 h-3" aria-hidden="true" />
+          <AlertTriangle className="w-4 h-4" aria-hidden="true" />
           <span>Pick not saved.</span>
           <button
             type="button"

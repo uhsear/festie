@@ -310,7 +310,7 @@ function RatingTag({ rating, compact = false }: { rating: number; compact?: bool
     <span
       className={`inline-flex items-center gap-1.5 text-text-secondary ${compact ? 'w-[4.5rem] text-xs shrink-0' : 'mt-2 text-sm'}`}
     >
-      <Icon className={compact ? 'w-3.5 h-3.5' : 'w-4 h-4'} aria-hidden="true" />
+      <Icon className="w-4 h-4" aria-hidden="true" />
       {meta?.label ?? `${rating}/5`}
     </span>
   );
@@ -494,7 +494,7 @@ function CrewWrapTab({
                       >
                         {(() => {
                           const Icon = RATING_META[s.rating]?.Icon ?? Trophy;
-                          return <Icon className="w-3 h-3" aria-hidden="true" />;
+                          return <Icon className="w-4 h-4" aria-hidden="true" />;
                         })()}
                         <ArtistNameButton name={artistOf(s)} />
                       </span>

@@ -172,7 +172,7 @@ export default function ClashPrompt({ currentSet, conflicts, b2bSeparator, days,
       })}
       {quietNames.length > 0 && (
         <div className="flex items-center gap-1.5 text-xs text-text-muted">
-          <TriangleAlert className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+          <TriangleAlert className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
           <span>{clashesWith(quietNames)}</span>
         </div>
       )}

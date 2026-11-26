@@ -123,7 +123,7 @@ export default function PollItem({
             disabled={isClosePending}
             className="min-h-11 flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary"
           >
-            <Lock className="w-3.5 h-3.5" aria-hidden="true" /> End poll
+            <Lock className="w-4 h-4" aria-hidden="true" /> End poll
           </button>
           {poll.nudged_at ? (
             <span className="text-xs text-text-muted">Reminder sent</span>
@@ -133,7 +133,7 @@ export default function PollItem({
                 onClick={() => onNudge(poll.id)}
                 className="min-h-11 flex items-center gap-2 text-xs text-text-secondary hover:text-text-primary"
               >
-                <BellRing className="w-3.5 h-3.5" aria-hidden="true" /> Remind {nonVoters.length} {person(nonVoters.length)}
+                <BellRing className="w-4 h-4" aria-hidden="true" /> Remind {nonVoters.length} {person(nonVoters.length)}
               </button>
             )
           )}

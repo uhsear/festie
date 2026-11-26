@@ -360,13 +360,13 @@ export default function RidesTab({ crewId, currentUserId, isOwner }: Props) {
                     {timeLabel ? <span className="text-xs text-text-secondary">{timeLabel}</span> : null}
                     {seatsLine ? (
                       <span className="inline-flex items-center gap-1 text-xs text-text-secondary">
-                        <Users className="w-3 h-3" aria-hidden="true" />
+                        <Users className="w-4 h-4" aria-hidden="true" />
                         {seatsLine}
                       </span>
                     ) : null}
                     {offer.depart_from ? (
                       <span className="inline-flex items-center gap-1 text-xs text-text-secondary truncate">
-                        <MapPin className="w-3 h-3" aria-hidden="true" />
+                        <MapPin className="w-4 h-4" aria-hidden="true" />
                         {offer.depart_from}
                       </span>
                     ) : null}

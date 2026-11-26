@@ -216,7 +216,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                 setSearchOpen((v) => !v);
               }}
             >
-              <Search className="w-3.5 h-3.5" aria-hidden="true" />
+              <Search className="w-4 h-4" aria-hidden="true" />
               Search
             </button>
             <button
@@ -234,7 +234,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                 setFiltersOpen((v) => !v);
               }}
             >
-              <Filter className="w-3.5 h-3.5" aria-hidden="true" />
+              <Filter className="w-4 h-4" aria-hidden="true" />
               {filterCount > 0 ? `Filters (${filterCount})` : 'Filters'}
             </button>
           </>
@@ -415,7 +415,7 @@ export default function SubHeader({ dayOnly, festivalOnly }: SubHeaderProps) {
                   : 'cursor-pointer border-border text-text-secondary hover:text-text-primary',
             )}
           >
-            <PicksIcon className="w-3.5 h-3.5" aria-hidden="true" />
+            <PicksIcon className="w-4 h-4" aria-hidden="true" />
             {canFilterMine ? 'My picks' : 'Pick a set first'}
           </button>
         )}

@@ -33,7 +33,7 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
     return (
       <div className={cn('flex items-center text-xs tabular-nums', className)}>
         <span role="status" className={cn(PILL, 'min-h-8')}>
-          <Check className="w-3.5 h-3.5 text-accent-aqua" aria-hidden="true" />
+          <Check className="w-4 h-4 text-accent-aqua" aria-hidden="true" />
           {offlineStatusLabel(summary)}
         </span>
       </div>
@@ -76,7 +76,7 @@ function Chip({ festivalId, className, remind }: { festivalId: string; className
           'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
         )}
       >
-        <Download className="w-3.5 h-3.5" aria-hidden="true" />
+        <Download className="w-4 h-4" aria-hidden="true" />
         {label}
       </button>
     </div>
