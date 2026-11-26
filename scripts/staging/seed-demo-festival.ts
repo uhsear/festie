@@ -19,7 +19,7 @@
  * staging web or app build by setting one on staging only, never through the production site.
  *
  * It fails closed: the URL comes only from SEED_DATABASE_URL (never DATABASE_URL), the database
- * name must end in _staging, and "festival_planner" is refused by name. The guard runs before any
+ * name must end in _staging, and the production database is refused by name. The guard runs before any
  * connection opens.
  */
 
