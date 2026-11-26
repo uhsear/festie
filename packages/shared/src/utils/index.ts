@@ -100,6 +100,7 @@ export * from './sharedPicks';
 export * from './ratingSummary';
 export * from './announcements';
 export * from './onboarding';
+export * from './introLineup';
 export * from './festivalReady';
 export * from './guestPicks';
 export * from './pickMenu';

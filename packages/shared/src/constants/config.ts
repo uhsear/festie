@@ -443,6 +443,15 @@ export const ONBOARDING_SLIDES_SHARED = [
   },
 ] as const;
 
+/** The scripted mini lineup on the plan slide and the guest picks teaser, shared by web and mobile (DP-56). */
+export const INTRO_LINEUP_COPY = {
+  day: 'Friday',
+  hint: 'Tap a set to change its priority.',
+  unpicked: 'Not picked',
+  picks: (n: number): string => `${n} ${n === 1 ? 'pick' : 'picks'}`,
+  clash: (a: string, b: string): string => `Clash: ${a} and ${b} overlap`,
+} as const;
+
 export const ONBOARDING_COPY = {
   dialogLabel: 'Welcome to Festie',
   next: 'Next',
