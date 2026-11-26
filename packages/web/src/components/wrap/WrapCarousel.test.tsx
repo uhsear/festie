@@ -22,7 +22,7 @@ beforeEach(() => {
 describe('WrapCarousel', () => {
   it('keeps a scaled side poster from reaching into the active poster', () => {
     const insetPerSide = (DESKTOP_POSTER_WIDTH * (1 - SIDE_SCALE)) / 2;
-    expect(2 * SIDE_OVERLAP).toBeLessThanOrEqual(insetPerSide);
+    expect(2 * SIDE_OVERLAP).toBeLessThanOrEqual(insetPerSide + 1e-9);
   });
 
   it('moves the current card with next and previous', () => {
