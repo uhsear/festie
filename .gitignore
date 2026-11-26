@@ -85,6 +85,8 @@ mobile-loop-capture.js
 # and the social share image (og:image / twitter:image) and the brand kit
 !packages/web/public/og-image.png
 !docs/brand/*.png
+# and the hosted email header lockup (lib/email.ts links it)
+!public/icons/email-lockup.png
 
 # Session logs and loop captures
 docs/session-logs/

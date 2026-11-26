@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { POSTER } from '@festie/shared/tokens';
-import { festivalTint } from '@festie/shared/utils';
+import { posterBand } from '@festie/shared/utils';
+import PosterMark from './PosterMark';
 
 interface Props {
   festivalName: string;
@@ -9,66 +10,51 @@ interface Props {
   children: ReactNode;
 }
 
-const rgba = (hex: string, alpha: number) => {
-  const n = parseInt(hex.slice(1), 16);
-  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
-};
+const CLASH = "'Clash Display', system-ui, sans-serif";
 
 /**
- * Fixed 1080x1920 share-poster frame: header, centred body, footer. Inline styles only,
- * because CSS variables do not resolve reliably in html-to-image. The mobile frame draws
- * the same layout, so a card looks identical on both apps.
+ * Fixed 1080x1920 share-poster frame: one festival-hue band, a left-aligned header with the
+ * mark, a body that starts at a fixed y, and a footer. Inline styles only, because CSS variables
+ * do not resolve reliably in html-to-image. The mobile frame places the same boxes from
+ * POSTER.layout, so a card matches on both apps.
  */
 export default function PosterFrame({ festivalName, kicker, byline, children }: Props) {
-  const tint = festivalTint(festivalName);
-  const { font, colors } = POSTER;
+  const { font, colors, layout, padding } = POSTER;
   return (
     <div
       style={{
+        position: 'relative',
         width: POSTER.width,
         height: POSTER.height,
-        background: tint.bg,
-        backgroundImage:
-          `radial-gradient(60% 45% at 50% 0%, ${rgba(tint.active, POSTER.glowAlpha)}, transparent 60%), ` +
-          `radial-gradient(60% 45% at 50% 100%, ${rgba(colors.glowBottom, POSTER.glowAlpha)}, transparent 60%)`,
+        background: colors.ground,
         color: colors.text,
         fontFamily: 'Space Grotesk, system-ui, -apple-system, sans-serif',
         textAlign: 'left',
-        padding: POSTER.padding,
-        display: 'flex',
-        flexDirection: 'column',
-        boxSizing: 'border-box',
+        overflow: 'hidden',
       }}
     >
-      <header style={{ textAlign: 'center' }}>
-        <div
-          style={{
-            fontFamily: "'Clash Display', system-ui, sans-serif",
-            fontSize: font.wordmark,
-            fontWeight: 900,
-            letterSpacing: 8,
-            color: colors.wordmark,
-            lineHeight: 1,
-          }}
-        >
-          FESTIE
+      <div
+        data-poster="band"
+        style={{ position: 'absolute', top: 0, left: 0, width: POSTER.width, height: POSTER.band.height, background: posterBand(festivalName).colour }}
+      />
+      <header style={{ position: 'absolute', top: layout.headerTop, left: padding, width: POSTER.width - 2 * padding, height: layout.headerHeight }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 20, height: layout.markSize }}>
+          <PosterMark size={layout.markSize} />
+          <div
+            style={{ fontFamily: CLASH, fontSize: font.wordmark, fontWeight: POSTER.weight, letterSpacing: 6, color: colors.text, lineHeight: 1 }}
+          >
+            FESTIE
+          </div>
         </div>
-        <div
-          style={{
-            fontSize: font.kicker,
-            color: colors.secondary,
-            marginTop: 16,
-            letterSpacing: 3,
-            textTransform: 'uppercase',
-          }}
-        >
+        <div style={{ fontSize: font.kicker, color: colors.secondary, marginTop: 24, letterSpacing: 3, textTransform: 'uppercase' }}>
           {kicker}
         </div>
         <div
           style={{
+            fontFamily: CLASH,
             fontSize: font.festival,
-            fontWeight: 700,
-            marginTop: 18,
+            fontWeight: POSTER.weight,
+            marginTop: 12,
             display: '-webkit-box',
             WebkitLineClamp: 2,
             WebkitBoxOrient: 'vertical',
@@ -80,17 +66,12 @@ export default function PosterFrame({ festivalName, kicker, byline, children }: 
         {byline && <div style={{ fontSize: font.byline, color: colors.secondary, marginTop: 8 }}>{byline}</div>}
       </header>
 
-      <section style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: 0 }}>
+      <section style={{ position: 'absolute', top: layout.bodyTop, left: padding, width: POSTER.width - 2 * padding, bottom: padding + layout.footerHeight + 24 }}>
         {children}
       </section>
 
       <footer
-        style={{
-          textAlign: 'center',
-          fontSize: font.footer,
-          color: colors.secondary,
-          letterSpacing: 6,
-        }}
+        style={{ position: 'absolute', left: padding, bottom: padding, height: layout.footerHeight, fontSize: font.footer, color: colors.secondary, letterSpacing: 6 }}
       >
         FESTIE.US
       </footer>

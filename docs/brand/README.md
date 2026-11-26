@@ -1,7 +1,7 @@
 # Festie brand kit
 
 This page is the first brand guide. It records what exists and the rules for using it. It does not
-redesign the logo. Later work (DP-08, DP-58 in the master design plan) adds the Daylight and
+redesign the logo. Later work (DP-08 in the master design plan) adds the Daylight and
 one-colour files and the stacked lockup.
 
 ## Master files
@@ -20,7 +20,8 @@ then recrop the favicon.
 | Part | Stage (dark ground) | Daylight |
 |------|---------------------|----------|
 | Pin | Spotlight Aqua `#00e8d0` | Not built yet. The Daylight token is `#00594f`. |
-| Tent legs and wordmark | Flare Coral `#ff3366` | Not built yet. The Daylight token is `#a8002a`. |
+| Tent legs | Flare Coral `#ff3366` | Not built yet. The Daylight token is `#a8002a`. |
+| Wordmark | House Light `#eaeaf2` | Not built yet. |
 
 The mark has no Daylight file yet. Until DP-08 adds one, do not place the Stage mark on a light
 ground, because the aqua pin fails contrast there.
@@ -39,7 +40,7 @@ in the 512 unit viewBox, so the diameter is 40 units, about 8% of the mark's wid
 ## Minimum size
 
 - Mark alone: 16 px wide.
-- Horizontal lockup: 80 px wide.
+- Horizontal lockup: 80 px wide. The email header shows it 110 px wide.
 
 Below those sizes the pin gap closes. Use the mark alone when the space is narrower than 80 px.
 
@@ -48,7 +49,10 @@ Below those sizes the pin gap closes. Use the mark alone when the space is narro
 1. **Mark alone**, 24 to 28 px, in app chrome on web and mobile. In product chrome the word
    "FESTIE" sits beside it in Clash Display 700 caps, in House Light (`text.primary`).
 2. **Mixed-case "Festie" lockup** (`festie-lockup.svg` or `.png`) on OG images, email and server
-   pages, such as the festival, invite and share pages.
+   pages, such as the festival, invite and share pages. The email header uses `public/icons/email-lockup.png`.
+   `lib/helpers/share-og-image.ts` bakes the lockup paths for the per-festival and per-plan
+   previews. If you change `festie-lockup.svg`, copy the new paths there and re-export
+   `packages/web/public/og-image.png`.
 3. **Tracked caps "FESTIE"** only in the header of the Wrap poster.
 
 A stacked lockup is planned and is not approved yet.

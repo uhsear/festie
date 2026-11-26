@@ -11,7 +11,9 @@ import { describe, test, mock } from 'node:test';
 import express from 'express';
 import request from 'supertest';
 import sharp from 'sharp';
-import { buildShareOgSvg, pickOgArtists } from '../lib/helpers/share-og-image.js';
+import { buildShareOgSvg, buildFestivalOgSvg, pickOgArtists } from '../lib/helpers/share-og-image.js';
+import { colors } from '../packages/shared/src/tokens/colors';
+import { posterBand } from '../packages/shared/src/utils/festivalTint';
 
 const noopLog = { info() {}, warn() {}, error() {}, debug() {} };
 
@@ -233,7 +235,7 @@ describe('buildShareOgSvg', () => {
     assert.ok(svg.includes('&lt;u&gt;&amp;&#39;s picks'));
     assert.ok(svg.includes('A &quot;B&quot;'));
     assert.ok(svg.includes('3 sets · 1 must-see'));
-    assert.ok(svg.includes('>FESTIE<'));
+    assert.ok(!svg.includes('>FESTIE<'), 'the wordmark is outlined, not live text');
   });
 
   test('truncates the festival name at 32 and artists at 28 characters, and shows at most 5 artists', () => {
@@ -251,6 +253,52 @@ describe('buildShareOgSvg', () => {
   test('leaves short values whole', () => {
     const svg = buildShareOgSvg({ ...base, festivalName: 'F'.repeat(32) });
     assert.ok(svg.includes(`>${'F'.repeat(32)}<`));
+  });
+});
+
+describe('OG card brand and layout', () => {
+  const plan = { username: 'sam', festivalName: 'Fest', location: 'Here', artists: ['M1', 'M2', 'W1', 'W2'], total: 9, must: 2 };
+  const fest = { festivalName: 'EDC Orlando 2026', dateRange: 'Nov 6 – 8, 2026', location: 'Here', setCount: 3, stageCount: 2 };
+  const fontSizeOf = (svg: string, label: string) => Number(new RegExp(`font-size="(\\d+)"[^>]*>${label}<`).exec(svg)![1]);
+
+  test('both cards bake the mark and wordmark paths and need no brand font', () => {
+    for (const svg of [buildShareOgSvg(plan), buildFestivalOgSvg(fest)]) {
+      assert.ok(svg.includes(`fill="${colors.accent.coral}" d="M132 372`));
+      assert.ok(svg.includes(`fill="${colors.accent.aqua}" fill-rule="evenodd"`));
+      assert.ok(svg.includes(`fill="${colors.text.primary}" transform="translate(227 147.5)"`));
+      assert.ok(svg.includes(`fill="${colors.bg.primary}"`));
+      assert.ok(!svg.includes('080810'));
+    }
+  });
+
+  test('plan card draws Must picks larger than Want picks and carries no festival hue', () => {
+    const svg = buildShareOgSvg({ ...plan, festivalName: 'EDC Orlando 2026' });
+    assert.ok(fontSizeOf(svg, 'M1') > fontSizeOf(svg, 'W1'));
+    assert.equal(fontSizeOf(svg, 'M1'), fontSizeOf(svg, 'M2'));
+    assert.equal(svg.match(new RegExp(`<circle [^>]*fill="${colors.priority.must}"`, 'g'))!.length, 2);
+    assert.ok(!svg.includes(posterBand('EDC Orlando 2026').colour));
+  });
+
+  test('festival card carries one band in the festival hue (OD-4 C)', () => {
+    const svg = buildFestivalOgSvg(fest);
+    const band = posterBand(fest.festivalName);
+    assert.equal(band.fallback, false);
+    assert.ok(svg.includes(`<rect x="0" y="0" width="1200" height="24" fill="${band.colour}"/>`));
+    assert.ok(svg.includes(`fill="${colors.accent.aqua}"`));
+  });
+
+  test('festival card swaps a hue near aqua for the neutral stage colour', () => {
+    const near = 'Beta';
+    assert.equal(posterBand(near).fallback, true);
+    assert.ok(buildFestivalOgSvg({ ...fest, festivalName: near }).includes(`height="24" fill="${colors.stage.fallback}"`));
+  });
+
+  test('both cards render to a 1200x630 PNG', async () => {
+    for (const svg of [buildShareOgSvg(plan), buildFestivalOgSvg(fest)]) {
+      const meta = await sharp(Buffer.from(svg)).png().metadata();
+      assert.equal(meta.width, 1200);
+      assert.equal(meta.height, 630);
+    }
   });
 });
 

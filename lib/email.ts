@@ -118,8 +118,8 @@ export async function sendEmail({ to, subject, html, text, headers, idempotencyK
   }
 }
 
-// Hosted 2x of the 40 px header mark (public/icons/email-mark.png). DP-58 swaps it for the lockup PNG.
-const EMAIL_MARK_URL = 'https://festie.us/icons/email-mark.png';
+// Hosted 2x of the 32 px high header lockup (public/icons/email-lockup.png, from docs/brand/festie-lockup.svg).
+const EMAIL_LOCKUP_URL = 'https://festie.us/icons/email-lockup.png';
 
 // `footer` is overridable because a security alert must not close with "you can
 // safely ignore this email" directly under "change your password immediately".
@@ -133,7 +133,7 @@ function _wrapTemplate(title: any, bodyHtml: any, footer = "If you didn't reques
 <tr><td align="center">
 <table width="100%" cellpadding="0" cellspacing="0" bgcolor="${c.card}" style="max-width:480px;background:${c.card};border-radius:16px;overflow:hidden">
   <tr><td style="padding:32px 32px 8px;text-align:left">
-    <img src="${EMAIL_MARK_URL}" width="40" height="40" alt="Festie" style="display:block;border:0;margin:0 0 16px">
+    <img src="${EMAIL_LOCKUP_URL}" width="110" height="32" alt="Festie" style="display:block;border:0;margin:0 0 16px">
     <h1 style="margin:0;color:${c.text};font-size:22px;font-weight:700;line-height:1.2">${title}</h1>
   </td></tr>
   <tr><td style="padding:16px 32px 24px;text-align:left">${bodyHtml}</td></tr>

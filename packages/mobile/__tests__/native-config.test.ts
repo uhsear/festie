@@ -1,4 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { colors } from '@festie/shared/tokens';
 import { read } from './read-source';
 
 
@@ -61,5 +64,12 @@ describe('t41 native config source guards', () => {
     for (const s of specs) {
       expect(s === 'react-native' || s.startsWith('@festie/shared') || declared.has(s), s).toBe(true);
     }
+  });
+
+  it('expo-notifications accent is the aqua token and the icon is RGBA', () => {
+    const entry = expo.plugins.find((p: unknown) => Array.isArray(p) && p[0] === 'expo-notifications');
+    expect(entry[1].color).toBe(colors.accent.aqua);
+    const png = readFileSync(join(__dirname, '..', entry[1].icon));
+    expect(png.readUInt8(25)).toBe(6); // colour type 6 = RGBA, so the system can tint it by alpha
   });
 });

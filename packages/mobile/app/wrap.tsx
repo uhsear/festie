@@ -79,7 +79,9 @@ export default function WrapScreen() {
     }, [festivalId, user, crewParam, reloadKey]),
   );
 
-  const cards = useMemo(() => (data ? buildWrapCards(data) : []), [data]);
+  // Stage colours come from the loaded festival; another festival's wrap gets neutral rails.
+  const stages = useFestivalDataStore((s) => (s.currentFestival?.id === festivalId ? s.stages : undefined));
+  const cards = useMemo(() => (data ? buildWrapCards(data, stages) : []), [data, stages]);
   const toRate = useMemo(() => (data ? selectSetsToRate(data.planned, data.festival).length : 0), [data]);
   const allSorted = useMemo(() => sortRatingsForWrap(data?.allRatings ?? []), [data?.allRatings]);
   const unlocked = !!data && isWrapUnlocked(data.festival);
@@ -138,6 +140,35 @@ export default function WrapScreen() {
     }
   };
 
+  // One fixed position above both views, so a switch keeps the tab (and screen-reader focus) where it is.
+  const tabBarEl = (
+    <View style={styles.tabBar}>
+      <TouchableOpacity
+        style={[styles.tab, tab === 'me' && styles.tabActive]}
+        onPress={() => setTab('me')}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: tab === 'me' }}
+      >
+        <Text style={[styles.tabText, tab === 'me' && styles.tabTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          You
+        </Text>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.tab, tab === 'crew' && styles.tabActive]}
+        onPress={() => setTab('crew')}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: tab === 'crew' }}
+      >
+        <Text
+          style={[styles.tabText, tab === 'crew' && styles.tabTextActive]}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        >
+          {COPY.wrap.crewName}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
   const body = () => {
     if (!festivalId) {
       return (
@@ -192,7 +223,7 @@ export default function WrapScreen() {
     const { stats, planned } = data;
     const heroValue = planned.length > 0 ? planned.length : stats.totalRated;
     const heroLabel = `${heroValue === 1 ? 'set' : 'sets'} ${planned.length > 0 ? 'planned' : 'rated'}`;
-    const pageW = screenW - t.spacing[4] * 2;
+    const pageW = screenW;
     const handleText = `Show @${username ?? 'you'} on cards`;
 
     return (
@@ -202,6 +233,60 @@ export default function WrapScreen() {
           { paddingBottom: Math.max(t.spacing[4], insets.bottom + t.spacing[2]) },
         ]}
       >
+        <View style={styles.posterBlock}>
+          <FlatList
+            ref={cardListRef}
+            data={cards}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(c) => c.kind}
+            onMomentumScrollEnd={(e) => {
+              const i = Math.round(e.nativeEvent.contentOffset.x / pageW);
+              setCardIndex(i);
+              if (i === cards.length - 1) setReachedEnd(true);
+            }}
+            getItemLayout={(_, i) => ({ length: pageW, offset: pageW * i, index: i })}
+            renderItem={({ item, index }) => (
+              <View style={{ width: pageW }} accessibilityLabel={`Card ${index + 1} of ${cards.length}`}>
+                <PosterPreview>
+                  <WrapCardPoster card={item} festivalName={festivalName} byline={byline} />
+                </PosterPreview>
+              </View>
+            )}
+          />
+          <View style={[styles.dots, styles.posterInset]}>
+            {cards.map((c, i) => (
+              <TouchableOpacity
+                key={c.kind}
+                onPress={() => goToCard(i)}
+                style={styles.dotTarget}
+                accessibilityRole="button"
+                accessibilityLabel={`Card ${i + 1} of ${cards.length}`}
+                accessibilityState={{ selected: i === cardIndex }}
+              >
+                <View style={[styles.dot, i === cardIndex && styles.dotActive]} />
+              </TouchableOpacity>
+            ))}
+          </View>
+          {reachedEnd ? <ConfettiBurst /> : null}
+          <TouchableOpacity
+            style={[styles.shareButton, styles.posterInset, sharing && styles.shareButtonBusy]}
+            onPress={() => void handleShare()}
+            disabled={sharing}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Share this card"
+          >
+            {sharing ? (
+              <ActivityIndicator size="small" color={t.colors.text.onLightAccent} />
+            ) : (
+              <Ionicons name="share-social-outline" size={t.iconSize.sm} color={t.colors.text.onLightAccent} />
+            )}
+            <Text style={styles.shareButtonText}>{sharing ? 'Preparing…' : 'Share this card'}</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.handleRow}>
           <Text style={styles.handleLabel} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {handleText}
@@ -234,60 +319,6 @@ export default function WrapScreen() {
 
         <Hero value={heroValue} label={heroLabel} />
 
-        <View style={styles.shareBlock}>
-          <FlatList
-            ref={cardListRef}
-            data={cards}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(c) => c.kind}
-            onMomentumScrollEnd={(e) => {
-              const i = Math.round(e.nativeEvent.contentOffset.x / pageW);
-              setCardIndex(i);
-              if (i === cards.length - 1) setReachedEnd(true);
-            }}
-            getItemLayout={(_, i) => ({ length: pageW, offset: pageW * i, index: i })}
-            renderItem={({ item, index }) => (
-              <View style={{ width: pageW }} accessibilityLabel={`Card ${index + 1} of ${cards.length}`}>
-                <PosterPreview>
-                  <WrapCardPoster card={item} festivalName={festivalName} byline={byline} />
-                </PosterPreview>
-              </View>
-            )}
-          />
-          <View style={styles.dots}>
-            {cards.map((c, i) => (
-              <TouchableOpacity
-                key={c.kind}
-                onPress={() => goToCard(i)}
-                style={styles.dotTarget}
-                accessibilityRole="button"
-                accessibilityLabel={`Card ${i + 1} of ${cards.length}`}
-                accessibilityState={{ selected: i === cardIndex }}
-              >
-                <View style={[styles.dot, i === cardIndex && styles.dotActive]} />
-              </TouchableOpacity>
-            ))}
-          </View>
-          {reachedEnd ? <ConfettiBurst /> : null}
-          <TouchableOpacity
-            style={[styles.shareButton, sharing && styles.shareButtonBusy]}
-            onPress={() => void handleShare()}
-            disabled={sharing}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Share this card"
-          >
-            {sharing ? (
-              <ActivityIndicator size="small" color={t.colors.text.onLightAccent} />
-            ) : (
-              <Ionicons name="share-social-outline" size={t.iconSize.sm} color={t.colors.text.onLightAccent} />
-            )}
-            <Text style={styles.shareButtonText}>{sharing ? 'Preparing…' : 'Share this card'}</Text>
-          </TouchableOpacity>
-        </View>
-
         {allSorted.length > 0 ? (
           <View>
             <SectionLabel>Everything you rated</SectionLabel>
@@ -316,33 +347,7 @@ export default function WrapScreen() {
   return (
     <View style={styles.screen}>
       <Stack.Screen options={{ title: 'Festival Wrap', headerShown: true }} />
-      {showTabs ? (
-        <View style={styles.tabBar}>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'me' && styles.tabActive]}
-            onPress={() => setTab('me')}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'me' }}
-          >
-            <Text style={[styles.tabText, tab === 'me' && styles.tabTextActive]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              You
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, tab === 'crew' && styles.tabActive]}
-            onPress={() => setTab('crew')}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: tab === 'crew' }}
-          >
-            <Text
-              style={[styles.tabText, tab === 'crew' && styles.tabTextActive]}
-              maxFontSizeMultiplier={MAX_FONT_SCALE}
-            >
-              {COPY.wrap.crewName}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
+      {showTabs ? tabBarEl : null}
 
       {showTabs && tab === 'crew' ? (
         <CrewWrapTab
@@ -485,10 +490,9 @@ const POSTER_H = 1920;
  * the capture source stays the off-screen full-size view. Keeps its dark artwork in both themes.
  */
 function PosterPreview({ children }: { children: React.ReactNode }) {
-  const t = useTokens();
   const styles = useStyles();
   const { width } = useWindowDimensions();
-  const previewW = Math.min(260, width - t.spacing[4] * 2);
+  const previewW = width;
   const scale = previewW / POSTER_W;
   const previewH = POSTER_H * scale;
   return (
@@ -1014,6 +1018,11 @@ const useStyles = makeStyles((t) => ({
     textAlign: 'center',
     paddingTop: t.spacing[2],
   },
+  posterBlock: {
+    gap: t.spacing[3],
+    marginHorizontal: -t.spacing[4],
+  },
+  posterInset: { marginHorizontal: t.spacing[4] },
   tabBar: {
     flexDirection: 'row',
     gap: t.spacing[1],
