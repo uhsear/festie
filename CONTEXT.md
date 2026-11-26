@@ -32,6 +32,10 @@ _Avoid_: date (ambiguous with the calendar date string)
 A registered account with username, password, and optional avatar. Global identity across all festivals.
 _Avoid_: account (when referring to the person)
 
+**Refresh-token family**:
+All refresh tokens that descend from one sign-in. Each rotation keeps the family id. Reusing an already rotated token revokes the whole family.
+_Avoid_: session (a session is one signed-in device, not the token chain)
+
 **Profile**:
 A user's per-festival participation record (`festival_profiles`). Holds that user's picks, notes, and reminders for one festival. One user has one profile per festival.
 _Avoid_: user account, settings, preferences
@@ -134,6 +138,24 @@ _Avoid_: set state, live flag
 A post-festival summary view showing stats (sets rated, stages visited, days attended, total hours) and the user's top-rated sets. Only available after a festival ends.
 _Avoid_: recap, summary, review
 
+### Organizer platform
+
+**Organization**:
+A venue, promoter or other group that owns festivals on the organizer platform. It starts pending, can become active, and can be suspended. A platform admin may verify it, and some actions need a verified organization. A festival with no organization is owned by the platform.
+_Avoid_: company, tenant
+
+**Organizer**:
+A **User** who is a member of an **Organization** with the role owner, editor or viewer. Organizers work through `/api/v1/manage`. An Organizer is not a platform admin.
+_Avoid_: admin, manager
+
+**Invitation**:
+A membership an owner adds by email before that person has a confirmed account. It is claimed when the signed-in user's confirmed email matches. It expires after 90 days and is deleted after 120. It is not an **Invite Code**.
+_Avoid_: invite (alone)
+
+**Artist review**:
+The admin queue of researched link, merge and rename proposals. An admin approves or rejects each item. An approval uses the same edit and merge code as the artist repository. It is not an artist suggestion, which is an **Organizer**'s change request.
+_Avoid_: moderation
+
 ### Publishing & reach
 
 **Draft festival**:
@@ -175,6 +197,9 @@ _Avoid_: upload, sync
 - **Overlap** is computed from the **Picks** of all **Crew** members for a given **Set**
 - A **Rating** is given by a **User** for a **Set** (post-festival)
 - A **User** can **Follow** many **Festivals**, and an admin sends **Announcements** to one **Festival**'s members
+- An **Organization** has many **Organizers** (owner, editor or viewer) and owns **Festivals**; an **Invitation** becomes an **Organizer** once its email matches a confirmed **User**
+- An **Artist review** item proposes a link, merge or rename for an **Artist**; an admin decides it
+- A **Refresh-token family** belongs to one sign-in of one **User**
 - A **Conflict** is detected between two **Picks** in the same **Profile** whose **Sets** overlap in time
 
 ## Example dialogue
@@ -196,3 +221,4 @@ _Avoid_: upload, sync
 - **"Activity"** vs **"Timeline"**: **Activity** is the crew event feed (`crew_activity` table). **Timeline** is a schedule view showing sets chronologically. Never swap these.
 - **"Overlap"** appears in two contexts: **Crew Overlap** (shared picks across members) and time overlap (used in **Conflict** detection). The crew concept is a feature; the time concept is a utility.
 - **"Note"** vs **"Rating note"**: A **Note** is a private annotation on a set within a profile. A **Rating** also has an optional note field, but this is a post-festival comment attached to the rating, not the profile note.
+- **"Invitation"** vs **"Invite Code"**: an **Invitation** adds a person to an **Organization** by email. An **Invite Code** joins a **Crew**. Never swap these.
