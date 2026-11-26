@@ -44,7 +44,7 @@ const CrewIcon = () => (
 
 /** Profile icon — user silhouette. Mobile needs a direct entry to /account
    because the header profile badge can get clipped off-screen at 390 px when
-   the util-strip (Install App + Support Me) hogs .header-left width. */
+   the header utility strip (Install App) hogs .header-left width. */
 const ProfileIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />

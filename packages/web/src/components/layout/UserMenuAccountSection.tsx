@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import { COPY } from '@festie/shared/constants';
+import { ACCOUNT_COPY, COPY, SUPPORT_URL_PAYPAL } from '@festie/shared/constants';
 import Button from '../ui/Button';
 
 interface UserMenuAccountSectionProps {
@@ -61,6 +61,14 @@ export default function UserMenuAccountSection({ user, onClose, onLogout }: User
         <Button variant="ghost" size="sm" type="button" onClick={onLogout}>
           {COPY.auth.signOut}
         </Button>
+        <a
+          href={SUPPORT_URL_PAYPAL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="type-caption text-center text-text-muted no-underline hover:text-accent-aqua focus-visible:outline-2 focus-visible:outline-accent-aqua"
+        >
+          {ACCOUNT_COPY.supportFestie}
+        </a>
       </div>
     </section>
   );
