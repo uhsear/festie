@@ -9,7 +9,7 @@ export default function ThemeSection() {
   const mode = themeModeOf({ theme, followSystemTheme });
 
   return (
-    <fieldset className="rounded-xl border border-border bg-bg-card p-3 space-y-2">
+    <fieldset className="border-b border-border-light py-3 space-y-2">
       <legend className="px-1 text-sm font-semibold text-text-primary">Theme</legend>
       {THEME_MODE_OPTIONS.map((o) => (
         <label

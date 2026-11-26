@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { useCrewStore } from '../stores/crewStore';
+import { useFestivalStore } from '../stores/festivalStore';
 import { useLiveLocationStore } from '../stores/liveLocationStore';
 import { useSosSeenAck } from './useSosSeenAck';
 import type { Crew, FestivalDay, SosEntry } from '../types';
@@ -11,6 +12,7 @@ import {
   type ActiveMeet,
   type CrewWhereabout,
 } from '../utils/dayOf';
+import { selectCrewFaces, type CrewFace, type SelectCrewFacesInput } from '../utils/crewFaces';
 
 /**
  * Keeps the live-location store scoped to the active crew app-wide. The store
@@ -101,4 +103,20 @@ export function useCrewDayOf(nowMs: number, days: ReadonlyArray<FestivalDay>, ti
       meet: selectActiveMeet({ meetingPoints, crew, days, nowMs, timeZone }),
     };
   }, [user, crew, crewMembers, statuses, peers, lostContact, sos, meetingPoints, nowMs, days, timeZone]);
+}
+
+/** The crew hub's face row: each crewmate with their stage and a walk or last-seen caption. */
+export function useCrewFaces(
+  nowMs: number,
+  days: ReadonlyArray<FestivalDay>,
+  viewer: SelectCrewFacesInput['viewer'],
+  timeZone?: string,
+): CrewFace[] {
+  const { whereabouts } = useCrewDayOf(nowMs, days, timeZone);
+  const peers = useLiveLocationStore((s) => s.peers);
+  const stages = useFestivalStore((s) => s.stages);
+  return useMemo(
+    () => selectCrewFaces({ whereabouts, peers, stages, viewer, nowMs }),
+    [whereabouts, peers, stages, viewer, nowMs],
+  );
 }

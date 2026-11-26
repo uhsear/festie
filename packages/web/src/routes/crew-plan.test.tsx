@@ -28,6 +28,9 @@ vi.mock('@festie/shared/hooks', () => ({
   usePicks: () => ({ savePick }),
 }));
 
+// The faces row has its own test; here it only has to lead the page.
+vi.mock('../components/crew/CrewFacesRow', () => ({ default: () => <div data-testid="crew-faces" /> }));
+
 // FreshnessChip reaches into these split-store entry points directly.
 vi.mock('@festie/shared/stores/uiStore', () => ({
   useUIStore: vi.fn((sel: (s: Record<string, unknown>) => unknown) => sel(uiState)),
@@ -321,25 +324,15 @@ describe('CrewPlanView', () => {
     expect(screen.getByText('3 of 5 want this')).toBeInTheDocument();
   });
 
-  it('renders Where everyone is and Open polls', () => {
-    hubState.whereabouts = [
-      {
-        userId: 'u2',
-        name: 'Ari',
-        statusLabel: 'Here · Main Stage',
-        statusAt: null,
-        live: null,
-        liveAt: null,
-        sos: false,
-      },
-    ];
+  it('leads with the faces row and renders Open polls', () => {
     hubState.openPolls = [
       { id: 'p1', question: 'Dinner?' },
       { id: 'p2', question: 'Late set?' },
       { id: 'p3', question: 'Brunch?' },
     ];
     render(<CrewPlanView />);
-    expect(screen.getByText('Ari · Here · Main Stage')).toBeInTheDocument();
+    expect(screen.getByTestId('crew-faces')).toBeInTheDocument();
+    expect(screen.queryByText('Where everyone is')).not.toBeInTheDocument();
     expect(screen.getByText('Dinner?')).toBeInTheDocument();
     expect(screen.queryByText('Brunch?')).not.toBeInTheDocument();
     expect(screen.getByText('+1 more')).toBeInTheDocument();

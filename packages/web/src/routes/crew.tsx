@@ -7,6 +7,7 @@ import { useAuthStore, useUIStore } from '@festie/shared/stores';
 import { useFestivalStore } from '@festie/shared/stores';
 import CrewSelector from '../components/features/CrewSelector';
 import FreshnessChip from '../components/features/FreshnessChip';
+import CrewFacesRow from '../components/crew/CrewFacesRow';
 import CrewHeader from '../components/crew/CrewHeader';
 import CrewSkeleton from '../components/ui/skeletons/CrewSkeleton';
 import OfflineStatusChip from '../components/features/OfflineStatusChip';
@@ -347,6 +348,7 @@ function CrewViewInner() {
         )
       ) : (
         <div className="crew-content space-y-4 min-w-0">
+          <CrewFacesRow />
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <FreshnessChip surface="crew" />
             <OfflineStatusChip />

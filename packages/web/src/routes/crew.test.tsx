@@ -112,6 +112,8 @@ vi.mock('@festie/shared/hooks', () => ({
   }),
 }));
 
+vi.mock('../components/crew/CrewFacesRow', () => ({ default: () => <div data-testid="crew-faces" /> }));
+
 vi.mock('../components/crew/CrewInviteBar', () => ({
   default: ({ inviteCode }: { inviteCode: string }) => <div data-testid="crew-invite-bar">{inviteCode}</div>,
 }));
@@ -575,5 +577,14 @@ describe('CrewView', () => {
     render(<CrewView />);
     expect(screen.queryByText('Invite your crew')).not.toBeInTheDocument();
     expect(screen.getAllByTestId('crew-invite-bar')).toHaveLength(1);
+  });
+
+  it('leads a multi-member crew with the faces row, above the invite bar', () => {
+    ownerCrew([me, bob]);
+    render(<CrewView />);
+    const faces = screen.getByTestId('crew-faces');
+    const invite = screen.getByTestId('crew-invite-bar');
+    expect(faces.compareDocumentPosition(invite) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(document.querySelector('.crew-content')!.firstElementChild).toBe(faces);
   });
 });

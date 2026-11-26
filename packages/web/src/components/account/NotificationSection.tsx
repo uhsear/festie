@@ -420,7 +420,7 @@ function PrefsSubsection() {
 /** Push opt-in, per-category preferences, quiet hours and per-festival topics in one account card. */
 export default function NotificationSection() {
   return (
-    <Card>
+    <Card variant="section">
       <PushSubsection />
       <PrefsSubsection />
     </Card>

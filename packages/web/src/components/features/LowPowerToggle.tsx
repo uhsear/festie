@@ -30,7 +30,7 @@ export default function LowPowerToggle({ className }: Props) {
   };
 
   return (
-    <div className={`flex items-center gap-3 rounded-xl border border-border bg-bg-card p-3 ${className ?? ''}`}>
+    <div className={`flex items-center gap-3 border-b border-border-light py-3 ${className ?? ''}`}>
       <BatteryLow
         className={`w-5 h-5 shrink-0 ${lowPowerMode ? 'text-accent-aqua' : 'text-text-secondary'}`}
         aria-hidden="true"

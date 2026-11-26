@@ -34,7 +34,7 @@ export default function InstallAppRow() {
   };
 
   return (
-    <div className="flex min-h-11 items-center gap-3 rounded-xl border border-border bg-bg-card p-3">
+    <div className="flex min-h-11 items-center gap-3 border-b border-border-light py-3">
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-text-primary">{ACCOUNT_COPY.installTitle}</p>
         <p className="text-xs text-text-muted">
