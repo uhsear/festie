@@ -142,9 +142,17 @@ test.describe('critical flows', () => {
       // The banner floats over the page, so its arrival moves nothing below it.
       expect(await watcherPage.locator('#main-content').boundingBox()).toEqual(mainBefore);
 
+      // The banner may cover the page only while it flashes: once it shrinks to a pill,
+      // the festival picker under it must take a click for as long as the SOS lasts.
+      await watcherPage.getByRole('link', { name: 'Lineup' }).first().click();
+      await expect(watcherPage.getByTestId('festival-select')).toBeVisible();
+      const banner = watcherPage.getByTestId('sos-banner');
+      await expect(banner.getByRole('button')).toBeVisible();
+      await watcherPage.getByTestId('festival-select').click({ trial: true });
+
       await page.getByRole('tabpanel').getByRole('button', { name: "I'm safe — clear SOS" }).click();
       await page.getByRole('dialog').getByRole('button', { name: "I'm safe", exact: true }).click();
-      await expect(alert).toHaveCount(0, { timeout: 30_000 });
+      await expect(banner).toHaveCount(0, { timeout: 30_000 });
     } finally {
       await watcherContext.close();
     }

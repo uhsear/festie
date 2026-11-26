@@ -101,7 +101,7 @@ describe('SosBanner', () => {
       expect(wrap).toHaveClass('inset-x-0');
       act(() => void vi.advanceTimersByTime(10_000));
       expect(wrap).not.toHaveClass('inset-x-0');
-      expect(wrap).toHaveClass('right-2', 'max-w-[40vw]');
+      expect(wrap).toHaveClass('right-2');
     });
 
     it('flashes twice on arrival, once per new raiser, not on the minute tick', () => {

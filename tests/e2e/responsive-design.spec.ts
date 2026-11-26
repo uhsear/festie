@@ -135,6 +135,36 @@ test.describe('responsive design', () => {
     expect(headerBox!.y).toBeLessThanOrEqual(5);
   });
 
+  test('header height stays constant while the page scrolls', async ({ app, page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoSchedule(page, app);
+
+    const header = page.locator('header').first();
+    const heightAt = async (top: number) => {
+      await page.locator('#main-content').evaluate((main, y) => {
+        main.scrollTop = y;
+      }, top);
+      await page.evaluate(
+        () => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))),
+      );
+      return (await header.boundingBox())!.height;
+    };
+    const rest = await heightAt(0);
+    expect(await heightAt(120)).toBe(rest);
+    expect(await heightAt(500)).toBe(rest);
+  });
+
+  test('the first set card starts in the top 300px at 390px', async ({ app, page }) => {
+    // DP-33 acceptance, not yet met: the Group by row and the freshness line still push the first card to about y = 393.
+    test.fail();
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoSchedule(page, app);
+
+    const firstCard = await page.locator('.card-grid .set-card').first().boundingBox();
+    expect(firstCard).toBeTruthy();
+    expect(firstCard!.y).toBeLessThan(300);
+  });
+
   test('detail panel opens above schedule', async ({ app, page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoSchedule(page, app);

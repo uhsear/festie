@@ -15,7 +15,7 @@ import { useMediaQuery } from '../../hooks/useMediaQuery';
  * in Map view, aimed at the newest raiser. It floats over the top of the page
  * from a zero-height slot, so its arrival never moves the content below it.
  * A new raiser flashes it twice (never under reduced motion). After that it
- * shrinks to a pill at the right edge, so the picker and filters under it
+ * shrinks to an icon-only pill at the right edge, so the picker and filters under it
  * stay tappable for as long as the SOS lasts.
  */
 const FULL_WIDTH_MS = duration.slow * 2 + 2_000;
@@ -66,23 +66,21 @@ export default function SosBanner() {
       <div role="alert" className="sr-only">
         {headline}
       </div>
-      <div className={cn('absolute top-0 shadow-lg', compact ? 'right-2 top-1 max-w-[40vw] rounded-full' : 'inset-x-0')}>
+      <div className={cn('absolute top-0 shadow-lg', compact ? 'right-2 top-1 rounded-full' : 'inset-x-0')}>
         <button
           type="button"
           onClick={() => navigate({ to: '/crew', search: { sos: entries[0]!.userId } })}
           aria-label={`${headline}, ${when}${seen ? `, ${seen}` : ''}. Open the map to find them`}
           className={cn(
             'relative flex items-center gap-3 w-full px-4 py-2 text-left bg-accent-coral-strong',
-            compact ? 'min-h-11 rounded-full overflow-hidden' : 'min-h-12',
+            compact ? 'min-h-11 min-w-11 justify-center rounded-full overflow-hidden px-0 py-0' : 'min-h-12',
             'text-text-on-accent hover:bg-[var(--color-accent-coral-strong-hover)] transition-colors motion-reduce:transition-none focus-visible:outline-2 focus-visible:-outline-offset-4 focus-visible:outline-text-on-accent',
           )}
         >
           <AlertCircle className="w-5 h-5 shrink-0" aria-hidden="true" />
-          <span className="min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2">
-            <span className={cn('type-label font-bold', compact && 'truncate')}>{headline}</span>
-            <span className={cn('type-caption tabular-nums opacity-90', compact && 'hidden')}>
-              {seen ? `${when} · ${seen}` : when}
-            </span>
+          <span className={cn('min-w-0 flex-1 flex flex-wrap items-baseline gap-x-2', compact && 'sr-only')}>
+            <span className="type-label font-bold">{headline}</span>
+            <span className="type-caption tabular-nums opacity-90">{seen ? `${when} · ${seen}` : when}</span>
           </span>
           <span className={cn('flex items-center gap-0.5 type-label font-semibold shrink-0', compact && 'hidden')}>
             Find
