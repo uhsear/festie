@@ -78,7 +78,7 @@ time, .ds-time { font-variant-numeric: tabular-nums; }`;
 export const ctaCss = `.ds-cta { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 24px; border-radius: 999px; background: var(--ds-accent); color: var(--ds-accent-ink); font-family: inherit; font-size: 1rem; font-weight: 600; text-decoration: none; }
 .ds-cta:focus-visible { outline: 2px solid var(--ds-accent); outline-offset: 3px; }`;
 
-export const lockupCss = `.ds-lockup { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--ds-text); text-decoration: none; }
+const lockupCss = `.ds-lockup { display: inline-flex; align-items: center; gap: 0.5rem; color: var(--ds-text); text-decoration: none; }
 .ds-lockup svg { width: 2rem; height: 2rem; }
 .ds-wordmark { font-family: ${FONT_DISPLAY}; font-weight: 700; font-size: 1.5rem; letter-spacing: ${letterSpacing.display}em; }`;
 
