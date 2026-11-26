@@ -84,7 +84,7 @@ export const durationSpatial = {
  * PHYSICAL FORM ON PURPOSE — THE REANIMATED 4 DURATION TRAP:
  * `withSpring` accepts EITHER a physical config (mass/stiffness/damping) OR a
  * `duration` + `dampingRatio` config. In Reanimated 4 (this repo pins
- * react-native-reanimated ~4.3.1) that `duration` is a PERCEPTUAL duration —
+ * react-native-reanimated ~4.7.1) that `duration` is a PERCEPTUAL duration —
  * the time until the motion reads as finished — and the animation keeps
  * settling after it. Real wall-clock settle time runs roughly 1.5x longer, so
  * `withSpring(v, { duration: 300 })` is done to the eye at ~300ms and actually

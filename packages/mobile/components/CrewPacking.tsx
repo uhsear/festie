@@ -231,8 +231,8 @@ export default function CrewPacking({ crewId, currentUserId, isOwner }: CrewPack
                 exiting: FadeOut.duration(motionDuration.fast),
                 layout: LinearTransition.duration(motionDuration.med),
               };
-          // R20 swipe-to-delete fallback: react-native-gesture-handler is absent
-          // from the mobile deps, so the whole row is long-pressable (= delete
+          // R20 swipe-to-delete fallback: react-native-gesture-handler is a mobile dep
+          // but this row does not use it, so the whole row is long-pressable (= delete
           // affordance) rather than a Gesture.Pan swipe. The trash button remains
           // the always-visible primary affordance, and the checkbox keeps its own
           // tap target — a long-press on the row body cannot collide with either.

@@ -77,7 +77,6 @@ export function EasingDemo({ name, curve }) {
 
 <EasingDemo name="out" curve={easing.out} />
 <EasingDemo name="in" curve={easing.in} />
-<EasingDemo name="spring" curve={easing.spring} />
 <EasingDemo name="standard" curve={easing.standard} />
 <EasingDemo name="outExpo" curve={easing.outExpo} />
 <EasingDemo name="outQuart" curve={easing.outQuart} />
@@ -166,7 +165,6 @@ export function DurationDemo({ name, ms }) {
 |--------|----------|
 | `out` | Default for most enter/appear animations (ease-out expo) |
 | `in` | Exit/disappear animations |
-| `spring` | Playful interactions: bouncy buttons, drag-and-drop snaps |
 | `standard` | Subtle, neutral transitions (Material-style ease) |
 | `outQuart` | Smooth deceleration alternative to `out` |
 
@@ -178,7 +176,6 @@ export function DurationDemo({ name, ms }) {
 /* Easing */
 --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
 --ease-in: cubic-bezier(0.4, 0, 1, 1);
---ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
 --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
 
 /* Duration — the original undifferentiated scale. Unchanged, still used. */
