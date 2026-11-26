@@ -96,6 +96,16 @@ describe('summarizePlan', () => {
 });
 
 describe('buildWrapCards', () => {
+  it('gives every card a short dominant value and a time on timed rows', () => {
+    const cards = buildWrapCards(wrap({ planned: [planned({ setId: 'a', priority: 'must', startTime: '21:30' })] }));
+    expect(cards.map((c) => c.dominant)).toEqual([
+      { value: '1', label: 'set planned' },
+      { value: '23.5', label: 'hours of music' },
+    ]);
+    expect(cards[0]!.rows![0]!.time).toBe('9:30 PM');
+    for (const c of cards) expect(c.dominant!.value.length).toBeLessThanOrEqual(4);
+  });
+
   it('returns [] when nothing is planned or rated', () => {
     expect(buildWrapCards(wrap())).toEqual([]);
   });
@@ -155,7 +165,7 @@ describe('buildWrapCards', () => {
     );
     expect(cards.map((c) => c.kind)).toEqual(['top', 'summary']);
     expect(cards[0]).toMatchObject({ kicker: 'YOUR TOP SETS', headline: 'X', sub: '#1 of 3 sets you rated' });
-    expect(cards[0]!.rows![1]).toEqual({ primary: 'Y', secondary: null, rating: 4 });
+    expect(cards[0]!.rows![1]).toEqual({ primary: 'Y', secondary: null, rating: 4, time: '8:00 PM' });
     expect(cards[1]!.headline).toBe('3.0 hours of music');
     expect(cards[1]!.rows).toHaveLength(2);
   });
@@ -215,8 +225,8 @@ describe('buildWrapCards', () => {
     expect(card.kicker).toBe('YOUR CREW');
     expect(card.headline).toBe('Squad agreed on 2 sets');
     expect(card.rows).toEqual([
-      { primary: 'B', secondary: 'Main', badge: '4 of 5' },
-      { primary: 'A', secondary: 'Main', badge: '2 of 5' },
+      { primary: 'B', secondary: 'Main', badge: '4 of 5', time: '10:00 PM' },
+      { primary: 'A', secondary: 'Main', badge: '2 of 5', time: '8:00 PM' },
     ]);
   });
 

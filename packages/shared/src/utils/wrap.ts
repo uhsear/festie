@@ -1,7 +1,7 @@
 import type { Festival, FestivalDay, FestivalSet, Priority } from '../types/domain';
 import type { WrapCaughtSet, WrapCard, WrapFestival, WrapPlannedSet, WrapRatedSet, WrapResponse } from '../types/wrap';
 import { ConflictDetected, detectConflicts } from './conflicts';
-import { formatFestivalDateRange, pluralize, timeToMinutes } from './format';
+import { formatFestivalDateRange, formatTime, pluralize, timeToMinutes } from './format';
 import { festivalStatus, isFestivalOver, resolveFestivalTimeZone } from './festivalTime';
 import { getSetTimeBounds } from './setStatus';
 
@@ -111,12 +111,14 @@ export function wrapByline(festival: WrapFestival, username: string | null, show
   return parts.length ? parts.join(' · ') : null;
 }
 
+const timeOf = (s: { startTime: string | null }) => (s.startTime ? { time: formatTime(s.startTime) } : {});
+
 function ratedRow(s: WrapRatedSet): Row {
-  return { primary: artistOf(s), secondary: s.stageName, rating: s.rating };
+  return { primary: artistOf(s), secondary: s.stageName, rating: s.rating, ...timeOf(s) };
 }
 
 function plannedRow(s: WrapPlannedSet): Row {
-  return { primary: artistOf(s), secondary: s.stageName };
+  return { primary: artistOf(s), secondary: s.stageName, ...timeOf(s) };
 }
 
 function hardestClash(clashes: ConflictDetected[]): ConflictDetected {
@@ -139,6 +141,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
       kind: 'plan',
       kicker: 'YOUR PLAN',
       headline: `${pluralize(plan.planned, 'set', 'sets')} planned`,
+      dominant: { value: String(plan.planned), label: plan.planned === 1 ? 'set planned' : 'sets planned' },
       sub: `${pluralize(plan.mustSees, 'must-see', 'must-sees')} · ${pluralize(plan.days, 'day', 'days')} · ${pluralize(distinctCount(planned.map((s) => s.stageId)), 'stage', 'stages')}`,
       rows: mustSees.slice(0, MAX_ROWS).map(plannedRow),
     });
@@ -149,6 +152,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
       kind: 'top',
       kicker: 'YOUR TOP SETS',
       headline: artistOf(topSets[0]!),
+      dominant: { value: '#1', label: 'top set' },
       sub: `#1 of ${pluralize(stats.totalRated, 'set', 'sets')} you rated`,
       rows: topSets.slice(0, MAX_ROWS).map(ratedRow),
     });
@@ -160,6 +164,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
       kind: 'clash',
       kicker: 'CLASHES SURVIVED',
       headline: `You survived ${pluralize(plan.clashes.length, 'clash', 'clashes')}`,
+      dominant: { value: String(plan.clashes.length), label: plan.clashes.length === 1 ? 'clash survived' : 'clashes survived' },
       sub: `Hardest call: ${hardest.setA.artist || UNKNOWN_ARTIST} vs ${hardest.setB.artist || UNKNOWN_ARTIST}`,
     });
   }
@@ -171,6 +176,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
       kind: 'crew',
       kicker: 'YOUR CREW',
       headline: `${crew.name} agreed on ${pluralize(agreed.length, 'set', 'sets')}`,
+      dominant: { value: String(agreed.length), label: agreed.length === 1 ? 'set agreed' : 'sets agreed' },
       rows: top.map((s) => ({ ...plannedRow(s), badge: `${s.crewAlso! + 1} of ${crew.memberCount}` })),
     });
   }
@@ -183,6 +189,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
       kind: 'memory',
       kicker: 'A MOMENT TO REMEMBER',
       headline: artistOf(remembered),
+      dominant: { value: '�', label: 'a moment to remember' },
       quote: {
         text: remembered.note!,
         by: [artistOf(remembered), remembered.stageName].filter(Boolean).join(' · '),
@@ -199,6 +206,7 @@ export function buildWrapCards(wrap: WrapResponse): WrapCard[] {
     kind: 'summary',
     kicker: 'YOUR FESTIVAL WRAP',
     headline: `${hours.toFixed(1)} hours of music`,
+    dominant: { value: hours.toFixed(1), label: 'hours of music' },
     stats: [
       { label: 'Planned', value: String(plan.planned) },
       { label: 'Rated', value: String(stats.totalRated) },

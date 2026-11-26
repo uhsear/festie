@@ -1,4 +1,4 @@
-import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M } from '@festie/shared/utils';
+import { SCHEDULE_IMAGE_LAYOUT, SCHEDULE_POSTER_METRICS as M, posterBand } from '@festie/shared/utils';
 import type { ScheduleImageFormat, ScheduleImageModel } from '@festie/shared/utils';
 import { PRIORITY_LABEL } from '@festie/shared/constants';
 import type { Priority } from '@festie/shared/types';
@@ -14,10 +14,7 @@ const PRIORITY_COLOR: Record<Priority, string> = {
   'want-to-see': POSTER.colors.priority.want,
   maybe: POSTER.colors.priority.maybe,
 };
-const GLOW = 0.3;
-const BG_IMAGE =
-  `radial-gradient(60% 45% at 50% 0%, rgba(255, 51, 102, ${GLOW}), transparent 60%), ` +
-  `radial-gradient(60% 45% at 50% 100%, rgba(0, 232, 208, ${GLOW}), transparent 60%)`;
+const CLASH = "'Clash Display', system-ui, sans-serif";
 const ONE_LINE = { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' } as const;
 
 /** Layout numbers come from SCHEDULE_POSTER_METRICS, shared with the mobile poster. */
@@ -40,14 +37,18 @@ export default function ScheduleImagePoster({
         padding: `${topReserve || M.padY}px ${M.padX}px ${bottomReserve || M.padY}px`,
         display: 'flex',
         flexDirection: 'column',
+        position: 'relative',
         backgroundColor: COLORS.bg,
-        backgroundImage: BG_IMAGE,
         color: COLORS.text,
         fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif',
         overflow: 'hidden',
       }}
     >
-      <div style={{ fontSize: M.titleSize, lineHeight: `${M.titleLine}px`, fontWeight: 700, ...ONE_LINE }}>
+      <div
+        data-poster="band"
+        style={{ position: 'absolute', top: 0, left: 0, width, height: POSTER.band.height, background: posterBand(model.festivalName).colour }}
+      />
+      <div style={{ fontFamily: CLASH, fontSize: M.titleSize, lineHeight: `${M.titleLine}px`, fontWeight: POSTER.weight, ...ONE_LINE }}>
         {model.festivalName}
       </div>
       <div
@@ -123,16 +124,12 @@ export default function ScheduleImagePoster({
           </div>
         ))}
       </div>
-      <div
-        style={{
-          fontSize: M.footerSize,
-          lineHeight: `${M.footerLine}px`,
-          color: COLORS.muted,
-          marginTop: M.footerGapTop,
-          ...ONE_LINE,
-        }}
-      >
-        {model.footer}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: M.footerGapTop }}>
+        <div style={{ flex: 1, minWidth: 0, fontSize: M.footerSize, lineHeight: `${M.footerLine}px`, color: COLORS.muted, ...ONE_LINE }}>
+          {model.footer}
+        </div>
+        <img src="/favicon.svg" alt="" width={M.footerLine} height={M.footerLine} />
+        <div style={{ fontFamily: CLASH, fontSize: M.footerSize, fontWeight: POSTER.weight, letterSpacing: 3, color: COLORS.text }}>FESTIE</div>
       </div>
     </div>
   );

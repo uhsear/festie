@@ -205,6 +205,12 @@
       "reason": "Poster size path: fixed-artboard sizes from POSTER tokens; only the face comes from posterFont() in hooks/useTokens.ts."
     },
     {
+      "file": "components/wrap/PosterDominant.tsx",
+      "rule": "fontSize",
+      "max": 3,
+      "reason": "Poster size path: fixed-artboard sizes from POSTER tokens; only the face comes from posterFont() in hooks/useTokens.ts."
+    },
+    {
       "file": "lib/backgroundShare.ts",
       "rule": "hex",
       "max": 1,

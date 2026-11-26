@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import Svg, { Defs, Ellipse, RadialGradient, Stop } from 'react-native-svg';
+import { View, Text, Image, StyleSheet } from 'react-native';
 import { POSTER } from '@festie/shared/tokens';
-import { festivalTint } from '@festie/shared/utils';
+import { posterBand } from '@festie/shared/utils';
 import { posterFont } from '../../hooks/useTokens';
 
 interface Props {
@@ -12,34 +11,25 @@ interface Props {
   children: ReactNode;
 }
 
-const { width: W, height: H, padding, colors: C, font: F } = POSTER;
+const { width: W, height: H, padding, colors: C, font: F, layout: L } = POSTER;
+const MARK = require('../../assets/splash-icon.png');
 
 /**
- * Shared 1080x1920 share-poster frame (header, centred body, footer) over the
- * festival tint with two radial glows. Mirrors web PosterFrame.
+ * Shared 1080x1920 share-poster frame: one festival-hue band, a left-aligned header with the
+ * mark, a body that starts at a fixed y, and a footer. Mirrors web PosterFrame, and both place
+ * their boxes from POSTER.layout.
  * Fixed-pixel artwork: every Text turns off font scaling, the documented
  * exception to the typeStyle() rule, so the capture is the same at any OS font size.
  */
 export default function PosterFrame({ festivalName, kicker, byline, children }: Props) {
-  const tint = festivalTint(festivalName);
   return (
-    <View style={[s.poster, { backgroundColor: tint.bg }]}>
-      <Svg width={W} height={H} style={StyleSheet.absoluteFill} pointerEvents="none">
-        <Defs>
-          <RadialGradient id="glowTop" cx="50%" cy="50%" rx="50%" ry="50%">
-            <Stop offset="0" stopColor={tint.active} stopOpacity={POSTER.glowAlpha} />
-            <Stop offset="0.6" stopColor={tint.active} stopOpacity={0} />
-          </RadialGradient>
-          <RadialGradient id="glowBottom" cx="50%" cy="50%" rx="50%" ry="50%">
-            <Stop offset="0" stopColor={C.glowBottom} stopOpacity={POSTER.glowAlpha} />
-            <Stop offset="0.6" stopColor={C.glowBottom} stopOpacity={0} />
-          </RadialGradient>
-        </Defs>
-        <Ellipse cx={W / 2} cy={0} rx={W * 0.6} ry={H * 0.45} fill="url(#glowTop)" />
-        <Ellipse cx={W / 2} cy={H} rx={W * 0.6} ry={H * 0.45} fill="url(#glowBottom)" />
-      </Svg>
+    <View style={s.poster}>
+      <View style={[s.band, { backgroundColor: posterBand(festivalName).colour }]} />
       <View style={s.header}>
-        <Text allowFontScaling={false} style={s.wordmark}>FESTIE</Text>
+        <View style={s.brand}>
+          <Image source={MARK} style={s.mark} accessible={false} />
+          <Text allowFontScaling={false} style={s.wordmark}>FESTIE</Text>
+        </View>
         <Text allowFontScaling={false} style={s.kicker}>{kicker}</Text>
         <Text allowFontScaling={false} style={s.festival} numberOfLines={2}>{festivalName}</Text>
         {byline ? <Text allowFontScaling={false} style={s.byline}>{byline}</Text> : null}
@@ -51,40 +41,44 @@ export default function PosterFrame({ festivalName, kicker, byline, children }: 
 }
 
 const s = StyleSheet.create({
-  poster: { width: W, height: H, padding, flexDirection: 'column', overflow: 'hidden' },
-  header: { alignItems: 'center' },
+  poster: { width: W, height: H, backgroundColor: C.ground, overflow: 'hidden' },
+  band: { position: 'absolute', top: 0, left: 0, width: W, height: POSTER.band.height },
+  header: { position: 'absolute', top: L.headerTop, left: padding, width: W - 2 * padding, height: L.headerHeight },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 20, height: L.markSize },
+  mark: { width: L.markSize, height: L.markSize },
   wordmark: {
-    ...posterFont(700, true),
+    ...posterFont(POSTER.weight, true),
     fontSize: F.wordmark,
-    letterSpacing: 8,
-    color: C.wordmark,
-    lineHeight: 104,
+    letterSpacing: 6,
+    color: C.text,
+    lineHeight: F.wordmark + 8,
   },
   kicker: {
     ...posterFont(400),
     fontSize: F.kicker,
     color: C.secondary,
-    marginTop: 16,
+    marginTop: 24,
     letterSpacing: 3,
   },
   festival: {
-    ...posterFont(700),
+    ...posterFont(POSTER.weight, true),
     fontSize: F.festival,
     color: C.text,
-    marginTop: 18,
-    textAlign: 'center',
+    marginTop: 12,
   },
   byline: {
     ...posterFont(400),
     fontSize: F.byline,
     color: C.secondary,
     marginTop: 8,
-    textAlign: 'center',
   },
-  body: { flex: 1, justifyContent: 'center' },
+  body: { position: 'absolute', top: L.bodyTop, left: padding, width: W - 2 * padding, bottom: padding + L.footerHeight + 24 },
   footer: {
     ...posterFont(400),
-    textAlign: 'center',
+    position: 'absolute',
+    left: padding,
+    bottom: padding,
+    height: L.footerHeight,
     fontSize: F.footer,
     color: C.secondary,
     letterSpacing: 6,
