@@ -330,6 +330,14 @@ describe('SetCard', () => {
       expect(screen.queryByRole('button', { name: /\(selected\)/ })).not.toBeInTheDocument();
     });
 
+    it('draws a must pick as a coral outline, never a coral fill (filled coral is for SOS)', () => {
+      mockPicks('must');
+      render(<SetCard {...defaultProps} />);
+      const must = screen.getByRole('button', { name: 'Must See: Daft Punk' });
+      expect(must).toHaveClass('border-priority-must');
+      expect(must).not.toHaveClass('bg-accent-coral-strong');
+    });
+
     it('clears through usePickClear when the active priority is clicked', async () => {
       mockPicks('must');
       clearPickMock.mockClear();

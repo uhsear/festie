@@ -11,12 +11,8 @@ const PRI_KEY: Record<Priority, 'must' | 'want' | 'maybe'> = { must: 'must', 'wa
 // Literal class strings: Tailwind finds classes by scanning source, so they cannot be built from a key.
 const ICON_TEXT = { must: 'text-priority-must', want: 'text-priority-want', maybe: 'text-priority-maybe' } as const;
 const ACTIVE_CLASS = {
-  // Fill = coral-strong so the white label clears WCAG AA (white on brand coral is 3.55:1);
-  // brand coral stays as the rim border and glow halo.
-  must: [
-    'active-must bg-accent-coral-strong text-text-on-accent border-priority-must',
-    'shadow-[var(--shadow-glow-coral),0_0_0_1px_var(--color-coral-a3)]',
-  ],
+  // Filled coral is reserved for SOS: a must pick is a coral outline with a filled glyph.
+  must: ['active-must text-text-primary border-priority-must', 'shadow-[0_0_0_1px_var(--color-coral-a3)]'],
   want: [
     'active-want bg-priority-want text-[var(--text-on-light-accent)] border-priority-want',
     'shadow-[var(--shadow-glow-aqua),0_0_0_1px_var(--color-aqua-a3)]',
@@ -87,7 +83,9 @@ export default function SetPickControl({ artistName, myPick, syncState = null, d
           setOpen(true);
         }}
       >
-        <PriorityIcon priority={myPick ?? 'must'} filled={!!myPick} />
+        <span className={myPick === 'must' ? ICON_TEXT.must : undefined}>
+          <PriorityIcon priority={myPick ?? 'must'} filled={!!myPick} />
+        </span>
         <span className="text-xs font-semibold">{chosen ? chosen.short : 'Pick'}</span>
         {syncState && <Clock className="w-4 h-4 ml-0.5" aria-hidden="true" data-testid="pick-pending-clock" />}
       </button>
@@ -143,7 +141,7 @@ export default function SetPickControl({ artistName, myPick, syncState = null, d
               select(p, active);
             }}
           >
-            <span className={active ? undefined : ICON_TEXT[priKey]}>
+            <span className={active && p !== 'must' ? undefined : ICON_TEXT[priKey]}>
               <PriorityIcon priority={p} filled={active} />
             </span>
             <span className={cn('text-xs font-semibold', !active && 'text-text-secondary')}>{PRIORITY_SYMBOLS[p].short}</span>

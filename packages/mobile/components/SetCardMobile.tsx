@@ -113,6 +113,8 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
   const [pressed, setPressed] = useState(false);
   const reduceMotion = useReduceMotion();
   const accent = priorityColor(t, option.value);
+  // A must pick is a coral outline with a filled glyph: filled coral is reserved for SOS.
+  const outline = option.value === 'must';
 
   // DC21: the pick is the product's core loop — confirm it with a scale pop +
   // color timing instead of an instant style flip. `progress` (0→1) drives the
@@ -133,7 +135,7 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
   }, [active, reduceMotion, progress]);
 
   const animatedStyle = useAnimatedStyle(() => {
-    const bg = interpolateColor(progress.value, [0, 1], [t.colors.overlay[3], accent]);
+    const bg = interpolateColor(progress.value, [0, 1], [t.colors.overlay[3], outline ? t.colors.overlay[3] : accent]);
     const border = interpolateColor(progress.value, [0, 1], [t.colors.border.light, accent]);
     return {
       backgroundColor: bg,
@@ -180,10 +182,13 @@ function PriorityButton({ option, active, pending = null, onPress }: PriorityBut
       <Ionicons
         name={active && pending ? 'time-outline' : option.icon}
         size={t.iconSize.sm}
-        color={active ? t.colors.text.onLightAccent : accent}
+        color={active && !outline ? t.colors.text.onLightAccent : accent}
       />
       <Text
-        style={[styles.priorityLabel, { color: active ? t.colors.text.onLightAccent : t.colors.text.secondary }]}
+        style={[
+          styles.priorityLabel,
+          { color: active ? (outline ? t.colors.text.primary : t.colors.text.onLightAccent) : t.colors.text.secondary },
+        ]}
         maxFontSizeMultiplier={MAX_FONT_SCALE}
       >
         {option.short + '\u00A0'}
@@ -229,10 +234,17 @@ function PickControl({ artistName, myPick, pending, onPick }: PickControlProps) 
     );
   }
 
-  const ink = chosen ? t.colors.text.onLightAccent : t.colors.text.secondary;
+  const outline = chosen?.value === 'must';
+  const ink = chosen ? (outline ? t.colors.text.primary : t.colors.text.onLightAccent) : t.colors.text.secondary;
   return (
     <Pressable
-      style={[styles.priorityButton, chosen && { backgroundColor: priorityColor(t, chosen.value), borderColor: priorityColor(t, chosen.value) }]}
+      style={[
+        styles.priorityButton,
+        chosen && {
+          backgroundColor: outline ? t.colors.overlay[3] : priorityColor(t, chosen.value),
+          borderColor: priorityColor(t, chosen.value),
+        },
+      ]}
       onPress={() => {
         haptics.select();
         setExpanded(true);
@@ -245,7 +257,7 @@ function PickControl({ artistName, myPick, pending, onPick }: PickControlProps) 
           : `Set priority for ${artistName}`
       }
     >
-      <Ionicons name={chosen ? (pending ? 'time-outline' : chosen.icon) : 'star-outline'} size={t.iconSize.sm} color={ink} />
+      <Ionicons name={chosen ? (pending ? 'time-outline' : chosen.icon) : 'star-outline'} size={t.iconSize.sm} color={outline ? priorityColor(t, 'must') : ink} />
       <Text style={[styles.priorityLabel, { color: ink }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         {(chosen ? chosen.short : 'Pick') + ' '}
       </Text>
