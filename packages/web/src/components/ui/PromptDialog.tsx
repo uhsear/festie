@@ -100,7 +100,7 @@ export default function PromptDialog({
           <p
             id={errorId}
             role="alert"
-            className="text-sm text-[var(--color-text-danger)] animate-in fade-in slide-in-from-top-1 duration-200"
+            className="text-sm text-[var(--color-text-danger)] field-error-enter"
           >
             {error}
           </p>

@@ -97,7 +97,7 @@ export default function Input({
         <p
           id={errorId}
           role="alert"
-          className="text-sm text-[var(--color-text-danger)] mt-1 animate-in fade-in slide-in-from-top-1 duration-200"
+          className="text-sm text-[var(--color-text-danger)] mt-1 field-error-enter"
         >
           {error}
         </p>

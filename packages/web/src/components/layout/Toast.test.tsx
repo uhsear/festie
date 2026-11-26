@@ -197,6 +197,33 @@ describe('toastError', () => {
   });
 });
 
+describe('toast exit', () => {
+  it('plays the leave class, then unmounts after TOAST_EXIT_MS', async () => {
+    mockUseToast.mockImplementation(realUseToast);
+    function Caller() {
+      const { toast, removeToast, toasts } = realUseToast();
+      return (
+        <div>
+          <button onClick={() => toast('Gone soon', 'info', 0)}>add</button>
+          <button onClick={() => removeToast(toasts[0]?.id ?? '')}>remove</button>
+        </div>
+      );
+    }
+    render(
+      <ToastProvider>
+        <Caller />
+        <Toast />
+      </ToastProvider>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByText('add'));
+    expect(screen.getByText('Gone soon', { selector: 'p' }).closest('.toast-enter')).not.toBeNull();
+    await user.click(screen.getByText('remove'));
+    expect(screen.getByText('Gone soon', { selector: 'p' }).closest('.toast-leave')).not.toBeNull();
+    await waitFor(() => expect(screen.queryByText('Gone soon', { selector: 'p' })).not.toBeInTheDocument());
+  });
+});
+
 describe('ToastProvider live regions', () => {
   beforeEach(() => {
     mockUseToast.mockImplementation(realUseToast);
