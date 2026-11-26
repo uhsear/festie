@@ -144,10 +144,14 @@ describe('TimelineGridCell block placement', () => {
   });
 
   it('draws a hatched bar for each clash segment and names the clash for screen readers', () => {
-    const clash: ClashMark = { segments: [{ from: 0.5, to: 1 }], withIds: ['b'], text: 'Clashes with Beta · Forest' };
+    const clash: ClashMark = { segments: [{ from: 0.5, to: 1 }], withIds: ['b'], overlapMin: 25, text: 'Clashes with Beta · Forest' };
     const el = renderCell('d', 0, 4, 'want-to-see', { clash });
-    const bars = el.querySelectorAll<HTMLElement>('span[aria-hidden="true"][style*="top"]');
+    const bars = el.querySelectorAll<HTMLElement>('[data-clash-hatch]');
     expect(bars).toHaveLength(1);
+    expect(el.querySelectorAll('[data-clash-minutes]')).toHaveLength(1);
+    expect(el.querySelector('[data-clash-minutes]')!.textContent).toBe('25m');
+    expect(el.querySelector('svg.lucide-triangle-alert')).toBeNull();
+    expect(el.className).not.toContain('border-[var(--color-clash)]');
     expect(bars[0]!.style.top).toBe('50%');
     expect(bars[0]!.style.height).toBe('50%');
     expect(el.textContent).toContain('Clashes with Beta · Forest');

@@ -108,6 +108,8 @@ export const FESTIVAL_STATUS_LABEL: Record<FestivalStatus, string> = {
 
 export const signInTo = (what: string): string => `Sign in to ${what}.`;
 export const clashCount = (n: number): string => (n === 1 ? COPY.clash.one : `${n} schedule clashes`);
+/** The one minutes numeral that sits beside the hatch stripe, e.g. "25m". */
+export const clashMinutes = (n: number): string => `${Math.max(0, Math.round(n))}m`;
 export const clashChip = (n: number): string => (n === 1 ? '1 clash' : `${n} clashes`);
 // Starts with the chip's visible text so the accessible name contains it (WCAG 2.5.3).
 export const clashChipA11y = (n: number): string =>

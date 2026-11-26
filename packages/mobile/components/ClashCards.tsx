@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { Ionicons } from '@expo/vector-icons';
+import { ClashSwatch } from './ClashHatch';
 import { useRouter } from 'expo-router';
 import { mapErrorToUserMessage } from '@festie/shared/services';
 import { useFestivalDataStore } from '@festie/shared/stores';
@@ -115,7 +115,7 @@ export default function ClashCards({ groups, days }: { groups: ConflictGroup[]; 
       ) : null}
       {groups.length > 0 ? (
         <View style={styles.clashHeading}>
-          <Ionicons name="warning-outline" size={t.iconSize.sm} color={t.colors.clash.mark} />
+          <ClashSwatch color={t.colors.clash.mark} />
           <Text style={styles.clashHeadingText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {clashCount(groups.length)}
           </Text>

@@ -62,7 +62,6 @@ vi.mock('../ui/StageBadge', () => ({
 
 vi.mock('lucide-react', () => ({
   CalendarClock: () => <span data-testid="calendar-clock-icon" />,
-  TriangleAlert: () => <span data-testid="triangle-alert-icon" />,
   Loader: () => <span />,
   Star: () => <span />,
   Heart: () => <span />,
@@ -137,6 +136,7 @@ describe('PickConflicts', () => {
     expect(screen.getByText('Artist s1')).toBeInTheDocument();
     expect(screen.getByText('Odesza')).toBeInTheDocument();
     expect(screen.getByText('Suggested')).toBeInTheDocument();
+    expect(document.querySelectorAll('[data-clash-hatch]')).toHaveLength(1);
   });
 
   it('opens the set detail when the artist name is clicked', async () => {

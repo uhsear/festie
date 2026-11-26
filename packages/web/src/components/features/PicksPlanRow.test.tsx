@@ -79,6 +79,13 @@ describe('PicksPlanRow', () => {
     ).toBeInTheDocument();
   });
 
+  it('marks a clash with one hatch and one minutes numeral, no triangle', () => {
+    const { container } = render(<PicksPlanRow set={set} hasClash clashMin={30} />);
+    expect(container.querySelectorAll('[data-clash-hatch]')).toHaveLength(1);
+    expect(container.querySelector('[data-clash-minutes]')!.textContent).toBe('30m');
+    expect(container.querySelector('svg.lucide-triangle-alert')).toBeNull();
+  });
+
   it('shows the moved chip and the old slot in the accessible name', () => {
     moveMock.value = { chip: 'Moved', line: 'Moved from Sat 10:00 PM, Sahara', a11y: 'Moved from Saturday 10:00 PM, Sahara' };
     render(<PicksPlanRow set={set} hasClash={false} />);

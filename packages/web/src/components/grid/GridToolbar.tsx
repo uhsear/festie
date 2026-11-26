@@ -1,7 +1,8 @@
-import { Share2, TriangleAlert, ZoomIn, ZoomOut } from 'lucide-react';
+import { Share2, ZoomIn, ZoomOut } from 'lucide-react';
 import { COPY, clashChip, clashChipA11y } from '@festie/shared/constants';
 import { GRID_ZOOM_LEVELS } from '@festie/shared/utils';
 import { cn } from '../../lib/utils';
+import ClashHatch from '../ui/ClashHatch';
 
 interface GridToolbarProps {
   clashCount: number;
@@ -46,7 +47,7 @@ export default function GridToolbar({
             'focus-visible:outline-2 focus-visible:outline-accent-aqua focus-visible:outline-offset-2',
           )}
         >
-          <TriangleAlert aria-hidden="true" className="w-4 h-4 text-[var(--color-clash)]" />
+          <ClashHatch className="h-4 w-1.5" />
           <span>{clashChip(clashCount)}</span>
         </button>
       )}
