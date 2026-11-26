@@ -19,6 +19,7 @@ vi.mock('@festie/shared/stores', () => ({
   useFestivalStore: (sel: (s: Record<string, unknown>) => unknown) =>
     sel({ festivals: h.state.festivals, currentFestival: h.state.currentFestival, selectFestival: h.selectFestival }),
   useAuthStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ user: h.state.user }),
+  useUIStore: (sel: (s: Record<string, unknown>) => unknown) => sel({ theme: 'stage' }),
 }));
 
 import Onboarding from './Onboarding';
