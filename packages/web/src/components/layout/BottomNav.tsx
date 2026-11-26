@@ -126,7 +126,7 @@ export default function BottomNav() {
                 'flex flex-col items-center gap-1 px-3 py-2',
                 'bg-transparent text-text-muted text-[10px] font-semibold no-underline',
                 'rounded-sm min-h-11 min-w-0 flex-1 overflow-hidden',
-                'transition-[color] duration-150 ease-[var(--ease-out)] [&_svg]:transition-[fill] [&_svg]:duration-150',
+                'transition-[color] duration-(--duration-fast) ease-[var(--ease-out)] [&_svg]:transition-[fill] [&_svg]:duration-(--duration-fast)',
                 '[&_svg]:size-5 md:[&_svg]:size-6',
                 'max-[480px]:px-[2px] max-[480px]:py-1.5 max-[480px]:text-[10px] max-[480px]:gap-1',
                 'max-[375px]:min-h-11 max-[375px]:px-1 max-[375px]:py-[5px]',

@@ -39,7 +39,7 @@ function IconButton({
       aria-label={label}
       title={label}
       className={cn(
-        'inline-flex items-center justify-center rounded-md transition-[color,background-color,scale] duration-150 ease-out press-scale',
+        'inline-flex items-center justify-center rounded-md transition-[color,background-color,scale] duration-(--duration-fast) ease-out press-scale',
         'hover:bg-[var(--color-overlay-3)]',
         'disabled:opacity-50 disabled:cursor-not-allowed',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-aqua',
